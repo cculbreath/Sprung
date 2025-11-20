@@ -1,3 +1,4 @@
+# Claude file picker
 # macOS and tooling artifacts
 .DS_Store
 **/.DS_Store
@@ -17,14 +18,13 @@ test_*
 # Private assets and notes (relocated outside the repo)
 debug/
 draft-archer/
-Notes/
-Resources/
+
+
 .swiftpm/
 DerivedData/
 **/xcuserdata/
 old-code-reports/
-!Sprung/Resources/
-!Sprung/Resources/TemplateDefaults/
+
 !Sprung/Resources/TemplateDefaults/**
 
 # Ignore root-level generated files
@@ -33,31 +33,16 @@ backup.txt
 combined_model_code.txt
 combined_output.txt
 output.txt
-CLAUDE.md
-**/CLAUDE.local.md
+
 build/
 clean-commit-msg.sh
 
 agents.md
 
 .swift-module-cache/
-agents.md
 .periphery.yml
-.gitignore
-.claude
+
 build.log
 
-consolelog.txt
-
 Sprung/flattened_output/
-Sprung/Onboarding/logs and docs/
-Sprung/Onboarding/Logs/
-Sprung/Onboarding/Logs/*.txt
-Sprung/Onboarding/Spec/
-Sprung/Onboarding/Spec and Docs/
-Sprung/Onboarding/Spec/Recent work (done).md
-docs/
-planning/
 consolelog.pid
-Agents.md
-Agents.md

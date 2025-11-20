@@ -40,7 +40,7 @@ struct GetValidatedApplicantProfileTool: InterviewTool {
 
     func execute(_ params: JSON) async throws -> ToolResult {
         // Retrieve persisted applicant profile using public accessor
-        let profileExists = await coordinator.applicantProfileJSON != nil
+        let profileExists = await coordinator.state.artifacts.applicantProfile != nil
 
         if profileExists {
             // Regenerate JSON from SwiftData to ensure image is included

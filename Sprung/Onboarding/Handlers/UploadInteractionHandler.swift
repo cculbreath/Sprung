@@ -65,14 +65,29 @@ final class UploadInteractionHandler {
         await handleUploadCompletion(id: id, fileURLs: fileURLs, originalURL: nil, cancelReason: nil)
     }
 
-    /// Completes an upload by downloading from a remote URL.
+    /// Completes an upload by processing a remote URL.
+    /// If the URL points to a file (pdf, docx), it downloads it.
+    /// If the URL is a web resource (GitHub, LinkedIn, website), it captures it directly as a URL artifact.
     func completeUpload(id: UUID, link: URL) async -> JSON? {
-        do {
-            let temporaryURL = try await uploadFileService.downloadRemoteFile(from: link)
-            defer { uploadFileService.cleanupTemporaryFile(at: temporaryURL) }
-            return await handleUploadCompletion(id: id, fileURLs: [temporaryURL], originalURL: link, cancelReason: nil)
-        } catch {
-            return await resumeUpload(id: id, withError: error.localizedDescription)
+        // Simple heuristic: If it has a file extension we recognize, download it.
+        // Otherwise, treat it as a web resource artifact.
+        let fileExtensions = ["pdf", "docx", "doc", "txt", "rtf", "jpg", "png"]
+        let ext = link.pathExtension.lowercased()
+        let isFile = !ext.isEmpty && fileExtensions.contains(ext)
+
+        if isFile {
+            do {
+                let temporaryURL = try await uploadFileService.downloadRemoteFile(from: link)
+                defer { uploadFileService.cleanupTemporaryFile(at: temporaryURL) }
+                return await handleUploadCompletion(id: id, fileURLs: [temporaryURL], originalURL: link, cancelReason: nil)
+            } catch {
+                return await resumeUpload(id: id, withError: error.localizedDescription)
+            }
+        } else {
+            // Treat as a web resource (URL artifact)
+            // We pass an empty file list, but provide the originalURL.
+            // handleUploadCompletion needs to be updated to handle this case (files empty but originalURL present).
+            return await handleUploadCompletion(id: id, fileURLs: [], originalURL: link, cancelReason: nil)
         }
     }
 
@@ -158,7 +173,7 @@ final class UploadInteractionHandler {
         payload["metadata"] = metadata
 
         do {
-            if fileURLs.isEmpty {
+            if fileURLs.isEmpty && originalURL == nil {
                 if let cancelReason = cancelReason {
                     payload["status"].string = "cancelled"
                     let trimmed = cancelReason.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -169,31 +184,6 @@ final class UploadInteractionHandler {
                     payload["status"].string = "skipped"
                 }
             } else {
-                // Process files through storage
-                processed = try fileURLs.map { try uploadStorage.processFile(at: $0) }
-
-                var filesJSON: [JSON] = []
-                for item in processed {
-                    var json = item.toJSON()
-                    if let originalURL {
-                        json["source"].string = "url"
-                        json["original_url"].string = originalURL.absoluteString
-                    }
-                    filesJSON.append(json)
-                }
-
-                payload["status"].string = "uploaded"
-                payload["files"] = JSON(filesJSON)
-
-                // Emit generic upload completed event
-                let uploadInfos = processed.map { item in
-                    ProcessedUploadInfo(
-                        storageURL: item.storageURL,
-                        contentType: item.contentType,
-                        filename: item.storageURL.lastPathComponent
-                    )
-                }
-
                 // Build metadata from request
                 var uploadMetadata = JSON()
                 uploadMetadata["title"].string = request.metadata.title
@@ -211,13 +201,62 @@ final class UploadInteractionHandler {
                     uploadMetadata["user_validated"].bool = userValidated
                 }
 
-                // Emit generic upload completed event (downstream handlers will process based on file type)
-                await eventBus.publish(.uploadCompleted(
-                    files: uploadInfos,
-                    requestKind: request.kind.rawValue,
-                    callId: nil,
-                    metadata: uploadMetadata
-                ))
+                if let url = originalURL, fileURLs.isEmpty {
+                    // Handle URL-only artifact
+                    var urlJSON = JSON()
+                    urlJSON["source"].string = "url"
+                    urlJSON["original_url"].string = url.absoluteString
+                    urlJSON["filename"].string = url.host ?? "link"
+                    
+                    payload["status"].string = "uploaded"
+                    payload["files"] = JSON([urlJSON])
+                    
+                    let info = ProcessedUploadInfo(
+                        storageURL: url, // Use remote URL as storage URL
+                        contentType: "application/x-url",
+                        filename: url.absoluteString
+                    )
+                    
+                    await eventBus.publish(.uploadCompleted(
+                        files: [info],
+                        requestKind: request.kind.rawValue,
+                        callId: nil,
+                        metadata: uploadMetadata
+                    ))
+                } else {
+                    // Process files through storage
+                    processed = try fileURLs.map { try uploadStorage.processFile(at: $0) }
+
+                    var filesJSON: [JSON] = []
+                    for item in processed {
+                        var json = item.toJSON()
+                        if let originalURL {
+                            json["source"].string = "url"
+                            json["original_url"].string = originalURL.absoluteString
+                        }
+                        filesJSON.append(json)
+                    }
+
+                    payload["status"].string = "uploaded"
+                    payload["files"] = JSON(filesJSON)
+
+                    // Emit generic upload completed event
+                    let uploadInfos = processed.map { item in
+                        ProcessedUploadInfo(
+                            storageURL: item.storageURL,
+                            contentType: item.contentType,
+                            filename: item.storageURL.lastPathComponent
+                        )
+                    }
+
+                    // Emit generic upload completed event (downstream handlers will process based on file type)
+                    await eventBus.publish(.uploadCompleted(
+                        files: uploadInfos,
+                        requestKind: request.kind.rawValue,
+                        callId: nil,
+                        metadata: uploadMetadata
+                    ))
+                }
 
                 // Handle targeted uploads (e.g., basics.image)
                 if let target = request.metadata.targetKey {

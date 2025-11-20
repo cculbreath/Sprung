@@ -84,6 +84,16 @@ enum OnboardingEvent {
     case knowledgeCardPersisted(card: JSON) // emitted when a knowledge card is approved and persisted
     case knowledgeCardsReplaced(cards: [JSON]) // emitted when persisted knowledge cards replace in-memory state
 
+    // MARK: - Draft Knowledge Cards
+    case draftKnowledgeCardProduced(KnowledgeCardDraft)
+    case draftKnowledgeCardUpdated(KnowledgeCardDraft)
+    case draftKnowledgeCardRemoved(UUID)
+
+    // MARK: - Evidence Requirements
+    case evidenceRequirementAdded(EvidenceRequirement)
+    case evidenceRequirementUpdated(EvidenceRequirement)
+    case evidenceRequirementRemoved(String)
+
     // MARK: - Timeline Operations
     case timelineCardCreated(card: JSON)
     case timelineCardUpdated(id: String, fields: JSON)
@@ -350,8 +360,13 @@ actor EventCoordinator {
              .artifactGetRequested, .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted,
              .artifactRecordProduced, .artifactRecordPersisted, .artifactRecordsReplaced,
              .artifactMetadataUpdateRequested, .artifactMetadataUpdated,
-             .knowledgeCardPersisted, .knowledgeCardsReplaced:
+             .knowledgeCardPersisted, .knowledgeCardsReplaced,
+             .draftKnowledgeCardProduced, .draftKnowledgeCardUpdated, .draftKnowledgeCardRemoved:
             return .artifact
+
+        // Evidence Requirements (treated as state/objectives)
+        case .evidenceRequirementAdded, .evidenceRequirementUpdated, .evidenceRequirementRemoved:
+            return .state
 
         // Toolpane events
         case .choicePromptRequested, .choicePromptCleared, .uploadRequestPresented,
@@ -481,6 +496,18 @@ actor EventCoordinator {
             description = "Knowledge card persisted: \(card["title"].stringValue)"
         case .knowledgeCardsReplaced(let cards):
             description = "Knowledge cards replaced (\(cards.count))"
+        case .draftKnowledgeCardProduced(let draft):
+            description = "Draft knowledge card produced: \(draft.title)"
+        case .draftKnowledgeCardUpdated(let draft):
+            description = "Draft knowledge card updated: \(draft.title)"
+        case .draftKnowledgeCardRemoved(let id):
+            description = "Draft knowledge card removed: \(id)"
+        case .evidenceRequirementAdded(let req):
+            description = "Evidence requirement added: \(req.description)"
+        case .evidenceRequirementUpdated(let req):
+            description = "Evidence requirement updated: \(req.description) (\(req.status))"
+        case .evidenceRequirementRemoved(let id):
+            description = "Evidence requirement removed: \(id)"
         case .timelineCardCreated:
             description = "Timeline card created"
         case .timelineCardUpdated(let id, _):

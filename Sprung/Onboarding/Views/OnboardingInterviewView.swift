@@ -143,23 +143,23 @@ struct OnboardingInterviewView: View {
                 applyPreferredModel(requestedId: newValue)
             }
             .onChange(of: defaultWebSearchAllowed) { _, newValue in
-                if !coordinator.isActiveSync {
+                if !coordinator.ui.isActive {
                     uiState.webSearchAllowed = newValue
                     applyPreferredModel()
                 }
             }
             .onChange(of: defaultWritingAnalysisAllowed) { _, newValue in
-                if !coordinator.isActiveSync {
+                if !coordinator.ui.isActive {
                     uiState.writingAnalysisAllowed = newValue
                 }
             }
-            .onChange(of: coordinator.preferences.allowWebSearch) { _, newValue in
-                if coordinator.isActiveSync {
+            .onChange(of: coordinator.ui.preferences.allowWebSearch) { _, newValue in
+                if coordinator.ui.isActive {
                     uiState.webSearchAllowed = newValue
                 }
             }
-            .onChange(of: coordinator.preferences.allowWritingAnalysis) { _, newValue in
-                if coordinator.isActiveSync {
+            .onChange(of: coordinator.ui.preferences.allowWritingAnalysis) { _, newValue in
+                if coordinator.ui.isActive {
                     uiState.writingAnalysisAllowed = newValue
                 }
             }
@@ -169,14 +169,14 @@ struct OnboardingInterviewView: View {
 
         let withSheets = withLifecycle
             .sheet(isPresented: Binding(
-                get: { coordinator.pendingExtractionSync != nil },
+                get: { coordinator.ui.pendingExtraction != nil },
                 set: { newValue in
                     if !newValue {
                         coordinator.setExtractionStatus(nil)
                     }
                 }
             )) {
-                if let pending = coordinator.pendingExtractionSync {
+                if let pending = coordinator.ui.pendingExtraction {
                     ExtractionReviewSheet(
                         extraction: pending,
                         onConfirm: { updated, notes in
@@ -346,15 +346,15 @@ private extension OnboardingInterviewView {
             case .introduction:
                 return openAIModels.isEmpty || appEnvironment.appState.openAiApiKey.isEmpty
             case .resumeIntake:
-                return coordinator.isProcessingSync ||
+                return coordinator.ui.isProcessing ||
                 coordinator.pendingChoicePrompt != nil ||
                 coordinator.pendingApplicantProfileRequest != nil ||
                 coordinator.pendingApplicantProfileIntake != nil
             case .artifactDiscovery:
-                return coordinator.isProcessingSync ||
+                return coordinator.ui.isProcessing ||
                 coordinator.pendingSectionToggleRequest != nil
             default:
-                return coordinator.isProcessingSync
+                return coordinator.ui.isProcessing
         }
     }
 
@@ -424,14 +424,14 @@ private extension OnboardingInterviewView {
     func modelStatusDescription(coordinator: OnboardingInterviewCoordinator) -> String {
         let rawId = viewModel.currentModelId
         let display = rawId.split(separator: "/").last.map(String.init) ?? rawId
-        let webText = coordinator.preferences.allowWebSearch ? "on" : "off"
+        let webText = coordinator.ui.preferences.allowWebSearch ? "on" : "off"
         return "Using \(display) with web search \(webText)."
     }
 
     func beginInterview() {
         let modelId = viewModel.currentModelId
         Task { @MainActor in
-            guard interviewCoordinator.isActiveSync == false else { return }
+            guard interviewCoordinator.ui.isActive == false else { return }
 
             // Check if there's an existing checkpoint to resume
             if interviewCoordinator.checkpoints.hasCheckpoint() {

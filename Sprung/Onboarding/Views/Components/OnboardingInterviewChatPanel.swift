@@ -18,7 +18,7 @@ private struct ConditionalIntelligenceGlow<S: InsettableShape>: ViewModifier {
 }
 
 struct OnboardingInterviewChatPanel: View {
-    @Bindable var coordinator: OnboardingInterviewCoordinator
+    let coordinator: OnboardingInterviewCoordinator
     @Bindable var state: OnboardingInterviewViewModel
     let modelStatusDescription: String
     let onOpenSettings: () -> Void
@@ -33,10 +33,10 @@ struct OnboardingInterviewChatPanel: View {
         let topPadding: CGFloat = 28
         let bottomPadding: CGFloat = 28
         let sectionSpacing: CGFloat = 20
-        let bannerVisible = !(coordinator.modelAvailabilityMessage?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        let bannerVisible = !(coordinator.ui.modelAvailabilityMessage?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
 
         return VStack(spacing: 0) {
-            if bannerVisible, let alert = coordinator.modelAvailabilityMessage {
+            if bannerVisible, let alert = coordinator.ui.modelAvailabilityMessage {
                 ModelAvailabilityBanner(
                     text: alert,
                     onOpenSettings: onOpenSettings,
@@ -70,7 +70,7 @@ struct OnboardingInterviewChatPanel: View {
                         get: { state.userInput },
                         set: { state.userInput = $0 }
                     ),
-                    isEditable: coordinator.isActiveSync,
+                    isEditable: coordinator.ui.isActive,
                     onSubmit: { text in
                         send(text)
                     },
@@ -87,7 +87,7 @@ struct OnboardingInterviewChatPanel: View {
                         )
                 )
 
-                if coordinator.isProcessingSync {
+                if coordinator.ui.isProcessing {
                     Button {
                         Task {
                             await coordinator.requestCancelLLM()
@@ -105,7 +105,7 @@ struct OnboardingInterviewChatPanel: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(
                         state.userInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                            !coordinator.isActiveSync
+                            !coordinator.ui.isActive
                     )
                 }
             }
@@ -128,7 +128,7 @@ struct OnboardingInterviewChatPanel: View {
         }
         .frame(minWidth: 640, maxWidth: .infinity, maxHeight: .infinity)
         // .animation(.easeInOut(duration: 0.2), value: coordinator.latestReasoningSummary)
-        .animation(.easeInOut(duration: 0.2), value: coordinator.modelAvailabilityMessage)
+        .animation(.easeInOut(duration: 0.2), value: coordinator.ui.modelAvailabilityMessage)
         .alert("Export Failed", isPresented: Binding(
             get: { exportErrorMessage != nil },
             set: { _ in exportErrorMessage = nil }
@@ -144,7 +144,7 @@ struct OnboardingInterviewChatPanel: View {
 
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: 16) {
-                ForEach(coordinator.messages.filter { !$0.isSystemGenerated }) { message in
+                ForEach(coordinator.ui.messages.filter { !$0.isSystemGenerated }) { message in
                     MessageBubble(message: message)
                         .id(message.id)
                 }
@@ -158,16 +158,16 @@ struct OnboardingInterviewChatPanel: View {
         .textSelection(.enabled)
         .background(bubbleShape.fill(.thinMaterial))
         .clipShape(bubbleShape)
-        .modifier(ConditionalIntelligenceGlow(isActive: coordinator.isProcessingSync, shape: bubbleShape))
+        .modifier(ConditionalIntelligenceGlow(isActive: coordinator.ui.isProcessing, shape: bubbleShape))
         .overlay(alignment: .bottomTrailing) {
             scrollToLatestButton(proxy: proxy)
         }
         .overlay(scrollOffsetOverlay())
         .contextMenu { exportTranscriptContextMenu() }
-        .onChange(of: coordinator.messages.count, initial: true) { _, newValue in
+        .onChange(of: coordinator.ui.messages.count, initial: true) { _, newValue in
             handleMessageCountChange(newValue: newValue, proxy: proxy)
         }
-        .onChange(of: coordinator.isProcessingSync) { oldValue, newValue in
+        .onChange(of: coordinator.ui.isProcessing) { oldValue, newValue in
             // Track when streaming ends (processing goes from true to false)
             if oldValue == true && newValue == false && isStreamingMessage {
                 // LLM message was finalized, scroll to bottom
@@ -185,7 +185,7 @@ struct OnboardingInterviewChatPanel: View {
             }
         }
         .onAppear {
-            lastMessageCount = coordinator.messages.count
+            lastMessageCount = coordinator.ui.messages.count
             scrollToLatestMessage(proxy)
         }
     }
@@ -229,7 +229,7 @@ struct OnboardingInterviewChatPanel: View {
 
         // Check if this is a user message (not streaming)
         // User messages are added when not processing, or at the start of processing
-        if !coordinator.isProcessingSync || !isStreamingMessage {
+        if !coordinator.ui.isProcessing || !isStreamingMessage {
             // This is likely a user message, scroll to bottom
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(100))
@@ -258,7 +258,7 @@ struct OnboardingInterviewChatPanel: View {
     }
 
     private func send(_ text: String) {
-        guard coordinator.isProcessingSync == false else { return }
+        guard coordinator.ui.isProcessing == false else { return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         state.shouldAutoScroll = true

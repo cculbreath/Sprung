@@ -26,6 +26,7 @@ actor StateCoordinator: OnboardingEventEmitter {
     private let artifactRepository: ArtifactRepository
     private let chatStore: ChatTranscriptStore
     private let uiState: SessionUIState
+    private let draftKnowledgeStore: DraftKnowledgeStore
 
     // MARK: - Phase Policy
 
@@ -37,35 +38,12 @@ actor StateCoordinator: OnboardingEventEmitter {
     // MARK: - Core Interview State
 
     private(set) var phase: InterviewPhase = .phase1CoreFacts
+    private(set) var evidenceRequirements: [EvidenceRequirement] = []
 
-    // MARK: - Synchronous Caches (for SwiftUI)
+    // MARK: - Synchronous Caches (Removed)
+    // StateCoordinator is now a pure actor for business logic.
+    // UI state is handled by OnboardingUIState in the coordinator.
 
-    /// PATTERN: Synchronous State Access for SwiftUI
-    /// These nonisolated(unsafe) properties are synchronous caches updated from service events.
-    /// StateCoordinator maintains these caches to provide a single point of access for SwiftUI views.
-    ///
-    /// Services own the authoritative state; StateCoordinator mirrors it here for sync access.
-    /// Views only need @ObservedObject state: StateCoordinator instead of multiple service references.
-
-    // From ObjectiveStore
-    nonisolated(unsafe) private(set) var objectivesSync: [String: ObjectiveStore.ObjectiveEntry] = [:]
-
-    // From ArtifactRepository
-    nonisolated(unsafe) private(set) var artifactRecordsSync: [JSON] = []
-    nonisolated(unsafe) private(set) var skeletonTimelineSync: JSON?
-
-    // From ChatTranscriptStore
-    nonisolated(unsafe) private(set) var messagesSync: [OnboardingMessage] = []
-    nonisolated(unsafe) private(set) var streamingMessageSync: ChatTranscriptStore.StreamingMessage?
-    nonisolated(unsafe) private(set) var currentReasoningSummarySync: String?
-    nonisolated(unsafe) private(set) var isReasoningActiveSync = false
-
-    // From SessionUIState
-    nonisolated(unsafe) private(set) var isProcessingSync = false
-    nonisolated(unsafe) private(set) var isActiveSync = false
-    nonisolated(unsafe) private(set) var pendingExtractionSync: OnboardingPendingExtraction?
-    nonisolated(unsafe) private(set) var pendingStreamingStatusSync: String?
-    nonisolated(unsafe) private(set) var pendingPhaseAdvanceRequestSync: OnboardingPhaseAdvanceRequest?
 
     // MARK: - Wizard Progress (Computed from ObjectiveStore)
 
@@ -98,6 +76,12 @@ actor StateCoordinator: OnboardingEventEmitter {
     private var currentModelId: String = "gpt-5.1"
     private var currentToolPaneCard: OnboardingToolPaneCard = .none
 
+    // MARK: - State Accessors
+
+    var pendingValidationPrompt: OnboardingValidationPrompt? {
+        get async { await uiState.pendingValidationPrompt }
+    }
+
     // MARK: - Initialization
 
     init(
@@ -106,7 +90,8 @@ actor StateCoordinator: OnboardingEventEmitter {
         objectives: ObjectiveStore,
         artifacts: ArtifactRepository,
         chat: ChatTranscriptStore,
-        uiState: SessionUIState
+        uiState: SessionUIState,
+        draftStore: DraftKnowledgeStore
     ) {
         self.eventBus = eventBus
         self.phasePolicy = phasePolicy
@@ -114,6 +99,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         self.artifactRepository = artifacts
         self.chatStore = chat
         self.uiState = uiState
+        self.draftKnowledgeStore = draftStore
 
         Logger.info("🎯 StateCoordinator initialized (orchestrator mode with injected services)", category: .ai)
     }
@@ -290,6 +276,12 @@ actor StateCoordinator: OnboardingEventEmitter {
                         await self.handleProcessingEvent(event)
                     }
                 }
+
+                group.addTask {
+                    for await event in await self.eventBus.stream(topic: .artifact) {
+                        await self.handleArtifactEvent(event)
+                    }
+                }
             }
         }
 
@@ -309,9 +301,8 @@ actor StateCoordinator: OnboardingEventEmitter {
             // Do NOT call setApplicantProfile here as it would create an infinite event loop
             Logger.info("👤 Applicant profile stored via event", category: .ai)
 
-        case .skeletonTimelineStored:
-            // Event notification only - data already stored in ArtifactRepository
-            // Do NOT call setSkeletonTimeline here as it would create an infinite event loop
+        case .skeletonTimelineStored(let timeline):
+            // Event notification only
             Logger.info("📅 Skeleton timeline stored via event", category: .ai)
 
         case .enabledSectionsUpdated:
@@ -323,6 +314,20 @@ actor StateCoordinator: OnboardingEventEmitter {
             allowedToolNames = tools
             Logger.info("🔧 Allowed tools updated in StateCoordinator: \(tools.count) tools", category: .ai)
 
+        case .evidenceRequirementAdded(let req):
+            evidenceRequirements.append(req)
+            Logger.info("📋 Evidence requirement added: \(req.description)", category: .ai)
+
+        case .evidenceRequirementUpdated(let req):
+            if let index = evidenceRequirements.firstIndex(where: { $0.id == req.id }) {
+                evidenceRequirements[index] = req
+                Logger.info("📋 Evidence requirement updated: \(req.description)", category: .ai)
+            }
+
+        case .evidenceRequirementRemoved(let id):
+            evidenceRequirements.removeAll { $0.id == id }
+            Logger.info("📋 Evidence requirement removed: \(id)", category: .ai)
+
         default:
             break
         }
@@ -331,9 +336,7 @@ actor StateCoordinator: OnboardingEventEmitter {
     private func handleProcessingEvent(_ event: OnboardingEvent) async {
         switch event {
         case .processingStateChanged(let processing, _):
-            // Update StateCoordinator's cache first (source of truth)
-            isProcessingSync = processing
-            // Then delegate to SessionUIState
+            // Delegate to SessionUIState
             await uiState.setProcessingState(processing, emitEvent: false)
 
         case .waitingStateChanged(let waiting, _):
@@ -342,11 +345,9 @@ actor StateCoordinator: OnboardingEventEmitter {
 
         case .pendingExtractionUpdated(let extraction, _):
             await uiState.setPendingExtraction(extraction)
-            pendingExtractionSync = extraction // Update sync cache
 
         case .streamingStatusUpdated(let status, _):
             await uiState.setStreamingStatus(status)
-            pendingStreamingStatusSync = status // Update sync cache
 
         default:
             break
@@ -362,7 +363,6 @@ actor StateCoordinator: OnboardingEventEmitter {
             if isSystemGenerated {
                 let text = payload["text"].stringValue
                 _ = await chatStore.appendUserMessage(text, isSystemGenerated: isSystemGenerated)
-                messagesSync = await chatStore.getAllMessages() // Update sync cache
                 Logger.debug("StateCoordinator: system-generated user message appended", category: .ai)
             }
 
@@ -372,32 +372,21 @@ actor StateCoordinator: OnboardingEventEmitter {
         case .llmStatus(let status):
             let newProcessingState = status == .busy
             await uiState.setProcessingState(newProcessingState)
-            isProcessingSync = newProcessingState // Update sync cache
 
         case .streamingMessageBegan(let id, let text, let reasoningExpected, _):
             _ = await chatStore.beginStreamingMessage(id: id, initialText: text, reasoningExpected: reasoningExpected)
-            messagesSync = await chatStore.getAllMessages()
-            streamingMessageSync = await chatStore.getStreamingMessage()
 
         case .streamingMessageUpdated(let id, let delta, _):
             await chatStore.updateStreamingMessage(id: id, delta: delta)
-            messagesSync = await chatStore.getAllMessages()
-            streamingMessageSync = await chatStore.getStreamingMessage()
 
         case .streamingMessageFinalized(let id, let finalText, let toolCalls, _):
             await chatStore.finalizeStreamingMessage(id: id, finalText: finalText, toolCalls: toolCalls)
-            messagesSync = await chatStore.getAllMessages()
-            streamingMessageSync = nil
 
         case .llmReasoningSummaryDelta(let delta):
             await chatStore.updateReasoningSummary(delta: delta)
-            currentReasoningSummarySync = await chatStore.getCurrentReasoningSummary()
-            isReasoningActiveSync = await chatStore.getIsReasoningActive()
 
         case .llmReasoningSummaryComplete(let text):
             await chatStore.completeReasoningSummary(finalText: text)
-            currentReasoningSummarySync = await chatStore.getCurrentReasoningSummary()
-            isReasoningActiveSync = false
 
         case .llmEnqueueUserMessage(let payload, let isSystemGenerated):
             enqueueStreamRequest(.userMessage(payload: payload, isSystemGenerated: isSystemGenerated))
@@ -424,8 +413,6 @@ actor StateCoordinator: OnboardingEventEmitter {
             await objectiveStore.setObjectiveStatus(id, status: status, source: source, notes: notes, details: details)
 
         case .objectiveStatusChanged:
-            // Update sync cache when objectives change
-            objectivesSync = objectiveStore.objectivesSync
             // Update wizard progress
             await updateWizardProgress()
 
@@ -446,15 +433,12 @@ actor StateCoordinator: OnboardingEventEmitter {
 
         case .phaseAdvanceRequested(let request):
             await uiState.setPendingPhaseAdvanceRequest(request)
-            pendingPhaseAdvanceRequestSync = request
 
         case .phaseTransitionApplied:
             await uiState.setPendingPhaseAdvanceRequest(nil)
-            pendingPhaseAdvanceRequestSync = nil
 
         case .phaseAdvanceDismissed:
             await uiState.setPendingPhaseAdvanceRequest(nil)
-            pendingPhaseAdvanceRequestSync = nil
 
         default:
             break
@@ -465,24 +449,19 @@ actor StateCoordinator: OnboardingEventEmitter {
         switch event {
         case .timelineCardCreated(let card):
             await artifactRepository.createTimelineCard(card)
-            skeletonTimelineSync = artifactRepository.skeletonTimelineSync
             Logger.info("📊 StateCoordinator: Timeline sync updated. Cards count: \(artifactRepository.skeletonTimelineSync?["experiences"].array?.count ?? 0)", category: .ai)
 
         case .timelineCardUpdated(let id, let fields):
             await artifactRepository.updateTimelineCard(id: id, fields: fields)
-            skeletonTimelineSync = artifactRepository.skeletonTimelineSync
 
         case .timelineCardDeleted(let id):
             await artifactRepository.deleteTimelineCard(id: id)
-            skeletonTimelineSync = artifactRepository.skeletonTimelineSync
 
         case .timelineCardsReordered(let orderedIds):
             await artifactRepository.reorderTimelineCards(orderedIds: orderedIds)
-            skeletonTimelineSync = artifactRepository.skeletonTimelineSync
 
         case .skeletonTimelineReplaced(let timeline, let diff, _):
             await artifactRepository.replaceSkeletonTimeline(timeline, diff: diff)
-            skeletonTimelineSync = artifactRepository.skeletonTimelineSync
 
         default:
             break
@@ -493,25 +472,30 @@ actor StateCoordinator: OnboardingEventEmitter {
         switch event {
         case .artifactRecordProduced(let record):
             await artifactRepository.upsertArtifactRecord(record)
-            artifactRecordsSync = artifactRepository.artifactRecordsSync
 
         case .artifactRecordPersisted(let record):
             await artifactRepository.upsertArtifactRecord(record)
-            artifactRecordsSync = artifactRepository.artifactRecordsSync
 
         case .artifactRecordsReplaced(let records):
             await artifactRepository.setArtifactRecords(records)
-            artifactRecordsSync = records
 
         case .artifactMetadataUpdateRequested(let artifactId, let updates):
             await artifactRepository.updateArtifactMetadata(artifactId: artifactId, updates: updates)
-            artifactRecordsSync = artifactRepository.artifactRecordsSync
 
         case .knowledgeCardPersisted(let card):
             await artifactRepository.addKnowledgeCard(card)
 
         case .knowledgeCardsReplaced(let cards):
             await artifactRepository.setKnowledgeCards(cards)
+
+        case .draftKnowledgeCardProduced(let draft):
+            await draftKnowledgeStore.addDraft(draft)
+
+        case .draftKnowledgeCardUpdated(let draft):
+            await draftKnowledgeStore.updateDraft(draft)
+
+        case .draftKnowledgeCardRemoved(let id):
+            await draftKnowledgeStore.removeDraft(id: id)
 
         default:
             break
@@ -673,6 +657,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         let hasStreamedFirstResponse: Bool
         // ToolPane UI state for resume
         let currentToolPaneCard: OnboardingToolPaneCard
+        let evidenceRequirements: [EvidenceRequirement]
     }
 
     func createSnapshot() async -> StateSnapshot {
@@ -692,7 +677,8 @@ actor StateCoordinator: OnboardingEventEmitter {
             currentModelId: currentModelId,
             messages: currentMessages,
             hasStreamedFirstResponse: hasStreamedFirstResponse,
-            currentToolPaneCard: currentToolPaneCard
+            currentToolPaneCard: currentToolPaneCard,
+            evidenceRequirements: evidenceRequirements
         )
     }
 
@@ -719,9 +705,8 @@ actor StateCoordinator: OnboardingEventEmitter {
         currentModelId = snapshot.currentModelId
 
         // Restore chat messages for UI display
-        await chatStore.restoreMessages(snapshot.messages)
-        messagesSync = snapshot.messages
-        Logger.info("💬 Restored \(snapshot.messages.count) chat messages", category: .ai)
+            await chatStore.restoreMessages(snapshot.messages)
+            Logger.info("💬 Restored \(snapshot.messages.count) chat messages", category: .ai)
 
         // Restore streaming state
         hasStreamedFirstResponse = snapshot.hasStreamedFirstResponse
@@ -736,8 +721,10 @@ actor StateCoordinator: OnboardingEventEmitter {
             // Note: UI reads currentToolPaneCard directly, no event emission needed during restore
         }
 
-        // Update sync caches
-        objectivesSync = objectiveStore.objectivesSync
+        // Restore evidence requirements
+        evidenceRequirements = snapshot.evidenceRequirements
+
+        // Update sync caches (Removed)
 
         Logger.info("📥 State restored from snapshot with conversation history", category: .ai)
     }
@@ -808,19 +795,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         await chatStore.reset()
         await uiState.reset()
 
-        // Reset sync caches
-        objectivesSync = [:]
-        artifactRecordsSync = []
-        skeletonTimelineSync = nil
-        messagesSync = []
-        streamingMessageSync = nil
-        currentReasoningSummarySync = nil
-        isReasoningActiveSync = false
-        isProcessingSync = false
-        isActiveSync = false
-        pendingExtractionSync = nil
-        pendingStreamingStatusSync = nil
-        pendingPhaseAdvanceRequestSync = nil
+        // Reset sync caches (Removed)
         currentToolPaneCard = .none
 
         Logger.info("🔄 StateCoordinator reset (all services reset)", category: .ai)
@@ -873,6 +848,16 @@ actor StateCoordinator: OnboardingEventEmitter {
         await artifactRepository.setApplicantProfile(profile)
     }
 
+    /// Store skeleton timeline in artifact repository
+    func storeSkeletonTimeline(_ timeline: JSON) async {
+        await artifactRepository.setSkeletonTimeline(timeline)
+    }
+
+    /// Store enabled sections in artifact repository
+    func storeEnabledSections(_ sections: Set<String>) async {
+        await artifactRepository.setEnabledSections(sections)
+    }
+
     var artifacts: ArtifactRepository.OnboardingArtifacts {
         get async {
             // Reconstruct artifacts struct from repository
@@ -882,7 +867,7 @@ actor StateCoordinator: OnboardingEventEmitter {
                 enabledSections: await artifactRepository.getEnabledSections(),
                 experienceCards: await artifactRepository.getExperienceCards(),
                 writingSamples: await artifactRepository.getWritingSamples(),
-                artifactRecords: artifactRecordsSync,
+                artifactRecords: await artifactRepository.getArtifacts().artifactRecords,
                 knowledgeCards: await artifactRepository.getKnowledgeCards()
             )
         }
@@ -907,8 +892,6 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     func appendUserMessage(_ text: String, isSystemGenerated: Bool = false) async -> UUID {
         let id = await chatStore.appendUserMessage(text, isSystemGenerated: isSystemGenerated)
-        // Sync messages cache so UI updates immediately
-        messagesSync = await chatStore.getAllMessages()
         return id
     }
 
@@ -939,8 +922,6 @@ actor StateCoordinator: OnboardingEventEmitter {
     // UI State delegation
     func setActiveState(_ active: Bool) async {
         await uiState.setActiveState(active)
-        // Sync the cache so UI can read it synchronously
-        isActiveSync = active
         Logger.info("🎛️ Interview active state set to: \(active) (chatbox \(active ? "enabled" : "disabled"))", category: .ai)
     }
 
@@ -972,31 +953,33 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     var isProcessing: Bool {
         get async {
-            isProcessingSync
+            await uiState.isProcessing
         }
     }
 
     var isActive: Bool {
         get async {
-            isActiveSync
+            await uiState.isActive
         }
     }
 
     var pendingExtraction: OnboardingPendingExtraction? {
         get async {
-            pendingExtractionSync
+            await uiState.pendingExtraction
         }
     }
 
     var pendingStreamingStatus: String? {
         get async {
-            pendingStreamingStatusSync
+            nil
         }
     }
 
     var pendingPhaseAdvanceRequest: OnboardingPhaseAdvanceRequest? {
         get async {
-            pendingPhaseAdvanceRequestSync
+            await uiState.pendingPhaseAdvanceRequest
         }
     }
 }
+
+

@@ -37,6 +37,11 @@ actor ArtifactRepository: OnboardingEventEmitter {
         Logger.info("📦 ArtifactRepository initialized", category: .ai)
     }
 
+    /// Get all artifacts snapshot
+    func getArtifacts() -> OnboardingArtifacts {
+        artifacts
+    }
+
     // MARK: - Core Artifacts
 
     /// Set applicant profile artifact

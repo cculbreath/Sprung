@@ -76,17 +76,7 @@ struct SettingsView: View {
                     get: { onboardingWebSearchAllowed },
                     set: { newValue in
                         onboardingWebSearchAllowed = newValue
-                        // TODO: Implement with event-driven architecture
-                        // let sanitized = sanitizeOnboardingModelIfNeeded()
-                        // let resolved = onboardingInterviewService.setPreferredDefaults(
-                        //     modelId: sanitized,
-                        //     backend: .openAI,
-                        //     webSearchAllowed: newValue
-                        // )
-                        // if onboardingModelId != resolved {
-                        //     onboardingModelId = resolved
-                        // }
-                        // onboardingInterviewService.clearModelAvailabilityMessage()
+                        onboardingWebSearchAllowed = newValue
                     }
                 ))
                 .toggleStyle(.switch)
@@ -95,10 +85,7 @@ struct SettingsView: View {
                     get: { onboardingWritingAllowed },
                     set: { newValue in
                         onboardingWritingAllowed = newValue
-                        // TODO: Implement with event-driven architecture
-                        // if onboardingInterviewService.isActive {
-                        //     onboardingInterviewService.setWritingAnalysisConsent(newValue)
-                        // }
+                        onboardingWritingAllowed = newValue
                     }
                 ))
                 .toggleStyle(.switch)
@@ -246,17 +233,7 @@ private extension SettingsView {
                     get: { onboardingModelId },
                     set: { newValue in
                         onboardingModelId = newValue
-                        // TODO: Implement with event-driven architecture
-                        // let sanitized = sanitizeOnboardingModelIfNeeded()
-                        // let resolved = onboardingInterviewService.setPreferredDefaults(
-                        //     modelId: sanitized,
-                        //     backend: .openAI,
-                        //     webSearchAllowed: onboardingWebSearchAllowed
-                        // )
-                        // if onboardingModelId != resolved {
-                        //     onboardingModelId = resolved
-                        // }
-                        // onboardingInterviewService.clearModelAvailabilityMessage()
+                        onboardingModelId = newValue
                     }
                 )) {
                     ForEach(onboardingInterviewModels, id: \.modelId) { model in
@@ -333,8 +310,6 @@ private extension SettingsView {
     @discardableResult
     func sanitizeOnboardingModelIfNeeded() -> String {
         let ids = onboardingInterviewModels.map(\.modelId)
-        // TODO: Implement with event-driven architecture
-        // onboardingInterviewService.updateAvailableModelIds(ids)
         let (sanitized, adjusted) = ModelPreferenceValidator.sanitize(
             requested: onboardingModelId,
             available: ids,
@@ -349,8 +324,6 @@ private extension SettingsView {
     @discardableResult
     func sanitizePDFExtractionModelIfNeeded() -> String {
         let ids = allOpenRouterModels.map(\.modelId)
-        // TODO: Implement with event-driven architecture
-        // onboardingInterviewService.updateExtractionModelIds(ids)
         let (sanitized, adjusted) = ModelPreferenceValidator.sanitize(
             requested: pdfExtractionModelId,
             available: ids,
