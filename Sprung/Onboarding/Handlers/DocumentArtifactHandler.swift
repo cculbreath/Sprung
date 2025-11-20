@@ -65,9 +65,9 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
             return
         }
 
-        // Process PDF documents
-        for file in files where file.storageURL.pathExtension.lowercased() == "pdf" {
-            Logger.info("📄 PDF detected: \(file.filename)", category: .ai)
+        // Process uploaded documents
+        for file in files {
+            Logger.info("📄 Document detected: \(file.filename)", category: .ai)
 
             do {
                 // Call service to perform business logic

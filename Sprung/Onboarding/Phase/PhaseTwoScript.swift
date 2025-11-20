@@ -11,12 +11,13 @@ struct PhaseTwoScript: PhaseScript {
     let phase: InterviewPhase = .phase2DeepDive
 
     let requiredObjectives: [String] = [
-        "interviewed_one_experience",
-        "one_card_generated"
+        "evidence_audit_completed",
+        "cards_generated"
     ]
 
     let allowedTools: [String] = [
         "get_user_option",
+        "request_evidence", // NEW
         "generate_knowledge_card",
         "get_user_upload",
         "cancel_user_upload",
@@ -31,19 +32,19 @@ struct PhaseTwoScript: PhaseScript {
 
     var objectiveWorkflows: [String: ObjectiveWorkflow] {
         [
-            "interviewed_one_experience": ObjectiveWorkflow(
-                id: "interviewed_one_experience",
+            "evidence_audit_completed": ObjectiveWorkflow(
+                id: "evidence_audit_completed",
                 onComplete: { context in
-                    let title = "Completed a deep-dive interview. Use the captured notes to generate at least one knowledge card next."
-                    let details = ["next_objective": "one_card_generated", "status": context.status.rawValue]
+                    let title = "Evidence audit complete. Requests have been generated."
+                    let details = ["next_objective": "cards_generated", "status": context.status.rawValue]
                     return [.developerMessage(title: title, details: details, payload: nil)]
                 }
             ),
-            "one_card_generated": ObjectiveWorkflow(
-                id: "one_card_generated",
-                dependsOn: ["interviewed_one_experience"],
+            "cards_generated": ObjectiveWorkflow(
+                id: "cards_generated",
+                dependsOn: ["evidence_audit_completed"],
                 onComplete: { context in
-                    let title = "Knowledge card created and validated. If the user has more experiences to cover, repeat the interview cycle; otherwise prepare to transition to Phase 3."
+                    let title = "Knowledge cards generated and validated. Ready for Phase 3."
                     let details = ["ready_for": "phase3", "status": context.status.rawValue]
                     return [.developerMessage(title: title, details: details, payload: nil)]
                 }
@@ -53,72 +54,60 @@ struct PhaseTwoScript: PhaseScript {
 
     var introductoryPrompt: String {
         """
-        ## PHASE 2: DEEP DIVE
+        ## PHASE 2: LEAD INVESTIGATOR (EVIDENCE AUDIT)
 
-        **Objective**: Conduct detailed interviews about the user's experiences and generate knowledge cards.
+        **Role**: You are the Lead Investigator. Your goal is to audit the user's career timeline, identify claims that need evidence, and oversee the generation of verified Knowledge Cards.
+
+        **Process**:
+        This phase is ASYNCHRONOUS. You do not need to interview the user linearly.
+        1. **Audit**: Analyze the Skeleton Timeline. Look for high-value claims (e.g., "Increased revenue by 20%").
+        2. **Request**: Use `request_evidence` to create specific requests for documents (e.g., "Q3 Report", "Architecture Diagram").
+        3. **Explain**: Tell the user they can drag-and-drop files to fulfill these requests *at any time*.
+        4. **Monitor**: The system will process uploads in the background and generate Draft Knowledge Cards.
+        5. **Review**: When drafts appear, review them with the user and finalize them.
 
         ### Primary Objectives (ID namespace)
-            interviewed_one_experience — Complete at least one in-depth interview about a significant position/project
-                interviewed_one_experience.prep_selection — Select the experience to explore and align on scope
-                interviewed_one_experience.discovery_interview — Conduct the structured deep-dive conversation
-                interviewed_one_experience.capture_notes — Summarize takeaways and prep them for card drafting
+            evidence_audit_completed — Analyze timeline and generate evidence requests
+                evidence_audit_completed.analyze — Review timeline for key claims
+                evidence_audit_completed.request — Issue `request_evidence` calls for top items
 
-            one_card_generated — Generate, validate, and persist at least one knowledge card from the interview
-                one_card_generated.draft — Draft the knowledge card content using `generate_knowledge_card`
-                one_card_generated.validation — Review the card with the user via validation UI
-                one_card_generated.persisted — Persist the approved card for future reuse
+            cards_generated — Finalize knowledge cards from evidence
+                cards_generated.review_drafts — Review generated drafts with user
+                cards_generated.persist — Save approved cards
 
         ### Workflow & Sub-objectives
 
-        #### interviewed_one_experience.*
-        1. `interviewed_one_experience.prep_selection`
-           - Review the skeleton timeline artifacts from Phase 1.
-           - Use `get_user_option` (if helpful) to let the user choose which experience to explore first.
-           - Call `set_objective_status("interviewed_one_experience.prep_selection", "completed")` once the target is agreed upon.
+        #### evidence_audit_completed.*
+        1. `evidence_audit_completed.analyze`
+           - Read the `skeleton_timeline` artifact.
+           - Identify 3-5 key experiences that demonstrate the user's core strengths.
 
-        2. `interviewed_one_experience.discovery_interview`
-           - Conduct a structured interview covering responsibilities, challenges, solutions, measurable impact, and technologies.
-           - Probe for specific metrics, blockers removed, leadership moments, etc.
-           - Mark this sub-objective completed when the interview has surfaced enough substance to draft at least one strong card.
+        2. `evidence_audit_completed.request`
+           - Call `request_evidence` for each key claim.
+           - BE SPECIFIC: "Upload the architecture diagram for the Payment Gateway" is better than "Upload proof".
+           - Mark this objective complete when you have issued a solid initial set of requests.
 
-        3. `interviewed_one_experience.capture_notes`
-           - Summarize the conversation in your reasoning channel or scratchpad so you can reference it when drafting cards.
-           - Highlight the elements that map cleanly into achievements, CAR/STAR narratives, and skill tags.
-           - Set this sub-objective completed when your notes are organized and ready for `generate_knowledge_card`.
+        #### cards_generated.*
+        3. `cards_generated.review_drafts`
+           - As the user uploads files, the system will generate drafts.
+           - You will see events like `draft_knowledge_card_produced`.
+           - Ask the user to review these drafts. Use `submit_for_validation` if you need to edit them first.
 
-        #### one_card_generated.*
-        4. `one_card_generated.draft`
-           - Call `generate_knowledge_card` once you have the story. Include metrics, impact, and context from the interview notes.
-           - Incorporate links to relevant artifacts or uploads when possible.
-           - Mark the draft sub-objective completed after the tool returns a card that reflects the conversation accurately.
-
-        5. `one_card_generated.validation`
-           - Present the card via `submit_for_validation` so the user can confirm wording and emphasis.
-           - Capture edits or corrections in follow-up messages or by re-running the generator if needed.
-           - Complete this sub-objective when the user explicitly validates the card.
-
-        6. `one_card_generated.persisted`
-           - Call `persist_data` to store the approved card. Include metadata tying it back to the originating experience.
-           - Set the sub-objective (and thus the parent `one_card_generated`) to completed when persistence succeeds.
-
-        ### Closing the Phase
-        - Use `set_objective_status` on each sub-objective to keep the ledger accurate; parents auto-complete when children finish.
-        - When both main objectives are complete (and any additional interviews/cards the user wants have been handled), call `next_phase` to advance to Phase 3.
+        4. `cards_generated.persist`
+           - Once a card is validated, call `persist_data`.
+           - Mark this objective complete when you have persisted at least one high-quality card.
 
         ### Tools Available:
-        - `get_user_option`: Present choices to the user (e.g., which experience to explore next)
-        - `generate_knowledge_card`: Create structured knowledge cards
-        - `submit_for_validation`: Show validation UI for knowledge cards
-        - `persist_data`: Save approved cards
-        - `set_objective_status`: Mark objectives as completed
-        - `list_artifacts`, `get_artifact`, `request_raw_file`: Reference prior uploads
-        - `next_phase`: Advance to Phase 3 when ready
+        - `request_evidence`: Create a formal request for a file.
+        - `generate_knowledge_card`: (Background capable) Used by system, but you can use it manually if needed.
+        - `submit_for_validation`: Show validation UI.
+        - `persist_data`: Save approved cards.
+        - `next_phase`: Advance to Phase 3 when ready.
 
         ### Key Constraints:
-        - Focus on depth over breadth: one thorough interview beats multiple shallow ones
-        - Knowledge cards must be evidence-backed and specific; avoid generic statements
-        - Validate cards before persisting to ensure the user agrees with framing
-        - Feel free to repeat the interview/card cycle beyond the minimum if the user wants more coverage
+        - **Do not block**: Allow the user to upload files in any order.
+        - **Be proactive**: Suggest specific types of evidence (code snippets, performance reviews, slide decks).
+        - **Verify**: Ensure the generated cards accurately reflect the evidence provided.
         """
     }
 }

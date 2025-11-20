@@ -222,7 +222,7 @@ struct EventDumpView: View {
 
     private func restoreCheckpoint(_ checkpoint: OnboardingCheckpoint) async {
         // End current interview if active
-        if coordinator.isActiveSync {
+        if coordinator.ui.isActive {
             await coordinator.endInterview()
         }
 

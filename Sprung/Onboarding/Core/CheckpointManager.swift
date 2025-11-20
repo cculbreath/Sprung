@@ -68,18 +68,18 @@ final class CheckpointManager {
 
         await state.restoreFromSnapshot(checkpoint.snapshot)
 
-        // Restore artifacts from checkpoint via events
+        // Restore artifacts from checkpoint via StateCoordinator
         if let profile = checkpoint.profileJSON {
-            await eventBus.publish(.applicantProfileStored(profile))
+            await state.storeApplicantProfile(profile)
             persistApplicantProfileToSwiftData(json: profile)
         }
 
         if let timeline = checkpoint.timelineJSON {
-            await eventBus.publish(.skeletonTimelineStored(timeline))
+            await state.storeSkeletonTimeline(timeline)
         }
 
         if !checkpoint.enabledSections.isEmpty {
-            await eventBus.publish(.enabledSectionsUpdated(checkpoint.enabledSections))
+            await state.storeEnabledSections(checkpoint.enabledSections)
         }
 
         Logger.info("✅ Restored from checkpoint", category: .ai)
@@ -91,18 +91,18 @@ final class CheckpointManager {
 
         await state.restoreFromSnapshot(data.snapshot)
 
-        // Restore artifacts from checkpoint via events
+        // Restore artifacts from checkpoint via StateCoordinator
         if let profile = data.profileJSON {
-            await eventBus.publish(.applicantProfileStored(profile))
+            await state.storeApplicantProfile(profile)
             persistApplicantProfileToSwiftData(json: profile)
         }
 
         if let timeline = data.timelineJSON {
-            await eventBus.publish(.skeletonTimelineStored(timeline))
+            await state.storeSkeletonTimeline(timeline)
         }
 
         if !data.enabledSections.isEmpty {
-            await eventBus.publish(.enabledSectionsUpdated(data.enabledSections))
+            await state.storeEnabledSections(data.enabledSections)
         }
 
         Logger.info("✅ Restored from specific checkpoint (\(checkpoint.timestamp))", category: .ai)

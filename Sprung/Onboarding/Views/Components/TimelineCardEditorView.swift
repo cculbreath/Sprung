@@ -8,7 +8,7 @@ struct TimelineCardEditorView: View {
     }
 
     let timeline: JSON
-    @Bindable var coordinator: OnboardingInterviewCoordinator
+    let coordinator: OnboardingInterviewCoordinator
     var mode: Mode = .editor
     var onValidationSubmit: ((String) -> Void)? = nil  // Callback for validation mode: "confirmed" or "confirmed_with_changes"
     var onSubmitChangesOnly: (() -> Void)? = nil  // Callback for "Submit Changes Only" - saves and lets LLM reassess
@@ -53,7 +53,7 @@ struct TimelineCardEditorView: View {
         )
         .onAppear {
             // Load from coordinator's sync cache, not the initial empty timeline
-            if let syncTimeline = coordinator.skeletonTimelineSync {
+            if let syncTimeline = coordinator.ui.skeletonTimeline {
                 Logger.info("🔄 TimelineCardEditorView: onAppear loading from sync cache with \(syncTimeline["experiences"].array?.count ?? 0) cards", category: .ai)
                 load(from: syncTimeline)
             } else {
@@ -63,11 +63,11 @@ struct TimelineCardEditorView: View {
         }
         .onChange(of: timeline) { _, newValue in
             // Only load if coordinator sync is not available
-            if coordinator.skeletonTimelineSync == nil {
+            if coordinator.ui.skeletonTimeline == nil {
                 load(from: newValue)
             }
         }
-        .onChange(of: coordinator.timelineUIChangeToken) { _, newToken in
+        .onChange(of: coordinator.ui.timelineUIChangeToken) { _, newToken in
             // Only watch coordinator changes in editor mode
             // In validation mode, we're showing a snapshot for final approval
             guard mode == .editor else { return }
@@ -85,7 +85,7 @@ struct TimelineCardEditorView: View {
                 return
             }
 
-            let newTimeline = coordinator.skeletonTimelineSync
+            let newTimeline = coordinator.ui.skeletonTimeline
             Logger.info("🔄 TimelineCardEditorView: onChange fired (UI token \(newToken)). New timeline has \(newTimeline?["experiences"].array?.count ?? 0) cards", category: .ai)
             if let newTimeline {
                 let state = TimelineCardAdapter.cards(from: newTimeline)
@@ -247,7 +247,7 @@ struct TimelineCardEditorView: View {
         isSaving = true
         errorMessage = nil
 
-        Task {
+        Task { @MainActor in
             await coordinator.applyUserTimelineUpdate(cards: updatedCards, meta: meta, diff: diff)
             await MainActor.run {
                 baselineCards = updatedCards
@@ -270,7 +270,7 @@ struct TimelineCardEditorView: View {
         isSaving = true
         errorMessage = nil
 
-        Task {
+        Task { @MainActor in
             // Save the changes to coordinator
             await coordinator.applyUserTimelineUpdate(cards: updatedCards, meta: meta, diff: diff)
             await MainActor.run {

@@ -91,8 +91,9 @@ struct SubmitForValidationTool: InterviewTool {
         if payload.validationType == "skeleton_timeline" {
             // Use the coordinator's current skeleton timeline as the data payload
             let currentTimeline = await MainActor.run {
-                coordinator.skeletonTimelineSync ?? JSON()
+                coordinator.ui.skeletonTimeline ?? JSON()
             }
+
             payload = ValidationPayload(
                 validationType: payload.validationType,
                 data: currentTimeline,

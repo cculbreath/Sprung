@@ -46,10 +46,10 @@ final class OnboardingInterviewViewModel {
         }
 
         Task {
-            if let coordinator = coordinator, coordinator.isActiveSync {
+            if let coordinator = coordinator, coordinator.ui.isActive {
                 await MainActor.run {
-                    webSearchAllowed = coordinator.preferences.allowWebSearch
-                    writingAnalysisAllowed = coordinator.preferences.allowWritingAnalysis
+                    webSearchAllowed = coordinator.ui.preferences.allowWebSearch
+                    writingAnalysisAllowed = coordinator.ui.preferences.allowWritingAnalysis
                 }
             } else {
                 webSearchAllowed = defaultWebSearchAllowed
@@ -92,10 +92,10 @@ final class OnboardingInterviewViewModel {
     func syncConsentFromCoordinator(_ coordinator: OnboardingInterviewCoordinator?) {
         guard let coordinator = coordinator else { return }
         Task {
-            guard coordinator.isActiveSync else { return }
+            guard coordinator.ui.isActive else { return }
             await MainActor.run {
-                webSearchAllowed = coordinator.preferences.allowWebSearch
-                writingAnalysisAllowed = coordinator.preferences.allowWritingAnalysis
+                webSearchAllowed = coordinator.ui.preferences.allowWebSearch
+                writingAnalysisAllowed = coordinator.ui.preferences.allowWritingAnalysis
             }
         }
     }

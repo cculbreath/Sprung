@@ -423,13 +423,8 @@ actor LLMMessenger: OnboardingEventEmitter {
     /// Determine if parallel tool calls should be enabled based on current state
     /// Enable for skeleton_timeline to allow LLM to create multiple cards at once
     private func shouldEnableParallelToolCalls() async -> Bool {
-        // TODO: Fix this - pendingValidationPrompt is not available on StateCoordinator
-        // It's available on ToolHandler.promptHandler but LLMMessenger doesn't have access to ToolHandler
-        // For now, disable parallel tool calls until this is properly implemented
-        return false
-        // Original broken code:
-        // let validation = await stateCoordinator.pendingValidationPrompt
-        // return validation?.dataType == "skeleton_timeline"
+        let validation = await stateCoordinator.pendingValidationPrompt
+        return validation?.dataType == "skeleton_timeline"
     }
 
     private func buildUserMessageRequest(text: String, isSystemGenerated: Bool) async -> ModelResponseParameter {

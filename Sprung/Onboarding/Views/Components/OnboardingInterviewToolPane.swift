@@ -12,12 +12,12 @@ struct OnboardingInterviewToolPane: View {
 
     var body: some View {
         let paneOccupied = isPaneOccupied(coordinator: coordinator)
-        let isLLMActive = coordinator.isProcessingSync || coordinator.pendingStreamingStatusSync != nil
+        let isLLMActive = coordinator.ui.isProcessing || coordinator.ui.pendingStreamingStatus != nil
         // Always show spinner during any busy state, regardless of what cards are shown
-        let showSpinner = coordinator.pendingExtractionSync != nil || isLLMActive
+        let showSpinner = coordinator.ui.pendingExtraction != nil || isLLMActive
 
         return VStack(alignment: .leading, spacing: 16) {
-            if coordinator.pendingExtractionSync != nil {
+            if coordinator.ui.pendingExtraction != nil {
                 Spacer(minLength: 0)
             } else {
                 let uploads = uploadRequests()
@@ -45,7 +45,7 @@ struct OnboardingInterviewToolPane: View {
                     if validation.dataType == "knowledge_card" {
                         KnowledgeCardValidationHost(
                             prompt: validation,
-                            artifactsJSON: coordinator.artifactRecordsSync,
+                            artifactsJSON: coordinator.ui.artifactRecords,
                             coordinator: coordinator
                         )
                     } else if validation.dataType == "skeleton_timeline" {
@@ -91,7 +91,7 @@ struct OnboardingInterviewToolPane: View {
                             }
                         )
                     }
-                } else if let phaseAdvanceRequest = coordinator.pendingPhaseAdvanceRequestSync {
+                } else if let phaseAdvanceRequest = coordinator.ui.pendingPhaseAdvanceRequest {
                     OnboardingPhaseAdvanceDialog(
                         request: phaseAdvanceRequest,
                         onSubmit: { decision, feedback in
@@ -153,16 +153,16 @@ struct OnboardingInterviewToolPane: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .overlay {
             ZStack {
-                if let extraction = coordinator.pendingExtractionSync {
+                if let extraction = coordinator.ui.pendingExtraction {
                     ExtractionProgressOverlay(
                         items: extraction.progressItems,
-                        statusText: coordinator.currentStatusMessage
+                        statusText: coordinator.ui.currentStatusMessage
                     )
                     .transition(.opacity.combined(with: .scale))
                     .zIndex(1)
                 } else if showSpinner {
                     // Use currentStatusMessage if available, otherwise fall back to pendingStreamingStatusSync
-                    let statusText = coordinator.currentStatusMessage ?? coordinator.pendingStreamingStatusSync?
+                    let statusText = coordinator.ui.currentStatusMessage ?? coordinator.ui.pendingStreamingStatus?
                         .trimmingCharacters(in: .whitespacesAndNewlines)
 
                     AnimatedThinkingText(statusMessage: statusText)
@@ -197,7 +197,7 @@ struct OnboardingInterviewToolPane: View {
 
     @ViewBuilder
     private func supportingContent() -> some View {
-        if let extraction = coordinator.pendingExtractionSync {
+        if let extraction = coordinator.ui.pendingExtraction {
             VStack(alignment: .leading, spacing: 16) {
                 ExtractionStatusCard(extraction: extraction)
                 summaryContent()
@@ -209,9 +209,14 @@ struct OnboardingInterviewToolPane: View {
 
     @ViewBuilder
     private func summaryContent() -> some View {
-        // Note: Summary cards removed during event-driven migration
-        // Supporting content is now shown only when relevant state exists
-        Spacer()
+        if coordinator.ui.phase == .phase2DeepDive {
+            VStack(spacing: 16) {
+                EvidenceRequestView(coordinator: coordinator)
+                DraftKnowledgeListView(coordinator: coordinator)
+            }
+        } else {
+            Spacer()
+        }
     }
 
     @ViewBuilder
@@ -324,7 +329,7 @@ struct OnboardingInterviewToolPane: View {
     }
 
     private func hasInteractiveCard(coordinator: OnboardingInterviewCoordinator) -> Bool {
-        if coordinator.pendingExtractionSync != nil { return true }
+        if coordinator.ui.pendingExtraction != nil { return true }
         if !uploadRequests().isEmpty { return true }
         // Don't count loading state as occupying the pane - allow spinner to show
         if let intake = coordinator.pendingApplicantProfileIntake {
@@ -335,7 +340,7 @@ struct OnboardingInterviewToolPane: View {
         if coordinator.pendingValidationPrompt != nil { return true }
         if coordinator.pendingApplicantProfileRequest != nil { return true }
         if coordinator.pendingSectionToggleRequest != nil { return true }
-        if coordinator.pendingPhaseAdvanceRequestSync != nil { return true }
+        if coordinator.ui.pendingPhaseAdvanceRequest != nil { return true }
         return false
     }
 

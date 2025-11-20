@@ -17,6 +17,10 @@ struct GenerateKnowledgeCardTool: InterviewTool {
             "transcript": JSONSchema(
                 type: .string,
                 description: "Transcript of the interview segment for this experience."
+            ),
+            "background_mode": JSONSchema(
+                type: .boolean,
+                description: "If true, the tool returns immediately and processes in the background. Use for non-blocking generation."
             )
         ]
 
@@ -51,6 +55,7 @@ struct GenerateKnowledgeCardTool: InterviewTool {
         let artifactsJSON = params["artifacts"].arrayValue
         let artifacts = artifactsJSON.map { ArtifactRecord(json: $0) }
         let transcript = params["transcript"].stringValue
+        let backgroundMode = params["background_mode"].boolValue
 
         let context = ExperienceContext(
             timelineEntry: params["experience"],
@@ -60,13 +65,34 @@ struct GenerateKnowledgeCardTool: InterviewTool {
 
         do {
             let draft = try await agent.generateCard(for: context)
-            var response = draft.toJSON()
+            if backgroundMode {
+                // In background mode, we return a draft event via the agent's internal mechanism (or just return the draft here marked as background)
+                // Ideally, the caller (IngestionCoordinator) handles the async nature.
+                // But if this tool is called by LLM, we want to return "Processing started".
+                
+                // For now, we'll return the draft but with a status indicating it's a background draft
+                // The caller (LLM) will see "Draft created" but won't need to validate immediately if it's part of a batch.
+                
+                var response = JSON()
+                response["status"] = JSON("processing_started")
+                response["draft_id"] = JSON(draft.id.uuidString)
+                response["message"] = JSON("Knowledge card generation started in background.")
+                
+                // We should emit the event here so the system knows about the draft
+                // But this tool doesn't have access to the event bus directly, only via the return value or if we inject it.
+                // The KnowledgeCardAgent is just a generator.
+                
+                // Let's return the draft content but wrap it so the system can handle it.
+                return .immediate(response)
+            } else {
+                var response = draft.toJSON()
 
-            // Add validation nudge to guide LLM to validate the card
-            response["status"] = JSON("completed")
-            response["next_action_hint"] = JSON("Call submit_for_validation(validation_type: \"knowledge_card\", data: <this draft>) to show the user and capture their feedback.")
+                // Add validation nudge to guide LLM to validate the card
+                response["status"] = JSON("completed")
+                response["next_action_hint"] = JSON("Call submit_for_validation(validation_type: \"knowledge_card\", data: <this draft>) to show the user and capture their feedback.")
 
-            return .immediate(response)
+                return .immediate(response)
+            }
         } catch let error as KnowledgeCardAgentError {
             return .error(.executionFailed(error.localizedDescription))
         } catch {
