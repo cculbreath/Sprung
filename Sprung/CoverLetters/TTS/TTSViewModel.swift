@@ -94,14 +94,14 @@ class TTSViewModel {
                 Logger.debug("[TTSViewModel] Ignoring provider finish event during initial setup")
                 return
             }
-            
+
             // Special case: If we're still speaking or paused when onFinish is called, this is likely
             // from the chunk overflow handler, and we should NOT stop playback
             if (self.isSpeaking || self.isPaused) && !self.isBuffering {
                 Logger.debug("[TTSViewModel] Received onFinish while speaking/paused - likely from chunk overflow handler, maintaining playback state")
                 return
             }
-            
+
             self.isSpeaking = false
             self.isPaused = false
             self.isBuffering = false
@@ -144,8 +144,7 @@ class TTSViewModel {
             Task { @MainActor in
                 guard !Task.isCancelled else { return }
                 if (state == "buffering" && self.isBuffering) ||
-                    (state == "speaking" && self.isSpeaking)
-                {
+                    (state == "speaking" && self.isSpeaking) {
                     self.isInitialSetup = false
                     self.isBuffering = false
                     self.isSpeaking = false

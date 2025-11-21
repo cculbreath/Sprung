@@ -180,16 +180,16 @@ final class UploadInteractionHandler {
                     urlJSON["source"].string = "url"
                     urlJSON["original_url"].string = url.absoluteString
                     urlJSON["filename"].string = url.host ?? "link"
-                    
+
                     payload["status"].string = "uploaded"
                     payload["files"] = JSON([urlJSON])
-                    
+
                     let info = ProcessedUploadInfo(
                         storageURL: url, // Use remote URL as storage URL
                         contentType: "application/x-url",
                         filename: url.absoluteString
                     )
-                    
+
                     await eventBus.publish(.uploadCompleted(
                         files: [info],
                         requestKind: request.kind.rawValue,

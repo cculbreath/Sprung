@@ -510,7 +510,6 @@ actor LLMMessenger: OnboardingEventEmitter {
         } else {
             errorMessage = "I encountered an error while processing your request: \(errorDescription). Please try again, or contact support if this persists."
         }
-        }
         let payload = JSON(["text": errorMessage])
         await emit(.llmUserMessageSent(messageId: UUID().uuidString, payload: payload, isSystemGenerated: true))
         Logger.error("📢 Error surfaced to UI: \(errorMessage)", category: .ai)

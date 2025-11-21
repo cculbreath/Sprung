@@ -12,7 +12,7 @@ import SwiftUI
     // MARK: - Properties
     /// Set this to `true` if you want to save a debug file containing the prompt text.
     var saveDebugPrompt: Bool = false
-    
+
     /// The mode for this query (normal or with clarifying questions)
     var queryMode: ResumeQueryMode = .normal
     // Native SwiftOpenAI JSON Schema for revisions
@@ -53,14 +53,14 @@ import SwiftUI
             required: ["id", "oldValue", "newValue", "valueChanged", "why", "isTitleNode", "treePath"],
             additionalProperties: false
         )
-        
+
         // Define the RevArray schema
         let revArraySchema = JSONSchema(
             type: .array,
             description: "IMPORTANT: Use exactly 'RevArray' as the property name (capital R)",
             items: revisionNodeSchema
         )
-        
+
         // Define the root schema
         return JSONSchema(
             type: .object,
@@ -71,7 +71,7 @@ import SwiftUI
             additionalProperties: false
         )
     }()
-    
+
     // Native SwiftOpenAI JSON Schema for clarifying questions
     static let clarifyingQuestionsSchema: JSONSchema = {
         // Define the clarifying question schema
@@ -94,14 +94,14 @@ import SwiftUI
             required: ["id", "question", "context"],
             additionalProperties: false
         )
-        
+
         // Define the questions array
         let questionsArraySchema = JSONSchema(
             type: .array,
             description: "Array of clarifying questions to ask the user (maximum 3 questions)",
             items: questionSchema
         )
-        
+
         // Define the root schema
         return JSONSchema(
             type: .object,
@@ -186,14 +186,11 @@ import SwiftUI
         self.saveDebugPrompt = saveDebugPrompt
     }
 
-
-
     // MARK: - Prompt Building
     @MainActor
     func wholeResumeQueryString() async -> String {
         // Ensure the resume's rendered text is up-to-date by awaiting the export/render process.
         try? await exportCoordinator.ensureFreshRenderedText(for: res)
-        
 
         // Build the improved prompt
         let prompt = """
@@ -254,35 +251,35 @@ import SwiftUI
     func clarifyingQuestionsPrompt() async -> String {
         // Get resume context WITHOUT editable nodes (clarifying questions don't need them)
         let resumeContextOnly = await clarifyingQuestionsContextString()
-        
+
         // Add clarifying questions instruction
         let clarifyingQuestionsInstruction = """
-        
+
         ================================================================================
         CLARIFYING QUESTIONS MODE
         ================================================================================
-        
+
         Before proposing revisions, you have two options:
-        
+
         1. **Ask Clarifying Questions** (up to 3): If you need more information to provide better, more targeted revisions
         2. **Proceed Directly**: If you have sufficient information to proceed with revisions
-        
+
         Consider asking about:
         - Specific skills or experiences to emphasize for this role
-        - Achievements that could be quantified or better highlighted  
+        - Achievements that could be quantified or better highlighted
         - Technologies, methodologies, or certifications to prioritize
         - Industry-specific terminology or focus areas
         - Career trajectory or role-specific accomplishments
-        
+
         If you choose to ask questions, they should be:
         - Specific and actionable
         - Focused on improving relevance to this particular job
         - Designed to gather information not already clear from the resume and job listing
-        
+
         Respond with either clarifying questions OR set proceedWithRevisions to true.
         ================================================================================
         """
-        
+
         return resumeContextOnly + clarifyingQuestionsInstruction
     }
     /// Generate resume context for clarifying questions (excludes editable nodes and JSON)
@@ -293,7 +290,7 @@ import SwiftUI
     func clarifyingQuestionsContextString() async -> String {
         // Ensure the resume's rendered text is up-to-date
         try? await exportCoordinator.ensureFreshRenderedText(for: res)
-        
+
         // Build context prompt without JSON or editable nodes
         let prompt = """
         ================================================================================
@@ -314,12 +311,12 @@ import SwiftUI
         \(backgroundDocs)
         ================================================================================
         """
-        
+
         // If debug flag is set, save the prompt to a text file in the user's Downloads folder.
         if saveDebugPrompt {
             savePromptToDownloads(content: prompt, fileName: "clarifyingQuestionsDebug.txt")
         }
-        
+
         return prompt
     }
     /// Generate revision prompt for multi-turn conversations (after clarifying questions)
@@ -328,7 +325,7 @@ import SwiftUI
     func multiTurnRevisionPrompt() async -> String {
         // Ensure the resume's rendered text is up-to-date
         try? await exportCoordinator.ensureFreshRenderedText(for: res)
-        
+
         // Build prompt with only editable nodes and instructions (context already established)
         let prompt = """
         Based on our discussion, please provide revision suggestions for the resume. Here are the editable nodes that can be modified:
@@ -336,7 +333,7 @@ import SwiftUI
         EDITABLE NODES:
         \(updatableFieldsString)
         ================================================================================
-        
+
         TASK:
         - Propose revisions that align with the job requirements and incorporate the information from our discussion
         - Provide all revisions as structured data in an array of RevNodes (RevArray) matching the schema
@@ -350,15 +347,15 @@ import SwiftUI
         - If no change is required for a given node, set "newValue" to "" and "valueChanged" to false
         - The "why" field can be an empty string if the reason is self-explanatory
         """
-        
+
         // If debug flag is set, save the prompt to a text file
         if saveDebugPrompt {
             savePromptToDownloads(content: prompt, fileName: "multiTurnRevisionDebug.txt")
         }
-        
+
         return prompt
     }
-    
+
     /// Helper method to truncate strings with ellipsis
     private func truncateString(_ string: String, maxLength: Int) -> String {
         if string.count <= maxLength {

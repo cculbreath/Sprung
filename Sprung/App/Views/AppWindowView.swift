@@ -17,7 +17,7 @@ struct AppWindowView: View {
     @Binding var hasVisitedResumeTab: Bool
     @Binding var tabRefresh: Bool
     @Binding var showSlidingList: Bool
-    
+
     // Centralized sheet state management for all app windows/modals
     @Binding var sheets: AppSheets
     @Binding var clarifyingQuestions: [ClarifyingQuestion]
@@ -25,7 +25,7 @@ struct AppWindowView: View {
         @Bindable var jobAppStore = jobAppStore
         mainContent
     }
-    
+
     private var mainContent: some View {
         VStack {
             if jobAppStore.selectedApp != nil {
@@ -53,7 +53,7 @@ struct AppWindowView: View {
             updateMyLetter: updateMyLetter
         ))
     }
-    
+
     private var tabView: some View {
         TabView(selection: $selectedTab) {
             JobAppDetailView(tab: $selectedTab, buttons: $listingButtons)
@@ -79,7 +79,7 @@ struct AppWindowView: View {
                 }
                 .tag(TabList.coverLetter)
                 .disabled(!(jobAppStore.selectedApp?.hasAnyRes ?? false))
-                
+
             ResumeExportView()
                 .tabItem {
                     Label(TabList.submitApp.rawValue, systemImage: "paperplane")
@@ -88,7 +88,7 @@ struct AppWindowView: View {
                 .disabled(jobAppStore.selectedApp?.selectedRes == nil)
         }
     }
-    
+
     // MARK: - Toolbar Action Methods
     func updateMyLetter() {
         if let selectedApp = jobAppStore.selectedApp {
@@ -121,7 +121,7 @@ struct AppWindowViewModifiers: ViewModifier {
     @Binding var selectedTab: TabList
     @Binding var hasVisitedResumeTab: Bool
     let updateMyLetter: () -> Void
-    
+
     func body(content: Content) -> some View {
         let step1: some View = content
             .onChange(of: jobAppStore.selectedApp) { _, _ in
@@ -141,7 +141,7 @@ struct AppWindowViewModifiers: ViewModifier {
                 updateMyLetter()
                 hasVisitedResumeTab = false
             }
-        
+
         let step2: some View = step1
             .sheet(isPresented: $refPopup) {
                 ResRefView()
@@ -152,7 +152,7 @@ struct AppWindowViewModifiers: ViewModifier {
                     ResumeReviewSheet(selectedResume: .constant(selectedResume))
                 }
             }
-        
+
         let step3: some View = step2
             .sheet(isPresented: $sheets.showMultiModelChooseBest) {
                 if jobAppStore.selectedApp != nil,
@@ -182,7 +182,7 @@ struct AppWindowViewModifiers: ViewModifier {
                     .environment(jobAppStore)
                     .environment(coverLetterStore)
             }
-        
+
         return step3
     }
 }

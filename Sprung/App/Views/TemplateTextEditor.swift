@@ -27,11 +27,11 @@ struct TemplateTextEditor: NSViewRepresentable {
         _insertionRequest = insertionRequest
         self.onTextChange = onTextChange
     }
-    
+
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
-    
+
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSTextView.scrollableTextView()
         if let textView = scrollView.documentView as? NSTextView {
@@ -58,7 +58,7 @@ struct TemplateTextEditor: NSViewRepresentable {
         }
         return scrollView
     }
-    
+
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         guard let textView = nsView.documentView as? NSTextView else { return }
         if textView.string != text {
@@ -67,16 +67,16 @@ struct TemplateTextEditor: NSViewRepresentable {
         context.coordinator.textView = textView
         context.coordinator.handleInsertionRequest(insertionRequest)
     }
-    
+
     class Coordinator: NSObject, NSTextViewDelegate {
         var parent: TemplateTextEditor
         weak var textView: NSTextView?
         private var lastHandledRequestID: UUID?
-        
+
         init(_ parent: TemplateTextEditor) {
             self.parent = parent
         }
-        
+
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             parent.text = textView.string

@@ -90,7 +90,7 @@ class OpenAITTSProvider {
     /// - Parameter apiKey: The OpenAI API key to use
     init(apiKey: String) {
         self.apiKey = apiKey
-        
+
         // Check if API key is valid or empty
         let cleanKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         if cleanKey.isEmpty || cleanKey == "none" {
@@ -100,7 +100,7 @@ class OpenAITTSProvider {
             // Create a direct OpenAI client for TTS (not OpenRouter)
             Logger.debug("🔑 Creating dedicated OpenAI TTS client with API key: \(cleanKey.prefix(4))..., length: \(cleanKey.count)")
             let openAIClient = OpenAIServiceFactory.service(apiKey: apiKey)
-            
+
             // Wrap the OpenAI service to make it TTSCapable
             // Since our fork of SwiftOpenAI already has TTS methods, we just need to bridge them
             ttsClient = OpenAIServiceTTSWrapper(service: openAIClient)
@@ -119,7 +119,6 @@ class OpenAITTSProvider {
             self.stopSpeaking()
         }
     }
-
 
     /// Clear all callback references to break reference cycles
     private func clearCallbacks() {
@@ -165,7 +164,7 @@ class OpenAITTSProvider {
         // OpenAI TTS has a 4096 character limit
         let maxLength = 4096
         var textToSpeak = text
-        
+
         if text.count > maxLength {
             Logger.warning("Text length (\(text.count)) exceeds TTS limit (\(maxLength)). Truncating...")
             let truncated = String(text.prefix(maxLength))
@@ -176,7 +175,7 @@ class OpenAITTSProvider {
             }
             Logger.debug("Truncated text to \(textToSpeak.count) characters")
         }
-        
+
         // Call the TTS-capable client with the voice and instructions
         ttsClient.sendTTSRequest(
             text: textToSpeak,
@@ -192,7 +191,6 @@ class OpenAITTSProvider {
             }
         )
     }
-
 
     /// Stops the currently playing speech and cancels any ongoing streaming
     func stopSpeaking() {
@@ -260,7 +258,6 @@ class OpenAITTSProvider {
         }
     }
 
-
     // MARK: – Streaming playback (incremental)
     /// Splits text into chunks at sentence boundaries
     /// - Parameters:
@@ -270,17 +267,17 @@ class OpenAITTSProvider {
     private func splitTextIntoChunks(_ text: String, maxLength: Int = 4000) -> [String] {
         var chunks: [String] = []
         var currentChunk = ""
-        
+
         // Split by sentences (basic approach - could be improved with NLP)
         let sentences = text.components(separatedBy: CharacterSet(charactersIn: ".!?"))
-        
+
         for sentence in sentences {
             let trimmedSentence = sentence.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmedSentence.isEmpty { continue }
-            
+
             // Add back the punctuation if it was removed
             let fullSentence = trimmedSentence + ". "
-            
+
             // If adding this sentence would exceed the limit, save current chunk and start new one
             if !currentChunk.isEmpty && currentChunk.count + fullSentence.count > maxLength {
                 chunks.append(currentChunk.trimmingCharacters(in: .whitespaces))
@@ -289,15 +286,15 @@ class OpenAITTSProvider {
                 currentChunk += fullSentence
             }
         }
-        
+
         if !currentChunk.isEmpty {
             chunks.append(currentChunk.trimmingCharacters(in: .whitespaces))
         }
-        
+
         Logger.debug("Split text into \(chunks.count) chunks. Lengths: \(chunks.map { $0.count })")
         return chunks
     }
-    
+
     /// Streams TTS audio and plays it as chunks arrive using ChunkedAudioPlayer
     /// - Parameters:
     ///   - text: The text to speak.
@@ -314,7 +311,7 @@ class OpenAITTSProvider {
     ) {
         // Split text into chunks if needed
         let textChunks = splitTextIntoChunks(text)
-        
+
         if textChunks.count == 1 {
             streamSingleChunk(textChunks[0], voice: voice, instructions: instructions,
                              onStart: onStart, onComplete: onComplete)
@@ -324,7 +321,7 @@ class OpenAITTSProvider {
                                 onStart: onStart, onComplete: onComplete)
         }
     }
-    
+
     /// Streams multiple text chunks with seamless playback transitions
     private func streamMultipleChunks(
         _ chunks: [String],
@@ -337,24 +334,24 @@ class OpenAITTSProvider {
             onComplete(nil)
             return
         }
-        
+
         Logger.debug("🎵 Starting multi-chunk streaming: \(chunks.count) chunks")
-        
+
         // Create a task to handle the sequential chunk processing
         Task {
             var chunkIndex = 0
             var hasStarted = false
-            
+
             func playNextChunk() async {
                 guard chunkIndex < chunks.count else {
                     Logger.info("✅ Multi-chunk TTS streaming completed")
                     onComplete(nil)
                     return
                 }
-                
+
                 let currentChunk = chunks[chunkIndex]
                 Logger.debug("🎵 Streaming chunk \(chunkIndex + 1)/\(chunks.count) (\(currentChunk.count) chars)")
-                
+
                 streamSingleChunk(
                     currentChunk,
                     voice: voice,
@@ -366,13 +363,13 @@ class OpenAITTSProvider {
                             onComplete(error)
                             return
                         }
-                        
+
                         if !hasStarted {
                             hasStarted = true
                         }
-                        
+
                         chunkIndex += 1
-                        
+
                         // Small delay to ensure smooth transition between chunks
                         Task {
                             try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
@@ -381,11 +378,11 @@ class OpenAITTSProvider {
                     }
                 )
             }
-            
+
             await playNextChunk()
         }
     }
-    
+
     /// Streams a single chunk of text using ChunkedAudioPlayer
     private func streamSingleChunk(
         _ text: String,
@@ -463,7 +460,7 @@ class OpenAITTSProvider {
                 Logger.error("Stream error: \(error.localizedDescription)")
                 self.cancelTimeoutTimer() // Ensure timer is cancelled
                 self.setBufferingState(false)
-                
+
                 // If it's a chunk overflow error, handle it gracefully by completing normally
                 let nsError = error as NSError
                 if nsError.domain == "TTSAudioStreamer" && nsError.code == 1002 {

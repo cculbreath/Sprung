@@ -236,7 +236,7 @@ struct KeywordChipsEditor: View {
 }
 struct KeywordChip: View {
     let keyword: String
-    var onRemove: (() -> Void)? = nil
+    var onRemove: (() -> Void)?
     @State private var isHovered = false
     var body: some View {
         HStack(spacing: 6) {

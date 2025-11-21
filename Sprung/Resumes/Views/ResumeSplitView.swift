@@ -9,16 +9,16 @@ struct ResumeSplitView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(ResStore.self) private var resStore: ResStore
     @Environment(AppEnvironment.self) private var appEnvironment: AppEnvironment
-    
+
     @Binding var isWide: Bool
     @Binding var tab: TabList
     @Binding var showResumeInspector: Bool
     @Binding var refresh: Bool
     @Binding var sheets: AppSheets
     @Binding var clarifyingQuestions: [ClarifyingQuestion]
-    
+
     @State private var showCreateResumeSheet = false
-    
+
     var body: some View {
         if let selApp = jobAppStore.selectedApp {
             if let selRes = selApp.selectedRes {
@@ -69,7 +69,7 @@ struct ResumeSplitView: View {
                         }
                         .frame(width: contentWidth, height: geo.size.height)
                         if isInspectorVisible {
-                            
+
                             Divider()
                             ResumeInspectorColumn(refresh: $refresh)
                                 .frame(width: inspectorWidth, height: geo.size.height)
@@ -87,11 +87,11 @@ struct ResumeSplitView: View {
                     Text("No Resume Available")
                         .font(.title)
                         .fontWeight(.bold)
-                    
+
                     Text("Create a resume to customize it for this job application.")
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
-                    
+
                     Button("Create Resume") {
                         showCreateResumeSheet = true
                     }
@@ -126,21 +126,21 @@ struct ResumeSplitView: View {
 }
 private struct ResumeActionsBar: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
-    
+
     @Binding var selectedTab: TabList
     @Binding var sheets: AppSheets
     @Binding var clarifyingQuestions: [ClarifyingQuestion]
-    
+
     var body: some View {
         HStack(spacing: 12) {
             ResumeCustomizeButton(selectedTab: $selectedTab)
-            
+
             ClarifyingQuestionsButton(
                 selectedTab: $selectedTab,
                 clarifyingQuestions: $clarifyingQuestions,
                 sheets: $sheets
             )
-            
+
             Button {
                 sheets.showResumeReview = true
             } label: {
@@ -150,7 +150,7 @@ private struct ResumeActionsBar: View {
             .buttonStyle(.automatic)
             .help("AI Resume Review")
             .disabled(jobAppStore.selectedApp?.selectedRes == nil)
-            
+
             Spacer(minLength: 0)
         }
         .controlSize(.large)

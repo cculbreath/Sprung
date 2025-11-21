@@ -77,7 +77,7 @@ actor DocumentProcessingService {
             artifactRecord["originating_call_id"].string = callId
         }
         // Merge any additional metadata from upload form
-        if metadata.dictionaryValue.count > 0 {
+        if !metadata.dictionaryValue.isEmpty {
             artifactRecord["metadata"] = metadata
         }
         Logger.info("📦 Artifact record created: \(artifactId)", category: .ai)

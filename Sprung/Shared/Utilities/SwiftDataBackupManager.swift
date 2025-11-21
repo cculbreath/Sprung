@@ -56,8 +56,7 @@ struct SwiftDataBackupManager {
         }
         for file in candidates {
             let target = dest.appendingPathComponent(file.lastPathComponent)
-            do { try FileManager.default.copyItem(at: file, to: target) }
-            catch { throw SwiftDataBackupError.copyFailed("\(file.lastPathComponent): \(error.localizedDescription)") }
+            do { try FileManager.default.copyItem(at: file, to: target) } catch { throw SwiftDataBackupError.copyFailed("\(file.lastPathComponent): \(error.localizedDescription)") }
         }
         return dest
     }

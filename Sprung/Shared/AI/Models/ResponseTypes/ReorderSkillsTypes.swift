@@ -24,14 +24,14 @@ struct ReorderedSkillNode: Codable, Equatable {
         case reasonForReordering
         case isTitleNode
     }
-    
+
     // Custom initializer to handle different field names
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        
+
         id = try container.decode(String.self, forKey: .id)
         originalValue = try container.decode(String.self, forKey: .originalValue)
-        
+
         // Handle different position field names
         if let position = try? container.decode(Int.self, forKey: .newPosition) {
             newPosition = position
@@ -43,7 +43,7 @@ struct ReorderedSkillNode: Codable, Equatable {
                 debugDescription: "Neither newPosition nor recommendedPosition key found"
             ))
         }
-        
+
         // Handle different reason field names
         if let reason = try? container.decode(String.self, forKey: .reasonForReordering) {
             reasonForReordering = reason
@@ -55,18 +55,18 @@ struct ReorderedSkillNode: Codable, Equatable {
                 debugDescription: "Neither reasonForReordering nor reason key found"
             ))
         }
-        
+
         // Optional fields with default values
         isTitleNode = (try? container.decodeIfPresent(Bool.self, forKey: .isTitleNode)) ?? false
     }
-    
+
     // Additional coding keys for alternative field names
     enum AdditionalKeys: String, CodingKey {
         case recommendedPosition
         case reason
         case isTitleNode
     }
-    
+
     // Standard initializer for creating instances directly
     init(id: String, originalValue: String, newPosition: Int, reasonForReordering: String, isTitleNode: Bool = false) {
         self.id = id
@@ -82,7 +82,7 @@ struct ReorderSkillsResponse: Codable, Equatable {
     enum CodingKeys: String, CodingKey {
         case reorderedSkillsAndExpertise = "reordered_skills_and_expertise"
     }
-    
+
     // Custom initializer to handle different response formats
     init(from decoder: Decoder) throws {
         // First, try to decode as a regular container with reordered_skills_and_expertise field
@@ -102,7 +102,7 @@ struct ReorderSkillsResponse: Codable, Equatable {
             }
         }
     }
-    
+
     // Initializer for manual creation
     init(reorderedSkillsAndExpertise: [ReorderedSkillNode]) {
         self.reorderedSkillsAndExpertise = reorderedSkillsAndExpertise

@@ -14,13 +14,13 @@ struct OpenRouterReasoning: Codable {
     let exclude: Bool?
     /// Maximum tokens for reasoning
     let maxTokens: Int?
-    
+
     enum CodingKeys: String, CodingKey {
         case effort
         case exclude
         case maxTokens = "max_tokens"
     }
-    
+
     /// Convenience initializer with includeReasoning parameter
     init(effort: String? = nil, includeReasoning: Bool = true, maxTokens: Int? = nil) {
         self.effort = effort
@@ -30,7 +30,7 @@ struct OpenRouterReasoning: Codable {
 }
 /// Factory for assembling ChatCompletionParameters objects
 struct LLMRequestBuilder {
-    
+
     /// Build parameters for a simple text request
     static func buildTextRequest(
         prompt: String,
@@ -38,14 +38,14 @@ struct LLMRequestBuilder {
         temperature: Double
     ) -> ChatCompletionParameters {
         let message = LLMMessage.text(role: .user, content: prompt)
-        
+
         return ChatCompletionParameters(
             messages: [message],
             model: .custom(modelId),
             temperature: temperature
         )
     }
-    
+
     /// Build parameters for a request with image inputs
     static func buildVisionRequest(
         prompt: String,
@@ -57,7 +57,7 @@ struct LLMRequestBuilder {
         var contentParts: [ChatCompletionParameters.Message.ContentType.MessageContent] = [
             .text(prompt)
         ]
-        
+
         // Add images
         for imageData in images {
             guard let imageDetail = LLMVendorMapper.makeImageDetail(from: imageData) else {
@@ -66,20 +66,20 @@ struct LLMRequestBuilder {
             }
             contentParts.append(.imageUrl(imageDetail))
         }
-        
+
         // Create message
         let message = ChatCompletionParameters.Message(
             role: .user,
             content: .contentArray(contentParts)
         )
-        
+
         return ChatCompletionParameters(
             messages: [message],
             model: .custom(modelId),
             temperature: temperature
         )
     }
-    
+
     /// Build parameters for a structured JSON request with optional schema
     static func buildStructuredRequest<T: Codable>(
         prompt: String,
@@ -89,7 +89,7 @@ struct LLMRequestBuilder {
         jsonSchema: JSONSchema? = nil
     ) -> ChatCompletionParameters {
         let message = LLMMessage.text(role: .user, content: prompt)
-        
+
         if let schema = jsonSchema {
             let responseFormatSchema = JSONSchemaResponseFormat(
                 name: String(describing: responseType).lowercased(),
@@ -113,7 +113,7 @@ struct LLMRequestBuilder {
             )
         }
     }
-    
+
     /// Build parameters for a structured request with images
     static func buildStructuredVisionRequest<T: Codable>(
         prompt: String,
@@ -126,7 +126,7 @@ struct LLMRequestBuilder {
         var contentParts: [ChatCompletionParameters.Message.ContentType.MessageContent] = [
             .text(prompt)
         ]
-        
+
         // Add images
         for imageData in images {
             guard let imageDetail = LLMVendorMapper.makeImageDetail(from: imageData) else {
@@ -135,13 +135,13 @@ struct LLMRequestBuilder {
             }
             contentParts.append(.imageUrl(imageDetail))
         }
-        
+
         // Create message
         let message = ChatCompletionParameters.Message(
             role: .user,
             content: .contentArray(contentParts)
         )
-        
+
         return ChatCompletionParameters(
             messages: [message],
             model: .custom(modelId),
@@ -149,7 +149,7 @@ struct LLMRequestBuilder {
             temperature: temperature
         )
     }
-    
+
     /// Build parameters for a flexible JSON request (uses structured output when available)
     static func buildFlexibleJSONRequest<T: Codable>(
         prompt: String,
@@ -161,7 +161,7 @@ struct LLMRequestBuilder {
         shouldAvoidJSONSchema: Bool
     ) -> ChatCompletionParameters {
         let message = LLMMessage.text(role: .user, content: prompt)
-        
+
         if supportsStructuredOutput && !shouldAvoidJSONSchema {
             if let schema = jsonSchema {
                 // Use full structured output with JSON schema enforcement
@@ -198,7 +198,7 @@ struct LLMRequestBuilder {
             )
         }
     }
-    
+
     /// Build parameters for conversation requests
     static func buildConversationRequest(
         messages: [LLMMessageDTO],

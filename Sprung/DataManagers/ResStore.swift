@@ -38,7 +38,7 @@ final class ResStore: SwiftDataStore {
         if jobApp.selectedRes == nil {
             jobApp.selectedRes = resume
         }
-        
+
         // Update job app status from 'new' to 'inProgress' when creating first resume
         if jobApp.status == .new {
             jobApp.status = .inProgress
@@ -71,7 +71,7 @@ final class ResStore: SwiftDataStore {
         }
         modelContext.insert(resume)
         saveContext()
-        
+
         Task { @MainActor in
             do {
                 try await exportCoordinator.ensureFreshRenderedText(for: resume)
@@ -99,39 +99,39 @@ final class ResStore: SwiftDataStore {
     @discardableResult
     func duplicate(_ originalResume: Resume) -> Resume? {
         guard let jobApp = originalResume.jobApp else { return nil }
-        
+
         // Create new resume with same sources and template
         let newResume = Resume(
             jobApp: jobApp,
             enabledSources: originalResume.enabledSources,
             template: originalResume.template
         )
-        
+
         // Copy basic properties
         newResume.includeFonts = originalResume.includeFonts
         newResume.keyLabels = originalResume.keyLabels
         newResume.importedEditorKeysData = originalResume.importedEditorKeysData
         newResume.template = originalResume.template
-        
+
         // Deep copy the tree structure
         if let originalRoot = originalResume.rootNode {
             newResume.rootNode = duplicateTreeNode(originalRoot, for: newResume)
         }
-        
+
         // Deep copy font size nodes if they exist
         if originalResume.includeFonts && !originalResume.fontSizeNodes.isEmpty {
             newResume.fontSizeNodes = originalResume.fontSizeNodes.map { originalNode in
                 duplicateFontSizeNode(originalNode, for: newResume)
             }
         }
-        
+
         // Add to jobApp and save
         withAnimation(.spring(response: 0.45, dampingFraction: 0.82, blendDuration: 0.1)) {
             jobApp.addResume(newResume)
         }
         modelContext.insert(newResume)
         saveContext()
-        
+
         // Trigger export for the new resume
         Task { @MainActor in
             do {
@@ -140,10 +140,10 @@ final class ResStore: SwiftDataStore {
                 Logger.error("ResStore.duplicate: Failed to render PDF for duplicated resume \(newResume.id): \(error)")
             }
         }
-        
+
         return newResume
     }
-    
+
     private func duplicateTreeNode(_ original: TreeNode, for resume: Resume, parent: TreeNode? = nil) -> TreeNode {
         let newNode = TreeNode(
             name: original.name,
@@ -205,7 +205,7 @@ final class ResStore: SwiftDataStore {
         }
         return nil
     }
-    
+
     private func duplicateFontSizeNode(_ original: FontSizeNode, for resume: Resume) -> FontSizeNode {
         return FontSizeNode(
             key: original.key,

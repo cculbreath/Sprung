@@ -23,13 +23,13 @@ final class JobAppStore: SwiftDataStore {
     var form = JobAppForm()
     var resStore: ResStore
     var coverLetterStore: CoverLetterStore
-    
+
     // MARK: - Initialiser
     init(context: ModelContext, resStore: ResStore, coverLetterStore: CoverLetterStore) {
         modelContext = context
         self.resStore = resStore
         self.coverLetterStore = coverLetterStore
-        
+
     }
     // MARK: - Methods
     func updateJobAppStatus(_ jobApp: JobApp, to newStatus: Statuses) {

@@ -6,7 +6,7 @@ import Foundation
 /// Shared template processing logic for resume generation
 @MainActor
 class ResumeTemplateProcessor {
-    
+
     /// Create template context from Resume data
     static func createTemplateContext(from resume: Resume) throws -> [String: Any] {
         do {
@@ -21,5 +21,5 @@ class ResumeTemplateProcessor {
             )
         }
     }
-    
+
 }

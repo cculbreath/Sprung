@@ -83,17 +83,17 @@ enum CoverLetterPrompts {
         case .rewrite:
             prompt = """
                 My initial draft of a cover letter to accompany my application to be hired as a  \(app?.jobPosition ?? "") at \(app?.companyName ?? "") is included below.
-                
+
                 \(coverLetter.editorPrompt.rawValue)
             Cover Letter initial draft:
             \(coverLetter.content)
             """
-            
+
             // For mimic revisions, add the writing samples context
             if coverLetter.editorPrompt == .mimic {
                 prompt = """
                     \(applicant.name) has written an initial draft of a cover letter to accompany their application to be hired as a \(app?.jobPosition ?? "") at \(app?.companyName ?? "").
-                    
+
                     \(applicant.name) has also included writing samples from cover letters they wrote for earlier applications that they are particularly satisfied with. These samples demonstrate \(applicant.name)'s preferred writing style and voice that should be emulated:
                     **WRITING SAMPLES TO EMULATE:**
                     \(coverLetter.writingSamplesString)

@@ -56,7 +56,7 @@ struct OnboardingInterviewView: View {
                 .animation(.easeInOut(duration: 0.25), value: coordinator.wizardTracker.currentStep)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.horizontal,32)
+            .padding(.horizontal, 32)
         }
         let styledContent = contentStack
             .frame(minWidth: 1040)
@@ -161,7 +161,7 @@ struct OnboardingInterviewView: View {
                 if let pending = coordinator.ui.pendingExtraction {
                     ExtractionReviewSheet(
                         extraction: pending,
-                        onConfirm: { updated, notes in
+                        onConfirm: { _, _ in
                             // FEATURE REQUEST: Extraction confirmation and editing
                             // Status: Deferred to post-M0 milestone
                             // The UI for reviewing and editing extracted data exists, but the confirmation

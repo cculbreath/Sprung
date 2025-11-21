@@ -4,13 +4,13 @@ struct ResumeCustomizeButton: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(ResumeReviseViewModel.self) private var resumeReviseViewModel: ResumeReviseViewModel
     @Environment(ReasoningStreamManager.self) private var reasoningStreamManager: ReasoningStreamManager
-    
+
     @Binding var selectedTab: TabList
-    
+
     @State private var isGeneratingResume = false
     @State private var showCustomizeModelSheet = false
     @State private var selectedCustomizeModel = ""
-    
+
     var body: some View {
         Button(action: {
             selectedTab = .resume
@@ -28,8 +28,8 @@ struct ResumeCustomizeButton: View {
         }
         .buttonStyle( .automatic )
         .help("Create Resume Revisions (requires nodes marked for AI revision)")
-        .disabled(jobAppStore.selectedApp == nil || 
-                  jobAppStore.selectedApp?.selectedRes?.rootNode == nil || 
+        .disabled(jobAppStore.selectedApp == nil ||
+                  jobAppStore.selectedApp?.selectedRes?.rootNode == nil ||
                   !(jobAppStore.selectedApp?.selectedRes?.hasUpdatableNodes == true))
         .sheet(isPresented: $showCustomizeModelSheet) {
             ModelSelectionSheet(
@@ -51,27 +51,27 @@ struct ResumeCustomizeButton: View {
             showCustomizeModelSheet = true
         }
     }
-    
-    @MainActor 
+
+    @MainActor
     private func startCustomizeWorkflow(modelId: String) async {
         guard let jobApp = jobAppStore.selectedApp,
               let resume = jobApp.selectedRes else {
             isGeneratingResume = false
             return
         }
-        
+
         do {
             Logger.debug("🛡️ [ResumeCustomizeButton] Starting fresh workflow with model: \(modelId)")
             reasoningStreamManager.hideAndClear()
-            
+
             try await resumeReviseViewModel.startFreshRevisionWorkflow(
                 resume: resume,
                 modelId: modelId,
                 workflow: .customize
             )
-            
+
             isGeneratingResume = false
-            
+
         } catch {
             Logger.error("Error in customize workflow: \(error.localizedDescription)")
             isGeneratingResume = false

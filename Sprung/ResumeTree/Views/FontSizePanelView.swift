@@ -20,7 +20,7 @@ struct FontSizePanelView: View {
         }
         .cornerRadius(5)
         .padding(.vertical, 2)
-        if isExpanded { 
+        if isExpanded {
             VStack {
                 // Safely access fontSizeNodes to avoid CoreData faulting issues
                 if let resume = jobAppStore.selectedApp?.selectedRes {

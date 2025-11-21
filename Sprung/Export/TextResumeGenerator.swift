@@ -11,7 +11,7 @@ class TextResumeGenerator {
     init(templateStore: TemplateStore) {
         self.templateStore = templateStore
     }
-    
+
     // MARK: - Public Methods
     /// Generate a text resume using the specified template
     func generateTextResume(for resume: Resume, template: String) throws -> String {
@@ -22,12 +22,12 @@ class TextResumeGenerator {
     private func renderTemplate(for resume: Resume, template: String) throws -> String {
         // Load template
         let templateContent = try loadTextTemplate(named: template)
-        
+
         // Create and process context
         let context = try createTemplateContext(from: resume)
         var processedContext = preprocessContextForText(context, from: resume)
         processedContext = HandlebarsContextAugmentor.augment(processedContext)
-        
+
         let translation = HandlebarsTranslator.translate(templateContent)
         logTranslationWarnings(translation.warnings, template: template)
         // Render with Mustache
@@ -35,28 +35,28 @@ class TextResumeGenerator {
         TemplateFilters.register(on: mustacheTemplate)
         return try mustacheTemplate.render(processedContext)
     }
-    
+
     private func loadTextTemplate(named template: String) throws -> String {
         var templateContent: String?
         if let stored = templateStore.textTemplateContent(slug: template.lowercased()) {
             templateContent = stored
         }
         guard let content = templateContent else {
-            throw NSError(domain: "TextResumeGenerator", code: 404, 
+            throw NSError(domain: "TextResumeGenerator", code: 404,
                          userInfo: [NSLocalizedDescriptionKey: "Template not found: \(template)"])
         }
-        
+
         return content
     }
-    
+
     private func createTemplateContext(from resume: Resume) throws -> [String: Any] {
         // Use the shared template processor for consistency
         return try ResumeTemplateProcessor.createTemplateContext(from: resume)
     }
-    
+
     private func preprocessContextForText(_ context: [String: Any], from resume: Resume) -> [String: Any] {
         var processed = context
-        
+
         // Normalize contact values and build contactItems
         var contactItems: [String] = []
         if var contact = processed["contact"] as? [String: Any],
@@ -96,7 +96,7 @@ class TextResumeGenerator {
             }
             processed["skills-and-expertise"] = skillsArray
         }
-        
+
         // Convert education object to array format
         if let educationDict = processed["education"] as? [String: Any] {
             var educationArray: [[String: Any]] = []
@@ -117,22 +117,22 @@ class TextResumeGenerator {
         }
         return processed
     }
-    
+
     /// Decode HTML entities that may appear in rendered plain-text output
     private func sanitizeRenderedText(_ text: String) -> String {
         return text
             .decodingHTMLEntities()
             .collapsingConsecutiveBlankLines()
     }
-    
+
     private func convertEmploymentToArray(_ employment: [String: Any], from resume: Resume) -> [[String: Any]] {
         if let rootNode = resume.rootNode,
            let employmentSection = rootNode.children?.first(where: { $0.name == "employment" }),
            let employmentNodes = employmentSection.children {
-            
+
             let sortedNodes = employmentNodes.sorted { $0.myIndex < $1.myIndex }
             var employmentArray: [[String: Any]] = []
-            
+
             for node in sortedNodes {
                 let employer = node.name
                 if let details = employment[employer] as? [String: Any] {
@@ -142,16 +142,16 @@ class TextResumeGenerator {
                     employmentArray.append(detailsDict)
                 }
             }
-            
+
             return employmentArray
         }
-        
+
         // Fallback to simple conversion without sorting
         return employment.map { employer, details in
             var detailsDict = details as? [String: Any] ?? [:]
             detailsDict["employer"] = employer
             normalizeLocation(in: &detailsDict)
-            
+
             return detailsDict
         }
     }

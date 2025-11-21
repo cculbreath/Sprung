@@ -13,20 +13,20 @@ class ApplicationReviewService: @unchecked Sendable {
     /// The LLM facade for AI operations
     private let llm: LLMFacade
     private let exportCoordinator: ResumeExportCoordinator
-    
+
     /// The query service for prompts
     private let query = ApplicationReviewQuery()
-    
+
     /// The current request ID for tracking active requests
     private var currentRequestID: UUID?
-    
+
     // MARK: - Initialization
     /// Initialize with LLM service
     init(llmFacade: LLMFacade, exportCoordinator: ResumeExportCoordinator) {
         self.llm = llmFacade
         self.exportCoordinator = exportCoordinator
     }
-    
+
     // MARK: - Core Review Operations
     // MARK: - LLM Request (non-image handled by client, image via raw call)
     func sendReviewRequest(
@@ -59,7 +59,7 @@ class ApplicationReviewService: @unchecked Sendable {
             }
         }
     }
-    
+
     private func performReviewRequest(
         reviewType: ApplicationReviewType,
         jobApp: JobApp,
@@ -73,7 +73,7 @@ class ApplicationReviewService: @unchecked Sendable {
         // Determine if we should include image based on review type and options
         let shouldIncludeImage = (reviewType != .custom) || (customOptions?.includeResumeImage ?? false)
         var imageData: [Data] = []
-        
+
         if shouldIncludeImage, let pdfData = resume.pdfData {
             // Convert PDF to PNG image format
             if let base64Image = ImageConversionService.shared.convertPDFToBase64Image(pdfData: pdfData),
@@ -96,7 +96,7 @@ class ApplicationReviewService: @unchecked Sendable {
         )
         let requestID = UUID()
         currentRequestID = requestID
-        
+
         Logger.debug("📤 [ApplicationReview] Starting review request")
         Logger.debug("📤 [ApplicationReview] Review type: \(reviewType.rawValue)")
         Logger.debug("📤 [ApplicationReview] Model: \(modelId)")
@@ -105,7 +105,7 @@ class ApplicationReviewService: @unchecked Sendable {
         Task {
             do {
                 let response: String
-                
+
                 if !imageData.isEmpty {
                     // Image request requires multimodal handling
                     Logger.debug("📸 [ApplicationReview] Using image-based request path")
@@ -122,27 +122,27 @@ class ApplicationReviewService: @unchecked Sendable {
                         modelId: modelId
                     )
                 }
-                
+
                 // Check if request was cancelled
                 guard currentRequestID == requestID else {
                     Logger.debug("📤 [ApplicationReview] Request cancelled")
                     return
                 }
-                
+
                 Logger.debug("📥 [ApplicationReview] Review complete")
                 Logger.debug("📥 [ApplicationReview] Response length: \(response.count) characters")
-                
+
                 // Stream the response for UI consistency
                 onProgress(response)
                 onComplete(.success("Done"))
-                
+
             } catch {
                 // Check if request was cancelled
                 guard currentRequestID == requestID else {
                     Logger.debug("📤 [ApplicationReview] Request cancelled during error handling")
                     return
                 }
-                
+
                 Logger.error("❌ [ApplicationReview] Error: \(error)")
                 onComplete(.failure(error))
             }

@@ -2,13 +2,13 @@ import SwiftUI
 import SwiftyJSON
 struct DraftKnowledgeListView: View {
     let coordinator: OnboardingInterviewCoordinator
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Draft Knowledge Cards")
                 .font(.headline)
                 .foregroundStyle(.secondary)
-            
+
             if coordinator.ui.drafts.isEmpty {
                 ContentUnavailableView(
                     "No Drafts Yet",
@@ -38,7 +38,7 @@ struct DraftKnowledgeListView: View {
 }
 struct DraftKnowledgeCardRow: View {
     let draft: KnowledgeCardDraft
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -53,12 +53,12 @@ struct DraftKnowledgeCardRow: View {
                     .foregroundStyle(.orange)
                     .cornerRadius(4)
             }
-            
+
             Text(draft.summary)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
-            
+
             HStack {
                 ForEach(draft.skills.prefix(3), id: \.self) { skill in
                     Text(skill)

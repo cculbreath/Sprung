@@ -17,7 +17,7 @@ struct ApplicationReviewSheet: View {
     @State private var customOptions: CustomApplicationReviewOptions
     @State private var responseText: String = ""
     @State private var isProcessing = false
-    @State private var errorMessage: String? = nil
+    @State private var errorMessage: String?
     init(jobApp: JobApp, resume: Resume, availableCoverLetters: [CoverLetter]) {
         self.jobApp = jobApp
         self.resume = resume
@@ -39,7 +39,7 @@ struct ApplicationReviewSheet: View {
             Text("AI Application Review")
                 .font(.title)
                 .padding(.bottom, 16)
-            
+
             // Scrollable content
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
@@ -103,7 +103,7 @@ struct ApplicationReviewSheet: View {
             if selectedType == .custom {
                 customOptionsView
             }
-            
+
                     // AI Model Selection
                     DropdownModelPicker(
                         selectedModel: $selectedModel,
@@ -114,11 +114,11 @@ struct ApplicationReviewSheet: View {
                         responseContent
                             .frame(minHeight: 200)
                     }
-                    
+
                 }
                 .padding(.bottom, 16)
             }
-            
+
             // Fixed buttons at bottom
             HStack {
                 if isProcessing {
@@ -242,7 +242,7 @@ struct ApplicationReviewSheet: View {
             }
         }()
         Logger.info("🚀 Submitting application review using \(selectedType.rawValue) (custom: \(selectedType == .custom))")
-        
+
         Task { @MainActor in
             guard let service = reviewService else {
                 self.isProcessing = false
@@ -259,8 +259,8 @@ struct ApplicationReviewSheet: View {
                 onProgress: { chunk in
                     Task { @MainActor in
                         // If we're just starting, clear any previous placeholder
-                        if self.responseText == "Submitting request..." { 
-                            self.responseText = "" 
+                        if self.responseText == "Submitting request..." {
+                            self.responseText = ""
                         }
                         self.responseText += chunk
                     }
@@ -268,7 +268,7 @@ struct ApplicationReviewSheet: View {
                 onComplete: { result in
                     Task { @MainActor in
                         self.isProcessing = false
-                        if case let .failure(err) = result { 
+                        if case let .failure(err) = result {
                             self.errorMessage = err.localizedDescription
                             Logger.error("❌ Application review failed: \(err)")
                         } else {

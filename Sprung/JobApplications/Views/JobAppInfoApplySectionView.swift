@@ -13,7 +13,7 @@ struct ApplySection: View {
                 leading: "Job Apply Link", trailingKeys: \JobApp.jobApplyLink,
                 formTrailingKeys: \JobAppForm.jobApplyLink, isEditing: $buttons.edit
             )
-            
+
             Cell(
                 leading: "Posting URL", trailingKeys: \JobApp.postingURL,
                 formTrailingKeys: \JobAppForm.postingURL, isEditing: $buttons.edit

@@ -112,7 +112,7 @@ enum ResumeReviewType: String, CaseIterable, Identifiable {
             // as it involves image data and iterative calls.
             // A base instruction could be:
             return "The 'Skills and Expertise' section of the resume is overflowing. Please adjust the content to fit."
-            
+
         case .reorderSkills:
             return """
             Context:
@@ -133,16 +133,16 @@ enum ResumeReviewType: String, CaseIterable, Identifiable {
             2. Analyze the job description to identify the most valuable and relevant skills.
             3. Recommend a reordering of the skills to prioritize those most relevant to the job.
             4. List the skills in the recommended order (most relevant first).
-            
+
             Output format (markdown):
             ### Skills Reordering Recommendation
-            
+
             **Current Skills Order**
             <List the current skills in their existing order>
-            
+
             **Recommended Skills Order**
             <List the skills in recommended order with the most relevant first>
-            
+
             **Rationale**
             <Brief explanation of the recommended changes and how they align with the job requirements>
             """

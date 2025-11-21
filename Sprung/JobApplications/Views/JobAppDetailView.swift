@@ -13,7 +13,6 @@ struct JobAppDetailView: View {
     @State private var showingDeleteConfirmation: Bool = false
     var body: some View {
         ScrollView {
-            let _ = jobAppStore.form
             if jobAppStore.selectedApp != nil {
                 VStack {
                     HeaderView(

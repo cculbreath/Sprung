@@ -24,17 +24,17 @@ struct RequestEvidenceTool: InterviewTool {
             additionalProperties: false
         )
     }()
-    
+
     private unowned let coordinator: OnboardingInterviewCoordinator
-    
+
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
-    
+
     var name: String { "request_evidence" }
     var description: String { "Request specific evidence from the user to verify a timeline entry." }
     var parameters: JSONSchema { Self.schema }
-    
+
     func execute(_ params: JSON) async throws -> ToolResult {
         guard let timelineEntryId = params["timeline_entry_id"].string, !timelineEntryId.isEmpty else {
             throw ToolError.invalidParameters("timeline_entry_id must be provided")
@@ -45,25 +45,25 @@ struct RequestEvidenceTool: InterviewTool {
         guard let categoryString = params["category"].string else {
             throw ToolError.invalidParameters("category must be provided")
         }
-        
+
         guard let category = EvidenceRequirement.EvidenceCategory(rawValue: categoryString) else {
             throw ToolError.invalidParameters("Invalid category: \(categoryString). Must be one of: paper, code, website, portfolio, degree, other")
         }
-        
+
         let requirement = EvidenceRequirement(
             timelineEntryId: timelineEntryId,
             description: description,
             category: category
         )
-        
+
         await coordinator.eventBus.publish(.evidenceRequirementAdded(requirement))
-        
+
         let result = JSON([
             "status": "success",
             "message": "Evidence request added: \(description)",
             "request_id": requirement.id
         ])
-        
+
         return .immediate(result)
     }
 }

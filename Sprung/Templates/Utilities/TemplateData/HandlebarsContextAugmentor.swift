@@ -26,11 +26,11 @@ enum HandlebarsContextAugmentor {
     private static func augmentBasics(in context: inout [String: Any]) {
         guard var basics = context["basics"] as? [String: Any] else { return }
         if let image = stringValue(basics["image"]), !image.isEmpty,
-           (stringValue(basics["picture"])?.isEmpty ?? true) {
+           stringValue(basics["picture"])?.isEmpty ?? true {
             basics["picture"] = image
         }
         if let picture = stringValue(basics["picture"]), !picture.isEmpty,
-           (stringValue(basics["image"])?.isEmpty ?? true) {
+           stringValue(basics["image"])?.isEmpty ?? true {
             basics["image"] = picture
         }
         if let name = stringValue(basics["name"]), !name.isEmpty {
@@ -41,10 +41,10 @@ enum HandlebarsContextAugmentor {
         }
         if var location = basics["location"] as? [String: Any] {
             if let state = stringValue(location["state"]), !state.isEmpty,
-               (stringValue(location["region"])?.isEmpty ?? true) {
+               stringValue(location["region"])?.isEmpty ?? true {
                 location["region"] = state
             } else if let region = stringValue(location["region"]), !region.isEmpty,
-                      (stringValue(location["state"])?.isEmpty ?? true) {
+                      stringValue(location["state"])?.isEmpty ?? true {
                 location["state"] = region
             }
             basics["location"] = location

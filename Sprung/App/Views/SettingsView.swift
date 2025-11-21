@@ -25,7 +25,7 @@ struct SettingsView: View {
         ("minimal", "Minimal", "Fastest responses; rely on tools and concise reasoning"),
         ("low", "Low", "Faster responses with basic reasoning"),
         ("medium", "Medium", "Balanced speed and reasoning depth"),
-        ("high", "High", "Thorough reasoning with detailed analysis"),
+        ("high", "High", "Thorough reasoning with detailed analysis")
     ]
     var body: some View {
         Form {

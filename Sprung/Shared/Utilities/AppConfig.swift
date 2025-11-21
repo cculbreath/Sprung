@@ -11,6 +11,6 @@ enum AppConfig {
     static let openRouterVersion = "v1"
     static let openRouterHeaders: [String: String] = [
         "HTTP-Referer": "https://github.com/cculbreath/Sprung",
-        "X-Title": "Sprung",
+        "X-Title": "Sprung"
     ]
 }

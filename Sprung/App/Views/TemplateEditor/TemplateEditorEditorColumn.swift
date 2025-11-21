@@ -46,7 +46,7 @@ struct TemplateEditorEditorColumn: View {
             .labelsHidden()
             .padding(.trailing, 16)
             controlsRow()
-            
+
             if selectedTab == .txtTemplate, let warning = customFieldWarningMessage {
                 warningBanner(text: warning)
             }

@@ -35,7 +35,7 @@ struct LetterAnalysis: Codable {
 }
 @Model
 class CoverLetter: Identifiable, Hashable {
-    var jobApp: JobApp? = nil
+    var jobApp: JobApp?
     @Attribute(.unique) var id: UUID = UUID() // Explicit id field
 
     var createdDate: Date = Date()
@@ -47,23 +47,23 @@ class CoverLetter: Identifiable, Hashable {
     var generated: Bool = false
     var includeResumeRefs: Bool = false
     // The AI model used to generate this cover letter
-    var generationModel: String? = nil
+    var generationModel: String?
     var encodedEnabledRefs: Data? // Store as Data
     var currentMode: CoverAiMode? = CoverAiMode.none
     var editorPrompt: CoverLetterPrompts.EditorPrompts = CoverLetterPrompts.EditorPrompts.zinsser
-    
+
     /// Indicates this is the chosen submission draft (star indicator)
     var isChosenSubmissionDraft: Bool = false
-    
+
     /// Multi-model assessment data (stored as encoded data to avoid schema changes)
     var encodedAssessmentData: Data? // Stores AssessmentData as JSON
-    
+
     /// Committee feedback summary (stored as encoded data)
     var encodedCommitteeFeedback: Data? // Stores CommitteeFeedbackSummary as JSON
-    
+
     /// Generation metadata: sources used at time of generation (stored as encoded data)
     var encodedGenerationSources: Data? // Stores [CoverRef] as JSON
-    
+
     /// Generation metadata: resume background state at time of generation
     var generationUsedResumeRefs: Bool = false
     var modDate: String {
@@ -81,7 +81,7 @@ class CoverLetter: Identifiable, Hashable {
             encodedEnabledRefs = try? JSONEncoder().encode(newValue)
         }
     }
-    
+
     /// Multi-model assessment data computed properties
     var assessmentData: AssessmentData {
         get {
@@ -103,34 +103,34 @@ class CoverLetter: Identifiable, Hashable {
             }
         }
     }
-    
+
     var voteCount: Int {
         get { assessmentData.voteCount }
-        set { 
+        set {
             var data = assessmentData
             data.voteCount = newValue
             assessmentData = data
         }
     }
-    
+
     var scoreCount: Int {
         get { assessmentData.scoreCount }
-        set { 
+        set {
             var data = assessmentData
             data.scoreCount = newValue
             assessmentData = data
         }
     }
-    
+
     var hasBeenAssessed: Bool {
         get { assessmentData.hasBeenAssessed }
-        set { 
+        set {
             var data = assessmentData
             data.hasBeenAssessed = newValue
             assessmentData = data
         }
     }
-    
+
     /// Committee feedback summary computed properties
     var committeeFeedback: CommitteeFeedbackSummary? {
         get {
@@ -152,7 +152,7 @@ class CoverLetter: Identifiable, Hashable {
             }
         }
     }
-    
+
     /// Generation sources computed properties (read-only snapshot of sources at generation time)
     var generationSources: [CoverRef] {
         get {
@@ -235,8 +235,7 @@ class CoverLetter: Identifiable, Hashable {
         if !nameParts.isEmpty {
             if let optionWord = nameParts[0].split(separator: " ").first,
                optionWord == "Option",
-               let letterPart = nameParts[0].split(separator: " ").last
-            {
+               let letterPart = nameParts[0].split(separator: " ").last {
                 return String(letterPart)
             }
         }
@@ -280,18 +279,18 @@ class CoverLetter: Identifiable, Hashable {
             name = newContent
         }
     }
-    
+
     /// Marks this cover letter as the chosen submission draft, clearing the flag from all others
     func markAsChosenSubmissionDraft() {
         guard let jobApp = jobApp else { return }
-        
+
         // Clear the flag from all other cover letters for this job
         for letter in jobApp.coverLetters {
             if letter.id != self.id {
                 letter.isChosenSubmissionDraft = false
             }
         }
-        
+
         // Set this one as chosen
         self.isChosenSubmissionDraft = true
     }

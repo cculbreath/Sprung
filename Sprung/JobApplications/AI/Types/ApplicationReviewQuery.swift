@@ -6,7 +6,7 @@ import Foundation
 /// Centralized prompt management for application review operations
 /// Follows the architecture pattern from ResumeQuery.swift and CoverLetterQuery.swift
 @Observable class ApplicationReviewQuery {
-    
+
     // MARK: - Main Review Prompt Building
     /// Build the main application review prompt
     /// - Parameters:
@@ -55,13 +55,13 @@ import Foundation
         prompt = prompt.replacingOccurrences(of: "{includeImage}", with: imageText)
         return prompt
     }
-    
+
     /// Build the system prompt for application review
     /// - Returns: The system prompt that establishes the AI's role
     func systemPrompt() -> String {
         return "You are an expert recruiter reviewing job application packets."
     }
-    
+
     // MARK: - Custom Prompt Building
     /// Build custom prompt from options
     /// - Parameter options: The custom review options
@@ -106,10 +106,10 @@ import Foundation
         } else {
             segments.append(finalPrompt)
         }
-        
+
         let result = segments.joined(separator: "\n\n")
         Logger.debug("🔧 [ApplicationReview] Custom prompt built, total length: \(result.count)")
         return result
     }
-    
+
 }

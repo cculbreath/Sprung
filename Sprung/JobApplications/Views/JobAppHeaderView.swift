@@ -14,7 +14,7 @@ struct HeaderView: View {
     var body: some View {
         HStack {
             Spacer()
-            
+
             if buttons.edit {
                 // Edit mode: Show Save, Cancel, and Delete buttons
                 HStack(spacing: 12) {
@@ -27,7 +27,7 @@ struct HeaderView: View {
                     }
                     .buttonStyle(.plain)
                     .help("Save changes")
-                    
+
                     Button {
                         buttons.cancel = true
                     } label: {
@@ -37,7 +37,7 @@ struct HeaderView: View {
                     }
                     .buttonStyle(.plain)
                     .help("Cancel editing")
-                    
+
                     Button {
                         showingDeleteConfirmation = true
                     } label: {

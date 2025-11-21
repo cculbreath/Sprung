@@ -50,65 +50,65 @@ struct MarkdownWebView: NSViewRepresentable {
                     background-color: \(colorScheme == .dark ? "#3A3A3A" : "#F0F0F0");
                     font-weight: bold;
                 }
-                h1, h2, h3, h4, h5, h6 { 
-                    margin-top: 1.2em; 
-                    margin-bottom: 0.6em; 
+                h1, h2, h3, h4, h5, h6 {
+                    margin-top: 1.2em;
+                    margin-bottom: 0.6em;
                     font-weight: 600;
                     color: \(colorScheme == .dark ? "#F0F0F0" : "#111111");
                 }
-                p { 
+                p {
                     margin-top: 0;
-                    margin-bottom: 0.8em; 
+                    margin-bottom: 0.8em;
                 }
-                ul, ol { 
+                ul, ol {
                     margin-left: 0; /* Reset default browser margin */
                     padding-left: 1.8em; /* Indent lists */
-                    margin-bottom: 0.8em; 
+                    margin-bottom: 0.8em;
                 }
-                li { 
-                    margin-bottom: 0.3em; 
+                li {
+                    margin-bottom: 0.3em;
                 }
-                code { 
-                    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace; 
-                    background-color: \(colorScheme == .dark ? "#383838" : "#F5F5F5"); 
-                    padding: 0.2em 0.4em; 
-                    border-radius: 4px; 
+                code {
+                    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+                    background-color: \(colorScheme == .dark ? "#383838" : "#F5F5F5");
+                    padding: 0.2em 0.4em;
+                    border-radius: 4px;
                     font-size: 90%;
                     border: 1px solid \(colorScheme == .dark ? "#4A4A4A" : "#E5E5E5");
                 }
-                pre { 
-                    background-color: \(colorScheme == .dark ? "#2C2C2C" : "#F8F8F8"); 
-                    padding: 12px; 
-                    border-radius: 6px; 
-                    overflow-x: auto; 
+                pre {
+                    background-color: \(colorScheme == .dark ? "#2C2C2C" : "#F8F8F8");
+                    padding: 12px;
+                    border-radius: 6px;
+                    overflow-x: auto;
                     border: 1px solid \(colorScheme == .dark ? "#454545" : "#E0E0E0");
                     font-size: 85%;
                 }
-                pre code { 
-                    padding: 0; 
-                    background-color: transparent; 
-                    border-radius: 0; 
+                pre code {
+                    padding: 0;
+                    background-color: transparent;
+                    border-radius: 0;
                     border: none;
                 }
-                blockquote { 
-                    border-left: 4px solid \(colorScheme == .dark ? "#666666" : "#BBBBBB"); 
-                    padding-left: 1em; 
-                    margin-left: 0; 
+                blockquote {
+                    border-left: 4px solid \(colorScheme == .dark ? "#666666" : "#BBBBBB");
+                    padding-left: 1em;
+                    margin-left: 0;
                     margin-top: 1em;
                     margin-bottom: 1em;
                     color: \(colorScheme == .dark ? "#B0B0B0" : "#555555");
                     font-style: italic;
                 }
-                a { 
+                a {
                     color: #007AFF; /* Standard iOS blue link color */
-                    text-decoration: none; 
+                    text-decoration: none;
                 }
-                a:hover { 
-                    text-decoration: underline; 
+                a:hover {
+                    text-decoration: underline;
                 }
-                img { 
-                    max-width: 100%; 
-                    height: auto; 
+                img {
+                    max-width: 100%;
+                    height: auto;
                     border-radius: 4px;
                 }
             </style>

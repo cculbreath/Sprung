@@ -19,7 +19,7 @@ struct APIKeyManager {
             kSecAttrService as String: service,
             kSecAttrAccount as String: type.rawValue,
             kSecReturnData as String: kCFBooleanTrue as Any,
-            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecMatchLimit as String: kSecMatchLimitOne
         ]
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
@@ -34,11 +34,11 @@ struct APIKeyManager {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: type.rawValue,
+            kSecAttrAccount as String: type.rawValue
         ]
         // Update if exists
         let updateAttrs: [String: Any] = [
-            kSecValueData as String: data,
+            kSecValueData as String: data
         ]
         var status = SecItemUpdate(query as CFDictionary, updateAttrs as CFDictionary)
         if status == errSecItemNotFound {
@@ -53,7 +53,7 @@ struct APIKeyManager {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: type.rawValue,
+            kSecAttrAccount as String: type.rawValue
         ]
         SecItemDelete(query as CFDictionary)
     }

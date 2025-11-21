@@ -113,7 +113,7 @@ struct OnboardingUploadMetadata: Codable {
     var allowMultiple: Bool
     var allowURL: Bool = true
     var targetKey: String?
-    var cancelMessage: String? = nil
+    var cancelMessage: String?
     var targetPhaseObjectives: [String]?
     var targetDeliverable: String?
     var userValidated: Bool?
@@ -145,7 +145,6 @@ struct OnboardingUploadedItem: Identifiable, Codable {
     let url: URL
     let uploadedAt: Date
 }
-
 
 struct OnboardingApplicantProfileIntakeState: Equatable {
     enum Mode: Equatable {

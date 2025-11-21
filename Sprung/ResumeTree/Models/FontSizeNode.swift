@@ -12,7 +12,7 @@ import SwiftData
     /// Local index within the font‑size array (provided by the builder).
     var index: Int
     var fontValue: Float
-    
+
     // Relationship back to Resume
     var resume: Resume?
     var fontString: String {

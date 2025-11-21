@@ -77,8 +77,7 @@ extension JobApp {
                        let data = rawJSON.data(using: .utf8),
                        let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                        let wrapper = obj["jobInfoWrapperModel"] as? [String: Any],
-                       let info = wrapper["jobInfoModel"] as? [String: Any]
-                    {
+                       let info = wrapper["jobInfoModel"] as? [String: Any] {
                         return mapEmbeddedJobInfo(info, url: url, store: jobAppStore)
                     }
                 }
@@ -87,14 +86,12 @@ extension JobApp {
                     // Use `.html()` to get raw JSON without entity decoding.
                     if let rawJSON = try? mosaicScript.html(),
                        let data = rawJSON.data(using: .utf8),
-                       let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-                    {
+                       let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                         // The hierarchy we care about lives under props.pageProps.jobInfoWrapperModel
                         if let props = obj["props"] as? [String: Any],
                            let pageProps = props["pageProps"] as? [String: Any],
                            let wrapper = pageProps["jobInfoWrapperModel"] as? [String: Any],
-                           let info = wrapper["jobInfoModel"] as? [String: Any]
-                        {
+                           let info = wrapper["jobInfoModel"] as? [String: Any] {
                             return mapEmbeddedJobInfo(info, url: url, store: jobAppStore)
                         }
                     }
@@ -117,8 +114,7 @@ extension JobApp {
             }
             // Company
             if let org = jobDict["hiringOrganization"] as? [String: Any],
-               let companyName = org["name"] as? String
-            {
+               let companyName = org["name"] as? String {
                 jobApp.companyName = companyName.decodingHTMLEntities()
             }
             // Employment type
@@ -227,8 +223,7 @@ extension JobApp {
         if let primary = try? await JobApp.fetchHTMLContent(from: urlString) {
             html = primary
         } else if let url = URL(string: urlString),
-                  let webHTML = try? await WebViewHTMLFetcher.html(for: url)
-        {
+                  let webHTML = try? await WebViewHTMLFetcher.html(for: url) {
             // Fallback: load the same desktop URL in a hidden WKWebView.
             html = webHTML
         } else {

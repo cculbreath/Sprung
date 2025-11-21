@@ -8,14 +8,14 @@ class NativePDFGenerator: NSObject, ObservableObject {
     private let profileProvider: ApplicantProfileProviding
     private var webView: WKWebView?
     private var currentCompletion: ((Result<Data, Error>) -> Void)?
-    
+
     init(templateStore: TemplateStore, profileProvider: ApplicantProfileProviding) {
         self.templateStore = templateStore
         self.profileProvider = profileProvider
         super.init()
         setupWebView()
     }
-    
+
     private func setupWebView() {
         let configuration = WKWebViewConfiguration()
         // Full letter size - margins will be handled in CSS
@@ -23,17 +23,17 @@ class NativePDFGenerator: NSObject, ObservableObject {
         webView = WKWebView(frame: pageRect, configuration: configuration)
         webView?.navigationDelegate = self
     }
-    
+
     func generatePDF(for resume: Resume, template: String, format: String = "html") async throws -> Data {
         return try await withCheckedThrowingContinuation { continuation in
             Task { @MainActor in
                 do {
                     let htmlContent = try renderTemplate(for: resume, template: template, format: format)
-                    
+
                     currentCompletion = { result in
                         continuation.resume(with: result)
                     }
-                    
+
                     webView?.loadHTMLString(htmlContent, baseURL: nil)
                 } catch {
                     continuation.resume(throwing: error)
@@ -41,7 +41,7 @@ class NativePDFGenerator: NSObject, ObservableObject {
             }
         }
     }
-    
+
     // MARK: - Custom Template Rendering
     @MainActor
     func generatePDFFromCustomTemplate(
@@ -86,7 +86,7 @@ class NativePDFGenerator: NSObject, ObservableObject {
 #endif
         return processed
     }
-    
+
     /// Legacy helper retained for text exports. Text generation duties moved to
     /// `TextResumeGenerator`, but PDF rendering still relies on this pipeline.
     @MainActor
@@ -102,11 +102,11 @@ class NativePDFGenerator: NSObject, ObservableObject {
         guard let content = templateContent else {
             throw PDFGeneratorError.templateNotFound("\(resourceName).\(format)")
         }
-        
+
         // Convert Resume to template context
         let rawContext = try createTemplateContext(from: resume)
         let processedContext = preprocessContextForTemplate(rawContext, from: resume)
-        
+
         // Fix font URLs for macOS system fonts and preprocess helpers
         let fontsFixed = fixFontReferences(content)
         let translation = HandlebarsTranslator.translate(fontsFixed)
@@ -115,20 +115,20 @@ class NativePDFGenerator: NSObject, ObservableObject {
         if format == "html", let css = templateStore.cssTemplateContent(slug: normalizedTemplate), !css.isEmpty {
             finalContent = "<style>\n\(css)\n</style>\n" + finalContent
         }
-        
+
         // Use GRMustache to render the template
         let mustacheTemplate = try Mustache.Template(string: finalContent)
         TemplateFilters.register(on: mustacheTemplate)
         let renderedContent = try mustacheTemplate.render(processedContext)
-        
+
         // For HTML format, save debug output
         if format == "html" {
             saveDebugHTML(renderedContent, template: template, format: format)
         }
-        
+
         return renderedContent
     }
-    
+
     @MainActor
     private func createTemplateContext(from resume: Resume) throws -> [String: Any] {
         try ResumeTemplateDataBuilder.buildContext(from: resume)
@@ -298,27 +298,27 @@ class NativePDFGenerator: NSObject, ObservableObject {
     }
     private func preprocessTemplateForGRMustache(_ template: String) -> String {
         var processed = template
-        
+
         // Convert simple cases that don't need complex helpers
         processed = processed.replacingOccurrences(of: "{{^@last}}&nbsp;&middot;&nbsp;{{/@last}}", with: "")
-        
+
         // For now, remove complex helper calls and use simpler alternatives
         processed = processed.replacingOccurrences(of: "{{yearOnly this.start}}", with: "{{this.start}}")
         processed = processed.replacingOccurrences(of: "{{yearOnly end}}", with: "{{this.end}}")
-        
+
         return processed
     }
-    
+
     private func logTranslationWarnings(_ warnings: [String], slug: String) {
         guard warnings.isEmpty == false else { return }
         for warning in warnings {
             Logger.warning("Handlebars compatibility (\(slug)): \(warning)")
         }
     }
-    
+
     private func fixFontReferences(_ template: String) -> String {
         var fixedTemplate = template
-        
+
         // Remove file:// URLs for fonts since we're using system-installed fonts
         // This regex matches font-face src declarations with local file URLs
         fixedTemplate = fixedTemplate.replacingOccurrences(
@@ -326,17 +326,17 @@ class NativePDFGenerator: NSObject, ObservableObject {
             with: "/* Font file removed - using system fonts */",
             options: .regularExpression
         )
-        
+
         // Also remove any remaining font-face declarations that reference files
         fixedTemplate = fixedTemplate.replacingOccurrences(
             of: #"@font-face \{[^}]*url\("file://[^}]*\}"#,
             with: "/* Font-face removed - using system fonts */",
             options: .regularExpression
         )
-        
+
         return fixedTemplate
     }
-    
+
     private func saveDebugHTML(_ html: String, template: String, format: String) {
         // Check if debug file saving is enabled in user settings
         let saveDebugFiles = UserDefaults.standard.bool(forKey: "saveDebugPrompts")
@@ -344,10 +344,10 @@ class NativePDFGenerator: NSObject, ObservableObject {
             Logger.debug("Debug file saving disabled - skipping HTML export")
             return
         }
-        
+
         let timestamp = Date().timeIntervalSince1970
         let filename = "debug_resume_\(template)_\(format)_\(timestamp).html"
-        
+
         if let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first {
             let fileURL = downloadsURL.appendingPathComponent(filename)
             do {
@@ -358,12 +358,12 @@ class NativePDFGenerator: NSObject, ObservableObject {
             }
         }
     }
-    
+
     private func generatePDFFromWebView() async throws -> Data {
         guard let webView = webView else {
             throw PDFGeneratorError.webViewNotInitialized
         }
-        
+
         #if DEBUG
         if let metrics = try? await fetchDocumentHeightMetrics(from: webView) {
             Logger.debug(
@@ -440,7 +440,7 @@ extension NativePDFGenerator: WKNavigationDelegate {
             }
         }
     }
-    
+
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
         currentCompletion?(.failure(error))
         currentCompletion = nil
@@ -451,7 +451,7 @@ enum PDFGeneratorError: Error, LocalizedError {
     case webViewNotInitialized
     case pdfGenerationFailed
     case invalidResumeData
-    
+
     var errorDescription: String? {
         switch self {
         case .templateNotFound(let template):
