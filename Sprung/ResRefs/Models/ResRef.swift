@@ -28,7 +28,6 @@ class ResRef: Identifiable, Codable {
     }
 
     // MARK: - Codable
-
     enum CodingKeys: String, CodingKey {
         case id
         case content

@@ -12,7 +12,6 @@ import UniformTypeIdentifiers
 @MainActor
 final class UploadFileService {
     // MARK: - Remote Downloads
-
     /// Downloads a file from a remote URL to a temporary location.
     func downloadRemoteFile(from url: URL) async throws -> URL {
         let (data, response) = try await URLSession.shared.data(from: url)
@@ -37,7 +36,6 @@ final class UploadFileService {
     }
 
     // MARK: - Image Validation
-
     /// Validates that the provided data represents a valid image file.
     func validateImageData(data: Data, fileExtension: String) throws {
         if data.isEmpty {
@@ -59,7 +57,6 @@ final class UploadFileService {
     }
 
     // MARK: - Cleanup
-
     /// Removes a temporary file, logging any errors but not throwing.
     func cleanupTemporaryFile(at url: URL) {
         do {

@@ -10,7 +10,6 @@ import Foundation
 import SwiftUI
 
 // MARK: - Cover Letter Response Types
-
 /// Voting scheme for multi-model selection
 enum VotingScheme: String, CaseIterable {
     case firstPastThePost = "First Past The Post"
@@ -78,12 +77,10 @@ struct BestCoverLetterResponse: Codable {
 
 @Observable class CoverLetterQuery {
     // MARK: - Properties
-    
     /// Set this to `true` if you want to save a debug file containing the prompt text.
     var saveDebugPrompt: Bool = false
     
     // MARK: - JSON Schemas
-    
     /// Schema for best cover letter selection (FPTP voting)
     static let bestCoverLetterSchemaString = """
     {
@@ -145,7 +142,6 @@ struct BestCoverLetterResponse: Codable {
     """
     
     // MARK: - Core Data
-    
     var applicant: Applicant
    let coverLetter: CoverLetter
    let resume: Resume
@@ -154,7 +150,6 @@ struct BestCoverLetterResponse: Codable {
     private static let maxResumeContextBytes = 120_000
     
     // MARK: - Derived Properties
-    
     var jobListing: String {
         return jobApp.jobListingString
     }
@@ -216,7 +211,6 @@ struct BestCoverLetterResponse: Codable {
     }
     
     // MARK: - Initialization
-    
     private let exportCoordinator: ResumeExportCoordinator
 
     init(
@@ -236,7 +230,6 @@ struct BestCoverLetterResponse: Codable {
     }
     
     // MARK: - System Prompts
-    
     /// System prompt for cover letter generation
     func systemPrompt(for modelId: String) -> String {
         var systemPrompt = CoverLetterPrompts.systemMessage.textContent
@@ -252,7 +245,6 @@ struct BestCoverLetterResponse: Codable {
     }
     
     // MARK: - Cover Letter Prompts
-    
     /// Generate prompt for cover letter generation
     @MainActor
     func generationPrompt(includeResumeRefs: Bool = true) async -> String {
@@ -340,7 +332,6 @@ struct BestCoverLetterResponse: Codable {
     }
     
     // MARK: - Best Cover Letter Selection Prompts
-    
     /// Generate prompt for best cover letter evaluation
     func bestCoverLetterPrompt(
         coverLetters: [CoverLetter],
@@ -531,7 +522,6 @@ struct BestCoverLetterResponse: Codable {
     
     
     // MARK: - Debugging Helper
-    
     /// Saves the provided prompt text to the user's `Downloads` folder for debugging purposes.
     private func savePromptToDownloads(content: String, fileName: String) {
         let fileManager = FileManager.default

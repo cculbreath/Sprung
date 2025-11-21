@@ -118,7 +118,6 @@ struct CoverLetterInspectorView: View {
     }
     
     // MARK: - Medal System Helper Functions
-    
     private func getTotalScore(for coverLetter: CoverLetter) -> Int {
         return max(coverLetter.voteCount, coverLetter.scoreCount)
     }

@@ -14,18 +14,15 @@ import SwiftOpenAI
 /// Includes full conversation history + state cues (allowed tools, objectives, phase)
 actor ConversationContextAssembler {
     // MARK: - Properties
-
     private let state: StateCoordinator
 
     // MARK: - Initialization
-
     init(state: StateCoordinator) {
         self.state = state
         Logger.info("📝 ConversationContextAssembler initialized (full conversation history mode)", category: .ai)
     }
 
     // MARK: - Context Assembly
-
     /// Build input items for a user message
     func buildForUserMessage(
         text: String
@@ -99,7 +96,6 @@ actor ConversationContextAssembler {
     }
 
     // MARK: - Private Helpers
-
     /// Build state cues developer message
     /// Note: Tool management is now handled via API's tools parameter, not injected here
     private func buildStateCues() async -> String {

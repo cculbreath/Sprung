@@ -78,7 +78,6 @@ final class OpenAIResponsesClient: LLMClient {
     }
 
     // MARK: - Private
-
     private func requestText(
         prompt: String,
         modelId: String,

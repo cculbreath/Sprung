@@ -12,13 +12,11 @@ import Observation
 @Observable
 final class WizardProgressTracker {
     // MARK: - Observable State
-
     private(set) var currentStep: OnboardingWizardStep = .introduction
     private(set) var completedSteps: Set<OnboardingWizardStep> = []
     private(set) var stepStatuses: [OnboardingWizardStep: OnboardingWizardStepStatus] = [:]
 
     // MARK: - Public API
-
     /// Sets the current wizard step and updates statuses accordingly.
     func setStep(_ step: OnboardingWizardStep) {
         let previousStep = currentStep

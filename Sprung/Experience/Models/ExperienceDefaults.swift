@@ -118,7 +118,6 @@ final class ExperienceDefaults {
 }
 
 // MARK: - Work Experience
-
 @Model
 final class WorkExperienceDefault {
     @Attribute(.unique) var id: UUID
@@ -181,7 +180,6 @@ final class WorkHighlightDefault {
 }
 
 // MARK: - Volunteer Experience
-
 @Model
 final class VolunteerExperienceDefault {
     @Attribute(.unique) var id: UUID
@@ -241,7 +239,6 @@ final class VolunteerHighlightDefault {
 }
 
 // MARK: - Education
-
 @Model
 final class EducationExperienceDefault {
     @Attribute(.unique) var id: UUID
@@ -304,7 +301,6 @@ final class EducationCourseDefault {
 }
 
 // MARK: - Projects
-
 @Model
 final class ProjectExperienceDefault {
     @Attribute(.unique) var id: UUID
@@ -416,7 +412,6 @@ final class ProjectRoleDefault {
 }
 
 // MARK: - Skills
-
 @Model
 final class SkillExperienceDefault {
     @Attribute(.unique) var id: UUID
@@ -464,7 +459,6 @@ final class SkillKeywordDefault {
 }
 
 // MARK: - Awards
-
 @Model
 final class AwardExperienceDefault {
     @Attribute(.unique) var id: UUID
@@ -493,7 +487,6 @@ final class AwardExperienceDefault {
 }
 
 // MARK: - Certificates
-
 @Model
 final class CertificateExperienceDefault {
     @Attribute(.unique) var id: UUID
@@ -522,7 +515,6 @@ final class CertificateExperienceDefault {
 }
 
 // MARK: - Publications
-
 @Model
 final class PublicationExperienceDefault {
     @Attribute(.unique) var id: UUID
@@ -554,7 +546,6 @@ final class PublicationExperienceDefault {
 }
 
 // MARK: - Languages
-
 @Model
 final class LanguageExperienceDefault {
     @Attribute(.unique) var id: UUID
@@ -577,7 +568,6 @@ final class LanguageExperienceDefault {
 }
 
 // MARK: - Interests
-
 @Model
 final class InterestExperienceDefault {
     @Attribute(.unique) var id: UUID
@@ -622,7 +612,6 @@ final class InterestKeywordDefault {
 }
 
 // MARK: - References
-
 @Model
 final class ReferenceExperienceDefault {
     @Attribute(.unique) var id: UUID

@@ -10,11 +10,9 @@ import Foundation
 @MainActor
 final class PhaseScriptRegistry {
     // MARK: - Properties
-
     private let scripts: [InterviewPhase: PhaseScript]
 
     // MARK: - Init
-
     init() {
         self.scripts = [
             .phase1CoreFacts: PhaseOneScript(),
@@ -24,7 +22,6 @@ final class PhaseScriptRegistry {
     }
 
     // MARK: - Public API
-
     /// Returns the script for the given phase.
     func script(for phase: InterviewPhase) -> PhaseScript? {
         scripts[phase]
@@ -42,7 +39,6 @@ final class PhaseScriptRegistry {
     }
 
     // MARK: - Base Developer Message
-
     private static func baseDeveloperMessage() -> String {
         """
         SYSTEM INSTRUCTIONS

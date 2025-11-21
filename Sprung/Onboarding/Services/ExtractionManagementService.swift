@@ -13,7 +13,6 @@ import SwiftyJSON
 @MainActor
 final class ExtractionManagementService: OnboardingEventEmitter {
     // MARK: - Properties
-
     let eventBus: EventCoordinator
     private let state: StateCoordinator
     private let toolRouter: ToolHandler
@@ -23,7 +22,6 @@ final class ExtractionManagementService: OnboardingEventEmitter {
     private var pendingExtractionProgressBuffer: [ExtractionProgressUpdate] = []
 
     // MARK: - Initialization
-
     init(
         eventBus: EventCoordinator,
         state: StateCoordinator,
@@ -37,7 +35,6 @@ final class ExtractionManagementService: OnboardingEventEmitter {
     }
 
     // MARK: - Extraction Status Management
-
     func setExtractionStatus(_ extraction: OnboardingPendingExtraction?) {
         Task {
             // Publish event instead of direct state mutation
@@ -99,7 +96,6 @@ final class ExtractionManagementService: OnboardingEventEmitter {
     }
 
     // MARK: - Progress Updates
-
     func updateExtractionProgress(with update: ExtractionProgressUpdate) {
         Task {
             if var extraction = await state.pendingExtraction {
@@ -137,7 +133,6 @@ final class ExtractionManagementService: OnboardingEventEmitter {
     }
 
     // MARK: - Streaming Status
-
     func setStreamingStatus(_ status: String?) async {
         // Publish event instead of direct state mutation
         await eventBus.publish(.streamingStatusUpdated(status))
@@ -145,7 +140,6 @@ final class ExtractionManagementService: OnboardingEventEmitter {
     }
 
     // MARK: - Wizard Synchronization
-
     func synchronizeWizardTracker(
         currentStep: StateCoordinator.WizardStep,
         completedSteps: Set<StateCoordinator.WizardStep>

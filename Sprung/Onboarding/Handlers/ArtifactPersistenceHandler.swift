@@ -12,7 +12,6 @@ import SwiftyJSON
 /// Handles persistence of artifact records to disk
 actor ArtifactPersistenceHandler: OnboardingEventEmitter {
     // MARK: - Properties
-
     let eventBus: EventCoordinator
     private let dataStore: InterviewDataStore
 
@@ -20,7 +19,6 @@ actor ArtifactPersistenceHandler: OnboardingEventEmitter {
     private var isActive = false
 
     // MARK: - Initialization
-
     init(eventBus: EventCoordinator, dataStore: InterviewDataStore) {
         self.eventBus = eventBus
         self.dataStore = dataStore
@@ -28,7 +26,6 @@ actor ArtifactPersistenceHandler: OnboardingEventEmitter {
     }
 
     // MARK: - Lifecycle
-
     func start() {
         guard !isActive else { return }
         isActive = true
@@ -54,7 +51,6 @@ actor ArtifactPersistenceHandler: OnboardingEventEmitter {
     }
 
     // MARK: - Event Handling
-
     private func handleArtifactEvent(_ event: OnboardingEvent) async {
         switch event {
         case .artifactRecordProduced(let record):

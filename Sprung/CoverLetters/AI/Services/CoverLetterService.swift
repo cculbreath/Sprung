@@ -13,7 +13,6 @@ import SwiftUI
 @Observable
 final class CoverLetterService {
     // MARK: - Properties
-    
     /// Conversation tracking
     internal var conversations: [UUID: UUID] = [:] // coverLetterId -> conversationId
     private let llmFacade: LLMFacade
@@ -21,7 +20,6 @@ final class CoverLetterService {
     private let applicantProfileStore: ApplicantProfileStore
 
     // MARK: - Initialization
-
     init(
         llmFacade: LLMFacade,
         exportCoordinator: ResumeExportCoordinator,
@@ -33,7 +31,6 @@ final class CoverLetterService {
     }
     
     // MARK: - Cover Letter Generation
-    
     /// Generate a new cover letter from the toolbar (handles creation and management)
     /// - Parameters:
     ///   - jobApp: The job application to generate a cover letter for
@@ -155,7 +152,6 @@ final class CoverLetterService {
     }
     
     // MARK: - Cover Letter Revision
-    
     /// Revise an existing cover letter based on feedback
     /// - Parameters:
     ///   - coverLetter: The cover letter to revise
@@ -230,10 +226,7 @@ final class CoverLetterService {
     }
     
     // MARK: - Conversation Management
-    
-    
     // MARK: - Helper Methods
-    
     /// Extract cover letter content from response, handling Gemini and Claude JSON formats
     internal func extractCoverLetterContent(from text: String) -> String {
         // Check if the response contains curly braces (indicating JSON)

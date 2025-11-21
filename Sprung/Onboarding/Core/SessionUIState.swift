@@ -6,21 +6,17 @@ import SwiftyJSON
 /// KEY INNOVATION: The service that owns waiting state also publishes tool permissions.
 actor SessionUIState: OnboardingEventEmitter {
     // MARK: - Event System
-
     let eventBus: EventCoordinator
 
     // MARK: - Policy
-
     private let phasePolicy: PhasePolicy
     private var currentPhase: InterviewPhase
 
     // MARK: - Session State
-
     private(set) var isActive = false
     private(set) var isProcessing = false
 
     // MARK: - Waiting States
-
     enum WaitingState: String {
         case selection
         case upload
@@ -32,7 +28,6 @@ actor SessionUIState: OnboardingEventEmitter {
     private(set) var waitingState: WaitingState?
 
     // MARK: - Pending UI Prompts
-
     private(set) var pendingUploadRequest: OnboardingUploadRequest?
     private(set) var pendingChoicePrompt: OnboardingChoicePrompt?
     private(set) var pendingValidationPrompt: OnboardingValidationPrompt?
@@ -41,7 +36,6 @@ actor SessionUIState: OnboardingEventEmitter {
     private(set) var pendingPhaseAdvanceRequest: OnboardingPhaseAdvanceRequest?
 
     // MARK: - Synchronous Caches (for SwiftUI)
-
     nonisolated(unsafe) private(set) var isProcessingSync = false
     nonisolated(unsafe) private(set) var isActiveSync = false
     nonisolated(unsafe) private(set) var pendingExtractionSync: OnboardingPendingExtraction?
@@ -49,7 +43,6 @@ actor SessionUIState: OnboardingEventEmitter {
     nonisolated(unsafe) private(set) var pendingPhaseAdvanceRequestSync: OnboardingPhaseAdvanceRequest?
 
     // MARK: - Initialization
-
     init(eventBus: EventCoordinator, phasePolicy: PhasePolicy, initialPhase: InterviewPhase) {
         self.eventBus = eventBus
         self.phasePolicy = phasePolicy
@@ -58,7 +51,6 @@ actor SessionUIState: OnboardingEventEmitter {
     }
 
     // MARK: - Phase Updates
-
     /// Update current phase (for tool permission calculation)
     func setPhase(_ phase: InterviewPhase) async {
         currentPhase = phase
@@ -67,7 +59,6 @@ actor SessionUIState: OnboardingEventEmitter {
     }
 
     // MARK: - Session State
-
     /// Set processing state
     func setProcessingState(_ processing: Bool, emitEvent: Bool = true) async {
         let didChange = isProcessing != processing
@@ -87,7 +78,6 @@ actor SessionUIState: OnboardingEventEmitter {
     }
 
     // MARK: - Waiting State Management
-
     /// Set waiting state and publish tool permissions
     /// KEY: This service owns waiting state AND publishes tool permissions
     func setWaitingState(_ state: WaitingState?) async {
@@ -119,7 +109,6 @@ actor SessionUIState: OnboardingEventEmitter {
     }
 
     // MARK: - Pending Prompts
-
     /// Set pending upload request
     func setPendingUpload(_ request: OnboardingUploadRequest?) async {
         pendingUploadRequest = request
@@ -167,7 +156,6 @@ actor SessionUIState: OnboardingEventEmitter {
     }
 
     // MARK: - Tool Gating Logic
-
     // Tool Gating Strategy:
     // When the system enters a waiting state (upload, selection, validation, extraction, processing),
     // ALL tools are gated (empty tool set) to prevent the LLM from calling tools while waiting for
@@ -221,7 +209,6 @@ actor SessionUIState: OnboardingEventEmitter {
     }
 
     // MARK: - State Management
-
     /// Reset all UI state
     func reset() {
         isActive = false

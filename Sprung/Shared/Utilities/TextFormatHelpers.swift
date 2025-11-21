@@ -193,7 +193,6 @@ struct TextFormatHelpers {
     }
     
     // MARK: - Helper Functions
-    
     private static func wrapText(_ text: String, maxWidth: Int) -> [String] {
         let words = text.split(separator: " ").map(String.init)
         var lines: [String] = []

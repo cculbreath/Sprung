@@ -10,7 +10,6 @@
 import Foundation
 
 // MARK: - Roles & Attachments
-
 enum LLMRole: String, Codable, Sendable {
     case system
     case user
@@ -24,7 +23,6 @@ struct LLMAttachment: Codable, Sendable {
 }
 
 // MARK: - Messages
-
 struct LLMMessageDTO: Codable, Sendable, Identifiable {
     var id: UUID
     var role: LLMRole
@@ -63,7 +61,6 @@ struct LLMToolStreamEvent: Sendable {
 }
 
 // MARK: - Responses
-
 struct LLMResponseChoiceDTO: Codable, Sendable {
     var message: LLMMessageDTO?
 }
@@ -73,7 +70,6 @@ struct LLMResponseDTO: Codable, Sendable {
 }
 
 // MARK: - Convenience Helpers
-
 extension LLMMessageDTO {
     static func text(_ text: String, role: LLMRole) -> LLMMessageDTO {
         LLMMessageDTO(role: role, text: text, attachments: [])

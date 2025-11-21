@@ -12,7 +12,6 @@ import SwiftUI
 
 @Observable class ResumeApiQuery {
     // MARK: - Properties
-
     /// Set this to `true` if you want to save a debug file containing the prompt text.
     var saveDebugPrompt: Bool = false
     
@@ -136,7 +135,6 @@ import SwiftUI
     private let exportCoordinator: ResumeExportCoordinator
 
     // MARK: - Derived Properties
-
     var backgroundDocs: String {
         let bgrefs = res.enabledSources
         if bgrefs.isEmpty {
@@ -186,7 +184,6 @@ import SwiftUI
 
 
     // MARK: - Initialization
-
     init(
         resume: Resume,
         exportCoordinator: ResumeExportCoordinator,
@@ -204,8 +201,6 @@ import SwiftUI
 
 
     // MARK: - Prompt Building
-
-
     @MainActor
     func wholeResumeQueryString() async -> String {
         // Ensure the resume's rendered text is up-to-date by awaiting the export/render process.
@@ -404,7 +399,6 @@ import SwiftUI
     }
 
     // MARK: - Debugging Helper
-
     /// Saves the provided prompt text to the user's `Downloads` folder for debugging purposes.
     private func savePromptToDownloads(content: String, fileName: String) {
         let fileManager = FileManager.default

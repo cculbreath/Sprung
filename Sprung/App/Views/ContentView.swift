@@ -6,7 +6,6 @@ import AppKit
 
 struct ContentView: View {
     // MARK: - Injected dependencies via SwiftUI Environment
-
     @Environment(AppEnvironment.self) private var appEnvironment
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
@@ -179,7 +178,6 @@ struct ContentView: View {
     }
     
     // MARK: - Helper Methods
-    
     private func openTemplateEditor() {
         presentTemplateEditorWindow()
     }

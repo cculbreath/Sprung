@@ -12,7 +12,6 @@ import SwiftyJSON
 /// Engine that automatically triggers workflows when objectives complete
 actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
     // MARK: - Properties
-
     let eventBus: EventCoordinator
     private let phaseRegistry: PhaseScriptRegistry
     private let state: StateCoordinator
@@ -21,7 +20,6 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
     private var isActive = false
 
     // MARK: - Initialization
-
     init(
         eventBus: EventCoordinator,
         phaseRegistry: PhaseScriptRegistry,
@@ -34,7 +32,6 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
     }
 
     // MARK: - Lifecycle
-
     func start() {
         guard !isActive else { return }
         isActive = true
@@ -60,7 +57,6 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
     }
 
     // MARK: - Event Handling
-
     private func handleObjectiveEvent(_ event: OnboardingEvent) async {
         guard case .objectiveStatusChanged(
             let id,
@@ -147,7 +143,6 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
     }
 
     // MARK: - Auto-Start Logic
-
     /// Check if any dependent objectives can be auto-started after an objective completes
     private func checkAndAutoStartDependents(
         completedObjectiveId: String,
@@ -198,7 +193,6 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
     }
 
     // MARK: - Workflow Output Processing
-
     private func processWorkflowOutput(_ output: ObjectiveWorkflowOutput, objectiveId: String) async {
         switch output {
         case .developerMessage(let title, let details, let payload):

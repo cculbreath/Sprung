@@ -291,7 +291,6 @@ private struct ResumeInterviewPromptView: View {
 }
 
 // MARK: - Layout
-
 private extension OnboardingInterviewView {
     func mainCard(
         coordinator: OnboardingInterviewCoordinator,
@@ -411,7 +410,6 @@ private extension OnboardingInterviewView {
 }
 
 // MARK: - Helpers
-
 private extension OnboardingInterviewView {
     func updateServiceDefaults() {
         applyPreferredModel()

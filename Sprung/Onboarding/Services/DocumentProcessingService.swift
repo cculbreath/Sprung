@@ -12,13 +12,11 @@ import SwiftyJSON
 /// Service that handles document processing workflow
 actor DocumentProcessingService {
     // MARK: - Properties
-
     private let documentExtractionService: DocumentExtractionService
     private let uploadStorage: OnboardingUploadStorage
     private let dataStore: InterviewDataStore
 
     // MARK: - Initialization
-
     init(
         documentExtractionService: DocumentExtractionService,
         uploadStorage: OnboardingUploadStorage,
@@ -31,7 +29,6 @@ actor DocumentProcessingService {
     }
 
     // MARK: - Public API
-
     /// Process a document file and return an artifact record
     func processDocument(
         fileURL: URL,

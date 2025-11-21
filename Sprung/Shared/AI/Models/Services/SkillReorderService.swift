@@ -29,7 +29,6 @@ class SkillReorderService {
     }
     
     // MARK: - Public Interface
-    
     /// Fetch skill reordering recommendations using LLMFacade
     /// - Parameters:
     ///   - resume: The resume containing skills to reorder
@@ -92,7 +91,6 @@ class SkillReorderService {
     }
     
     // MARK: - Skills Extraction
-    
     /// Extract skills from resume for reordering
     private func extractSkillsForReordering(resume: Resume) -> String? {
         // First, ensure the resume has a rootNode.
@@ -122,7 +120,6 @@ class SkillReorderService {
     }
     
     // MARK: - Private Helpers
-    
     /// Build the skill reordering prompt
     private func buildPrompt(skillsJsonString: String, jobDescription: String) -> String {
         let prompt = """
@@ -192,7 +189,6 @@ class SkillReorderService {
 }
 
 // MARK: - Supporting Types
-
 /// Errors specific to skill reorder service
 enum SkillReorderError: LocalizedError {
     case noJobDescription

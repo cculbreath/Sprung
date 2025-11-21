@@ -17,11 +17,9 @@ import SwiftUI
 @MainActor
 final class ResumeDetailVM {
     // MARK: - Input ---------------------------------------------------------
-
     private(set) var resume: Resume
 
     // MARK: - UI State ------------------------------------------------------
-
     /// Width toggle previously handled by the view hierarchy.
     var isWide: Bool = false
 
@@ -53,7 +51,6 @@ final class ResumeDetailVM {
     }
 
     // MARK: - Dependencies --------------------------------------------------
-
     private let exportCoordinator: ResumeExportCoordinator
 
     init(resume: Resume, exportCoordinator: ResumeExportCoordinator) {
@@ -72,7 +69,6 @@ final class ResumeDetailVM {
     }
 
     // MARK: - Intents -------------------------------------------------------
-
     /// Adds a new child node to the given parent. If the parent's existing children
     /// already include both non-empty names and values (i.e. compound entries),
     /// the new node is initialized with placeholder name and value so it renders
@@ -137,7 +133,6 @@ final class ResumeDetailVM {
     }
 
     // MARK: - Editing -------------------------------------------------------
-
     private(set) var editingNodeID: String?
     var tempName: String = ""
     var tempValue: String = ""
@@ -181,7 +176,6 @@ final class ResumeDetailVM {
     }
 
     // MARK: - Expansion state ---------------------------------------------
-
     func isExpanded(_ node: TreeNode) -> Bool {
         if node.parent == nil { return true } // Root always expanded
         return expandedIDs.contains(node.id)
@@ -196,7 +190,6 @@ final class ResumeDetailVM {
     }
 
     // MARK: - Section Visibility -----------------------------------------
-
     func sectionVisibilityBinding(for key: String) -> Binding<Bool> {
         Binding(
             get: { self.sectionVisibilityValue(for: key) },
@@ -232,7 +225,6 @@ final class ResumeDetailVM {
     }
     
     // MARK: - Bulk Operations ---------------------------------------------
-    
     /// Set all child nodes to AI status (.aiToReplace)
     func setAllChildrenToAI(for parent: TreeNode) {
         for child in parent.orderedChildren {
@@ -250,7 +242,6 @@ final class ResumeDetailVM {
     }
 
     // MARK: - Validation -------------------------------------------------
-
     private func validate(node: TreeNode, proposedValue: String) -> String? {
         let trimmed = proposedValue.trimmingCharacters(in: .whitespacesAndNewlines)
         if node.schemaRequired && trimmed.isEmpty {

@@ -10,7 +10,6 @@ import Foundation
 import SwiftyJSON
 
 // MARK: - Supporting Types
-
 /// Information about a processed upload file
 struct ProcessedUploadInfo {
     let storageURL: URL
@@ -403,7 +402,6 @@ actor EventCoordinator {
     }
 
     // MARK: - Private
-
     private func logEvent(_ event: OnboardingEvent) {
         let description: String
         switch event {
@@ -602,14 +600,9 @@ protocol OnboardingEventHandler {
 }
 
 // Tool call structure now uses the one from ToolProtocol.swift
-// Legacy compatibility
-struct FunctionCall: Codable {
-    let name: String
-    let arguments: String
-}
+
 
 // MARK: - TimelineDiff Summary Extension
-
 /// Extension to provide a summary string for the detailed TimelineDiff type
 extension TimelineDiff {
     var summary: String {

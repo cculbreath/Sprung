@@ -53,7 +53,6 @@ struct ExperienceEditorView: View {
     }
 
     // MARK: - Header
-
     private var header: some View {
         HStack(spacing: 16) {
             Button {
@@ -98,7 +97,6 @@ struct ExperienceEditorView: View {
     }
 
     // MARK: - Content
-
     private var content: some View {
         HStack(spacing: 0) {
             if showSectionBrowser {
@@ -130,7 +128,6 @@ struct ExperienceEditorView: View {
     }
 
     // MARK: - Actions
-
     private func markDirty() {
         hasChanges = true
         if saveState == .saved {

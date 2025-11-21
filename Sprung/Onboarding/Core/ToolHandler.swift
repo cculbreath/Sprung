@@ -50,7 +50,6 @@ struct OnboardingToolStatusSnapshot: Equatable {
 @Observable
 final class ToolHandler {
     // MARK: - Handlers
-
     let promptHandler: PromptInteractionHandler
     let uploadHandler: UploadInteractionHandler
     let profileHandler: ProfileInteractionHandler
@@ -61,7 +60,6 @@ final class ToolHandler {
     private weak var eventBus: EventCoordinator?
 
     // MARK: - Init
-
     init(
         promptHandler: PromptInteractionHandler,
         uploadHandler: UploadInteractionHandler,
@@ -78,7 +76,6 @@ final class ToolHandler {
     }
 
     // MARK: - Event Subscriptions
-
     /// Start listening to tool UI events
     func startEventSubscriptions() async {
         guard let eventBus = eventBus else { return }
@@ -130,7 +127,6 @@ final class ToolHandler {
     }
 
     // MARK: - Status Snapshot
-
     /// Returns the current status of each tool managed by the router. Used for
     /// capability manifests and analytics.
     var statusSnapshot: OnboardingToolStatusSnapshot {
@@ -139,7 +135,6 @@ final class ToolHandler {
     }
 
     // MARK: - Observable State Facades
-
     var pendingChoicePrompt: OnboardingChoicePrompt? {
         promptHandler.pendingChoicePrompt
     }
@@ -173,7 +168,6 @@ final class ToolHandler {
     }
 
     // MARK: - Choice Prompts
-
     func presentChoicePrompt(_ prompt: OnboardingChoicePrompt) {
         promptHandler.presentChoicePrompt(prompt)
     }
@@ -191,7 +185,6 @@ final class ToolHandler {
     }
 
     // MARK: - Validation Prompts
-
     func presentValidationPrompt(_ prompt: OnboardingValidationPrompt) {
         promptHandler.presentValidationPrompt(prompt)
     }
@@ -219,7 +212,6 @@ final class ToolHandler {
     }
 
     // MARK: - Applicant Profile Validation
-
     func presentApplicantProfileRequest(_ request: OnboardingApplicantProfileRequest) {
         profileHandler.presentProfileRequest(request)
     }
@@ -237,7 +229,6 @@ final class ToolHandler {
     }
 
     // MARK: - Applicant Profile Intake
-
     func presentApplicantProfileIntake() {
         profileHandler.presentProfileIntake()
     }
@@ -279,7 +270,6 @@ final class ToolHandler {
     }
 
     // MARK: - Upload Handling
-
     func presentUploadRequest(_ request: OnboardingUploadRequest) {
         uploadHandler.presentUploadRequest(request)
     }
@@ -305,7 +295,6 @@ final class ToolHandler {
     }
 
     // MARK: - Section Toggle Handling
-
     func presentSectionToggle(_ request: OnboardingSectionToggleRequest) {
         sectionHandler.presentToggleRequest(request)
     }
@@ -323,7 +312,6 @@ final class ToolHandler {
     }
 
     // MARK: - Lifecycle
-
     func reset() {
         promptHandler.reset()
         uploadHandler.reset()

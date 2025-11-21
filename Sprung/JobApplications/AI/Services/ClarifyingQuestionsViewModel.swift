@@ -50,7 +50,6 @@ class ClarifyingQuestionsViewModel {
     }
     
     // MARK: - Public Interface
-    
     /// Start the clarifying questions workflow
     /// - Parameters:
     ///   - resume: The resume to analyze
@@ -280,7 +279,6 @@ class ClarifyingQuestionsViewModel {
     }
     
     // MARK: - ResumeReviseViewModel Handoff
-    
     /// Hand off conversation context to ResumeReviseViewModel for revision generation
     /// This is the core handoff method mentioned in LLM_MULTI_TURN_WORKFLOWS.md
     /// - Parameters:
@@ -327,7 +325,6 @@ class ClarifyingQuestionsViewModel {
     }
     
     // MARK: - Private Helpers
-    
     /// Handle the clarifying questions response
     private func handleClarifyingQuestionsResponse(
         _ questionsRequest: ClarifyingQuestionsRequest,

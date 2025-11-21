@@ -50,7 +50,6 @@ final class DataResetService {
     }
 
     // MARK: - Private Reset Methods
-
     private func resetSwiftDataModels(modelContext: ModelContext) throws {
         // Delete all SwiftData models from the persistent store
         // Using specific FetchDescriptor types for each model to ensure proper deletion

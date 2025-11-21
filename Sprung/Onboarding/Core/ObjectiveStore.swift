@@ -5,15 +5,12 @@ import SwiftyJSON
 /// Owns all objective state and provides async APIs for updates.
 actor ObjectiveStore: OnboardingEventEmitter {
     // MARK: - Event System
-
     let eventBus: EventCoordinator
 
     // MARK: - Policy
-
     private let phasePolicy: PhasePolicy
 
     // MARK: - Objective Storage
-
     /// The ONLY objective tracking storage
     private var objectives: [String: ObjectiveEntry] = [:]
 
@@ -55,12 +52,10 @@ actor ObjectiveStore: OnboardingEventEmitter {
     }
 
     // MARK: - Synchronous Caches (for SwiftUI)
-
     /// Sync cache of all objectives for SwiftUI access
     nonisolated(unsafe) private(set) var objectivesSync: [String: ObjectiveEntry] = [:]
 
     // MARK: - Initialization
-
     init(eventBus: EventCoordinator, phasePolicy: PhasePolicy, initialPhase: InterviewPhase) {
         self.eventBus = eventBus
         self.phasePolicy = phasePolicy
@@ -86,7 +81,6 @@ actor ObjectiveStore: OnboardingEventEmitter {
     }
 
     // MARK: - Objective Catalog
-
     /// Hierarchical objective metadata for each phase.
     /// Structure matches the objective tree in PhaseOneScript.swift prompt.
     private static let objectiveMetadata: [InterviewPhase: [(id: String, label: String, parentId: String?)]] = [
@@ -164,7 +158,6 @@ actor ObjectiveStore: OnboardingEventEmitter {
     }
 
     // MARK: - Registration
-
     /// Register default objectives for a given phase
     func registerDefaultObjectives(for phase: InterviewPhase) {
         let descriptors = Self.objectivesForPhase(phase, policy: phasePolicy)
@@ -221,7 +214,6 @@ actor ObjectiveStore: OnboardingEventEmitter {
     }
 
     // MARK: - Status Updates
-
     /// Update objective status (main API)
     func setObjectiveStatus(
         _ id: String,
@@ -278,7 +270,6 @@ actor ObjectiveStore: OnboardingEventEmitter {
     }
 
     // MARK: - Hierarchical Logic
-
     /// Recursively check if parent should be auto-completed
     private func checkAndAutoCompleteParent(_ parentId: String) async {
         guard let parent = objectives[parentId] else { return }
@@ -311,7 +302,6 @@ actor ObjectiveStore: OnboardingEventEmitter {
     }
 
     // MARK: - Query Methods
-
     /// Get objective status by ID
     func getObjectiveStatus(_ id: String) -> ObjectiveStatus? {
         objectives[id]?.status
@@ -354,7 +344,6 @@ actor ObjectiveStore: OnboardingEventEmitter {
     }
 
     // MARK: - Scratchpad Summary
-
     /// Build a condensed scratchpad summary for LLM metadata
     func scratchpadSummary(for phase: InterviewPhase) -> String {
         let phaseObjectives = getObjectivesForPhase(phase)
@@ -369,7 +358,6 @@ actor ObjectiveStore: OnboardingEventEmitter {
     }
 
     // MARK: - State Management
-
     /// Restore objectives from snapshot
     func restore(objectives: [String: ObjectiveEntry]) {
         self.objectives = objectives

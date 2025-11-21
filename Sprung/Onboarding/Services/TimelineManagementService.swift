@@ -12,12 +12,10 @@ import SwiftyJSON
 /// Service that handles timeline management operations
 actor TimelineManagementService: OnboardingEventEmitter {
     // MARK: - Properties
-
     let eventBus: EventCoordinator
     private let phaseTransitionController: PhaseTransitionController
 
     // MARK: - Initialization
-
     init(
         eventBus: EventCoordinator,
         phaseTransitionController: PhaseTransitionController
@@ -27,7 +25,6 @@ actor TimelineManagementService: OnboardingEventEmitter {
     }
 
     // MARK: - User Timeline Updates
-
     /// Apply user timeline update from editor (Phase 3)
     /// Replaces timeline in one shot and sends developer message
     func applyUserTimelineUpdate(cards: [TimelineCard], meta: JSON?, diff: TimelineDiff) async {
@@ -55,7 +52,6 @@ actor TimelineManagementService: OnboardingEventEmitter {
     }
 
     // MARK: - Timeline Card Operations
-
     func createTimelineCard(fields: JSON) async -> JSON {
         var card = fields
         // Add ID if not present
@@ -107,7 +103,6 @@ actor TimelineManagementService: OnboardingEventEmitter {
     }
 
     // MARK: - Phase Transition Support
-
     func requestPhaseTransition(from: String, to: String, reason: String?) async {
         await phaseTransitionController.requestPhaseTransition(from: from, to: to, reason: reason)
     }

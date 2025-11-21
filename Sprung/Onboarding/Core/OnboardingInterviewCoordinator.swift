@@ -8,7 +8,6 @@ import UniformTypeIdentifiers
 @Observable
 final class OnboardingInterviewCoordinator {
     // MARK: - Core Dependencies
-
     let state: StateCoordinator
     let eventBus: EventCoordinator
     private let chatboxHandler: ChatboxHandler
@@ -23,27 +22,23 @@ final class OnboardingInterviewCoordinator {
     private let knowledgeCardAgent: KnowledgeCardAgent?
 
     // MARK: - Core Controllers (Decomposed Components)
-
     private let lifecycleController: InterviewLifecycleController
     private let checkpointManager: CheckpointManager
     private let phaseTransitionController: PhaseTransitionController
 
     // MARK: - Services (Phase 3 Decomposition)
-
     private let extractionManagementService: ExtractionManagementService
     private let timelineManagementService: TimelineManagementService
     private let dataPersistenceService: DataPersistenceService
     private let ingestionCoordinator: IngestionCoordinator
 
     // MARK: - Data Store Dependencies
-
     private let applicantProfileStore: ApplicantProfileStore
     private let dataStore: InterviewDataStore
     let checkpoints: Checkpoints
     private let draftKnowledgeStore: DraftKnowledgeStore
 
     // MARK: - Document Processing
-
     private let uploadStorage: OnboardingUploadStorage
     private let documentProcessingService: DocumentProcessingService
     private let documentArtifactHandler: DocumentArtifactHandler
@@ -52,17 +47,13 @@ final class OnboardingInterviewCoordinator {
     private let uiResponseCoordinator: UIResponseCoordinator
     private var toolRegistrar: OnboardingToolRegistrar!
     private var coordinatorEventRouter: CoordinatorEventRouter!
+    private var toolInteractionCoordinator: ToolInteractionCoordinator!
 
     // MARK: - UI State
-    
     let ui: OnboardingUIState
     
     // MARK: - Tool Registration
-    
-
-
     // MARK: - Computed Properties (Read from StateCoordinator)
-    
     var currentPhase: InterviewPhase {
         get async { await state.phase }
     }
@@ -71,12 +62,11 @@ final class OnboardingInterviewCoordinator {
         applicantProfileStore.currentProfile()
     }
     
-    var artifacts: StateCoordinator.OnboardingArtifacts {
+    var artifacts: OnboardingArtifacts {
         get async { await state.artifacts }
     }
 
     // MARK: - UI State Properties (from ToolRouter)
-
     var pendingUploadRequests: [OnboardingUploadRequest] {
         toolRouter.pendingUploadRequests
     }
@@ -116,7 +106,6 @@ final class OnboardingInterviewCoordinator {
     }
 
     // MARK: - Initialization
-
     init(
         openAIService: OpenAIService?,
         documentExtractionService: DocumentExtractionService,
@@ -326,6 +315,12 @@ final class OnboardingInterviewCoordinator {
             eventBus: eventBus,
             coordinator: self
         )
+        
+        self.toolInteractionCoordinator = ToolInteractionCoordinator(
+            eventBus: eventBus,
+            toolRouter: toolRouter,
+            dataStore: dataStore
+        )
 
         toolRegistrar.registerTools(
             documentExtractionService: documentExtractionService,
@@ -345,15 +340,11 @@ final class OnboardingInterviewCoordinator {
     }
 
     // MARK: - Event Subscription
-
     private func subscribeToEvents() async {
         coordinatorEventRouter.subscribeToEvents(lifecycle: lifecycleController)
     }
 
-
-
     // MARK: - State Updates
-
     private func subscribeToStateUpdates() {
         let handlers = StateUpdateHandlers(
             handleProcessingEvent: { [weak self] event in
@@ -484,7 +475,6 @@ final class OnboardingInterviewCoordinator {
     }
 
     // MARK: - Interview Lifecycle
-
     func startInterview(resumeExisting: Bool = false) async -> Bool {
         Logger.info("🚀 Starting interview (resume: \(resumeExisting))", category: .ai)
 
@@ -557,13 +547,11 @@ final class OnboardingInterviewCoordinator {
     }
 
     // MARK: - Evidence Handling
-
     func handleEvidenceUpload(url: URL, requirementId: String) async {
         await ingestionCoordinator.handleEvidenceUpload(url: url, requirementId: requirementId)
     }
 
     // MARK: - Phase Management
-
     func advancePhase() async -> InterviewPhase? {
         let newPhase = await phaseTransitionController.advancePhase()
 
@@ -579,7 +567,6 @@ final class OnboardingInterviewCoordinator {
     }
 
     // MARK: - Objective Management
-
     func updateObjectiveStatus(
         objectiveId: String,
         status: String,
@@ -604,7 +591,6 @@ final class OnboardingInterviewCoordinator {
     }
 
     // MARK: - Timeline Management (Delegated to TimelineManagementService)
-
     func applyUserTimelineUpdate(cards: [TimelineCard], meta: JSON?, diff: TimelineDiff) async {
         await uiResponseCoordinator.applyUserTimelineUpdate(cards: cards, meta: meta, diff: diff)
     }
@@ -634,7 +620,6 @@ final class OnboardingInterviewCoordinator {
     }
 
     // MARK: - Artifact Queries (Read-Only State Access)
-
     func listArtifactSummaries() async -> [JSON] {
         await state.listArtifactSummaries()
     }
@@ -674,43 +659,12 @@ final class OnboardingInterviewCoordinator {
     }
 
     // MARK: - Artifact Management
-
-    // MARK: - Message Management
-
-    @discardableResult
-    func appendUserMessage(_ text: String) async -> UUID {
-        let id = await state.appendUserMessage(text)
-        return id
-    }
-
-    @discardableResult
-    func appendAssistantMessage(_ text: String, reasoningExpected: Bool) async -> UUID {
-        let id = await state.appendAssistantMessage(text)
-        return id
-    }
-
-    @discardableResult
-    func beginAssistantStream(initialText: String, reasoningExpected: Bool) async -> UUID {
-        let id = await state.beginStreamingMessage(
-            initialText: initialText,
-            reasoningExpected: reasoningExpected
-        )
-        return id
-    }
-
-    func updateAssistantStream(id: UUID, text: String) async {
-        await state.updateStreamingMessage(id: id, delta: text)
-    }
-
-    func finalizeAssistantStream(id: UUID, text: String) async -> TimeInterval {
-        await state.finalizeStreamingMessage(id: id, finalText: text)
-        return 0 // Elapsed time now tracked by ChatboxHandler
-    }
+    // MARK: - Message Management (Delegated to StateCoordinator via ChatboxHandler)
+    // Message management methods have been removed as they are handled directly by StateCoordinator
+    // and ChatboxHandler.
 
     // MARK: - Waiting State
-
     // MARK: - Extraction Management (Delegated to ExtractionManagementService)
-
     func setExtractionStatus(_ extraction: OnboardingPendingExtraction?) {
         extractionManagementService.setExtractionStatus(extraction)
     }
@@ -733,50 +687,29 @@ final class OnboardingInterviewCoordinator {
         )
     }
 
-    // MARK: - Tool Management
-
+    // MARK: - Tool Management (Delegated to ToolInteractionCoordinator)
     func presentUploadRequest(_ request: OnboardingUploadRequest) {
-        Task {
-            await eventBus.publish(.uploadRequestPresented(request: request))
-        }
+        toolInteractionCoordinator.presentUploadRequest(request)
     }
 
     func completeUpload(id: UUID, fileURLs: [URL]) async -> JSON? {
-        let result = await toolRouter.completeUpload(id: id, fileURLs: fileURLs)
-        Task {
-            await eventBus.publish(.uploadRequestCancelled(id: id))
-        }
-        return result
+        await toolInteractionCoordinator.completeUpload(id: id, fileURLs: fileURLs)
     }
 
     func skipUpload(id: UUID) async -> JSON? {
-        let result = await toolRouter.skipUpload(id: id)
-        Task {
-            await eventBus.publish(.uploadRequestCancelled(id: id))
-        }
-        return result
+        await toolInteractionCoordinator.skipUpload(id: id)
     }
 
     func presentChoicePrompt(_ prompt: OnboardingChoicePrompt) {
-        Task {
-            await eventBus.publish(.choicePromptRequested(prompt: prompt))
-        }
+        toolInteractionCoordinator.presentChoicePrompt(prompt)
     }
 
     func submitChoice(optionId: String) -> JSON? {
-        let result = toolRouter.promptHandler.resolveChoice(selectionIds: [optionId])
-        if result != nil {
-            Task {
-                await eventBus.publish(.choicePromptCleared)
-            }
-        }
-        return result
+        toolInteractionCoordinator.submitChoice(optionId: optionId)
     }
 
     func presentValidationPrompt(_ prompt: OnboardingValidationPrompt) {
-        Task {
-            await eventBus.publish(.validationPromptRequested(prompt: prompt))
-        }
+        toolInteractionCoordinator.presentValidationPrompt(prompt)
     }
 
     func submitValidationResponse(
@@ -784,60 +717,35 @@ final class OnboardingInterviewCoordinator {
         updatedData: JSON?,
         changes: JSON?,
         notes: String?
-    ) -> JSON? {
-        let pendingValidation = pendingValidationPrompt
-
-        if let validation = pendingValidation,
-           validation.dataType == "knowledge_card",
-           let data = updatedData,
-           data != .null,
-           ["approved", "modified"].contains(status.lowercased()) {
-            Task {
-                do {
-                    _ = try await dataStore.persist(dataType: "knowledge_card", payload: data)
-                } catch {
-                    Logger.error("Failed to persist knowledge card: \(error)", category: .ai)
-                }
-
-                await eventBus.publish(.knowledgeCardPersisted(card: data))
-            }
-        }
-
-        let result = toolRouter.submitValidationResponse(
+    ) async -> JSON? {
+        await toolInteractionCoordinator.submitValidationResponse(
             status: status,
             updatedData: updatedData,
             changes: changes,
             notes: notes
         )
-        if result != nil {
-            Task {
-                await eventBus.publish(.validationPromptCleared)
-            }
-        }
-        return result
     }
 
-    // MARK: - Applicant Profile Intake Facade Methods
-
+    // MARK: - Applicant Profile Intake Facade Methods (Delegated to ToolInteractionCoordinator)
     func beginProfileUpload() {
-        let request = toolRouter.beginApplicantProfileUpload()
+        let request = toolInteractionCoordinator.beginProfileUpload()
         presentUploadRequest(request)
     }
 
     func beginProfileURLEntry() {
-        toolRouter.beginApplicantProfileURL()
+        toolInteractionCoordinator.beginProfileURLEntry()
     }
 
     func beginProfileContactsFetch() {
-        toolRouter.beginApplicantProfileContactsFetch()
+        toolInteractionCoordinator.beginProfileContactsFetch()
     }
 
     func beginProfileManualEntry() {
-        toolRouter.beginApplicantProfileManualEntry()
+        toolInteractionCoordinator.beginProfileManualEntry()
     }
 
     func resetProfileIntakeToOptions() {
-        toolRouter.resetApplicantProfileIntakeToOptions()
+        toolInteractionCoordinator.resetProfileIntakeToOptions()
     }
 
     func submitProfileDraft(draft: ApplicantProfileDraft, source: OnboardingApplicantProfileIntakeState.Source) async {
@@ -849,7 +757,6 @@ final class OnboardingInterviewCoordinator {
     }
 
     // MARK: - Phase Advance
-
     func approvePhaseAdvance() async {
         guard let request = await state.pendingPhaseAdvanceRequest else { return }
         await eventBus.publish(.phaseAdvanceApproved(request: request))
@@ -860,7 +767,6 @@ final class OnboardingInterviewCoordinator {
     }
 
     // MARK: - UI Response Handling (Send User Messages)
-
     func submitChoiceSelection(_ selectionIds: [String]) async {
         await uiResponseCoordinator.submitChoiceSelection(selectionIds)
     }
@@ -921,11 +827,8 @@ final class OnboardingInterviewCoordinator {
     }
 
 
-
     // MARK: - Checkpoint Management (Delegated to CheckpointManager)
-
     // MARK: - Data Store Management (Delegated to DataPersistenceService)
-
     func loadPersistedArtifacts() async {
         await dataPersistenceService.loadPersistedArtifacts()
     }
@@ -941,7 +844,6 @@ final class OnboardingInterviewCoordinator {
     }
 
     // MARK: - Utility
-
     func notifyInvalidModel(id: String) {
         Logger.warning("⚠️ Invalid model id reported: \(id)", category: .ai)
         ui.modelAvailabilityMessage = "Your selected model (\(id)) is not available. Choose another model in Settings."
@@ -962,7 +864,6 @@ final class OnboardingInterviewCoordinator {
 
     #if DEBUG
     // MARK: - Debug Event Diagnostics
-
     func getRecentEvents(count: Int = 10) async -> [OnboardingEvent] {
         await eventBus.getRecentEvents(count: count)
     }

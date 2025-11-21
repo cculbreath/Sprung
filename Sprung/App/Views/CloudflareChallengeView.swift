@@ -18,7 +18,6 @@ struct CloudflareChallengeView: NSViewRepresentable {
     var onSuccess: (() -> Void)?
 
     // MARK: NSViewRepresentable ----------------------------------
-
     func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
 
     func makeNSView(context: Context) -> WKWebView {
@@ -42,7 +41,6 @@ struct CloudflareChallengeView: NSViewRepresentable {
     }
 
     // MARK: Coordinator -----------------------------------------
-
     class Coordinator: NSObject, WKNavigationDelegate {
         let parent: CloudflareChallengeView
         init(parent: CloudflareChallengeView) { self.parent = parent }

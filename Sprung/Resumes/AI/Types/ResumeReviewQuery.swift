@@ -10,7 +10,6 @@ import Foundation
 @Observable class ResumeReviewQuery {
     
     // MARK: - General Resume Review Prompts
-    
     /// Build the main review prompt based on review type
     /// - Parameters:
     ///   - reviewType: The type of review to perform
@@ -81,7 +80,6 @@ import Foundation
     }
     
     // MARK: - Fix Overflow Prompts
-    
     /// Build the fix fits prompt for standard (non-Grok) models
     /// - Parameters:
     ///   - skillsJsonString: JSON representation of skills
@@ -209,7 +207,6 @@ import Foundation
     }
     
     // MARK: - Content Fit Check Prompt
-    
     /// Build the contents fit prompt for checking if content fits on page
     /// - Returns: Complete prompt for contents fit check
     func buildContentsFitPrompt() -> String {
@@ -244,7 +241,6 @@ import Foundation
     }
     
     // MARK: - Console Print Friendly Methods
-    
     /// Creates a console-friendly version of the prompt with truncated long strings
     func consoleFriendlyPrompt(_ fullPrompt: String) -> String {
         var truncatedPrompt = fullPrompt

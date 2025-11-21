@@ -7,12 +7,10 @@ import SwiftyJSON
 @Observable
 final class PromptInteractionHandler {
     // MARK: - Observable State
-
     private(set) var pendingChoicePrompt: OnboardingChoicePrompt?
     private(set) var pendingValidationPrompt: OnboardingValidationPrompt?
 
     // MARK: - Choice Prompts
-
     func presentChoicePrompt(_ prompt: OnboardingChoicePrompt) {
         pendingChoicePrompt = prompt
         Logger.info("📝 Choice prompt presented (id: \(prompt.id))", category: .ai)
@@ -53,7 +51,6 @@ final class PromptInteractionHandler {
     }
 
     // MARK: - Validation Prompts
-
     func presentValidationPrompt(_ prompt: OnboardingValidationPrompt) {
         pendingValidationPrompt = prompt
         Logger.info("🧾 Validation prompt presented (id: \(prompt.id))", category: .ai)
@@ -106,7 +103,6 @@ final class PromptInteractionHandler {
     }
 
     // MARK: - Lifecycle
-
     func reset() {
         pendingChoicePrompt = nil
         pendingValidationPrompt = nil

@@ -31,7 +31,6 @@ class JobRecommendationService {
     }
     
     // MARK: - Public Interface
-    
     /// Fetch job recommendation using LLMService
     /// - Parameters:
     ///   - jobApps: Array of job applications to consider
@@ -106,7 +105,6 @@ class JobRecommendationService {
     }
     
     // MARK: - Private Helpers
-    
     /// Find the most recently edited resume based on job app status priority
     private func findMostRecentResume(from jobApps: [JobApp]) -> Resume? {
         // Status priority: "interview pending" > "submitted" > "rejected"
@@ -338,7 +336,6 @@ class JobRecommendationService {
 }
 
 // MARK: - Supporting Types
-
 /// Errors specific to job recommendation service
 enum JobRecommendationError: LocalizedError {
     case noResumeAvailable

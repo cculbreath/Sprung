@@ -24,7 +24,6 @@ actor LLMRequestExecutor {
     init() {}
 
     // MARK: - Client Configuration
-    
     /// Configure the OpenRouter client with the current API key from Keychain
     func configureClient() {
         let apiKey = APIKeyManager.get(.openRouter) ?? ""
@@ -75,7 +74,6 @@ actor LLMRequestExecutor {
     }
     
     // MARK: - Request Execution
-    
     /// Execute a request with retry logic and exponential backoff
     func execute(parameters: ChatCompletionParameters, maxRetries: Int? = nil) async throws -> LLMResponse {
         guard let client = openRouterClient else {
@@ -263,7 +261,6 @@ actor LLMRequestExecutor {
     }
     
     // MARK: - Private Helpers
-    
     /// Extract model ID from chat completion parameters for error reporting
     private func extractModelId(from parameters: ChatCompletionParameters) -> String {
         return parameters.model

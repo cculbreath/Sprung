@@ -14,7 +14,6 @@ import Foundation
 @MainActor
 final class JobAppStore: SwiftDataStore {
     // MARK: - Properties
-
     unowned let modelContext: ModelContext
     // Computed collection that always reflects the latest state stored in
     // `modelContext`.  Because this is *computed*, any view access will fetch
@@ -30,7 +29,6 @@ final class JobAppStore: SwiftDataStore {
     var coverLetterStore: CoverLetterStore
     
     // MARK: - Initialiser
-
     init(context: ModelContext, resStore: ResStore, coverLetterStore: CoverLetterStore) {
         modelContext = context
         self.resStore = resStore
@@ -39,7 +37,6 @@ final class JobAppStore: SwiftDataStore {
     }
 
     // MARK: - Methods
-
     func updateJobAppStatus(_ jobApp: JobApp, to newStatus: Statuses) {
         jobApp.status = newStatus
         saveContext()

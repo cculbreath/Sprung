@@ -12,7 +12,6 @@ import OrderedCollections
 extension TemplateEditorView {
     
     // MARK: - Manifest Operations
-    
     func loadManifest() {
         manifestValidationMessage = nil
         guard selectedTemplate.isEmpty == false else {
@@ -138,7 +137,6 @@ extension TemplateEditorView {
     }
     
     // MARK: - Seed Operations
-
     func loadSeed() {
         seedValidationMessage = nil
         guard selectedTemplate.isEmpty == false else {
@@ -347,7 +345,6 @@ extension TemplateEditorView {
     }
     
     // MARK: - Profile Field Mapping
-    
     private func profileField(for path: [String]) -> ProfileField? {
         var remaining = ArraySlice(path)
 
@@ -544,7 +541,6 @@ extension TemplateEditorView {
     }
     
     // MARK: - JSON Utilities
-
     func prettyJSONString(from data: Data) -> String? {
         guard let jsonObject = try? JSONSerialization.jsonObject(with: data) else {
             return nil
@@ -561,7 +557,6 @@ extension TemplateEditorView {
     }
     
     // MARK: - Supporting Types
-
     struct ProfileUpdateChange {
         let label: String
         let keyPath: WritableKeyPath<ApplicantProfile, String>

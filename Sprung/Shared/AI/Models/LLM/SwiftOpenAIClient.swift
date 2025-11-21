@@ -9,7 +9,6 @@ import Foundation
 import SwiftOpenAI
 
 // MARK: - Sprung Logger Adapter for SwiftOpenAI
-
 /// Implements OpenAILoggerProtocol to route SwiftOpenAI logs through Sprung's centralized Logger
 private class SprungOpenAILogger: OpenAILoggerProtocol {
     func debug(_ message: String) {

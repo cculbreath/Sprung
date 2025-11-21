@@ -46,7 +46,6 @@ class NativePDFGenerator: NSObject, ObservableObject {
     }
     
     // MARK: - Custom Template Rendering
-
     @MainActor
     func generatePDFFromCustomTemplate(
         for resume: Resume,

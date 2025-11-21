@@ -13,11 +13,9 @@ import SwiftyJSON
 @Observable
 final class SectionToggleHandler {
     // MARK: - Observable State
-
     private(set) var pendingSectionToggleRequest: OnboardingSectionToggleRequest?
 
     // MARK: - Presentation
-
     /// Presents a section toggle request to the user.
     func presentToggleRequest(_ request: OnboardingSectionToggleRequest) {
         pendingSectionToggleRequest = request
@@ -25,7 +23,6 @@ final class SectionToggleHandler {
     }
 
     // MARK: - Resolution
-
     /// Resolves a section toggle with the user's enabled sections.
     func resolveToggle(enabled: [String]) -> JSON? {
         guard pendingSectionToggleRequest != nil else {
@@ -60,7 +57,6 @@ final class SectionToggleHandler {
     }
 
     // MARK: - Lifecycle
-
     private func clear() {
         pendingSectionToggleRequest = nil
     }

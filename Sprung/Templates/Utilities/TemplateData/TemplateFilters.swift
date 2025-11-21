@@ -24,7 +24,6 @@ enum TemplateFilters {
     }
 
     // MARK: - Individual Filters
-
     private static let centerFilter = VariadicFilter { boxes -> Any? in
         guard let text = string(from: boxes.first) else { return nil }
         let width = intArgument(from: boxes, index: 1, defaultValue: 80)
@@ -225,7 +224,6 @@ enum TemplateFilters {
     }
 
     // MARK: - Helpers
-
     private static func string(from box: MustacheBox?) -> String? {
         guard let box else { return nil }
         if let string = box.value as? String {

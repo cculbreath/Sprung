@@ -6,14 +6,12 @@ import SwiftyJSON
 @MainActor
 final class PhaseTransitionController {
     // MARK: - Dependencies
-
     private let state: StateCoordinator
     private let eventBus: EventCoordinator
     private let phaseRegistry: PhaseScriptRegistry
     private weak var lifecycleController: InterviewLifecycleController?
 
     // MARK: - Initialization
-
     init(
         state: StateCoordinator,
         eventBus: EventCoordinator,
@@ -25,13 +23,11 @@ final class PhaseTransitionController {
     }
 
     // MARK: - Lifecycle Controller Reference
-
     func setLifecycleController(_ controller: InterviewLifecycleController) {
         self.lifecycleController = controller
     }
 
     // MARK: - Phase Transition Handling
-
     func handlePhaseTransition(_ phaseName: String) async {
         guard let phase = InterviewPhase(rawValue: phaseName) else {
             Logger.warning("Invalid phase name: \(phaseName)", category: .ai)
@@ -114,7 +110,6 @@ final class PhaseTransitionController {
     }
 
     // MARK: - Phase Advancement
-
     func advancePhase() async -> InterviewPhase? {
         guard let newPhase = await state.advanceToNextPhase() else { return nil }
 
@@ -141,7 +136,6 @@ final class PhaseTransitionController {
     }
 
     // MARK: - Phase Transition Requests
-
     func requestPhaseTransition(from: String, to: String, reason: String?) async {
         await eventBus.publish(.phaseTransitionRequested(
             from: from,
@@ -151,7 +145,6 @@ final class PhaseTransitionController {
     }
 
     // MARK: - Objective Management
-
     func registerObjectivesForCurrentPhase() async {
         // Objectives are now automatically registered by StateCoordinator
         // when the phase is set, so this is no longer needed
@@ -170,7 +163,6 @@ final class PhaseTransitionController {
     }
 
     // MARK: - System Prompt Building
-
     func buildSystemPrompt(for phase: InterviewPhase) -> String {
         phaseRegistry.buildSystemPrompt(for: phase)
     }

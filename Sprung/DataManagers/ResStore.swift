@@ -13,7 +13,6 @@ import SwiftUI
 @MainActor
 final class ResStore: SwiftDataStore {
     // MARK: - Properties
-
     unowned let modelContext: ModelContext
     private let exportCoordinator: ResumeExportCoordinator
     private let applicantProfileStore: ApplicantProfileStore
@@ -21,7 +20,6 @@ final class ResStore: SwiftDataStore {
     private let experienceDefaultsStore: ExperienceDefaultsStore
 
     // MARK: - Initialiser
-
     init(
         context: ModelContext,
         exportCoordinator: ResumeExportCoordinator,

@@ -11,7 +11,6 @@ import Foundation
 /// These types abstract away the implementation details of specific AI libraries
 
 // MARK: - Clarifying Questions Types
-
 /// Structure for the LLM's clarifying questions request
 struct ClarifyingQuestionsRequest: Codable {
     let questions: [ClarifyingQuestion]

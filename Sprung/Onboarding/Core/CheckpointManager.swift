@@ -6,18 +6,15 @@ import SwiftyJSON
 @MainActor
 final class CheckpointManager {
     // MARK: - Dependencies
-
     private let state: StateCoordinator
     private let eventBus: EventCoordinator
     private let checkpoints: Checkpoints
     private let applicantProfileStore: ApplicantProfileStore
 
     // MARK: - Debounce State
-
     private var checkpointDebounce: Task<Void, Never>?
 
     // MARK: - Initialization
-
     init(
         state: StateCoordinator,
         eventBus: EventCoordinator,
@@ -31,7 +28,6 @@ final class CheckpointManager {
     }
 
     // MARK: - Checkpoint Scheduling
-
     /// Schedule a debounced checkpoint save.
     /// Rapid edits don't spam disk; saves occur 300ms after last change.
     func scheduleCheckpoint() {
@@ -48,7 +44,6 @@ final class CheckpointManager {
     }
 
     // MARK: - Checkpoint Operations
-
     func saveCheckpoint() async {
         let snapshot = await state.createSnapshot()
         let artifacts = await state.artifacts
@@ -114,7 +109,6 @@ final class CheckpointManager {
     }
 
     // MARK: - Persistence Helpers
-
     private func persistApplicantProfileToSwiftData(json: JSON) {
         let draft = ApplicantProfileDraft(json: json)
         let profile = applicantProfileStore.currentProfile()

@@ -12,7 +12,6 @@ import SwiftUI
 @MainActor
 class ApplicationReviewService: @unchecked Sendable {
     // MARK: - Properties
-    
     /// The LLM facade for AI operations
     private let llm: LLMFacade
     private let exportCoordinator: ResumeExportCoordinator
@@ -24,7 +23,6 @@ class ApplicationReviewService: @unchecked Sendable {
     private var currentRequestID: UUID?
     
     // MARK: - Initialization
-    
     /// Initialize with LLM service
     init(llmFacade: LLMFacade, exportCoordinator: ResumeExportCoordinator) {
         self.llm = llmFacade
@@ -33,9 +31,7 @@ class ApplicationReviewService: @unchecked Sendable {
     
 
     // MARK: - Core Review Operations
-
     // MARK: - LLM Request (non-image handled by client, image via raw call)
-
     func sendReviewRequest(
         reviewType: ApplicationReviewType,
         jobApp: JobApp,

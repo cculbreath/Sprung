@@ -9,7 +9,6 @@ import Foundation
 import SwiftSoup
 
 // MARK: - Indeed HTML → JobApp
-
 extension JobApp {
     /// Attempts to parse an Indeed job‑posting HTML page and create a populated `JobApp`.
     /// The function looks for the Schema.org JSON‑LD ``JobPosting`` block which Indeed
@@ -229,7 +228,6 @@ extension JobApp {
     }
 
     // MARK: - EmbeddedData mapping fallback
-
     @MainActor
     private static func mapEmbeddedJobInfo(_ info: [String: Any], url: String, store: JobAppStore) -> JobApp? {
         let jobApp = JobApp()

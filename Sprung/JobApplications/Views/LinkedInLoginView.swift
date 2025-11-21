@@ -115,7 +115,6 @@ struct LinkedInLoginView: NSViewRepresentable {
         }
         
         // MARK: - WKUIDelegate for popup handling
-        
         func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
             Logger.debug("🪟 [LinkedIn Login] Creating popup for: \(navigationAction.request.url?.absoluteString ?? "unknown")")
             
@@ -401,7 +400,6 @@ struct LinkedInLoginView: NSViewRepresentable {
 }
 
 // MARK: - LinkedIn Login Sheet
-
 struct LinkedInLoginSheet: View {
     @Binding var isPresented: Bool
     @ObservedObject var sessionManager: LinkedInSessionManager
@@ -508,7 +506,6 @@ struct LinkedInLoginSheet: View {
 }
 
 // MARK: - LinkedIn Session Status View
-
 struct LinkedInSessionStatusView: View {
     @ObservedObject var sessionManager: LinkedInSessionManager
     @State private var showLoginSheet = false

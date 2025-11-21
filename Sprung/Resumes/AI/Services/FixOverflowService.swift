@@ -160,7 +160,6 @@ class FixOverflowService {
     }
     
     // MARK: - Private Helper Methods
-    
     private func ensurePDFAvailable(resume: Resume, onStatusUpdate: @escaping (FixOverflowStatus) -> Void) async throws {
         if resume.pdfData == nil {
             onStatusUpdate(FixOverflowStatus(statusMessage: "Generating initial PDF for analysis...", changeMessage: "", overflowLineCount: 0))
@@ -331,7 +330,6 @@ class FixOverflowService {
 }
 
 // MARK: - Error Types
-
 enum FixOverflowError: LocalizedError {
     case pdfGenerationFailed
     case pdfConversionFailed(iteration: Int)

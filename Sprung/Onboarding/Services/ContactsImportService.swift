@@ -12,7 +12,6 @@ import Foundation
 @MainActor
 final class ContactsImportService {
     // MARK: - Public API
-
     /// Fetches the user's "Me" contact card and converts it to an ApplicantProfileDraft.
     /// - Throws: `ContactFetchError` if permission is denied, contact not found, or system error.
     func fetchMeCardAsDraft() async throws -> ApplicantProfileDraft {
@@ -80,7 +79,6 @@ final class ContactsImportService {
     }
 
     // MARK: - Private Helpers
-
     private func requestContactsAccess() async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             CNContactStore().requestAccess(for: .contacts) { granted, error in
@@ -170,7 +168,6 @@ final class ContactsImportService {
 }
 
 // MARK: - Error Handling
-
 enum ContactFetchError: Error {
     case permissionDenied
     case notFound

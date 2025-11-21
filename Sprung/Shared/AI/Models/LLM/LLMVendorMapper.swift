@@ -11,7 +11,6 @@ import SwiftOpenAI
 
 enum LLMVendorMapper {
     // MARK: - Message Conversion
-
     static func vendorMessages(from dtoMessages: [LLMMessageDTO]) -> [LLMMessage] {
         dtoMessages.map { vendorMessage(from: $0) }
     }
@@ -50,7 +49,6 @@ enum LLMVendorMapper {
     }
 
     // MARK: - Response Conversion
-
     static func responseDTO(from response: LLMResponse) -> LLMResponseDTO {
         let choices = (response.choices ?? []).map { choice in
             let messageDTO: LLMMessageDTO? = choice.message.flatMap { message in

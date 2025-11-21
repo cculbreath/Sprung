@@ -11,7 +11,6 @@ import Observation
 import SwiftData
 
 // MARK: - LLM Error Types
-
 enum LLMError: LocalizedError {
     case clientError(String)
     case decodingFailed(Error)
@@ -46,7 +45,6 @@ enum LLMError: LocalizedError {
 }
 
 // MARK: - LLM Service
-
 @Observable
 final class LLMService {
 
@@ -72,7 +70,6 @@ final class LLMService {
     }
 
     // MARK: - Initialization
-
     @MainActor
     func initialize(appState: AppState, modelContext: ModelContext? = nil, enabledLLMStore: EnabledLLMStore? = nil, openRouterService: OpenRouterService? = nil) {
         self.appState = appState
@@ -111,7 +108,6 @@ final class LLMService {
     }
 
     // MARK: - Helpers
-
     private func loadMessages(conversationId: UUID) async -> [LLMMessageDTO] {
         await conversationCoordinator.messages(for: conversationId)
     }
@@ -151,7 +147,6 @@ final class LLMService {
     }
 
     // MARK: - Core Operations
-
     func executeStructuredStreaming<T: Codable & Sendable>(
         prompt: String,
         modelId: String,
@@ -193,7 +188,6 @@ final class LLMService {
     }
 
     // MARK: - Conversation Streaming
-
     func startConversationStreaming(
         systemPrompt: String? = nil,
         userMessage: String,
@@ -321,7 +315,6 @@ final class LLMService {
     }
 
     // MARK: - Conversation (non-streaming)
-
     func startConversation(
         systemPrompt: String? = nil,
         userMessage: String,

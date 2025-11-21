@@ -52,7 +52,6 @@ struct TemplateManifestOverrides: Codable {
 enum TemplateManifestDefaults {
 
     // MARK: - Public API
-
     static let defaultSectionOrder: [String] = [
         "basics",
         "work",
@@ -187,7 +186,6 @@ enum TemplateManifestDefaults {
     }
 
     // MARK: - Base Manifest Construction
-
     private static let baseSections: [String: TemplateManifest.Section] = {
         var sections: [String: TemplateManifest.Section] = [:]
         sections["basics"] = basicsSection()
@@ -208,7 +206,6 @@ enum TemplateManifestDefaults {
     }()
 
     // MARK: - Section Builders
-
     private static func basicsSection() -> TemplateManifest.Section {
         let fields: [TemplateManifest.Section.FieldDescriptor] = [
             field("name", input: .text, required: true, binding: ["name"]),
@@ -395,7 +392,6 @@ enum TemplateManifestDefaults {
     }
 
     // MARK: - Field Helper Builders
-
     private static func field(
         _ key: String,
         input: TemplateManifest.Section.FieldDescriptor.InputKind? = nil,
@@ -537,7 +533,6 @@ enum TemplateManifestDefaults {
 }
 
 // MARK: - Section Mutation Helpers
-
 private extension TemplateManifest.Section {
     func applyingStylingOverride(_ override: TemplateManifestOverrides.Styling) -> TemplateManifest.Section {
         var dictionary = dictionaryDefaultValue()

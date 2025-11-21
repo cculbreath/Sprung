@@ -5,11 +5,9 @@ import SwiftyJSON
 /// Owns all message state including streaming messages and reasoning summaries.
 actor ChatTranscriptStore: OnboardingEventEmitter {
     // MARK: - Event System
-
     let eventBus: EventCoordinator
 
     // MARK: - Message Storage
-
     private(set) var messages: [OnboardingMessage] = []
     private(set) var streamingMessage: StreamingMessage?
     private(set) var latestReasoningSummary: String?
@@ -22,26 +20,22 @@ actor ChatTranscriptStore: OnboardingEventEmitter {
     }
 
     // MARK: - Reasoning Summary (Sidebar Display)
-
     private(set) var currentReasoningSummary: String?
     private(set) var isReasoningActive = false
 
     // MARK: - Synchronous Caches (for SwiftUI)
-
     nonisolated(unsafe) private(set) var messagesSync: [OnboardingMessage] = []
     nonisolated(unsafe) private(set) var streamingMessageSync: StreamingMessage?
     nonisolated(unsafe) private(set) var currentReasoningSummarySync: String?
     nonisolated(unsafe) private(set) var isReasoningActiveSync = false
 
     // MARK: - Initialization
-
     init(eventBus: EventCoordinator) {
         self.eventBus = eventBus
         Logger.info("💬 ChatTranscriptStore initialized", category: .ai)
     }
 
     // MARK: - Message Management
-
     /// Append user message
     func appendUserMessage(_ text: String, isSystemGenerated: Bool = false) -> UUID {
         let message = OnboardingMessage(
@@ -80,7 +74,6 @@ actor ChatTranscriptStore: OnboardingEventEmitter {
     }
 
     // MARK: - Responses API Threading
-
     /// Set previous response ID for Responses API threading
     func setPreviousResponseId(_ responseId: String?) {
         previousResponseId = responseId
@@ -92,7 +85,6 @@ actor ChatTranscriptStore: OnboardingEventEmitter {
     }
 
     // MARK: - Streaming Message Management
-
     /// Begin streaming a new message
     func beginStreamingMessage(initialText: String, reasoningExpected: Bool) -> UUID {
         let id = UUID()
@@ -150,7 +142,6 @@ actor ChatTranscriptStore: OnboardingEventEmitter {
     }
 
     // MARK: - Reasoning Summary (Sidebar Display)
-
     /// Update the current reasoning summary for sidebar display (ChatGPT-style)
     func updateReasoningSummary(delta: String) {
         if currentReasoningSummary == nil {
@@ -202,7 +193,6 @@ actor ChatTranscriptStore: OnboardingEventEmitter {
     }
 
     // MARK: - State Management
-
     /// Restore messages from checkpoint
     func restoreMessages(_ restoredMessages: [OnboardingMessage]) {
         messages = restoredMessages

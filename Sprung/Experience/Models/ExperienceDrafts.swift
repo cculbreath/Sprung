@@ -296,7 +296,6 @@ extension ExperienceDefaultsDraft {
 }
 
 // MARK: - Work
-
 struct WorkExperienceDraft: Identifiable, Equatable {
     var id: UUID = UUID()
     var name: String = ""
@@ -336,7 +335,6 @@ struct HighlightDraft: Identifiable, Equatable {
 }
 
 // MARK: - Volunteer
-
 struct VolunteerExperienceDraft: Identifiable, Equatable {
     var id: UUID = UUID()
     var organization: String = ""
@@ -374,7 +372,6 @@ struct VolunteerHighlightDraft: Identifiable, Equatable {
 }
 
 // MARK: - Education
-
 struct EducationExperienceDraft: Identifiable, Equatable {
     var id: UUID = UUID()
     var institution: String = ""
@@ -414,7 +411,6 @@ struct CourseDraft: Identifiable, Equatable {
 }
 
 // MARK: - Projects
-
 struct ProjectExperienceDraft: Identifiable, Equatable {
     var id: UUID = UUID()
     var name: String = ""
@@ -468,7 +464,6 @@ struct RoleDraft: Identifiable, Equatable {
 }
 
 // MARK: - Skills
-
 struct SkillExperienceDraft: Identifiable, Equatable {
     var id: UUID = UUID()
     var name: String = ""
@@ -486,7 +481,6 @@ struct SkillExperienceDraft: Identifiable, Equatable {
 }
 
 // MARK: - Awards
-
 struct AwardExperienceDraft: Identifiable, Equatable {
     var id: UUID = UUID()
     var title: String = ""
@@ -506,7 +500,6 @@ struct AwardExperienceDraft: Identifiable, Equatable {
 }
 
 // MARK: - Certificates
-
 struct CertificateExperienceDraft: Identifiable, Equatable {
     var id: UUID = UUID()
     var name: String = ""
@@ -526,7 +519,6 @@ struct CertificateExperienceDraft: Identifiable, Equatable {
 }
 
 // MARK: - Publications
-
 struct PublicationExperienceDraft: Identifiable, Equatable {
     var id: UUID = UUID()
     var name: String = ""
@@ -548,7 +540,6 @@ struct PublicationExperienceDraft: Identifiable, Equatable {
 }
 
 // MARK: - Languages
-
 struct LanguageExperienceDraft: Identifiable, Equatable {
     var id: UUID = UUID()
     var language: String = ""
@@ -564,7 +555,6 @@ struct LanguageExperienceDraft: Identifiable, Equatable {
 }
 
 // MARK: - Interests
-
 struct InterestExperienceDraft: Identifiable, Equatable {
     var id: UUID = UUID()
     var name: String = ""
@@ -580,7 +570,6 @@ struct InterestExperienceDraft: Identifiable, Equatable {
 }
 
 // MARK: - References
-
 struct ReferenceExperienceDraft: Identifiable, Equatable {
     var id: UUID = UUID()
     var name: String = ""

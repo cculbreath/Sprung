@@ -73,7 +73,6 @@ class RevisionCompletionService {
     }
 
     // MARK: - Private Helpers
-
     /// Create a revision prompt from feedback nodes
     private func createRevisionPrompt(feedbackNodes: [FeedbackNode]) -> String {
         var prompt = "Please revise the following items based on the feedback provided:\n\n"

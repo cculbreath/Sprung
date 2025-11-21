@@ -278,7 +278,6 @@ class MenuNotificationHandler {
     }
     
     // MARK: - Menu Action Handlers
-    
     // These handlers directly trigger the same UI state changes that the toolbar buttons do
     
     @MainActor

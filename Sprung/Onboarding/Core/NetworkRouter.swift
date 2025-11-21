@@ -18,7 +18,6 @@ import SwiftyJSON
 ///                LLM.reasoningDelta, LLM.reasoningDone, LLM.error
 actor NetworkRouter: OnboardingEventEmitter {
     // MARK: - Properties
-
     let eventBus: EventCoordinator
 
     // Stream buffering for delta accumulation
@@ -37,14 +36,12 @@ actor NetworkRouter: OnboardingEventEmitter {
     private var receivedOutputItemDone = false
 
     // MARK: - Initialization
-
     init(eventBus: EventCoordinator) {
         self.eventBus = eventBus
         Logger.info("📡 NetworkRouter initialized", category: .ai)
     }
 
     // MARK: - Stream Processing
-
     /// Process a ResponseStreamEvent from OpenAI
     func handleResponseEvent(_ event: ResponseStreamEvent) async {
         switch event {
@@ -127,7 +124,6 @@ actor NetworkRouter: OnboardingEventEmitter {
     }
 
     // MARK: - Message Processing
-
     private func processMessageContent(_ message: OutputItem.Message) async {
         for contentItem in message.content {
             if case .outputText(let outputText) = contentItem {
@@ -239,7 +235,6 @@ actor NetworkRouter: OnboardingEventEmitter {
     }
 
     // MARK: - Stream Cancellation (Phase 2)
-
     /// Cancel and clean up any in-progress streaming messages
     /// Called when user cancels LLM mid-response
     func cancelPendingStreams() async {
@@ -267,7 +262,6 @@ actor NetworkRouter: OnboardingEventEmitter {
     }
 
     // MARK: - Tool Call Processing
-
     private func processToolCall(_ toolCall: OutputItem.FunctionToolCall) async {
         let functionName = toolCall.name
         let arguments = toolCall.arguments
@@ -306,7 +300,6 @@ actor NetworkRouter: OnboardingEventEmitter {
     }
 
     // MARK: - Reasoning Support
-
     /// Process reasoning item from output (indicates reasoning is present)
     private func processReasoningItem(_ reasoning: OutputItem.Reasoning) async {
         // Reasoning items are handled automatically by previous_response_id

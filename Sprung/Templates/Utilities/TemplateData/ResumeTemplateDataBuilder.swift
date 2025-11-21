@@ -26,7 +26,6 @@ struct ResumeTemplateDataBuilder {
 }
 
 // MARK: - Private Implementation
-
 private final class Implementation {
     let resume: Resume
     let rootNode: TreeNode
@@ -207,7 +206,6 @@ private final class Implementation {
     }
 
     // MARK: Section Builders
-
     private func applySectionVisibility(
         to context: inout [String: Any],
         manifest: TemplateManifest

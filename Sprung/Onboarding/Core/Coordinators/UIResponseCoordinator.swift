@@ -20,7 +20,6 @@ final class UIResponseCoordinator {
     }
     
     // MARK: - Choice Selection
-    
     func submitChoiceSelection(_ selectionIds: [String]) async {
         guard toolRouter.resolveChoice(selectionIds: selectionIds) != nil else { return }
 
@@ -33,7 +32,6 @@ final class UIResponseCoordinator {
     }
     
     // MARK: - Upload Handling
-    
     func completeUploadAndResume(id: UUID, fileURLs: [URL], coordinator: OnboardingInterviewCoordinator) async {
         guard await coordinator.completeUpload(id: id, fileURLs: fileURLs) != nil else { return }
 
@@ -83,7 +81,6 @@ final class UIResponseCoordinator {
     }
     
     // MARK: - Validation Handling
-    
     func submitValidationAndResume(
         status: String,
         updatedData: JSON?,
@@ -91,7 +88,7 @@ final class UIResponseCoordinator {
         notes: String?,
         coordinator: OnboardingInterviewCoordinator
     ) async {
-        guard coordinator.submitValidationResponse(status: status, updatedData: updatedData, changes: changes, notes: notes) != nil else { return }
+        guard await coordinator.submitValidationResponse(status: status, updatedData: updatedData, changes: changes, notes: notes) != nil else { return }
 
         var userMessage = JSON()
         userMessage["role"].string = "user"
@@ -131,7 +128,6 @@ final class UIResponseCoordinator {
     }
     
     // MARK: - Applicant Profile Handling
-    
     func confirmApplicantProfile(draft: ApplicantProfileDraft) async {
         guard let resolution = toolRouter.resolveApplicantProfile(with: draft) else { return }
 
@@ -248,7 +244,6 @@ final class UIResponseCoordinator {
     }
     
     // MARK: - Section Toggle Handling
-    
     func confirmSectionToggle(enabled: [String]) async {
         guard toolRouter.resolveSectionToggle(enabled: enabled) != nil else { return }
 
@@ -272,7 +267,6 @@ final class UIResponseCoordinator {
     }
     
     // MARK: - Model Availability
-    
     func notifyInvalidModel(id: String) {
         // This method is called by OnboardingInterviewCoordinator when an invalid model is reported
         // We don't need to do anything here as the coordinator updates the UI state directly
@@ -282,7 +276,6 @@ final class UIResponseCoordinator {
     }
     
     // MARK: - Chat & Control
-    
     func sendChatMessage(_ text: String) async {
         var userMessage = JSON()
         userMessage["role"].string = "user"
@@ -296,7 +289,6 @@ final class UIResponseCoordinator {
     }
     
     // MARK: - Timeline Handling
-    
     func applyUserTimelineUpdate(cards: [TimelineCard], meta: JSON?, diff: TimelineDiff) async {
         // Reconstruct the full JSON
         var timelineJSON = JSON()

@@ -34,7 +34,6 @@ actor ToolExecutor {
     }
 
     // MARK: - Helpers
-
     private func normalize(_ result: ToolResult, toolName: String) -> ToolResult {
         switch result {
         case .immediate:

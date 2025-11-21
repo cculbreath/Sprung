@@ -103,7 +103,6 @@ struct PersistDataTool: InterviewTool {
     }
 
     // MARK: - Domain Event Emission
-
     /// Emit domain-specific events based on dataType to update StateCoordinator
     private func emitDomainEvent(for dataType: String, payload: JSON) async {
         switch dataType {

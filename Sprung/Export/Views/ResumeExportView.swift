@@ -210,7 +210,6 @@ struct ResumeExportView: View {
     }
 
     // MARK: - Toolbar
-
     private func showToastNotification(_ message: String) {
         // Cancel any existing timer
         toastTimer?.invalidate()
@@ -231,7 +230,6 @@ struct ResumeExportView: View {
     }
 
     // MARK: - File Utilities
-
     private func sanitizeFilename(_ name: String) -> String {
         let invalidCharacters = CharacterSet(charactersIn: "/\\?%*:|\"<>")
         return name.components(separatedBy: invalidCharacters).joined(separator: "_")
@@ -295,7 +293,6 @@ struct ResumeExportView: View {
     }
 
     // MARK: - Export Methods
-
     private func exportResumePDF() {
         guard let jobApp = jobAppStore.selectedApp,
               let resume = jobApp.selectedRes
@@ -562,7 +559,6 @@ struct ResumeExportView: View {
     }
     
     // MARK: - Helper Functions
-    
     /// Returns the primary URL for applying to the job (apply URL if available, otherwise posting URL)
     private func getPrimaryApplyURL(for jobApp: JobApp) -> String? {
         if !jobApp.jobApplyLink.isEmpty {
@@ -575,7 +571,6 @@ struct ResumeExportView: View {
 }
 
 // MARK: - Supporting Views
-
 struct MacOSToastOverlay: View {
     let showToast: Bool
     let message: String

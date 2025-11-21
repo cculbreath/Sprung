@@ -15,7 +15,6 @@ import os.log // For system logging
 /// Drop-in replacement for StreamingTTSPlayer that handles buffered audio playback
 final class TTSAudioStreamer {
     // MARK: - Properties
-
     /// Audio file type hint (e.g. MP3)
     private let fileType: AudioFileTypeID = kAudioFileMP3Type
 
@@ -89,7 +88,6 @@ final class TTSAudioStreamer {
     )
 
     // MARK: - Callbacks
-
     /// Called when the player is ready to start playback (buffering complete)
     var onReady: (() -> Void)?
 
@@ -104,9 +102,7 @@ final class TTSAudioStreamer {
     var onBufferingStateChanged: ((Bool) -> Void)?
 
     // MARK: - Computed Properties
-
     // MARK: - Initialization
-
     init() {
     }
 
@@ -124,7 +120,6 @@ final class TTSAudioStreamer {
     }
 
     // MARK: - Private Methods
-
     /// Set the buffering state and notify listeners
     private func setBufferingState(_ buffering: Bool) {
         if isBufferingFlag != buffering {
@@ -148,8 +143,6 @@ final class TTSAudioStreamer {
     }
 
     // MARK: - Public Methods
-    
-
     /// Append a new chunk of audio data for playback.
     /// On the first chunk, buffer it before starting the player to ensure initial data is available.
     func append(_ data: Data) {
@@ -308,7 +301,6 @@ final class TTSAudioStreamer {
     }
 
     // MARK: - Transport Controls
-
     /// Pause playback without dropping buffered data.
     /// - Returns: `true` if a pause actually occurred.
     @discardableResult
@@ -344,7 +336,6 @@ final class TTSAudioStreamer {
     }
 
     // MARK: - Debug
-
 }
 
 // swift-format-enable: all

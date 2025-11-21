@@ -9,7 +9,6 @@ import WebKit
 import ObjectiveC
 
 // MARK: - LinkedIn Session Manager
-
 private enum LinkedInScrapeTiming {
     static let requestTimeout: TimeInterval = 60
     static let fallbackCheckInterval: TimeInterval = 2
@@ -57,7 +56,6 @@ class LinkedInSessionManager: ObservableObject {
 }
 
 // MARK: - LinkedIn Job Extractor
-
 extension JobApp {
     /// Attempts to extract job information directly from LinkedIn using an authenticated session
     @MainActor
@@ -496,7 +494,6 @@ extension JobApp {
 }
 
 // MARK: - Navigation Delegate Helper
-
 private class LinkedInJobScrapeDelegate: NSObject, WKNavigationDelegate {
     let targetURL: URL
     let completion: (Result<String, Error>) -> Void

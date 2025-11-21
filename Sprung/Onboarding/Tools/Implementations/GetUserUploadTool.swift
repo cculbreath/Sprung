@@ -113,7 +113,6 @@ struct GetUserUploadTool: InterviewTool {
 
 
 // MARK: - Payload Parsing
-
 private struct UploadRequestPayload {
     let kind: OnboardingUploadKind
     let metadata: OnboardingUploadMetadata
@@ -275,5 +274,4 @@ private struct UploadUserResponse {
 }
 
 // MARK: - Storage & Extraction
-
 // Upload storage helper moved to shared utility file.

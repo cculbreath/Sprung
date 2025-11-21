@@ -18,12 +18,10 @@ import SwiftyJSON
 /// Message state is managed entirely by StateCoordinator.
 actor ChatboxHandler: OnboardingEventEmitter {
     // MARK: - Properties
-
     let eventBus: EventCoordinator
     private let state: StateCoordinator
 
     // MARK: - Initialization
-
     init(
         eventBus: EventCoordinator,
         state: StateCoordinator
@@ -34,7 +32,6 @@ actor ChatboxHandler: OnboardingEventEmitter {
     }
 
     // MARK: - Event Subscriptions
-
     /// Start listening to chat-related events
     func startEventSubscriptions() async {
         Task {
@@ -50,7 +47,6 @@ actor ChatboxHandler: OnboardingEventEmitter {
     }
 
     // MARK: - Event Handlers
-
     private func handleLLMEvent(_ event: OnboardingEvent) async {
         switch event {
         case .errorOccurred(let message):
@@ -63,7 +59,6 @@ actor ChatboxHandler: OnboardingEventEmitter {
     }
 
     // MARK: - User Input
-
     /// Send user message to LLM
     func sendUserMessage(_ text: String) async {
         // Add the ORIGINAL message (without tags) to chat transcript IMMEDIATELY so user sees it right away
