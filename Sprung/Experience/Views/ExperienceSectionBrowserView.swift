@@ -1,16 +1,13 @@
 import SwiftUI
-
 struct ExperienceSectionBrowserView: View {
     @Binding var draft: ExperienceDefaultsDraft
     @State private var expandedSections: Set<ExperienceSectionKey> = Set(ExperienceSectionKey.allCases)
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Sections")
                     .font(.headline)
                     .padding(.top, 12)
-
                 ForEach(ExperienceSchema.sections) { section in
                     DisclosureGroup(isExpanded: binding(for: section.key)) {
                         VStack(alignment: .leading, spacing: 4) {
@@ -37,7 +34,6 @@ struct ExperienceSectionBrowserView: View {
             .padding(.horizontal, 16)
         }
     }
-
     private func nodeView(_ node: ExperienceSchemaNode, indentLevel: Int) -> some View {
         switch node.kind {
         case .field(let name):
@@ -62,7 +58,6 @@ struct ExperienceSectionBrowserView: View {
                             .foregroundStyle(.secondary)
                     }
                     .padding(.leading, CGFloat(indentLevel) * 12)
-
                     ForEach(children) { child in
                         nodeView(child, indentLevel: indentLevel + 1)
                     }
@@ -70,7 +65,6 @@ struct ExperienceSectionBrowserView: View {
             )
         }
     }
-
     private func binding(for key: ExperienceSectionKey) -> Binding<Bool> {
         Binding(
             get: { expandedSections.contains(key) },
@@ -83,7 +77,6 @@ struct ExperienceSectionBrowserView: View {
             }
         )
     }
-
     private func sectionToggle(for section: ExperienceSchemaSection) -> Binding<Bool> {
         section.metadata.toggleBinding(in: $draft)
     }

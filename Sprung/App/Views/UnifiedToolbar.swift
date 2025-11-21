@@ -2,7 +2,6 @@
 import SwiftUI
 import AppKit
 
-
 /// Unified toolbar with all buttons visible, using disabled state instead of hiding
 @ToolbarContentBuilder
 func buildUnifiedToolbar(
@@ -24,10 +23,8 @@ func buildUnifiedToolbar(
         showSlidingList: showSlidingList
     )
 }
-
 struct UnifiedToolbar: CustomizableToolbarContent {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
-
     @Binding var selectedTab: TabList
     @Binding var listingButtons: SaveButtons
     @Binding var refresh: Bool
@@ -35,7 +32,6 @@ struct UnifiedToolbar: CustomizableToolbarContent {
     @Binding var clarifyingQuestions: [ClarifyingQuestion]
     @Binding var showNewAppSheet: Bool
     @Binding var showSlidingList: Bool
-
     var body: some CustomizableToolbarContent {
         Group {
             navigationButtonsGroup
@@ -55,11 +51,9 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 .buttonStyle( .automatic )
                 .help("Create New Job Application")
             }
-
             ToolbarItem(id: "bestJob", placement: .navigation, showsByDefault: true) {
                 BestJobButton()
             }
-
             ToolbarItem(id: "applicantProfile", placement: .navigation, showsByDefault: true) {
                 Button(action: {
                     Task { @MainActor in
@@ -77,7 +71,6 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 .help("Open Applicant Profile")
             }
         }}
-
     private var mainButtonsGroup: some CustomizableToolbarContent {
         Group {
             ToolbarItem(id: "startOnboardingInterview", placement: .secondaryAction, showsByDefault: true) {
@@ -98,11 +91,9 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 .buttonStyle(.automatic)
                 .help("Launch onboarding interview")
             }
-
             ToolbarItem(id: "coverLetter", placement: .secondaryAction, showsByDefault: true) {
                 CoverLetterGenerateButton()
             }
-
             ToolbarItem(id: "analyze", placement: .secondaryAction, showsByDefault: true) {
                 Button(action: {
                     sheets.showApplicationReview = true
@@ -119,7 +110,6 @@ struct UnifiedToolbar: CustomizableToolbarContent {
             }
         }
     }
-
     private var inspectorButtonGroup: some CustomizableToolbarContent {
         Group {
             ToolbarItem(id: "templateEditor", placement: .primaryAction, showsByDefault: true) {
@@ -135,7 +125,6 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 .buttonStyle(.automatic)
                 .help("Open Template Editor")
             }
-
             ToolbarItem(id: "experienceEditor", placement: .primaryAction, showsByDefault: true) {
                 Button(action: {
                     Task { @MainActor in
@@ -149,7 +138,6 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 .buttonStyle(.automatic)
                 .help("Open Experience Editor")
             }
-
             ToolbarItem(id: "showSources", placement: .primaryAction, showsByDefault: true) {
                 Button(action: {
                     withAnimation(.spring(response: 0.5, dampingFraction: 0.8, blendDuration: 0.2)) {
@@ -163,7 +151,6 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 .help("Show Sources")
                 .disabled(jobAppStore.selectedApp == nil)
             }
-
             ToolbarItem(id: "inspector", placement: .primaryAction, showsByDefault: true) {
                 Button("Inspector", systemImage: "sidebar.right") {
                     switch selectedTab {
@@ -195,7 +182,6 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 }
                 .help("Toggle text-to-speech playback")
             }
-
             ToolbarItem(id: "separator", placement: .primaryAction, showsByDefault: false) {
                 Divider()
             }

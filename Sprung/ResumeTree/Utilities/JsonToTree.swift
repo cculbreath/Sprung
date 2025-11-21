@@ -4,10 +4,8 @@
 //
 //  Rewritten to separate data-tree construction from view concerns.
 //
-
 import Foundation
 import OrderedCollections
-
 /// Builds the mutable `TreeNode` hierarchy that powers the resume editor.
 /// Requires a manifest and uses it as the single source of truth for ordering,
 /// visibility, and behaviour.
@@ -18,7 +16,6 @@ final class JsonToTree {
     fileprivate let originalContext: [String: Any]
     fileprivate let sectionKeys: [String]
     fileprivate var indexCounter: Int = 0
-
     private init(
         resume: Resume,
         orderedContext: OrderedDictionary<String, Any>,
@@ -32,7 +29,6 @@ final class JsonToTree {
         self.originalContext = originalContext
         sectionKeys = orderedKeys
     }
-
     convenience init(resume: Resume, context: [String: Any], manifest: TemplateManifest?) {
         let (orderedContext, orderedKeys) = JsonToTree.makeOrderedContext(from: context, manifest: manifest)
         self.init(
@@ -43,26 +39,21 @@ final class JsonToTree {
             orderedKeys: orderedKeys
         )
     }
-
     func buildTree() -> TreeNode? {
         guard resume.needToTree else { return resume.rootNode }
         resume.needToTree = false
-
         guard let manifest else {
             Logger.error("JsonToTree: missing manifest for template \(resume.template?.slug ?? "unknown"); aborting tree build.")
             resume.needToTree = true
             return nil
         }
-
         resetResumeState()
-
         let renderer = ManifestRenderer(host: self, manifest: manifest)
         guard let root = renderer.build() else { return nil }
         root.rebuildViewHierarchy(manifest: manifest)
         return root
     }
 }
-
 // MARK: - Shared helpers -----------------------------------------------------
 private extension JsonToTree {
     static func makeOrderedContext(
@@ -71,21 +62,17 @@ private extension JsonToTree {
     ) -> (OrderedDictionary<String, Any>, [String]) {
         var ordered: OrderedDictionary<String, Any> = [:]
         let preferredOrder = orderedKeys(from: Array(context.keys), manifest: manifest)
-
         for key in preferredOrder {
             if let value = context[key] {
                 ordered[key] = convertToOrderedStructure(value)
             }
         }
-
         let extraKeys = context.keys.filter { ordered[$0] == nil }.sorted()
         for key in extraKeys {
             ordered[key] = convertToOrderedStructure(context[key] as Any)
         }
-
         return (ordered, Array(ordered.keys))
     }
-
     static func convertToOrderedStructure(_ value: Any) -> Any {
         if let ordered = value as? OrderedDictionary<String, Any> { return ordered }
         if let dict = value as? [String: Any] {
@@ -100,7 +87,6 @@ private extension JsonToTree {
         }
         return value
     }
-
     static func orderedKeys(from keys: [String], manifest: TemplateManifest?) -> [String] {
         guard let manifest else { return keys.sorted() }
         var ordered: [String] = []
@@ -112,13 +98,11 @@ private extension JsonToTree {
         }
         return ordered
     }
-
     func value(for key: String) -> Any? {
         if let stored = orderedContext[key] { return stored }
         guard let original = originalContext[key] else { return nil }
         return JsonToTree.convertToOrderedStructure(original)
     }
-
     func resetResumeState() {
         if resume.needToFont {
             resume.fontSizeNodes = []
@@ -127,7 +111,6 @@ private extension JsonToTree {
         resume.importedEditorKeys = []
         resume.keyLabels = [:]
     }
-
     func assignFontSizes(from value: Any?) {
         guard resume.needToFont else { return }
         guard let value,
@@ -156,7 +139,6 @@ private extension JsonToTree {
         }
         resume.fontSizeNodes = nodes
     }
-
     func assignIncludeFonts(from value: Any?) {
         guard let value else { return }
         if let boolValue = value as? Bool {
@@ -167,7 +149,6 @@ private extension JsonToTree {
             resume.includeFonts = numberValue.boolValue
         }
     }
-
     func assignEditorKeys(from value: Any?) {
         guard let value else { return }
         if let strings = value as? [String] {
@@ -178,7 +159,6 @@ private extension JsonToTree {
             resume.importedEditorKeys = [single]
         }
     }
-
     func assignSectionLabels(from value: Any?) {
         guard let value else { return }
         var labels: [String: String] = [:]
@@ -202,7 +182,6 @@ private extension JsonToTree {
             resume.keyLabels[key] = label
         }
     }
-
     func orderedDictionary(from value: Any) -> OrderedDictionary<String, Any>? {
         if let ordered = value as? OrderedDictionary<String, Any> { return ordered }
         if let dict = value as? [String: Any] {
@@ -215,19 +194,16 @@ private extension JsonToTree {
         return nil
     }
 }
-
 // MARK: - Manifest-driven renderer ------------------------------------------
 private final class ManifestRenderer {
     private unowned let host: JsonToTree
     private let manifest: TemplateManifest
     private let editorLabels: [String: String]
-
     init(host: JsonToTree, manifest: TemplateManifest) {
         self.host = host
         self.manifest = manifest
         editorLabels = manifest.editorLabels ?? [:]
     }
-
     func build() -> TreeNode? {
         host.applyManifestBehaviors(using: manifest)
         let root = TreeNode(
@@ -237,7 +213,6 @@ private final class ManifestRenderer {
             status: .isNotLeaf,
             resume: host.resume
         )
-
         for key in host.sectionKeys where shouldIncludeSection(key) {
             guard let rawValue = host.value(for: key) else { continue }
             buildSection(
@@ -248,10 +223,8 @@ private final class ManifestRenderer {
                 path: [key]
             )
         }
-
         return root
     }
-
     private func shouldIncludeSection(_ key: String) -> Bool {
         if let behavior = manifest.behavior(forSection: key),
            [.styling, .includeFonts, .editorKeys, .metadata].contains(behavior) {
@@ -259,7 +232,6 @@ private final class ManifestRenderer {
         }
         return true
     }
-
     private func buildSection(
         name: String,
         value: Any,
@@ -268,7 +240,6 @@ private final class ManifestRenderer {
         path: [String]
     ) {
         guard let kind = descriptor?.type ?? inferKind(from: value) else { return }
-
         switch kind {
         case .string:
             buildStringLeaf(
@@ -315,7 +286,6 @@ private final class ManifestRenderer {
             break
         }
     }
-
     private func buildStringLeaf(
         name: String,
         value: Any,
@@ -336,7 +306,6 @@ private final class ManifestRenderer {
         node.applyDescriptor(descriptor)
         applyEditorLabel(path: path, to: node)
     }
-
     private func buildArray(
         name: String,
         value: Any,
@@ -363,7 +332,6 @@ private final class ManifestRenderer {
         )
         container.schemaAllowsChildMutation = descriptor?.allowsManualMutations ?? false
         applyEditorLabel(path: path, to: container)
-
         if elements.allSatisfy({ $0 is String }) {
             for (index, stringValue) in elements.enumerated() {
                 guard let stringValue = stringValue as? String else { continue }
@@ -381,7 +349,6 @@ private final class ManifestRenderer {
             }
             return
         }
-
         for (index, element) in elements.enumerated() {
             let childPath = path + ["\(index)"]
             if let dictValue = element as? OrderedDictionary<String, Any> {
@@ -440,7 +407,6 @@ private final class ManifestRenderer {
             }
         }
     }
-
     private func buildMapOfStrings(
         name: String,
         value: Any,
@@ -459,7 +425,6 @@ private final class ManifestRenderer {
             )
         )
         applyEditorLabel(path: path, to: container)
-
         let orderedKeys = orderedKeys(in: dict, descriptors: descriptor?.fields)
         for key in orderedKeys {
             guard let rawValue = dict[key] as? String else { continue }
@@ -478,7 +443,6 @@ private final class ManifestRenderer {
             applyEditorLabel(path: path + [key], to: child)
         }
     }
-
     private func buildArrayOfObjects(
         name: String,
         value: Any,
@@ -490,14 +454,12 @@ private final class ManifestRenderer {
             buildObject(name: name, value: value, descriptor: descriptor, parent: parent, path: path)
             return
         }
-
         guard let normalizedEntries = normalizedArrayEntries(
             value: value,
             entryDescriptor: entryDescriptor
         ) else {
             return
         }
-
         let container = parent.addChild(
             TreeNode(
                 name: name,
@@ -510,7 +472,6 @@ private final class ManifestRenderer {
         container.schemaAllowsChildMutation = entryDescriptor.allowsManualMutations
         container.schemaAllowsNodeDeletion = entryDescriptor.allowsManualMutations
         applyEditorLabel(path: path, to: container)
-
         for (index, entry) in normalizedEntries.enumerated() {
             let title = displayTitle(
                 fallback: "\(name.capitalized) \(index + 1)",
@@ -538,7 +499,6 @@ private final class ManifestRenderer {
             )
         }
     }
-
     private func buildObject(
         name: String,
         value: Any,
@@ -547,7 +507,6 @@ private final class ManifestRenderer {
         path: [String]
     ) {
         guard let dict = host.orderedDictionary(from: value) else { return }
-
         let container = parent.addChild(
             TreeNode(
                 name: name,
@@ -558,7 +517,6 @@ private final class ManifestRenderer {
             )
         )
         applyEditorLabel(path: path, to: container)
-
         buildObjectFields(
             dictionary: dict,
             descriptors: descriptor?.fields,
@@ -566,7 +524,6 @@ private final class ManifestRenderer {
             path: path
         )
     }
-
     private func buildObjectFields(
         dictionary: OrderedDictionary<String, Any>,
         descriptors: [TemplateManifest.Section.FieldDescriptor]?,
@@ -574,21 +531,17 @@ private final class ManifestRenderer {
         path: [String]
     ) {
         let orderedKeys = orderedKeys(in: dictionary, descriptors: descriptors)
-
         for key in orderedKeys {
             guard let rawValue = dictionary[key] else { continue }
             let fieldPath = path + [key]
             guard let descriptor = descriptorField(for: key, in: descriptors) else { continue }
-
             if descriptor.binding?.source == .applicantProfile {
                 continue
             }
-
             if let behavior = descriptor.behavior {
                 handleBehavior(behavior, value: rawValue)
                 continue
             }
-
             switch rawValue {
             case let stringValue as String:
                 let child = parent.addChild(
@@ -632,7 +585,6 @@ private final class ManifestRenderer {
             }
         }
     }
-
     private func buildChildObject(
         name: String,
         dictionary: OrderedDictionary<String, Any>,
@@ -659,7 +611,6 @@ private final class ManifestRenderer {
             path: path
         )
     }
-
     private func applyEditorLabel(path: [String], to node: TreeNode) {
         guard let tail = path.last else { return }
         if let label = editorLabels[path.joined(separator: ".")] {
@@ -668,7 +619,6 @@ private final class ManifestRenderer {
             node.editorLabel = label
         }
     }
-
     private func orderedKeys(
         in dict: OrderedDictionary<String, Any>,
         descriptors: [TemplateManifest.Section.FieldDescriptor]?
@@ -687,7 +637,6 @@ private final class ManifestRenderer {
         }
         return keys
     }
-
     private func descriptorField(
         for key: String,
         in descriptors: [TemplateManifest.Section.FieldDescriptor]?
@@ -696,7 +645,6 @@ private final class ManifestRenderer {
         if let exact = descriptors.first(where: { $0.key == key }) { return exact }
         return descriptors.first(where: { $0.key == "*" })
     }
-
     private func handleBehavior(
         _ behavior: TemplateManifest.Section.FieldDescriptor.Behavior,
         value: Any
@@ -714,7 +662,6 @@ private final class ManifestRenderer {
             break
         }
     }
-
     private func inferKind(from value: Any) -> TemplateManifest.Section.Kind? {
         switch value {
         case is String:
@@ -739,7 +686,6 @@ private final class ManifestRenderer {
             return nil
         }
     }
-
     private func normalizedArrayEntries(
         value: Any,
         entryDescriptor: TemplateManifest.Section.FieldDescriptor
@@ -747,14 +693,12 @@ private final class ManifestRenderer {
         if let ordered = value as? [OrderedDictionary<String, Any>] {
             return ordered.map { ArrayEntry(sourceKey: nil, value: $0) }
         }
-
         if let array = value as? [[String: Any]] {
             return array.compactMap { dict in
                 guard let ordered = host.orderedDictionary(from: dict) else { return nil }
                 return ArrayEntry(sourceKey: nil, value: ordered)
             }
         }
-
         if let dict = host.orderedDictionary(from: value) {
             var result: [ArrayEntry] = []
             for (key, rawValue) in dict {
@@ -776,7 +720,6 @@ private final class ManifestRenderer {
             }
             return result.isEmpty ? nil : result
         }
-
         if let array = value as? [String] {
             return array.map {
                 ArrayEntry(
@@ -785,10 +728,8 @@ private final class ManifestRenderer {
                 )
             }
         }
-
         return nil
     }
-
     private func assignTitleAndPrimaryValue(
         to entry: inout OrderedDictionary<String, Any>,
         title: String,
@@ -808,7 +749,6 @@ private final class ManifestRenderer {
             entry["value"] = value
         }
     }
-
     private func displayTitle(
         fallback: String,
         descriptor: TemplateManifest.Section.FieldDescriptor,
@@ -831,7 +771,6 @@ private final class ManifestRenderer {
         }
         return fallback
     }
-
     private func renderTemplate(
         _ template: String,
         using element: OrderedDictionary<String, Any>
@@ -858,20 +797,17 @@ private final class ManifestRenderer {
         }
         return result
     }
-
     private struct ArrayEntry {
         let sourceKey: String?
         let value: OrderedDictionary<String, Any>
     }
 }
-
 // MARK: - Manifest behaviours ------------------------------------------------
 private extension JsonToTree {
     func applyManifestBehaviors(using manifest: TemplateManifest) {
         if let keys = manifest.keysInEditor, keys.isEmpty == false {
             resume.importedEditorKeys = keys
         }
-
         for key in sectionKeys {
             guard let behavior = manifest.behavior(forSection: key) else { continue }
             let sectionValue = value(for: key)
@@ -894,7 +830,6 @@ private extension JsonToTree {
                 break
             }
         }
-
         for (sectionKey, section) in manifest.sections {
             guard let sectionValue = value(for: sectionKey) else { continue }
             for field in section.fields {
@@ -904,7 +839,6 @@ private extension JsonToTree {
             }
         }
     }
-
     func extractRawValue(
         for descriptor: TemplateManifest.Section.FieldDescriptor,
         in value: Any
@@ -918,7 +852,6 @@ private extension JsonToTree {
         }
         return nil
     }
-
     func handleFieldBehavior(
         _ behavior: TemplateManifest.Section.FieldDescriptor.Behavior,
         rawValue: Any?
@@ -937,5 +870,4 @@ private extension JsonToTree {
         }
     }
 }
-
 // All rendering is manifest-driven; no heuristic fallback.

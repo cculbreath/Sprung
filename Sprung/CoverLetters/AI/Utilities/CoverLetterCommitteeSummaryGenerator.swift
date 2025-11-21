@@ -4,17 +4,13 @@
 //
 //  Created by Christopher Culbreath on 6/11/25.
 //
-
 import Foundation
-
 enum CoverLetterCommitteeSummaryError: LocalizedError {
     case facadeUnavailable
-
     var errorDescription: String? {
         "Unable to generate the analysis summary because the AI service is unavailable."
     }
 }
-
 class CoverLetterCommitteeSummaryGenerator {
     private var llmFacade: LLMFacade?
     
@@ -115,9 +111,7 @@ class CoverLetterCommitteeSummaryGenerator {
         guard let llm = llmFacade else {
             throw CoverLetterCommitteeSummaryError.facadeUnavailable
         }
-
         let summaryModelId = preferredModelId ?? modelReasonings.first?.model ?? "gpt-4o-mini"
-
         let summaryResponse: CommitteeSummaryResponse = try await llm.executeFlexibleJSON(
                 prompt: summaryPrompt,
                 modelId: summaryModelId,

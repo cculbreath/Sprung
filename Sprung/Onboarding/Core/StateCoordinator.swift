@@ -1,36 +1,29 @@
 import Foundation
 import SwiftyJSON
-
 /// Immutable phase policy configuration derived from PhaseScriptRegistry.
 struct PhasePolicy {
     let requiredObjectives: [InterviewPhase: [String]]
     let allowedTools: [InterviewPhase: Set<String>]
 }
-
 /// Thin orchestrator for onboarding state.
 /// Delegates domain logic to injected services and maintains sync caches for SwiftUI.
 actor StateCoordinator: OnboardingEventEmitter {
     // MARK: - Event System
     let eventBus: EventCoordinator
     private var subscriptionTask: Task<Void, Never>?
-
     // MARK: - Domain Services (Injected)
     private let objectiveStore: ObjectiveStore
     private let artifactRepository: ArtifactRepository
     private let chatStore: ChatTranscriptStore
     private let uiState: SessionUIState
     private let draftKnowledgeStore: DraftKnowledgeStore
-
     // MARK: - Phase Policy
     private let phasePolicy: PhasePolicy
-
     // Runtime tool exclusions (e.g., one-time bootstrap tools)
     private var excludedTools: Set<String> = []
-
     // MARK: - Core Interview State
     private(set) var phase: InterviewPhase = .phase1CoreFacts
     private(set) var evidenceRequirements: [EvidenceRequirement] = []
-
     // MARK: - Wizard Progress (Computed from ObjectiveStore)
     enum WizardStep: String, CaseIterable {
         case introduction
@@ -39,31 +32,25 @@ actor StateCoordinator: OnboardingEventEmitter {
         case writingCorpus
         case wrapUp
     }
-
     private(set) var currentWizardStep: WizardStep = .introduction
     private(set) var completedWizardSteps: Set<WizardStep> = []
-
     // MARK: - Stream Queue Management (Ensures Serial LLM Streaming)
     enum StreamRequestType {
         case userMessage(payload: JSON, isSystemGenerated: Bool)
         case toolResponse(payload: JSON)
     }
-
     private var isStreaming = false
     private var streamQueue: [StreamRequestType] = []
     private(set) var hasStreamedFirstResponse = false
-
     // MARK: - LLM State (Single Source of Truth)
     private var allowedToolNames: Set<String> = []
     private var lastResponseId: String?
     private var currentModelId: String = "gpt-5.1"
     private var currentToolPaneCard: OnboardingToolPaneCard = .none
-
     // MARK: - State Accessors
     var pendingValidationPrompt: OnboardingValidationPrompt? {
         get async { await uiState.pendingValidationPrompt }
     }
-
     // MARK: - Initialization
     init(
         eventBus: EventCoordinator,
@@ -81,10 +68,8 @@ actor StateCoordinator: OnboardingEventEmitter {
         self.chatStore = chat
         self.uiState = uiState
         self.draftKnowledgeStore = draftStore
-
         Logger.info("🎯 StateCoordinator initialized (orchestrator mode with injected services)", category: .ai)
     }
-
     // MARK: - Phase Management
     private static let nextPhaseMap: [InterviewPhase: InterviewPhase?] = [
         .phase1CoreFacts: .phase2DeepDive,
@@ -92,49 +77,33 @@ actor StateCoordinator: OnboardingEventEmitter {
         .phase3WritingCorpus: .complete,
         .complete: nil
     ]
-
     func setPhase(_ phase: InterviewPhase) async {
         self.phase = phase
         Logger.info("📍 Phase changed to: \(phase)", category: .ai)
-
-        // Register default objectives for new phase
         await objectiveStore.registerDefaultObjectives(for: phase)
-
-        // Update UI state phase (for tool permissions)
         await uiState.setPhase(phase)
-
-        // Update wizard progress
         await updateWizardProgress()
     }
-
     func advanceToNextPhase() async -> InterviewPhase? {
         guard await canAdvancePhase() else { return nil }
-
         guard let nextPhase = Self.nextPhaseMap[phase] ?? nil else {
             return nil
         }
-
         await setPhase(nextPhase)
         return nextPhase
     }
-
     func canAdvancePhase() async -> Bool {
         return await objectiveStore.canAdvancePhase(from: phase)
     }
-
     // MARK: - Wizard Progress (Queries ObjectiveStore)
     private func updateWizardProgress() async {
-        // Query objective statuses from ObjectiveStore
         let hasProfile = await objectiveStore.getObjectiveStatus("applicant_profile") == .completed
         let hasTimeline = await objectiveStore.getObjectiveStatus("skeleton_timeline") == .completed
         let hasSections = await objectiveStore.getObjectiveStatus("enabled_sections") == .completed
-
         let hasExperienceInterview = await objectiveStore.getObjectiveStatus("interviewed_one_experience") == .completed
         let hasKnowledgeCard = await objectiveStore.getObjectiveStatus("one_card_generated") == .completed
-
         let hasWriting = await objectiveStore.getObjectiveStatus("one_writing_sample") == .completed
         let hasDossier = await objectiveStore.getObjectiveStatus("dossier_complete") == .completed
-
         // Start from introduction
         if currentWizardStep == .introduction {
             let allObjectives = await objectiveStore.getAllObjectives()
@@ -142,45 +111,35 @@ actor StateCoordinator: OnboardingEventEmitter {
                 currentWizardStep = .resumeIntake
             }
         }
-
         // Resume Intake (Phase 1)
         if hasProfile && hasTimeline && hasSections {
             completedWizardSteps.insert(.resumeIntake)
-
             if phase == .phase2DeepDive || phase == .phase3WritingCorpus || phase == .complete {
                 currentWizardStep = .artifactDiscovery
             }
         }
-
         // Artifact Discovery (Phase 2)
         if hasExperienceInterview && hasKnowledgeCard {
             completedWizardSteps.insert(.artifactDiscovery)
-
             if phase == .phase3WritingCorpus || phase == .complete {
                 currentWizardStep = .writingCorpus
             }
         }
-
         // Writing Corpus (Phase 3)
         if hasWriting && hasDossier {
             completedWizardSteps.insert(.writingCorpus)
             currentWizardStep = .wrapUp
         }
-
         // Wrap Up
         if phase == .complete {
             completedWizardSteps.insert(.wrapUp)
         }
     }
-
-    // MARK: - Scratchpad Summary (Aggregates from Services)
     // MARK: - Event Subscription Setup
     func startEventSubscriptions() async {
         subscriptionTask?.cancel()
-
         subscriptionTask = Task { [weak self] in
             guard let self else { return }
-
             await withTaskGroup(of: Void.self) { group in
                 // Subscribe to all relevant event topics
                 group.addTask {
@@ -188,187 +147,139 @@ actor StateCoordinator: OnboardingEventEmitter {
                         await self.handleStateEvent(event)
                     }
                 }
-
                 group.addTask {
                     for await event in await self.eventBus.stream(topic: .llm) {
                         await self.handleLLMEvent(event)
                     }
                 }
-
                 group.addTask {
                     for await event in await self.eventBus.stream(topic: .objective) {
                         await self.handleObjectiveEvent(event)
                     }
                 }
-
                 group.addTask {
                     for await event in await self.eventBus.stream(topic: .phase) {
                         await self.handlePhaseEvent(event)
                     }
                 }
-
                 group.addTask {
                     for await event in await self.eventBus.stream(topic: .timeline) {
                         await self.handleTimelineEvent(event)
                     }
                 }
-
                 group.addTask {
                     for await event in await self.eventBus.stream(topic: .artifact) {
                         await self.handleArtifactEvent(event)
                     }
                 }
-
                 group.addTask {
                     for await event in await self.eventBus.stream(topic: .toolpane) {
                         await self.handleToolpaneEvent(event)
                     }
                 }
-
                 group.addTask {
                     for await event in await self.eventBus.stream(topic: .processing) {
                         await self.handleProcessingEvent(event)
                     }
                 }
-
             }
         }
-
         try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
         Logger.info("📡 StateCoordinator subscribed to event streams", category: .ai)
     }
-
     // MARK: - Event Handlers (Delegate to Services)
     private func handleStateEvent(_ event: OnboardingEvent) async {
         switch event {
         case .checkpointRequested:
             await emitSnapshot(reason: "checkpoint")
-
         case .applicantProfileStored:
-            // Event notification only - data already stored in ArtifactRepository
-            // Do NOT call setApplicantProfile here as it would create an infinite event loop
             Logger.info("👤 Applicant profile stored via event", category: .ai)
-
         case .skeletonTimelineStored(let timeline):
-            // Event notification only
             Logger.info("📅 Skeleton timeline stored via event", category: .ai)
-
         case .enabledSectionsUpdated:
-            // Event notification only - data already stored in ArtifactRepository
-            // Do NOT call setEnabledSections here as it would create an infinite event loop
             Logger.info("📑 Enabled sections updated via event", category: .ai)
-
         case .stateAllowedToolsUpdated(let tools):
             allowedToolNames = tools
             Logger.info("🔧 Allowed tools updated in StateCoordinator: \(tools.count) tools", category: .ai)
-
         case .evidenceRequirementAdded(let req):
             evidenceRequirements.append(req)
             Logger.info("📋 Evidence requirement added: \(req.description)", category: .ai)
-
         case .evidenceRequirementUpdated(let req):
             if let index = evidenceRequirements.firstIndex(where: { $0.id == req.id }) {
                 evidenceRequirements[index] = req
                 Logger.info("📋 Evidence requirement updated: \(req.description)", category: .ai)
             }
-
         case .evidenceRequirementRemoved(let id):
             evidenceRequirements.removeAll { $0.id == id }
             Logger.info("📋 Evidence requirement removed: \(id)", category: .ai)
-
         default:
             break
         }
     }
-
     private func handleProcessingEvent(_ event: OnboardingEvent) async {
         switch event {
         case .processingStateChanged(let processing, _):
             // Delegate to SessionUIState
             await uiState.setProcessingState(processing, emitEvent: false)
-
         case .waitingStateChanged(let waiting, _):
             // SessionUIState handles this internally, just log
             Logger.debug("Waiting state changed: \(waiting ?? "nil")", category: .ai)
-
         case .pendingExtractionUpdated(let extraction, _):
             await uiState.setPendingExtraction(extraction)
-
         case .streamingStatusUpdated(let status, _):
             await uiState.setStreamingStatus(status)
-
         default:
             break
         }
     }
-
     private func handleLLMEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .llmUserMessageSent(_, let payload, let isSystemGenerated):
-            // For non-system-generated messages (from chatbox), the message was already
-            // added to the transcript in ChatboxHandler for immediate display.
-            // Only add system-generated messages here.
             if isSystemGenerated {
                 let text = payload["text"].stringValue
                 _ = await chatStore.appendUserMessage(text, isSystemGenerated: isSystemGenerated)
                 Logger.debug("StateCoordinator: system-generated user message appended", category: .ai)
             }
-
         case .llmSentToolResponseMessage:
             break
-
         case .llmStatus(let status):
             let newProcessingState = status == .busy
             await uiState.setProcessingState(newProcessingState)
-
         case .streamingMessageBegan(let id, let text, let reasoningExpected, _):
             _ = await chatStore.beginStreamingMessage(id: id, initialText: text, reasoningExpected: reasoningExpected)
-
         case .streamingMessageUpdated(let id, let delta, _):
             await chatStore.updateStreamingMessage(id: id, delta: delta)
-
         case .streamingMessageFinalized(let id, let finalText, let toolCalls, _):
             await chatStore.finalizeStreamingMessage(id: id, finalText: finalText, toolCalls: toolCalls)
-
         case .llmReasoningSummaryDelta(let delta):
             await chatStore.updateReasoningSummary(delta: delta)
-
         case .llmReasoningSummaryComplete(let text):
             await chatStore.completeReasoningSummary(finalText: text)
-
         case .llmEnqueueUserMessage(let payload, let isSystemGenerated):
             enqueueStreamRequest(.userMessage(payload: payload, isSystemGenerated: isSystemGenerated))
-
         case .llmEnqueueToolResponse(let payload):
             enqueueStreamRequest(.toolResponse(payload: payload))
-
         default:
             break
         }
     }
-
     private func handleObjectiveEvent(_ event: OnboardingEvent) async {
         switch event {
         case .objectiveStatusRequested(let id, let response):
             let status = await objectiveStore.getObjectiveStatus(id)
             response(status?.rawValue)
-
         case .objectiveStatusUpdateRequested(let id, let statusString, let source, let notes, let details):
             guard let status = ObjectiveStatus(rawValue: statusString) else {
                 Logger.warning("Invalid objective status: \(statusString)", category: .ai)
                 return
             }
             await objectiveStore.setObjectiveStatus(id, status: status, source: source, notes: notes, details: details)
-
         case .objectiveStatusChanged:
             // Update wizard progress
             await updateWizardProgress()
-
         default:
             break
         }
     }
-
     private func handlePhaseEvent(_ event: OnboardingEvent) async {
         switch event {
         case .phaseTransitionRequested(let from, let to, _):
@@ -378,136 +289,100 @@ actor StateCoordinator: OnboardingEventEmitter {
                     await emit(.phaseTransitionApplied(phase: newPhase.rawValue, timestamp: Date()))
                 }
             }
-
         case .phaseAdvanceRequested(let request):
             await uiState.setPendingPhaseAdvanceRequest(request)
-
         case .phaseTransitionApplied:
             await uiState.setPendingPhaseAdvanceRequest(nil)
-
         case .phaseAdvanceDismissed:
             await uiState.setPendingPhaseAdvanceRequest(nil)
-
         default:
             break
         }
     }
-
     private func handleTimelineEvent(_ event: OnboardingEvent) async {
         switch event {
         case .timelineCardCreated(let card):
             await artifactRepository.createTimelineCard(card)
             Logger.info("📊 StateCoordinator: Timeline sync updated. Cards count: \(artifactRepository.skeletonTimelineSync?["experiences"].array?.count ?? 0)", category: .ai)
-
         case .timelineCardUpdated(let id, let fields):
             await artifactRepository.updateTimelineCard(id: id, fields: fields)
-
         case .timelineCardDeleted(let id):
             await artifactRepository.deleteTimelineCard(id: id)
-
         case .timelineCardsReordered(let orderedIds):
             await artifactRepository.reorderTimelineCards(orderedIds: orderedIds)
-
         case .skeletonTimelineReplaced(let timeline, let diff, _):
             await artifactRepository.replaceSkeletonTimeline(timeline, diff: diff)
-
         default:
             break
         }
     }
-
     private func handleArtifactEvent(_ event: OnboardingEvent) async {
         switch event {
         case .artifactRecordProduced(let record):
             await artifactRepository.upsertArtifactRecord(record)
-
         case .artifactRecordPersisted(let record):
             await artifactRepository.upsertArtifactRecord(record)
-
         case .artifactRecordsReplaced(let records):
             await artifactRepository.setArtifactRecords(records)
-
         case .artifactMetadataUpdateRequested(let artifactId, let updates):
             await artifactRepository.updateArtifactMetadata(artifactId: artifactId, updates: updates)
-
         case .knowledgeCardPersisted(let card):
             await artifactRepository.addKnowledgeCard(card)
-
         case .knowledgeCardsReplaced(let cards):
             await artifactRepository.setKnowledgeCards(cards)
-
         case .draftKnowledgeCardProduced(let draft):
             await draftKnowledgeStore.addDraft(draft)
-
         case .draftKnowledgeCardUpdated(let draft):
             await draftKnowledgeStore.updateDraft(draft)
-
         case .draftKnowledgeCardRemoved(let id):
             await draftKnowledgeStore.removeDraft(id: id)
-
         default:
             break
         }
     }
-
     private func handleToolpaneEvent(_ event: OnboardingEvent) async {
         switch event {
         case .choicePromptRequested(let prompt):
             await uiState.setPendingChoice(prompt)
             currentToolPaneCard = .choicePrompt
-
         case .choicePromptCleared:
             await uiState.setPendingChoice(nil)
             currentToolPaneCard = .none
-
         case .uploadRequestPresented(let request):
             await uiState.setPendingUpload(request)
             currentToolPaneCard = .uploadRequest
-
         case .uploadRequestCancelled:
             await uiState.setPendingUpload(nil)
             currentToolPaneCard = .none
-
         case .validationPromptRequested(let prompt):
             await uiState.setPendingValidation(prompt)
-            // Determine card type based on prompt mode
             currentToolPaneCard = prompt.mode == .editor ? .editTimelineCards : .confirmTimelineCards
-
         case .validationPromptCleared:
             await uiState.setPendingValidation(nil)
             currentToolPaneCard = .none
-
         case .applicantProfileIntakeRequested:
             currentToolPaneCard = .applicantProfileRequest
-
         case .applicantProfileIntakeCleared:
             currentToolPaneCard = .none
-
         case .sectionToggleRequested:
             currentToolPaneCard = .sectionToggle
-
         case .sectionToggleCleared:
             currentToolPaneCard = .none
-
         default:
             break
         }
     }
-
     // MARK: - Stream Queue Management
     /// Enqueue a stream request to be processed serially
     func enqueueStreamRequest(_ requestType: StreamRequestType) {
         streamQueue.append(requestType)
         Logger.debug("📥 Stream request enqueued (queue size: \(streamQueue.count))", category: .ai)
-
-        // If not currently streaming, start processing
         if !isStreaming {
             Task {
                 await processStreamQueue()
             }
         }
     }
-
     /// Process the stream queue serially
     private func processStreamQueue() async {
         while !streamQueue.isEmpty {
@@ -515,18 +390,14 @@ actor StateCoordinator: OnboardingEventEmitter {
                 Logger.debug("⏸️ Queue processing paused (stream in progress)", category: .ai)
                 return
             }
-
             isStreaming = true
             let request = streamQueue.removeFirst()
             Logger.debug("▶️ Processing stream request from queue (\(streamQueue.count) remaining)", category: .ai)
-
             // Emit event for LLMMessenger to react to
             await emitStreamRequest(request)
-
             // Note: isStreaming will be set to false when .streamCompleted event is received
         }
     }
-
     /// Emit the appropriate stream request event for LLMMessenger to handle
     private func emitStreamRequest(_ requestType: StreamRequestType) async {
         switch requestType {
@@ -536,18 +407,15 @@ actor StateCoordinator: OnboardingEventEmitter {
             await emit(.llmExecuteToolResponse(payload: payload))
         }
     }
-
     /// Mark stream as completed and process next in queue
     func markStreamCompleted() {
         guard isStreaming else {
             Logger.warning("markStreamCompleted called but isStreaming=false", category: .ai)
             return
         }
-
         isStreaming = false
         hasStreamedFirstResponse = true
         Logger.debug("✅ Stream completed (queue size: \(streamQueue.count))", category: .ai)
-
         // Process next item in queue if any
         if !streamQueue.isEmpty {
             Task {
@@ -555,40 +423,33 @@ actor StateCoordinator: OnboardingEventEmitter {
             }
         }
     }
-
     /// Check if this is the first response (for toolChoice logic)
     func getHasStreamedFirstResponse() -> Bool {
         return hasStreamedFirstResponse
     }
-
     // MARK: - LLM State Accessors
     /// Get allowed tool names
     func getAllowedToolNames() -> Set<String> {
         return allowedToolNames
     }
-
     /// Update conversation state (called by LLMMessenger when response completes)
     func updateConversationState(responseId: String) {
         self.lastResponseId = responseId
         Logger.debug("💬 Conversation state updated: \(responseId.prefix(8))", category: .ai)
     }
-
     /// Get last response ID
     func getLastResponseId() -> String? {
         return lastResponseId
     }
-
     /// Set model ID
     func setModelId(_ modelId: String) {
         currentModelId = modelId
         Logger.info("🔧 Model ID set to: \(modelId)", category: .ai)
     }
-
     /// Get current model ID
     func getCurrentModelId() -> String {
         return currentModelId
     }
-
     // MARK: - Snapshot Management
     struct StateSnapshot: Codable {
         let phase: InterviewPhase
@@ -604,15 +465,12 @@ actor StateCoordinator: OnboardingEventEmitter {
         let currentToolPaneCard: OnboardingToolPaneCard
         let evidenceRequirements: [EvidenceRequirement]
     }
-
     func createSnapshot() async -> StateSnapshot {
         let allObjectives = await objectiveStore.getAllObjectives()
         let objectivesDict = Dictionary(uniqueKeysWithValues: allObjectives.map { ($0.id, $0) })
-
         // Get conversation state
         let previousResponseId = await chatStore.getPreviousResponseId()
         let currentMessages = await chatStore.getAllMessages()
-
         return StateSnapshot(
             phase: phase,
             objectives: objectivesDict,
@@ -626,59 +484,40 @@ actor StateCoordinator: OnboardingEventEmitter {
             evidenceRequirements: evidenceRequirements
         )
     }
-
     func restoreFromSnapshot(_ snapshot: StateSnapshot) async {
         phase = snapshot.phase
-
-        // Restore objectives to ObjectiveStore
         await objectiveStore.restore(objectives: snapshot.objectives)
-
-        // Restore wizard progress
         if let step = WizardStep(rawValue: snapshot.wizardStep) {
             currentWizardStep = step
         }
         completedWizardSteps = Set(snapshot.completedWizardSteps.compactMap { WizardStep(rawValue: $0) })
-
         // Restore conversation state
         if let previousResponseId = snapshot.previousResponseId {
             await chatStore.setPreviousResponseId(previousResponseId)
             lastResponseId = previousResponseId
             Logger.info("📝 Restored previousResponseId: \(previousResponseId)", category: .ai)
         }
-
         // Restore model ID
         currentModelId = snapshot.currentModelId
-
-        // Restore chat messages for UI display
-            await chatStore.restoreMessages(snapshot.messages)
-            Logger.info("💬 Restored \(snapshot.messages.count) chat messages", category: .ai)
-
+        await chatStore.restoreMessages(snapshot.messages)
+        Logger.info("💬 Restored \(snapshot.messages.count) chat messages", category: .ai)
         // Restore streaming state
         hasStreamedFirstResponse = snapshot.hasStreamedFirstResponse
         if hasStreamedFirstResponse {
             Logger.info("✅ Restored hasStreamedFirstResponse=true (conversation in progress)", category: .ai)
         }
-
         // Restore ToolPane card state
         currentToolPaneCard = snapshot.currentToolPaneCard
         if currentToolPaneCard != .none {
             Logger.info("🎴 Restored ToolPane card: \(currentToolPaneCard.rawValue)", category: .ai)
-            // Note: UI reads currentToolPaneCard directly, no event emission needed during restore
         }
-
         // Restore evidence requirements
         evidenceRequirements = snapshot.evidenceRequirements
-
         Logger.info("📥 State restored from snapshot with conversation history", category: .ai)
     }
-
     /// Backfill objective statuses when migrating from legacy snapshots
     private func backfillObjectiveStatuses(snapshot: StateSnapshot) async {
-        // Migration policy: Infer status for new objectives based on existing state
-        // Example: If applicant_profile is completed, assume contact_source_selected is also completed
-
         let restoredObjectives = snapshot.objectives
-
         // contact_source_selected: completed if applicant_profile was completed
         if let applicantProfile = restoredObjectives["applicant_profile"],
            applicantProfile.status == .completed {
@@ -689,7 +528,6 @@ actor StateCoordinator: OnboardingEventEmitter {
                 notes: "Backfilled based on applicant_profile completion"
             )
         }
-
         // contact_data_collected: completed if applicant_profile.contact_intake.persisted was completed
         if let contactPersisted = restoredObjectives["applicant_profile.contact_intake.persisted"],
            contactPersisted.status == .completed {
@@ -700,7 +538,6 @@ actor StateCoordinator: OnboardingEventEmitter {
                 notes: "Backfilled based on contact_intake.persisted completion"
             )
         }
-
         // contact_data_validated: completed if applicant_profile.contact_intake.persisted was completed
         if let contactPersisted = restoredObjectives["applicant_profile.contact_intake.persisted"],
            contactPersisted.status == .completed {
@@ -711,93 +548,69 @@ actor StateCoordinator: OnboardingEventEmitter {
                 notes: "Backfilled based on contact_intake.persisted completion"
             )
         }
-
         Logger.info("✅ Objective status backfill completed", category: .ai)
     }
-
     private func emitSnapshot(reason: String) async {
         let snapshot = await createSnapshot()
         var snapshotJSON = JSON()
         snapshotJSON["phase"].string = snapshot.phase.rawValue
         snapshotJSON["wizardStep"].string = snapshot.wizardStep
-
         let updatedKeys = ["phase", "wizardStep", "objectives"]
         await emit(.stateSnapshot(updatedKeys: updatedKeys, snapshot: snapshotJSON))
     }
-
     // MARK: - Reset
     func reset() async {
         phase = .phase1CoreFacts
         currentWizardStep = .introduction
         completedWizardSteps.removeAll()
-
         // Reset all services
         await objectiveStore.reset()
         await artifactRepository.reset()
         await chatStore.reset()
         await uiState.reset()
-
-        // Reset sync caches (Removed)
         currentToolPaneCard = .none
-
         Logger.info("🔄 StateCoordinator reset (all services reset)", category: .ai)
     }
-
     // MARK: - ToolPane Card Tracking
     func setToolPaneCard(_ card: OnboardingToolPaneCard) {
         currentToolPaneCard = card
     }
-
     func getCurrentToolPaneCard() -> OnboardingToolPaneCard {
         currentToolPaneCard
     }
-
     // MARK: - Delegation Methods (Convenience APIs)
-    /// Provides backward compatibility and convenience access to service methods.
-    /// These delegate to the appropriate service actors.
-
     // Objective delegation
     func getObjectiveStatus(_ id: String) async -> ObjectiveStatus? {
         await objectiveStore.getObjectiveStatus(id)
     }
-
     func getAllObjectives() async -> [ObjectiveStore.ObjectiveEntry] {
         await objectiveStore.getAllObjectives()
     }
-
     func getMissingObjectives() async -> [String] {
         await objectiveStore.getMissingObjectives(for: phase)
     }
-
     func getObjectivesForPhase(_ phase: InterviewPhase) async -> [ObjectiveStore.ObjectiveEntry] {
         await objectiveStore.getObjectivesForPhase(phase)
     }
-
     // Artifact delegation
     func getArtifactRecord(id: String) async -> JSON? {
         await artifactRepository.getArtifactRecord(id: id)
     }
-
     func getArtifactsForPhaseObjective(_ objectiveId: String) async -> [JSON] {
         await artifactRepository.getArtifactsForPhaseObjective(objectiveId)
     }
-
     /// Store applicant profile in artifact repository
-    /// This method stores the data and emits the .applicantProfileStored event
     func storeApplicantProfile(_ profile: JSON) async {
         await artifactRepository.setApplicantProfile(profile)
     }
-
     /// Store skeleton timeline in artifact repository
     func storeSkeletonTimeline(_ timeline: JSON) async {
         await artifactRepository.setSkeletonTimeline(timeline)
     }
-
     /// Store enabled sections in artifact repository
     func storeEnabledSections(_ sections: Set<String>) async {
         await artifactRepository.setEnabledSections(sections)
     }
-
     var artifacts: OnboardingArtifacts {
         get async {
             // Reconstruct artifacts struct from repository
@@ -812,109 +625,88 @@ actor StateCoordinator: OnboardingEventEmitter {
             )
         }
     }
-
     func listArtifactSummaries() async -> [JSON] {
         await artifactRepository.listArtifactSummaries()
     }
-
     // Chat delegation
     var messages: [OnboardingMessage] {
         get async {
             await chatStore.getAllMessages()
         }
     }
-
     var latestReasoningSummary: String? {
         get async {
             await chatStore.getLatestReasoningSummary()
         }
     }
-
     func appendUserMessage(_ text: String, isSystemGenerated: Bool = false) async -> UUID {
         let id = await chatStore.appendUserMessage(text, isSystemGenerated: isSystemGenerated)
         return id
     }
-
     func appendAssistantMessage(_ text: String) async -> UUID {
         await chatStore.appendAssistantMessage(text)
     }
-
     func beginStreamingMessage(initialText: String, reasoningExpected: Bool) async -> UUID {
         await chatStore.beginStreamingMessage(initialText: initialText, reasoningExpected: reasoningExpected)
     }
-
     func updateStreamingMessage(id: UUID, delta: String) async {
         await chatStore.updateStreamingMessage(id: id, delta: delta)
     }
-
     func finalizeStreamingMessage(id: UUID, finalText: String, toolCalls: [OnboardingMessage.ToolCallInfo]? = nil) async {
         await chatStore.finalizeStreamingMessage(id: id, finalText: finalText, toolCalls: toolCalls)
     }
-
     func getPreviousResponseId() async -> String? {
         await chatStore.getPreviousResponseId()
     }
-
     func setPreviousResponseId(_ responseId: String?) async {
         await chatStore.setPreviousResponseId(responseId)
     }
-
     // UI State delegation
     func setActiveState(_ active: Bool) async {
         await uiState.setActiveState(active)
         Logger.info("🎛️ Interview active state set to: \(active) (chatbox \(active ? "enabled" : "disabled"))", category: .ai)
     }
-
     func publishAllowedToolsNow() async {
         await uiState.publishToolPermissionsNow()
     }
-
     var waitingState: SessionUIState.WaitingState? {
         get async {
             await uiState.getWaitingState()
         }
     }
-
     func getAllowedToolsForCurrentPhase() -> Set<String> {
         let phaseTools = phasePolicy.allowedTools[phase] ?? []
         return phaseTools.subtracting(excludedTools)
     }
-
     /// Remove a tool from the allowed tools list (e.g., after one-time use)
     func excludeTool(_ toolName: String) {
         excludedTools.insert(toolName)
         Logger.info("🚫 Tool excluded from future calls: \(toolName)", category: .ai)
-
         // Republish allowed tools to update subscribers
         Task {
             await publishAllowedToolsNow()
         }
     }
-
     var isProcessing: Bool {
         get async {
             await uiState.isProcessing
         }
     }
-
     var isActive: Bool {
         get async {
             await uiState.isActive
         }
     }
-
     var pendingExtraction: OnboardingPendingExtraction? {
         get async {
             await uiState.pendingExtraction
         }
     }
-
     var pendingStreamingStatus: String? {
         get async {
             nil
         }
     }
-
     var pendingPhaseAdvanceRequest: OnboardingPhaseAdvanceRequest? {
         get async {
             await uiState.pendingPhaseAdvanceRequest

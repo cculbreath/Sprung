@@ -1,15 +1,12 @@
 import SwiftUI
 import SwiftyJSON
-
 struct ExtractionReviewSheet: View {
     let extraction: OnboardingPendingExtraction
     let onConfirm: (JSON, String?) -> Void
     let onCancel: () -> Void
-
     @State private var jsonText: String
     @State private var notes: String = ""
     @State private var errorMessage: String?
-
     init(
         extraction: OnboardingPendingExtraction,
         onConfirm: @escaping (JSON, String?) -> Void,
@@ -23,13 +20,11 @@ struct ExtractionReviewSheet: View {
                 ?? extraction.rawExtraction.description
         )
     }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Review Résumé Extraction")
                 .font(.title2)
                 .bold()
-
             if !extraction.uncertainties.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Uncertain Fields")
@@ -41,10 +36,8 @@ struct ExtractionReviewSheet: View {
                     }
                 }
             }
-
             Text("Raw Extraction (editable JSON)")
                 .font(.headline)
-
             TextEditor(text: $jsonText)
                 .font(.system(.body, design: .monospaced))
                 .frame(minHeight: 240)
@@ -52,16 +45,13 @@ struct ExtractionReviewSheet: View {
                     RoundedRectangle(cornerRadius: 8)
                         .stroke(Color.secondary.opacity(0.2))
                 )
-
             TextField("Notes for the assistant (optional)", text: $notes)
                 .textFieldStyle(.roundedBorder)
-
             if let error = errorMessage {
                 Text(error)
                     .foregroundColor(.red)
                     .font(.caption)
             }
-
             HStack {
                 Spacer()
                 Button("Cancel") { onCancel() }

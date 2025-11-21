@@ -1,5 +1,4 @@
 import SwiftUI
-
 // MARK: - View Extensions
 extension View {
     @MainActor
@@ -8,7 +7,6 @@ extension View {
     ) -> some View {
         background(shape.intelligenceStroke())
     }
-
     @MainActor
     func intelligenceOverlay<S: InsettableShape>(
         in shape: S
@@ -16,7 +14,6 @@ extension View {
         overlay(shape.intelligenceStroke())
     }
 }
-
 // MARK: - Shape Extension
 extension InsettableShape {
     @MainActor
@@ -38,7 +35,6 @@ extension InsettableShape {
         .allowsHitTesting(false)
     }
 }
-
 // MARK: - Core Rendering View
 private struct IntelligenceStrokeView<S: InsettableShape>: View {
     let shape: S
@@ -47,17 +43,14 @@ private struct IntelligenceStrokeView<S: InsettableShape>: View {
     let updateInterval: TimeInterval
     let animationDurations: [TimeInterval]
     let gradientGenerator: @MainActor @Sendable () -> [Gradient.Stop]
-
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var stops: [Gradient.Stop] = .rainbowSpring
-
     var body: some View {
         let layerCount = min(lineWidths.count, blurs.count, animationDurations.count)
         let gradient = AngularGradient(
             gradient: Gradient(stops: stops),
             center: .center
         )
-
         ZStack {
             ForEach(0..<layerCount, id: \.self) { i in
                 shape
@@ -77,7 +70,6 @@ private struct IntelligenceStrokeView<S: InsettableShape>: View {
         }
     }
 }
-
 // MARK: - Gradient Definition
 private extension Array where Element == Gradient.Stop {
     /// Rainbow spring gradient based on the SVG gradient:
@@ -95,7 +87,6 @@ private extension Array where Element == Gradient.Stop {
             Color(red: 1.0, green: 0.54, blue: 0.28).opacity(0.6),      // #FF8A47 (orange)
             Color(red: 1.0, green: 0.72, blue: 0).opacity(0.6)          // #FFB700 (golden)
         ]
-
         return colors.map { Gradient.Stop(color: $0, location: Double.random(in: 0...1)) }
             .sorted { $0.location < $1.location }
     }

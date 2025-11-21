@@ -4,21 +4,17 @@
 //
 //  Defines the phases of the onboarding interview process.
 //
-
 import Foundation
-
 /// The phases of the onboarding interview
 enum InterviewPhase: String, Codable, CaseIterable {
     case phase1CoreFacts = "Phase 1: Core Facts"
     case phase2DeepDive = "Phase 2: Deep Dive"
     case phase3WritingCorpus = "Phase 3: Writing Corpus"
     case complete = "Complete"
-
     /// Human-readable description
     var description: String {
         rawValue
     }
-
     /// Short identifier for logging
     var shortName: String {
         switch self {
@@ -33,7 +29,6 @@ enum InterviewPhase: String, Codable, CaseIterable {
         }
     }
 }
-
 /// Status of an objective in the interview
 enum ObjectiveStatus: String, Codable {
     case pending

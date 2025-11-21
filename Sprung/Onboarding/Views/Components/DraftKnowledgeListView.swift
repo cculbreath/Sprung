@@ -1,6 +1,5 @@
 import SwiftUI
 import SwiftyJSON
-
 struct DraftKnowledgeListView: View {
     let coordinator: OnboardingInterviewCoordinator
     
@@ -37,7 +36,6 @@ struct DraftKnowledgeListView: View {
         )
     }
 }
-
 struct DraftKnowledgeCardRow: View {
     let draft: KnowledgeCardDraft
     

@@ -4,9 +4,7 @@
 //
 //  Created by Christopher Culbreath on 2/27/25.
 //
-
 import SwiftUI
-
 struct DraggableNodeWrapper<Content: View>: View {
     let node: TreeNode
     let siblings: [TreeNode]
@@ -72,7 +70,6 @@ struct DraggableNodeWrapper<Content: View>: View {
         ))
     }
 }
-
 struct NodeDropDelegate: DropDelegate {
     let node: TreeNode
     var siblings: [TreeNode]

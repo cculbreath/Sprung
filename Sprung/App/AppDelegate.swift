@@ -1,17 +1,14 @@
 
 
-
 //
 //  AppDelegate.swift
 //  Sprung
 //
 //  Created by Christopher Culbreath on 9/1/24.
 //
-
 import Cocoa
 import SwiftUI
 import SwiftData
-
 class AppDelegate: NSObject, NSApplicationDelegate {
     var settingsWindow: NSWindow?
     var applicantProfileWindow: NSWindow?
@@ -26,24 +23,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var onboardingCoordinator: OnboardingInterviewCoordinator?
     var experienceDefaultsStore: ExperienceDefaultsStore?
     var careerKeywordStore: CareerKeywordStore?
-
     func applicationDidFinishLaunching(_: Notification) {
         // Wait until the app is fully loaded before modifying the menu
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             self.setupAppMenu()
         }
-
         // We no longer add a separate Profile main menu to avoid duplication
     }
-
     private func setupAppMenu() {
         guard let mainMenu = NSApp.mainMenu else {
             return
         }
-
         // Find the name of the application to look for the right menu item
         let appName = ProcessInfo.processInfo.processName
-
         // Find or create the Application menu (first menu)
         let appMenu: NSMenu
         if let existingAppMenu = mainMenu.item(at: 0)?.submenu {
@@ -55,14 +47,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             appMenuItem.submenu = appMenu
             mainMenu.insertItem(appMenuItem, at: 0)
         }
-
         // Find the About menu item with different possible titles
         let possibleAboutTitles = [
             "About \(appName)",
             "About Sprung",
             "About Physics Cloud Résumé",
         ]
-
         var aboutItemIndex = -1
         for title in possibleAboutTitles {
             let index = appMenu.indexOfItem(withTitle: title)
@@ -71,23 +61,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 break
             }
         }
-
         // If About item not found, insert at the beginning
         let aboutSeparatorIndex = aboutItemIndex >= 0 ? aboutItemIndex + 1 : 0
-
         // If we already have an Applicant Profile menu item, remove it to avoid duplicates
         let existingProfileIndex = appMenu.indexOfItem(withTitle: "Applicant Profile...")
         if existingProfileIndex >= 0 {
             appMenu.removeItem(at: existingProfileIndex)
         }
-
         // Insert separator if needed
         if aboutSeparatorIndex < appMenu.numberOfItems &&
             !appMenu.item(at: aboutSeparatorIndex)!.isSeparatorItem
         {
             appMenu.insertItem(NSMenuItem.separator(), at: aboutSeparatorIndex)
         }
-
         // Add Applicant Profile menu item after separator
         let profileMenuItem = NSMenuItem(
             title: "Applicant Profile...",
@@ -106,7 +92,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         templateMenuItem.target = self
         templateMenuItem.keyEquivalentModifierMask = [.command, .shift]
         appMenu.insertItem(templateMenuItem, at: aboutSeparatorIndex + 2)
-
         let experienceMenuItem = NSMenuItem(
             title: "Experience Editor...",
             action: #selector(showExperienceEditorWindow),
@@ -116,7 +101,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         experienceMenuItem.target = self
         appMenu.insertItem(experienceMenuItem, at: aboutSeparatorIndex + 3)
     }
-
     @MainActor @objc func showSettingsWindow() {
         if settingsWindow == nil {
             let settingsView = SettingsView()
@@ -132,7 +116,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                let careerKeywordStore = self.careerKeywordStore {
                 let appState = appEnvironment.appState
                 let debugSettingsStore = appState.debugSettingsStore ?? appEnvironment.debugSettingsStore
-
                 let root = settingsView
                     .environment(appEnvironment)
                     .environment(appState)
@@ -146,7 +129,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(llmService)
                     .environment(debugSettingsStore)
                     .modelContainer(container)
-
                 hostingView = NSHostingView(rootView: AnyView(root))
             } else {
                 // Fallback if appState or modelContainer is not available
@@ -177,23 +159,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             settingsWindow?.title = "Settings"
             settingsWindow?.contentView = hostingView
             settingsWindow?.isReleasedWhenClosed = false
-
             // Center the window on the screen
             settingsWindow?.center()
         }
         settingsWindow?.makeKeyAndOrderFront(nil)
     }
-
     @objc func showApplicantProfileWindow() {
         // If window exists but was closed, reset it
         if let window = applicantProfileWindow, !window.isVisible {
             applicantProfileWindow = nil
         }
-
         if applicantProfileWindow == nil {
             let profileView = ApplicantProfileView()
             let hostingView: NSHostingView<AnyView>
-
             if let appEnvironment,
                let container = modelContainer,
                let applicantProfileStore {
@@ -211,7 +189,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 hostingView = NSHostingView(rootView: AnyView(profileView))
             }
-
             applicantProfileWindow = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 600, height: 650),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -221,10 +198,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             applicantProfileWindow?.contentView = hostingView
             applicantProfileWindow?.isReleasedWhenClosed = false
             applicantProfileWindow?.center()
-
             // Set a minimum size for the window
             applicantProfileWindow?.minSize = NSSize(width: 500, height: 520)
-
             // Register for notifications when window is closed
             NotificationCenter.default.addObserver(
                 self,
@@ -233,14 +208,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 object: applicantProfileWindow
             )
         }
-
         // Bring the window to the front
         applicantProfileWindow?.makeKeyAndOrderFront(nil)
-
         // Activate the app to ensure focus
         NSApp.activate(ignoringOtherApps: true)
     }
-
     @objc func windowWillClose(_ notification: Notification) {
         if notification.object as? NSWindow == applicantProfileWindow {
             applicantProfileWindow = nil
@@ -300,7 +272,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Activate the app to ensure focus
         NSApp.activate(ignoringOtherApps: true)
     }
-
     @MainActor @objc func showOnboardingInterviewWindow() {
         Logger.info(
             "🎬 showOnboardingInterviewWindow invoked (existing window: \(onboardingInterviewWindow != nil))",
@@ -309,11 +280,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if let window = onboardingInterviewWindow, !window.isVisible {
             onboardingInterviewWindow = nil
         }
-
         if onboardingInterviewWindow == nil {
             let interviewView = OnboardingInterviewView()
             let hostingView: NSHostingView<AnyView>
-
             if let modelContainer,
                let appEnvironment,
                let enabledLLMStore {
@@ -330,19 +299,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(onboardingService)
                     .environment(onboardingService.toolRouter)
                     .environment(debugSettingsStore)
-
                 hostingView = NSHostingView(rootView: AnyView(root))
             } else if let modelContainer {
                 hostingView = NSHostingView(rootView: AnyView(interviewView.modelContainer(modelContainer)))
             } else {
                 hostingView = NSHostingView(rootView: AnyView(interviewView))
             }
-
             let innerXPadding: CGFloat = 32 * 2        // = 64
             let minCardWidth = 1040 + innerXPadding    // = 1104
             let outerPad: CGFloat = 30                 // same as shadowR (left/right)
             let windowW = minCardWidth + outerPad*2    // = 1164
-
             onboardingInterviewWindow = BorderlessOverlayWindow(
                 contentRect: NSRect(x: 0, y: 0, width: windowW, height: 700)
             )
@@ -352,24 +318,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             onboardingInterviewWindow?.isReleasedWhenClosed = false
             onboardingInterviewWindow?.center()
             onboardingInterviewWindow?.minSize = NSSize(width: windowW, height: 600)
-
             Logger.info("🆕 Created onboarding interview window", category: .ui)
         }
-
         onboardingInterviewWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         Logger.info("✅ Onboarding interview window presented", category: .ui)
     }
-
     @objc func showExperienceEditorWindow() {
         if let window = experienceEditorWindow, !window.isVisible {
             experienceEditorWindow = nil
         }
-
         if experienceEditorWindow == nil {
             let editorView = ExperienceEditorView()
             let hostingView: NSHostingView<AnyView>
-
             if let modelContainer,
                let appEnvironment,
                let experienceDefaultsStore {
@@ -400,7 +361,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 hostingView = NSHostingView(rootView: AnyView(editorView))
             }
-
             experienceEditorWindow = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 1180, height: 780),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -413,7 +373,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             experienceEditorWindow?.isReleasedWhenClosed = false
             experienceEditorWindow?.center()
             experienceEditorWindow?.minSize = NSSize(width: 960, height: 680)
-
             NotificationCenter.default.addObserver(
                 self,
                 selector: #selector(windowWillClose(_:)),
@@ -421,7 +380,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 object: experienceEditorWindow
             )
         }
-
         experienceEditorWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }

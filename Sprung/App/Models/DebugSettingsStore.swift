@@ -2,10 +2,8 @@
 //  DebugSettingsStore.swift
 //  Sprung
 //
-
 import Foundation
 import Observation
-
 @Observable
 final class DebugSettingsStore {
     enum LogLevelSetting: Int, CaseIterable, Identifiable {
@@ -13,9 +11,7 @@ final class DebugSettingsStore {
         case info = 1
         case verbose = 2
         case debug = 3
-
         var id: Int { rawValue }
-
         var title: String {
             switch self {
             case .quiet:
@@ -28,7 +24,6 @@ final class DebugSettingsStore {
                 return "Debug"
             }
         }
-
         var loggerLevel: Logger.Level {
             switch self {
             case .quiet:
@@ -41,7 +36,6 @@ final class DebugSettingsStore {
                 return .debug
             }
         }
-
         var swiftOpenAILogLevel: SwiftOpenAIClient.LogLevel {
             switch self {
             case .quiet:
@@ -57,10 +51,8 @@ final class DebugSettingsStore {
             }
         }
     }
-
     @ObservationIgnored
     private let defaults: UserDefaults
-
     var logLevelSetting: LogLevelSetting {
         didSet {
             defaults.set(logLevelSetting.rawValue, forKey: Keys.debugLogLevel)
@@ -68,33 +60,28 @@ final class DebugSettingsStore {
             SwiftOpenAIClient.setLogLevel(logLevelSetting.swiftOpenAILogLevel)
         }
     }
-
     var saveDebugPrompts: Bool {
         didSet {
             defaults.set(saveDebugPrompts, forKey: Keys.saveDebugPrompts)
             Logger.updateFileLogging(isEnabled: saveDebugPrompts)
         }
     }
-
     var showOnboardingDebugButton: Bool {
         didSet {
             defaults.set(showOnboardingDebugButton, forKey: Keys.showOnboardingDebugButton)
         }
     }
-
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         let storedLevel = LogLevelSetting(rawValue: defaults.integer(forKey: Keys.debugLogLevel)) ?? .info
         self.logLevelSetting = storedLevel
         self.saveDebugPrompts = defaults.bool(forKey: Keys.saveDebugPrompts)
         self.showOnboardingDebugButton = defaults.object(forKey: Keys.showOnboardingDebugButton) as? Bool ?? true
-
         // Apply persisted settings to the logging facade on initialization.
         Logger.updateMinimumLevel(storedLevel.loggerLevel)
         Logger.updateFileLogging(isEnabled: saveDebugPrompts)
         SwiftOpenAIClient.setLogLevel(storedLevel.swiftOpenAILogLevel)
     }
-
     private enum Keys {
         static let debugLogLevel = "debugLogLevel"
         static let saveDebugPrompts = "saveDebugPrompts"

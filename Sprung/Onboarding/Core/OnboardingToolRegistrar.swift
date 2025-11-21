@@ -1,5 +1,4 @@
 import Foundation
-
 /// Handles registration of tools for the OnboardingInterviewCoordinator.
 @MainActor
 final class OnboardingToolRegistrar {

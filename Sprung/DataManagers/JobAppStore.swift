@@ -4,12 +4,9 @@
 //
 //  Created by Christopher Culbreath on 9/1/24.
 //
-
 import SwiftData
 import Foundation
-
 // Shared helper for SwiftData persistence.
-
 @Observable
 @MainActor
 final class JobAppStore: SwiftDataStore {
@@ -22,7 +19,6 @@ final class JobAppStore: SwiftDataStore {
     var jobApps: [JobApp] {
         (try? modelContext.fetch(FetchDescriptor<JobApp>())) ?? []
     }
-
     var selectedApp: JobApp?
     var form = JobAppForm()
     var resStore: ResStore
@@ -35,42 +31,34 @@ final class JobAppStore: SwiftDataStore {
         self.coverLetterStore = coverLetterStore
         
     }
-
     // MARK: - Methods
     func updateJobAppStatus(_ jobApp: JobApp, to newStatus: Statuses) {
         jobApp.status = newStatus
         saveContext()
         // Handle additional logic like notifying listeners as needed
     }
-
     func addJobApp(_ jobApp: JobApp) -> JobApp? {
         modelContext.insert(jobApp)
         saveContext()
-
         selectedApp = jobApp
         return jobApp
     }
-
     func deleteSelected() {
         guard let deleteMe = selectedApp else {
             Logger.error("No job application available to delete.")
             return
         }
-
         deleteJobApp(deleteMe)
         // Fallback to most recent app (if any)
         selectedApp = jobApps.last
     }
-
     func deleteJobApp(_ jobApp: JobApp) {
         // Clean up child objects first
         for resume in jobApp.resumes {
             resStore.deleteRes(resume)
         }
-
         modelContext.delete(jobApp)
         saveContext()
-
         if selectedApp == jobApp {
             selectedApp = nil
         }
@@ -78,11 +66,9 @@ final class JobAppStore: SwiftDataStore {
             selectedApp = jobApps.first
         }
     }
-
     private func populateFormFromObj(_ jobApp: JobApp) {
         form.populateFormFromObj(jobApp)
     }
-
     func editWithForm(_ jobApp: JobApp? = nil) {
         let jobAppEditing = jobApp ?? selectedApp
         guard let jobAppEditing = jobAppEditing else {
@@ -91,7 +77,6 @@ final class JobAppStore: SwiftDataStore {
         }
         populateFormFromObj(jobAppEditing)
     }
-
     func cancelFormEdit(_ jobApp: JobApp? = nil) {
         let jobAppEditing = jobApp ?? selectedApp
         guard let jobAppEditing = jobAppEditing else {
@@ -100,7 +85,6 @@ final class JobAppStore: SwiftDataStore {
         }
         populateFormFromObj(jobAppEditing)
     }
-
     func saveForm(_ jobApp: JobApp? = nil) {
         let jobAppToSave = jobApp ?? selectedApp
         guard let jobAppToSave = jobAppToSave else {
@@ -122,13 +106,11 @@ final class JobAppStore: SwiftDataStore {
         jobAppToSave.postingURL = form.postingURL
         saveContext()
     }
-
     func updateJobApp(_: JobApp) {
         // Persist the changes that should already be reflected on the entity
         // instance.
         _ = saveContext()
     }
-
     // Save changes to the database
     // `saveContext()` now lives in `SwiftDataStore`.
 }

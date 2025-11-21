@@ -3,7 +3,6 @@ import SwiftOpenAI
 import SwiftUI
 import os.log
 import Observation
-
 @Observable
 final class OpenRouterService {
     var availableModels: [OpenRouterModel] = []
@@ -48,12 +47,10 @@ final class OpenRouterService {
             Logger.error("🔴 OpenRouter client not configured")
             return
         }
-
         await MainActor.run {
             self.isLoading = true
             self.lastError = nil
         }
-
         do {
             Logger.info("🌐 Fetching models from OpenRouter")
             
@@ -112,7 +109,6 @@ final class OpenRouterService {
                 Logger.error("🔴 Failed to fetch OpenRouter models: \(error.localizedDescription)")
             }
         }
-
         await MainActor.run {
             self.isLoading = false
         }
@@ -228,7 +224,6 @@ final class OpenRouterService {
         Logger.debug("   $$$$$: > $\(String(format: "%.6f", q4))")
     }
 }
-
 enum ModelCapability: CaseIterable {
     case structuredOutput
     case vision
@@ -245,7 +240,6 @@ enum ModelCapability: CaseIterable {
     }
     
 }
-
 enum OpenRouterError: Error, LocalizedError {
     case invalidResponse
     case httpError(Int)

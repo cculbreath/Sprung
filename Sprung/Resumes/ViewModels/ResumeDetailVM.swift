@@ -4,12 +4,10 @@
 //
 //  Created by Christopher Culbreath on 4/17/25.
 //
-
 import Foundation
 import Observation
 import SwiftData
 import SwiftUI
-
 /// View‑model for the resume editor panel (node tree + font panel).
 /// Encapsulates UI‑specific state so SwiftUI views no longer mutate the model
 /// layer directly.
@@ -18,11 +16,9 @@ import SwiftUI
 final class ResumeDetailVM {
     // MARK: - Input ---------------------------------------------------------
     private(set) var resume: Resume
-
     // MARK: - UI State ------------------------------------------------------
     /// Width toggle previously handled by the view hierarchy.
     var isWide: Bool = false
-
     /// Whether the optional font‑size panel should be shown. This setting is
     /// mirrored from the underlying model but owned by the view‑model so that
     /// the view no longer touches the model layer directly.
@@ -30,29 +26,22 @@ final class ResumeDetailVM {
         get { resume.includeFonts }
         set { resume.includeFonts = newValue }
     }
-
     // Tracks which group nodes are expanded in the UI.
     private var expandedIDs: Set<String> = []
-
     /// Computed convenience access to the resume's root node.
     var rootNode: TreeNode? { resume.rootNode }
-
     /// Whether font size nodes exist for this resume.
     var hasFontSizeNodes: Bool {
         !resume.fontSizeNodes.isEmpty
     }
-
     private let sectionVisibilityDefaults: [String: Bool]
     private let sectionVisibilityLabels: [String: String]
     private let sectionVisibilityKeys: [String]
-
     var hasSectionVisibilityOptions: Bool {
         !sectionVisibilityKeys.isEmpty
     }
-
     // MARK: - Dependencies --------------------------------------------------
     private let exportCoordinator: ResumeExportCoordinator
-
     init(resume: Resume, exportCoordinator: ResumeExportCoordinator) {
         self.resume = resume
         self.exportCoordinator = exportCoordinator
@@ -67,7 +56,6 @@ final class ResumeDetailVM {
             sectionVisibilityKeys = []
         }
     }
-
     // MARK: - Intents -------------------------------------------------------
     /// Adds a new child node to the given parent. If the parent's existing children
     /// already include both non-empty names and values (i.e. compound entries),
@@ -108,58 +96,48 @@ final class ResumeDetailVM {
         rebuildViewHierarchy()
         refreshPDF()
     }
-
     /// Deletes a node from the tree and rebuilds the view hierarchy.
     func deleteNode(_ node: TreeNode, context: ModelContext) {
         TreeNode.deleteTreeNode(node: node, context: context)
         rebuildViewHierarchy()
         refreshPDF()
     }
-
     /// Rebuilds the viewChildren hierarchy for v4+ manifests after mutations.
     /// This ensures the presentation layer stays in sync with the data layer.
     private func rebuildViewHierarchy() {
         guard let rootNode = resume.rootNode else { return }
         guard let template = resume.template else { return }
         guard let manifest = TemplateManifestLoader.manifest(for: template) else { return }
-
         // Delegate to TreeNode extension method
         rootNode.rebuildViewHierarchy(manifest: manifest)
     }
-
     /// Re‑exports the resume JSON → PDF via the debounce mechanism.
     func refreshPDF() {
         exportCoordinator.debounceExport(resume: resume)
     }
-
     // MARK: - Editing -------------------------------------------------------
     private(set) var editingNodeID: String?
     var tempName: String = ""
     var tempValue: String = ""
     var validationError: String?
-
     func startEditing(node: TreeNode) {
         editingNodeID = node.id
         tempName = node.name
         tempValue = node.value
         validationError = nil
     }
-
     func cancelEditing() {
         editingNodeID = nil
         validationError = nil
     }
-
     /// Save edits currently in `tempName` / `tempValue` back to the node and
     /// refresh the PDF.
     func saveEdits() {
         guard let id = editingNodeID, let node = resume.nodes.first(where: { $0.id == id }) else { return }
-
         if let error = validate(node: node, proposedValue: tempValue) {
             validationError = error
             return
         }
-
         if node.parent?.name == "section-labels" {
             resume.keyLabels[node.name] = tempValue
             node.value = tempValue
@@ -167,20 +145,16 @@ final class ResumeDetailVM {
             node.name = tempName
             node.value = tempValue
         }
-
         editingNodeID = nil
         validationError = nil
-
         // Trigger PDF export and view refresh
         refreshPDF()
     }
-
     // MARK: - Expansion state ---------------------------------------------
     func isExpanded(_ node: TreeNode) -> Bool {
         if node.parent == nil { return true } // Root always expanded
         return expandedIDs.contains(node.id)
     }
-
     func toggleExpansion(for node: TreeNode) {
         if expandedIDs.contains(node.id) {
             expandedIDs.remove(node.id)
@@ -188,7 +162,6 @@ final class ResumeDetailVM {
             expandedIDs.insert(node.id)
         }
     }
-
     // MARK: - Section Visibility -----------------------------------------
     func sectionVisibilityBinding(for key: String) -> Binding<Bool> {
         Binding(
@@ -196,22 +169,18 @@ final class ResumeDetailVM {
             set: { self.setSectionVisibility(key: key, isVisible: $0) }
         )
     }
-
     func sectionVisibilityLabel(for key: String) -> String {
         sectionVisibilityLabels[key] ?? key.replacingOccurrences(of: "-", with: " ").capitalized
     }
-
     func sectionVisibilityKeysOrdered() -> [String] {
         sectionVisibilityKeys
     }
-
     private func sectionVisibilityValue(for key: String) -> Bool {
         if let override = resume.sectionVisibilityOverrides[key] {
             return override
         }
         return sectionVisibilityDefaults[key] ?? true
     }
-
     private func setSectionVisibility(key: String, isVisible: Bool) {
         var overrides = resume.sectionVisibilityOverrides
         let defaultValue = sectionVisibilityDefaults[key] ?? true
@@ -240,16 +209,13 @@ final class ResumeDetailVM {
         }
         refreshPDF()
     }
-
     // MARK: - Validation -------------------------------------------------
     private func validate(node: TreeNode, proposedValue: String) -> String? {
         let trimmed = proposedValue.trimmingCharacters(in: .whitespacesAndNewlines)
         if node.schemaRequired && trimmed.isEmpty {
             return node.schemaValidationMessage ?? "This field is required."
         }
-
         guard let rule = node.schemaValidationRule else { return nil }
-
         switch rule {
         case "minLength":
             if let min = node.schemaValidationMin,
@@ -285,7 +251,6 @@ final class ResumeDetailVM {
         default:
             break
         }
-
         return nil
     }
 }

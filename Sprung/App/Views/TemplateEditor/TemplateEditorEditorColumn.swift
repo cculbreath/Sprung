@@ -2,9 +2,7 @@
 //  TemplateEditorEditorColumn.swift
 //  Sprung
 //
-
 import SwiftUI
-
 struct TemplateEditorEditorColumn: View {
     @Binding var selectedTab: TemplateEditorTab
     @Binding var htmlContent: String
@@ -26,7 +24,6 @@ struct TemplateEditorEditorColumn: View {
     let onValidateManifest: () -> Void
     let onPromoteSeed: () -> Void
     let onValidateSeed: () -> Void
-
     var body: some View {
         VStack(spacing: 0) {
             header()
@@ -36,7 +33,6 @@ struct TemplateEditorEditorColumn: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(NSColor.textBackgroundColor))
     }
-
     @ViewBuilder
     private func header() -> some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -49,7 +45,6 @@ struct TemplateEditorEditorColumn: View {
             .controlSize(.regular)
             .labelsHidden()
             .padding(.trailing, 16)
-
             controlsRow()
             
             if selectedTab == .txtTemplate, let warning = customFieldWarningMessage {
@@ -61,7 +56,6 @@ struct TemplateEditorEditorColumn: View {
         .padding(.bottom, 6)
         .background(Color(NSColor.windowBackgroundColor))
     }
-
     @ViewBuilder
     private func editorContent() -> some View {
         switch selectedTab {
@@ -83,7 +77,6 @@ struct TemplateEditorEditorColumn: View {
             seedEditor()
         }
     }
-
     private func saveButton() -> some View {
         TemplateRefreshButton(
             hasUnsavedChanges: hasUnsavedChanges,
@@ -93,7 +86,6 @@ struct TemplateEditorEditorColumn: View {
             action: onSaveAndRefresh
         )
     }
-
     private func validateManifestButton() -> some View {
         Button(action: onValidateManifest) {
             Image(systemName: "questionmark.diamond")
@@ -101,7 +93,6 @@ struct TemplateEditorEditorColumn: View {
         .buttonStyle(.borderless)
         .help("Validate manifest JSON")
     }
-
     private func promoteSeedButton() -> some View {
         Button(action: onPromoteSeed) {
             Image(systemName: "tray.and.arrow.up.fill")
@@ -110,7 +101,6 @@ struct TemplateEditorEditorColumn: View {
         .disabled(selectedResume == nil)
         .help("Promote current resume to default values")
     }
-
     private func validateSeedButton() -> some View {
         Button(action: onValidateSeed) {
             Image(systemName: "questionmark.diamond")
@@ -118,7 +108,6 @@ struct TemplateEditorEditorColumn: View {
         .buttonStyle(.borderless)
         .help("Validate default values format")
     }
-
     @ViewBuilder
     private func controlsRow() -> some View {
         HStack(spacing: 12) {
@@ -139,7 +128,6 @@ struct TemplateEditorEditorColumn: View {
         }
         .padding(.horizontal, 4)
     }
-
     @ViewBuilder
     private func manifestEditor() -> some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -149,7 +137,6 @@ struct TemplateEditorEditorColumn: View {
                     .foregroundColor(.secondary)
                     .padding([.top, .horizontal])
             }
-
             TemplateTextEditor(text: $manifestContent) {
                 manifestHasChanges = true
                 manifestValidationMessage = nil
@@ -164,7 +151,6 @@ struct TemplateEditorEditorColumn: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
-
     @ViewBuilder
     private func seedEditor() -> some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -174,7 +160,6 @@ struct TemplateEditorEditorColumn: View {
                     .foregroundColor(.secondary)
                     .padding([.top, .horizontal])
             }
-
             TemplateTextEditor(text: $seedContent) {
                 seedHasChanges = true
                 seedValidationMessage = nil
@@ -189,7 +174,6 @@ struct TemplateEditorEditorColumn: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
-
     private func warningBanner(text: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")

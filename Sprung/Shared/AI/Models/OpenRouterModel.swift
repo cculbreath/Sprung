@@ -1,5 +1,4 @@
 import Foundation
-
 struct OpenRouterModel: Codable, Identifiable, Hashable, Equatable {
     let id: String
     let name: String
@@ -57,7 +56,6 @@ struct OpenRouterModel: Codable, Identifiable, Hashable, Equatable {
         case supportedParameters = "supported_parameters"
     }
 }
-
 extension OpenRouterModel {
     var supportsStructuredOutput: Bool {
         // 1. Check supported parameters from endpoints (primary source)
@@ -192,7 +190,6 @@ extension OpenRouterModel {
         return costFor50kTokens > 0.5
     }
 }
-
 struct OpenRouterModelsResponse: Codable {
     let data: [OpenRouterModel]
 }

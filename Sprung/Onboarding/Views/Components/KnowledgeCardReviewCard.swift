@@ -1,16 +1,12 @@
 import SwiftUI
 import SwiftyJSON
-
 struct KnowledgeCardReviewCard: View {
     @Binding var card: KnowledgeCardDraft
-
     @State private var expandedCitations: Set<UUID> = []
     @State private var rejectedClaims: Set<UUID> = []
-
     let artifacts: [ArtifactRecord]
     let onApprove: (KnowledgeCardDraft) -> Void
     let onReject: (Set<UUID>, String) -> Void
-
     init(
         card: Binding<KnowledgeCardDraft>,
         artifacts: [ArtifactRecord],
@@ -22,7 +18,6 @@ struct KnowledgeCardReviewCard: View {
         self.onApprove = onApprove
         self.onReject = onReject
     }
-
     var body: some View {
         ValidationCardContainer(
             draft: $card,
@@ -50,7 +45,6 @@ struct KnowledgeCardReviewCard: View {
             }
         )
     }
-
     private var headerSection: some View {
         SectionCard(title: card.title.isEmpty ? "Untitled Knowledge Card" : card.title) {
             VStack(alignment: .leading, spacing: 12) {
@@ -58,13 +52,11 @@ struct KnowledgeCardReviewCard: View {
                     Text(card.summary)
                         .font(.body)
                 }
-
                 if let source = card.source, !source.isEmpty {
                     Label(source, systemImage: "book")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-
                 if !card.skills.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Skills")
@@ -77,7 +69,6 @@ struct KnowledgeCardReviewCard: View {
             }
         }
     }
-
     private func achievementsSection(_ callbacks: EditableContentCallbacks) -> some View {
         SectionCard(title: "Achievements") {
             if card.achievements.isEmpty {
@@ -104,7 +95,6 @@ struct KnowledgeCardReviewCard: View {
             }
         }
     }
-
     private var evidenceSection: some View {
         SectionCard(title: "Evidence Attachments") {
             if artifacts.isEmpty {
@@ -132,7 +122,6 @@ struct KnowledgeCardReviewCard: View {
             }
         }
     }
-
     private var metricsSection: some View {
         SectionCard(title: "Metrics") {
             if card.metrics.isEmpty {
@@ -153,7 +142,6 @@ struct KnowledgeCardReviewCard: View {
             }
         }
     }
-
     private var byteCountFormatter: ByteCountFormatter {
         let formatter = ByteCountFormatter()
         formatter.allowedUnits = [.useKB, .useMB]
@@ -161,7 +149,6 @@ struct KnowledgeCardReviewCard: View {
         return formatter
     }
 }
-
 private extension Set where Element: Hashable {
     mutating func toggleMembership(of element: Element) {
         if contains(element) {

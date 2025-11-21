@@ -2,9 +2,7 @@
 //  TemplateTextFilters.swift
 //  Sprung
 //
-
 import Foundation
-
 struct TemplateTextFilters {
     static let reference: [TextFilterInfo] = [
         TextFilterInfo(

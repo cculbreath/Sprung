@@ -1,6 +1,5 @@
 import Foundation
 import SwiftData
-
 struct ExperienceDefaultsDraft: Equatable {
     var isWorkEnabled: Bool = false
     var isVolunteerEnabled: Bool = false
@@ -13,7 +12,6 @@ struct ExperienceDefaultsDraft: Equatable {
     var isLanguagesEnabled: Bool = false
     var isInterestsEnabled: Bool = false
     var isReferencesEnabled: Bool = false
-
     var work: [WorkExperienceDraft] = []
     var volunteer: [VolunteerExperienceDraft] = []
     var education: [EducationExperienceDraft] = []
@@ -26,7 +24,6 @@ struct ExperienceDefaultsDraft: Equatable {
     var interests: [InterestExperienceDraft] = []
     var references: [ReferenceExperienceDraft] = []
 }
-
 extension ExperienceDefaultsDraft {
     init(model: ExperienceDefaults) {
         isWorkEnabled = model.isWorkEnabled
@@ -40,7 +37,6 @@ extension ExperienceDefaultsDraft {
         isLanguagesEnabled = model.isLanguagesEnabled
         isInterestsEnabled = model.isInterestsEnabled
         isReferencesEnabled = model.isReferencesEnabled
-
         work = model.workExperiences.map(WorkExperienceDraft.init)
         volunteer = model.volunteerExperiences.map(VolunteerExperienceDraft.init)
         education = model.educationRecords.map(EducationExperienceDraft.init)
@@ -53,7 +49,6 @@ extension ExperienceDefaultsDraft {
         interests = model.interests.map(InterestExperienceDraft.init)
         references = model.references.map(ReferenceExperienceDraft.init)
     }
-
     func apply(to model: ExperienceDefaults, in context: ModelContext) {
         model.isWorkEnabled = isWorkEnabled
         model.isVolunteerEnabled = isVolunteerEnabled
@@ -66,7 +61,6 @@ extension ExperienceDefaultsDraft {
         model.isLanguagesEnabled = isLanguagesEnabled
         model.isInterestsEnabled = isInterestsEnabled
         model.isReferencesEnabled = isReferencesEnabled
-
         model.workExperiences = rebuildWorkExperiences(in: context, owner: model)
         model.volunteerExperiences = rebuildVolunteerExperiences(in: context, owner: model)
         model.educationRecords = rebuildEducation(in: context, owner: model)
@@ -79,7 +73,6 @@ extension ExperienceDefaultsDraft {
         model.interests = rebuildInterests(in: context, owner: model)
         model.references = rebuildReferences(in: context, owner: model)
     }
-
     private func rebuildWorkExperiences(in context: ModelContext, owner: ExperienceDefaults) -> [WorkExperienceDefault] {
         owner.workExperiences.forEach(context.delete)
         return work.map { draft in
@@ -102,7 +95,6 @@ extension ExperienceDefaultsDraft {
             return model
         }
     }
-
     private func rebuildVolunteerExperiences(in context: ModelContext, owner: ExperienceDefaults) -> [VolunteerExperienceDefault] {
         owner.volunteerExperiences.forEach(context.delete)
         return volunteer.map { draft in
@@ -124,7 +116,6 @@ extension ExperienceDefaultsDraft {
             return model
         }
     }
-
     private func rebuildEducation(in context: ModelContext, owner: ExperienceDefaults) -> [EducationExperienceDefault] {
         owner.educationRecords.forEach(context.delete)
         return education.map { draft in
@@ -147,7 +138,6 @@ extension ExperienceDefaultsDraft {
             return model
         }
     }
-
     private func rebuildProjects(in context: ModelContext, owner: ExperienceDefaults) -> [ProjectExperienceDefault] {
         owner.projects.forEach(context.delete)
         return projects.map { draft in
@@ -178,7 +168,6 @@ extension ExperienceDefaultsDraft {
             return model
         }
     }
-
     private func rebuildSkills(in context: ModelContext, owner: ExperienceDefaults) -> [SkillExperienceDefault] {
         owner.skills.forEach(context.delete)
         return skills.map { draft in
@@ -196,7 +185,6 @@ extension ExperienceDefaultsDraft {
             return model
         }
     }
-
     private func rebuildAwards(in context: ModelContext, owner: ExperienceDefaults) -> [AwardExperienceDefault] {
         owner.awards.forEach(context.delete)
         return awards.map { draft in
@@ -212,7 +200,6 @@ extension ExperienceDefaultsDraft {
             return model
         }
     }
-
     private func rebuildCertificates(in context: ModelContext, owner: ExperienceDefaults) -> [CertificateExperienceDefault] {
         owner.certificates.forEach(context.delete)
         return certificates.map { draft in
@@ -228,7 +215,6 @@ extension ExperienceDefaultsDraft {
             return model
         }
     }
-
     private func rebuildPublications(in context: ModelContext, owner: ExperienceDefaults) -> [PublicationExperienceDefault] {
         owner.publications.forEach(context.delete)
         return publications.map { draft in
@@ -245,7 +231,6 @@ extension ExperienceDefaultsDraft {
             return model
         }
     }
-
     private func rebuildLanguages(in context: ModelContext, owner: ExperienceDefaults) -> [LanguageExperienceDefault] {
         owner.languages.forEach(context.delete)
         return languages.map { draft in
@@ -259,7 +244,6 @@ extension ExperienceDefaultsDraft {
             return model
         }
     }
-
     private func rebuildInterests(in context: ModelContext, owner: ExperienceDefaults) -> [InterestExperienceDefault] {
         owner.interests.forEach(context.delete)
         return interests.map { draft in
@@ -278,7 +262,6 @@ extension ExperienceDefaultsDraft {
             return model
         }
     }
-
     private func rebuildReferences(in context: ModelContext, owner: ExperienceDefaults) -> [ReferenceExperienceDefault] {
         owner.references.forEach(context.delete)
         return references.map { draft in
@@ -294,7 +277,6 @@ extension ExperienceDefaultsDraft {
         }
     }
 }
-
 // MARK: - Work
 struct WorkExperienceDraft: Identifiable, Equatable {
     var id: UUID = UUID()
@@ -306,9 +288,7 @@ struct WorkExperienceDraft: Identifiable, Equatable {
     var endDate: String = ""
     var summary: String = ""
     var highlights: [HighlightDraft] = []
-
     init() {}
-
     init(model: WorkExperienceDefault) {
         id = model.id
         name = model.name
@@ -321,19 +301,15 @@ struct WorkExperienceDraft: Identifiable, Equatable {
         highlights = model.highlights.map(HighlightDraft.init)
     }
 }
-
 struct HighlightDraft: Identifiable, Equatable {
     var id: UUID = UUID()
     var text: String = ""
-
     init() {}
-
     init(model: WorkHighlightDefault) {
         id = model.id
         text = model.text
     }
 }
-
 // MARK: - Volunteer
 struct VolunteerExperienceDraft: Identifiable, Equatable {
     var id: UUID = UUID()
@@ -344,9 +320,7 @@ struct VolunteerExperienceDraft: Identifiable, Equatable {
     var endDate: String = ""
     var summary: String = ""
     var highlights: [VolunteerHighlightDraft] = []
-
     init() {}
-
     init(model: VolunteerExperienceDefault) {
         id = model.id
         organization = model.organization
@@ -358,19 +332,15 @@ struct VolunteerExperienceDraft: Identifiable, Equatable {
         highlights = model.highlights.map(VolunteerHighlightDraft.init)
     }
 }
-
 struct VolunteerHighlightDraft: Identifiable, Equatable {
     var id: UUID = UUID()
     var text: String = ""
-
     init() {}
-
     init(model: VolunteerHighlightDefault) {
         id = model.id
         text = model.text
     }
 }
-
 // MARK: - Education
 struct EducationExperienceDraft: Identifiable, Equatable {
     var id: UUID = UUID()
@@ -382,9 +352,7 @@ struct EducationExperienceDraft: Identifiable, Equatable {
     var endDate: String = ""
     var score: String = ""
     var courses: [CourseDraft] = []
-
     init() {}
-
     init(model: EducationExperienceDefault) {
         id = model.id
         institution = model.institution
@@ -397,19 +365,15 @@ struct EducationExperienceDraft: Identifiable, Equatable {
         courses = model.courses.map(CourseDraft.init)
     }
 }
-
 struct CourseDraft: Identifiable, Equatable {
     var id: UUID = UUID()
     var name: String = ""
-
     init() {}
-
     init(model: EducationCourseDefault) {
         id = model.id
         name = model.name
     }
 }
-
 // MARK: - Projects
 struct ProjectExperienceDraft: Identifiable, Equatable {
     var id: UUID = UUID()
@@ -423,9 +387,7 @@ struct ProjectExperienceDraft: Identifiable, Equatable {
     var highlights: [ProjectHighlightDraft] = []
     var keywords: [KeywordDraft] = []
     var roles: [RoleDraft] = []
-
     init() {}
-
     init(model: ProjectExperienceDefault) {
         id = model.id
         name = model.name
@@ -440,38 +402,30 @@ struct ProjectExperienceDraft: Identifiable, Equatable {
         roles = model.roles.map { RoleDraft(id: $0.id, role: $0.role) }
     }
 }
-
 struct ProjectHighlightDraft: Identifiable, Equatable {
     var id: UUID = UUID()
     var text: String = ""
-
     init() {}
-
     init(model: ProjectHighlightDefault) {
         id = model.id
         text = model.text
     }
 }
-
 struct KeywordDraft: Identifiable, Equatable {
     var id: UUID = UUID()
     var keyword: String = ""
 }
-
 struct RoleDraft: Identifiable, Equatable {
     var id: UUID = UUID()
     var role: String = ""
 }
-
 // MARK: - Skills
 struct SkillExperienceDraft: Identifiable, Equatable {
     var id: UUID = UUID()
     var name: String = ""
     var level: String = ""
     var keywords: [KeywordDraft] = []
-
     init() {}
-
     init(model: SkillExperienceDefault) {
         id = model.id
         name = model.name
@@ -479,7 +433,6 @@ struct SkillExperienceDraft: Identifiable, Equatable {
         keywords = model.keywords.map { KeywordDraft(id: $0.id, keyword: $0.keyword) }
     }
 }
-
 // MARK: - Awards
 struct AwardExperienceDraft: Identifiable, Equatable {
     var id: UUID = UUID()
@@ -487,9 +440,7 @@ struct AwardExperienceDraft: Identifiable, Equatable {
     var date: String = ""
     var awarder: String = ""
     var summary: String = ""
-
     init() {}
-
     init(model: AwardExperienceDefault) {
         id = model.id
         title = model.title
@@ -498,7 +449,6 @@ struct AwardExperienceDraft: Identifiable, Equatable {
         summary = model.summary
     }
 }
-
 // MARK: - Certificates
 struct CertificateExperienceDraft: Identifiable, Equatable {
     var id: UUID = UUID()
@@ -506,9 +456,7 @@ struct CertificateExperienceDraft: Identifiable, Equatable {
     var date: String = ""
     var issuer: String = ""
     var url: String = ""
-
     init() {}
-
     init(model: CertificateExperienceDefault) {
         id = model.id
         name = model.name
@@ -517,7 +465,6 @@ struct CertificateExperienceDraft: Identifiable, Equatable {
         url = model.url
     }
 }
-
 // MARK: - Publications
 struct PublicationExperienceDraft: Identifiable, Equatable {
     var id: UUID = UUID()
@@ -526,9 +473,7 @@ struct PublicationExperienceDraft: Identifiable, Equatable {
     var releaseDate: String = ""
     var url: String = ""
     var summary: String = ""
-
     init() {}
-
     init(model: PublicationExperienceDefault) {
         id = model.id
         name = model.name
@@ -538,46 +483,37 @@ struct PublicationExperienceDraft: Identifiable, Equatable {
         summary = model.summary
     }
 }
-
 // MARK: - Languages
 struct LanguageExperienceDraft: Identifiable, Equatable {
     var id: UUID = UUID()
     var language: String = ""
     var fluency: String = ""
-
     init() {}
-
     init(model: LanguageExperienceDefault) {
         id = model.id
         language = model.language
         fluency = model.fluency
     }
 }
-
 // MARK: - Interests
 struct InterestExperienceDraft: Identifiable, Equatable {
     var id: UUID = UUID()
     var name: String = ""
     var keywords: [KeywordDraft] = []
-
     init() {}
-
     init(model: InterestExperienceDefault) {
         id = model.id
         name = model.name
         keywords = model.keywords.map { KeywordDraft(id: $0.id, keyword: $0.keyword) }
     }
 }
-
 // MARK: - References
 struct ReferenceExperienceDraft: Identifiable, Equatable {
     var id: UUID = UUID()
     var name: String = ""
     var reference: String = ""
     var url: String = ""
-
     init() {}
-
     init(model: ReferenceExperienceDefault) {
         id = model.id
         name = model.name

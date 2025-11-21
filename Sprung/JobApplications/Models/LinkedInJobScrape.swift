@@ -2,12 +2,10 @@
 //  LinkedInJobScrape.swift
 //  Sprung
 //
-
 import Foundation
 import SwiftSoup
 import WebKit
 import ObjectiveC
-
 // MARK: - LinkedIn Session Manager
 private enum LinkedInScrapeTiming {
     static let requestTimeout: TimeInterval = 60
@@ -19,18 +17,15 @@ private enum LinkedInScrapeTiming {
     static let ultimateTimeout: TimeInterval = 60
     static let timeoutDebugWindowDuration: TimeInterval = 10
 }
-
 private enum LinkedInScrapeAssociatedKeys {
     static var delegateKey: UInt8 = 0
 }
-
 @MainActor
 class LinkedInSessionManager: ObservableObject {
     @Published var isLoggedIn = false
     @Published var sessionExpired = false
     
     private var webView: WKWebView?
-
     init() {
         setupWebView()
     }
@@ -54,7 +49,6 @@ class LinkedInSessionManager: ObservableObject {
         return webView
     }
 }
-
 // MARK: - LinkedIn Job Extractor
 extension JobApp {
     /// Attempts to extract job information directly from LinkedIn using an authenticated session
@@ -492,7 +486,6 @@ extension JobApp {
     }
     
 }
-
 // MARK: - Navigation Delegate Helper
 private class LinkedInJobScrapeDelegate: NSObject, WKNavigationDelegate {
     let targetURL: URL

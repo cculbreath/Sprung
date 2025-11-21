@@ -4,26 +4,20 @@
 //
 //  Created by Christopher Culbreath on 9/16/24.
 //
-
 import PDFKit
 import SwiftUI
-
 struct ResumeExportView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(AppEnvironment.self) private var appEnvironment: AppEnvironment
-
     // Local state for controlling the status picker
     @State private var selectedStatus: Statuses = .new
-
     // Local state for notes text
     @State private var notes: String = ""
-
     // State for toast notification
     @State private var showToast: Bool = false
     @State private var toastMessage: String = ""
     @State private var toastTimer: Timer? = nil
-
     var body: some View {
         // Only show if we actually have a selected JobApp in the store
         if let jobApp = jobAppStore.selectedApp {
@@ -208,19 +202,15 @@ struct ResumeExportView: View {
             EmptyView()
         }
     }
-
     // MARK: - Toolbar
     private func showToastNotification(_ message: String) {
         // Cancel any existing timer
         toastTimer?.invalidate()
-
         // Update toast message and show it
         toastMessage = message
-
         withAnimation {
             showToast = true
         }
-
         // Schedule timer to hide toast after 3 seconds
         toastTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { _ in
             withAnimation {
@@ -228,41 +218,33 @@ struct ResumeExportView: View {
             }
         }
     }
-
     // MARK: - File Utilities
     private func sanitizeFilename(_ name: String) -> String {
         let invalidCharacters = CharacterSet(charactersIn: "/\\?%*:|\"<>")
         return name.components(separatedBy: invalidCharacters).joined(separator: "_")
     }
-
     /// Creates a unique file URL for the given base filename by appending an incrementing number if the file already exists
     private func createUniqueFileURL(baseFileName: String, extension: String, in directory: URL) -> (URL, String) {
         let sanitizedBaseName = sanitizeFilename(baseFileName)
         var fullFileName = "\(sanitizedBaseName).\(`extension`)"
         var fileURL = directory.appendingPathComponent(fullFileName)
-
         var counter = 1
         while FileManager.default.fileExists(atPath: fileURL.path) {
             fullFileName = "\(sanitizedBaseName)_\(counter).\(`extension`)"
             fileURL = directory.appendingPathComponent(fullFileName)
             counter += 1
         }
-
         return (fileURL, fullFileName)
     }
-
     /// Joins multiple PDF documents together into a single PDF with multiple pages
     private func combinePDFs(pdfDataArray: [Data]) -> Data? {
         guard !pdfDataArray.isEmpty else { return nil }
-
         // If only one PDF, return it as-is
         if pdfDataArray.count == 1 {
             return pdfDataArray[0]
         }
-
         // Create a new empty PDF document
         let combinedPDF = PDFDocument()
-
         // Process each PDF document and maintain its pages
         for pdfData in pdfDataArray {
             if let pdfDoc = PDFDocument(data: pdfData) {
@@ -275,7 +257,6 @@ struct ResumeExportView: View {
                 }
             }
         }
-
         // Verify we have the expected number of pages
         var expectedPages = 0
         for pdfData in pdfDataArray {
@@ -283,15 +264,12 @@ struct ResumeExportView: View {
                 expectedPages += doc.pageCount
             }
         }
-
         if combinedPDF.pageCount != expectedPages {
             Logger.debug("Warning: Expected \(expectedPages) pages but got \(combinedPDF.pageCount)")
         }
-
         // Return the combined document as data
         return combinedPDF.dataRepresentation()
     }
-
     // MARK: - Export Methods
     private func exportResumePDF() {
         guard let jobApp = jobAppStore.selectedApp,
@@ -300,7 +278,6 @@ struct ResumeExportView: View {
             showToastNotification("No resume selected. Please select a resume first.")
             return
         }
-
         // Show exporting status
         showToastNotification("Generating fresh PDF...")
         
@@ -323,17 +300,14 @@ struct ResumeExportView: View {
             showToastNotification("Failed to generate PDF data. Please try again.")
             return
         }
-
         let jobPosition = resume.jobApp?.jobPosition ?? "unknown"
         let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
-
         // Create unique filename using the job position: e.g. "Software Engineer Resume.pdf"
         let (fileURL, filename) = createUniqueFileURL(
             baseFileName: "\(jobPosition) Resume",
             extension: "pdf",
             in: downloadsURL
         )
-
         do {
             try FileManager.default.createDirectory(at: downloadsURL, withIntermediateDirectories: true, attributes: nil)
             try pdfData.write(to: fileURL)
@@ -342,7 +316,6 @@ struct ResumeExportView: View {
             showToastNotification("Failed to export PDF: \(error.localizedDescription)")
         }
     }
-
     private func exportResumeText() {
         guard let jobApp = jobAppStore.selectedApp,
               let resume = jobApp.selectedRes
@@ -350,7 +323,6 @@ struct ResumeExportView: View {
             showToastNotification("No resume selected. Please select a resume first.")
             return
         }
-
         // Show regenerating status
         showToastNotification("Generating fresh text resume...")
         
@@ -363,14 +335,12 @@ struct ResumeExportView: View {
             onFinish: { [self] in
                 let jobPosition = resume.jobApp?.jobPosition ?? "unknown"
                 let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
-
                 // Create unique filename using the job position: e.g. "Software Engineer Resume.txt"
                 let (fileURL, filename) = createUniqueFileURL(
                     baseFileName: "\(jobPosition) Resume",
                     extension: "txt",
                     in: downloadsURL
                 )
-
                 do {
                     try resume.textResume.write(to: fileURL, atomically: true, encoding: .utf8)
                     showToastNotification("Resume text has been exported to \"\(filename)\"")
@@ -380,7 +350,6 @@ struct ResumeExportView: View {
             }
         )
     }
-
     private func exportResumeJSON() {
         guard let jobApp = jobAppStore.selectedApp,
               let resume = jobApp.selectedRes
@@ -388,17 +357,14 @@ struct ResumeExportView: View {
             showToastNotification("No resume selected. Please select a resume first.")
             return
         }
-
         let jobPosition = resume.jobApp?.jobPosition ?? "unknown"
         let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
-
         // Create unique filename using the job position: e.g. "Software Engineer Resume.json"
         let (fileURL, filename) = createUniqueFileURL(
             baseFileName: "\(jobPosition) Resume",
             extension: "json",
             in: downloadsURL
         )
-
         let jsonString = resume.jsonTxt
         do {
             try jsonString.write(to: fileURL, atomically: true, encoding: .utf8)
@@ -407,7 +373,6 @@ struct ResumeExportView: View {
             showToastNotification("Failed to export JSON: \(error.localizedDescription)")
         }
     }
-
     private func exportCoverLetterText() {
         guard let jobApp = jobAppStore.selectedApp,
               let coverLetter = jobApp.selectedCover
@@ -415,17 +380,14 @@ struct ResumeExportView: View {
             showToastNotification("No cover letter selected. Please select a cover letter first.")
             return
         }
-
         let jobPosition = coverLetter.jobApp?.jobPosition ?? "unknown"
         let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
-
         // Create unique filename using the job position: e.g. "Software Engineer Cover Letter.txt"
         let (fileURL, filename) = createUniqueFileURL(
             baseFileName: "\(jobPosition) Cover Letter",
             extension: "txt",
             in: downloadsURL
         )
-
         do {
             try coverLetter.content.write(to: fileURL, atomically: true, encoding: .utf8)
             showToastNotification("Cover letter has been exported to \"\(filename)\"")
@@ -433,7 +395,6 @@ struct ResumeExportView: View {
             showToastNotification("Failed to export: \(error.localizedDescription)")
         }
     }
-
     private func exportCoverLetterPDF() {
         guard let jobApp = jobAppStore.selectedApp,
               let coverLetter = jobApp.selectedCover
@@ -441,19 +402,15 @@ struct ResumeExportView: View {
             showToastNotification("No cover letter selected. Please select a cover letter first.")
             return
         }
-
         let jobPosition = coverLetter.jobApp?.jobPosition ?? "unknown"
         let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
-
         // Create unique filename using the job position: e.g. "Software Engineer Cover Letter.pdf"
         let (fileURL, filename) = createUniqueFileURL(
             baseFileName: "\(jobPosition) Cover Letter",
             extension: "pdf",
             in: downloadsURL
         )
-
         let pdfData = coverLetterStore.exportPDF(from: coverLetter)
-
         do {
             try pdfData.write(to: fileURL)
             showToastNotification("Cover letter PDF has been exported to \"\(filename)\"")
@@ -461,7 +418,6 @@ struct ResumeExportView: View {
             showToastNotification("Failed to export PDF: \(error.localizedDescription)")
         }
     }
-
     private func exportApplicationPacket() {
         guard let jobApp = jobAppStore.selectedApp,
               let resume = jobApp.selectedRes,
@@ -470,25 +426,20 @@ struct ResumeExportView: View {
             showToastNotification("No resume selected. Please select a resume first.")
             return
         }
-
         guard let coverLetter = jobApp.selectedCover else {
             showToastNotification("No cover letter selected. Please select a cover letter first.")
             return
         }
-
         let jobPosition = coverLetter.jobApp?.jobPosition ?? "unknown"
         let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
-
         // Create unique filename using the job position: e.g. "Software Engineer Application.pdf"
         let (fileURL, filename) = createUniqueFileURL(
             baseFileName: "\(jobPosition) Application",
             extension: "pdf",
             in: downloadsURL
         )
-
         // Get cover letter PDF data
         let coverLetterPdfData = coverLetterStore.exportPDF(from: coverLetter)
-
         // Combine PDFs - cover letter first, then resume
         if let combinedPdfData = combinePDFs(pdfDataArray: [coverLetterPdfData, resumePdfData]) {
             do {
@@ -501,33 +452,26 @@ struct ResumeExportView: View {
             showToastNotification("Failed to combine PDFs for application packet.")
         }
     }
-
     private func exportAllCoverLetters() {
         guard let jobApp = jobAppStore.selectedApp else {
             return
         }
-
         // Get all cover letters for this job app
         let allCoverLetters = jobApp.coverLetters.filter { $0.generated }.sorted(by: { $0.moddedDate > $1.moddedDate })
-
         if allCoverLetters.isEmpty {
             showToastNotification("No cover letters available to export for this job application.")
             return
         }
-
         let jobPosition = jobApp.jobPosition
         let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
-
         // Create unique filename using the job position: e.g. "Software Engineer All Cover Letters.txt"
         let (textFileURL, textFilename) = createUniqueFileURL(
             baseFileName: "\(jobPosition) All Cover Letters",
             extension: "txt",
             in: downloadsURL
         )
-
         // Create and export combined text file
         let combinedText = createCombinedCoverLettersText(jobApp: jobApp, coverLetters: allCoverLetters)
-
         do {
             // Export text file
             try combinedText.write(to: textFileURL, atomically: true, encoding: .utf8)
@@ -536,17 +480,13 @@ struct ResumeExportView: View {
             showToastNotification("Failed to export: \(error.localizedDescription)")
         }
     }
-
     private func createCombinedCoverLettersText(jobApp: JobApp, coverLetters: [CoverLetter]) -> String {
         var combinedText = "ALL COVER LETTER OPTIONS FOR \(jobApp.jobPosition.uppercased()) AT \(jobApp.companyName.uppercased())\n\n"
-
         // Use letters a, b, c, etc. to label options
         let letterLabels = Array("abcdefghijklmnopqrstuvwxyz")
-
         for (index, letter) in coverLetters.enumerated() {
             // Determine the option label (a, b, c, etc.)
             let optionLabel = index < letterLabels.count ? String(letterLabels[index]) : "\(index + 1)"
-
             combinedText += "=============================================\n"
             // Use the editable name for each option
             combinedText += "OPTION \(optionLabel): (\(letter.name))\n"
@@ -554,7 +494,6 @@ struct ResumeExportView: View {
             combinedText += letter.content
             combinedText += "\n\n\n"
         }
-
         return combinedText
     }
     
@@ -569,7 +508,6 @@ struct ResumeExportView: View {
         return nil
     }
 }
-
 // MARK: - Supporting Views
 struct MacOSToastOverlay: View {
     let showToast: Bool

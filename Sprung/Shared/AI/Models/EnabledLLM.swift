@@ -4,10 +4,8 @@
 //
 //  Track enabled models and their verified capabilities
 //
-
 import Foundation
 import SwiftData
-
 @Model
 class EnabledLLM {
     @Attribute(.unique) var modelId: String = ""

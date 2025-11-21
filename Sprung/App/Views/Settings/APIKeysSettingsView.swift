@@ -4,9 +4,7 @@
 //
 //  Created by Christopher Culbreath on 4/24/25.
 //
-
 import SwiftUI
-
 struct APIKeysSettingsView: View {
     @Environment(AppState.self) private var appState
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
@@ -15,15 +13,12 @@ struct APIKeysSettingsView: View {
     @State private var scrapingDogApiKey: String = APIKeyManager.get(.scrapingDog) ?? ""
     @State private var openRouterApiKey: String = APIKeyManager.get(.openRouter) ?? ""
     @State private var openAiTTSApiKey: String = APIKeyManager.get(.openAI) ?? ""
-
     @State private var showModelSelectionSheet = false
-
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Manage credentials used for importing jobs and accessing external AI services. Leave a field blank to remove the saved key.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
-
             APIKeyEditor(
                 title: "OpenRouter",
                 systemImage: "globe",
@@ -32,7 +27,6 @@ struct APIKeysSettingsView: View {
                 help: "Required for multi-model résumé reasoning and OpenRouter integrations.",
                 onSave: handleOpenRouterSave
             )
-
             APIKeyEditor(
                 title: "Scraping Dog",
                 systemImage: "dog.fill",
@@ -42,7 +36,6 @@ struct APIKeysSettingsView: View {
                 normalizesNoneValue: true,
                 onSave: handleScrapingDogSave
             )
-
             APIKeyEditor(
                 title: "OpenAI (Voice and Onboarding Interview)",
                 systemImage: "speaker.wave.2",
@@ -52,16 +45,13 @@ struct APIKeysSettingsView: View {
                 normalizesNoneValue: true,
                 onSave: handleOpenAITTSSave
             )
-
             Divider()
-
             HStack(spacing: 12) {
                 Button("Choose OpenRouter Models…") {
                     appState.reconfigureOpenRouterService(using: llmService)
                     showModelSelectionSheet = true
                 }
                 .disabled(!appState.hasValidOpenRouterKey)
-
                 if appState.hasValidOpenRouterKey {
                     Label(
                         "\(openRouterService.availableModels.count) available, \(enabledLLMStore.enabledModelIds.count) selected",
@@ -91,7 +81,6 @@ struct APIKeysSettingsView: View {
             refreshKeys()
         }
     }
-
     private func handleOpenRouterSave(_ newValue: String) {
         let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
@@ -101,11 +90,9 @@ struct APIKeysSettingsView: View {
             _ = APIKeyManager.set(.openRouter, value: trimmed)
             openRouterApiKey = trimmed
         }
-
         appState.reconfigureOpenRouterService(using: llmService)
         NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
     }
-
     private func handleScrapingDogSave(_ newValue: String) {
         let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
@@ -117,7 +104,6 @@ struct APIKeysSettingsView: View {
         }
         NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
     }
-
     private func handleOpenAITTSSave(_ newValue: String) {
         let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
@@ -129,14 +115,12 @@ struct APIKeysSettingsView: View {
         }
         NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
     }
-
     private func refreshKeys() {
         openRouterApiKey = APIKeyManager.get(.openRouter) ?? ""
         scrapingDogApiKey = APIKeyManager.get(.scrapingDog) ?? ""
         openAiTTSApiKey = APIKeyManager.get(.openAI) ?? ""
     }
 }
-
 private struct APIKeyEditor: View {
     let title: String
     let systemImage: String
@@ -145,29 +129,23 @@ private struct APIKeyEditor: View {
     var help: String?
     var normalizesNoneValue: Bool = false
     var onSave: ((String) -> Void)?
-
     @State private var isEditing = false
     @State private var draft: String = ""
-
     private var displayValue: String {
         normalizesNoneValue && value == "none" ? "" : value
     }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Label(title, systemImage: systemImage)
                     .labelStyle(.titleAndIcon)
-
                 Spacer()
-
                 if isEditing {
                     HStack(spacing: 8) {
                         Button("Save") {
                             commit()
                         }
                         .buttonStyle(.borderedProminent)
-
                         Button("Cancel") {
                             cancel()
                         }
@@ -180,7 +158,6 @@ private struct APIKeyEditor: View {
                     .buttonStyle(.link)
                 }
             }
-
             if isEditing {
                 SecureField(placeholder, text: $draft)
                     .textFieldStyle(.roundedBorder)
@@ -196,7 +173,6 @@ private struct APIKeyEditor: View {
                     .font(.callout)
                     .foregroundStyle(.tertiary)
             }
-
             if let help {
                 Text(help)
                     .font(.footnote)
@@ -204,26 +180,21 @@ private struct APIKeyEditor: View {
             }
         }
     }
-
     private func startEditing() {
         draft = displayValue
         isEditing = true
     }
-
     private func cancel() {
         isEditing = false
         draft = displayValue
     }
-
     private func commit() {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         let stored = trimmed.isEmpty && normalizesNoneValue ? "" : trimmed
-
         value = stored
         onSave?(trimmed)
         isEditing = false
     }
-
     private func mask(_ raw: String) -> String {
         guard raw.count > 8 else { return raw }
         let prefix = raw.prefix(4)

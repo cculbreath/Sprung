@@ -4,26 +4,19 @@
 //
 //  Created by Christopher Culbreath on 2/27/25.
 //
-
 import SwiftData
 import SwiftUI
-
 struct NodeLeafView: View {
     @Environment(\.modelContext) private var context
     @Environment(ResumeDetailVM.self) private var vm: ResumeDetailVM
-
     @State var node: TreeNode
-
     // Local UI state (hover effects)
     @State private var isHoveringEdit: Bool = false
     @State private var isHoveringSparkles: Bool = false
-
     // Derived editing bindings
     private var isEditing: Bool { vm.editingNodeID == node.id }
-
     var body: some View {
         let isSectionLabelEntry = node.parent?.name == "section-labels"
-
         HStack(spacing: 5) {
             if node.value.isEmpty && !isSectionLabelEntry {
                 Spacer().frame(width: 50)
@@ -78,7 +71,6 @@ struct NodeLeafView: View {
                         )
                         Spacer()
                     }
-
                     if node.status != LeafStatus.disabled {
                         Button(action: { vm.startEditing(node: node) }) {
                             Image(systemName: "square.and.pencil")
@@ -109,7 +101,6 @@ struct NodeLeafView: View {
         )
         .cornerRadius(5)
     }
-
     // MARK: - Actions
     private func toggleNodeStatus() {
         if node.status == LeafStatus.saved {
@@ -118,9 +109,7 @@ struct NodeLeafView: View {
             node.status = .saved
         }
     }
-
     // startEditing/save/cancel logic handled by ResumeDetailVM
-
     private func deleteNode(node: TreeNode) {
         vm.deleteNode(node, context: context)
     }

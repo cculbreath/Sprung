@@ -4,11 +4,9 @@
 //
 //  Menu command definitions and notifications for the application.
 //
-
 import Foundation
 import SwiftUI
 import SwiftData
-
 // MARK: - Menu Command Notifications
 /// Central list of notifications bridging AppKit menu/toolbar commands into the SwiftUI layer.
 extension Notification.Name {
@@ -38,7 +36,6 @@ extension Notification.Name {
     
     // Analysis Commands
     static let analyzeApplication = Notification.Name("analyzeApplication")
-
     // Interview Commands
     static let startOnboardingInterview = Notification.Name("startOnboardingInterview")
     
@@ -67,7 +64,6 @@ extension Notification.Name {
     static let exportCoverLetterText = Notification.Name("exportCoverLetterText")
     static let exportAllCoverLetters = Notification.Name("exportAllCoverLetters")
     static let exportApplicationPacket = Notification.Name("exportApplicationPacket")
-
     // Settings/Configuration
     static let apiKeysChanged = Notification.Name("apiKeysChanged")
 }

@@ -4,7 +4,6 @@
 //
 //  Created by Christopher Culbreath on 6/10/25.
 //
-
 import Foundation
 /// Data transformer for converting LLM responses to structured objects
 struct JSONResponseParser {

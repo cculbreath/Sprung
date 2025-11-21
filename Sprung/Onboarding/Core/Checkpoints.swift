@@ -5,10 +5,8 @@
 //  Provides lightweight persistence for interview session checkpoints.
 //  Works with the centralized StateCoordinator system.
 //
-
 import Foundation
 import SwiftyJSON
-
 /// Represents a saved checkpoint of the interview state
 struct OnboardingCheckpoint: Codable {
     let timestamp: Date
@@ -17,13 +15,11 @@ struct OnboardingCheckpoint: Codable {
     let timelineJSON: String?
     let enabledSections: Set<String>
 }
-
 /// Manages checkpoint persistence for the onboarding interview
 @MainActor
 final class Checkpoints {
     private var history: [OnboardingCheckpoint] = []
     private let maxHistoryCount = 8
-
     private let url: URL = {
         let appSupport = FileManager.default.urls(
             for: .applicationSupportDirectory,
@@ -40,11 +36,9 @@ final class Checkpoints {
         }
         return directory.appendingPathComponent("Interview.checkpoints.json")
     }()
-
     init() {
         loadHistory()
     }
-
     /// Saves a checkpoint with the current state
     func save(
         snapshot: StateCoordinator.StateSnapshot,
@@ -59,17 +53,13 @@ final class Checkpoints {
             timelineJSON: timelineJSON?.rawString(options: .sortedKeys),
             enabledSections: enabledSections
         )
-
         history.append(checkpoint)
-
         // Trim history to max count
         if history.count > maxHistoryCount {
             history.removeFirst(history.count - maxHistoryCount)
         }
-
         persistHistory()
     }
-
     /// Restores the most recent checkpoint
     func restore() -> (
         snapshot: StateCoordinator.StateSnapshot,
@@ -80,10 +70,8 @@ final class Checkpoints {
         guard let latest = history.max(by: { $0.timestamp < $1.timestamp }) else {
             return nil
         }
-
         let profileJSON = latest.profileJSON.flatMap { JSON(parseJSON: $0) }
         let timelineJSON = latest.timelineJSON.flatMap { JSON(parseJSON: $0) }
-
         return (
             snapshot: latest.snapshot,
             profileJSON: profileJSON,
@@ -91,18 +79,15 @@ final class Checkpoints {
             enabledSections: latest.enabledSections
         )
     }
-
     /// Checks if any checkpoints exist
     func hasCheckpoint() -> Bool {
         !history.isEmpty
     }
-
     /// Get the last N checkpoints (most recent first)
     func getRecentCheckpoints(count: Int = 5) -> [OnboardingCheckpoint] {
         let sorted = history.sorted(by: { $0.timestamp > $1.timestamp })
         return Array(sorted.prefix(count))
     }
-
     /// Restore from a specific checkpoint
     func restore(checkpoint: OnboardingCheckpoint) -> (
         snapshot: StateCoordinator.StateSnapshot,
@@ -112,7 +97,6 @@ final class Checkpoints {
     ) {
         let profileJSON = checkpoint.profileJSON.flatMap { JSON(parseJSON: $0) }
         let timelineJSON = checkpoint.timelineJSON.flatMap { JSON(parseJSON: $0) }
-
         return (
             snapshot: checkpoint.snapshot,
             profileJSON: profileJSON,
@@ -120,7 +104,6 @@ final class Checkpoints {
             enabledSections: checkpoint.enabledSections
         )
     }
-
     /// Clears all checkpoints
     func clear() {
         history.removeAll()
@@ -132,7 +115,6 @@ final class Checkpoints {
             Logger.debug("Failed to clear checkpoints: \(error)")
         }
     }
-
     // MARK: - Private Methods
     private func loadHistory() {
         guard
@@ -142,10 +124,8 @@ final class Checkpoints {
             history = []
             return
         }
-
         history = checkpoints.suffix(maxHistoryCount)
     }
-
     private func persistHistory() {
         do {
             let data = try JSONEncoder().encode(history)

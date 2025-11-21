@@ -4,9 +4,7 @@
 //
 //  Created on 6/2/25.
 //
-
 import SwiftUI
-
 /// A reusable checkbox-style model picker component for multi-model selection
 /// Models shown are filtered first by user's selection in Settings, then by capability requirements
 struct CheckboxModelPicker: View {
@@ -17,16 +15,12 @@ struct CheckboxModelPicker: View {
     @Environment(AppState.self) private var appState
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(OpenRouterService.self) private var openRouterService
-
     /// Optional capability filter for operation-specific requirements
     var requiredCapability: ModelCapability? = nil
-
     /// Title for the GroupBox
     var title: String = "Select Models"
-
     /// Whether to show inside a GroupBox
     var showInGroupBox: Bool = true
-
     /// Whether to show Select All/None buttons
     var showSelectionButtons: Bool = true
     

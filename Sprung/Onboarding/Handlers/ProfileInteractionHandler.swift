@@ -5,11 +5,9 @@
 //  Handles applicant profile intake (manual/URL/upload/contacts) and validation.
 //  Manages the profile intake state machine and produces JSON payloads for tool continuations.
 //
-
 import Foundation
 import Observation
 import SwiftyJSON
-
 @MainActor
 @Observable
 final class ProfileInteractionHandler {
@@ -18,18 +16,15 @@ final class ProfileInteractionHandler {
     private(set) var pendingApplicantProfileIntake: OnboardingApplicantProfileIntakeState?
     private(set) var pendingApplicantProfileSummary: JSON?
     private(set) var lastSubmittedDraft: JSON?
-
     // MARK: - Private State
     private let isoFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter
     }()
-
     // MARK: - Dependencies
     private let contactsImportService: ContactsImportService
     private let eventBus: EventCoordinator
-
     // MARK: - Init
     init(
         contactsImportService: ContactsImportService,
@@ -38,75 +33,61 @@ final class ProfileInteractionHandler {
         self.contactsImportService = contactsImportService
         self.eventBus = eventBus
     }
-
     // MARK: - Validation Flow (Approve/Reject)
     /// Presents a validation request for an applicant profile.
     func presentProfileRequest(_ request: OnboardingApplicantProfileRequest) {
         pendingApplicantProfileRequest = request
         Logger.info("📋 Profile validation request presented", category: .ai)
     }
-
     /// Clears the current profile request.
     func clearProfileRequest() {
         pendingApplicantProfileRequest = nil
     }
-
     /// Resolves an applicant profile validation with user-approved or modified draft.
     func resolveProfile(with draft: ApplicantProfileDraft) -> JSON? {
         guard let request = pendingApplicantProfileRequest else {
             Logger.warning("⚠️ No pending profile request to resolve", category: .ai)
             return nil
         }
-
         let resolvedJSON = draft.toJSON()
         let status: String = resolvedJSON == request.proposedProfile ? "approved" : "modified"
         let enriched = attachingValidationMetadata(to: resolvedJSON, via: "validation_card")
-
         var payload = JSON()
         payload["status"].string = status
         payload["data"] = enriched
-
         clearProfileRequest()
         lastSubmittedDraft = enriched
         Logger.info("✅ Profile resolved (status: \(status))", category: .ai)
-
         // Show the profile summary card in the tool pane
         // @Observable will handle UI updates automatically
         showProfileSummary(profile: enriched)
-
         return payload
     }
-
     /// Rejects an applicant profile validation.
     func rejectProfile(reason: String) -> JSON? {
         guard pendingApplicantProfileRequest != nil else {
             Logger.warning("⚠️ No pending profile request to reject", category: .ai)
             return nil
         }
-
         var payload = JSON()
         payload["status"].string = "rejected"
         if !reason.isEmpty {
             payload["userNotes"].string = reason
         }
-
         clearProfileRequest()
         Logger.info("❌ Profile rejected", category: .ai)
         return payload
     }
-
     // MARK: - Intake Flow (Collect Profile)
     /// Presents the profile intake UI (shows mode picker: manual/URL/upload/contacts).
     func presentProfileIntake() {
         pendingApplicantProfileIntake = .options()
         Logger.info("📝 Profile intake presented", category: .ai)
     }
-
     /// Resets intake state to show mode picker again.
     func resetIntakeToOptions() {
         pendingApplicantProfileIntake = .options()
     }
-
     // MARK: - Intake Modes
     /// Begins manual entry mode.
     func beginManualEntry() {
@@ -118,7 +99,6 @@ final class ProfileInteractionHandler {
         )
         Logger.info("✏️ Manual entry mode activated", category: .ai)
     }
-
     /// Begins URL entry mode.
     func beginURLEntry() {
         pendingApplicantProfileIntake = OnboardingApplicantProfileIntakeState(
@@ -129,7 +109,6 @@ final class ProfileInteractionHandler {
         )
         Logger.info("🔗 URL entry mode activated", category: .ai)
     }
-
     /// Begins upload mode (returns an upload request for the router to present).
     func beginUpload() -> OnboardingUploadRequest {
         pendingApplicantProfileIntake = OnboardingApplicantProfileIntakeState(
@@ -138,7 +117,6 @@ final class ProfileInteractionHandler {
             urlString: "",
             errorMessage: nil
         )
-
         let metadata = OnboardingUploadMetadata(
             title: "Upload Contact Information",
             instructions: "Please upload a document that contains your basic contact information.",
@@ -148,11 +126,9 @@ final class ProfileInteractionHandler {
             targetDeliverable: "ApplicantProfile",
             userValidated: false
         )
-
         Logger.info("📤 Upload mode activated", category: .ai)
         return OnboardingUploadRequest(kind: .resume, metadata: metadata)
     }
-
     /// Begins contacts fetch mode (imports from macOS Contacts).
     func beginContactsFetch() {
         pendingApplicantProfileIntake = OnboardingApplicantProfileIntakeState(
@@ -161,7 +137,6 @@ final class ProfileInteractionHandler {
             urlString: "",
             errorMessage: nil
         )
-
         Task { @MainActor in
             do {
                 let draft = try await contactsImportService.fetchMeCardAsDraft()
@@ -191,7 +166,6 @@ final class ProfileInteractionHandler {
             }
         }
     }
-
     // MARK: - Intake Completion
     /// Submits a URL for profile intake.
     func submitURL(_ urlString: String) -> URL? {
@@ -206,48 +180,38 @@ final class ProfileInteractionHandler {
             Logger.warning("⚠️ Invalid URL: \(urlString)", category: .ai)
             return nil
         }
-
         Logger.info("🔗 URL submitted: \(url.absoluteString)", category: .ai)
         return url
     }
-
     /// Completes profile intake with a user-filled draft.
     func completeDraft(_ draft: ApplicantProfileDraft, source: OnboardingApplicantProfileIntakeState.Source) {
         let dataJSON = attachingValidationMetadata(
             to: draft.toSafeJSON(),
             via: source == .contacts ? "contacts" : "manual"
         )
-
         if dataJSON != .null {
             lastSubmittedDraft = dataJSON
         }
-
         // Emit artifact record for contacts and manual entry
         Task {
             await emitProfileArtifactRecord(profileJSON: dataJSON, source: source)
         }
-
         Logger.info("✅ Draft completed (source: \(source == .contacts ? "contacts" : "manual"))", category: .ai)
     }
-
     /// Cancels profile intake.
     func cancelIntake(reason: String) -> JSON? {
         guard pendingApplicantProfileIntake != nil else { return nil }
-
         Logger.info("❌ Profile intake cancelled: \(reason)", category: .ai)
         var payload = JSON()
         payload["cancelled"].boolValue = true
-
         pendingApplicantProfileIntake = nil
         return payload
     }
-
     /// Clears the applicant profile intake state without completing it.
     /// Used when extraction begins to allow spinner to show.
     func clearIntake() {
         pendingApplicantProfileIntake = nil
     }
-
     // MARK: - Lifecycle
     /// Clears all pending profile state (for interview reset).
     func reset() {
@@ -255,7 +219,6 @@ final class ProfileInteractionHandler {
         pendingApplicantProfileIntake = nil
         lastSubmittedDraft = nil
     }
-
     // MARK: - Metadata Helpers
     private func attachingValidationMetadata(to json: JSON, via channel: String) -> JSON {
         var enriched = json
@@ -264,14 +227,12 @@ final class ProfileInteractionHandler {
         enriched["meta"]["validated_at"].string = isoFormatter.string(from: Date())
         return enriched
     }
-
     // MARK: - Artifact Record Creation
     private func emitProfileArtifactRecord(
         profileJSON: JSON,
         source: OnboardingApplicantProfileIntakeState.Source
     ) async {
         let artifactId = UUID().uuidString
-
         // For contacts, use vCard text; for manual, use JSON
         let extractedText: String
         if source == .contacts {
@@ -286,7 +247,6 @@ final class ProfileInteractionHandler {
         } else {
             extractedText = profileJSON.rawString() ?? "{}"
         }
-
         var artifactRecord = JSON()
         artifactRecord["id"].string = artifactId
         artifactRecord["filename"].string = source == .contacts ? "contact-card.vcf" : "manual-entry.json"
@@ -294,33 +254,27 @@ final class ProfileInteractionHandler {
         artifactRecord["extracted_text"].string = extractedText
         artifactRecord["content_type"].string = source == .contacts ? "text/vcard" : "application/json"
         artifactRecord["created_at"].string = isoFormatter.string(from: Date())
-
         // Add metadata for LLM
         var metadata = JSON()
         metadata["target_phase_objectives"] = JSON(["applicant_profile.contact_intake"])  // Contact Information sub-objective
         metadata["target_deliverable"].string = "ApplicantProfile"
         metadata["user_validated"].bool = true
         artifactRecord["metadata"] = metadata
-
         // Emit artifact record produced event
         await eventBus.publish(.artifactRecordProduced(record: artifactRecord))
-
         Logger.info("📦 Profile artifact record emitted: \(artifactId) (source: \(source == .contacts ? "contacts" : "manual"))", category: .ai)
     }
-
     // MARK: - Profile Summary Management
     /// Shows the profile summary card in the tool pane.
     func showProfileSummary(profile: JSON) {
         pendingApplicantProfileSummary = profile
         Logger.info("📋 Profile summary shown", category: .ai)
     }
-
     /// Updates the profile summary with new data (e.g., when photo is added).
     func updateProfileSummary(profile: JSON) {
         pendingApplicantProfileSummary = profile
         Logger.info("📋 Profile summary updated", category: .ai)
     }
-
     /// Dismisses the profile summary card.
     func dismissProfileSummary() {
         pendingApplicantProfileSummary = nil

@@ -4,11 +4,9 @@
 //
 //  Created by Christopher Culbreath on 4/16/25.
 //
-
 import Foundation
 import AppKit
 import UniformTypeIdentifiers
-
 
 @MainActor
 class ResumeExportService: ObservableObject {
@@ -32,7 +30,6 @@ class ResumeExportService: ObservableObject {
     private func exportNatively(for resume: Resume) async throws {
         var template = try await ensureTemplate(for: resume)
         var slug = template.slug
-
         // Generate PDF from HTML template
         let pdfData: Data
         do {
@@ -43,7 +40,6 @@ class ResumeExportService: ObservableObject {
             pdfData = try await nativeGenerator.generatePDF(for: resume, template: slug, format: "html")
         }
         resume.pdfData = pdfData
-
         // Generate text version using the template's text content (or fallback)
         let textContent = try textGenerator.generateTextResume(for: resume, template: slug)
         resume.textResume = textContent
@@ -55,7 +51,6 @@ class ResumeExportService: ObservableObject {
            templateStore.template(slug: template.slug) != nil {
             return template
         }
-
         if let fallback = defaultTemplate() {
             resume.template = fallback
             return fallback
@@ -66,11 +61,9 @@ class ResumeExportService: ObservableObject {
     @MainActor
     private func promptForCustomTemplate(for resume: Resume) async throws -> Template {
         let selection = try ExportTemplateSelection.requestTemplateHTMLAndOptionalCSS()
-
         let slug = "custom-\(Int(Date().timeIntervalSince1970))"
         let name = "Custom Template - \(Date().formatted(date: .numeric, time: .standard))"
         let textFallback = defaultTextTemplate(for: resume)
-
         let template = templateStore.upsertTemplate(
             slug: slug,
             name: name,
@@ -82,7 +75,6 @@ class ResumeExportService: ObservableObject {
         resume.template = template
         return template
     }
-
     private func defaultTextTemplate(for resume: Resume?) -> String {
         if let existingSlug = resume?.template?.slug,
            let existingText = templateStore.textTemplateContent(slug: existingSlug) {
@@ -90,27 +82,20 @@ class ResumeExportService: ObservableObject {
         }
         return generateBasicTextTemplate()
     }
-
     private func defaultTemplate() -> Template? {
         return templateStore.defaultTemplate()
     }
-
     private func generateBasicTextTemplate() -> String {
         return """
 {{{ center(contact.name, 80) }}}
-
 {{{ center(join(job-titles), 80) }}}
-
 {{#contactLine}}
 {{{ center(contactLine, 80) }}}
 {{/contactLine}}
-
 {{{ wrap(summary, 80, 6, 6) }}}
-
 {{#section-labels.employment}}
 {{{ sectionLine(section-labels.employment, 80) }}}
 {{/section-labels.employment}}
-
 {{#employment}}
 {{ employer }}{{#location}} | {{{.}}}{{/location}}
 {{#position}}
@@ -118,16 +103,13 @@ class ResumeExportService: ObservableObject {
 {{/position}}
 {{ formatDate(start) }} – {{ formatDate(end) }}
 {{{ bulletList(highlights, 80, 2, "•") }}}
-
 {{/employment}}
-
 {{#more-info}}
 {{{ wrap(uppercase(more-info), 80, 0, 0) }}}
 {{/more-info}}
 """
     }
 }
-
 enum ResumeExportError: Error, LocalizedError {
     case userCancelled
     case templateSelectionFailed

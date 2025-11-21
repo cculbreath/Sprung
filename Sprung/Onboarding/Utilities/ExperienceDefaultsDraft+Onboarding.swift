@@ -1,5 +1,4 @@
 import Foundation
-
 extension ExperienceDefaultsDraft {
     mutating func setEnabledSections(_ enabled: Set<ExperienceSectionKey>) {
         for key in ExperienceSectionKey.allCases {
@@ -7,7 +6,6 @@ extension ExperienceDefaultsDraft {
             setEnabled(isEnabled, for: key)
         }
     }
-
     mutating func replaceSection(_ key: ExperienceSectionKey, with other: ExperienceDefaultsDraft) {
         switch key {
         case .work:
@@ -45,11 +43,9 @@ extension ExperienceDefaultsDraft {
             isReferencesEnabled = !references.isEmpty
         }
     }
-
     func enabledSectionKeys() -> [ExperienceSectionKey] {
         ExperienceSectionKey.allCases.filter { isEnabled(for: $0) }
     }
-
     private mutating func setEnabled(_ isEnabled: Bool, for key: ExperienceSectionKey) {
         switch key {
         case .work: isWorkEnabled = isEnabled
@@ -65,7 +61,6 @@ extension ExperienceDefaultsDraft {
         case .references: isReferencesEnabled = isEnabled
         }
     }
-
     private func isEnabled(for key: ExperienceSectionKey) -> Bool {
         switch key {
         case .work: return isWorkEnabled

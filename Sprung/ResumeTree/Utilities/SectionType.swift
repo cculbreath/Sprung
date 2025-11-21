@@ -4,9 +4,7 @@
 //
 //  Created by Christopher Culbreath on 2/27/25.
 //
-
 import Foundation
-
 /// Defines different section types.
 enum SectionType {
     case object
@@ -17,7 +15,6 @@ enum SectionType {
     case arrayOfObjects
     case fontSizes
 }
-
 extension SectionType {
     init?(manifestKind: TemplateManifest.Section.Kind) {
         switch manifestKind {

@@ -2,10 +2,8 @@
 //  Logger.swift
 //  Sprung
 //
-
 import Foundation
 import os
-
 /// Backend protocol that funnels log events to the desired sink.
 protocol Logging {
     func log(
@@ -15,7 +13,6 @@ protocol Logging {
         metadata: [String: String]
     )
 }
-
 /// Default backend that bridges to Apple's os.Logger.
 final class OSLoggerBackend: Logging {
     private let subsystem: String
@@ -59,7 +56,6 @@ final class OSLoggerBackend: Logging {
         return "\(message) [\(sorted)]"
     }
 }
-
 /// Lightweight logging facade with configurable backends and debug settings.
 final class Logger {
     // MARK: - Nested Types
@@ -154,7 +150,6 @@ final class Logger {
         }
 #endif
     }
-
     static func updateConsoleOutput(isEnabled: Bool) {
 #if DEBUG
         configurationQueue.async(flags: .barrier) {
@@ -346,7 +341,6 @@ final class Logger {
         static let saveDebugPrompts = "saveDebugPrompts"
     }
 }
-
 private extension Logger.Level {
     var osLogType: OSLogType {
         switch self {

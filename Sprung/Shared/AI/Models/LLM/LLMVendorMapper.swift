@@ -5,25 +5,19 @@
 //  Centralized helpers for translating between vendor SDK types and
 //  domain DTOs.
 //
-
 import Foundation
 import SwiftOpenAI
-
 enum LLMVendorMapper {
     // MARK: - Message Conversion
     static func vendorMessages(from dtoMessages: [LLMMessageDTO]) -> [LLMMessage] {
         dtoMessages.map { vendorMessage(from: $0) }
     }
-
     static func vendorMessage(from dto: LLMMessageDTO) -> LLMMessage {
         let role = ChatCompletionParameters.Message.Role(rawValue: dto.role.rawValue) ?? .assistant
-
         var contentParts: [ChatCompletionParameters.Message.ContentType.MessageContent] = []
-
         if let text = dto.text, !text.isEmpty {
             contentParts.append(.text(text))
         }
-
         if !dto.attachments.isEmpty {
             for attachment in dto.attachments {
                 guard let detail = makeImageDetail(from: attachment.data, mimeType: attachment.mimeType) else {
@@ -33,21 +27,17 @@ enum LLMVendorMapper {
                 contentParts.append(.imageUrl(detail))
             }
         }
-
         if contentParts.isEmpty {
             return LLMMessage.text(role: role, content: dto.text ?? "")
         }
-
         if contentParts.count == 1, case let .text(text) = contentParts[0], dto.attachments.isEmpty {
             return LLMMessage.text(role: role, content: text)
         }
-
         return ChatCompletionParameters.Message(
             role: role,
             content: .contentArray(contentParts)
         )
     }
-
     // MARK: - Response Conversion
     static func responseDTO(from response: LLMResponse) -> LLMResponseDTO {
         let choices = (response.choices ?? []).map { choice in
@@ -59,25 +49,20 @@ enum LLMVendorMapper {
                 let text = segments.isEmpty ? nil : segments.joined(separator: "\n\n")
                 return LLMMessageDTO(role: role, text: text, attachments: [])
             }
-
             return LLMResponseChoiceDTO(message: messageDTO)
         }
-
         return LLMResponseDTO(choices: choices)
     }
-
     static func streamChunkDTO(from chunk: ChatCompletionChunkObject) -> LLMStreamChunkDTO {
         guard let firstChoice = chunk.choices?.first else {
             return LLMStreamChunkDTO(content: nil, reasoning: nil, isFinished: false)
         }
-
         return LLMStreamChunkDTO(
             content: firstChoice.delta?.content,
             reasoning: firstChoice.delta?.reasoningContent,
             isFinished: firstChoice.finishReason != nil
         )
     }
-
     static func makeImageDetail(
         from data: Data,
         mimeType: String = "image/png"

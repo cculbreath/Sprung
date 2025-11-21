@@ -5,22 +5,17 @@
 //  Created on 6/5/2025
 //
 //  Shared conversation and messaging types used across the application
-
 import Foundation
 import SwiftOpenAI
-
 // MARK: - Type Aliases for SwiftOpenAI
 /// Use SwiftOpenAI's native message type throughout the application
 typealias LLMMessage = ChatCompletionParameters.Message
-
 /// Use SwiftOpenAI's native response type throughout the application
 typealias LLMResponse = ChatCompletionObject
-
 /// JSON Schema types for structured outputs
 typealias JSONSchema = SwiftOpenAI.JSONSchema
 typealias JSONSchemaResponseFormat = SwiftOpenAI.JSONSchemaResponseFormat
 typealias ChatCompletionParameters = SwiftOpenAI.ChatCompletionParameters
-
 
 // MARK: - Convenience Extensions for LLMMessage
 extension ChatCompletionParameters.Message {

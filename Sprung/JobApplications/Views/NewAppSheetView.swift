@@ -4,13 +4,10 @@
 //
 //  Created by Christopher Culbreath on 9/1/24.
 //
-
 import Foundation
 import SwiftUI
-
 struct NewAppSheetView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
-
     @State private var isLoading: Bool = false
     @State private var urlText: String = ""
     @State private var delayed: Bool = false
@@ -23,20 +20,16 @@ struct NewAppSheetView: View {
     @State private var showLinkedInLogin: Bool = false
     @State private var isProcessingJob: Bool = false
     @StateObject private var linkedInSessionManager: LinkedInSessionManager
-
     @Binding var isPresented: Bool
-
     @MainActor
     init(isPresented: Binding<Bool>) {
         self.init(isPresented: isPresented, sessionManager: LinkedInSessionManager())
     }
-
     @MainActor
     init(isPresented: Binding<Bool>, sessionManager: LinkedInSessionManager) {
         _isPresented = isPresented
         _linkedInSessionManager = StateObject(wrappedValue: sessionManager)
     }
-
     var body: some View {
         VStack {
             if isLoading {
@@ -120,7 +113,6 @@ struct NewAppSheetView: View {
                             }
                         }
                     }
-
                     HStack(spacing: 12) {
                         Button("Cancel") {
                             isPresented = false
@@ -178,7 +170,6 @@ struct NewAppSheetView: View {
             }
         }
     }
-
     private func handleNewApp() async {
         Logger.info("🚀 Starting job URL fetch for: \(urlText)")
         if let url = URL(string: urlText) {
@@ -194,7 +185,6 @@ struct NewAppSheetView: View {
                             jobAppStore: jobAppStore, html: htmlContent, url: urlText
                         )
                         Logger.info("✅ Successfully imported job from Apple")
-
                         isLoading = false
                         isPresented = false
                     } catch {
@@ -290,16 +280,12 @@ struct NewAppSheetView: View {
             }
             return
         }
-
         await fetchLinkedInWithScrapingDog(jobID: jobID, postingURL: url, apiKey: scrapingDogApiKey)
     }
-
     private func fetchLinkedInWithScrapingDog(jobID: String, postingURL: URL, apiKey: String) async {
         let requestURL =
             "https://api.scrapingdog.com/linkedinjobs?api_key=\(apiKey)&job_id=\(jobID)"
-
         guard let url = URL(string: requestURL) else { return }
-
         do {
             // Create URLSession with 60 second timeout
             let config = URLSessionConfiguration.default
@@ -308,7 +294,6 @@ struct NewAppSheetView: View {
             let session = URLSession(configuration: config)
             
             let (data, response) = try await session.data(from: url)
-
             if let httpResponse = response as? HTTPURLResponse,
                httpResponse.statusCode != 200
             {
@@ -321,7 +306,6 @@ struct NewAppSheetView: View {
                 }
                 return
             }
-
             let jobDetails = try JSONDecoder().decode([JobApp].self, from: data)
             if let jobDetail = jobDetails.first {
                 jobDetail.postingURL = postingURL.absoluteString
@@ -339,10 +323,8 @@ struct NewAppSheetView: View {
             }
             return
         }
-
         isLoading = false
     }
-
     private func linkedinJobId(from url: URL) -> String? {
         let candidates = url.pathComponents.reversed()
         for component in candidates where !component.isEmpty && component != "view" {

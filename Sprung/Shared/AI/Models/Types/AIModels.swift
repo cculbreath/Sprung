@@ -3,12 +3,10 @@
 //  Sprung
 //
 //
-
 import Foundation
 import PDFKit
 import AppKit
 import SwiftUI
-
 /// Utilities for AI model management and display
 struct AIModels {
     
@@ -57,7 +55,6 @@ struct AIModels {
         
         // Handle o1 models first (before general GPT handling)
 
-
         if modelName.lowercased().contains("gpt") {
             if components.count >= 2 {
                 // Extract main version (e.g., "GPT-4" from "gpt-4-1106-preview")
@@ -69,7 +66,6 @@ struct AIModels {
                 if components.contains("mini") {
                     return "GPT-\(components[1]) Mini"
                 }
-
             }
             
             // Special case for GPT-4o models
@@ -135,4 +131,3 @@ struct AIModels {
             .joined(separator: " ")
     }
     }
-

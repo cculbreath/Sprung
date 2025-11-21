@@ -4,10 +4,8 @@
 //
 //  Created by Christopher Culbreath on 9/9/24.
 //
-
 import AppKit
 import SwiftUI
-
 struct Cell: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore?
     @Environment(\.openURL) private var openURL
@@ -15,7 +13,6 @@ struct Cell: View {
     var trailingKeys: KeyPath<JobApp, String>
     var formTrailingKeys: WritableKeyPath<JobAppForm, String>
     @Binding var isEditing: Bool
-
     var body: some View {
         HStack {
             Text(leading)
@@ -42,7 +39,6 @@ struct Cell: View {
                             .foregroundColor(isLink ? .accentColor : .secondary)
                             .italic(value.isEmpty)
                             .lineLimit(1)
-
                         if isLink {
                             Button(action: {
                                 if let url = URL(string: value) {
@@ -54,7 +50,6 @@ struct Cell: View {
                             }
                             .buttonStyle(PlainButtonStyle())
                         }
-
                     } else {
                         Text("No app selected")
                             .foregroundColor(.red)
@@ -63,7 +58,6 @@ struct Cell: View {
             }
         }
     }
-
     private func isValidURL(_ urlString: String) -> Bool {
         if let url = URL(string: urlString) {
             return NSWorkspace.shared.urlForApplication(toOpen: url) != nil

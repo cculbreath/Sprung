@@ -1,25 +1,19 @@
 // Sprung/AI/Views/ResumeReviewSheet.swift
-
 import PDFKit // Required for PDFDocument access if not already imported
 import SwiftUI
 import WebKit // Required for WKWebView used in MarkdownView
 import Foundation
-
 // Make sure we're using the right MarkdownView component
-
 struct ResumeReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppEnvironment.self) private var appEnvironment
     @Environment(ReasoningStreamManager.self) private var reasoningStreamManager
     @Environment(OpenRouterService.self) private var openRouterService
-
     @Binding var selectedResume: Resume?
     @State private var viewModel = ResumeReviewViewModel()
     @Environment(LLMFacade.self) private var llmFacade
-
     @State private var selectedReviewType: ResumeReviewType = .assessQuality
     @State private var customOptions = CustomReviewOptions()
-
     // Model selection state with persistence
     @AppStorage("resumeReviewSelectedModel") private var selectedModel: String = ""
     
@@ -118,7 +112,6 @@ struct ResumeReviewSheet: View {
             }
         }
     }
-
     var body: some View {
         ZStack(alignment: .bottom) {
             VStack(alignment: .leading, spacing: 0) { // Use spacing 0 for the outer VStack to control padding precisely
@@ -127,7 +120,6 @@ struct ResumeReviewSheet: View {
                     .font(.title)
                     .padding([.horizontal, .top]) // Add padding to header
                     .padding(.bottom, 8)
-
                 // Scrollable content area
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
@@ -141,7 +133,6 @@ struct ResumeReviewSheet: View {
                         .onChange(of: selectedReviewType) { _, _ in
                             viewModel.resetOnReviewTypeChange()
                         }
-
                         // Custom options if custom type is selected
                         if selectedReviewType == .custom {
                             CustomReviewOptionsView(customOptions: $customOptions)
@@ -163,7 +154,6 @@ struct ResumeReviewSheet: View {
                             requiredCapability: selectedReviewType == .fixOverflow ? .vision : nil,
                             title: "AI Model"
                         )
-
                         // Content area (GroupBox with contentView)
                         GroupBox(label: Text("AI Analysis").fontWeight(.medium)) {
                             contentView // This already handles its internal scrolling for MarkdownView
@@ -173,7 +163,6 @@ struct ResumeReviewSheet: View {
                     .padding(.horizontal) // Padding for the scrollable content
                     .padding(.bottom) // Padding at the bottom of scrollable content
                 } // End ScrollView
-
                 // Button row - Pinned to the bottom
                 HStack {
                     if viewModel.isProcessingGeneral || viewModel.isProcessingFixOverflow {
@@ -219,11 +208,9 @@ struct ResumeReviewSheet: View {
             )
         }
     }
-
     // View for custom options (extracted for clarity) - Unchanged
     struct CustomReviewOptionsView: View {
         @Binding var customOptions: CustomReviewOptions
-
         var body: some View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Custom Review Options")
@@ -248,10 +235,8 @@ struct ResumeReviewSheet: View {
             .padding(.vertical, 8)
         }
     }
-
     func handleSubmit() {
         guard let resume = selectedResume else { return }
-
         viewModel.handleSubmit(
             reviewType: selectedReviewType,
             resume: resume,

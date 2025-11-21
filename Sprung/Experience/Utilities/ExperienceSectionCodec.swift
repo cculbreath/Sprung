@@ -1,14 +1,11 @@
 import Foundation
 import SwiftyJSON
-
 struct AnyExperienceSectionCodec: Identifiable {
     let key: ExperienceSectionKey
     private let isEnabledClosure: (ExperienceDefaultsDraft) -> Bool
     private let encodeItemsClosure: (ExperienceDefaultsDraft) -> [[String: Any]]
     private let decodeClosure: (JSON?, inout ExperienceDefaultsDraft) -> Void
-
     var id: ExperienceSectionKey { key }
-
     init<Item>(
         key: ExperienceSectionKey,
         metadata: ExperienceSectionMetadata,
@@ -20,48 +17,40 @@ struct AnyExperienceSectionCodec: Identifiable {
         isEnabledClosure = { draft in
             draft[keyPath: metadata.isEnabledKeyPath]
         }
-
         encodeItemsClosure = { draft in
             guard draft[keyPath: metadata.isEnabledKeyPath] else { return [] }
             return draft[keyPath: itemsKeyPath]
                 .map(encodeItem)
                 .filter { $0.isEmpty == false }
         }
-
         decodeClosure = { sectionJSON, draft in
             guard let sectionJSON else {
                 draft[keyPath: metadata.isEnabledKeyPath] = false
                 draft[keyPath: itemsKeyPath] = []
                 return
             }
-
             if sectionJSON.type != .array {
                 Logger.warning("📄 Experience codec expected array for section \(key.rawValue); received \(sectionJSON.type.rawValue)")
                 draft[keyPath: metadata.isEnabledKeyPath] = false
                 draft[keyPath: itemsKeyPath] = []
                 return
             }
-
             let array = sectionJSON.arrayValue
             draft[keyPath: metadata.isEnabledKeyPath] = array.isEmpty == false
             draft[keyPath: itemsKeyPath] = array.map(decodeItem)
         }
     }
-
     func isEnabled(in draft: ExperienceDefaultsDraft) -> Bool {
         isEnabledClosure(draft)
     }
-
     func encodeSection(from draft: ExperienceDefaultsDraft) -> [[String: Any]]? {
         let encoded = encodeItemsClosure(draft)
         return encoded.isEmpty ? nil : encoded
     }
-
     func decodeSection(from json: JSON?, into draft: inout ExperienceDefaultsDraft) {
         decodeClosure(json, &draft)
     }
 }
-
 enum ExperienceSectionCodecs {
     static let all: [AnyExperienceSectionCodec] = [
         work(),
@@ -77,7 +66,6 @@ enum ExperienceSectionCodecs {
         references()
     ]
 }
-
 private extension ExperienceSectionCodecs {
     static func work() -> AnyExperienceSectionCodec {
         AnyExperienceSectionCodec(
@@ -88,7 +76,6 @@ private extension ExperienceSectionCodecs {
             decodeItem: decodeWork
         )
     }
-
     static func volunteer() -> AnyExperienceSectionCodec {
         AnyExperienceSectionCodec(
             key: .volunteer,
@@ -98,7 +85,6 @@ private extension ExperienceSectionCodecs {
             decodeItem: decodeVolunteer
         )
     }
-
     static func education() -> AnyExperienceSectionCodec {
         AnyExperienceSectionCodec(
             key: .education,
@@ -108,7 +94,6 @@ private extension ExperienceSectionCodecs {
             decodeItem: decodeEducation
         )
     }
-
     static func projects() -> AnyExperienceSectionCodec {
         AnyExperienceSectionCodec(
             key: .projects,
@@ -118,7 +103,6 @@ private extension ExperienceSectionCodecs {
             decodeItem: decodeProject
         )
     }
-
     static func skills() -> AnyExperienceSectionCodec {
         AnyExperienceSectionCodec(
             key: .skills,
@@ -128,7 +112,6 @@ private extension ExperienceSectionCodecs {
             decodeItem: decodeSkill
         )
     }
-
     static func awards() -> AnyExperienceSectionCodec {
         AnyExperienceSectionCodec(
             key: .awards,
@@ -138,7 +121,6 @@ private extension ExperienceSectionCodecs {
             decodeItem: decodeAward
         )
     }
-
     static func certificates() -> AnyExperienceSectionCodec {
         AnyExperienceSectionCodec(
             key: .certificates,
@@ -148,7 +130,6 @@ private extension ExperienceSectionCodecs {
             decodeItem: decodeCertificate
         )
     }
-
     static func publications() -> AnyExperienceSectionCodec {
         AnyExperienceSectionCodec(
             key: .publications,
@@ -158,7 +139,6 @@ private extension ExperienceSectionCodecs {
             decodeItem: decodePublication
         )
     }
-
     static func languages() -> AnyExperienceSectionCodec {
         AnyExperienceSectionCodec(
             key: .languages,
@@ -168,7 +148,6 @@ private extension ExperienceSectionCodecs {
             decodeItem: decodeLanguage
         )
     }
-
     static func interests() -> AnyExperienceSectionCodec {
         AnyExperienceSectionCodec(
             key: .interests,
@@ -178,7 +157,6 @@ private extension ExperienceSectionCodecs {
             decodeItem: decodeInterest
         )
     }
-
     static func references() -> AnyExperienceSectionCodec {
         AnyExperienceSectionCodec(
             key: .references,
@@ -189,7 +167,6 @@ private extension ExperienceSectionCodecs {
         )
     }
 }
-
 // MARK: - Encoding helpers
 private func encodeWork(_ draft: WorkExperienceDraft) -> [String: Any] {
     var payload: [String: Any] = [:]
@@ -204,7 +181,6 @@ private func encodeWork(_ draft: WorkExperienceDraft) -> [String: Any] {
     if highlights.isEmpty == false { payload["highlights"] = highlights }
     return payload
 }
-
 private func encodeVolunteer(_ draft: VolunteerExperienceDraft) -> [String: Any] {
     var payload: [String: Any] = [:]
     if let value = sanitized(draft.organization) { payload["organization"] = value }
@@ -217,7 +193,6 @@ private func encodeVolunteer(_ draft: VolunteerExperienceDraft) -> [String: Any]
     if highlights.isEmpty == false { payload["highlights"] = highlights }
     return payload
 }
-
 private func encodeEducation(_ draft: EducationExperienceDraft) -> [String: Any] {
     var payload: [String: Any] = [:]
     if let value = sanitized(draft.institution) { payload["institution"] = value }
@@ -231,7 +206,6 @@ private func encodeEducation(_ draft: EducationExperienceDraft) -> [String: Any]
     if courses.isEmpty == false { payload["courses"] = courses }
     return payload
 }
-
 private func encodeProject(_ draft: ProjectExperienceDraft) -> [String: Any] {
     var payload: [String: Any] = [:]
     if let value = sanitized(draft.name) { payload["name"] = value }
@@ -249,7 +223,6 @@ private func encodeProject(_ draft: ProjectExperienceDraft) -> [String: Any] {
     if roles.isEmpty == false { payload["roles"] = roles }
     return payload
 }
-
 private func encodeSkill(_ draft: SkillExperienceDraft) -> [String: Any] {
     var payload: [String: Any] = [:]
     if let value = sanitized(draft.name) { payload["name"] = value }
@@ -258,7 +231,6 @@ private func encodeSkill(_ draft: SkillExperienceDraft) -> [String: Any] {
     if keywords.isEmpty == false { payload["keywords"] = keywords }
     return payload
 }
-
 private func encodeAward(_ draft: AwardExperienceDraft) -> [String: Any] {
     var payload: [String: Any] = [:]
     if let value = sanitized(draft.title) { payload["title"] = value }
@@ -267,7 +239,6 @@ private func encodeAward(_ draft: AwardExperienceDraft) -> [String: Any] {
     if let value = sanitized(draft.summary) { payload["summary"] = value }
     return payload
 }
-
 private func encodeCertificate(_ draft: CertificateExperienceDraft) -> [String: Any] {
     var payload: [String: Any] = [:]
     if let value = sanitized(draft.name) { payload["name"] = value }
@@ -276,7 +247,6 @@ private func encodeCertificate(_ draft: CertificateExperienceDraft) -> [String: 
     if let value = sanitized(draft.url) { payload["url"] = value }
     return payload
 }
-
 private func encodePublication(_ draft: PublicationExperienceDraft) -> [String: Any] {
     var payload: [String: Any] = [:]
     if let value = sanitized(draft.name) { payload["name"] = value }
@@ -286,14 +256,12 @@ private func encodePublication(_ draft: PublicationExperienceDraft) -> [String: 
     if let value = sanitized(draft.summary) { payload["summary"] = value }
     return payload
 }
-
 private func encodeLanguage(_ draft: LanguageExperienceDraft) -> [String: Any] {
     var payload: [String: Any] = [:]
     if let value = sanitized(draft.language) { payload["language"] = value }
     if let value = sanitized(draft.fluency) { payload["fluency"] = value }
     return payload
 }
-
 private func encodeInterest(_ draft: InterestExperienceDraft) -> [String: Any] {
     var payload: [String: Any] = [:]
     if let value = sanitized(draft.name) { payload["name"] = value }
@@ -301,7 +269,6 @@ private func encodeInterest(_ draft: InterestExperienceDraft) -> [String: Any] {
     if keywords.isEmpty == false { payload["keywords"] = keywords }
     return payload
 }
-
 private func encodeReference(_ draft: ReferenceExperienceDraft) -> [String: Any] {
     var payload: [String: Any] = [:]
     if let value = sanitized(draft.name) { payload["name"] = value }
@@ -309,7 +276,6 @@ private func encodeReference(_ draft: ReferenceExperienceDraft) -> [String: Any]
     if let value = sanitized(draft.url) { payload["url"] = value }
     return payload
 }
-
 // MARK: - Decoding helpers
 private func decodeWork(_ json: JSON) -> WorkExperienceDraft {
     var draft = WorkExperienceDraft()
@@ -327,7 +293,6 @@ private func decodeWork(_ json: JSON) -> WorkExperienceDraft {
     }
     return draft
 }
-
 private func decodeVolunteer(_ json: JSON) -> VolunteerExperienceDraft {
     var draft = VolunteerExperienceDraft()
     draft.organization = json["organization"].stringValue.trimmed()
@@ -343,7 +308,6 @@ private func decodeVolunteer(_ json: JSON) -> VolunteerExperienceDraft {
     }
     return draft
 }
-
 private func decodeEducation(_ json: JSON) -> EducationExperienceDraft {
     var draft = EducationExperienceDraft()
     draft.institution = json["institution"].stringValue.trimmed()
@@ -360,7 +324,6 @@ private func decodeEducation(_ json: JSON) -> EducationExperienceDraft {
     }
     return draft
 }
-
 private func decodeProject(_ json: JSON) -> ProjectExperienceDraft {
     var draft = ProjectExperienceDraft()
     draft.name = json["name"].stringValue.trimmed()
@@ -379,7 +342,6 @@ private func decodeProject(_ json: JSON) -> ProjectExperienceDraft {
     draft.roles = json["roles"].arrayValue.map(makeRole)
     return draft
 }
-
 private func decodeSkill(_ json: JSON) -> SkillExperienceDraft {
     var draft = SkillExperienceDraft()
     draft.name = json["name"].stringValue.trimmed()
@@ -387,7 +349,6 @@ private func decodeSkill(_ json: JSON) -> SkillExperienceDraft {
     draft.keywords = json["keywords"].arrayValue.map(makeKeyword)
     return draft
 }
-
 private func decodeAward(_ json: JSON) -> AwardExperienceDraft {
     var draft = AwardExperienceDraft()
     draft.title = json["title"].stringValue.trimmed()
@@ -396,7 +357,6 @@ private func decodeAward(_ json: JSON) -> AwardExperienceDraft {
     draft.summary = json["summary"].stringValue
     return draft
 }
-
 private func decodeCertificate(_ json: JSON) -> CertificateExperienceDraft {
     var draft = CertificateExperienceDraft()
     draft.name = json["name"].stringValue.trimmed()
@@ -405,7 +365,6 @@ private func decodeCertificate(_ json: JSON) -> CertificateExperienceDraft {
     draft.url = json["url"].stringValue.trimmed()
     return draft
 }
-
 private func decodePublication(_ json: JSON) -> PublicationExperienceDraft {
     var draft = PublicationExperienceDraft()
     draft.name = json["name"].stringValue.trimmed()
@@ -415,21 +374,18 @@ private func decodePublication(_ json: JSON) -> PublicationExperienceDraft {
     draft.summary = json["summary"].stringValue
     return draft
 }
-
 private func decodeLanguage(_ json: JSON) -> LanguageExperienceDraft {
     var draft = LanguageExperienceDraft()
     draft.language = json["language"].stringValue.trimmed()
     draft.fluency = json["fluency"].stringValue.trimmed()
     return draft
 }
-
 private func decodeInterest(_ json: JSON) -> InterestExperienceDraft {
     var draft = InterestExperienceDraft()
     draft.name = json["name"].stringValue.trimmed()
     draft.keywords = json["keywords"].arrayValue.map(makeKeyword)
     return draft
 }
-
 private func decodeReference(_ json: JSON) -> ReferenceExperienceDraft {
     var draft = ReferenceExperienceDraft()
     draft.name = json["name"].stringValue.trimmed()
@@ -437,19 +393,16 @@ private func decodeReference(_ json: JSON) -> ReferenceExperienceDraft {
     draft.url = json["url"].stringValue.trimmed()
     return draft
 }
-
 private func makeKeyword(_ json: JSON) -> KeywordDraft {
     var keyword = KeywordDraft()
     keyword.keyword = json.stringValue.trimmed()
     return keyword
 }
-
 private func makeRole(_ json: JSON) -> RoleDraft {
     var role = RoleDraft()
     role.role = json.stringValue.trimmed()
     return role
 }
-
 private func sanitized(_ raw: String) -> String? {
     let trimmed = raw.trimmed()
     return trimmed.isEmpty ? nil : trimmed

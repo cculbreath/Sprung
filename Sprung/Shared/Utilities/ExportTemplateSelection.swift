@@ -5,16 +5,13 @@
 //  Encapsulates alerts and file pickers used during export to keep UI logic
 //  separate from service orchestration.
 //
-
 import AppKit
 import UniformTypeIdentifiers
 import Foundation
-
 enum ExportTemplateSelectionError: Error {
     case userCancelled
     case failedToReadFile
 }
-
 struct ExportTemplateSelection {
     /// Show an alert for missing template and prompt the user to select template files.
     /// - Returns: HTML content and optional CSS content
@@ -27,7 +24,6 @@ struct ExportTemplateSelection {
         alert.addButton(withTitle: "Cancel")
         alert.alertStyle = .informational
         guard alert.runModal() == .alertFirstButtonReturn else { throw ExportTemplateSelectionError.userCancelled }
-
         // Pick HTML template
         let htmlPanel = NSOpenPanel()
         htmlPanel.title = "Select HTML Template"
@@ -36,7 +32,6 @@ struct ExportTemplateSelection {
         htmlPanel.allowsMultipleSelection = false
         guard htmlPanel.runModal() == .OK, let htmlURL = htmlPanel.url else { throw ExportTemplateSelectionError.userCancelled }
         guard let htmlContent = try? String(contentsOf: htmlURL, encoding: .utf8) else { throw ExportTemplateSelectionError.failedToReadFile }
-
         // Ask about CSS
         let cssAlert = NSAlert()
         cssAlert.messageText = "CSS File"

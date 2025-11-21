@@ -4,12 +4,9 @@
 //
 //  Created by Christopher Culbreath on 9/1/24.
 //
-
 import SwiftUI
-
 struct JobAppPostingDetailsSection: View {
     @Binding var buttons: SaveButtons
-
     var body: some View {
         Section {
             Cell(

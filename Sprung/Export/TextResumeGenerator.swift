@@ -2,15 +2,12 @@
 //  TextResumeGenerator.swift
 //  Sprung
 //
-
 import Foundation
 import Mustache
-
 /// Handles generation of plain text resumes from Resume data
 @MainActor
 class TextResumeGenerator {
     private let templateStore: TemplateStore
-
     init(templateStore: TemplateStore) {
         self.templateStore = templateStore
     }
@@ -33,7 +30,6 @@ class TextResumeGenerator {
         
         let translation = HandlebarsTranslator.translate(templateContent)
         logTranslationWarnings(translation.warnings, template: template)
-
         // Render with Mustache
         let mustacheTemplate = try Mustache.Template(string: translation.template)
         TemplateFilters.register(on: mustacheTemplate)
@@ -42,11 +38,9 @@ class TextResumeGenerator {
     
     private func loadTextTemplate(named template: String) throws -> String {
         var templateContent: String?
-
         if let stored = templateStore.textTemplateContent(slug: template.lowercased()) {
             templateContent = stored
         }
-
         guard let content = templateContent else {
             throw NSError(domain: "TextResumeGenerator", code: 404, 
                          userInfo: [NSLocalizedDescriptionKey: "Template not found: \(template)"])
@@ -86,13 +80,11 @@ class TextResumeGenerator {
             processed["contactItems"] = contactItems
             processed["contactLine"] = contactItems.joined(separator: " • ")
         }
-
         // Convert employment data to array preserving order
         if let employment = processed["employment"] as? [String: Any] {
             let employmentArray = convertEmploymentToArray(employment, from: resume)
             processed["employment"] = employmentArray
         }
-
         // Ensure skills are represented as an array of dictionaries
         if let skillsDict = processed["skills-and-expertise"] as? [String: Any] {
             var skillsArray: [[String: Any]] = []
@@ -117,14 +109,12 @@ class TextResumeGenerator {
             }
             processed["education"] = educationArray
         }
-
         if let moreInfo = processed["more-info"] as? String {
             let cleaned = moreInfo
                 .replacingOccurrences(of: #"<\/?[^>]+(>|$)|↪︎"#, with: "", options: .regularExpression)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             processed["more-info"] = cleaned
         }
-
         return processed
     }
     
@@ -165,7 +155,6 @@ class TextResumeGenerator {
             return detailsDict
         }
     }
-
     private func appendIfPresent(_ value: Any?, to array: inout [String]) {
         guard let value else { return }
         if let string = value as? String {
@@ -177,7 +166,6 @@ class TextResumeGenerator {
             array.append(number.stringValue)
         }
     }
-
     private func normalizeLocation(in dict: inout [String: Any]) {
         if let locationDict = dict["location"] as? [String: Any] {
             let city = (locationDict["city"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -192,7 +180,6 @@ class TextResumeGenerator {
             dict["location"] = cleaned.isEmpty ? nil : cleaned
         }
     }
-
     private func logTranslationWarnings(_ warnings: [String], template: String) {
         guard warnings.isEmpty == false else { return }
         for warning in warnings {

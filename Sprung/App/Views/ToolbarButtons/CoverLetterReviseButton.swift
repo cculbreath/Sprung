@@ -1,6 +1,5 @@
 // Sprung/App/Views/ToolbarButtons/CoverLetterReviseButton.swift
 import SwiftUI
-
 struct CoverLetterReviseButton: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore

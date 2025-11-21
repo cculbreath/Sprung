@@ -1,17 +1,14 @@
 import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
-
 struct OnboardingInterviewInteractiveCard: View {
     @Bindable var coordinator: OnboardingInterviewCoordinator
     @Bindable var state: OnboardingInterviewViewModel
     let modelStatusDescription: String
     let onOpenSettings: () -> Void
     @State private var isToolPaneOccupied = false
-
     var body: some View {
         let cornerRadius: CGFloat = 28  // Reduced for more natural appearance
-
         return HStack(spacing: 0) {
             OnboardingInterviewToolPane(
                 coordinator: coordinator,
@@ -19,9 +16,7 @@ struct OnboardingInterviewInteractiveCard: View {
             )
             .frame(minWidth: 340, maxWidth: 420)
             .frame(maxHeight: .infinity, alignment: .topLeading)
-
             Divider()
-
             OnboardingInterviewChatPanel(
                 coordinator: coordinator,
                 state: state,

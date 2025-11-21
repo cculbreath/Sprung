@@ -4,16 +4,13 @@
 //
 //  Created by Christopher Culbreath on 9/1/24.
 //
-
 import SwiftData
 import SwiftUI
-
 struct HeaderView: View {
     @Binding var showingDeleteConfirmation: Bool
     @Binding var buttons: SaveButtons
     @Binding var tab: TabList
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore // Explicit type
-
     var body: some View {
         HStack {
             Spacer()

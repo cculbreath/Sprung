@@ -2,11 +2,9 @@
 //  LinkedInLoginView.swift
 //  Sprung
 //
-
 import SwiftUI
 import WebKit
 import ObjectiveC
-
 /// Interactive LinkedIn login view that handles Google SSO and other authentication methods
 struct LinkedInLoginView: NSViewRepresentable {
     @Binding var isPresented: Bool
@@ -45,7 +43,6 @@ struct LinkedInLoginView: NSViewRepresentable {
     
     class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         var parent: LinkedInLoginView
-
         init(parent: LinkedInLoginView) {
             self.parent = parent
         }
@@ -398,7 +395,6 @@ struct LinkedInLoginView: NSViewRepresentable {
         }
     }
 }
-
 // MARK: - LinkedIn Login Sheet
 struct LinkedInLoginSheet: View {
     @Binding var isPresented: Bool
@@ -504,7 +500,6 @@ struct LinkedInLoginSheet: View {
         }
     }
 }
-
 // MARK: - LinkedIn Session Status View
 struct LinkedInSessionStatusView: View {
     @ObservedObject var sessionManager: LinkedInSessionManager

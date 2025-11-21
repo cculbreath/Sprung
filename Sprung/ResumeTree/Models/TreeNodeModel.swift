@@ -1,8 +1,6 @@
 // Sprung/ResumeTree/Models/TreeNodeModel.swift
-
 import Foundation
 import SwiftData
-
 enum LeafStatus: String, Codable, Hashable {
     case isEditing
     case aiToReplace
@@ -10,7 +8,6 @@ enum LeafStatus: String, Codable, Hashable {
     case saved = "leafValueSaved"
     case isNotLeaf = "nodeIsNotLeaf"
 }
-
 @Model class TreeNode: Identifiable {
     var id = UUID().uuidString
     var name: String = ""
@@ -31,7 +28,6 @@ enum LeafStatus: String, Codable, Hashable {
     var depth: Int = 0
     /// Presentation depth derived from `viewChildren` hierarchy.
     var viewDepth: Int = 0
-
     // Schema metadata (optional, derived from manifest descriptors)
     var schemaKey: String?
     var schemaInputKindRaw: String?
@@ -65,28 +61,22 @@ enum LeafStatus: String, Codable, Hashable {
     var schemaAllowsNodeDeletion: Bool = false
     /// When true, the node is hidden in the editor but its children should be surfaced as if they belonged to the parent.
     var editorTransparent: Bool = false
-
     // This property should be explicitly set when a node is created or its role changes.
     // It's not reliably computable based on name/value alone.
     // For the "Fix Overflow" feature, we will pass this to the LLM and expect it back.
     var isTitleNode: Bool = false
-
     var hasChildren: Bool {
         return !(children?.isEmpty ?? true)
     }
-
     var schemaInputKind: TemplateManifest.Section.FieldDescriptor.InputKind? {
         schemaInputKindRaw.flatMap { TemplateManifest.Section.FieldDescriptor.InputKind(rawValue: $0) }
     }
-
     var orderedChildren: [TreeNode] {
         (children ?? []).sorted { $0.myIndex < $1.myIndex }
     }
-
     var orderedViewChildren: [TreeNode] {
         (viewChildren ?? []).sorted { $0.myIndex < $1.myIndex }
     }
-
     var aiStatusChildren: Int {
         var count = 0
         if status == .aiToReplace {
@@ -99,7 +89,6 @@ enum LeafStatus: String, Codable, Hashable {
         }
         return count
     }
-
     init(
         name: String, value: String = "", children: [TreeNode]? = nil,
         parent: TreeNode? = nil, inEditor: Bool, status: LeafStatus = LeafStatus.disabled,
@@ -116,7 +105,6 @@ enum LeafStatus: String, Codable, Hashable {
         self.resume = resume
         self.isTitleNode = isTitleNode // Initialize isTitleNode
     }
-
     @discardableResult
     func addChild(_ child: TreeNode) -> TreeNode {
         if children == nil {
@@ -133,13 +121,11 @@ enum LeafStatus: String, Codable, Hashable {
         children?.append(child)
         return child
     }
-
     static func traverseAndExportNodes(node: TreeNode, currentPath _: String = "")
         -> [[String: Any]]
     {
         var result: [[String: Any]] = []
         let newPath = node.buildTreePath() // Use the instance method
-
         // Export node if it's marked for AI replacement OR if it's a title node (even if not for replacement, LLM might need context)
         // For "Fix Overflow", we are specifically interested in nodes from the "Skills & Expertise" section,
         // which will be filtered by the caller (extractSkillsForLLM in ResumeReviewService).
@@ -156,7 +142,6 @@ enum LeafStatus: String, Codable, Hashable {
                 ]
                 result.append(titleNodeData)
             }
-
             // Then, handle value node content if present
             if !node.value.isEmpty { // Always export value field as a content node if it's not empty
                 let valueNodeData: [String: Any] = [
@@ -169,7 +154,6 @@ enum LeafStatus: String, Codable, Hashable {
                 result.append(valueNodeData)
             }
         }
-
         // Force load children to ensure SwiftData loads the relationship
         let childNodes = node.children ?? []
         for child in childNodes {
@@ -178,7 +162,6 @@ enum LeafStatus: String, Codable, Hashable {
         }
         return result
     }
-
     static func deleteTreeNode(node: TreeNode, context: ModelContext) {
         guard node.allowsDeletion else {
             Logger.warning("🚫 Prevented deletion of node '\(node.name)' without manifest permission.")
@@ -193,7 +176,6 @@ enum LeafStatus: String, Codable, Hashable {
         context.delete(node)
         // Note: save() is not called here to allow for batch operations
     }
-
     /// Builds the hierarchical path string for this node.
     /// Example: "Resume > Skills and Expertise > Software > Swift"
     func buildTreePath() -> String {
@@ -215,7 +197,6 @@ enum LeafStatus: String, Codable, Hashable {
         return pathComponents.joined(separator: " > ")
     }
 }
-
 extension TreeNode {
     func applyDescriptor(_ descriptor: TemplateManifest.Section.FieldDescriptor?) {
         schemaKey = descriptor?.key
@@ -226,7 +207,6 @@ extension TreeNode {
         schemaTitleTemplate = descriptor?.titleTemplate
         schemaAllowsChildMutation = descriptor?.allowsManualMutations ?? false
         schemaAllowsNodeDeletion = descriptor?.allowsManualMutations ?? false
-
         if let validation = descriptor?.validation {
             schemaValidationRule = validation.rule.rawValue
             schemaValidationMessage = validation.message
@@ -244,7 +224,6 @@ extension TreeNode {
         }
     }
 }
-
 // MARK: - Schema convenience -------------------------------------------------
 extension TreeNode {
     func copySchemaMetadata(from source: TreeNode) {
@@ -264,7 +243,6 @@ extension TreeNode {
         schemaAllowsChildMutation = source.schemaAllowsChildMutation
         schemaAllowsNodeDeletion = source.schemaAllowsNodeDeletion
     }
-
     func makeTemplateClone(for resume: Resume) -> TreeNode {
         let baseName: String
         if let titleTemplate = schemaTitleTemplate, titleTemplate.isEmpty == false {
@@ -276,7 +254,6 @@ extension TreeNode {
         } else {
             baseName = name
         }
-
         let clone = TreeNode(
             name: baseName,
             value: "",
@@ -287,10 +264,8 @@ extension TreeNode {
             resume: resume,
             isTitleNode: isTitleNode
         )
-
         clone.editorTransparent = editorTransparent
         clone.copySchemaMetadata(from: self)
-
         if !hasChildren {
             if let placeholder = schemaPlaceholder, placeholder.isEmpty == false {
                 clone.value = placeholder
@@ -298,15 +273,12 @@ extension TreeNode {
                 clone.value = ""
             }
         }
-
         for child in orderedChildren {
             let childClone = child.makeTemplateClone(for: resume)
             clone.addChild(childClone)
         }
-
         return clone
     }
-
     /// Determines whether the node's label ("name") should be editable in the UI.
     /// Manifest-backed nodes typically provide explicit titles, so we hide the name field
     /// unless the node lacks schema metadata.
@@ -321,16 +293,13 @@ extension TreeNode {
         if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return false }
         return true
     }
-
     var allowsChildAddition: Bool {
         schemaAllowsChildMutation
     }
-
     var allowsDeletion: Bool {
         schemaAllowsNodeDeletion || (parent?.schemaAllowsChildMutation ?? false)
     }
 }
-
 // MARK: - JSON Conversion Extension
 extension TreeNode {
     /// Convert TreeNode to JSON string representation
@@ -344,7 +313,6 @@ extension TreeNode {
             return nil
         }
     }
-
     /// Convert TreeNode to dictionary for JSON serialization
     private func toDictionary() -> [String: Any] {
         var dict: [String: Any] = [
@@ -354,11 +322,9 @@ extension TreeNode {
             "includeInEditor": includeInEditor,
             "myIndex": myIndex
         ]
-
         if let children = children, !children.isEmpty {
             dict["children"] = children.map { $0.toDictionary() }
         }
-
         return dict
     }
 }

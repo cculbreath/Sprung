@@ -4,19 +4,15 @@
 //
 //  Keychain-backed storage for API keys.
 //
-
 import Foundation
 import Security
-
 enum APIKeyType: String {
     case openRouter = "openRouterApiKey"
     case openAI = "openAiApiKey"
     case scrapingDog = "scrapingDogApiKey"
 }
-
 struct APIKeyManager {
     private static let service = Bundle.main.bundleIdentifier ?? "physicscloud.Sprung"
-
     static func get(_ type: APIKeyType) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -32,17 +28,14 @@ struct APIKeyManager {
         }
         return nil
     }
-
     @discardableResult
     static func set(_ type: APIKeyType, value: String) -> Bool {
         guard let data = value.data(using: .utf8) else { return false }
-
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: type.rawValue,
         ]
-
         // Update if exists
         let updateAttrs: [String: Any] = [
             kSecValueData as String: data,
@@ -56,7 +49,6 @@ struct APIKeyManager {
         }
         return status == errSecSuccess
     }
-
     static func delete(_ type: APIKeyType) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -65,5 +57,4 @@ struct APIKeyManager {
         ]
         SecItemDelete(query as CFDictionary)
     }
-
 }

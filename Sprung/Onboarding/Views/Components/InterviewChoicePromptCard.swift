@@ -1,35 +1,27 @@
 import SwiftUI
-
 struct InterviewChoicePromptCard: View {
     let prompt: OnboardingChoicePrompt
     let onSubmit: ([String]) -> Void
     let onCancel: () -> Void
-
     @State private var singleSelection: String?
     @State private var multiSelection: Set<String> = []
-
     private var isSingleSelection: Bool {
         prompt.selectionStyle == .single
     }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(prompt.prompt)
                 .font(.headline)
                 .frame(maxWidth: .infinity, alignment: .leading)
-
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(prompt.options) { option in
                     choiceRow(for: option)
                 }
             }
-
             HStack {
                 Button("Cancel", action: onCancel)
                     .buttonStyle(.bordered)
-
                 Spacer()
-
                 Button("Continue") {
                     let selections = isSingleSelection ? [singleSelection].compactMap { $0 } : Array(multiSelection)
                     guard !selections.isEmpty else { return }
@@ -56,7 +48,6 @@ struct InterviewChoicePromptCard: View {
             }
         }
     }
-
     @ViewBuilder
     private func choiceRow(for option: OnboardingChoiceOption) -> some View {
         let isSelected = selectionState(for: option.id)
@@ -91,7 +82,6 @@ struct InterviewChoicePromptCard: View {
         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .accessibilityAddTraits(.isButton)
     }
-
     private func selectionState(for optionId: String) -> Bool {
         switch prompt.selectionStyle {
         case .single:
@@ -100,7 +90,6 @@ struct InterviewChoicePromptCard: View {
             return multiSelection.contains(optionId)
         }
     }
-
     private func toggleSelection(for optionId: String) {
         switch prompt.selectionStyle {
         case .single:
@@ -113,7 +102,6 @@ struct InterviewChoicePromptCard: View {
             }
         }
     }
-
     private func iconName(isSelected: Bool) -> String {
         switch prompt.selectionStyle {
         case .single:

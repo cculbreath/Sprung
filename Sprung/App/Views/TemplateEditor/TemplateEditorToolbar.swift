@@ -1,5 +1,4 @@
 import SwiftUI
-
 struct TemplateEditorToolbar: CustomizableToolbarContent {
     @Binding var showSidebar: Bool
     var hasUnsavedChanges: Bool
@@ -9,7 +8,6 @@ struct TemplateEditorToolbar: CustomizableToolbarContent {
     var onCloseWithoutSaving: () -> Void
     var onRevert: () -> Void
     var onSaveAndClose: () -> Void
-
     var body: some CustomizableToolbarContent {
         navigationItems
         applicantItem
@@ -18,7 +16,6 @@ struct TemplateEditorToolbar: CustomizableToolbarContent {
         revertItem
         saveItem
     }
-
     private var navigationItems: some CustomizableToolbarContent {
         ToolbarItem(id: "toggleSidebar", placement: .navigation, showsByDefault: true) {
             Button(action: onToggleSidebar) {
@@ -29,7 +26,6 @@ struct TemplateEditorToolbar: CustomizableToolbarContent {
             .help(showSidebar ? "Hide Sidebar" : "Show Sidebar")
         }
     }
-
     private var applicantItem: some CustomizableToolbarContent {
         ToolbarItem(id: "applicantProfile", placement: .navigation, showsByDefault: true) {
             Button(action: onOpenApplicant) {
@@ -38,7 +34,6 @@ struct TemplateEditorToolbar: CustomizableToolbarContent {
             .help("Open Applicant Profile Editor")
         }
     }
-
     private var experienceItem: some CustomizableToolbarContent {
         ToolbarItem(id: "experienceEditor", placement: .navigation, showsByDefault: true) {
             Button(action: onOpenExperience) {
@@ -47,7 +42,6 @@ struct TemplateEditorToolbar: CustomizableToolbarContent {
             .help("Open Experience Editor")
         }
     }
-
     private var closeWithoutSavingItem: some CustomizableToolbarContent {
         ToolbarItem(id: "closeWithoutSaving", placement: .cancellationAction, showsByDefault: true) {
             Button(action: onCloseWithoutSaving) {
@@ -56,7 +50,6 @@ struct TemplateEditorToolbar: CustomizableToolbarContent {
             .help("Close editor and discard unsaved edits")
         }
     }
-
     private var revertItem: some CustomizableToolbarContent {
         ToolbarItem(id: "revertAll", placement: .primaryAction, showsByDefault: true) {
             Button(action: onRevert) {
@@ -66,7 +59,6 @@ struct TemplateEditorToolbar: CustomizableToolbarContent {
             .help("Revert all changes to last saved state")
         }
     }
-
     private var saveItem: some CustomizableToolbarContent {
         ToolbarItem(id: "saveAndClose", placement: .confirmationAction, showsByDefault: true) {
             Button(action: onSaveAndClose) {

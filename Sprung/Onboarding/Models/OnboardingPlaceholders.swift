@@ -5,16 +5,13 @@
 //  Minimal data models to support the onboarding interview UI during the M0
 //  skeleton milestone. These will be expanded in later milestones.
 //
-
 import Foundation
 import SwiftyJSON
-
 enum OnboardingMessageRole: String, Codable {
     case user
     case assistant
     case system
 }
-
 struct OnboardingMessage: Identifiable, Codable {
     let id: UUID
     let role: OnboardingMessageRole
@@ -22,13 +19,11 @@ struct OnboardingMessage: Identifiable, Codable {
     let timestamp: Date
     let isSystemGenerated: Bool  // True for app-generated trigger messages
     var toolCalls: [ToolCallInfo]?  // Tool calls made in this message (for assistant messages)
-
     struct ToolCallInfo: Codable {
         let id: String
         let name: String
         let arguments: String
     }
-
     init(
         id: UUID = UUID(),
         role: OnboardingMessageRole,
@@ -45,26 +40,22 @@ struct OnboardingMessage: Identifiable, Codable {
         self.toolCalls = toolCalls
     }
 }
-
 enum OnboardingSelectionStyle: String, Codable {
     case single
     case multiple
 }
-
 struct OnboardingChoiceOption: Identifiable, Codable {
     let id: String
     let title: String
     let detail: String?
     let icon: String?
 }
-
 struct OnboardingChoicePrompt: Identifiable, Codable {
     let id: UUID
     let prompt: String
     let options: [OnboardingChoiceOption]
     let selectionStyle: OnboardingSelectionStyle
     let required: Bool
-
     init(
         id: UUID = UUID(),
         prompt: String,
@@ -79,7 +70,6 @@ struct OnboardingChoicePrompt: Identifiable, Codable {
         self.required = required
     }
 }
-
 enum OnboardingWizardStep: String, CaseIterable, Hashable, Codable {
     case introduction
     case resumeIntake
@@ -87,13 +77,11 @@ enum OnboardingWizardStep: String, CaseIterable, Hashable, Codable {
     case writingCorpus
     case wrapUp
 }
-
 enum OnboardingWizardStepStatus: String, Codable {
     case pending
     case current
     case completed
 }
-
 extension OnboardingWizardStep {
     var title: String {
         switch self {
@@ -110,17 +98,14 @@ extension OnboardingWizardStep {
         }
     }
 }
-
 struct OnboardingQuestion: Identifiable, Codable {
     let id: UUID
     let text: String
-
     init(id: UUID = UUID(), text: String) {
         self.id = id
         self.text = text
     }
 }
-
 struct OnboardingUploadMetadata: Codable {
     var title: String
     var instructions: String
@@ -133,7 +118,6 @@ struct OnboardingUploadMetadata: Codable {
     var targetDeliverable: String?
     var userValidated: Bool?
 }
-
 enum OnboardingUploadKind: String, CaseIterable, Codable {
     case resume
     case linkedIn
@@ -145,26 +129,22 @@ enum OnboardingUploadKind: String, CaseIterable, Codable {
     case transcript
     case certificate
 }
-
 struct OnboardingUploadRequest: Identifiable, Codable {
     let id: UUID
     let kind: OnboardingUploadKind
     let metadata: OnboardingUploadMetadata
-
     init(id: UUID = UUID(), kind: OnboardingUploadKind, metadata: OnboardingUploadMetadata) {
         self.id = id
         self.kind = kind
         self.metadata = metadata
     }
 }
-
 struct OnboardingUploadedItem: Identifiable, Codable {
     let id: UUID
     let filename: String
     let url: URL
     let uploadedAt: Date
 }
-
 
 
 struct OnboardingApplicantProfileIntakeState: Equatable {
@@ -174,17 +154,14 @@ struct OnboardingApplicantProfileIntakeState: Equatable {
         case manual(source: Source)
         case urlEntry
     }
-
     enum Source: Equatable {
         case manual
         case contacts
     }
-
     var mode: Mode
     var draft: ApplicantProfileDraft
     var urlString: String
     var errorMessage: String?
-
     static func options() -> OnboardingApplicantProfileIntakeState {
         OnboardingApplicantProfileIntakeState(
             mode: .options,
@@ -194,7 +171,6 @@ struct OnboardingApplicantProfileIntakeState: Equatable {
         )
     }
 }
-
 struct OnboardingPhaseAdvanceRequest: Identifiable {
     var id: UUID
     var currentPhase: InterviewPhase
@@ -202,7 +178,6 @@ struct OnboardingPhaseAdvanceRequest: Identifiable {
     var missingObjectives: [String]
     var reason: String?
     var proposedOverrides: [String]
-
     init(
         id: UUID = UUID(),
         currentPhase: InterviewPhase,
@@ -219,7 +194,6 @@ struct OnboardingPhaseAdvanceRequest: Identifiable {
         self.proposedOverrides = proposedOverrides
     }
 }
-
 /// Tracks which type of card is currently visible in the ToolPane
 enum OnboardingToolPaneCard: String, Codable {
     case none
@@ -232,19 +206,16 @@ enum OnboardingToolPaneCard: String, Codable {
     case editTimelineCards
     case confirmTimelineCards
 }
-
 struct OnboardingValidationPrompt: Identifiable, Codable {
     enum Mode: String, Codable {
         case editor      // Editor UI (Save button, no waiting state, tools allowed)
         case validation  // Validation UI (Approve/Reject buttons, waiting state, tools blocked)
     }
-
     var id: UUID
     var dataType: String
     var payload: JSON
     var message: String?
     var mode: Mode
-
     init(id: UUID = UUID(), dataType: String, payload: JSON, message: String?, mode: Mode = .validation) {
         self.id = id
         self.dataType = dataType
@@ -253,23 +224,19 @@ struct OnboardingValidationPrompt: Identifiable, Codable {
         self.mode = mode
     }
 }
-
 struct OnboardingApplicantProfileRequest {
     var proposedProfile: JSON
     var sources: [String]
-
     init(proposedProfile: JSON, sources: [String] = []) {
         self.proposedProfile = proposedProfile
         self.sources = sources
     }
 }
-
 struct OnboardingSectionToggleRequest {
     var id: UUID
     var proposedSections: [String]
     var availableSections: [String]
     var rationale: String?
-
     init(
         id: UUID = UUID(),
         proposedSections: [String] = [],
@@ -281,7 +248,6 @@ struct OnboardingSectionToggleRequest {
         self.availableSections = Self.normalizedIdentifiers(from: availableSections)
         self.rationale = rationale
     }
-
     private static func normalizedIdentifiers(from identifiers: [String]) -> [String] {
         var seen: Set<String> = []
         return identifiers.compactMap { identifier in
@@ -289,7 +255,6 @@ struct OnboardingSectionToggleRequest {
         }.filter { seen.insert($0).inserted }
     }
 }
-
 struct OnboardingPendingExtraction: Identifiable {
     var id: UUID
     var title: String
@@ -297,7 +262,6 @@ struct OnboardingPendingExtraction: Identifiable {
     var rawExtraction: JSON
     var uncertainties: [String]
     var progressItems: [ExtractionProgressItem]
-
     init(
         id: UUID = UUID(),
         title: String,
@@ -313,23 +277,19 @@ struct OnboardingPendingExtraction: Identifiable {
         self.uncertainties = uncertainties
         self.progressItems = progressItems.isEmpty ? ExtractionProgressStage.defaultItems() : progressItems
     }
-
     mutating func ensureProgressItems() {
         if progressItems.isEmpty {
             progressItems = ExtractionProgressStage.defaultItems()
         }
     }
-
     mutating func applyProgressUpdate(_ update: ExtractionProgressUpdate) {
         ensureProgressItems()
         guard let index = progressItems.firstIndex(where: { $0.stage == update.stage }) else { return }
-
         if update.state == .active {
             for idx in progressItems.indices where idx != index && progressItems[idx].state == .active {
                 progressItems[idx].state = .completed
             }
         }
-
         if update.state == .completed {
             let targetOrder = update.stage.order
             for idx in progressItems.indices where progressItems[idx].stage.order < targetOrder {
@@ -338,16 +298,13 @@ struct OnboardingPendingExtraction: Identifiable {
                 }
             }
         }
-
         progressItems[index].state = update.state
-
         if let detail = update.detail?.trimmingCharacters(in: .whitespacesAndNewlines), !detail.isEmpty {
             progressItems[index].detail = detail
         } else if update.state == .pending {
             progressItems[index].detail = nil
         }
     }
-
     mutating func applyProgressUpdates(_ updates: [ExtractionProgressUpdate]) {
         updates.forEach { applyProgressUpdate($0) }
     }

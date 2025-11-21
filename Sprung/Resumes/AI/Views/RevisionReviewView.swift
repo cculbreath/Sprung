@@ -5,11 +5,9 @@
 //  Created by Christopher Culbreath on 9/9/24.
 //  Refactored on 6/19/25 - Enhanced for professional, polished appearance
 //
-
 import SwiftData
 import SwiftUI
 import AppKit
-
 /// Clean, focused view for reviewing AI revision proposals with a professional, polished UI
 /// All business logic delegated to ResumeReviseViewModel and enhanced node classes
 struct RevisionReviewView: View {
@@ -33,7 +31,6 @@ struct RevisionReviewView: View {
         let model = viewModel.openRouterService.findModel(id: modelId)
         return model?.supportsReasoning ?? false
     }
-
     var body: some View {
         VStack(spacing: 0) {
             if let resume = resume {
@@ -86,7 +83,6 @@ struct RevisionReviewView: View {
                                     insertion: .move(edge: .trailing).combined(with: .opacity),
                                     removal: .move(edge: .leading).combined(with: .opacity)
                                 ))
-
                                 // Content panels
                                 RevisionComparisonPanels(
                                     revisionNode: currentRevisionNode,
@@ -102,7 +98,6 @@ struct RevisionReviewView: View {
                                     insertion: .move(edge: .trailing).combined(with: .opacity),
                                     removal: .move(edge: .leading).combined(with: .opacity)
                                 ))
-
                                 // Action buttons
                                 RevisionActionButtons(viewModel: viewModel, resume: resume)
                                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -163,13 +158,11 @@ struct RevisionReviewView: View {
         }
         .frame(maxWidth: 860)
     }
-
     // MARK: - View Setup and Cleanup
     private func setupView(for resume: Resume) {
         viewModel.initializeUpdateNodes(for: resume)
         setupKeyboardShortcuts()
     }
-
     private func setupKeyboardShortcuts() {
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             if event.keyCode == 53 { // Escape key
@@ -179,20 +172,17 @@ struct RevisionReviewView: View {
             return event
         }
     }
-
     private func cleanupEventMonitor() {
         if let monitor = eventMonitor {
             NSEvent.removeMonitor(monitor)
             eventMonitor = nil
         }
     }
-
     private func resetToFirstNode() {
         viewModel.currentRevisionNode = viewModel.resumeRevisions.first
         viewModel.feedbackIndex = 0
         viewModel.feedbackNodes = []
     }
-
     private func closeReview() {
         Logger.debug("🔍 [RevisionReviewView] closeReview() called")
         Logger.debug("🔍 [RevisionReviewView] Current showResumeRevisionSheet: \(viewModel.showResumeRevisionSheet)")
@@ -216,14 +206,12 @@ struct RevisionReviewView: View {
         Logger.debug("🔍 [RevisionReviewView] After setting - showResumeRevisionSheet = \(viewModel.showResumeRevisionSheet)")
     }
 }
-
 // MARK: - Subviews
 struct RevisionReviewHeader: View {
     let currentIndex: Int
     let totalCount: Int
     let onPrevious: (() -> Void)?
     let onNext: (() -> Void)?
-
     var body: some View {
         VStack(spacing: 16) {
             // Icon with modern gradient and subtle animation
@@ -241,7 +229,6 @@ struct RevisionReviewHeader: View {
                     .foregroundStyle(.white)
                     .symbolEffect(.pulse, options: .speed(1.0))
             }
-
             // Title with refined typography
             VStack(spacing: 8) {
                 Text("Review AI Suggestions")
@@ -255,7 +242,6 @@ struct RevisionReviewHeader: View {
                     .background(.secondary.opacity(0.15))
                     .clipShape(Capsule())
             }
-
             // Navigation controls with modern styling
             HStack(spacing: 16) {
                 NavigationButton(
@@ -276,13 +262,11 @@ struct RevisionReviewHeader: View {
         .padding(.horizontal, 20)
     }
 }
-
 struct NavigationButton: View {
     let systemName: String
     let isEnabled: Bool
     let action: () -> Void
     let helpText: String
-
     var body: some View {
         Button(action: action) {
             Image(systemName: systemName)
@@ -303,7 +287,6 @@ struct NavigationButton: View {
         .animation(.easeOut(duration: 0.2), value: isEnabled)
     }
 }
-
 struct RevisionComparisonPanels: View {
     let revisionNode: ProposedRevisionNode
     @Bindable var feedbackNode: FeedbackNode
@@ -313,7 +296,6 @@ struct RevisionComparisonPanels: View {
     @Binding var isEditingResponse: Bool
     @Binding var isCommenting: Bool
     @Binding var isMoreCommenting: Bool
-
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             if revisionNode.valueChanged {
@@ -392,7 +374,6 @@ struct RevisionComparisonPanels: View {
                 }
                 .frame(maxWidth: .infinity)
             }
-
             // Reasoning section for changed values
             if revisionNode.valueChanged && !revisionNode.why.isEmpty {
                 ReasoningPanel(
@@ -407,7 +388,6 @@ struct RevisionComparisonPanels: View {
         .shadow(color: .black.opacity(0.05), radius: 8)
     }
 }
-
 struct ComparisonPanel: View {
     let title: String
     let content: String
@@ -416,7 +396,6 @@ struct ComparisonPanel: View {
     let onEdit: (() -> Void)?
     
     @State private var isHovering = false
-
     init(title: String, content: String, accentColor: Color, showEditButton: Bool = false, onEdit: (() -> Void)? = nil) {
         self.title = title
         self.content = content
@@ -424,7 +403,6 @@ struct ComparisonPanel: View {
         self.showEditButton = showEditButton
         self.onEdit = onEdit
     }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -472,7 +450,6 @@ struct ComparisonPanel: View {
         }
     }
 }
-
 struct UnchangedValuePanel: View {
     let title: String
     let content: String
@@ -480,14 +457,12 @@ struct UnchangedValuePanel: View {
     let onEdit: (() -> Void)?
     
     @State private var isHovering = false
-
     init(title: String, content: String, showEditButton: Bool = false, onEdit: (() -> Void)? = nil) {
         self.title = title
         self.content = content
         self.showEditButton = showEditButton
         self.onEdit = onEdit
     }
-
     var body: some View {
         VStack(alignment: .center, spacing: 8) {
             HStack {
@@ -533,11 +508,9 @@ struct UnchangedValuePanel: View {
         }
     }
 }
-
 struct ReasoningPanel: View {
     let title: String
     let content: String
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -563,14 +536,12 @@ struct ReasoningPanel: View {
         )
     }
 }
-
 struct EditableComparisonPanel: View {
     let title: String
     @Binding var content: String
     let accentColor: Color
     let onSave: () -> Void
     let onCancel: () -> Void
-
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -624,11 +595,9 @@ struct EditableComparisonPanel: View {
         .frame(maxWidth: .infinity)
     }
 }
-
 struct RevisionActionButtons: View {
     @Bindable var viewModel: ResumeReviseViewModel
     let resume: Resume
-
     var body: some View {
         VStack(spacing: 16) {
             // Commenting interface - moved above action buttons
@@ -638,7 +607,6 @@ struct RevisionActionButtons: View {
                     Text("Add your comments for the AI:")
                         .font(.system(.headline, design: .rounded))
                         .foregroundStyle(.primary)
-
                     TextEditor(text: Binding(
                         get: { currentFeedbackNode.reviewerComments },
                         set: { newValue in currentFeedbackNode.reviewerComments = newValue }
@@ -652,7 +620,6 @@ struct RevisionActionButtons: View {
                             .stroke(.blue.opacity(0.3), lineWidth: 1.5)
                     )
                     .cornerRadius(8)
-
                     HStack(spacing: 12) {
                         Button("Submit with Comments") {
                             let response: PostReviewAction = viewModel.isCommenting ? .revise : .mandatedChange
@@ -663,7 +630,6 @@ struct RevisionActionButtons: View {
                         .buttonStyle(.borderedProminent)
                         .tint(.blue)
                         .controlSize(.large)
-
                         Button("Cancel") {
                             viewModel.isCommenting = false
                             viewModel.isMoreCommenting = false
@@ -690,7 +656,6 @@ struct RevisionActionButtons: View {
                 Text("Accept proposed revision?")
                     .font(.system(.title3, design: .rounded, weight: .semibold))
                     .foregroundStyle(.primary)
-
                 HStack(spacing: 16) {
                     ImageButton(
                         systemName: "hand.thumbsdown.circle",
@@ -705,7 +670,6 @@ struct RevisionActionButtons: View {
                         }
                     )
                     .help("Reject Revision with comment")
-
                     ImageButton(
                         systemName: "trash.circle",
                         activeColor: .red,
@@ -718,7 +682,6 @@ struct RevisionActionButtons: View {
                         }
                     )
                     .help("Try again. Reject Revision without comment")
-
                     ImageButton(
                         name: "ai-rejected",
                         imageSize: 40,
@@ -732,7 +695,6 @@ struct RevisionActionButtons: View {
                         }
                     )
                     .help("Restore Original")
-
                     ImageButton(
                         systemName: "pencil.circle",
                         activeColor: .green,
@@ -746,7 +708,6 @@ struct RevisionActionButtons: View {
                         }
                     )
                     .help("Edit Response")
-
                     ImageButton(
                         systemName: "hand.thumbsup.circle",
                         activeColor: .green,
@@ -764,7 +725,6 @@ struct RevisionActionButtons: View {
                 Text("Accept current value?")
                     .font(.system(.title3, design: .rounded, weight: .semibold))
                     .foregroundStyle(.primary)
-
                 HStack(spacing: 16) {
                     ImageButton(
                         systemName: "hand.thumbsdown.circle",
@@ -779,7 +739,6 @@ struct RevisionActionButtons: View {
                         }
                     )
                     .help("Reject with comment")
-
                     ImageButton(
                         systemName: "hand.thumbsup.circle",
                         activeColor: .green,
@@ -794,11 +753,9 @@ struct RevisionActionButtons: View {
                     .help("Accept current value")
                 }
             }
-
         }
         .padding(.vertical, 16)
     }
-
     private var currentRevNode: ProposedRevisionNode? {
         viewModel.currentRevisionNode
     }

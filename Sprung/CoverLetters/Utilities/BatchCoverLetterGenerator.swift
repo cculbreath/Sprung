@@ -1,6 +1,5 @@
 import Foundation
 import SwiftUI
-
 @MainActor
 class BatchCoverLetterGenerator {
     private let coverLetterStore: CoverLetterStore
@@ -8,7 +7,6 @@ class BatchCoverLetterGenerator {
     private let coverLetterService: CoverLetterService
     private let exportCoordinator: ResumeExportCoordinator
     private let applicantProfileStore: ApplicantProfileStore
-
     init(
         coverLetterStore: CoverLetterStore,
         llmFacade: LLMFacade,
@@ -22,11 +20,9 @@ class BatchCoverLetterGenerator {
         self.exportCoordinator = exportCoordinator
         self.applicantProfileStore = applicantProfileStore
     }
-
     private func executeText(_ prompt: String, modelId: String) async throws -> String {
         return try await llmFacade.executeText(prompt: prompt, modelId: modelId, temperature: nil)
     }
-
     private func startConversation(systemPrompt: String?, userMessage: String, modelId: String) async throws -> (UUID, String) {
         return try await llmFacade.startConversation(
             systemPrompt: systemPrompt,
@@ -35,7 +31,6 @@ class BatchCoverLetterGenerator {
             temperature: nil
         )
     }
-
     private func continueConversation(userMessage: String, modelId: String, conversationId: UUID) async throws -> String {
         return try await llmFacade.continueConversation(
             userMessage: userMessage,
@@ -301,7 +296,6 @@ class BatchCoverLetterGenerator {
         
         // Set up mode
         let mode: CoverAiMode = revision != nil ? .rewrite : .generate
-
         // Generate content using direct LLM calls (no temporary CoverLetter objects)
         let responseText: String
         var conversationIdForNewLetter: UUID?
@@ -352,7 +346,6 @@ class BatchCoverLetterGenerator {
             
             let systemPrompt = query.systemPrompt(for: model)
             let userMessage = await query.generationPrompt(includeResumeRefs: baseCoverLetter.includeResumeRefs)
-
             // Check if this is an o1 model that doesn't support system messages
             let isO1Model = coverLetterService.isReasoningModel(model)
             usesReasoningModelForNewLetter = isO1Model
@@ -370,7 +363,6 @@ class BatchCoverLetterGenerator {
                 responseText = initialResponse
             }
         }
-
         // Extract cover letter content from response
         let content = coverLetterService.extractCoverLetterContent(from: responseText)
         
@@ -443,7 +435,6 @@ class BatchCoverLetterGenerator {
         }
     }
 }
-
 // Result type for tracking generation outcomes
 private struct GenerationResult {
     let success: Bool

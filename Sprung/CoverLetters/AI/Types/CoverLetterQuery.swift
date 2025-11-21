@@ -5,10 +5,8 @@
 //  Created on 6/5/2025
 //
 //  Centralized prompt and schema management for cover letter operations
-
 import Foundation
 import SwiftUI
-
 // MARK: - Cover Letter Response Types
 /// Voting scheme for multi-model selection
 enum VotingScheme: String, CaseIterable {
@@ -24,7 +22,6 @@ enum VotingScheme: String, CaseIterable {
         }
     }
 }
-
 /// Score allocation for a single cover letter in score voting
 struct CoverLetterScore: Codable {
     let letterUuid: String
@@ -42,7 +39,6 @@ struct CoverLetterScore: Codable {
         case letterUuid, score, reasoning
     }
 }
-
 /// Response schema for best cover letter selection
 struct BestCoverLetterResponse: Codable {
     let strengthAndVoiceAnalysis: String
@@ -74,7 +70,6 @@ struct BestCoverLetterResponse: Codable {
     
     
 }
-
 @Observable class CoverLetterQuery {
     // MARK: - Properties
     /// Set this to `true` if you want to save a debug file containing the prompt text.
@@ -146,7 +141,6 @@ struct BestCoverLetterResponse: Codable {
    let coverLetter: CoverLetter
    let resume: Resume
    let jobApp: JobApp
-
     private static let maxResumeContextBytes = 120_000
     
     // MARK: - Derived Properties
@@ -164,12 +158,10 @@ struct BestCoverLetterResponse: Codable {
               let string = String(data: data, encoding: .utf8) else {
             return ""
         }
-
         let byteCount = string.utf8.count
         guard byteCount > Self.maxResumeContextBytes else {
             return string
         }
-
         Logger.warning("CoverLetterQuery: resume context is \(byteCount) bytes; truncating to \(Self.maxResumeContextBytes) bytes to avoid prompt overflow.")
         let truncated = truncateContext(string, maxBytes: Self.maxResumeContextBytes)
         return truncated + "\n\n/* truncated resume context to fit cover letter prompt */"
@@ -187,11 +179,9 @@ struct BestCoverLetterResponse: Codable {
     var writingSamples: String {
         return coverLetter.writingSamplesString
     }
-
     private func truncateContext(_ string: String, maxBytes: Int) -> String {
         var count = 0
         var index = string.startIndex
-
         while index < string.endIndex {
             let character = string[index]
             let characterBytes = character.utf8.count
@@ -201,7 +191,6 @@ struct BestCoverLetterResponse: Codable {
             count += characterBytes
             index = string.index(after: index)
         }
-
         var truncated = String(string[string.startIndex..<index])
         if truncated.last?.isWhitespace == false {
             truncated.append(" ")
@@ -212,7 +201,6 @@ struct BestCoverLetterResponse: Codable {
     
     // MARK: - Initialization
     private let exportCoordinator: ResumeExportCoordinator
-
     init(
         coverLetter: CoverLetter,
         resume: Resume,
@@ -304,13 +292,10 @@ struct BestCoverLetterResponse: Codable {
         if editorPrompt == .custom {
             prompt = """
             Upon reading your latest draft, \(applicant.name) has provided the following feedback:
-
                 \(feedback)
-
             Please prepare a revised draft that improves upon the original while incorporating this feedback. 
             Your response should only include the plain full text of the revised letter draft without any 
             markdown formatting or additional explanations or reasoning.
-
             Current draft:
             \(coverLetter.content)
             """

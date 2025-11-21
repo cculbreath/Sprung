@@ -4,10 +4,8 @@
 //
 //  Created by Christopher Culbreath on 6/11/25.
 //
-
 import SwiftUI
 import SwiftData
-
 @Observable
 @MainActor
 class MultiModelCoverLetterService {
@@ -224,7 +222,6 @@ class MultiModelCoverLetterService {
             }
             return
         }
-
         guard let applicantProfileStore else {
             await MainActor.run {
                 errorMessage = "Applicant profile store unavailable"
@@ -232,7 +229,6 @@ class MultiModelCoverLetterService {
             }
             return
         }
-
         let query = CoverLetterQuery(
             coverLetter: coverLetter,
             resume: resume,
@@ -271,7 +267,6 @@ class MultiModelCoverLetterService {
             }
             return
         }
-
         // Execute models in parallel with real-time result processing
         do {
             try await withThrowingTaskGroup(of: (String, Result<BestCoverLetterResponse, Error>).self) { group in

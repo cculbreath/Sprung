@@ -4,15 +4,12 @@
 //
 //  Created by Christopher Culbreath on .
 //
-
 import Foundation
 import SwiftData
-
 enum CoverRefType: String, Codable {
     case writingSample
     case backgroundFact
 }
-
 @Model
 class CoverRef: Identifiable, Codable {
     var id: String
@@ -20,7 +17,6 @@ class CoverRef: Identifiable, Codable {
     var name: String
     var enabledByDefault: Bool
     var type: CoverRefType
-
     init(
         name: String = "", content: String = "",
         enabledByDefault: Bool = false, type: CoverRefType
@@ -31,7 +27,6 @@ class CoverRef: Identifiable, Codable {
         self.enabledByDefault = enabledByDefault
         self.type = type
     }
-
     // Manual Codable implementation
     enum CodingKeys: String, CodingKey {
         case id
@@ -40,7 +35,6 @@ class CoverRef: Identifiable, Codable {
         case enabledByDefault
         case type
     }
-
     // Required initializer for Decodable
     required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -50,7 +44,6 @@ class CoverRef: Identifiable, Codable {
         enabledByDefault = try container.decode(Bool.self, forKey: .enabledByDefault)
         type = try container.decode(CoverRefType.self, forKey: .type)
     }
-
     // Required function for Encodable
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)

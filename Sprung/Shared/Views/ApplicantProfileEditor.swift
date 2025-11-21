@@ -1,7 +1,6 @@
 import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
-
 struct ApplicantProfileEditor: View {
     @Binding var draft: ApplicantProfileDraft
     var showPhotoSection: Bool = true
@@ -9,27 +8,21 @@ struct ApplicantProfileEditor: View {
     var showsProfessionalLabel: Bool = true
     var emailSuggestions: [String] = []
     var onPhotoPicked: (() -> Void)?
-
     @State private var selectedProfileID: UUID?
     @State private var hoveredProfileID: UUID?
-
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             GroupBox {
                 VStack(alignment: .leading, spacing: 12) {
                     TextField("Name", text: $draft.name)
                         .textFieldStyle(.roundedBorder)
-
                     if showsProfessionalLabel {
                         TextField("Professional Label", text: $draft.label)
                             .textFieldStyle(.roundedBorder)
                     }
-
                     emailEntry
-
                     TextField("Phone", text: $draft.phone)
                         .textFieldStyle(.roundedBorder)
-
                     TextField("Website", text: $draft.website)
                         .textFieldStyle(.roundedBorder)
                 }
@@ -41,14 +34,12 @@ struct ApplicantProfileEditor: View {
                 VStack(alignment: .leading, spacing: 12) {
                     TextField("Street Address", text: $draft.address)
                         .textFieldStyle(.roundedBorder)
-
                     HStack {
                         TextField("City", text: $draft.city)
                             .textFieldStyle(.roundedBorder)
                         TextField("State / Region", text: $draft.state)
                             .textFieldStyle(.roundedBorder)
                     }
-
                     HStack {
                         TextField("Postal Code", text: $draft.zip)
                             .textFieldStyle(.roundedBorder)
@@ -70,7 +61,6 @@ struct ApplicantProfileEditor: View {
                         Text("Use a succinct 2–3 sentence summary that highlights your focus areas.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-
                         TextEditor(text: $draft.summary)
                             .frame(minHeight: 120)
                             .padding(6)
@@ -84,14 +74,12 @@ struct ApplicantProfileEditor: View {
                         .font(.headline)
                 }
             }
-
             if showPhotoSection {
                 GroupBox {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Profile photo appears on generated resumes where supported.")
                             .font(.caption)
                             .foregroundColor(.secondary)
-
                         HStack {
                             if let image = draft.pictureImage {
                                 Image(nsImage: image)
@@ -113,18 +101,15 @@ struct ApplicantProfileEditor: View {
                                     )
                             }
                         }
-
                         HStack(spacing: 12) {
                             Button("Choose Photo…") {
                                 presentPicturePicker()
                             }
                             .buttonStyle(.bordered)
-
                             Button("Choose from Photos…") {
                                 presentPhotoLibraryPicker()
                             }
                             .buttonStyle(.bordered)
-
                             if draft.pictureData != nil {
                                 Button("Remove Photo") {
                                     draft.updatePicture(data: nil, mimeType: nil)
@@ -132,7 +117,6 @@ struct ApplicantProfileEditor: View {
                                 .buttonStyle(.bordered)
                                 .foregroundColor(.red)
                             }
-
                             Spacer()
                         }
                     }
@@ -141,7 +125,6 @@ struct ApplicantProfileEditor: View {
                         .font(.headline)
                 }
             }
-
             GroupBox {
                 VStack(alignment: .leading, spacing: 12) {
                     if draft.socialProfiles.isEmpty {
@@ -174,7 +157,6 @@ struct ApplicantProfileEditor: View {
                             }
                         }
                     }
-
                     HStack(spacing: 8) {
                         Button {
                             addProfile()
@@ -182,7 +164,6 @@ struct ApplicantProfileEditor: View {
                             Label("Add Profile", systemImage: "plus")
                         }
                         .buttonStyle(.bordered)
-
                         Button {
                             removeSelectedProfile()
                         } label: {
@@ -190,7 +171,6 @@ struct ApplicantProfileEditor: View {
                         }
                         .buttonStyle(.bordered)
                         .disabled(selectedProfileID == nil)
-
                         Spacer()
                     }
                 }
@@ -199,64 +179,53 @@ struct ApplicantProfileEditor: View {
                     .font(.headline)
             }
 
-
         }
     }
-
     private func addProfile() {
         let newProfile = ApplicantSocialProfileDraft()
         draft.socialProfiles.append(newProfile)
         selectedProfileID = newProfile.id
     }
-
     private func removeProfile(_ profile: ApplicantSocialProfileDraft) {
         draft.socialProfiles.removeAll { $0.id == profile.id }
     }
-
     private func replaceProfile(_ profile: ApplicantSocialProfileDraft) {
         if let index = draft.socialProfiles.firstIndex(where: { $0.id == profile.id }) {
             draft.socialProfiles[index] = profile
         }
     }
-
     private func removeSelectedProfile() {
         guard let id = selectedProfileID else { return }
         draft.socialProfiles.removeAll { $0.id == id }
         selectedProfileID = nil
     }
-
     private func presentPicturePicker() {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.image]
-
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
             guard let data = try? Data(contentsOf: url) else { return }
             draft.updatePicture(data: data, mimeType: url.mimeTypeHint())
         }
     }
-
     private func presentPhotoLibraryPicker() {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.image]
         panel.directoryURL = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Pictures")
-
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
             guard let data = try? Data(contentsOf: url) else { return }
             draft.updatePicture(data: data, mimeType: url.mimeTypeHint())
         }
     }
-
     private var emailEntry: some View {
         HStack(spacing: 8) {
             TextField("Email", text: $draft.email)
                 .textFieldStyle(.roundedBorder)
-
             if !emailSuggestions.isEmpty {
                 Menu {
                     ForEach(emailSuggestions, id: \.self) { email in
@@ -275,7 +244,6 @@ struct ApplicantProfileEditor: View {
         }
     }
 }
-
 private struct ApplicantSocialProfileRow: View {
     @State private var draft: ApplicantSocialProfileDraft
     let isSelected: Bool
@@ -284,7 +252,6 @@ private struct ApplicantSocialProfileRow: View {
     let onHover: (Bool) -> Void
     let onDelete: () -> Void
     let onUpdate: (ApplicantSocialProfileDraft) -> Void
-
     init(
         profile: ApplicantSocialProfileDraft,
         isSelected: Bool,
@@ -302,7 +269,6 @@ private struct ApplicantSocialProfileRow: View {
         self.onDelete = onDelete
         self.onUpdate = onUpdate
     }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -339,7 +305,6 @@ private struct ApplicantSocialProfileRow: View {
         }
     }
 }
-
 private extension URL {
     func mimeTypeHint() -> String? {
         if let type = try? resourceValues(forKeys: [.contentTypeKey]).contentType {

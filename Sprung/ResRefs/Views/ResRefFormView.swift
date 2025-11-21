@@ -4,10 +4,8 @@
 //
 //  Created by Christopher Culbreath on 1/31/25.
 //
-
 import SwiftUI
 import UniformTypeIdentifiers
-
 struct ResRefFormView: View {
     @State private var isTargeted: Bool = false
     @State var sourceName: String = ""
@@ -15,24 +13,18 @@ struct ResRefFormView: View {
     @State var enabledByDefault: Bool = true
     @State private var dropErrorMessage: String?
     @Binding var isSheetPresented: Bool
-
     @Environment(ResRefStore.self) private var resRefStore: ResRefStore
-
     var existingResRef: ResRef? = nil
-
     init(isSheetPresented: Binding<Bool>, existingResRef: ResRef? = nil) {
         _isSheetPresented = isSheetPresented
-
         self.existingResRef = existingResRef
     }
-
     var body: some View {
         @Bindable var resRefStore = resRefStore
         VStack {
             Text(existingResRef == nil ? "Add New Source" : "Edit Source")
                 .font(.headline)
                 .padding(.top)
-
             ScrollView { // Prevents unnecessary Form padding
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
@@ -42,18 +34,15 @@ struct ResRefFormView: View {
                             .frame(maxWidth: .infinity)
                             .textFieldStyle(RoundedBorderTextFieldStyle())
                     }
-
                     HStack(alignment: .top) {
                         Text("Content:")
                             .frame(width: 150, alignment: .trailing)
-
                         CustomTextEditor(sourceContent: $sourceContent)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 6)
                                     .stroke(isTargeted ? Color.accentColor : Color.clear, lineWidth: 2)
                             )
                     }
-
                     HStack {
                         Text("Enabled by Default:")
                             .frame(width: 150, alignment: .trailing)
@@ -63,15 +52,12 @@ struct ResRefFormView: View {
                 }
                 .padding()
             }
-
             HStack {
                 Button("Cancel") {
                     isSheetPresented = false
                 }
                 .buttonStyle(.bordered)
-
                 Spacer()
-
                 Button("Save") {
                     if sourceName.trimmingCharacters(in: .whitespaces).isEmpty { return }
                     saveRefForm()
@@ -106,14 +92,12 @@ struct ResRefFormView: View {
             Text(dropErrorMessage ?? "Unknown error")
         }
     }
-
     private func saveRefForm() {
         if let resRef = existingResRef {
             let updatedResRef = resRef
             updatedResRef.name = sourceName
             updatedResRef.content = sourceContent
             updatedResRef.enabledByDefault = enabledByDefault
-
             resRefStore.updateResRef(updatedResRef)
         } else {
             let newSource = ResRef(
@@ -124,16 +108,13 @@ struct ResRefFormView: View {
             resRefStore.addResRef(newSource)
         }
     }
-
     private func resetRefForm() {
         sourceName = ""
         sourceContent = ""
         enabledByDefault = true
     }
-
     private func handleOnDrop(providers: [NSItemProvider]) -> Bool {
         var didRequestLoad = false
-
         for provider in providers where provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
             didRequestLoad = true
             provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
@@ -144,17 +125,14 @@ struct ResRefFormView: View {
                     showDropError("Could not access the dropped file.")
                     return
                 }
-
                 guard isSupportedTextFile(url) else {
                     Logger.warning("⚠️ Unsupported file type dropped: \(url.pathExtension)")
                     showDropError("Unsupported file type: \(url.pathExtension.uppercased()). Please drop a plain text, Markdown, or JSON file.")
                     return
                 }
-
                 do {
                     let text = try String(contentsOf: url, encoding: .utf8)
                     let fileName = url.deletingPathExtension().lastPathComponent
-
                     DispatchQueue.main.async {
                         self.sourceName = fileName
                         self.sourceContent = text
@@ -169,18 +147,14 @@ struct ResRefFormView: View {
                 }
             }
         }
-
         return didRequestLoad
     }
-
     private func closePopup() {
         isSheetPresented = false
     }
-
     private func isSupportedTextFile(_ url: URL) -> Bool {
         let ext = url.pathExtension.lowercased()
         guard !ext.isEmpty else { return false }
-
         if let type = UTType(filenameExtension: ext) {
             if type.conforms(to: .plainText) ||
                 type.conforms(to: .utf8PlainText) ||
@@ -188,15 +162,12 @@ struct ResRefFormView: View {
                 type.conforms(to: .json) {
                 return true
             }
-
             if let markdown = UTType(filenameExtension: "md"), type == markdown { return true }
             if let markdownLong = UTType(filenameExtension: "markdown"), type == markdownLong { return true }
         }
-
         let allowedExtensions: Set<String> = ["txt", "md", "markdown", "json", "csv", "yaml", "yml"]
         return allowedExtensions.contains(ext)
     }
-
     private func showDropError(_ message: String) {
         DispatchQueue.main.async {
             self.dropErrorMessage = message

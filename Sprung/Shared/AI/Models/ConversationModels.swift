@@ -4,20 +4,16 @@
 //
 //  SwiftData persistence for LLM conversations using domain DTOs.
 //
-
 import SwiftData
 import Foundation
-
 @Model
 class ConversationContext {
     var id: UUID
     var objectId: UUID
     var objectType: String
     var lastUpdated: Date
-
     @Relationship(deleteRule: .cascade, inverse: \ConversationMessage.context)
     var messages: [ConversationMessage] = []
-
     init(
         conversationId: UUID,
         objectId: UUID? = nil,
@@ -29,7 +25,6 @@ class ConversationContext {
         self.lastUpdated = Date()
     }
 }
-
 @Model
 class ConversationMessage {
     var id: UUID
@@ -37,9 +32,7 @@ class ConversationMessage {
     var content: String
     var imageData: String?
     var timestamp: Date
-
     @Relationship var context: ConversationContext?
-
     init(role: LLMRole, content: String, imageData: String? = nil) {
         self.id = UUID()
         self.role = role.rawValue
@@ -48,13 +41,11 @@ class ConversationMessage {
         self.timestamp = Date()
     }
 }
-
 enum ConversationType: String, CaseIterable {
     case general
     case resume
     case coverLetter
 }
-
 extension ConversationMessage {
     var dto: LLMMessageDTO {
         var attachments: [LLMAttachment] = []
@@ -71,7 +62,6 @@ extension ConversationMessage {
             createdAt: timestamp
         )
     }
-
     static func fromDTO(_ dto: LLMMessageDTO) -> ConversationMessage {
         let message = ConversationMessage(
             role: dto.role,

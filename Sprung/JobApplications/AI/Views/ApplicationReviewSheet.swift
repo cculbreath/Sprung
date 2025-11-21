@@ -2,20 +2,15 @@
 //  ApplicationReviewSheet.swift
 //  Sprung
 //
-
 import SwiftUI
 import WebKit // Required for the MarkdownView
-
 struct ApplicationReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
-
     @Environment(LLMFacade.self) private var llmFacade
     @Environment(AppEnvironment.self) private var appEnvironment
-
     let jobApp: JobApp
     let resume: Resume
     let availableCoverLetters: [CoverLetter]
-
     // MARK: State
     @State private var reviewService: ApplicationReviewService?
     @State private var selectedType: ApplicationReviewType = .assessQuality
@@ -23,12 +18,10 @@ struct ApplicationReviewSheet: View {
     @State private var responseText: String = ""
     @State private var isProcessing = false
     @State private var errorMessage: String? = nil
-
     init(jobApp: JobApp, resume: Resume, availableCoverLetters: [CoverLetter]) {
         self.jobApp = jobApp
         self.resume = resume
         self.availableCoverLetters = availableCoverLetters
-
         // Initialize customOptions with the jobApp's selectedCover if available
         let initialCoverLetter = jobApp.selectedCover
         _customOptions = State(initialValue: CustomApplicationReviewOptions(
@@ -40,7 +33,6 @@ struct ApplicationReviewSheet: View {
             customPrompt: ""
         ))
     }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Fixed header
@@ -63,7 +55,6 @@ struct ApplicationReviewSheet: View {
                             Text(jobApp.jobPosition)
                                 .foregroundColor(.secondary)
                         }
-
                         HStack {
                             Text("Company:")
                                 .fontWeight(.semibold)
@@ -72,9 +63,7 @@ struct ApplicationReviewSheet: View {
                                 .foregroundColor(.secondary)
                         }
                     }
-
                     Divider()
-
                     // Documents being analyzed
                     HStack(alignment: .top, spacing: 16) {
                         // Resume information
@@ -85,9 +74,7 @@ struct ApplicationReviewSheet: View {
                                 .foregroundColor(.secondary)
                                 .font(.callout)
                         }
-
                         Spacer()
-
                         // Cover Letter information if available
                         if !availableCoverLetters.isEmpty, let selectedCover = jobApp.selectedCover {
                             VStack(alignment: .leading, spacing: 4) {
@@ -102,7 +89,6 @@ struct ApplicationReviewSheet: View {
                 }
                 .padding(.vertical, 4)
             }
-
             // Review type selection
             GroupBox(label: Text("Review Type").fontWeight(.medium)) {
                 Picker("Select review type", selection: $selectedType) {
@@ -114,7 +100,6 @@ struct ApplicationReviewSheet: View {
                 .labelsHidden() // Hide the redundant label
                 .padding(.vertical, 4)
             }
-
             if selectedType == .custom {
                 customOptionsView
             }
@@ -124,7 +109,6 @@ struct ApplicationReviewSheet: View {
                         selectedModel: $selectedModel,
                         title: "AI Model"
                     )
-
                     // Response area
                     GroupBox(label: Text("AI Analysis").fontWeight(.medium)) {
                         responseContent
@@ -162,10 +146,8 @@ struct ApplicationReviewSheet: View {
             }
         }
     }
-
     // Model selection state
     @State private var selectedModel: String = ""
-
     // MARK: - Custom Options View
     @ViewBuilder
     private var customOptionsView: some View {
@@ -178,7 +160,6 @@ struct ApplicationReviewSheet: View {
                             customOptions.selectedCoverLetter = jobApp.selectedCover
                         }
                     }
-
                 if customOptions.includeCoverLetter {
                     Picker("Cover Letter", selection: Binding(
                         get: { customOptions.selectedCoverLetter ?? jobApp.selectedCover },
@@ -192,11 +173,9 @@ struct ApplicationReviewSheet: View {
                     }
                     .pickerStyle(.menu)
                 }
-
                 Toggle("Include Resume Text", isOn: $customOptions.includeResumeText)
                 Toggle("Include Resume Image", isOn: $customOptions.includeResumeImage)
                 Toggle("Include Background Docs", isOn: $customOptions.includeBackgroundDocs)
-
                 Text("Custom Prompt")
                     .font(.headline)
                     .padding(.top, 4)
@@ -207,7 +186,6 @@ struct ApplicationReviewSheet: View {
             .padding(.vertical, 4)
         }
     }
-
     // MARK: - Response Content
     // A computed property for the response content to keep the main view clean
     @ViewBuilder
@@ -245,18 +223,15 @@ struct ApplicationReviewSheet: View {
                 .padding()
         }
     }
-
     private func previewTitle(for cl: CoverLetter) -> String {
         let txt = cl.content
         return txt.isEmpty ? "Cover Letter" : String(txt.prefix(40)) + (txt.count > 40 ? "…" : "")
     }
-
     // MARK: - Submit
     private func submit() {
         isProcessing = true
         responseText = "Submitting request..."
         errorMessage = nil
-
         let coverLetterToUse: CoverLetter? = {
             if selectedType == .custom {
                 // For custom reviews, use the cover letter specifically selected in the UI picker
@@ -266,7 +241,6 @@ struct ApplicationReviewSheet: View {
                 return jobApp.selectedCover
             }
         }()
-
         Logger.info("🚀 Submitting application review using \(selectedType.rawValue) (custom: \(selectedType == .custom))")
         
         Task { @MainActor in

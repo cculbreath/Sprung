@@ -1,9 +1,7 @@
 // Sprung/App/Views/MenuNotificationHandler.swift
-
 import SwiftUI
 import Foundation
 import AppKit
-
 /// Handles menu command notifications and delegates to appropriate UI actions.
 /// 
 /// ## Architecture Note
@@ -38,12 +36,10 @@ class MenuNotificationHandler {
         self.sheets = sheets
         self.selectedTab = selectedTab
         self.showSlidingList = showSlidingList
-
         guard !observersConfigured else {
             Logger.debug("♻️ MenuNotificationHandler already configured; skipping observer setup", category: .ui)
             return
         }
-
         observersConfigured = true
         Logger.debug("✅ MenuNotificationHandler registering NotificationCenter observers", category: .ui)
         setupNotificationObservers()
@@ -251,7 +247,6 @@ class MenuNotificationHandler {
                 appDelegate.showTemplateEditorWindow()
             }
         }
-
         NotificationCenter.default.addObserver(
             forName: .showExperienceEditor,
             object: nil,
@@ -261,7 +256,6 @@ class MenuNotificationHandler {
                 appDelegate.showExperienceEditorWindow()
             }
         }
-
         NotificationCenter.default.addObserver(
             forName: .startOnboardingInterview,
             object: nil,

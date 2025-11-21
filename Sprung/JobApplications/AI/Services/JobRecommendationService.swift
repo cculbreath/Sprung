@@ -4,9 +4,7 @@
 //
 //  Created by Christopher Culbreath on 6/4/25.
 //
-
 import Foundation
-
 /// Service for job recommendation using the unified LLM architecture
 /// Replaces JobRecommendationProvider with cleaner LLMService integration
 @MainActor
@@ -19,9 +17,7 @@ class JobRecommendationService {
     // MARK: - Configuration
     private let systemPrompt = """
     You are an expert career advisor specializing in job application prioritization. Your task is to analyze a list of job applications and recommend the one that best matches the candidate's qualifications and career goals. You will be provided with job descriptions, the candidate's resume, and additional background information. Choose the job that offers the best match in terms of skills, experience, and potential career growth.
-
     IMPORTANT: Your response must be a valid JSON object conforming to the JSON schema provided. The recommendedJobId field must contain the exact UUID string from the id field of the chosen job in the job listings JSON array. Do not modify the UUID format in any way.
-
     IMPORTANT: Output ONLY the JSON object with the fields "recommendedJobId" and "reason". Do not include any additional commentary, explanation, or text outside the JSON.
     """
     private let maxResumeContextBytes = 120_000
@@ -168,34 +164,27 @@ class JobRecommendationService {
         let prompt = """
         TASK:
         Analyze the candidate's information and the list of new job applications. Recommend the ONE job that is the best match for the candidate's qualifications and career goals.
-
         \(resumeText.isEmpty ? "" : """
         CANDIDATE'S RESUME:
         \(resumeText)
         """)
-
         \(backgroundDocs.isEmpty ? "" : """
         BACKGROUND INFORMATION:
         \(backgroundDocs)
         """)
-
         \(coverLetterBackgroundDocs.isEmpty ? "" : """
         COVER LETTER BACKGROUND FACTS:
         \(coverLetterBackgroundDocs)
         """)
-
         JOB LISTINGS (JSON FORMAT):
         \(jsonString)
-
         RESPONSE REQUIREMENTS:
         - You MUST respond with a valid JSON object containing exactly these fields:
           "recommendedJobId": The exact UUID string from the 'id' field of the best matching job
           "reason": A brief explanation of why this job is the best match
-
         - The recommendedJobId MUST be copied exactly from the job listing, character-for-character
         - Do not include any text, comments, or explanations outside the JSON object
         - Your entire response must be a valid JSON structure
-
         Example response format:
         {
           "recommendedJobId": "00000000-0000-0000-0000-000000000000",
@@ -210,19 +199,16 @@ class JobRecommendationService {
         if let cached = resumeContextCache[resume.id] {
             return cached
         }
-
         if !resume.textResume.isEmpty {
             resumeContextCache[resume.id] = resume.textResume
             return resume.textResume
         }
-
         guard let context = try? ResumeTemplateDataBuilder.buildContext(from: resume),
               let data = try? JSONSerialization.data(withJSONObject: context, options: [.prettyPrinted]),
               let string = String(data: data, encoding: .utf8) else {
             resumeContextCache[resume.id] = ""
             return ""
         }
-
         let byteCount = string.utf8.count
         if byteCount > maxResumeContextBytes {
             Logger.warning("JobRecommendationService: resume context for \(resume.id) is \(byteCount) bytes; truncating to \(maxResumeContextBytes).")
@@ -231,15 +217,12 @@ class JobRecommendationService {
             resumeContextCache[resume.id] = annotated
             return annotated
         }
-
         resumeContextCache[resume.id] = string
         return string
     }
-
     private func truncateContext(_ string: String, maxBytes: Int) -> String {
         var consumedBytes = 0
         var index = string.startIndex
-
         while index < string.endIndex {
             let character = string[index]
             let characterBytes = character.utf8.count
@@ -249,7 +232,6 @@ class JobRecommendationService {
             consumedBytes += characterBytes
             index = string.index(after: index)
         }
-
         var truncated = String(string[string.startIndex..<index])
         if truncated.last?.isWhitespace == false {
             truncated.append(" ")
@@ -257,7 +239,6 @@ class JobRecommendationService {
         truncated.append(contentsOf: "...")
         return truncated
     }
-
     /// Build background documentation from resume sources
     private func buildBackgroundDocs(from resume: Resume?) -> String {
         guard let resume = resume else { return "" }
@@ -316,7 +297,6 @@ class JobRecommendationService {
             Logger.warning("⚠️ Unable to locate Application Support directory for debug prompt.")
             return
         }
-
         let debugDirectory = supportDirectory.appendingPathComponent("Sprung/Debug", isDirectory: true)
         do {
             try fileManager.createDirectory(at: debugDirectory, withIntermediateDirectories: true)
@@ -324,7 +304,6 @@ class JobRecommendationService {
             Logger.warning("⚠️ Failed to create debug directory: \(error.localizedDescription)")
             return
         }
-
         let fileURL = debugDirectory.appendingPathComponent(fileName)
         do {
             try content.write(to: fileURL, atomically: true, encoding: .utf8)
@@ -334,7 +313,6 @@ class JobRecommendationService {
         }
     }
 }
-
 // MARK: - Supporting Types
 /// Errors specific to job recommendation service
 enum JobRecommendationError: LocalizedError {
@@ -359,7 +337,6 @@ enum JobRecommendationError: LocalizedError {
         }
     }
 }
-
 /// Job recommendation response structure (reusing existing type from JobRecommendationProvider)
 struct JobRecommendation: Codable {
     let recommendedJobId: String

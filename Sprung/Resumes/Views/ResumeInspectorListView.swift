@@ -4,18 +4,14 @@
 //
 //  Created by Christopher Culbreath on 1/31/25.
 //
-
 import AppKit
 import SwiftUI
-
 struct ResumeInspectorListView: View {
     @Environment(ResStore.self) private var resStore
     @Binding var listSelection: Resume?
     var resumes: [Resume]
-
     var body: some View {
         let sortedResumes = resumes.sorted { $0.dateCreated > $1.dateCreated }
-
         if sortedResumes.isEmpty {
             Text("No resumes yet. Create one below to get started.")
                 .foregroundColor(.secondary)
@@ -53,14 +49,12 @@ struct ResumeInspectorListView: View {
         }
     }
 }
-
 struct ResumeRowView: View {
     let resume: Resume
     let isSelected: Bool
     let onSelect: () -> Void
     let onDelete: () -> Void
     let onDuplicate: () -> Void
-
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 12) {
@@ -69,13 +63,11 @@ struct ResumeRowView: View {
                         .font(.subheadline)
                         .foregroundColor(isSelected ? Color.white : Color.secondary)
                         .lineLimit(1)
-
                     Text(resume.template?.name ?? resume.template?.slug.capitalized ?? "-")
                         .font(.footnote)
                         .foregroundColor(isSelected ? Color.white : Color.secondary)
                         .lineLimit(1)
                 }
-
                 Spacer()
             }
             .padding(.vertical, 10)

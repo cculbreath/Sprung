@@ -1,5 +1,4 @@
 import SwiftUI
-
 struct OnboardingInterviewBackgroundView: View {
     var body: some View {
         LinearGradient(

@@ -4,9 +4,7 @@
 //
 //  Centralized non-secret configuration constants.
 //
-
 import Foundation
-
 enum AppConfig {
     static let openRouterBaseURL = "https://openrouter.ai"
     static let openRouterAPIPath = "api"
@@ -16,4 +14,3 @@ enum AppConfig {
         "X-Title": "Sprung",
     ]
 }
-

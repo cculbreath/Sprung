@@ -4,16 +4,13 @@
 //
 //  Created by Christopher Culbreath on 9/1/24.
 //
-
 import SwiftData
 import SwiftUI
-
 struct JobAppDetailView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore // Explicit
     @Binding var tab: TabList
     @Binding var buttons: SaveButtons
     @State private var showingDeleteConfirmation: Bool = false
-
     var body: some View {
         ScrollView {
             let _ = jobAppStore.form
@@ -22,13 +19,9 @@ struct JobAppDetailView: View {
                     HeaderView(
                         showingDeleteConfirmation: $showingDeleteConfirmation, buttons: $buttons, tab: $tab
                     )
-
                     JobAppPostingDetailsSection(buttons: $buttons)
-
                     JobAppDescriptionSection(buttons: $buttons)
-
                     JobAppInformationSection(buttons: $buttons)
-
                     ApplySection(buttons: $buttons)
                 }
                 .padding(.horizontal).padding(.vertical)
@@ -47,7 +40,6 @@ struct JobAppDetailView: View {
                 .onChange(of: buttons.save) { _, newValue in
                     if newValue && buttons.edit {
                         jobAppStore.saveForm()
-
                         buttons.edit = false
                         buttons.save = false
                     }

@@ -6,9 +6,7 @@
 //  environment. Owned and assembled by AppDependencies to keep construction
 //  centralized and explicit.
 //
-
 import Observation
-
 @MainActor
 @Observable
 final class AppEnvironment {
@@ -27,7 +25,6 @@ final class AppEnvironment {
     let onboardingCoordinator: OnboardingInterviewCoordinator
     var launchState: LaunchState
     var requiresTemplateSetup: Bool = false
-
     init(
         appState: AppState,
         navigationState: NavigationStateService,
@@ -60,12 +57,10 @@ final class AppEnvironment {
         self.launchState = launchState
     }
 }
-
 extension AppEnvironment {
     enum LaunchState: Equatable {
         case ready
         case readOnly(message: String)
-
         var isReadOnly: Bool {
             if case .readOnly = self {
                 return true

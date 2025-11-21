@@ -4,10 +4,8 @@
 //
 //  Created by Christopher Culbreath on 2/27/25.
 //
-
 import Foundation
 import SwiftData
-
 @Model class FontSizeNode: Identifiable {
     var id = UUID().uuidString
     var key: String = ""
@@ -25,7 +23,6 @@ import SwiftData
             fontValue = FontSizeNode.parseFontString(newValue)
         }
     }
-
     init(
         id: String = UUID().uuidString,
         key: String,
@@ -39,7 +36,6 @@ import SwiftData
         fontValue = FontSizeNode.parseFontString(fontString)
         self.resume = resume
     }
-
     /// Converts a "12pt" style string to a Float value
     private static func parseFontString(_ fontString: String) -> Float {
         let trimmed = fontString.trimmingCharacters(in: .whitespacesAndNewlines)

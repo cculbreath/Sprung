@@ -5,10 +5,8 @@
 //  Coordinator that handles all tool UI interactions and presentations.
 //  Extracted from OnboardingInterviewCoordinator to reduce complexity.
 //
-
 import Foundation
 import SwiftyJSON
-
 /// Coordinator responsible for tool UI interactions (uploads, choices, validation, profile intake)
 @MainActor
 final class ToolInteractionCoordinator {

@@ -4,10 +4,8 @@
 //
 //  Domain model for onboarding artifacts.
 //
-
 import Foundation
 import SwiftyJSON
-
 struct OnboardingArtifacts {
     var applicantProfile: JSON?
     var skeletonTimeline: JSON?

@@ -1,19 +1,15 @@
 import AppKit
 import SwiftUI
-
 struct ChatComposerTextView: NSViewRepresentable {
     static let minimumHeight: CGFloat = 36
-
     @Binding var text: String
     var isEditable: Bool
     var onSubmit: (String) -> Void
     @Binding var measuredHeight: CGFloat
     var maxLines: Int = 4
-
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
     }
-
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSScrollView()
         scrollView.drawsBackground = false
@@ -24,7 +20,6 @@ struct ChatComposerTextView: NSViewRepresentable {
         scrollView.wantsLayer = true
         scrollView.layer?.cornerRadius = 12
         scrollView.layer?.masksToBounds = true
-
         let textView = ChatNSTextView()
         textView.delegate = context.coordinator
         textView.isRichText = false
@@ -54,55 +49,44 @@ struct ChatComposerTextView: NSViewRepresentable {
         textView.isAutomaticDashSubstitutionEnabled = false
         textView.isAutomaticSpellingCorrectionEnabled = false
         textView.isAutomaticTextCompletionEnabled = false
-
         scrollView.documentView = textView
         coordinator.parent = self
         context.coordinator.textView = textView
         coordinator.updateHeight(for: textView)
         return scrollView
     }
-
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         guard let textView = context.coordinator.textView else { return }
-
         if textView.string != text {
             textView.string = text
             textView.scrollToEndOfDocument(nil)
         }
-
         textView.isEditable = isEditable
         textView.isSelectable = isEditable
         context.coordinator.parent = self
         context.coordinator.updateHeight(for: textView)
     }
-
     static func dismantleNSView(_ nsView: NSScrollView, coordinator: Coordinator) {
         coordinator.invalidate()
     }
-
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: ChatComposerTextView
         weak var textView: ChatNSTextView?
-
         init(parent: ChatComposerTextView) {
             self.parent = parent
         }
-
         func textDidChange(_ notification: Notification) {
             guard let textView else { return }
             parent.text = textView.string
             updateHeight(for: textView)
         }
-
         func submit() {
             parent.onSubmit(parent.text)
         }
-
         func invalidate() {
             textView?.delegate = nil
             textView?.onReturn = nil
         }
-
         func updateHeight(for textView: NSTextView) {
             guard let container = textView.textContainer, let layoutManager = textView.layoutManager else {
                 DispatchQueue.main.async {
@@ -110,7 +94,6 @@ struct ChatComposerTextView: NSViewRepresentable {
                 }
                 return
             }
-
             layoutManager.ensureLayout(for: container)
             let usedRect = layoutManager.usedRect(for: container)
             let insets = textView.textContainerInset
@@ -120,17 +103,14 @@ struct ChatComposerTextView: NSViewRepresentable {
             let maxHeight = minHeight * CGFloat(parent.maxLines)
             let contentHeight = usedRect.height + (insets.height * 2)
             let clampedHeight = min(max(contentHeight, minHeight), maxHeight)
-
             DispatchQueue.main.async {
                 self.parent.measuredHeight = clampedHeight
             }
         }
     }
 }
-
 final class ChatNSTextView: NSTextView {
     var onReturn: (() -> Void)?
-
     override func insertNewline(_ sender: Any?) {
         if let event = window?.currentEvent,
            event.modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.shift) {

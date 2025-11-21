@@ -1,6 +1,5 @@
 import Foundation
 import SwiftyJSON
-
 struct RequestEvidenceTool: InterviewTool {
     private static let schema: JSONSchema = {
         JSONSchema(

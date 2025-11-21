@@ -1,5 +1,4 @@
 import SwiftUI
-
 struct OnboardingInterviewBottomBar: View {
     let showBack: Bool
     let continueTitle: String
@@ -8,7 +7,6 @@ struct OnboardingInterviewBottomBar: View {
     let onBack: () -> Void
     let onCancel: () -> Void
     let onContinue: () -> Void
-
     var body: some View {
         HStack(spacing: 12) {
             Button("Options…") {
@@ -16,9 +14,7 @@ struct OnboardingInterviewBottomBar: View {
             }
             .buttonBorderShape(.capsule)
             .buttonStyle(.glass)
-
             Spacer()
-
             if showBack {
                 Button("Go Back") {
                     onBack()
@@ -26,15 +22,12 @@ struct OnboardingInterviewBottomBar: View {
                 .buttonBorderShape(.capsule)
                 .buttonStyle(.glass)
 
-
             }
-
             Button("Cancel") {
                 onCancel()
             }
             .buttonStyle(.glass)
             .buttonBorderShape(.capsule)
-
 
             Button(continueTitle) {
                 onContinue()

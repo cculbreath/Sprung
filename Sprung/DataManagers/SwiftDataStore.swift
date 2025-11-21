@@ -4,7 +4,6 @@
 //
 //  Created by Christopher Culbreath on 4/20/25.
 //
-
 //  SwiftDataStore.swift
 //  Sprung
 //
@@ -13,15 +12,12 @@
 //  SwiftData `ModelContext` can now adopt `SwiftDataStore` to gain a default
 //  implementation of `saveContext()` (along with a convenience `persist(_:)`
 //  wrapper for one‑off entity inserts).
-
 import Foundation
 import SwiftData
-
 @MainActor
 protocol SwiftDataStore: AnyObject {
     var modelContext: ModelContext { get }
 }
-
 extension SwiftDataStore {
     /// Attempts to `save()` and logs any thrown error (in *debug* builds only)
     /// so production performance isn't impacted.

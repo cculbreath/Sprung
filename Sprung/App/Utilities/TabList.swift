@@ -4,7 +4,6 @@
 //
 //  Created by Christopher Culbreath on .
 //
-
 enum TabList: String, CaseIterable, Codable {
     case listing = "Listing"
     case resume = "Résumé"

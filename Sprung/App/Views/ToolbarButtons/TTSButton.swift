@@ -3,9 +3,7 @@
 //  Sprung
 //
 //
-
 import SwiftUI
-
 /// Toolbar button for text-to-speech functionality with status display and option-click restart
 struct TTSButton: View {
     @Environment(CoverLetterStore.self) private var coverLetterStore

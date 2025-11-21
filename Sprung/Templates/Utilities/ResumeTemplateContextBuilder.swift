@@ -1,10 +1,8 @@
 import Foundation
 import OrderedCollections
-
 struct ResumeTemplateContextBuilder {
     private let templateSeedStore: TemplateSeedStore
     private let experienceDefaultsStore: ExperienceDefaultsStore
-
     init(
         templateSeedStore: TemplateSeedStore,
         experienceDefaultsStore: ExperienceDefaultsStore
@@ -12,7 +10,6 @@ struct ResumeTemplateContextBuilder {
         self.templateSeedStore = templateSeedStore
         self.experienceDefaultsStore = experienceDefaultsStore
     }
-
     @MainActor
     func buildContext(
         for template: Template,
@@ -22,23 +19,18 @@ struct ResumeTemplateContextBuilder {
         let seedJSON = templateSeedStore.seed(for: template)?.jsonString ?? ""
         let seed = Self.parseJSON(from: seedJSON)
         let sanitizedSeed = removeContactSection(from: seed, manifest: manifest)
-
         let experienceDefaults = experienceDefaultsStore.currentDefaults()
         let experienceSeed = ExperienceDefaultsEncoder.makeSeedDictionary(from: experienceDefaults)
         let sanitizedExperience = removeContactSection(from: experienceSeed, manifest: manifest)
-
         var context = manifest?.makeDefaultContext() ?? [:]
         merge(into: &context, with: sanitizedExperience)
         merge(into: &context, with: sanitizedSeed)
         merge(into: &context, with: profileContext(from: applicantProfile, manifest: manifest, templateSlug: template.slug))
-
         addMissingKeys(from: sanitizedExperience, to: &context)
         addMissingKeys(from: sanitizedSeed, to: &context)
-
         if let manifest {
             context = SeedContextNormalizer(manifest: manifest).normalize(context)
         }
-
         if Logger.isVerboseEnabled {
             if let basics = context["basics"] as? [String: Any] {
                 Logger.verbose("ResumeTemplateContextBuilder: basics keys = \(Array(basics.keys))", category: .general)
@@ -51,24 +43,20 @@ struct ResumeTemplateContextBuilder {
                 Logger.verbose("ResumeTemplateContextBuilder: basics section missing", category: .general)
             }
         }
-
         return context
     }
-
     // MARK: - Private helpers
     private func profileContext(from profile: ApplicantProfile, manifest: TemplateManifest?, templateSlug: String?) -> [String: Any] {
         let fallbackContext = modernProfileContext(from: profile)
         guard let manifest else {
             return fallbackContext
         }
-
         let payload = buildProfilePayload(using: manifest, profile: profile)
         guard payload.isEmpty == false else {
             return fallbackContext
         }
         return mergeProfilePayload(payload, fallback: fallbackContext)
     }
-
     private func modernProfileContext(from profile: ApplicantProfile) -> [String: Any] {
         var location: [String: Any] = [:]
         if let value = sanitizedString(profile.address) { location["address"] = value }
@@ -79,7 +67,6 @@ struct ResumeTemplateContextBuilder {
         }
         if let value = sanitizedString(profile.zip) { location["postalCode"] = value }
         if let value = sanitizedString(profile.countryCode) { location["countryCode"] = value }
-
         var basics: [String: Any] = [:]
         if let value = sanitizedString(profile.name) { basics["name"] = value }
         if let value = sanitizedString(profile.label) { basics["label"] = value }
@@ -91,20 +78,16 @@ struct ResumeTemplateContextBuilder {
             basics["picture"] = picture
         }
         if !location.isEmpty { basics["location"] = location }
-
         let profiles = makeProfilesPayload(from: profile)
         if profiles.isEmpty == false {
             basics["profiles"] = profiles
         }
-
         var context: [String: Any] = [:]
         if !basics.isEmpty {
             context["basics"] = basics
         }
-
         return context
     }
-
     private func buildProfilePayload(using manifest: TemplateManifest, profile: ApplicantProfile) -> [String: Any] {
         var payload: [String: Any] = [:]
         let bindings = manifest.applicantProfileBindings()
@@ -120,7 +103,6 @@ struct ResumeTemplateContextBuilder {
         }
         return payload
     }
-
     private func mergeProfilePayload(_ payload: [String: Any], fallback: [String: Any]) -> [String: Any] {
         var merged = payload
         for (key, fallbackValue) in fallback {
@@ -128,13 +110,11 @@ struct ResumeTemplateContextBuilder {
                 merged[key] = fallbackValue
                 continue
             }
-
             if let existingDict = existing as? [String: Any],
                let fallbackDict = fallbackValue as? [String: Any] {
                 merged[key] = mergeDictionaries(existingDict, fallback: fallbackDict)
                 continue
             }
-
             if let existingArray = existing as? [Any],
                existingArray.isEmpty,
                let fallbackArray = fallbackValue as? [Any] {
@@ -143,7 +123,6 @@ struct ResumeTemplateContextBuilder {
         }
         return merged
     }
-
     private func mergeDictionaries(_ existing: [String: Any], fallback: [String: Any]) -> [String: Any] {
         var merged = existing
         for (key, fallbackValue) in fallback where merged[key] == nil {
@@ -151,7 +130,6 @@ struct ResumeTemplateContextBuilder {
         }
         return merged
     }
-
     private func applicantProfileValue(
         for binding: TemplateManifest.Section.FieldDescriptor.Binding,
         profile: ApplicantProfile
@@ -159,12 +137,10 @@ struct ResumeTemplateContextBuilder {
         guard binding.source == .applicantProfile else { return nil }
         return profileValue(for: binding.path, profile: profile)
     }
-
     private func sanitizedString(_ value: String) -> String? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
-
     private func makeProfilesPayload(from profile: ApplicantProfile) -> [[String: String]] {
         profile.profiles.compactMap { social -> [String: String]? in
             var entry: [String: String] = [:]
@@ -174,7 +150,6 @@ struct ResumeTemplateContextBuilder {
             return entry.isEmpty ? nil : entry
         }
     }
-
     private func profileValue(for path: [String], profile: ApplicantProfile) -> Any? {
         guard let first = path.first else { return nil }
         switch first {
@@ -221,7 +196,6 @@ struct ResumeTemplateContextBuilder {
             return nil
         }
     }
-
     private func isEmptyProfileContribution(_ value: Any) -> Bool {
         if let dict = value as? [String: Any] {
             return dict.isEmpty
@@ -237,7 +211,6 @@ struct ResumeTemplateContextBuilder {
         }
         return false
     }
-
     private func settingProfileValue(
         _ value: Any,
         for path: [String],
@@ -254,17 +227,14 @@ struct ResumeTemplateContextBuilder {
         }
         return dictionary
     }
-
     private static func parseJSON(from string: String) -> [String: Any] {
         guard let data = string.data(using: .utf8),
               let object = try? JSONSerialization.jsonObject(with: data),
               let dict = object as? [String: Any] else {
             return [:]
         }
-
         return (normalize(dict) as? [String: Any]) ?? [:]
     }
-
     private static func normalize(_ value: Any) -> Any {
         switch value {
         case is NSNull:
@@ -287,19 +257,16 @@ struct ResumeTemplateContextBuilder {
             return value
         }
     }
-
     private func merge(into base: inout [String: Any], with overlay: [String: Any]) {
         for (key, value) in overlay {
             let normalized = ResumeTemplateContextBuilder.normalize(value)
             base[key] = mergeValue(base[key], with: normalized)
         }
     }
-
     private func mergeValue(_ base: Any?, with overlay: Any) -> Any {
         if overlay is NSNull {
             return base ?? NSNull()
         }
-
         switch (base, overlay) {
         case let (baseDict as [String: Any], overlayDict as [String: Any]):
             if shouldReplaceDictionary(base: baseDict, with: overlayDict) {
@@ -324,16 +291,13 @@ struct ResumeTemplateContextBuilder {
             return overlay
         }
     }
-
     private func mergeCustomOverlay(baseArray: [Any], overlayArray: [Any]) -> [Any]? {
         var result = baseArray
         var didMerge = false
-
         for (position, element) in overlayArray.enumerated() {
             guard let overlayDict = element as? [String: Any] else { return nil }
             guard overlayDict.keys.allSatisfy({ $0 == "custom" || $0 == "__key" }) else { return nil }
             guard let overlayCustom = overlayDict["custom"] else { continue }
-
             let targetIndex: Int?
             if let identifier = overlayDict["__key"] as? String {
                 targetIndex = baseArray.enumerated().first(where: { entry in
@@ -345,7 +309,6 @@ struct ResumeTemplateContextBuilder {
             } else {
                 targetIndex = position < result.count ? position : nil
             }
-
             if let index = targetIndex,
                index < result.count,
                var baseDict = dictionaryValue(from: result[index]) {
@@ -361,10 +324,8 @@ struct ResumeTemplateContextBuilder {
                 didMerge = true
             }
         }
-
         return didMerge ? result : nil
     }
-
     private func shouldReplaceDictionary(base: [String: Any], with overlay: [String: Any]) -> Bool {
         guard overlay.isEmpty == false else { return true }
         if overlay.values.allSatisfy(isScalarValue) && base.values.allSatisfy(isScalarValue) {
@@ -372,7 +333,6 @@ struct ResumeTemplateContextBuilder {
         }
         return false
     }
-
     private func isScalarValue(_ value: Any) -> Bool {
         switch value {
         case is String, is NSString, is NSNumber, is NSNull:
@@ -381,17 +341,14 @@ struct ResumeTemplateContextBuilder {
             return false
         }
     }
-
     private func addMissingKeys(from source: [String: Any], to context: inout [String: Any]) {
         for (key, value) in source where context[key] == nil {
             context[key] = value
         }
     }
-
     private func removeContactSection(from dictionary: [String: Any], manifest: TemplateManifest?) -> [String: Any] {
         var sanitized = dictionary
         var processedKeys: Set<String> = []
-
         if let manifest {
             let targets = manifest.applicantProfileBindings()
             for target in targets {
@@ -403,12 +360,10 @@ struct ResumeTemplateContextBuilder {
                 processedKeys.insert(makeBindingKey(section: target.section, path: target.path))
             }
         }
-
         sanitized = removeDefaultContactFields(from: sanitized, skipping: processedKeys)
         sanitized.removeValue(forKey: "contact")
         return sanitized
     }
-
     private func removeProfileValue(
         at path: [String],
         inSection section: String,
@@ -416,7 +371,6 @@ struct ResumeTemplateContextBuilder {
     ) -> [String: Any] {
         guard let sectionValue = dictionary[section] else { return dictionary }
         let updatedSection = removeValue(at: path, from: sectionValue)
-
         var sanitized = dictionary
         if let updatedSection {
             sanitized[section] = updatedSection
@@ -425,7 +379,6 @@ struct ResumeTemplateContextBuilder {
         }
         return sanitized
     }
-
     private func removeValue(at path: [String], from value: Any) -> Any? {
         guard let first = path.first else { return value }
         if path.count == 1 {
@@ -435,7 +388,6 @@ struct ResumeTemplateContextBuilder {
             }
             return nil
         }
-
         guard var dict = dictionaryValue(from: value) else { return value }
         let remainder = Array(path.dropFirst())
         if let child = dict[first], let updated = removeValue(at: remainder, from: child) {
@@ -445,7 +397,6 @@ struct ResumeTemplateContextBuilder {
         }
         return dict.isEmpty ? nil : dict
     }
-
     private func dictionaryValue(from value: Any) -> [String: Any]? {
         if let dict = value as? [String: Any] {
             return dict
@@ -455,7 +406,6 @@ struct ResumeTemplateContextBuilder {
         }
         return nil
     }
-
     private func removeDefaultContactFields(
         from dictionary: [String: Any],
         skipping processed: Set<String>
@@ -466,26 +416,20 @@ struct ResumeTemplateContextBuilder {
             return removeProfileValue(at: path.path, inSection: path.section, from: partial)
         }
     }
-
     private func makeBindingKey(section: String, path: [String]) -> String {
         ([section] + path).joined(separator: ".")
     }
-
 }
-
 // MARK: - Seed normalization
 private struct SeedContextNormalizer {
     let manifest: TemplateManifest
-
     func normalize(_ context: [String: Any]) -> [String: Any] {
         var normalized = context
-
         for key in manifest.sectionOrder {
             guard let section = manifest.section(for: key),
                   let rawValue = normalized[key] else { continue }
             normalized[key] = normalizeValue(rawValue, for: section)
         }
-
         // Include any sections not listed in sectionOrder
         for (key, value) in context where normalized[key] == nil {
             if let section = manifest.section(for: key) {
@@ -494,10 +438,8 @@ private struct SeedContextNormalizer {
                 normalized[key] = value
             }
         }
-
         return normalized
     }
-
     private func normalizeValue(
         _ value: Any,
         for section: TemplateManifest.Section
@@ -519,7 +461,6 @@ private struct SeedContextNormalizer {
             return value
         }
     }
-
     // MARK: - Section handlers
     private func normalizeArraySection(_ value: Any) -> Any {
         if let array = value as? [Any] {
@@ -537,7 +478,6 @@ private struct SeedContextNormalizer {
         }
         return value
     }
-
     private func normalizeStringSection(_ value: Any) -> Any {
         if let string = value as? String {
             return string
@@ -553,7 +493,6 @@ private struct SeedContextNormalizer {
         }
         return value
     }
-
     private func normalizeArrayOfObjectsSection(
         _ value: Any,
         descriptor: TemplateManifest.Section.FieldDescriptor?
@@ -561,7 +500,6 @@ private struct SeedContextNormalizer {
         let entries = arrayEntries(from: value, descriptor: descriptor)
         return entries.isEmpty ? value : entries
     }
-
     private func normalizeObjectOfObjectsSection(
         _ value: Any,
         descriptor: TemplateManifest.Section.FieldDescriptor?
@@ -576,7 +514,6 @@ private struct SeedContextNormalizer {
             }
             return ordered.mapValues { $0 }
         }
-
         if var dictionary = value as? [String: Any] {
             for key in dictionary.keys {
                 dictionary[key] = normalizeDictionaryEntry(
@@ -587,7 +524,6 @@ private struct SeedContextNormalizer {
             }
             return dictionary
         }
-
         if let array = value as? [[String: Any]] {
             var result: [String: Any] = [:]
             for entry in array {
@@ -598,10 +534,8 @@ private struct SeedContextNormalizer {
             }
             return result.isEmpty ? value : result
         }
-
         return value
     }
-
     private func normalizeMapOfStringsSection(_ value: Any) -> Any {
         if let ordered = value as? OrderedDictionary<String, Any> {
             return ordered
@@ -618,14 +552,12 @@ private struct SeedContextNormalizer {
         }
         return value
     }
-
     // MARK: - Entry helpers
     private func arrayEntries(
         from raw: Any,
         descriptor: TemplateManifest.Section.FieldDescriptor?
     ) -> [[String: Any]] {
         var entries: [[String: Any]] = []
-
         func appendEntry(sourceKey: String?, payload: [String: Any]) {
             var entry = payload
             if let sourceKey, entry["__key"] == nil {
@@ -638,7 +570,6 @@ private struct SeedContextNormalizer {
             }
             entries.append(entry)
         }
-
         if let ordered = raw as? OrderedDictionary<String, Any> {
             for key in ordered.keys {
                 let value = ordered[key]
@@ -661,7 +592,6 @@ private struct SeedContextNormalizer {
             }
             return entries
         }
-
         if let dictionary = raw as? [String: Any] {
             for key in dictionary.keys.sorted() {
                 guard let value = dictionary[key] else { continue }
@@ -682,7 +612,6 @@ private struct SeedContextNormalizer {
             }
             return entries
         }
-
         if let array = raw as? [Any] {
             for element in array {
                 if let dict = element as? [String: Any] {
@@ -708,10 +637,8 @@ private struct SeedContextNormalizer {
             }
             return entries
         }
-
         return entries
     }
-
     private func dictionaryFromPrimitive(
         _ value: String,
         descriptor: TemplateManifest.Section.FieldDescriptor?,
@@ -720,7 +647,6 @@ private struct SeedContextNormalizer {
         guard let descriptor, let children = descriptor.children, !children.isEmpty else {
             return ["value": value]
         }
-
         var entry: [String: Any] = [:]
         if let titleDescriptor = children.first(where: { $0.key == "title" }),
            let fallbackKey {
@@ -733,14 +659,12 @@ private struct SeedContextNormalizer {
         }
         return entry
     }
-
     private func normalizeDictionaryEntry(
         _ raw: Any?,
         key: String,
         descriptor: TemplateManifest.Section.FieldDescriptor?
     ) -> Any {
         guard let raw else { return [:] }
-
         if var dict = raw as? [String: Any] {
             if dict["__key"] == nil {
                 dict["__key"] = key
@@ -750,7 +674,6 @@ private struct SeedContextNormalizer {
             }
             return dict
         }
-
         if let ordered = raw as? OrderedDictionary<String, Any> {
             var dict = ordered.asDictionary()
             if dict["__key"] == nil {
@@ -761,7 +684,6 @@ private struct SeedContextNormalizer {
             }
             return dict
         }
-
         if let string = raw as? String {
             var dict = dictionaryFromPrimitive(
                 string,
@@ -774,7 +696,6 @@ private struct SeedContextNormalizer {
             }
             return dict
         }
-
         if let array = raw as? [Any] {
             if let firstDict = array.first as? [String: Any] {
                 var normalized = firstDict
@@ -795,10 +716,8 @@ private struct SeedContextNormalizer {
                 return normalized
             }
         }
-
         return raw
     }
-
     private func ensureDescriptorDefaults(
         for entry: inout [String: Any],
         descriptor: TemplateManifest.Section.FieldDescriptor,
@@ -810,20 +729,17 @@ private struct SeedContextNormalizer {
            entry[titleDescriptor.key] == nil {
             entry[titleDescriptor.key] = fallbackKey
         }
-
         if let fallbackKey,
            descriptor.repeatable,
            entry["__key"] == nil {
             entry["__key"] = fallbackKey
         }
-
         if let value = entry["value"],
            let primaryDescriptor = children.first(where: { $0.key != "title" }) {
             if entry[primaryDescriptor.key] == nil {
                 entry[primaryDescriptor.key] = value
             }
         }
-
         if entry["title"] == nil,
            children.first(where: { $0.key == "title" }) == nil,
            let fallbackKey {
@@ -831,7 +747,6 @@ private struct SeedContextNormalizer {
         }
     }
 }
-
 private extension OrderedDictionary where Key == String, Value == Any {
     func asDictionary() -> [String: Any] {
         var result: [String: Any] = [:]

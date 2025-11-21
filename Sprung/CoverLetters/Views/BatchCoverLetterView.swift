@@ -1,11 +1,9 @@
 import SwiftUI
 import SwiftData
-
 enum BatchMode {
     case generate
     case existing
 }
-
 struct BatchCoverLetterView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) var appState: AppState
@@ -16,10 +14,8 @@ struct BatchCoverLetterView: View {
     @Environment(AppEnvironment.self) private var appEnvironment: AppEnvironment
     @Environment(OpenRouterService.self) private var openRouterService: OpenRouterService
     @Environment(ApplicantProfileStore.self) private var applicantProfileStore: ApplicantProfileStore
-
     // Live SwiftData query to automatically refresh on model changes
     @Query(sort: \CoverRef.name) private var allCoverRefs: [CoverRef]
-
     @State private var mode: BatchMode = .generate
     @State private var selectedModels: Set<String> = []
     @State private var selectedLetters: Set<CoverLetter> = []
@@ -30,7 +26,6 @@ struct BatchCoverLetterView: View {
     @State private var totalOperations: Int = 0
     @State private var completedOperations: Int = 0
     @State private var errorMessage: String?
-
     // Source management states
     @State private var includeResumeRefs: Bool = true
     @State private var selectedBackgroundFacts: Set<String> = []

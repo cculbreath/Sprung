@@ -2,10 +2,8 @@
 //  OpenAIService+TTSCapable.swift
 //  Sprung
 //
-
 import Foundation
 import SwiftOpenAI
-
 /// Bridges the SwiftOpenAI fork to the `TTSCapable` protocol until the SDK
 /// exposes native conformance. Remove this adapter when the upstream
 /// dependency ships a direct implementation.

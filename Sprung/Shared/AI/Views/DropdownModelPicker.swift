@@ -4,9 +4,7 @@
 //
 //  Created on 6/2/25.
 //
-
 import SwiftUI
-
 /// A reusable dropdown-style model picker component that displays in a GroupBox
 /// Models shown are filtered first by user's selection in Settings, then by capability requirements
 struct DropdownModelPicker: View {
@@ -17,16 +15,12 @@ struct DropdownModelPicker: View {
     @Environment(AppState.self) private var appState
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(OpenRouterService.self) private var openRouterService
-
     /// Optional capability filter for operation-specific requirements
     var requiredCapability: ModelCapability? = nil
-
     /// Title for the GroupBox label
     var title: String = "AI Model"
-
     /// Whether to show inside a GroupBox
     var showInGroupBox: Bool = true
-
     /// Optional special option to show at the top (label, value)
     var includeSpecialOption: (String, String)? = nil
     

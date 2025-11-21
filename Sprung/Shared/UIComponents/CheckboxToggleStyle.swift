@@ -4,9 +4,7 @@
 //
 //  Created on 6/2/25.
 //
-
 import SwiftUI
-
 /// Custom checkbox toggle style with square checkbox appearance
 struct CheckboxToggleStyle: ToggleStyle {
     func makeBody(configuration: Configuration) -> some View {

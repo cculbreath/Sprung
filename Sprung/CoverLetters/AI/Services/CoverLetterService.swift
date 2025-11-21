@@ -5,10 +5,8 @@
 //  Created on 6/5/2025
 //
 //  Service for cover letter generation and revision using unified LLMService
-
 import Foundation
 import SwiftUI
-
 @MainActor
 @Observable
 final class CoverLetterService {
@@ -18,7 +16,6 @@ final class CoverLetterService {
     private let llmFacade: LLMFacade
     private let exportCoordinator: ResumeExportCoordinator
     private let applicantProfileStore: ApplicantProfileStore
-
     // MARK: - Initialization
     init(
         llmFacade: LLMFacade,

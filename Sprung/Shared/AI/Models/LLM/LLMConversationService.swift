@@ -6,9 +6,7 @@
 //  conversations. LLMFacade uses this to route conversational traffic to the
 //  appropriate provider (OpenRouter, OpenAI Responses, etc.).
 //
-
 import Foundation
-
 protocol LLMConversationService: AnyObject {
     func startConversation(
         systemPrompt: String?,
@@ -16,7 +14,6 @@ protocol LLMConversationService: AnyObject {
         modelId: String,
         temperature: Double?
     ) async throws -> (UUID, String)
-
     func continueConversation(
         userMessage: String,
         modelId: String,
@@ -25,7 +22,6 @@ protocol LLMConversationService: AnyObject {
         temperature: Double?
     ) async throws -> String
 }
-
 protocol LLMStreamingConversationService: LLMConversationService {
     func startConversationStreaming(
         systemPrompt: String?,
@@ -34,7 +30,6 @@ protocol LLMStreamingConversationService: LLMConversationService {
         temperature: Double?,
         images: [Data]
     ) async throws -> (UUID, AsyncThrowingStream<LLMStreamChunkDTO, Error>)
-
     func continueConversationStreaming(
         userMessage: String,
         modelId: String,
@@ -43,14 +38,11 @@ protocol LLMStreamingConversationService: LLMConversationService {
         temperature: Double?
     ) async throws -> AsyncThrowingStream<LLMStreamChunkDTO, Error>
 }
-
 final class OpenRouterConversationService: LLMConversationService {
     private let service: LLMService
-
     init(service: LLMService) {
         self.service = service
     }
-
     func startConversation(
         systemPrompt: String?,
         userMessage: String,
@@ -64,7 +56,6 @@ final class OpenRouterConversationService: LLMConversationService {
             temperature: temperature
         )
     }
-
     func continueConversation(
         userMessage: String,
         modelId: String,

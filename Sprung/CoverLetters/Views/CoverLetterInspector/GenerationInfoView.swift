@@ -4,9 +4,7 @@
 //
 //  Created on 6/13/25.
 //
-
 import SwiftUI
-
 struct GenerationInfoView: View {
     let coverLetter: CoverLetter
     let openRouterService: OpenRouterService

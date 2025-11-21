@@ -2,11 +2,9 @@
 //  NavigationStateService.swift
 //  Sprung
 //
-
 import Foundation
 import Observation
 import SwiftData
-
 @MainActor
 @Observable
 final class NavigationStateService {
@@ -14,13 +12,11 @@ final class NavigationStateService {
         static let selectedTab = "selectedTab"
         static let selectedJobAppId = "selectedJobAppId"
     }
-
     var selectedTab: TabList {
         didSet {
             UserDefaults.standard.set(selectedTab.rawValue, forKey: StorageKeys.selectedTab)
         }
     }
-
     var selectedJobApp: JobApp? {
         didSet {
             if let jobApp = selectedJobApp {
@@ -32,13 +28,10 @@ final class NavigationStateService {
             }
         }
     }
-
     var selectedResume: Resume? {
         selectedJobApp?.selectedRes
     }
-
     private var pendingSelectedJobAppId: UUID?
-
     init(defaultTab: TabList = .listing) {
         if let storedValue = UserDefaults.standard.string(forKey: StorageKeys.selectedTab),
            let storedTab = TabList(rawValue: storedValue) {
@@ -46,18 +39,15 @@ final class NavigationStateService {
         } else {
             selectedTab = defaultTab
         }
-
         if let storedId = UserDefaults.standard.string(forKey: StorageKeys.selectedJobAppId),
            let uuid = UUID(uuidString: storedId) {
             pendingSelectedJobAppId = uuid
         }
     }
-
     func restoreSelectedJobApp(from jobAppStore: JobAppStore) {
         guard let identifier = pendingSelectedJobAppId ?? savedJobAppIdentifier() else {
             return
         }
-
         if let jobApp = jobAppStore.jobApps.first(where: { $0.id == identifier }) {
             jobAppStore.selectedApp = jobApp
             selectedJobApp = jobApp
@@ -68,11 +58,9 @@ final class NavigationStateService {
             Logger.debug("⚠️ Could not restore job app with ID: \(identifier.uuidString)")
         }
     }
-
     func saveSelectedJobApp(_ jobApp: JobApp?) {
         selectedJobApp = jobApp
     }
-
     private func savedJobAppIdentifier() -> UUID? {
         guard let storedId = UserDefaults.standard.string(forKey: StorageKeys.selectedJobAppId) else {
             return nil

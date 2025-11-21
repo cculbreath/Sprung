@@ -1,13 +1,10 @@
 // Sprung/Resumes/AI/Services/FixOverflowService.swift
-
 import Foundation
-
 struct FixOverflowStatus {
     let statusMessage: String
     let changeMessage: String
     let overflowLineCount: Int
 }
-
 @MainActor
 class FixOverflowService {
     private let reviewService: ResumeReviewService
@@ -328,7 +325,6 @@ class FixOverflowService {
         }
     }
 }
-
 // MARK: - Error Types
 enum FixOverflowError: LocalizedError {
     case pdfGenerationFailed

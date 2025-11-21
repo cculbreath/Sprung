@@ -1,10 +1,8 @@
 import SwiftUI
-
 /// Lightweight wrapper that mimics the grouped cards used across onboarding flows.
 struct SectionCard<Content: View>: View {
     let title: String
     let content: () -> Content
-
     init(
         title: String,
         @ViewBuilder content: @escaping () -> Content
@@ -12,7 +10,6 @@ struct SectionCard<Content: View>: View {
         self.title = title
         self.content = content
     }
-
     var body: some View {
         GroupBox {
             VStack(alignment: .leading, spacing: 12) {

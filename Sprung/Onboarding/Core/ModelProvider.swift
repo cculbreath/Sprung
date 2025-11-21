@@ -4,9 +4,7 @@
 //
 //  Centralizes model selection for onboarding interview tasks.
 //
-
 import Foundation
-
 enum TaskType {
     case orchestrator
     case validate
@@ -14,14 +12,12 @@ enum TaskType {
     case summarize
     case knowledgeCard
 }
-
 struct ModelProvider {
     struct Config {
         let id: String
         let defaultVerbosity: String?
         let defaultReasoningEffort: String?
     }
-
     static func forTask(_ type: TaskType) -> Config {
         switch type {
         case .orchestrator:
@@ -50,7 +46,6 @@ struct ModelProvider {
             )
         }
     }
-
     static func escalate(_ prior: Config) -> Config {
         Config(
             id: "o1",
@@ -58,9 +53,7 @@ struct ModelProvider {
             defaultReasoningEffort: nil
         )
     }
-
     private static let supportedReasoningEfforts: Set<String> = ["minimal", "low", "medium", "high"]
-
     private static func userReasoningEffort(defaultValue: String?) -> String? {
         let stored = UserDefaults.standard.string(forKey: "reasoningEffort")?.lowercased()
         if let stored, supportedReasoningEfforts.contains(stored) {

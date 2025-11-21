@@ -4,10 +4,8 @@
 //
 //  Handles custom field validation and save/refresh orchestration.
 //
-
 import Foundation
 import SwiftUI
-
 extension TemplateEditorView {
     
     // MARK: - Custom Field Validation
@@ -16,13 +14,10 @@ extension TemplateEditorView {
             customFieldWarningMessage = nil
             return
         }
-
         let slug = selectedTemplate.lowercased()
         let baseManifest = TemplateManifestDefaults.baseManifest(for: slug)
-
         let trimmedManifest = manifestContent.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedManifest: TemplateManifest
-
         if trimmedManifest.isEmpty {
             resolvedManifest = baseManifest
         } else if let data = manifestContent.data(using: .utf8),
@@ -36,9 +31,7 @@ extension TemplateEditorView {
             customFieldWarningMessage = "Fix manifest JSON to verify custom fields coverage."
             return
         }
-
         let manifestKeys = resolvedManifest.customFieldKeyPaths()
-
         let trimmedSeed = seedContent.trimmingCharacters(in: .whitespacesAndNewlines)
         let seedKeys: Set<String>
         if trimmedSeed.isEmpty {
@@ -50,16 +43,13 @@ extension TemplateEditorView {
             customFieldWarningMessage = "Fix default values JSON to verify custom fields coverage."
             return
         }
-
         let definedKeys = manifestKeys.union(seedKeys)
         guard definedKeys.isEmpty == false else {
             customFieldWarningMessage = nil
             return
         }
-
         let usedKeys = TemplateEditorView.extractCustomFieldReferences(from: textContent)
         let missing = definedKeys.subtracting(usedKeys)
-
         if missing.isEmpty {
             customFieldWarningMessage = nil
         } else {
@@ -67,12 +57,10 @@ extension TemplateEditorView {
             customFieldWarningMessage = "Text template omits custom fields: \(list). They will be missing from plain-text resumes and LLM outputs."
         }
     }
-
     private static let customFieldReferenceRegex: NSRegularExpression = {
         let pattern = #"custom(?:\.[A-Za-z0-9_\-]+)+"#
         return try! NSRegularExpression(pattern: pattern, options: [])
     }()
-
     static func extractCustomFieldReferences(from template: String) -> Set<String> {
         let range = NSRange(template.startIndex..<template.endIndex, in: template)
         let matches = customFieldReferenceRegex.matches(in: template, options: [], range: range)
@@ -81,14 +69,12 @@ extension TemplateEditorView {
             return String(template[matchRange])
         })
     }
-
     static func collectCustomFieldKeys(from dictionary: [String: Any]) -> Set<String> {
         guard let customValue = dictionary["custom"] else { return [] }
         var results: Set<String> = []
         collectCustomFieldKeys(from: customValue, currentPath: ["custom"], accumulator: &results)
         return results
     }
-
     private static func collectCustomFieldKeys(
         from value: Any,
         currentPath: [String],
@@ -104,12 +90,10 @@ extension TemplateEditorView {
             }
             return
         }
-
         if value is [Any] {
             accumulator.insert(currentPath.joined(separator: "."))
             return
         }
-
         accumulator.insert(currentPath.joined(separator: "."))
     }
     
@@ -125,24 +109,20 @@ extension TemplateEditorView {
         }
         return success
     }
-
     func performRefresh() {
         if saveAllChanges() {
             refreshTemplatePreview()
             refreshCustomFieldWarnings()
         }
     }
-
     func saveAndClose() {
         guard saveAllChanges() else { return }
         closeEditor()
     }
-
     func closeWithoutSaving() {
         revertAllChanges()
         closeEditor()
     }
-
     private func discardPendingChanges() {
         htmlHasChanges = false
         textHasChanges = false
@@ -151,7 +131,6 @@ extension TemplateEditorView {
         manifestValidationMessage = nil
         seedValidationMessage = nil
     }
-
     func revertAllChanges() {
         discardPendingChanges()
         loadTemplateAssets()
@@ -179,7 +158,6 @@ extension TemplateEditorView {
        refreshTemplatePreview()
         refreshCustomFieldWarnings()
     }
-
     func handleTabSelectionChange(newValue: TemplateEditorTab) {
         textEditorInsertion = nil
         switch newValue {

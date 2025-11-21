@@ -1,6 +1,5 @@
 import Foundation
 import OrderedCollections
-
 struct TemplateManifest: Codable {
     struct Section: Codable {
         enum Kind: String, Codable {
@@ -12,7 +11,6 @@ struct TemplateManifest: Codable {
             case arrayOfObjects
             case fontSizes
         }
-
         enum Behavior: String, Codable {
             case styling
             case fontSizes
@@ -21,7 +19,6 @@ struct TemplateManifest: Codable {
             case applicantProfile
             case metadata
         }
-
         struct FieldDescriptor: Codable {
             enum InputKind: String, Codable {
                 case text
@@ -36,7 +33,6 @@ struct TemplateManifest: Codable {
                 case phone
                 case select
             }
-
             enum Behavior: String, Codable {
                 case fontSizes
                 case includeFonts
@@ -44,20 +40,16 @@ struct TemplateManifest: Codable {
                 case sectionLabels
                 case applicantProfile
             }
-
             enum BindingSource: String, Codable {
                 case applicantProfile
             }
-
             struct Binding: Codable {
                 let source: BindingSource
                 let path: [String]
-
                 init(source: BindingSource, path: [String]) {
                     self.source = source
                     self.path = path
                 }
-
                 init(from decoder: Decoder) throws {
                     let container = try decoder.singleValueContainer()
                     if let stringValue = try? container.decode(String.self) {
@@ -73,7 +65,6 @@ struct TemplateManifest: Codable {
                         path = Array(components.dropFirst())
                         return
                     }
-
                     let keyed = try decoder.container(keyedBy: CodingKeys.self)
                     let rawSource = try keyed.decode(String.self, forKey: .source)
                     guard let resolvedSource = BindingSource(rawValue: rawSource) else {
@@ -86,25 +77,21 @@ struct TemplateManifest: Codable {
                     source = resolvedSource
                     path = try keyed.decodeIfPresent([String].self, forKey: .path) ?? []
                 }
-
                 func encode(to encoder: Encoder) throws {
                     if path.isEmpty {
                         var container = encoder.singleValueContainer()
                         try container.encode(source.rawValue)
                         return
                     }
-
                     var container = encoder.container(keyedBy: CodingKeys.self)
                     try container.encode(source.rawValue, forKey: .source)
                     try container.encode(path, forKey: .path)
                 }
-
                 private enum CodingKeys: String, CodingKey {
                     case source
                     case path
                 }
             }
-
             private enum CodingKeys: String, CodingKey {
                 case key
                 case input
@@ -118,7 +105,6 @@ struct TemplateManifest: Codable {
             case binding
             case allowsManualMutations
         }
-
         struct Validation: Codable {
             enum Rule: String, Codable {
                 case regex
@@ -132,16 +118,13 @@ struct TemplateManifest: Codable {
                     case numericRange
                     case custom
                 }
-
                 let rule: Rule
                 let pattern: String?
                 let min: Double?
                 let max: Double?
                 let options: [String]?
                 let message: String?
-
             }
-
             let key: String
             let input: InputKind?
             let required: Bool
@@ -153,7 +136,6 @@ struct TemplateManifest: Codable {
             let behavior: Behavior?
             let binding: Binding?
             let allowsManualMutations: Bool
-
             init(
                 key: String,
                 input: InputKind? = nil,
@@ -179,7 +161,6 @@ struct TemplateManifest: Codable {
                 self.binding = binding
                 self.allowsManualMutations = allowsManualMutations
             }
-
             init(from decoder: Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
                 key = try container.decode(String.self, forKey: .key)
@@ -194,7 +175,6 @@ struct TemplateManifest: Codable {
                 binding = try container.decodeIfPresent(Binding.self, forKey: .binding)
                 allowsManualMutations = try container.decodeIfPresent(Bool.self, forKey: .allowsManualMutations) ?? false
             }
-
             func encode(to encoder: Encoder) throws {
                 var container = encoder.container(keyedBy: CodingKeys.self)
                 try container.encode(key, forKey: .key)
@@ -216,27 +196,23 @@ struct TemplateManifest: Codable {
                 }
             }
         }
-
         /// Tracks whether section metadata was declared in the manifest or
         /// synthesized at runtime for legacy templates (schema < v2024.09).
         enum FieldMetadataSource {
             case declared
             case synthesized
         }
-
         private enum CodingKeys: String, CodingKey {
             case type
             case defaultValue = "default"
             case fields
             case behavior
         }
-
         let type: Kind
         let defaultValue: JSONValue?
         var fields: [FieldDescriptor]
         var fieldMetadataSource: FieldMetadataSource
         let behavior: Behavior?
-
         init(
             type: Kind,
             defaultValue: JSONValue?,
@@ -250,7 +226,6 @@ struct TemplateManifest: Codable {
             self.fieldMetadataSource = fieldMetadataSource
             self.behavior = behavior
         }
-
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             type = try container.decode(Kind.self, forKey: .type)
@@ -259,7 +234,6 @@ struct TemplateManifest: Codable {
             fieldMetadataSource = fields.isEmpty ? .synthesized : .declared
             behavior = try container.decodeIfPresent(Behavior.self, forKey: .behavior)
         }
-
         func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(type, forKey: .type)
@@ -269,7 +243,6 @@ struct TemplateManifest: Codable {
             }
             try container.encodeIfPresent(behavior, forKey: .behavior)
         }
-
         mutating func ensureFieldDescriptors(for sectionKey: String) {
             guard fields.isEmpty else { return }
             let synthesized = FieldDescriptorFactory.descriptors(
@@ -284,7 +257,6 @@ struct TemplateManifest: Codable {
                 category: .migration
             )
         }
-
         func defaultContextValue() -> Any? {
             guard let value = defaultValue?.value else { return nil }
             switch type {
@@ -313,10 +285,8 @@ struct TemplateManifest: Codable {
             }
         }
     }
-
     struct JSONValue: Codable {
         let value: Any
-
         init(from decoder: Decoder) throws {
             let container = try decoder.singleValueContainer()
             if container.decodeNil() {
@@ -340,11 +310,9 @@ struct TemplateManifest: Codable {
                 )
             }
         }
-
         init(value: Any) {
             self.value = value
         }
-
         func encode(to encoder: Encoder) throws {
             var container = encoder.singleValueContainer()
             switch value {
@@ -390,9 +358,7 @@ struct TemplateManifest: Codable {
             }
         }
     }
-
     static let currentSchemaVersion: Int = 4
-
     let slug: String
     let schemaVersion: Int
     let sectionOrder: [String]
@@ -403,11 +369,9 @@ struct TemplateManifest: Codable {
     let keysInEditor: [String]?
     let sectionVisibilityDefaults: [String: Bool]?
     let sectionVisibilityLabels: [String: String]?
-
     var usesSynthesizedMetadata: Bool {
         !synthesizedSectionKeys.isEmpty
     }
-
     init(
         slug: String,
         schemaVersion: Int = 1,
@@ -439,7 +403,6 @@ struct TemplateManifest: Codable {
         self.sections = normalized
         synthesizedSectionKeys = synthesized
     }
-
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         slug = try container.decode(String.self, forKey: .slug)
@@ -463,7 +426,6 @@ struct TemplateManifest: Codable {
         sections = normalized
         synthesizedSectionKeys = synthesized
     }
-
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(slug, forKey: .slug)
@@ -478,19 +440,15 @@ struct TemplateManifest: Codable {
         try container.encodeIfPresent(sectionVisibilityLabels, forKey: .sectionVisibilityLabels)
         try container.encode(sections, forKey: .sections)
     }
-
     func section(for key: String) -> Section? {
         sections[key]
     }
-
     func behavior(forSection key: String) -> Section.Behavior? {
         sections[key]?.behavior
     }
-
     func isFieldMetadataSynthesized(for key: String) -> Bool {
         synthesizedSectionKeys.contains(key)
     }
-
     func customFieldKeyPaths() -> Set<String> {
         guard let customSection = sections["custom"] else { return [] }
         var results: Set<String> = []
@@ -501,7 +459,6 @@ struct TemplateManifest: Codable {
         )
         return results
     }
-
     private func collectCustomFieldPaths(
         in descriptors: [Section.FieldDescriptor],
         currentPath: [String],
@@ -520,7 +477,6 @@ struct TemplateManifest: Codable {
                 }
                 continue
             }
-
             let nextPath = currentPath + [descriptor.key]
             if let children = descriptor.children, children.isEmpty == false {
                 collectCustomFieldPaths(
@@ -533,7 +489,6 @@ struct TemplateManifest: Codable {
             }
         }
     }
-
     func makeDefaultContext() -> [String: Any] {
         var context: [String: Any] = [:]
         for key in sectionOrder {
@@ -543,7 +498,6 @@ struct TemplateManifest: Codable {
         }
         return context
     }
-
     static func normalize(_ value: Any) -> Any {
         switch value {
         case is NSNull:
@@ -566,7 +520,6 @@ struct TemplateManifest: Codable {
             return value
         }
     }
-
     private enum CodingKeys: String, CodingKey {
         case slug
         case schemaVersion
@@ -579,20 +532,16 @@ struct TemplateManifest: Codable {
         case sectionVisibilityLabels = "section-visibility-labels"
     }
 }
-
 // MARK: - Encoding helpers
 extension TemplateManifest {
     static func decode(from data: Data) throws -> TemplateManifest {
         try JSONDecoder().decode(TemplateManifest.self, from: data)
     }
-
     func sectionVisibilityKeys() -> [String] {
         guard let defaultKeys = sectionVisibilityDefaults?.keys else { return [] }
         return Array(defaultKeys).sorted()
     }
-
 }
-
 // MARK: - Applicant Profile Bindings
 extension TemplateManifest {
     struct ApplicantProfileBinding {
@@ -600,12 +549,10 @@ extension TemplateManifest {
         let path: [String]
         let binding: Section.FieldDescriptor.Binding
     }
-
     struct ApplicantProfilePath {
         let section: String
         let path: [String]
     }
-
     static let defaultApplicantProfilePaths: [ApplicantProfilePath] = [
         ApplicantProfilePath(section: "basics", path: ["name"]),
         ApplicantProfilePath(section: "basics", path: ["label"]),
@@ -624,7 +571,6 @@ extension TemplateManifest {
         ApplicantProfilePath(section: "basics", path: ["location", "code"]),
         ApplicantProfilePath(section: "basics", path: ["location", "countryCode"])
     ]
-
     func applicantProfileBindings() -> [ApplicantProfileBinding] {
         var bindings: [ApplicantProfileBinding] = []
         for (sectionKey, section) in sections {
@@ -637,7 +583,6 @@ extension TemplateManifest {
         }
         return bindings
     }
-
     private func collectApplicantProfileBindings(
         in descriptors: [Section.FieldDescriptor],
         sectionKey: String,
@@ -668,7 +613,6 @@ extension TemplateManifest {
         }
     }
 }
-
 // MARK: - Field Descriptor Synthesis
 private enum FieldDescriptorFactory {
     static func descriptors(
@@ -758,7 +702,6 @@ private enum FieldDescriptorFactory {
             ]
         }
     }
-
     private static func childDescriptors(from value: Any) -> [TemplateManifest.Section.FieldDescriptor]? {
         if let dict = asOrderedDictionary(value) {
             return dict.map { key, inner in
@@ -770,7 +713,6 @@ private enum FieldDescriptorFactory {
                 )
             }
         }
-
         if let array = value as? [Any], let first = array.first {
             if let dict = asOrderedDictionary(first) {
                 let children = dict.map { key, inner in
@@ -797,10 +739,8 @@ private enum FieldDescriptorFactory {
                 )
             ]
         }
-
         return nil
     }
-
     private static func asOrderedDictionary(_ value: Any?) -> OrderedDictionary<String, Any>? {
         if let ordered = value as? OrderedDictionary<String, Any> {
             return ordered
@@ -810,11 +750,9 @@ private enum FieldDescriptorFactory {
         }
         return nil
     }
-
     private static func isRepeatable(_ value: Any) -> Bool {
         value is [Any]
     }
-
     private static func inputKind(for value: Any) -> TemplateManifest.Section.FieldDescriptor.InputKind {
         switch value {
         case is Bool:

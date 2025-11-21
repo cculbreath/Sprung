@@ -4,10 +4,8 @@
 //
 //  Created by Christopher Culbreath on 9/1/24.
 //
-
 import Foundation
 import SwiftData
-
 enum Statuses: String, Codable, CaseIterable {
     case new = "new"
     case inProgress = "In Progress"
@@ -19,7 +17,6 @@ enum Statuses: String, Codable, CaseIterable {
     case abandonned = "Abandonned" // Legacy spelling maintained for persisted records
     case rejected = "Rejected"
 }
-
 extension Statuses {
     /// Human-friendly label for UI surfaces.
     var displayName: String {
@@ -31,26 +28,20 @@ extension Statuses {
         }
     }
 }
-
 @Model class JobApp: Equatable, Identifiable, Decodable, Hashable {
     @Attribute(.unique) var id: UUID = UUID()
-
     static func == (lhs: JobApp, rhs: JobApp) -> Bool {
         lhs.id == rhs.id
     }
-
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }
-
     @Relationship(deleteRule: .cascade, inverse: \Resume.jobApp)
     var resumes: [Resume] = []
-
     @Relationship(deleteRule: .cascade, inverse: \CoverLetter.jobApp)
     var coverLetters: [CoverLetter] = []
     var selectedResId: UUID?
     var selectedCoverId: UUID?
-
     var selectedRes: Resume? {
         get {
             if let id = selectedResId {
@@ -63,7 +54,6 @@ extension Statuses {
             selectedResId = newValue?.id
         }
     }
-
     var selectedCover: CoverLetter? {
         get {
             if let id = selectedCoverId {
@@ -75,7 +65,6 @@ extension Statuses {
             selectedCoverId = newValue?.id
         }
     }
-
     @Attribute(originalName: "job_position")
     var jobPosition: String
     @Attribute(originalName: "job_location")
@@ -102,7 +91,6 @@ extension Statuses {
     var postingURL: String = ""
     var status: Statuses = Statuses.new
     var notes: String = ""
-
     enum CodingKeys: String, CodingKey {
         case jobPosition = "job_position"
         case jobLocation = "job_location"
@@ -121,47 +109,35 @@ extension Statuses {
         case status
         case postingURL = "posting_url"
     }
-
     var jobListingString: String {
         var descriptionParts: [String] = []
-
         descriptionParts.append("Job Position: \(jobPosition)")
         descriptionParts.append("Job Location: \(jobLocation)")
         descriptionParts.append("Company Name: \(companyName)")
-
         if !companyLinkedinId.isEmpty {
             descriptionParts.append("Company LinkedIn ID: \(companyLinkedinId)")
         }
-
         if !jobPostingTime.isEmpty {
             descriptionParts.append("Job Posting Time: \(jobPostingTime)")
         }
-
         if !seniorityLevel.isEmpty {
             descriptionParts.append("Seniority Level: \(seniorityLevel)")
         }
-
         if !employmentType.isEmpty {
             descriptionParts.append("Employment Type: \(employmentType)")
         }
-
         if !jobFunction.isEmpty {
             descriptionParts.append("Job Function: \(jobFunction)")
         }
-
         if !industries.isEmpty {
             descriptionParts.append("Industries: \(industries)")
         }
-
         if !jobDescription.isEmpty {
             descriptionParts.append("Job Description: \(jobDescription)")
         }
-
         return descriptionParts.joined(separator: "\n")
     }
-
     // UI helpers have been moved to SwiftUI‑only extension (ViewExtensions).
-
     init(
         jobPosition: String = "",
         jobLocation: String = "",
@@ -190,7 +166,6 @@ extension Statuses {
         self.postingURL = postingURL
         resumes = []
     }
-
     var hasAnyRes: Bool { return !resumes.isEmpty }
     func addResume(_ resume: Resume) {
         // Ensure uniqueness
@@ -198,12 +173,10 @@ extension Statuses {
             resumes.append(resume)
             selectedRes = resume
         }
-
         if selectedRes == nil {
             selectedRes = resume
         }
     }
-
     func resumeDeletePrep(candidate: Resume) {
         if selectedRes == candidate {
             if resumes.count <= 1 {
@@ -218,7 +191,6 @@ extension Statuses {
         }
         // No else branch needed - if selectedRes != candidate, we don't need to change selection
     }
-
     required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         jobPosition = try container.decode(String.self, forKey: .jobPosition)
@@ -237,9 +209,7 @@ extension Statuses {
     }
     func replaceUUIDsWithLetterNames(in text: String) -> String {
 
-
         var result = text
-
         for letter in self.coverLetters {
             let uuidString = letter.id.uuidString
             if result.contains(uuidString) {

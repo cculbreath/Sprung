@@ -4,17 +4,13 @@
 //
 //  Created by Christopher Culbreath on 1/31/25.
 //
-
 import SwiftUI
-
 struct ResRefRowView: View {
     @Environment(ResRefStore.self) private var resRefStore: ResRefStore
     @State var sourceNode: ResRef
     @State private var isButtonHovering = false
-
     // State to manage sheet presentation
     @State private var isEditSheetPresented: Bool = false
-
     var body: some View {
         @Bindable var resRefStore = resRefStore
         HStack {
@@ -23,7 +19,6 @@ struct ResRefRowView: View {
                 .toggleStyle(SwitchToggleStyle())
                 .labelsHidden()
                 .padding(.horizontal, 15)
-
             // Text filling the space
             VStack(alignment: .leading) {
                 Text(sourceNode.name)
@@ -39,9 +34,7 @@ struct ResRefRowView: View {
                     existingResRef: sourceNode
                 )
             }
-
             Spacer() // Pushes the trash button to the right
-
             // Trash button aligned to the right
             Button(action: {
                 resRefStore.deleteResRef(sourceNode)

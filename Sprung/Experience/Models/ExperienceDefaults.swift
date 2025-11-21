@@ -1,10 +1,8 @@
 import Foundation
 import SwiftData
-
 @Model
 final class ExperienceDefaults {
     @Attribute(.unique) var id: UUID
-
     var isWorkEnabled: Bool
     var isVolunteerEnabled: Bool
     var isEducationEnabled: Bool
@@ -16,40 +14,28 @@ final class ExperienceDefaults {
     var isLanguagesEnabled: Bool
     var isInterestsEnabled: Bool
     var isReferencesEnabled: Bool
-
     @Relationship(deleteRule: .cascade, inverse: \WorkExperienceDefault.defaults)
     var workExperiences: [WorkExperienceDefault]
-
     @Relationship(deleteRule: .cascade, inverse: \VolunteerExperienceDefault.defaults)
     var volunteerExperiences: [VolunteerExperienceDefault]
-
     @Relationship(deleteRule: .cascade, inverse: \EducationExperienceDefault.defaults)
     var educationRecords: [EducationExperienceDefault]
-
     @Relationship(deleteRule: .cascade, inverse: \ProjectExperienceDefault.defaults)
     var projects: [ProjectExperienceDefault]
-
     @Relationship(deleteRule: .cascade, inverse: \SkillExperienceDefault.defaults)
     var skills: [SkillExperienceDefault]
-
     @Relationship(deleteRule: .cascade, inverse: \AwardExperienceDefault.defaults)
     var awards: [AwardExperienceDefault]
-
     @Relationship(deleteRule: .cascade, inverse: \CertificateExperienceDefault.defaults)
     var certificates: [CertificateExperienceDefault]
-
     @Relationship(deleteRule: .cascade, inverse: \PublicationExperienceDefault.defaults)
     var publications: [PublicationExperienceDefault]
-
     @Relationship(deleteRule: .cascade, inverse: \LanguageExperienceDefault.defaults)
     var languages: [LanguageExperienceDefault]
-
     @Relationship(deleteRule: .cascade, inverse: \InterestExperienceDefault.defaults)
     var interests: [InterestExperienceDefault]
-
     @Relationship(deleteRule: .cascade, inverse: \ReferenceExperienceDefault.defaults)
     var references: [ReferenceExperienceDefault]
-
     init(
         id: UUID = UUID(),
         isWorkEnabled: Bool = false,
@@ -98,10 +84,8 @@ final class ExperienceDefaults {
         self.languages = languages
         self.interests = interests
         self.references = references
-
         establishInverseRelationships()
     }
-
     private func establishInverseRelationships() {
         workExperiences.forEach { $0.defaults = self }
         volunteerExperiences.forEach { $0.defaults = self }
@@ -116,7 +100,6 @@ final class ExperienceDefaults {
         references.forEach { $0.defaults = self }
     }
 }
-
 // MARK: - Work Experience
 @Model
 final class WorkExperienceDefault {
@@ -128,12 +111,9 @@ final class WorkExperienceDefault {
     var startDate: String
     var endDate: String
     var summary: String
-
     @Relationship(deleteRule: .cascade, inverse: \WorkHighlightDefault.workExperience)
     var highlights: [WorkHighlightDefault]
-
     var defaults: ExperienceDefaults?
-
     init(
         id: UUID = UUID(),
         name: String = "",
@@ -156,18 +136,14 @@ final class WorkExperienceDefault {
         self.summary = summary
         self.highlights = highlights
         self.defaults = defaults
-
         self.highlights.forEach { $0.workExperience = self }
     }
 }
-
 @Model
 final class WorkHighlightDefault {
     @Attribute(.unique) var id: UUID
     var text: String
-
     var workExperience: WorkExperienceDefault?
-
     init(
         id: UUID = UUID(),
         text: String = "",
@@ -178,7 +154,6 @@ final class WorkHighlightDefault {
         self.workExperience = workExperience
     }
 }
-
 // MARK: - Volunteer Experience
 @Model
 final class VolunteerExperienceDefault {
@@ -189,12 +164,9 @@ final class VolunteerExperienceDefault {
     var startDate: String
     var endDate: String
     var summary: String
-
     @Relationship(deleteRule: .cascade, inverse: \VolunteerHighlightDefault.volunteerExperience)
     var highlights: [VolunteerHighlightDefault]
-
     var defaults: ExperienceDefaults?
-
     init(
         id: UUID = UUID(),
         organization: String = "",
@@ -215,18 +187,14 @@ final class VolunteerExperienceDefault {
         self.summary = summary
         self.highlights = highlights
         self.defaults = defaults
-
         self.highlights.forEach { $0.volunteerExperience = self }
     }
 }
-
 @Model
 final class VolunteerHighlightDefault {
     @Attribute(.unique) var id: UUID
     var text: String
-
     var volunteerExperience: VolunteerExperienceDefault?
-
     init(
         id: UUID = UUID(),
         text: String = "",
@@ -237,7 +205,6 @@ final class VolunteerHighlightDefault {
         self.volunteerExperience = volunteerExperience
     }
 }
-
 // MARK: - Education
 @Model
 final class EducationExperienceDefault {
@@ -249,12 +216,9 @@ final class EducationExperienceDefault {
     var startDate: String
     var endDate: String
     var score: String
-
     @Relationship(deleteRule: .cascade, inverse: \EducationCourseDefault.education)
     var courses: [EducationCourseDefault]
-
     var defaults: ExperienceDefaults?
-
     init(
         id: UUID = UUID(),
         institution: String = "",
@@ -277,18 +241,14 @@ final class EducationExperienceDefault {
         self.score = score
         self.courses = courses
         self.defaults = defaults
-
         self.courses.forEach { $0.education = self }
     }
 }
-
 @Model
 final class EducationCourseDefault {
     @Attribute(.unique) var id: UUID
     var name: String
-
     var education: EducationExperienceDefault?
-
     init(
         id: UUID = UUID(),
         name: String = "",
@@ -299,7 +259,6 @@ final class EducationCourseDefault {
         self.education = education
     }
 }
-
 // MARK: - Projects
 @Model
 final class ProjectExperienceDefault {
@@ -312,18 +271,13 @@ final class ProjectExperienceDefault {
     @Attribute(originalName: "entity")
     var organization: String
     var type: String
-
     @Relationship(deleteRule: .cascade, inverse: \ProjectHighlightDefault.project)
     var highlights: [ProjectHighlightDefault]
-
     @Relationship(deleteRule: .cascade, inverse: \ProjectKeywordDefault.project)
     var keywords: [ProjectKeywordDefault]
-
     @Relationship(deleteRule: .cascade, inverse: \ProjectRoleDefault.project)
     var roles: [ProjectRoleDefault]
-
     var defaults: ExperienceDefaults?
-
     init(
         id: UUID = UUID(),
         name: String = "",
@@ -350,20 +304,16 @@ final class ProjectExperienceDefault {
         self.keywords = keywords
         self.roles = roles
         self.defaults = defaults
-
         self.highlights.forEach { $0.project = self }
         self.keywords.forEach { $0.project = self }
         self.roles.forEach { $0.project = self }
     }
 }
-
 @Model
 final class ProjectHighlightDefault {
     @Attribute(.unique) var id: UUID
     var text: String
-
     var project: ProjectExperienceDefault?
-
     init(
         id: UUID = UUID(),
         text: String = "",
@@ -374,14 +324,11 @@ final class ProjectHighlightDefault {
         self.project = project
     }
 }
-
 @Model
 final class ProjectKeywordDefault {
     @Attribute(.unique) var id: UUID
     var keyword: String
-
     var project: ProjectExperienceDefault?
-
     init(
         id: UUID = UUID(),
         keyword: String = "",
@@ -392,14 +339,11 @@ final class ProjectKeywordDefault {
         self.project = project
     }
 }
-
 @Model
 final class ProjectRoleDefault {
     @Attribute(.unique) var id: UUID
     var role: String
-
     var project: ProjectExperienceDefault?
-
     init(
         id: UUID = UUID(),
         role: String = "",
@@ -410,19 +354,15 @@ final class ProjectRoleDefault {
         self.project = project
     }
 }
-
 // MARK: - Skills
 @Model
 final class SkillExperienceDefault {
     @Attribute(.unique) var id: UUID
     var name: String
     var level: String
-
     @Relationship(deleteRule: .cascade, inverse: \SkillKeywordDefault.skill)
     var keywords: [SkillKeywordDefault]
-
     var defaults: ExperienceDefaults?
-
     init(
         id: UUID = UUID(),
         name: String = "",
@@ -435,18 +375,14 @@ final class SkillExperienceDefault {
         self.level = level
         self.keywords = keywords
         self.defaults = defaults
-
         self.keywords.forEach { $0.skill = self }
     }
 }
-
 @Model
 final class SkillKeywordDefault {
     @Attribute(.unique) var id: UUID
     var keyword: String
-
     var skill: SkillExperienceDefault?
-
     init(
         id: UUID = UUID(),
         keyword: String = "",
@@ -457,7 +393,6 @@ final class SkillKeywordDefault {
         self.skill = skill
     }
 }
-
 // MARK: - Awards
 @Model
 final class AwardExperienceDefault {
@@ -466,9 +401,7 @@ final class AwardExperienceDefault {
     var date: String
     var awarder: String
     var summary: String
-
     var defaults: ExperienceDefaults?
-
     init(
         id: UUID = UUID(),
         title: String = "",
@@ -485,7 +418,6 @@ final class AwardExperienceDefault {
         self.defaults = defaults
     }
 }
-
 // MARK: - Certificates
 @Model
 final class CertificateExperienceDefault {
@@ -494,9 +426,7 @@ final class CertificateExperienceDefault {
     var date: String
     var issuer: String
     var url: String
-
     var defaults: ExperienceDefaults?
-
     init(
         id: UUID = UUID(),
         name: String = "",
@@ -513,7 +443,6 @@ final class CertificateExperienceDefault {
         self.defaults = defaults
     }
 }
-
 // MARK: - Publications
 @Model
 final class PublicationExperienceDefault {
@@ -523,9 +452,7 @@ final class PublicationExperienceDefault {
     var releaseDate: String
     var url: String
     var summary: String
-
     var defaults: ExperienceDefaults?
-
     init(
         id: UUID = UUID(),
         name: String = "",
@@ -544,16 +471,13 @@ final class PublicationExperienceDefault {
         self.defaults = defaults
     }
 }
-
 // MARK: - Languages
 @Model
 final class LanguageExperienceDefault {
     @Attribute(.unique) var id: UUID
     var language: String
     var fluency: String
-
     var defaults: ExperienceDefaults?
-
     init(
         id: UUID = UUID(),
         language: String = "",
@@ -566,18 +490,14 @@ final class LanguageExperienceDefault {
         self.defaults = defaults
     }
 }
-
 // MARK: - Interests
 @Model
 final class InterestExperienceDefault {
     @Attribute(.unique) var id: UUID
     var name: String
-
     @Relationship(deleteRule: .cascade, inverse: \InterestKeywordDefault.interest)
     var keywords: [InterestKeywordDefault]
-
     var defaults: ExperienceDefaults?
-
     init(
         id: UUID = UUID(),
         name: String = "",
@@ -588,18 +508,14 @@ final class InterestExperienceDefault {
         self.name = name
         self.keywords = keywords
         self.defaults = defaults
-
         self.keywords.forEach { $0.interest = self }
     }
 }
-
 @Model
 final class InterestKeywordDefault {
     @Attribute(.unique) var id: UUID
     var keyword: String
-
     var interest: InterestExperienceDefault?
-
     init(
         id: UUID = UUID(),
         keyword: String = "",
@@ -610,7 +526,6 @@ final class InterestKeywordDefault {
         self.interest = interest
     }
 }
-
 // MARK: - References
 @Model
 final class ReferenceExperienceDefault {
@@ -618,9 +533,7 @@ final class ReferenceExperienceDefault {
     var name: String
     var reference: String
     var url: String
-
     var defaults: ExperienceDefaults?
-
     init(
         id: UUID = UUID(),
         name: String = "",

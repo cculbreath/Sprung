@@ -4,9 +4,7 @@
 //
 //  Created by Christopher Culbreath on 1/31/25.
 //
-
 import SwiftUI
-
 struct ResumeSplitView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(ResStore.self) private var resStore: ResStore
@@ -26,14 +24,12 @@ struct ResumeSplitView: View {
             if let selRes = selApp.selectedRes {
                 // Back to working custom inspector implementation
                 @Bindable var selApp = selApp
-
                 GeometryReader { geo in
                     let inspectorWidth: CGFloat = 340
                     let actionBarHeight: CGFloat = 52
                     let isInspectorVisible = showResumeInspector
                     let availableWidth = geo.size.width - (isInspectorVisible ? inspectorWidth : 0)
                     let contentWidth = max(availableWidth, 480)
-
                     HStack(spacing: 0) {
                         ZStack(alignment: .topLeading) {
                             HSplitView {
@@ -52,7 +48,6 @@ struct ResumeSplitView: View {
                                 .id(selRes.id)
                                 .onAppear { Logger.debug("RootNode") }
                                 .layoutPriority(1)
-
                                 ResumePDFView(resume: selRes)
                                     .frame(
                                         minWidth: 260, idealWidth: 360,
@@ -62,7 +57,6 @@ struct ResumeSplitView: View {
                                     .layoutPriority(1)
                             }
                             .padding(.top, actionBarHeight)
-
                             VStack(spacing: 0) {
                                 ResumeActionsBar(
                                     selectedTab: $tab,
@@ -72,10 +66,8 @@ struct ResumeSplitView: View {
                                 Divider()
                             }
                             .frame(maxWidth: .infinity)
-
                         }
                         .frame(width: contentWidth, height: geo.size.height)
-
                         if isInspectorVisible {
                             
                             Divider()
@@ -88,7 +80,6 @@ struct ResumeSplitView: View {
                         }
                     }
                     .animation(.easeInOut(duration: 0.25), value: isInspectorVisible)
-
                 }
             } else {
                 // If no resume is selected, show a create resume view
@@ -133,7 +124,6 @@ struct ResumeSplitView: View {
         }
     }
 }
-
 private struct ResumeActionsBar: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     
@@ -169,10 +159,8 @@ private struct ResumeActionsBar: View {
         .padding(.bottom, 6)
     }
 }
-
 private struct ResumeInspectorColumn: View {
     @Binding var refresh: Bool
-
     var body: some View {
         ResumeInspectorView(refresh: $refresh)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -184,4 +172,3 @@ private struct ResumeInspectorColumn: View {
             }
     }
 }
-

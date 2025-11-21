@@ -4,9 +4,7 @@
 //
 //  Lightweight helper for writing debug artifacts to disk.
 //
-
 import Foundation
-
 enum DebugFileWriter {
     /// Writes the given string to a UTF‑8 file whose name begins with `prefix`
     /// (followed by a timestamp) and prints the resulting path.  Returns the
@@ -17,10 +15,8 @@ enum DebugFileWriter {
         formatter.dateFormat = "yyyyMMdd-HHmmss"
         let ts = formatter.string(from: .init())
         let filename = "\(prefix)-\(ts).\(ext)"
-
         let tempURL = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent(filename)
-
         do {
             try text.write(to: tempURL, atomically: true, encoding: .utf8)
             return tempURL

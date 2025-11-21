@@ -1,12 +1,9 @@
 import Foundation
-
 struct DescriptorValueValidator {
     struct ValidationResult {
         let isValid: Bool
         let messages: [String]
-
         static let valid = ValidationResult(isValid: true, messages: [])
-
         func merging(_ other: ValidationResult) -> ValidationResult {
             ValidationResult(
                 isValid: isValid && other.isValid,
@@ -14,7 +11,6 @@ struct DescriptorValueValidator {
             )
         }
     }
-
     func validate(
         _ value: Any?,
         descriptor: TemplateManifest.Section.FieldDescriptor
@@ -27,7 +23,6 @@ struct DescriptorValueValidator {
                 }
                 return .valid
             }
-
             if let childDescriptor = descriptor.children?.first {
                 return array.reduce(.valid) { partial, element in
                     partial.merging(validate(element, descriptor: childDescriptor))
@@ -39,7 +34,6 @@ struct DescriptorValueValidator {
                 }
             }
         }
-
         if let children = descriptor.children, children.isEmpty == false {
             guard let dict = value as? [String: Any] else {
                 if descriptor.required {
@@ -48,17 +42,14 @@ struct DescriptorValueValidator {
                 }
                 return .valid
             }
-
             return children.reduce(.valid) { partial, childDescriptor in
                 let childValue = dict[childDescriptor.key]
                 return partial.merging(validate(childValue, descriptor: childDescriptor))
             }
         }
-
         let string = stringValue(from: value) ?? ""
         return evaluateLeafValue(string, descriptor: descriptor)
     }
-
     private func stringValue(from value: Any?) -> String? {
         switch value {
         case let string as String:
@@ -73,22 +64,18 @@ struct DescriptorValueValidator {
             return nil
         }
     }
-
     private func evaluateLeafValue(
         _ value: String,
         descriptor: TemplateManifest.Section.FieldDescriptor
     ) -> ValidationResult {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-
         if descriptor.required && trimmed.isEmpty {
             let message = descriptor.validation?.message ?? "This field is required."
             return ValidationResult(isValid: false, messages: [message])
         }
-
         guard let validation = descriptor.validation, trimmed.isEmpty == false else {
             return .valid
         }
-
         let message = validation.message ?? defaultMessage(for: validation.rule)
         switch validation.rule {
         case .regex:
@@ -147,10 +134,8 @@ struct DescriptorValueValidator {
         case .custom:
             break
         }
-
         return .valid
     }
-
     private func defaultMessage(
         for rule: TemplateManifest.Section.FieldDescriptor.Validation.Rule
     ) -> String {

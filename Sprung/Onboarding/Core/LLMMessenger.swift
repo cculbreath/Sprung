@@ -3,13 +3,9 @@
 //  Sprung
 //
 //  LLM message orchestration (Spec §4.3)
-//  Handles sending messages to LLM and emitting status events
-//
-
 import Foundation
 import SwiftOpenAI
 import SwiftyJSON
-
 /// Orchestrates LLM message sending and status emission
 /// Responsibilities (Spec §4.3):
 /// - Subscribe to message request events
@@ -17,7 +13,6 @@ import SwiftyJSON
 /// - Emit message sent/status events
 /// - Coordinate with NetworkRouter for stream processing
 actor LLMMessenger: OnboardingEventEmitter {
-    // MARK: - Properties
     let eventBus: EventCoordinator
     private let networkRouter: NetworkRouter
     private let service: OpenAIService
@@ -25,14 +20,10 @@ actor LLMMessenger: OnboardingEventEmitter {
     private let toolRegistry: ToolRegistry
     private let contextAssembler: ConversationContextAssembler
     private let stateCoordinator: StateCoordinator
-
-    // Active state
     private var isActive = false
-
-    // Phase 3: Stream cancellation tracking
+    // Stream cancellation tracking
     private var currentStreamTask: Task<Void, Error>?
 
-    // MARK: - Initialization
     init(
         service: OpenAIService,
         baseDeveloperMessage: String,
@@ -50,8 +41,6 @@ actor LLMMessenger: OnboardingEventEmitter {
         self.contextAssembler = ConversationContextAssembler(state: state)
         Logger.info("📬 LLMMessenger initialized", category: .ai)
     }
-
-    // MARK: - Event Subscription
     /// Start listening to message request events
     func startEventSubscriptions() async {
         // Use unstructured tasks so they run independently but ensure streams are ready
@@ -60,96 +49,63 @@ actor LLMMessenger: OnboardingEventEmitter {
                 await self.handleLLMEvent(event)
             }
         }
-
         Task {
             for await event in await self.eventBus.stream(topic: .userInput) {
                 await self.handleUserInputEvent(event)
             }
         }
-
         // Small delay to ensure streams are connected before returning
         try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
-
         Logger.info("📡 LLMMessenger subscribed to events", category: .ai)
     }
 
-    // MARK: - Event Handlers
     private func handleLLMEvent(_ event: OnboardingEvent) async {
         switch event {
         case .llmSendUserMessage(let payload, let isSystemGenerated):
             await sendUserMessage(payload, isSystemGenerated: isSystemGenerated)
-
         case .llmSendDeveloperMessage(let payload):
-            // Developer messages sent directly (no queueing needed - internally generated)
             await executeDeveloperMessage(payload)
-
         case .llmToolResponseMessage(let payload):
             await sendToolResponse(payload)
-
         case .llmExecuteUserMessage(let payload, let isSystemGenerated):
-            // Execute stream directly (called from StateCoordinator queue)
             await executeUserMessage(payload, isSystemGenerated: isSystemGenerated)
-
         case .llmExecuteToolResponse(let payload):
-            // Execute stream directly (called from StateCoordinator queue)
             await executeToolResponse(payload)
-
         case .llmCancelRequested:
-            // Phase 3: Cancel current stream
             await cancelCurrentStream()
-
         default:
             break
         }
     }
-
     private func handleUserInputEvent(_ event: OnboardingEvent) async {
-        // UserInput events are currently handled through .llmSendUserMessage
-        // This handler is reserved for future direct user input events
         Logger.debug("LLMMessenger received user input event", category: .ai)
     }
-
-    // MARK: - Message Sending
     /// Send user message to LLM (enqueues via event publication)
     private func sendUserMessage(_ payload: JSON, isSystemGenerated: Bool = false) async {
         guard isActive else {
             Logger.warning("LLMMessenger not active, ignoring message", category: .ai)
             return
         }
-
-        // Publish enqueue event for StateCoordinator to handle
         await emit(.llmEnqueueUserMessage(payload: payload, isSystemGenerated: isSystemGenerated))
     }
-
-    /// Execute user message (called from StateCoordinator queue via event)
     private func executeUserMessage(_ payload: JSON, isSystemGenerated: Bool) async {
         await emit(.llmStatus(status: .busy))
-
-        // Support both "content" (system-generated) and "text" (chatbox) fields
         let text = payload["content"].string ?? payload["text"].stringValue
-
         do {
             let request = await buildUserMessageRequest(text: text, isSystemGenerated: isSystemGenerated)
             let messageId = UUID().uuidString
-
-            // Emit message sent event
             await emit(.llmUserMessageSent(messageId: messageId, payload: payload, isSystemGenerated: isSystemGenerated))
-
-            // Process stream via NetworkRouter with retry logic
             currentStreamTask = Task {
                 var retryCount = 0
                 let maxRetries = 3
                 var lastError: Error?
-
                 while retryCount <= maxRetries {
                     do {
                         Logger.info("🔍 About to call service.responseCreateStream, service type: \(type(of: service))", category: .ai)
                         Logger.debug("📋 Request model: \(request.model), prevId: \(request.previousResponseId != nil), store: \(String(describing: request.store))", category: .ai)
-
                         let stream = try await service.responseCreateStream(request)
                         for try await streamEvent in stream {
                             await networkRouter.handleResponseEvent(streamEvent)
-
                             // Track conversation state
                             if case .responseCompleted(let completed) = streamEvent {
                                 // Update StateCoordinator (single source of truth)
@@ -164,18 +120,13 @@ actor LLMMessenger: OnboardingEventEmitter {
                         return // Success - exit retry loop
                     } catch {
                         lastError = error
-
-                        // Check if this is a retriable error
                         let isRetriableError = isRetriable(error)
-
                         if isRetriableError && retryCount < maxRetries {
                             retryCount += 1
                             let delay = Double(retryCount) * 2.0 // Exponential backoff: 2s, 4s, 6s
                             Logger.warning("⚠️ Transient error (attempt \(retryCount)/\(maxRetries)), retrying in \(delay)s: \(error)", category: .ai)
                             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                         } else {
-                            // Non-retriable error or max retries reached
-                            Logger.error("❌ User message stream failed: \(error)", category: .ai)
                             if let apiError = error as? APIError {
                                 Logger.error("❌ API Error details: \(apiError)", category: .ai)
                             }
@@ -184,68 +135,51 @@ actor LLMMessenger: OnboardingEventEmitter {
                     }
                 }
 
-                // If we get here, we've exhausted all retries
+
                 if let error = lastError {
                     Logger.error("❌ User message failed after \(maxRetries) retries: \(error)", category: .ai)
                     throw error
                 }
             }
-
             try await currentStreamTask?.value
             currentStreamTask = nil
-
-            // Notify StateCoordinator that stream completed
             await stateCoordinator.markStreamCompleted()
-
         } catch is CancellationError {
             Logger.info("User message stream cancelled", category: .ai)
-            // Notify StateCoordinator even on cancellation
             await stateCoordinator.markStreamCompleted()
         } catch {
             Logger.error("❌ Failed to send message: \(error)", category: .ai)
             await emit(.errorOccurred("Failed to send message: \(error.localizedDescription)"))
             await emit(.llmStatus(status: .error))
-            // Surface error as visible assistant message
             await surfaceErrorToUI(error: error)
-            // Notify StateCoordinator even on error
             await stateCoordinator.markStreamCompleted()
         }
     }
-
-    /// Execute developer message directly (no queueing - developer messages are internally generated)
     private func executeDeveloperMessage(_ payload: JSON) async {
         guard isActive else {
             Logger.warning("LLMMessenger not active, ignoring developer message", category: .ai)
             return
         }
         await emit(.llmStatus(status: .busy))
-
         let text = payload["text"].stringValue
         let toolChoiceName = payload["toolChoice"].string
         let reasoningEffort = payload["reasoningEffort"].string
-
-        // Add telemetry
         Logger.info("📨 Sending developer message (\(text.prefix(100))...)", category: .ai)
-
         do {
             let request = await buildDeveloperMessageRequest(text: text, toolChoice: toolChoiceName, reasoningEffort: reasoningEffort)
             let messageId = UUID().uuidString
-
             // Emit message sent event
             await emit(.llmDeveloperMessageSent(messageId: messageId, payload: payload))
-
             // Process stream via NetworkRouter with retry logic
             currentStreamTask = Task {
                 var retryCount = 0
                 let maxRetries = 3
                 var lastError: Error?
-
                 while retryCount <= maxRetries {
                     do {
                         let stream = try await service.responseCreateStream(request)
                         for try await streamEvent in stream {
                             await networkRouter.handleResponseEvent(streamEvent)
-
                             // Track conversation state
                             if case .responseCompleted(let completed) = streamEvent {
                                 // Update StateCoordinator (single source of truth)
@@ -260,10 +194,8 @@ actor LLMMessenger: OnboardingEventEmitter {
                         return // Success - exit retry loop
                     } catch {
                         lastError = error
-
                         // Check if this is a retriable error
                         let isRetriableError = isRetriable(error)
-
                         if isRetriableError && retryCount < maxRetries {
                             retryCount += 1
                             let delay = Double(retryCount) * 2.0 // Exponential backoff: 2s, 4s, 6s
@@ -279,22 +211,17 @@ actor LLMMessenger: OnboardingEventEmitter {
                         }
                     }
                 }
-
                 // If we get here, we've exhausted all retries
                 if let error = lastError {
                     Logger.error("❌ Developer message failed after \(maxRetries) retries: \(error)", category: .ai)
                     throw error
                 }
             }
-
             try await currentStreamTask?.value
             currentStreamTask = nil
-
             Logger.info("✅ Developer message completed successfully", category: .ai)
-
             // Notify StateCoordinator that stream completed
             await stateCoordinator.markStreamCompleted()
-
         } catch is CancellationError {
             Logger.info("Developer message stream cancelled", category: .ai)
             // Notify StateCoordinator even on cancellation
@@ -309,31 +236,21 @@ actor LLMMessenger: OnboardingEventEmitter {
             await stateCoordinator.markStreamCompleted()
         }
     }
-
     /// Send tool response back to LLM - enqueues via event publication
     private func sendToolResponse(_ payload: JSON) async {
-        // Publish enqueue event for StateCoordinator to handle
         await emit(.llmEnqueueToolResponse(payload: payload))
     }
-
-    /// Execute tool response (called from StateCoordinator queue via event)
     private func executeToolResponse(_ payload: JSON) async {
         await emit(.llmStatus(status: .busy))
-
         do {
             let callId = payload["callId"].stringValue
             let output = payload["output"]
             let reasoningEffort = payload["reasoningEffort"].string
-
-            // Log the tool response at appropriate levels
             Logger.debug("📤 Tool response payload: callId=\(callId), output=\(output.rawString() ?? "nil")", category: .ai)
             Logger.info("📤 Sending tool response for callId=\(String(callId.prefix(12)))...", category: .ai)
-
             let request = await buildToolResponseRequest(output: output, callId: callId, reasoningEffort: reasoningEffort)
             Logger.debug("📦 Tool response request: previousResponseId=\(request.previousResponseId ?? "nil")", category: .ai)
-
             let messageId = UUID().uuidString
-
             // Emit message sent event
             await emit(.llmSentToolResponseMessage(messageId: messageId, payload: payload))
             
@@ -342,13 +259,11 @@ actor LLMMessenger: OnboardingEventEmitter {
                 var retryCount = 0
                 let maxRetries = 3
                 var lastError: Error?
-
                 while retryCount <= maxRetries {
                     do {
                         let stream = try await service.responseCreateStream(request)
                         for try await streamEvent in stream {
                             await networkRouter.handleResponseEvent(streamEvent)
-
                             if case .responseCompleted(let completed) = streamEvent {
                                 // Update StateCoordinator (single source of truth)
                                 await stateCoordinator.updateConversationState(
@@ -362,10 +277,8 @@ actor LLMMessenger: OnboardingEventEmitter {
                         return // Success - exit retry loop
                     } catch {
                         lastError = error
-
                         // Check if this is a retriable error
                         let isRetriableError = isRetriable(error)
-
                         if isRetriableError && retryCount < maxRetries {
                             retryCount += 1
                             let delay = Double(retryCount) * 2.0 // Exponential backoff: 2s, 4s, 6s
@@ -381,20 +294,16 @@ actor LLMMessenger: OnboardingEventEmitter {
                         }
                     }
                 }
-
                 // If we get here, we've exhausted all retries
                 if let error = lastError {
                     Logger.error("❌ Tool response failed after \(maxRetries) retries: \(error)", category: .ai)
                     throw error
                 }
             }
-
             try await currentStreamTask?.value
             currentStreamTask = nil
-
             // Notify StateCoordinator that stream completed
             await stateCoordinator.markStreamCompleted()
-
         } catch is CancellationError {
             Logger.info("Tool response stream cancelled", category: .ai)
             // Notify StateCoordinator even on cancellation
@@ -406,31 +315,23 @@ actor LLMMessenger: OnboardingEventEmitter {
             await stateCoordinator.markStreamCompleted()
         }
     }
-
-    // MARK: - Request Building
     /// Determine if parallel tool calls should be enabled based on current state
-    /// Enable for skeleton_timeline to allow LLM to create multiple cards at once
     private func shouldEnableParallelToolCalls() async -> Bool {
         let validation = await stateCoordinator.pendingValidationPrompt
         return validation?.dataType == "skeleton_timeline"
     }
-
     private func buildUserMessageRequest(text: String, isSystemGenerated: Bool) async -> ModelResponseParameter {
-        // Use previous_response_id for context management (OpenAI manages conversation history)
         let previousResponseId = await contextAssembler.getPreviousResponseId()
 
-        // Current user message
         let inputItems: [InputItem] = [
             .message(InputMessage(
                 role: "user",
                 content: .text(text)
             ))
         ]
-
         let tools = await getToolSchemas()
         let toolChoice = await determineToolChoice(for: text, isSystemGenerated: isSystemGenerated)
         let modelId = await stateCoordinator.getCurrentModelId()
-
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(modelId),
@@ -445,39 +346,28 @@ actor LLMMessenger: OnboardingEventEmitter {
         parameters.toolChoice = toolChoice
         parameters.tools = tools
         parameters.parallelToolCalls = await shouldEnableParallelToolCalls()
-
         Logger.info("📝 Built request: previousResponseId=\(previousResponseId?.description ?? "nil"), inputItems=\(inputItems.count), parallelToolCalls=\(parameters.parallelToolCalls?.description ?? "nil")", category: .ai)
         return parameters
     }
-
     /// Determine appropriate tool_choice for the given message context
     private func determineToolChoice(for text: String, isSystemGenerated: Bool) async -> ToolChoiceMode {
-        // For system-generated messages (like phase prompts), always allow tools
         if isSystemGenerated {
             return .auto
         }
-
-        // For user-generated messages: Force .none on the very first request to guarantee a textual greeting
         let hasStreamed = await stateCoordinator.getHasStreamedFirstResponse()
         if !hasStreamed {
             Logger.info("🚫 Forcing toolChoice=.none for first user request to ensure greeting", category: .ai)
             return .none
         }
-
-        // After first response, let LLM use tools naturally
         return .auto
     }
-
     private func buildDeveloperMessageRequest(
         text: String,
         toolChoice toolChoiceName: String? = nil,
         reasoningEffort: String? = nil
     ) async -> ModelResponseParameter {
         let previousResponseId = await contextAssembler.getPreviousResponseId()
-
         var inputItems: [InputItem] = []
-
-        // On FIRST request only: prepend base developer message before phase instructions
         if previousResponseId == nil {
             inputItems.append(.message(InputMessage(
                 role: "developer",
@@ -485,25 +375,18 @@ actor LLMMessenger: OnboardingEventEmitter {
             )))
             Logger.info("📋 Including base developer message (first request)", category: .ai)
         }
-
-        // Current developer message (phase instructions)
         inputItems.append(.message(InputMessage(
             role: "developer",
             content: .text(text)
         )))
-
         let tools = await getToolSchemas()
-
-        // Determine tool choice - force specific tool if requested
         let toolChoice: ToolChoiceMode
         if let toolName = toolChoiceName {
             toolChoice = .functionTool(FunctionTool(name: toolName))
         } else {
             toolChoice = .auto
         }
-
         let modelId = await stateCoordinator.getCurrentModelId()
-
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(modelId),
@@ -518,26 +401,21 @@ actor LLMMessenger: OnboardingEventEmitter {
         parameters.toolChoice = toolChoice
         parameters.tools = tools
         parameters.parallelToolCalls = await shouldEnableParallelToolCalls()
-
         // Set reasoning effort if provided
         if let effort = reasoningEffort {
             parameters.reasoning = Reasoning(effort: effort)
         }
-
         Logger.info("📝 Built developer message request: previousResponseId=\(previousResponseId?.description ?? "nil"), inputItems=\(inputItems.count), parallelToolCalls=\(parameters.parallelToolCalls?.description ?? "nil"), reasoningEffort=\(reasoningEffort ?? "default")", category: .ai)
         return parameters
     }
-
     private func buildToolResponseRequest(output: JSON, callId: String, reasoningEffort: String? = nil) async -> ModelResponseParameter {
         let inputItems = await contextAssembler.buildForToolResponse(
             output: output,
             callId: callId
         )
-
         let tools = await getToolSchemas()
         let modelId = await stateCoordinator.getCurrentModelId()
         let previousResponseId = await contextAssembler.getPreviousResponseId()
-
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(modelId),
@@ -552,16 +430,13 @@ actor LLMMessenger: OnboardingEventEmitter {
         parameters.toolChoice = .auto
         parameters.tools = tools
         parameters.parallelToolCalls = await shouldEnableParallelToolCalls()
-
         // Set reasoning effort if provided
         if let effort = reasoningEffort {
             parameters.reasoning = Reasoning(effort: effort)
         }
-
         Logger.info("📝 Built tool response request: parallelToolCalls=\(parameters.parallelToolCalls?.description ?? "nil")", category: .ai)
         return parameters
     }
-
     /// Get tool schemas from ToolRegistry, filtered by allowed tools from StateCoordinator
     private func getToolSchemas() async -> [Tool] {
         let allowedNames = await stateCoordinator.getAllowedToolNames()
@@ -569,77 +444,46 @@ actor LLMMessenger: OnboardingEventEmitter {
         return await toolRegistry.toolSchemas(filteredBy: filterNames)
     }
 
-    // MARK: - Lifecycle
     func activate() {
         isActive = true
         Logger.info("✅ LLMMessenger activated", category: .ai)
     }
-
     func deactivate() {
         isActive = false
         Logger.info("⏹️ LLMMessenger deactivated", category: .ai)
     }
-
     func setModelId(_ modelId: String) async {
         await stateCoordinator.setModelId(modelId)
     }
-
-    // MARK: - Stream Cancellation (Phase 2)
+    // MARK: - Stream Cancellation
     /// Cancel the currently running stream
-    ///
-    /// This method handles immediate cancellation of LLM streaming responses:
-    /// - Cancels the active network stream task
-    /// - Finalizes partial messages (displayed in chat as-is or marked cancelled)
-    /// - Updates UI state to idle
-    ///
-    /// Note on tool execution: If tool calls were emitted before cancellation,
-    /// they will continue executing. This is intentional - cancellation stops
-    /// the LLM from generating more output, not already-started tool operations.
     private func cancelCurrentStream() async {
         guard let task = currentStreamTask else {
             Logger.debug("No active stream to cancel", category: .ai)
             return
         }
-
         Logger.info("🛑 Cancelling LLM stream...", category: .ai)
-
-        // Cancel the stream task
+        Logger.info("🛑 Cancelling LLM stream...", category: .ai)
         task.cancel()
         currentStreamTask = nil
-
-        // Clean up partial messages in NetworkRouter
         await networkRouter.cancelPendingStreams()
-
-        // Emit idle status to update UI
         await emit(.llmStatus(status: .idle))
-
         Logger.info("✅ LLM stream cancelled and cleaned up", category: .ai)
     }
-
     // MARK: - Error Handling
-    /// Determine if an error is retriable (transient failure vs permanent error)
     private func isRetriable(_ error: Error) -> Bool {
-        // Check for APIError from SwiftOpenAI
         if let apiError = error as? APIError {
             switch apiError {
             case .responseUnsuccessful(_, let statusCode, _):
-                // Retry on server errors (5xx) and specific client errors
-                // 503 Service Unavailable, 502 Bad Gateway, 504 Gateway Timeout
                 return statusCode == 503 || statusCode == 502 || statusCode == 504 || statusCode >= 500
             case .jsonDecodingFailure, .bothDecodingStrategiesFailed:
-                // Retry on decoding errors - these often indicate malformed API responses
-                // which can be transient (e.g., partial/corrupted streaming chunks)
                 return true
             case .timeOutError:
-                // Retry on timeout errors
                 return true
             case .requestFailed, .invalidData, .dataCouldNotBeReadMissingData:
-                // Don't retry on permanent errors
                 return false
             }
         }
-
-        // Check for network-related errors in the error description
         let errorDescription = error.localizedDescription.lowercased()
         if errorDescription.contains("network") ||
            errorDescription.contains("connection") ||
@@ -647,21 +491,13 @@ actor LLMMessenger: OnboardingEventEmitter {
            errorDescription.contains("lost connection") {
             return true
         }
-
-        // Don't retry on CancellationError
         if error is CancellationError {
             return false
         }
-
-        // Default to non-retriable for unknown errors
         return false
     }
-
-    /// Surface bootstrap and API errors as visible assistant messages
     private func surfaceErrorToUI(error: Error) async {
         let errorMessage: String
-
-        // Provide user-friendly error messages based on error type
         let errorDescription = error.localizedDescription
         if errorDescription.contains("network") || errorDescription.contains("connection") {
             errorMessage = "I'm having trouble connecting to the AI service. Please check your network connection and try again."
@@ -674,11 +510,9 @@ actor LLMMessenger: OnboardingEventEmitter {
         } else {
             errorMessage = "I encountered an error while processing your request: \(errorDescription). Please try again, or contact support if this persists."
         }
-
-        // Emit a system-generated user message with the error
+        }
         let payload = JSON(["text": errorMessage])
         await emit(.llmUserMessageSent(messageId: UUID().uuidString, payload: payload, isSystemGenerated: true))
-
         Logger.error("📢 Error surfaced to UI: \(errorMessage)", category: .ai)
     }
 }

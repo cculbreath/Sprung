@@ -4,9 +4,7 @@
 //
 //  Created by Team on 5/14/25.
 //
-
 import Foundation
-
 /// Represents a skill node with reordering information from the LLM
 struct ReorderedSkillNode: Codable, Equatable {
     var id: String
@@ -18,7 +16,6 @@ struct ReorderedSkillNode: Codable, Equatable {
     var reasonForReordering: String
     /// Indicates when the node represents a section title rather than an item.
     var isTitleNode: Bool = false
-
     // Alternative coding keys for different LLM response formats
     enum CodingKeys: String, CodingKey {
         case id
@@ -79,11 +76,9 @@ struct ReorderedSkillNode: Codable, Equatable {
         self.isTitleNode = isTitleNode
     }
 }
-
 /// Canonical response used throughout the app for skill reordering.
 struct ReorderSkillsResponse: Codable, Equatable {
     var reorderedSkillsAndExpertise: [ReorderedSkillNode]
-
     enum CodingKeys: String, CodingKey {
         case reorderedSkillsAndExpertise = "reordered_skills_and_expertise"
     }
@@ -112,7 +107,6 @@ struct ReorderSkillsResponse: Codable, Equatable {
     init(reorderedSkillsAndExpertise: [ReorderedSkillNode]) {
         self.reorderedSkillsAndExpertise = reorderedSkillsAndExpertise
     }
-
     func validate() -> Bool {
         guard reorderedSkillsAndExpertise.isEmpty == false else { return false }
         return reorderedSkillsAndExpertise.allSatisfy { UUID(uuidString: $0.id) != nil }

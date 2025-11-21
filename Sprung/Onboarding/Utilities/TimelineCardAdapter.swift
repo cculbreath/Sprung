@@ -1,11 +1,9 @@
 import Foundation
 import SwiftyJSON
-
 enum TimelineCardAdapter {
     static func cards(from timeline: JSON) -> (cards: [TimelineCard], meta: JSON?) {
         let experiences = timeline["experiences"].arrayValue
         var cards: [TimelineCard] = []
-
         for entry in experiences {
             if let card = TimelineCard(json: entry) {
                 cards.append(card)
@@ -14,17 +12,14 @@ enum TimelineCardAdapter {
                 cards.append(synthesized)
             }
         }
-
         let meta: JSON?
         if timeline["meta"] != .null {
             meta = timeline["meta"]
         } else {
             meta = nil
         }
-
         return (cards, meta)
     }
-
     static func workDrafts(from cards: [TimelineCard]) -> [WorkExperienceDraft] {
         cards.map { card in
             var draft = WorkExperienceDraft()
@@ -43,7 +38,6 @@ enum TimelineCardAdapter {
             return draft
         }
     }
-
     static func cards(from drafts: [WorkExperienceDraft]) -> [TimelineCard] {
         drafts.map { draft in
             TimelineCard(
@@ -58,7 +52,6 @@ enum TimelineCardAdapter {
             )
         }
     }
-
     static func makeTimelineJSON(cards: [TimelineCard], meta: JSON?) -> JSON {
         var timeline = JSON()
         timeline["experiences"] = JSON(cards.map { $0.json })
@@ -67,7 +60,6 @@ enum TimelineCardAdapter {
         }
         return timeline
     }
-
     static func normalizedTimeline(_ input: JSON) -> JSON {
         let result = cards(from: input)
         return makeTimelineJSON(cards: result.cards, meta: result.meta)

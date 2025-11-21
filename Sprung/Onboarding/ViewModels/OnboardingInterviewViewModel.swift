@@ -1,6 +1,5 @@
 import Foundation
 import Observation
-
 @MainActor
 @Observable
 final class OnboardingInterviewViewModel {
@@ -11,10 +10,8 @@ final class OnboardingInterviewViewModel {
     var writingAnalysisAllowed: Bool
     var showImportError = false
     var importErrorText: String?
-
     private let fallbackModelId: String
     private var hasInitialized = false
-
     init(
         fallbackModelId: String,
         defaultWebSearchAllowed: Bool = true,
@@ -24,11 +21,9 @@ final class OnboardingInterviewViewModel {
         self.webSearchAllowed = defaultWebSearchAllowed
         self.writingAnalysisAllowed = defaultWritingAnalysisAllowed
     }
-
     var currentModelId: String {
         selectedModelId.isEmpty ? fallbackModelId : selectedModelId
     }
-
     func configureIfNeeded(
         coordinator: OnboardingInterviewCoordinator?,
         defaultModelId: String,
@@ -44,7 +39,6 @@ final class OnboardingInterviewViewModel {
             )
             hasInitialized = true
         }
-
         Task {
             if let coordinator = coordinator, coordinator.ui.isActive {
                 await MainActor.run {
@@ -57,7 +51,6 @@ final class OnboardingInterviewViewModel {
             }
         }
     }
-
     func syncModelSelection(
         applyingDefaults: Bool,
         defaultModelId: String,
@@ -66,7 +59,6 @@ final class OnboardingInterviewViewModel {
         if !selectedModelId.isEmpty && !applyingDefaults {
             return
         }
-
         if availableModelIds.contains(defaultModelId) {
             selectedModelId = defaultModelId
         } else if availableModelIds.contains(fallbackModelId) {
@@ -77,7 +69,6 @@ final class OnboardingInterviewViewModel {
             selectedModelId = fallbackModelId
         }
     }
-
     func handleDefaultModelChange(
         newValue: String,
         availableModelIds: [String]
@@ -88,7 +79,6 @@ final class OnboardingInterviewViewModel {
             availableModelIds: availableModelIds
         )
     }
-
     func syncConsentFromCoordinator(_ coordinator: OnboardingInterviewCoordinator?) {
         guard let coordinator = coordinator else { return }
         Task {
@@ -99,12 +89,10 @@ final class OnboardingInterviewViewModel {
             }
         }
     }
-
     func registerImportError(_ error: String) {
         importErrorText = error
         showImportError = true
     }
-
     func clearImportError() {
         importErrorText = nil
         showImportError = false

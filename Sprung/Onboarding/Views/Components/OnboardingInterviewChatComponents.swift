@@ -1,29 +1,23 @@
 import SwiftUI
 import SwiftyJSON
-
 struct MessageBubble: View {
     let message: OnboardingMessage
-
     var body: some View {
         HStack {
             if message.role == .user { Spacer() }
-
             VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 4) {
                 bubbleContent
                     .background(backgroundColor)
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-
                 Text(message.timestamp.formatted(date: .omitted, time: .shortened))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: 520, alignment: message.role == .user ? .trailing : .leading)
-
             if message.role != .user { Spacer() }
         }
         .transition(.opacity)
     }
-
     private var backgroundColor: Color {
         switch message.role {
         case .user:
@@ -34,11 +28,9 @@ struct MessageBubble: View {
             return Color.gray.opacity(0.15)
         }
     }
-
     private var bubbleContent: some View {
         let alignment: Alignment = message.role == .user ? .trailing : .leading
         let multilineAlignment: TextAlignment = message.role == .user ? .trailing : .leading
-
         return VStack(alignment: .leading, spacing: 8) {
             Text(displayText)
                 .multilineTextAlignment(multilineAlignment)
@@ -51,7 +43,6 @@ struct MessageBubble: View {
         .padding(12)
         .foregroundStyle(.primary)
     }
-
     private var displayText: String {
         switch message.role {
         case .assistant:
@@ -62,7 +53,6 @@ struct MessageBubble: View {
             return message.text
         }
     }
-
     private func stripChatboxTags(from text: String) -> String {
         // Remove <chatbox> and </chatbox> tags that are added for LLM context
         // Also handle HTML-encoded versions in case they were encoded somewhere
@@ -71,17 +61,14 @@ struct MessageBubble: View {
             .replacingOccurrences(of: "</chatbox>", with: "")
             .replacingOccurrences(of: "&lt;chatbox&gt;", with: "")
             .replacingOccurrences(of: "&lt;/chatbox&gt;", with: "")
-
         // Debug logging to help diagnose the issue
         if text != stripped {
             Logger.debug("🏷️ Stripped chatbox tags from: '\(text.prefix(100))'", category: .ai)
         } else if text.contains("chatbox") {
             Logger.warning("⚠️ Text contains 'chatbox' but wasn't stripped: '\(text.prefix(100))'", category: .ai)
         }
-
         return stripped
     }
-
     private func parseAssistantReply(from text: String) -> String {
         if let data = text.data(using: .utf8),
            let json = try? JSON(data: data),
@@ -100,22 +87,17 @@ struct MessageBubble: View {
         return text
     }
 }
-
 struct LLMActivityView: View {
     var diameter: CGFloat = 48
     var centerColor: Color = Color.clear  // Changed from black/white to transparent
-
     private let gradientColors: [Color] = [
         Color(red: 1.0, green: 0.38, blue: 0.0),
         Color(red: 0.95, green: 0.15, blue: 0.55),
         Color(red: 0.56, green: 0.17, blue: 0.95),
         Color(red: 0.0, green: 0.54, blue: 0.98)
     ]
-
     private let rotationDuration: Double = 1.2
-
     private var strokeWidth: CGFloat { diameter * 0.45 }
-
     var body: some View {
         TimelineView(.animation) { timeline in
             let timestamp = timeline.date.timeIntervalSinceReferenceDate
@@ -127,36 +109,29 @@ struct LLMActivityView: View {
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
-
     private var spinner: some View {
         let gradient = AngularGradient(
             gradient: Gradient(colors: gradientColors + [gradientColors.first ?? .accentColor]),
             center: .center
         )
-
         return ZStack {
             Circle()
                 .stroke(gradient, lineWidth: strokeWidth)
-
             Circle()
                 .stroke(gradient, lineWidth: strokeWidth)
                 .blur(radius: 10)
                 .opacity(0.9)
-
             Circle()
                 .stroke(gradient, lineWidth: strokeWidth)
                 .blur(radius: 26)
                 .opacity(0.7)
-
             Circle()
                 .stroke(gradient, lineWidth: strokeWidth)
                 .blur(radius: 44)
                 .opacity(0.45)
-
             Circle()
                 .fill(centerColor)
                 .padding(strokeWidth * 0.8)
-
             Circle()
                 .stroke(Color.white.opacity(0.3), lineWidth: max(2, strokeWidth * 0.18))
                 .padding(strokeWidth * 0.65)
@@ -167,7 +142,6 @@ struct LLMActivityView: View {
         .shadow(color: gradientColors.last?.opacity(0.3) ?? .clear, radius: 20, y: -8)
     }
 }
-
 private struct ReasoningSummaryPlaceholderView: View {
     var body: some View {
         Text("Thinking…")
@@ -180,4 +154,3 @@ private struct ReasoningSummaryPlaceholderView: View {
             .padding(.vertical, 1)
     }
 }
-

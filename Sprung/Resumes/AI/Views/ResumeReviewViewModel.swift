@@ -1,8 +1,6 @@
 // Sprung/Resumes/AI/Views/ResumeReviewViewModel.swift
-
 import Foundation
 import SwiftUI
-
 @MainActor
 @Observable
 class ResumeReviewViewModel {
@@ -22,12 +20,9 @@ class ResumeReviewViewModel {
     // MARK: - Dependencies
     private var reasoningStreamManager: ReasoningStreamManager?
     private var openRouterService: OpenRouterService?
-
-    // Services
     private var reviewService: ResumeReviewService?
     private var fixOverflowService: FixOverflowService?
     private var reorderSkillsService: ReorderSkillsService?
-
     // MARK: - Initialization
     func initialize(llmFacade: LLMFacade, exportCoordinator: ResumeExportCoordinator, reasoningStreamManager: ReasoningStreamManager, openRouterService: OpenRouterService) {
         self.reasoningStreamManager = reasoningStreamManager
@@ -164,13 +159,11 @@ class ResumeReviewViewModel {
     private func performFixOverflow(resume: Resume, allowEntityMerge: Bool, selectedModel: String) async {
         isProcessingFixOverflow = true
         fixOverflowStatusMessage = "Starting skills optimization..."
-
         guard let openRouterService = openRouterService, let reasoningStreamManager = reasoningStreamManager else {
             fixOverflowError = "Service dependencies not initialized"
             isProcessingFixOverflow = false
             return
         }
-
         // Check if model supports reasoning and prepare callback
         let model = openRouterService.findModel(id: selectedModel)
         let supportsReasoning = model?.supportsReasoning ?? false
@@ -179,8 +172,6 @@ class ResumeReviewViewModel {
                 reasoningStreamManager.reasoningText += reasoningContent
             }
         } : nil
-
-        // Start reasoning stream if applicable
         if supportsReasoning {
             reasoningStreamManager.startReasoning(modelName: selectedModel)
         }
@@ -214,7 +205,6 @@ class ResumeReviewViewModel {
         if supportsReasoning {
             reasoningStreamManager.stopStream()
         }
-
         isProcessingFixOverflow = false
     }
     

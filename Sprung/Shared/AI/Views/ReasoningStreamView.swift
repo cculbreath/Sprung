@@ -4,9 +4,7 @@
 //
 //  Displays real-time reasoning tokens from AI models in a collapsible bottom bar
 //
-
 import SwiftUI
-
 struct ReasoningStreamView: View {
     @Binding var isVisible: Bool
     @Binding var reasoningText: String
@@ -243,7 +241,6 @@ struct ReasoningStreamView: View {
         return attributedString
     }
 }
-
 // MARK: - Reasoning Stream Manager
 /// Manages the reasoning stream state and text accumulation
 @MainActor
@@ -265,7 +262,6 @@ class ReasoningStreamManager {
         modelName = ""
         isStreaming = false
     }
-
     /// Hides the reasoning interface and clears any accumulated state.
     func hideAndClear() {
         clear()

@@ -2,25 +2,20 @@
 //  TemplateQuickActionsView.swift
 //  Sprung
 //
-
 import AppKit
 import Foundation
 import SwiftUI
-
 @MainActor
 struct TemplateQuickActionsView: View {
     @Environment(NavigationStateService.self) private var navigationState
     @Environment(AppEnvironment.self) private var appEnvironment
-
     @State private var statusMessage: String?
     @State private var statusKind: StatusKind = .info
     @State private var isProcessing: Bool = false
-
     private enum StatusKind {
         case info
         case success
         case error
-
         var tint: Color {
             switch self {
             case .info:
@@ -32,34 +27,27 @@ struct TemplateQuickActionsView: View {
             }
         }
     }
-
     private var selectedResume: Resume? {
         navigationState.selectedResume
     }
-
     private var selectedTemplate: Template? {
         selectedResume?.template
     }
-
     private var currentSeed: TemplateSeed? {
         guard let template = selectedTemplate else { return nil }
         return appEnvironment.templateSeedStore.seed(for: template)
     }
-
     private var templateSummary: String {
         guard let template = selectedTemplate else {
             return "Select a resume to see its template details and quick actions."
         }
-
         let slug = template.slug.isEmpty ? template.name : template.slug
         return "Current template: \(template.name) (\(slug))"
     }
-
     private var seedSummary: String {
         guard let template = selectedTemplate else {
             return "Seed defaults load from template manifests until you promote a resume."
         }
-
         if let seed = currentSeed {
             let formatter = RelativeDateTimeFormatter()
             formatter.unitsStyle = .short
@@ -69,11 +57,9 @@ struct TemplateQuickActionsView: View {
             return "No seed saved yet for \(template.name). Promote a resume to capture curated defaults."
         }
     }
-
     private var canPromote: Bool {
         selectedResume?.template != nil && !isProcessing
     }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -81,11 +67,9 @@ struct TemplateQuickActionsView: View {
                     .font(.headline)
                 Spacer()
             }
-
             Text("Manifests and seed data now live in the Template Editor. Promote refined resumes to refresh default content before creating new ones.")
                 .font(.callout)
                 .foregroundColor(.secondary)
-
             VStack(alignment: .leading, spacing: 6) {
                 Text(templateSummary)
                     .font(.subheadline)
@@ -94,13 +78,11 @@ struct TemplateQuickActionsView: View {
                     .font(.footnote)
                     .foregroundColor(.secondary)
             }
-
             HStack(spacing: 12) {
                 Button("Open Template Editor") {
                     openTemplateEditor()
                 }
                 .buttonStyle(.borderedProminent)
-
                 Button {
                     promoteSelectedResumeToSeed()
                 } label: {
@@ -117,7 +99,6 @@ struct TemplateQuickActionsView: View {
                 .disabled(!canPromote)
                 .help("Capture the current resume tree as the default seed for this template.")
             }
-
             if let statusMessage {
                 Text(statusMessage)
                     .font(.footnote)
@@ -137,7 +118,6 @@ struct TemplateQuickActionsView: View {
         .padding(.horizontal, 16)
         .padding(.bottom, 12)
     }
-
     private func openTemplateEditor() {
         if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
             appDelegate.showTemplateEditorWindow()
@@ -147,7 +127,6 @@ struct TemplateQuickActionsView: View {
             setStatus("Opening Template Editor...", kind: .info)
         }
     }
-
     @MainActor
     private func promoteSelectedResumeToSeed() {
         guard !isProcessing else { return }
@@ -159,20 +138,16 @@ struct TemplateQuickActionsView: View {
             setStatus("The selected resume is missing a template link.", kind: .error)
             return
         }
-
         isProcessing = true
         setStatus(nil, kind: .info)
-
         Task { @MainActor in
             defer { isProcessing = false }
-
             do {
                 let context = try ResumeTemplateDataBuilder.buildContext(from: resume)
                 guard let formatted = prettyJSONString(from: context) else {
                     setStatus("Unable to serialize resume context.", kind: .error)
                     return
                 }
-
                 appEnvironment.templateSeedStore.upsertSeed(
                     slug: template.slug,
                     jsonString: formatted,
@@ -187,7 +162,6 @@ struct TemplateQuickActionsView: View {
             }
         }
     }
-
     private func prettyJSONString(from object: Any) -> String? {
         guard JSONSerialization.isValidJSONObject(object),
               let data = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys])
@@ -196,7 +170,6 @@ struct TemplateQuickActionsView: View {
         }
         return String(data: data, encoding: .utf8)
     }
-
     private func setStatus(_ message: String?, kind: StatusKind) {
         statusMessage = message
         statusKind = kind

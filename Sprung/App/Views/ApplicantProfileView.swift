@@ -4,22 +4,18 @@
 //
 //  Created by Christopher Culbreath on 4/21/25.
 //
-
 import AppKit
 import Observation
 import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
-
 struct ApplicantProfileView: View {
     @Environment(ApplicantProfileStore.self) private var profileStore: ApplicantProfileStore
-
     @State private var profile: ApplicantProfile?
     @State private var draft = ApplicantProfileDraft()
     @State private var successMessage = ""
     @State private var hasChanges = false
     @State private var isLoading = true
-
     var body: some View {
         VStack {
             if isLoading {
@@ -32,7 +28,6 @@ struct ApplicantProfileView: View {
                             .onChange(of: draft) { _, _ in
                                 hasChanges = true
                             }
-
                         signatureSection
                         actionsSection
                     }
@@ -48,14 +43,12 @@ struct ApplicantProfileView: View {
             isLoading = false
         }
     }
-
     private var signatureSection: some View {
         GroupBox {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Signature image will be used on cover letters and official documents.")
                     .font(.caption)
                     .foregroundColor(.secondary)
-
                 HStack {
                     if let image = profile?.getSignatureImage() {
                         image
@@ -73,13 +66,11 @@ struct ApplicantProfileView: View {
                             .background(Color.white)
                     }
                 }
-
                 HStack(spacing: 12) {
                     Button("Choose Image…") {
                         presentSignaturePicker()
                     }
                     .buttonStyle(.bordered)
-
                     if profile?.signatureData != nil {
                         Button("Remove") {
                             profile?.signatureData = nil
@@ -88,7 +79,6 @@ struct ApplicantProfileView: View {
                         .buttonStyle(.bordered)
                         .foregroundColor(.red)
                     }
-
                     Spacer()
                 }
             }
@@ -97,7 +87,6 @@ struct ApplicantProfileView: View {
                 .font(.headline)
         }
     }
-
     private var actionsSection: some View {
         GroupBox {
             HStack(alignment: .center, spacing: 12) {
@@ -110,13 +99,11 @@ struct ApplicantProfileView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(!hasChanges)
-
                 if !successMessage.isEmpty {
                     Text(successMessage)
                         .foregroundColor(.green)
                         .font(.callout)
                 }
-
                 Spacer()
             }
         } label: {
@@ -124,7 +111,6 @@ struct ApplicantProfileView: View {
                 .font(.headline)
         }
     }
-
     private func presentSignaturePicker() {
         presentOpenPanel(allowedTypes: [.png, .jpeg, .pdf, .svg]) { url in
             do {
@@ -136,7 +122,6 @@ struct ApplicantProfileView: View {
             }
         }
     }
-
     private func presentOpenPanel(allowedTypes: [UTType], completion: @escaping (URL) -> Void) {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = allowedTypes
@@ -151,7 +136,6 @@ struct ApplicantProfileView: View {
             }
         }
     }
-
     @MainActor
     private func loadProfile() {
         let current = profileStore.currentProfile()
@@ -160,7 +144,6 @@ struct ApplicantProfileView: View {
         hasChanges = false
         successMessage = ""
     }
-
     @MainActor
     private func saveProfile() {
         guard let profile else { return }
@@ -168,7 +151,6 @@ struct ApplicantProfileView: View {
         profileStore.save(profile)
         successMessage = "Profile saved successfully"
         hasChanges = false
-
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
             successMessage = ""
         }

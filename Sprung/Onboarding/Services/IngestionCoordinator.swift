@@ -1,6 +1,5 @@
 import Foundation
 import SwiftyJSON
-
 /// Coordinator that listens for file uploads linked to evidence requests
 /// and triggers background knowledge card generation.
 actor IngestionCoordinator: OnboardingEventHandler {
@@ -31,32 +30,24 @@ actor IngestionCoordinator: OnboardingEventHandler {
             }
         }
     }
-
     func handleEvidenceUpload(url: URL, requirementId: String) async {
         Logger.info("📎 Handling evidence upload for requirement: \(requirementId)", category: .ai)
-
         await eventBus.publish(.processingStateChanged(true, statusMessage: "Processing evidence..."))
-
         do {
             var metadata = JSON()
             metadata["evidence_requirement_id"].string = requirementId
-
             let record = try await documentProcessingService.processDocument(
                 fileURL: url,
                 documentType: "evidence",
                 callId: nil,
                 metadata: metadata
             )
-
             await eventBus.publish(.artifactRecordProduced(record: record))
-
             Logger.info("✅ Evidence processed and artifact produced", category: .ai)
-
         } catch {
             Logger.error("❌ Evidence upload failed: \(error.localizedDescription)", category: .ai)
             await eventBus.publish(.errorOccurred("Failed to process evidence: \(error.localizedDescription)"))
         }
-
         await eventBus.publish(.processingStateChanged(false))
     }
     

@@ -5,11 +5,9 @@
 //  Network stream monitoring and event emission (Spec §4.4)
 //  Monitors SSE/WebSocket deltas from OpenAI and converts to events
 //
-
 import Foundation
 import SwiftOpenAI
 import SwiftyJSON
-
 /// Routes inbound network streams to EventCoordinator
 /// Responsibilities (Spec §4.4):
 /// - Monitor SSE/WebSocket streams
@@ -19,7 +17,6 @@ import SwiftyJSON
 actor NetworkRouter: OnboardingEventEmitter {
     // MARK: - Properties
     let eventBus: EventCoordinator
-
     // Stream buffering for delta accumulation
     private struct StreamBuffer {
         let messageId: UUID
@@ -29,18 +26,15 @@ actor NetworkRouter: OnboardingEventEmitter {
         var firstDeltaLogged: Bool
         var toolCalls: [OnboardingMessage.ToolCallInfo]
     }
-
     private var streamingBuffers: [String: StreamBuffer] = [:]
     private var messageIds: [String: UUID] = [:]
     private var lastMessageUUID: UUID?
     private var receivedOutputItemDone = false
-
     // MARK: - Initialization
     init(eventBus: EventCoordinator) {
         self.eventBus = eventBus
         Logger.info("📡 NetworkRouter initialized", category: .ai)
     }
-
     // MARK: - Stream Processing
     /// Process a ResponseStreamEvent from OpenAI
     func handleResponseEvent(_ event: ResponseStreamEvent) async {
@@ -48,34 +42,27 @@ actor NetworkRouter: OnboardingEventEmitter {
         case .responseFailed(let failed):
             let message = failed.response.error?.message ?? "Response failed"
             await emit(.errorOccurred("Stream error: \(message)"))
-
         case .outputTextDelta(let delta):
             // Handle streaming text deltas for real-time message display
             await processContentDelta(0, delta.delta)
-
         case .outputItemDone(let done):
             // Handle completed output items (messages, function calls, etc.)
             // Mark that we've received output items so we don't double-process in responseCompleted
             receivedOutputItemDone = true
-
             switch done.item {
             case .functionCall(let toolCall):
                 await processToolCall(toolCall)
-
             case .message(let message):
                 // Only process message content if we're NOT streaming
                 // (streaming messages already accumulated via outputTextDelta events)
                 if streamingBuffers.isEmpty {
                     await processMessageContent(message)
                 }
-
             case .reasoning(let reasoning):
                 await processReasoningItem(reasoning)
-
             default:
                 break
             }
-
         case .responseCompleted(let completed):
             // If we have buffered messages from streaming, finalize them
             if !streamingBuffers.isEmpty {
@@ -85,13 +72,10 @@ actor NetworkRouter: OnboardingEventEmitter {
                 // Extract complete message from final response (fallback for non-streaming responses)
                 await processCompletedResponse(completed.response)
             }
-
             // Reset state for next response
             receivedOutputItemDone = false
-
             // Emit completion event with response ID
             Logger.info("📨 Response completed: \(completed.response.id)", category: .ai)
-
         case .responseInProgress(let inProgress):
             // Process deltas from in-progress response
             // Note: Tool calls are handled by outputItemDone, not here
@@ -99,30 +83,23 @@ actor NetworkRouter: OnboardingEventEmitter {
                 switch item {
                 case .message(let message):
                     await processMessageContent(message)
-
                 case .reasoning(let reasoning):
                     await processReasoningItem(reasoning)
-
                 default:
                     break
                 }
             }
-
         case .reasoningSummaryTextDelta(let delta):
             await processReasoningSummaryDelta(delta)
-
         case .reasoningSummaryTextDone(let done):
             await processReasoningSummaryDone(done)
-
         case .responseCreated, .responseIncomplete:
             // These events don't need special handling
             break
-
         default:
             break
         }
     }
-
     // MARK: - Message Processing
     private func processMessageContent(_ message: OutputItem.Message) async {
         for contentItem in message.content {
@@ -131,10 +108,8 @@ actor NetworkRouter: OnboardingEventEmitter {
             }
         }
     }
-
     private func processContentDelta(_ index: Int, _ text: String) async {
         let itemId = "message_\(index)"
-
         // Initialize buffer for new message
         if streamingBuffers[itemId] == nil {
             let messageId = UUID()
@@ -150,34 +125,28 @@ actor NetworkRouter: OnboardingEventEmitter {
             messageIds[itemId] = messageId
             lastMessageUUID = messageId
         }
-
         guard var buffer = streamingBuffers[itemId] else { return }
         buffer.text += text
         buffer.pendingFragment += text
-
         // Emit delta event
         await emit(.streamingMessageUpdated(id: buffer.messageId, delta: buffer.pendingFragment))
         buffer.pendingFragment = ""
         streamingBuffers[itemId] = buffer
     }
-
     private func finalizePendingMessages() async {
         for (_, buffer) in streamingBuffers {
             let toolCalls = buffer.toolCalls.isEmpty ? nil : buffer.toolCalls
             await emit(.streamingMessageFinalized(id: buffer.messageId, finalText: buffer.text, toolCalls: toolCalls))
         }
-
         streamingBuffers.removeAll()
         messageIds.removeAll()
         lastMessageUUID = nil
     }
-
     /// Process a completed response that arrived without streaming deltas
     private func processCompletedResponse(_ response: ResponseModel) async {
         // Extract message content and tool calls from the completed response
         var completeText = ""
         var toolCalls: [OnboardingMessage.ToolCallInfo] = []
-
         // Process all output items
         for outputItem in response.output {
             switch outputItem {
@@ -188,7 +157,6 @@ actor NetworkRouter: OnboardingEventEmitter {
                         completeText += outputText.text
                     }
                 }
-
             case .functionCall(let toolCall):
                 // Collect tool call info for the assistant message
                 toolCalls.append(OnboardingMessage.ToolCallInfo(
@@ -196,30 +164,24 @@ actor NetworkRouter: OnboardingEventEmitter {
                     name: toolCall.name,
                     arguments: toolCall.arguments
                 ))
-
                 // Emit tool call event directly (don't call processToolCall which expects buffers)
                 let functionName = toolCall.name
                 let arguments = toolCall.arguments
                 let argsJSON = JSON(parseJSON: arguments)
-
                 let call = ToolCall(
                     id: UUID().uuidString,
                     name: functionName,
                     arguments: argsJSON,
                     callId: toolCall.callId
                 )
-
                 await emit(.toolCallRequested(call, statusMessage: "Executing \(functionName)..."))
                 Logger.info("🔧 Tool call received: \(functionName)", category: .ai)
-
             case .reasoning(let reasoning):
                 await processReasoningItem(reasoning)
-
             default:
                 break
             }
         }
-
         // Only emit message events if there's actual text content
         // Tool-only responses shouldn't create empty chat bubbles
         if !completeText.isEmpty {
@@ -233,7 +195,6 @@ actor NetworkRouter: OnboardingEventEmitter {
             Logger.warning("⚠️ No text or tool calls in LLM response", category: .ai)
         }
     }
-
     // MARK: - Stream Cancellation (Phase 2)
     /// Cancel and clean up any in-progress streaming messages
     /// Called when user cancels LLM mid-response
@@ -242,33 +203,26 @@ actor NetworkRouter: OnboardingEventEmitter {
             Logger.debug("No pending streams to cancel", category: .ai)
             return
         }
-
         let bufferCount = streamingBuffers.count
-
         // Finalize all partial messages with their current text
         for (_, buffer) in streamingBuffers {
             let cancelledText = buffer.text.isEmpty ? "(cancelled)" : buffer.text
             await emit(.streamingMessageFinalized(id: buffer.messageId, finalText: cancelledText))
             Logger.debug("🛑 Finalized cancelled stream: \(buffer.messageId)", category: .ai)
         }
-
         // Clean up all tracking state
         streamingBuffers.removeAll()
         messageIds.removeAll()
         lastMessageUUID = nil
         receivedOutputItemDone = false
-
         Logger.info("🧹 NetworkRouter cleaned up \(bufferCount) cancelled stream(s)", category: .ai)
     }
-
     // MARK: - Tool Call Processing
     private func processToolCall(_ toolCall: OutputItem.FunctionToolCall) async {
         let functionName = toolCall.name
         let arguments = toolCall.arguments
-
         // Convert arguments string to JSON
         let argsJSON = JSON(parseJSON: arguments)
-
         // Create tool call with OpenAI's call ID (important for continuations)
         let call = ToolCall(
             id: UUID().uuidString,
@@ -276,7 +230,6 @@ actor NetworkRouter: OnboardingEventEmitter {
             arguments: argsJSON,
             callId: toolCall.callId
         )
-
         // Store tool call info in the current message buffer
         // Assumes tool calls arrive for message_0 (standard assistant message index)
         let itemId = "message_0"
@@ -291,14 +244,11 @@ actor NetworkRouter: OnboardingEventEmitter {
         } else {
             Logger.warning("⚠️ Tool call received but no message buffer exists: \(functionName)", category: .ai)
         }
-
         // Emit tool call event (Spec §6: LLM.toolCallReceived)
         // Orchestrator will subscribe to this and manage continuations
         await emit(.toolCallRequested(call, statusMessage: "Processing \(functionName)..."))
-
         Logger.info("🔧 Tool call received: \(functionName)", category: .ai)
     }
-
     // MARK: - Reasoning Support
     /// Process reasoning item from output (indicates reasoning is present)
     private func processReasoningItem(_ reasoning: OutputItem.Reasoning) async {
@@ -306,7 +256,6 @@ actor NetworkRouter: OnboardingEventEmitter {
         // No need to track or pass them back with tool responses
         Logger.debug("🧠 Reasoning output: \(reasoning.id)", category: .ai)
     }
-
     /// Process reasoning summary text delta (streaming)
     /// Reasoning summaries display in a separate sidebar, not attached to specific messages
     private func processReasoningSummaryDelta(_ event: ReasoningSummaryTextDeltaEvent) async {
@@ -314,7 +263,6 @@ actor NetworkRouter: OnboardingEventEmitter {
         await emit(.llmReasoningSummaryDelta(delta: event.delta))
         Logger.debug("🧠 Reasoning summary delta: \(event.delta.prefix(50))...", category: .ai)
     }
-
     /// Process reasoning summary completion
     /// Reasoning summaries display in a separate sidebar, not attached to specific messages
     private func processReasoningSummaryDone(_ event: ReasoningSummaryTextDoneEvent) async {

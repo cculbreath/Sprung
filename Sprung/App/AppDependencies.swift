@@ -5,13 +5,11 @@
 //  Lightweight dependency injection container for stable store lifetimes.
 //  Ensures stores are created once per scene, not recreated on view updates.
 //
-
 import Foundation
 import Observation
 import SwiftData
 import SwiftOpenAI
 import SwiftUI
-
 @Observable
 @MainActor
 final class AppDependencies {
@@ -34,20 +32,16 @@ final class AppDependencies {
     let llmService: LLMService
     let reasoningStreamManager: ReasoningStreamManager
     let resumeReviseViewModel: ResumeReviseViewModel
-
     // MARK: - UI State
     let dragInfo: DragInfo
     let debugSettingsStore: DebugSettingsStore
-
     // MARK: - Core Services
     let appEnvironment: AppEnvironment
-
     // MARK: - Init
     init(modelContext: ModelContext) {
         let debugSettingsStore = DebugSettingsStore()
         self.debugSettingsStore = debugSettingsStore
         Logger.debug("🏗️ AppDependencies: initializing with shared ModelContext", category: .appLifecycle)
-
         // Base stores
         let templateStore = TemplateStore(context: modelContext)
         self.templateStore = templateStore
@@ -57,15 +51,12 @@ final class AppDependencies {
         self.experienceDefaultsStore = experienceDefaultsStore
         let careerKeywordStore = CareerKeywordStore()
         self.careerKeywordStore = careerKeywordStore
-
         TemplateDefaultsImporter(
             templateStore: templateStore,
             templateSeedStore: templateSeedStore
         ).installDefaultsIfNeeded()
-
         let applicantProfileStore = ApplicantProfileStore(context: modelContext)
         self.applicantProfileStore = applicantProfileStore
-
         // Core export orchestration
         let resumeExportService = ResumeExportService(
             templateStore: templateStore,
@@ -75,7 +66,6 @@ final class AppDependencies {
             exportService: resumeExportService
         )
         self.resumeExportCoordinator = resumeExportCoordinator
-
         self.resStore = ResStore(
             context: modelContext,
             exportCoordinator: resumeExportCoordinator,
@@ -86,7 +76,6 @@ final class AppDependencies {
         self.resRefStore = ResRefStore(context: modelContext)
         self.coverRefStore = CoverRefStore(context: modelContext)
         self.reasoningStreamManager = ReasoningStreamManager()
-
         // Dependent stores
         self.coverLetterStore = CoverLetterStore(
             context: modelContext,
@@ -96,20 +85,16 @@ final class AppDependencies {
         self.jobAppStore = JobAppStore(context: modelContext, resStore: resStore, coverLetterStore: coverLetterStore)
         self.enabledLLMStore = EnabledLLMStore(modelContext: modelContext)
         self.navigationState = NavigationStateService()
-
         // UI state
         self.dragInfo = DragInfo()
-
         // Core services
         let openRouterService = OpenRouterService()
         let modelValidationService = ModelValidationService()
-
         let appState = AppState(
             openRouterService: openRouterService,
             modelValidationService: modelValidationService
         )
         appState.debugSettingsStore = debugSettingsStore
-
         let requestExecutor = LLMRequestExecutor()
         let documentExtractionService = DocumentExtractionService(requestExecutor: requestExecutor)
         self.documentExtractionService = documentExtractionService
@@ -124,19 +109,15 @@ final class AppDependencies {
             enabledLLMStore: enabledLLMStore,
             modelValidationService: appState.modelValidationService
         )
-
         var onboardingOpenAIService: OpenAIService?
-
         if let openAIKey = APIKeyManager.get(.openAI)?.trimmingCharacters(in: .whitespacesAndNewlines),
            !openAIKey.isEmpty {
             let debugEnabled = Logger.isVerboseEnabled
-
             let responsesConfiguration = URLSessionConfiguration.default
             // Give slow or lossy networks more time to connect and stream response events from OpenAI.
             responsesConfiguration.timeoutIntervalForRequest = 180
             responsesConfiguration.timeoutIntervalForResource = 600
             responsesConfiguration.waitsForConnectivity = true
-
             let responsesSession = URLSession(configuration: responsesConfiguration)
             let responsesHTTPClient = URLSessionHTTPClientAdapter(urlSession: responsesSession)
             let openAIService = OpenAIServiceFactory.service(
@@ -151,13 +132,11 @@ final class AppDependencies {
             onboardingOpenAIService = openAIService
             Logger.info("✅ OpenAI backend registered for onboarding conversations", category: .appLifecycle)
         }
-
         let coverLetterService = CoverLetterService(
             llmFacade: llmFacade,
             exportCoordinator: resumeExportCoordinator,
             applicantProfileStore: applicantProfileStore
         )
-
         let resumeReviseViewModel = ResumeReviseViewModel(
             llmFacade: llmFacade,
             openRouterService: openRouterService,
@@ -166,7 +145,6 @@ final class AppDependencies {
             applicantProfileStore: applicantProfileStore
         )
         self.resumeReviseViewModel = resumeReviseViewModel
-
         let interviewDataStore = InterviewDataStore()
         let checkpoints = Checkpoints()
         let preferences = OnboardingPreferences()
@@ -179,7 +157,6 @@ final class AppDependencies {
             preferences: preferences
         )
         self.onboardingCoordinator = onboardingCoordinator
-
         self.appEnvironment = AppEnvironment(
             appState: appState,
             navigationState: navigationState,
@@ -196,7 +173,6 @@ final class AppDependencies {
             onboardingCoordinator: onboardingCoordinator,
             launchState: .ready
         )
-
         let migrationCoordinator = DatabaseMigrationCoordinator(
             appState: appState,
             openRouterService: openRouterService,
@@ -204,7 +180,6 @@ final class AppDependencies {
             modelValidationService: modelValidationService
         )
         migrationCoordinator.performStartupMigrations()
-
         llmService.initialize(
             appState: appState,
             modelContext: modelContext,
@@ -212,7 +187,6 @@ final class AppDependencies {
             openRouterService: openRouterService
         )
         llmService.reconfigureClient()
-
         appEnvironment.requiresTemplateSetup = templateStore.templates().isEmpty
         Logger.debug("✅ AppDependencies: ready", category: .appLifecycle)
     }

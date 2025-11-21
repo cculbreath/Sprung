@@ -4,9 +4,7 @@
 //
 //  Specialized model selection sheet for Find Best Job operation with background toggles
 //
-
 import SwiftUI
-
 /// Specialized model selection sheet for Find Best Job operation
 /// Includes toggles for resume background and cover letter background facts
 struct BestJobModelSelectionSheet: View {

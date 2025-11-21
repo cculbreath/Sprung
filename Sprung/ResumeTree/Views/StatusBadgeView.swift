@@ -5,11 +5,9 @@
 //  Created by Christopher Culbreath on 2/27/25.
 //
 import SwiftUI
-
 struct StatusBadgeView: View {
     let node: TreeNode
     let isExpanded: Bool
-
     var body: some View {
         if node.aiStatusChildren > 0 && (!isExpanded || node.parent == nil || node.parent?.parent == nil) {
             Text("\(node.aiStatusChildren)")

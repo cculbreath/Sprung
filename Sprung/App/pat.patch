@@ -31,7 +31,6 @@ index 3a3a222..ffbd211 100644
 +
 +            Logger.info("🆕 Created onboarding interview window (borderless overlay)", category: .ui)
          }
-
          onboardingInterviewWindow?.makeKeyAndOrderFront(nil)
          NSApp.activate(ignoringOtherApps: true)
          Logger.info("✅ Onboarding interview window presented", category: .ui)

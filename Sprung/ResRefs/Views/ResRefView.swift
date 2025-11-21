@@ -4,15 +4,12 @@
 //
 //  Created by Christopher Culbreath on 1/31/25.
 //
-
 import SwiftData
 import SwiftUI
-
 // A hover wrapper for each résumé reference row
 struct HoverableResRefRowView: View {
     var sourceNode: ResRef
     @State private var isHovering: Bool = false
-
     var body: some View {
         ResRefRowView(sourceNode: sourceNode)
             .padding(.horizontal, 10)
@@ -29,20 +26,16 @@ struct HoverableResRefRowView: View {
             }
     }
 }
-
 struct ResRefView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(ResRefStore.self) private var resRefStore: ResRefStore
     // Live SwiftData list of references
     @Query(sort: \ResRef.name) private var resRefs: [ResRef]
-
     @State var isRefSheetPresented: Bool = false
     @State private var isHovering: Bool = false
-
     var body: some View {
         // Using @Bindable for jobAppStore if needed
         @Bindable var jobAppStore = jobAppStore
-
         VStack(alignment: .leading) {
             HStack {
                 Text("Résumé Source Documents")
@@ -52,7 +45,6 @@ struct ResRefView: View {
             .padding(10)
             .padding(.top, 10)
             .contentShape(Rectangle())
-
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(resRefs) { child in
                     Divider()

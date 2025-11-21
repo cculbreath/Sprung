@@ -4,10 +4,8 @@
 //
 //  Created by Christopher Culbreath on 6/10/25.
 //
-
 import Foundation
 import SwiftOpenAI
-
 /// Network layer for executing LLM requests with retry logic
 actor LLMRequestExecutor {
     
@@ -22,7 +20,6 @@ actor LLMRequestExecutor {
     private let baseRetryDelay: TimeInterval = 1.0
     
     init() {}
-
     // MARK: - Client Configuration
     /// Configure the OpenRouter client with the current API key from Keychain
     func configureClient() {
@@ -105,7 +102,6 @@ actor LLMRequestExecutor {
                 // Handle SwiftOpenAI APIErrors with enhanced 403 detection
                 if let apiError = error as? SwiftOpenAI.APIError {
                     Logger.debug("🔍 SwiftOpenAI APIError details: \(apiError.displayDescription)", category: .networking)
-
                     // Check for 403 Unauthorized specifically
                     if apiError.displayDescription.contains("status code 403") {
                         let modelId = extractModelId(from: parameters)
@@ -118,7 +114,6 @@ actor LLMRequestExecutor {
                         throw LLMError.invalidModelId(modelId)
                     }
                 }
-
                 // Don't retry on certain errors
                 if let appError = error as? LLMError {
                     switch appError {
@@ -195,7 +190,6 @@ actor LLMRequestExecutor {
                 // Handle SwiftOpenAI APIErrors with enhanced 403 detection
                 if let apiError = error as? SwiftOpenAI.APIError {
                     Logger.debug("🔍 SwiftOpenAI APIError details: \(apiError.displayDescription)", category: .networking)
-
                     // Check for 403 Unauthorized specifically
                     if apiError.displayDescription.contains("status code 403") {
                         let modelId = extractModelId(from: parameters)
@@ -208,7 +202,6 @@ actor LLMRequestExecutor {
                         throw LLMError.invalidModelId(modelId)
                     }
                 }
-
                 // Don't retry on certain errors
                 if let appError = error as? LLMError {
                     switch appError {

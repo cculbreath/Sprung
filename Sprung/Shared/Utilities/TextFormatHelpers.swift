@@ -1,5 +1,4 @@
 import Foundation
-
 struct TextFormatHelpers {
     
     static func wrapper(_ text: String, width: Int = 80, leftMargin: Int = 0, rightMargin: Int = 0, centered: Bool = false, rightFill: Bool = false) -> String {

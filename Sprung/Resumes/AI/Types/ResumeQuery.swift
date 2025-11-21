@@ -4,12 +4,10 @@
 //
 //  Created by Christopher Culbreath on 9/1/24.
 //
-
 import Foundation
 import PDFKit
 import AppKit
 import SwiftUI
-
 @Observable class ResumeApiQuery {
     // MARK: - Properties
     /// Set this to `true` if you want to save a debug file containing the prompt text.
@@ -17,7 +15,6 @@ import SwiftUI
     
     /// The mode for this query (normal or with clarifying questions)
     var queryMode: ResumeQueryMode = .normal
-
     // Native SwiftOpenAI JSON Schema for revisions
     static let revNodeArraySchema: JSONSchema = {
         // Define the revision node schema
@@ -119,7 +116,6 @@ import SwiftUI
             additionalProperties: false
         )
     }()
-
     /// System prompt using the native SwiftOpenAI message format
     let genericSystemMessage = LLMMessage.text(
         role: .system,
@@ -127,13 +123,11 @@ import SwiftUI
         You are an expert career coach with a specialization in crafting and refining technical resumes to optimize them for job applications. With extensive experience in helping candidates secure interviews at top companies, you understand the importance of aligning resume content with job descriptions and the subtleties of tailoring resumes to specific roles. Your goal is to propose revisions that truthfully showcase the candidate's relevant achievements, experiences, and skills. Make the resume compelling, concise, and closely aligned with the target job posting, without adding any fabricated details.
         """
     )
-
     // Make this var instead of let so it can be updated
     var applicant: Applicant
     var queryString: String = ""
     let res: Resume
     private let exportCoordinator: ResumeExportCoordinator
-
     // MARK: - Derived Properties
     var backgroundDocs: String {
         let bgrefs = res.enabledSources
@@ -143,11 +137,9 @@ import SwiftUI
             return bgrefs.map { $0.name + ":\n" + $0.content + "\n\n" }.joined()
         }
     }
-
     var resumeText: String {
         res.textResume
     }
-
     var resumeJson: String {
         do {
             let context = try ResumeTemplateDataBuilder.buildContext(from: res)
@@ -158,11 +150,9 @@ import SwiftUI
             return "{}"
         }
     }
-
     var jobListing: String {
         return res.jobApp?.jobListingString ?? ""
     }
-
     var updatableFieldsString: String {
         guard let rootNode = res.rootNode else {
             Logger.debug("⚠️ updatableFieldsString: rootNode is nil!")
@@ -182,7 +172,6 @@ import SwiftUI
         }
     }
 
-
     // MARK: - Initialization
     init(
         resume: Resume,
@@ -199,14 +188,12 @@ import SwiftUI
 
 
 
-
     // MARK: - Prompt Building
     @MainActor
     func wholeResumeQueryString() async -> String {
         // Ensure the resume's rendered text is up-to-date by awaiting the export/render process.
         try? await exportCoordinator.ensureFreshRenderedText(for: res)
         
-
 
         // Build the improved prompt
         let prompt = """
@@ -215,24 +202,20 @@ import SwiftUI
         \(resumeText)
         ================================================================================
         This is the most recent version of \(applicant.name)'s résumé in plain text, generated from the following JSON data using a templating system. This system also builds HTML and PDF outputs from the same JSON.
-
         RÉSUMÉ SOURCE JSON:
         \(resumeJson)
         ================================================================================
         ================================================================================
         GOAL:
         Our objective is to secure \(applicant.name) an interview for the following position:
-
         JOB LISTING:
         \(jobListing)
-
         TASK:
         - Review \(applicant.name)’s latest résumé and background documents.
         - Propose revisions that align with the listed job requirements, reflect the key responsibilities and skills mentioned, and truthfully enhance the resume’s impact.
         - Incorporate relevant keywords from the job listing to help pass automated screeners.
         - Ensure you do not introduce any fabricated experience.
         - Provide all revisions as structured data in an array of RevNodes (RevArray) matching the schema below.
-
         IMPORTANT:
         1. Only modify the fields in the EditableNodes array below.
         2. For each field that needs no change, set newValue to "" and valueChanged to false.
@@ -242,7 +225,6 @@ import SwiftUI
         6. Safeguard the broader skill set if it is relevant to roles beyond the target position, but do prioritize clarity and relevance to this specific job.
         7. Keep formatting cues consistent with the style implied by the existing resume content.
         8. CRITICAL: Replacement content should be roughly the same length as the original to accommodate fixed text-box-sized layouts. Aim to match character count within ±10% when possible.
-
         ================================================================================
         EDITABLE NODES:
         \(updatableFieldsString)
@@ -256,20 +238,16 @@ import SwiftUI
         - If no change is required for a given node, set “newValue” to "" and “valueChanged” to false.
         - The “why” field can be an empty string if the reason is self-explanatory.
         - Do **not** modify the "id" or "treePath" fields. Always return the exact same values you received for those fields for each node.
-
         SUMMARY:
         Make the resume as compelling and accurate as possible for the target job. Keep it honest, relevant, and ensure that any additions or modifications support \(applicant.name)’s candidacy for the role. Use strategic language to highlight achievements, mirror core keywords from the job posting, and present a polished, stand-out resume.
         ================================================================================
         """
-
         // If debug flag is set, save the prompt to a text file in the user's Downloads folder.
         if saveDebugPrompt {
             savePromptToDownloads(content: prompt, fileName: "promptDebug.txt")
         }
-
         return prompt
     }
-
     /// Generate prompt for clarifying questions workflow
     /// Returns resume context WITHOUT editable nodes, plus clarifying questions instructions
     @MainActor
@@ -307,7 +285,6 @@ import SwiftUI
         
         return resumeContextOnly + clarifyingQuestionsInstruction
     }
-
     /// Generate resume context for clarifying questions (excludes editable nodes and JSON)
     /// This provides the resume text, job listing, and background docs for context
     /// but does NOT include the JSON structure or editable nodes array since clarifying questions
@@ -325,16 +302,13 @@ import SwiftUI
         ================================================================================
         GOAL:
         Our objective is to secure \(applicant.name) an interview for the following position:
-
         JOB LISTING:
         \(jobListing)
-
         CONTEXT:
         - Review \(applicant.name)'s résumé and the job listing
         - Consider what additional information would help provide better, more targeted revisions
         - Focus on understanding the candidate's experience, achievements, and how to best position them for this role
         - Background documents provide additional context about the candidate's experience
-
         ================================================================================
         BACKGROUND DOCUMENTS:
         \(backgroundDocs)
@@ -348,7 +322,6 @@ import SwiftUI
         
         return prompt
     }
-
     /// Generate revision prompt for multi-turn conversations (after clarifying questions)
     /// Only includes editable nodes and revision instructions since context is already established
     @MainActor
@@ -359,7 +332,6 @@ import SwiftUI
         // Build prompt with only editable nodes and instructions (context already established)
         let prompt = """
         Based on our discussion, please provide revision suggestions for the resume. Here are the editable nodes that can be modified:
-
         ================================================================================
         EDITABLE NODES:
         \(updatableFieldsString)
@@ -372,7 +344,6 @@ import SwiftUI
         - For each field that requires a change, propose newValue, set valueChanged to true, and include a "why" explanation if non-trivial
         - Do **not** modify the "id" or "treePath" fields. Always return the exact same values you received for those fields for each node
         - CRITICAL: Replacement content should be roughly the same length as the original to accommodate fixed text-box-sized layouts. Aim to match character count within ±10% when possible
-
         OUTPUT INSTRUCTIONS:
         - Return your proposed revisions as JSON matching the RevNode array schema provided
         - For each original EditableNode, include exactly one RevNode in the RevArray
@@ -387,7 +358,6 @@ import SwiftUI
         
         return prompt
     }
-
     
     /// Helper method to truncate strings with ellipsis
     private func truncateString(_ string: String, maxLength: Int) -> String {
@@ -397,7 +367,6 @@ import SwiftUI
         let truncated = String(string.prefix(maxLength))
         return truncated + "..."
     }
-
     // MARK: - Debugging Helper
     /// Saves the provided prompt text to the user's `Downloads` folder for debugging purposes.
     private func savePromptToDownloads(content: String, fileName: String) {
@@ -405,7 +374,6 @@ import SwiftUI
         let homeDirectoryURL = fileManager.homeDirectoryForCurrentUser
         let downloadsURL = homeDirectoryURL.appendingPathComponent("Downloads")
         let fileURL = downloadsURL.appendingPathComponent(fileName)
-
         do {
             try content.write(to: fileURL, atomically: true, encoding: .utf8)
         } catch {

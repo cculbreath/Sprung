@@ -2,9 +2,7 @@
 //  ClarifyingQuestionsSheet.swift
 //  Sprung
 //
-
 import SwiftUI
-
 struct ClarifyingQuestionsSheet: View {
     let questions: [ClarifyingQuestion]
     @Binding var isPresented: Bool
@@ -14,7 +12,6 @@ struct ClarifyingQuestionsSheet: View {
     @State private var declinedQuestions: Set<String> = []
     @FocusState private var focusedQuestionId: String?
     @Environment(\.dismiss) private var dismiss
-
     
     var body: some View {
         VStack(spacing: 0) {
@@ -139,7 +136,6 @@ struct ClarifyingQuestionsSheet: View {
         dismiss()
     }
 }
-
 struct QuestionView: View {
     let question: ClarifyingQuestion
     @Binding var answer: String
@@ -202,7 +198,6 @@ struct QuestionView: View {
         .cornerRadius(8)
     }
 }
-
 // Custom TextEditor that handles Tab navigation
 struct TabNavigableTextEditor: NSViewRepresentable {
     @Binding var text: String

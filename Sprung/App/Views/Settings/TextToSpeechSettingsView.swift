@@ -4,23 +4,19 @@
 //
 //  Created by Christopher Culbreath on 4/24/25.
 //
-
 import AVFoundation // Needed for AVAudioPlayerDelegate potentially
 import SwiftUI
-
 struct TextToSpeechSettingsView: View {
     // AppStorage properties specific to this view
     @Environment(AppState.self) private var appState
     @AppStorage("ttsEnabled") private var ttsEnabled: Bool = false
     @AppStorage("ttsVoice") private var ttsVoice: String = "nova"
     @AppStorage("ttsInstructions") private var ttsInstructions: String = ""
-
     // State for managing TTS preview
     @State private var ttsProvider: OpenAITTSProvider?
     @State private var isPreviewingVoice: Bool = false
     @State private var ttsError: String? = nil
     @State private var showTTSErrorAlert: Bool = false // Use a different name to avoid conflict
-
     // Default instructions constant
     private let defaultInstructions = """
     Voice Affect: Confident, composed, and respectful; project well-supported authority and confidence without hubris.
@@ -30,7 +26,6 @@ struct TextToSpeechSettingsView: View {
     Pronunciation: Clear and precise, emphasizing understanding and fluency with technical concepts, and a deft handling of even the most stubborn aspects of the English language.
     Pauses: Brief pauses for emphasis and gravitas, but with an overall cadence of efficiency and forward momentum.
     """
-
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Toggle("Enable Text-to-Speech", isOn: $ttsEnabled)
@@ -43,13 +38,11 @@ struct TextToSpeechSettingsView: View {
                         ttsProvider = nil
                     }
                 }
-
             if !appState.hasValidOpenAiKey {
                 Text("Add an OpenAI API key to enable the résumé narration preview.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
-
             if ttsEnabled && appState.hasValidOpenAiKey {
                 Picker("Voice", selection: $ttsVoice) {
                     ForEach(OpenAITTSProvider.Voice.allCases, id: \.rawValue) { voice in
@@ -57,7 +50,6 @@ struct TextToSpeechSettingsView: View {
                     }
                 }
                 .pickerStyle(.menu)
-
                 HStack {
                     Spacer()
                     Button(action: previewVoice) {
@@ -71,7 +63,6 @@ struct TextToSpeechSettingsView: View {
                     .controlSize(.small)
                     Spacer()
                 }
-
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Text("Voice Instructions")
@@ -84,7 +75,6 @@ struct TextToSpeechSettingsView: View {
                         .buttonStyle(.link)
                         .controlSize(.small)
                     }
-
                     TextEditor(text: $ttsInstructions)
                         .font(.system(.callout, design: .monospaced))
                         .frame(minHeight: 120, maxHeight: 220)
@@ -92,7 +82,6 @@ struct TextToSpeechSettingsView: View {
                             RoundedRectangle(cornerRadius: 8)
                                 .stroke(Color.primary.opacity(0.1), lineWidth: 1)
                         )
-
                     Text("Instructions guide the AI narrator’s tone, pacing, and emphasis when generating audio.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -118,7 +107,6 @@ struct TextToSpeechSettingsView: View {
             Text(ttsError ?? "An unknown error occurred with text-to-speech.")
         }
     }
-
     // Initialize or update the TTS provider
     private func initializeTTSProvider() {
         // Avoid re-initializing if the key hasn't changed
@@ -128,7 +116,6 @@ struct TextToSpeechSettingsView: View {
             ttsProvider = nil
         }
     }
-
     // Preview the currently selected TTS voice
     private func previewVoice() {
         // If already previewing, stop it
@@ -137,25 +124,20 @@ struct TextToSpeechSettingsView: View {
             isPreviewingVoice = false
             return
         }
-
         // Ensure provider is initialized
         guard let provider = ttsProvider else {
             ttsError = "TTS Provider not initialized. Check API Key."
             showTTSErrorAlert = true
             return
         }
-
         // Sample text for preview
         let sampleText = "This is a preview of the \(ttsVoice) voice."
         isPreviewingVoice = true
         ttsError = nil // Clear previous errors
-
         // Get the selected voice enum case
         let voiceEnum = OpenAITTSProvider.Voice(rawValue: ttsVoice) ?? .nova
-
         // Get instructions, use nil if empty
         let instructions = ttsInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : ttsInstructions
-
         // Speak the sample text
         provider.speakText(sampleText, voice: voiceEnum, instructions: instructions) { error in
             DispatchQueue.main.async {

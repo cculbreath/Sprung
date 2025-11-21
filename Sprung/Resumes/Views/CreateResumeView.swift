@@ -2,12 +2,10 @@
 //  CreateResumeView.swift
 //  Sprung
 //
-
 import SwiftUI
 import SwiftData
 import AppKit
 import Foundation
-
 // Helper view for creating a resume
 struct CreateResumeView: View {
     @Environment(TemplateStore.self) private var templateStore: TemplateStore
@@ -84,7 +82,6 @@ struct CreateResumeView: View {
                         )
                         return
                     }
-
                     onCreateResume(selectedTemplate, resRefStore.resRefs)
                     dismiss()
                 }) {

@@ -1,16 +1,13 @@
 import Foundation
-
 struct TitleTemplateRenderer {
     func placeholders(in template: String) -> [String] {
         guard let regex = try? NSRegularExpression(pattern: "\\{\\{\\s*([^}]+)\\s*\\}}") else {
             return []
         }
-
         let matches = regex.matches(
             in: template,
             range: NSRange(template.startIndex..., in: template)
         )
-
         return matches.compactMap { match in
             guard match.numberOfRanges >= 2,
                   let range = Range(match.range(at: 1), in: template) else {
@@ -21,7 +18,6 @@ struct TitleTemplateRenderer {
             return raw
         }
     }
-
     func render(_ template: String, context: [String: Any]) -> String? {
         guard let regex = try? NSRegularExpression(pattern: "\\{\\{\\s*([^}]+)\\s*\\}}") else {
             return nil
@@ -45,7 +41,6 @@ struct TitleTemplateRenderer {
         }
         return result
     }
-
     private func lookupValue(
         forKeyPath keyPath: String,
         context: [String: Any]

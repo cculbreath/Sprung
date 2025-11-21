@@ -7,17 +7,14 @@
 //  the facade can hand out UUID conversation identifiers even though the remote
 //  API uses string-based IDs.
 //
-
 import Foundation
 import SwiftOpenAI
-
 struct OpenAIConversationState: Codable, Equatable {
     let remoteConversationId: String?
     let lastResponseId: String
     let systemPrompt: String?
     let modelId: String
 }
-
 actor OpenAIResponsesConversationService: LLMStreamingConversationService {
     private struct ConversationState {
         let remoteConversationId: String?
@@ -25,17 +22,13 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
         let systemPrompt: String?
         let modelId: String
     }
-
     private let service: OpenAIService
     private let defaultTemperature: Double = 1.0
     private var conversations: [UUID: ConversationState] = [:]
-
     private var onboardingToolSchemas: [Tool] { [] }
-
     init(service: OpenAIService) {
         self.service = service
     }
-
     func startConversation(
         systemPrompt: String?,
         userMessage: String,
@@ -52,11 +45,9 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
             streaming: false
         )
         let response = try await service.responseCreate(parameters)
-
         guard let text = extractText(from: response), !text.isEmpty else {
             throw LLMError.unexpectedResponseFormat
         }
-
         let remoteConversationId = extractConversationId(from: response)
         let localId = UUID()
         let state = ConversationState(
@@ -66,10 +57,8 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
             modelId: modelId
         )
         conversations[localId] = state
-
         return (localId, text)
     }
-
     func continueConversation(
         userMessage: String,
         modelId: String,
@@ -83,7 +72,6 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
         guard state.modelId == modelId else {
             throw LLMError.clientError("Model mismatch for conversation")
         }
-
         let parameters = makeParameters(
             systemPrompt: state.systemPrompt,
             userMessage: userMessage,
@@ -94,16 +82,13 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
             streaming: false
         )
         let response = try await service.responseCreate(parameters)
-
         guard let text = extractText(from: response), !text.isEmpty else {
             throw LLMError.unexpectedResponseFormat
         }
-
         state.lastResponseId = response.id
         conversations[conversationId] = state
         return text
     }
-
     func startConversationStreaming(
         systemPrompt: String?,
         userMessage: String,
@@ -120,7 +105,6 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
             images: images,
             streaming: true
         )
-
         let localConversationId = UUID()
         let stream = try await streamConversation(
             parameters: parameters,
@@ -129,10 +113,8 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
             systemPrompt: systemPrompt,
             modelId: modelId
         )
-
         return (localConversationId, stream)
     }
-
     func startConversationStreamingWithHistory(
         systemPrompt: String?,
         messageHistory: [InputItem],
@@ -143,7 +125,6 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
         var inputItems = messageHistory
         let message = InputMessage(role: "user", content: .text(userMessage))
         inputItems.append(.message(message))
-
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(modelId),
@@ -157,7 +138,6 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
         parameters.parallelToolCalls = false
         parameters.tools = onboardingToolSchemas
         parameters.stream = true
-
         let localConversationId = UUID()
         let stream = try await streamConversation(
             parameters: parameters,
@@ -166,10 +146,8 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
             systemPrompt: systemPrompt,
             modelId: modelId
         )
-
         return (localConversationId, stream)
     }
-
     func continueConversationStreaming(
         userMessage: String,
         modelId: String,
@@ -183,7 +161,6 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
         guard state.modelId == modelId else {
             throw LLMError.clientError("Model mismatch for conversation")
         }
-
         let parameters = makeParameters(
             systemPrompt: state.systemPrompt,
             userMessage: userMessage,
@@ -193,7 +170,6 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
             images: images,
             streaming: true
         )
-
         return try await streamConversation(
             parameters: parameters,
             localConversationId: conversationId,
@@ -202,7 +178,6 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
             modelId: modelId
         )
     }
-
     // MARK: - Helpers
     private func makeParameters(
         systemPrompt: String?,
@@ -216,7 +191,6 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
         var content: [ContentItem] = [
             .text(TextContent(text: userMessage))
         ]
-
         for imageData in images {
             let imageContent = ImageContent(
                 detail: "auto",
@@ -225,10 +199,8 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
             )
             content.append(.image(imageContent))
         }
-
         let message = InputMessage(role: "user", content: .array(content))
         let inputItems: [InputItem] = [.message(message)]
-
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(modelId),
@@ -248,7 +220,6 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
         parameters.stream = streaming
         return parameters
     }
-
     private func streamConversation(
         parameters: ModelResponseParameter,
         localConversationId: UUID,
@@ -263,7 +234,6 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
                 var remoteConversationId = existingState?.remoteConversationId
                 var lastResponseId = existingState?.lastResponseId
                 var hasEmittedFinish = false
-
                 do {
                     for try await event in sdkStream {
                         try Task.checkCancellation()
@@ -514,13 +484,11 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
                     continuation.finish(throwing: error)
                 }
             }
-
             continuation.onTermination = { @Sendable _ in
                 task.cancel()
             }
         }
     }
-
     private func storeConversationStateIfNeeded(
         localConversationId: UUID,
         remoteConversationId: String?,
@@ -538,7 +506,6 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
             )
         }
     }
-
     private func updateConversationState(
         localConversationId: UUID,
         remoteConversationId: String?,
@@ -559,7 +526,6 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
             )
         }
     }
-
     private func extractConversationId(from response: ResponseModel) -> String? {
         if let conversation = response.conversation {
             switch conversation {
@@ -571,13 +537,11 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
         }
         return nil
     }
-
     private func extractText(from response: ResponseModel) -> String? {
         if let output = response.outputText?.trimmingCharacters(in: .whitespacesAndNewlines),
            !output.isEmpty {
             return output
         }
-
         for item in response.output {
             if case let .message(message) = item {
                 for content in message.content {
@@ -588,15 +552,12 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
                 }
             }
         }
-
         return nil
     }
-
     private func dataURL(for data: Data, mimeType: String = "image/png") -> String {
         let base64 = data.base64EncodedString()
         return "data:\(mimeType);base64,\(base64)"
     }
-
     func persistedState(for conversationId: UUID) -> OpenAIConversationState? {
         guard let state = conversations[conversationId] else { return nil }
         return OpenAIConversationState(
@@ -606,7 +567,6 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
             modelId: state.modelId
         )
     }
-
     func registerPersistedConversation(_ state: OpenAIConversationState) -> UUID {
         let localId = UUID()
         let stored = ConversationState(

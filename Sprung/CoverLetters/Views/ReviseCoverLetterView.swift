@@ -4,9 +4,7 @@
 //
 //  Created on 6/9/25.
 //
-
 import SwiftUI
-
 /// A sheet for revising cover letters with model and operation selection
 struct ReviseCoverLetterView: View {
     @Environment(\.dismiss) private var dismiss

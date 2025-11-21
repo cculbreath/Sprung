@@ -1,5 +1,4 @@
 import Foundation
-
 /// Represents a specific piece of evidence requested by the Lead Investigator.
 struct EvidenceRequirement: Codable, Identifiable, Equatable {
     let id: String

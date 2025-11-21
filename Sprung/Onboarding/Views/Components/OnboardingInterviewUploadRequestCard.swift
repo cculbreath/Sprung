@@ -1,22 +1,17 @@
 import SwiftUI
 import UniformTypeIdentifiers
-
 struct UploadRequestCard: View {
     let request: OnboardingUploadRequest
     let onSelectFile: () -> Void
     let onDropFiles: ([URL]) -> Void
     let onDecline: () -> Void
-
     @State private var isDropTargetHighlighted = false
-
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(request.metadata.title)
                 .font(.headline)
-
             Text(request.metadata.instructions)
                 .font(.callout)
-
             if !request.metadata.accepts.isEmpty {
                 Text("Accepted types: \(request.metadata.accepts.joined(separator: ", ").uppercased())")
                     .font(.caption)
@@ -26,20 +21,17 @@ struct UploadRequestCard: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-
             if request.metadata.allowMultiple {
                 Text("Multiple files allowed.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
-
             filePickerArea
         }
         .padding(16)
         .background(Color(nsColor: .controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
-
     private var filePickerArea: some View {
         let dashStyle = StrokeStyle(lineWidth: 1.2, dash: [6, 6])
         return VStack(spacing: 12) {
@@ -53,7 +45,6 @@ struct UploadRequestCard: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-
             HStack(spacing: 12) {
                 Button("Choose File…") {
                     onSelectFile()
@@ -80,18 +71,15 @@ struct UploadRequestCard: View {
         .onTapGesture { onSelectFile() }
         .onDrop(of: [UTType.fileURL], isTargeted: $isDropTargetHighlighted, perform: handleDrop(providers:))
     }
-
     private var skipButtonTitle: String {
         if request.metadata.targetKey == "basics.image" {
             return "Skip photo for now"
         }
         return "Skip"
     }
-
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
         let supportingProviders = providers.filter { $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) }
         guard !supportingProviders.isEmpty else { return false }
-
         Task {
             var collected: [URL] = []
             for provider in supportingProviders {
@@ -103,7 +91,6 @@ struct UploadRequestCard: View {
                     }
                 }
             }
-
             if !collected.isEmpty {
                 let limited = request.metadata.allowMultiple ? collected : Array(collected.prefix(1))
                 await MainActor.run {
@@ -111,20 +98,16 @@ struct UploadRequestCard: View {
                 }
             }
         }
-
         return true
     }
-
     private func isFileTypeAllowed(_ url: URL) -> Bool {
         // If no specific types are specified, allow all
         guard !request.metadata.accepts.isEmpty else { return true }
-
         let fileExtension = url.pathExtension.lowercased()
         return request.metadata.accepts.contains { acceptedType in
             acceptedType.lowercased() == fileExtension
         }
     }
-
     private func loadURL(from provider: NSItemProvider) async -> URL? {
         await withCheckedContinuation { continuation in
             provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, error in

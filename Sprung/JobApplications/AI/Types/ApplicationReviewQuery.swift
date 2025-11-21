@@ -2,9 +2,7 @@
 //  ApplicationReviewQuery.swift
 //  Sprung
 //
-
 import Foundation
-
 /// Centralized prompt management for application review operations
 /// Follows the architecture pattern from ResumeQuery.swift and CoverLetterQuery.swift
 @Observable class ApplicationReviewQuery {
@@ -28,20 +26,16 @@ import Foundation
         customOptions: CustomApplicationReviewOptions? = nil
     ) -> String {
         var prompt = reviewType.promptTemplate()
-
         // Handle custom build if necessary
         if reviewType == .custom, let opt = customOptions {
             prompt = buildCustomPrompt(options: opt)
         }
-
         prompt = prompt.replacingOccurrences(of: "{jobPosition}", with: jobApp.jobPosition)
         prompt = prompt.replacingOccurrences(of: "{companyName}", with: jobApp.companyName)
         prompt = prompt.replacingOccurrences(of: "{jobDescription}", with: jobApp.jobDescription)
-
         // Cover letter text replacement
         let coverText = coverLetter?.content ?? ""
         prompt = prompt.replacingOccurrences(of: "{coverLetterText}", with: coverText)
-
         // Resume text replacement
         let resumeText: String
         if !resume.textResume.isEmpty {
@@ -53,15 +47,12 @@ import Foundation
             resumeText = ""
         }
         prompt = prompt.replacingOccurrences(of: "{resumeText}", with: resumeText)
-
         // Background docs placeholder
         let bgDocs = resume.enabledSources.map { "\($0.name):\n\($0.content)\n\n" }.joined()
         prompt = prompt.replacingOccurrences(of: "{backgroundDocs}", with: bgDocs)
-
         // Include image sentence
         let imageText = includeImage ? "I've also attached an image so you can assess its overall professionalism and design." : ""
         prompt = prompt.replacingOccurrences(of: "{includeImage}", with: imageText)
-
         return prompt
     }
     
@@ -77,14 +68,12 @@ import Foundation
     /// - Returns: Complete custom prompt string
     private func buildCustomPrompt(options: CustomApplicationReviewOptions) -> String {
         var segments: [String] = []
-
         Logger.debug("🔧 [ApplicationReview] Building custom prompt")
         Logger.debug("🔧 [ApplicationReview] Include cover letter: \(options.includeCoverLetter)")
         Logger.debug("🔧 [ApplicationReview] Include resume text: \(options.includeResumeText)")
         Logger.debug("🔧 [ApplicationReview] Include resume image: \(options.includeResumeImage)")
         Logger.debug("🔧 [ApplicationReview] Include background docs: \(options.includeBackgroundDocs)")
         Logger.debug("🔧 [ApplicationReview] Custom prompt length: \(options.customPrompt.count)")
-
         if options.includeCoverLetter {
             segments.append("""
             Cover Letter
@@ -92,7 +81,6 @@ import Foundation
             {coverLetterText}
             """)
         }
-
         if options.includeResumeText {
             segments.append("""
             Resume
@@ -100,11 +88,9 @@ import Foundation
             {resumeText}
             """)
         }
-
         if options.includeResumeImage {
             segments.append("{includeImage}")
         }
-
         if options.includeBackgroundDocs {
             segments.append("""
             Background Docs
@@ -112,7 +98,6 @@ import Foundation
             {backgroundDocs}
             """)
         }
-
         // Add custom prompt or a default if empty
         let finalPrompt = options.customPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         if finalPrompt.isEmpty {
