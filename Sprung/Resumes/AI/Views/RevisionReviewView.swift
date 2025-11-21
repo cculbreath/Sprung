@@ -165,7 +165,6 @@ struct RevisionReviewView: View {
     }
 
     // MARK: - View Setup and Cleanup
-
     private func setupView(for resume: Resume) {
         viewModel.initializeUpdateNodes(for: resume)
         setupKeyboardShortcuts()
@@ -219,7 +218,6 @@ struct RevisionReviewView: View {
 }
 
 // MARK: - Subviews
-
 struct RevisionReviewHeader: View {
     let currentIndex: Int
     let totalCount: Int

@@ -269,7 +269,6 @@ struct OnboardingPhaseAdvanceDialog: View {
     }
 
     // MARK: - Helpers
-
     private var currentPhaseDisplayName: String {
         switch request.currentPhase {
         case .phase1CoreFacts:

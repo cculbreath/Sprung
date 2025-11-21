@@ -14,14 +14,12 @@ import SwiftyJSON
 @Observable
 final class ProfileInteractionHandler {
     // MARK: - Observable State
-
     private(set) var pendingApplicantProfileRequest: OnboardingApplicantProfileRequest?
     private(set) var pendingApplicantProfileIntake: OnboardingApplicantProfileIntakeState?
     private(set) var pendingApplicantProfileSummary: JSON?
     private(set) var lastSubmittedDraft: JSON?
 
     // MARK: - Private State
-
     private let isoFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -29,12 +27,10 @@ final class ProfileInteractionHandler {
     }()
 
     // MARK: - Dependencies
-
     private let contactsImportService: ContactsImportService
     private let eventBus: EventCoordinator
 
     // MARK: - Init
-
     init(
         contactsImportService: ContactsImportService,
         eventBus: EventCoordinator
@@ -44,7 +40,6 @@ final class ProfileInteractionHandler {
     }
 
     // MARK: - Validation Flow (Approve/Reject)
-
     /// Presents a validation request for an applicant profile.
     func presentProfileRequest(_ request: OnboardingApplicantProfileRequest) {
         pendingApplicantProfileRequest = request
@@ -101,7 +96,6 @@ final class ProfileInteractionHandler {
     }
 
     // MARK: - Intake Flow (Collect Profile)
-
     /// Presents the profile intake UI (shows mode picker: manual/URL/upload/contacts).
     func presentProfileIntake() {
         pendingApplicantProfileIntake = .options()
@@ -114,7 +108,6 @@ final class ProfileInteractionHandler {
     }
 
     // MARK: - Intake Modes
-
     /// Begins manual entry mode.
     func beginManualEntry() {
         pendingApplicantProfileIntake = OnboardingApplicantProfileIntakeState(
@@ -200,7 +193,6 @@ final class ProfileInteractionHandler {
     }
 
     // MARK: - Intake Completion
-
     /// Submits a URL for profile intake.
     func submitURL(_ urlString: String) -> URL? {
         let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -257,7 +249,6 @@ final class ProfileInteractionHandler {
     }
 
     // MARK: - Lifecycle
-
     /// Clears all pending profile state (for interview reset).
     func reset() {
         pendingApplicantProfileRequest = nil
@@ -266,7 +257,6 @@ final class ProfileInteractionHandler {
     }
 
     // MARK: - Metadata Helpers
-
     private func attachingValidationMetadata(to json: JSON, via channel: String) -> JSON {
         var enriched = json
         enriched["meta"]["validation_state"].string = "user_validated"
@@ -276,7 +266,6 @@ final class ProfileInteractionHandler {
     }
 
     // MARK: - Artifact Record Creation
-
     private func emitProfileArtifactRecord(
         profileJSON: JSON,
         source: OnboardingApplicantProfileIntakeState.Source
@@ -320,7 +309,6 @@ final class ProfileInteractionHandler {
     }
 
     // MARK: - Profile Summary Management
-
     /// Shows the profile summary card in the tool pane.
     func showProfileSummary(profile: JSON) {
         pendingApplicantProfileSummary = profile

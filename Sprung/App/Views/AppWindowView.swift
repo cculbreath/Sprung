@@ -97,7 +97,6 @@ struct AppWindowView: View {
     
 
     // MARK: - Toolbar Action Methods
-
     func updateMyLetter() {
         if let selectedApp = jobAppStore.selectedApp {
             // Determine or create the cover letter
@@ -122,8 +121,6 @@ struct SaveButtons {
 }
 
 // MARK: - View Modifiers
-
-
 struct AppWindowViewModifiers: ViewModifier {
     let jobAppStore: JobAppStore
     @Binding var sheets: AppSheets

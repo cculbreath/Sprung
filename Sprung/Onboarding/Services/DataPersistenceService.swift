@@ -12,7 +12,6 @@ import SwiftyJSON
 /// Service that handles data persistence operations
 actor DataPersistenceService: OnboardingEventEmitter {
     // MARK: - Properties
-
     let eventBus: EventCoordinator
     private let state: StateCoordinator
     private let dataStore: InterviewDataStore
@@ -21,7 +20,6 @@ actor DataPersistenceService: OnboardingEventEmitter {
     private let wizardTracker: WizardProgressTracker
 
     // MARK: - Initialization
-
     init(
         eventBus: EventCoordinator,
         state: StateCoordinator,
@@ -39,7 +37,6 @@ actor DataPersistenceService: OnboardingEventEmitter {
     }
 
     // MARK: - Artifact Loading
-
     func loadPersistedArtifacts() async {
         let profileRecords = (await dataStore.list(dataType: "applicant_profile")).filter { $0 != .null }
         let timelineRecords = (await dataStore.list(dataType: "skeleton_timeline")).filter { $0 != .null }
@@ -80,7 +77,6 @@ actor DataPersistenceService: OnboardingEventEmitter {
     }
 
     // MARK: - Store Management
-
     func clearArtifacts() async {
         await dataStore.reset()
     }
@@ -96,7 +92,6 @@ actor DataPersistenceService: OnboardingEventEmitter {
     }
 
     // MARK: - Persistence Helpers
-
     private func persistApplicantProfileToSwiftData(json: JSON) async {
         await MainActor.run {
             let draft = ApplicantProfileDraft(json: json)

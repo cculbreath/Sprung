@@ -16,14 +16,12 @@ class TextResumeGenerator {
     }
     
     // MARK: - Public Methods
-    
     /// Generate a text resume using the specified template
     func generateTextResume(for resume: Resume, template: String) throws -> String {
         let rendered = try renderTemplate(for: resume, template: template)
         return sanitizeRenderedText(rendered)
     }
     // MARK: - Private Methods
-    
     private func renderTemplate(for resume: Resume, template: String) throws -> String {
         // Load template
         let templateContent = try loadTextTemplate(named: template)

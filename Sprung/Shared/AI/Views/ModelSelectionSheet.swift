@@ -11,7 +11,6 @@ import SwiftUI
 /// Provides consistent UX and eliminates code duplication
 struct ModelSelectionSheet: View {
     // MARK: - Properties
-    
     let title: String
     let requiredCapability: ModelCapability?
     let operationKey: String? // Optional key for per-operation model persistence
@@ -19,12 +18,10 @@ struct ModelSelectionSheet: View {
     let onModelSelected: (String) -> Void
     
     // MARK: - State
-    
     @State private var selectedModel: String = ""
     @AppStorage("lastSelectedModel") private var lastSelectedModelGlobal: String = ""
     
     // MARK: - Body
-    
     var body: some View {
         NavigationStack {
             VStack(spacing: 20) {
@@ -65,7 +62,6 @@ struct ModelSelectionSheet: View {
     }
     
     // MARK: - Private Methods
-    
     /// Load the last selected model based on operation key or global preference
     private func loadLastSelectedModel() {
         if let operationKey = operationKey {

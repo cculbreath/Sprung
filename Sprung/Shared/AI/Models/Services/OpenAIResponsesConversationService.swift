@@ -204,7 +204,6 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
     }
 
     // MARK: - Helpers
-
     private func makeParameters(
         systemPrompt: String?,
         userMessage: String,

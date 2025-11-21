@@ -248,7 +248,6 @@ struct EditingControls: View {
 }
 
 // MARK: - Supporting Views
-
 private struct ChipsEditor: View {
     @Binding var text: String
     var placeholder: String?

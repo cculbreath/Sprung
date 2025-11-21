@@ -59,7 +59,6 @@ final class CareerKeywordStore {
     }
 
     // MARK: - Private Helpers
-
     private func prepareStorage() {
         if fileManager.fileExists(atPath: keywordsFileURL.path) {
             return

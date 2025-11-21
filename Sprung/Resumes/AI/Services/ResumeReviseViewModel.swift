@@ -101,7 +101,6 @@ class ResumeReviseViewModel {
     }
     
     // MARK: - Public Interface
-    
     /// Start a fresh revision workflow (without clarifying questions)
     /// - Parameters:
     ///   - resume: The resume to revise
@@ -139,12 +138,8 @@ class ResumeReviseViewModel {
             let supportsReasoning = model?.supportsReasoning ?? false
             
             // Debug logging to track reasoning interface triggering
-            Logger.debug("🤖 [startFreshRevisionWorkflow] Model: \(modelId)")
-            Logger.debug("🤖 [startFreshRevisionWorkflow] Model found: \(model != nil)")
-            Logger.debug("🤖 [startFreshRevisionWorkflow] Model supportedParameters: \(model?.supportedParameters ?? [])")
-            Logger.debug("🤖 [startFreshRevisionWorkflow] Supports reasoning: \(supportsReasoning)")
+            Logger.debug("🤖 [startFreshRevisionWorkflow] Model: \(modelId), Supported: \(model != nil), Reasoning: \(supportsReasoning)")
             
-            // Defensive check: ensure reasoning modal is hidden for non-reasoning models
             if !supportsReasoning {
                 reasoningStreamManager.hideAndClear()
             }
@@ -244,16 +239,11 @@ class ResumeReviseViewModel {
             let supportsReasoning = model?.supportsReasoning ?? false
             
             // Debug logging to track reasoning interface triggering
-            Logger.debug("🤖 [continueConversationAndGenerateRevisions] Model: \(modelId)")
-            Logger.debug("🤖 [continueConversationAndGenerateRevisions] Model found: \(model != nil)")
-            Logger.debug("🤖 [continueConversationAndGenerateRevisions] Supports reasoning: \(supportsReasoning)")
+            Logger.debug("🤖 [continueConversation] Model: \(modelId), Supported: \(model != nil), Reasoning: \(supportsReasoning)")
             
-            // Only show reasoning modal for models that support reasoning
             if supportsReasoning {
-                // Clear any previous reasoning content and reset state
                 reasoningStreamManager.startReasoning(modelName: modelId)
             } else {
-                // Defensive check: ensure reasoning modal is hidden for non-reasoning models
                 reasoningStreamManager.hideAndClear()
             }
             
@@ -306,7 +296,6 @@ class ResumeReviseViewModel {
         }
     }
     
-    
     /// Set up revisions for UI review
     /// - Parameter revisions: The validated revisions to review
     @MainActor
@@ -319,30 +308,18 @@ class ResumeReviseViewModel {
         feedbackNodes = []
         feedbackIndex = 0
         
-        // Set up the first revision for review
         if !revisions.isEmpty {
             currentRevisionNode = revisions[0]
             currentFeedbackNode = revisions[0].createFeedbackNode()
         }
         
-        // Ensure reasoning modal is hidden before showing revision review
-        Logger.debug("🔍 [ResumeReviseViewModel] Hiding reasoning modal")
         reasoningStreamManager.hideAndClear()
-        
-        // Show the revision review UI
-        Logger.debug("🔍 [ResumeReviseViewModel] Setting showResumeRevisionSheet = true")
         showResumeRevisionSheet = true
         isProcessingRevisions = false
         markWorkflowCompleted(reset: false)
-        
-        Logger.debug("🔍 [ResumeReviseViewModel] After setting - showResumeRevisionSheet = \(showResumeRevisionSheet)")
     }
     
-    
-    
-    
     // MARK: - Review Workflow Navigation (Moved from ReviewView)
-    
     /// Save the current feedback and move to next node
     /// Clean interface that delegates to node logic
     func saveAndNext(response: PostReviewAction, resume: Resume) {
@@ -430,8 +407,6 @@ class ResumeReviseViewModel {
 
         case .finished:
             Logger.debug("No nodes need resubmission. All changes applied, dismissing sheet...")
-            Logger.debug("🔍 [completeReviewWorkflow] Setting showResumeRevisionSheet = false")
-            Logger.debug("🔍 [completeReviewWorkflow] Current showResumeRevisionSheet value: \(showResumeRevisionSheet)")
 
             // Clear all state before dismissing
             approvedFeedbackNodes = []
@@ -439,7 +414,6 @@ class ResumeReviseViewModel {
             resumeRevisions = []
 
             showResumeRevisionSheet = false
-            Logger.debug("🔍 [completeReviewWorkflow] After setting - showResumeRevisionSheet = \(showResumeRevisionSheet)")
             markWorkflowCompleted(reset: true)
         }
     }
@@ -802,9 +776,6 @@ class ResumeReviseViewModel {
 }
 
 // MARK: - Supporting Types
-
-
-
 // MARK: - Note: Using existing types from AITypes.swift and ResumeUpdateNode.swift
 // - RevisionsContainer (with revArray property)
 // - ClarifyingQuestionsRequest 

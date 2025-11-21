@@ -11,7 +11,6 @@ import SwiftUI
 extension TemplateEditorView {
     
     // MARK: - Template Asset Loading
-    
     func loadTemplateAssets() {
         guard selectedTemplate.isEmpty == false else {
             htmlContent = ""
@@ -92,7 +91,6 @@ extension TemplateEditorView {
     }
     
     // MARK: - Template Management
-    
     func loadAvailableTemplates() {
         let templates = appEnvironment.templateStore.templates()
         availableTemplates = templates.map { $0.slug }.sorted()

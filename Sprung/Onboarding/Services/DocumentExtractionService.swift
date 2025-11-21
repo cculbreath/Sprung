@@ -70,7 +70,6 @@ actor DocumentExtractionService {
     }
 
     // MARK: - Private Properties
-
     private let requestExecutor: LLMRequestExecutor
     private let maxCharactersForPrompt = 18_000
     private let defaultModelId = "google/gemini-2.0-flash-001"
@@ -89,7 +88,6 @@ actor DocumentExtractionService {
     }
 
     // MARK: - Public API
-
     func extract(using request: ExtractionRequest, progress: ExtractionProgressHandler? = nil) async throws -> ExtractionResult {
         try await ensureExecutorConfigured()
 
@@ -219,7 +217,6 @@ actor DocumentExtractionService {
     }
 
     // MARK: - Helpers
-
     private func ensureExecutorConfigured() async throws {
         if !(await requestExecutor.isConfigured()) {
             await requestExecutor.configureClient()

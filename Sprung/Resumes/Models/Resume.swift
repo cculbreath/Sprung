@@ -141,7 +141,6 @@ class Resume: Identifiable, Hashable {
     }
 
     // MARK: - Hashable
-
     static func == (lhs: Resume, rhs: Resume) -> Bool {
         lhs.id == rhs.id
     }

@@ -10,7 +10,6 @@ import Foundation
 @Observable class ApplicationReviewQuery {
     
     // MARK: - Main Review Prompt Building
-    
     /// Build the main application review prompt
     /// - Parameters:
     ///   - reviewType: The type of review to perform
@@ -73,7 +72,6 @@ import Foundation
     }
     
     // MARK: - Custom Prompt Building
-    
     /// Build custom prompt from options
     /// - Parameter options: The custom review options
     /// - Returns: Complete custom prompt string

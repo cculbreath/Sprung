@@ -68,20 +68,13 @@ class OpenAITTSProvider {
     /// Tracks if we're in streaming setup phase to prevent premature callbacks
     private var isInStreamSetup: Bool = false
 
-    // MARK: - Playback state callbacks (wired to UI)
-    
-
-    /// Fires when the first audio buffer starts playing (leaves buffering state).
+    // MARK: - Playback State Callbacks
     var apiKey: String?
     var onReady: (() -> Void)?
-    /// Fires when playback finishes naturally or is stopped.
     var onFinish: (() -> Void)?
-    /// Fires when any playback/streaming error occurs.
     var onError: ((Error) -> Void)?
-    /// Fires when buffering state changes
     var onBufferingStateChanged: ((Bool) -> Void)?
 
-    // Adapter-based streaming player using ChunkedAudioPlayer
     private let streamer = TTSAudioStreamer()
 
     /// Set the buffering state and notify listeners
@@ -133,13 +126,10 @@ class OpenAITTSProvider {
             Logger.debug("✅ OpenAI TTS client created successfully via wrapper")
         }
 
-        // Connect streamer buffering state to our provider
         streamer.onBufferingStateChanged = { [weak self] isBuffering in
             self?.setBufferingState(isBuffering)
         }
     }
-    
-    // Placeholder TTSClient now defined in TTSTypes.swift
 
     deinit {
         // Clean up all resources - must use Task to dispatch to the MainActor
@@ -324,8 +314,6 @@ class OpenAITTSProvider {
 
 
     // MARK: – Streaming playback (incremental)
-
-    
     /// Splits text into chunks at sentence boundaries
     /// - Parameters:
     ///   - text: The text to split
@@ -602,10 +590,7 @@ class OpenAITTSProvider {
         )
     }
 
-    // MARK: - External transport controls required by the UI
-
-    // MARK: Transport controls
-
+    // MARK: - Transport Controls
     /// Pause playback; returns `true` on success.
     @discardableResult
     func pause() -> Bool {

@@ -11,7 +11,6 @@ import SwiftUI
 extension TemplateEditorView {
     
     // MARK: - Custom Field Validation
-    
     func refreshCustomFieldWarnings() {
         guard selectedTemplate.isEmpty == false else {
             customFieldWarningMessage = nil
@@ -115,7 +114,6 @@ extension TemplateEditorView {
     }
     
     // MARK: - Save/Refresh Orchestration
-    
     @discardableResult
     func saveAllChanges() -> Bool {
         var success = saveTemplateAssets()
@@ -168,7 +166,6 @@ extension TemplateEditorView {
     }
     
     // MARK: - Change Handlers
-
     func handleTemplateSelectionChange(previousSlug: String) {
         guard selectedTemplate != previousSlug else { return }
         let previous = previousSlug

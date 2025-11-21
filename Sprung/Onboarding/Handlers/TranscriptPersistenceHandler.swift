@@ -13,7 +13,6 @@ import SwiftyJSON
 /// Listens to user message sends and assistant message finalizations
 actor TranscriptPersistenceHandler: OnboardingEventEmitter {
     // MARK: - Properties
-
     let eventBus: EventCoordinator
     private let dataStore: InterviewDataStore
 
@@ -21,7 +20,6 @@ actor TranscriptPersistenceHandler: OnboardingEventEmitter {
     private var isActive = false
 
     // MARK: - Initialization
-
     init(eventBus: EventCoordinator, dataStore: InterviewDataStore) {
         self.eventBus = eventBus
         self.dataStore = dataStore
@@ -29,7 +27,6 @@ actor TranscriptPersistenceHandler: OnboardingEventEmitter {
     }
 
     // MARK: - Lifecycle
-
     func start() {
         guard !isActive else { return }
         isActive = true
@@ -55,7 +52,6 @@ actor TranscriptPersistenceHandler: OnboardingEventEmitter {
     }
 
     // MARK: - Event Handling
-
     private func handleLLMEvent(_ event: OnboardingEvent) async {
         switch event {
         case .llmUserMessageSent(let messageId, let payload, _):
@@ -70,7 +66,6 @@ actor TranscriptPersistenceHandler: OnboardingEventEmitter {
     }
 
     // MARK: - Private Methods
-
     private func persistUserMessage(messageId: String, payload: JSON) async {
         // Extract text from payload
         guard let text = payload["text"].string else {

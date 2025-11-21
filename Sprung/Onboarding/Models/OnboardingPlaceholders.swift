@@ -165,8 +165,7 @@ struct OnboardingUploadedItem: Identifiable, Codable {
     let uploadedAt: Date
 }
 
-// OnboardingArtifacts is now defined as a typealias to StateCoordinator.OnboardingArtifacts
-// See: Core/OnboardingArtifacts+Alias.swift
+
 
 struct OnboardingApplicantProfileIntakeState: Equatable {
     enum Mode: Equatable {

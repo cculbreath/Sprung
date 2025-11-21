@@ -23,7 +23,6 @@ struct AppSheets {
 }
 
 // MARK: - Sheet Presentation ViewModifier
-
 struct AppSheetsModifier: ViewModifier {
     @Binding var sheets: AppSheets
     @Binding var clarifyingQuestions: [ClarifyingQuestion]
@@ -115,7 +114,6 @@ struct AppSheetsModifier: ViewModifier {
 }
 
 // MARK: - Helper View Extension
-
 extension View {
     func appSheets(sheets: Binding<AppSheets>, clarifyingQuestions: Binding<[ClarifyingQuestion]>, refPopup: Binding<Bool>) -> some View {
         self.modifier(AppSheetsModifier(sheets: sheets, clarifyingQuestions: clarifyingQuestions, refPopup: refPopup))

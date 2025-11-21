@@ -17,13 +17,11 @@ import SwiftyJSON
 /// - Emit Tool.result and LLM.toolResponseMessage events
 actor ToolExecutionCoordinator: OnboardingEventEmitter {
     // MARK: - Properties
-
     let eventBus: EventCoordinator
     private let toolExecutor: ToolExecutor
     private let stateCoordinator: StateCoordinator
 
     // MARK: - Initialization
-
     init(
         eventBus: EventCoordinator,
         toolExecutor: ToolExecutor,
@@ -36,7 +34,6 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
     }
 
     // MARK: - Event Subscriptions
-
     /// Start listening to tool call events
     func startEventSubscriptions() async {
         Task {
@@ -52,7 +49,6 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
     }
 
     // MARK: - Event Handlers
-
     private func handleToolEvent(_ event: OnboardingEvent) async {
         switch event {
         case .toolCallRequested(let call, _):
@@ -64,7 +60,6 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
     }
 
     // MARK: - Tool Execution
-
     /// Execute a tool call
     private func handleToolCall(_ call: ToolCall) async {
         // First, check if we're in a waiting state
@@ -155,7 +150,6 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
     }
 
     // MARK: - Event Emission
-
     /// Emit tool response to LLM
     private func emitToolResponse(callId: String, output: JSON, reasoningEffort: String? = nil) async {
         var payload = JSON()

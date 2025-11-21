@@ -41,7 +41,6 @@ struct ResumePDFView: View {
 }
 
 // MARK: - PDF helpers -------------------------------------------------------
-
 private struct PDFKitWrapper: NSViewRepresentable {
     let pdfData: Data
 

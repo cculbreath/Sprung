@@ -15,7 +15,6 @@ import SwiftOpenAI
 /// Delegates to NetworkRouter (§4.4) for stream event processing.
 actor InterviewOrchestrator: OnboardingEventEmitter {
     // MARK: - Properties
-
     let eventBus: EventCoordinator
     private let state: StateCoordinator
     private let llmMessenger: LLMMessenger
@@ -26,7 +25,6 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
     private var isActive = false
 
     // MARK: - Initialization
-
     init(
         service: OpenAIService,
         baseDeveloperMessage: String,
@@ -51,7 +49,6 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
     }
 
     // MARK: - Interview Control
-
     /// Initialize and subscribe to events, but don't send the initial message yet
     func initializeSubscriptions() async {
         isActive = true
@@ -114,7 +111,6 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
     }
 
     // MARK: - Model Configuration
-
     /// Set the model ID for the LLM messenger
     func setModelId(_ id: String) async {
         await llmMessenger.setModelId(id)

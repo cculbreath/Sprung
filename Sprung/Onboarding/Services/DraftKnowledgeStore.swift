@@ -5,26 +5,21 @@ import SwiftyJSON
 /// These drafts are pending user review before being promoted to permanent storage.
 actor DraftKnowledgeStore: OnboardingEventEmitter {
     // MARK: - Event System
-    
     let eventBus: EventCoordinator
     
     // MARK: - State
-    
     private var drafts: [KnowledgeCardDraft] = []
     
     // MARK: - Synchronous Caches (for SwiftUI)
-    
     nonisolated(unsafe) private(set) var draftsSync: [KnowledgeCardDraft] = []
     
     // MARK: - Initialization
-    
     init(eventBus: EventCoordinator) {
         self.eventBus = eventBus
         Logger.info("📝 DraftKnowledgeStore initialized", category: .ai)
     }
     
     // MARK: - Draft Management
-    
     /// Add a new draft
     func addDraft(_ draft: KnowledgeCardDraft) async {
         drafts.append(draft)

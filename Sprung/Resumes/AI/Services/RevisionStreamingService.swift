@@ -24,7 +24,6 @@ class RevisionStreamingService {
     }
 
     // MARK: - Public Interface
-
     /// Start a new streaming conversation with reasoning support
     /// - Parameters:
     ///   - systemPrompt: The system prompt for the conversation
@@ -109,7 +108,6 @@ class RevisionStreamingService {
     }
 
     // MARK: - Private Helpers
-
     /// Process streaming response with reasoning coordination
     /// - Parameters:
     ///   - handle: The streaming handle

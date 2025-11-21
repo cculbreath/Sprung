@@ -63,7 +63,6 @@ final class OSLoggerBackend: Logging {
 /// Lightweight logging facade with configurable backends and debug settings.
 final class Logger {
     // MARK: - Nested Types
-    
     /// Defines available log levels in increasing order of severity.
     /// Lower raw values = more output, higher raw values = less output.
     enum Level: Int, CaseIterable {
@@ -118,7 +117,6 @@ final class Logger {
     }
     
     // MARK: - Static State
-    
     private static let configurationQueue = DispatchQueue(label: "Logger.configuration.queue", attributes: .concurrent)
     private static let backendLock = NSLock()
     private static var configuration: Configuration = Logger.makeDefaultConfiguration()
@@ -126,7 +124,6 @@ final class Logger {
     private static let newlineStripper = CharacterSet.newlines
     
     // MARK: - Public Configuration Accessors
-    
     static var minimumLevel: Level {
         configurationQueue.sync { configuration.minimumLevel }
     }
@@ -167,7 +164,6 @@ final class Logger {
     }
     
     // MARK: - Logging Methods
-    
     static func log(
         _ level: Level,
         _ message: String,
@@ -267,7 +263,6 @@ final class Logger {
     }
     
     // MARK: - Helpers
-    
     private static func currentBackend() -> Logging {
         backendLock.lock()
         defer { backendLock.unlock() }

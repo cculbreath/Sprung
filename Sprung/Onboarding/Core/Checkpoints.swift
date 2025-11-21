@@ -134,7 +134,6 @@ final class Checkpoints {
     }
 
     // MARK: - Private Methods
-
     private func loadHistory() {
         guard
             let data = try? Data(contentsOf: url),

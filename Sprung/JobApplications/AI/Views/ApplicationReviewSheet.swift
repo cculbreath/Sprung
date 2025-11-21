@@ -17,7 +17,6 @@ struct ApplicationReviewSheet: View {
     let availableCoverLetters: [CoverLetter]
 
     // MARK: State
-
     @State private var reviewService: ApplicationReviewService?
     @State private var selectedType: ApplicationReviewType = .assessQuality
     @State private var customOptions: CustomApplicationReviewOptions
@@ -168,7 +167,6 @@ struct ApplicationReviewSheet: View {
     @State private var selectedModel: String = ""
 
     // MARK: - Custom Options View
-
     @ViewBuilder
     private var customOptionsView: some View {
         GroupBox(label: Text("Custom Options").fontWeight(.medium)) {
@@ -211,7 +209,6 @@ struct ApplicationReviewSheet: View {
     }
 
     // MARK: - Response Content
-
     // A computed property for the response content to keep the main view clean
     @ViewBuilder
     private var responseContent: some View {
@@ -255,7 +252,6 @@ struct ApplicationReviewSheet: View {
     }
 
     // MARK: - Submit
-
     private func submit() {
         isProcessing = true
         responseText = "Submitting request..."

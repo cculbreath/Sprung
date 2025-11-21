@@ -43,7 +43,6 @@ enum CoverLetterPDFGenerator {
     }
 
     // MARK: - Private Helpers
-
     private static func buildLetterText(from cover: CoverLetter, applicant: Applicant) -> String {
         // Extract just the body of the letter
         let letterContent = extractLetterBody(from: cover.content, applicantName: applicant.name)
@@ -493,17 +492,14 @@ enum CoverLetterPDFGenerator {
                 // Position will be calculated dynamically later
 
                 // Dynamically position based on what we found
-                // Variable to store the calculated Y position for the signature
                 var adjustedSignatureY: CGFloat = textRect.origin.y + 100 // Default fallback position
 
                 if let nameIdx = nameLineIndex, nameIdx < origins.count {
                     if let regardsIdx = regardsLineIndex, regardsIdx < origins.count {
                         // Position between "Best Regards" and name - ideal case
                         if nameIdx > regardsIdx + 1 {
-                            // Get the midpoint between regards and name
                             let regardsY = origins[regardsIdx].y
                             let nameY = origins[nameIdx].y
-                            // Position signature between regards and name with proper spacing
                             adjustedSignatureY = (regardsY + nameY) / 2
                         } else {
                             // Regards and name are adjacent - position closely above name
@@ -527,46 +523,26 @@ enum CoverLetterPDFGenerator {
                 // Determine the right position based on the content
                 let signatureX = textRect.origin.x + 2 // Default indent from margin
 
-                // Position signature intelligently based on all detected signature elements
-
                 // Determine where there's space to place the signature
                 let hasContactLines = contactInfoLineIndex != nil || emailLineIndex != nil
-                // Check if there's space between regards and name lines
-                _ = regardsLineIndex != nil && nameLineIndex != nil &&
-                    (nameLineIndex ?? 0) > (regardsLineIndex ?? 0) &&
-                    abs((nameLineIndex ?? 0) - (regardsLineIndex ?? 0)) > 1
 
-                // First, calculate optimal signature position
-                // (already initialized above)
-
-                // Check if we have both regards and name lines for optimal positioning
+                // Refine positioning if we have both regards and name lines
                 if let regardsIdx = regardsLineIndex, let nameIdx = nameLineIndex,
                    regardsIdx < origins.count, nameIdx < origins.count
                 {
-                    // We have both regards and name - position precisely
-                    // Use the Y position directly from origins array
-
-                    // Position EXTREMELY high right at the regards line
-                    // The signature needs to appear almost at the same line as the closing text
                     let regardsY = origins[regardsIdx].y
                     if nameIdx == regardsIdx + 1 {
-                        // Name immediately follows regards - place directly on the regards line
-                        adjustedSignatureY = regardsY + 5 // Right on the regards line
+                        adjustedSignatureY = regardsY + 5
                     } else if nameIdx == regardsIdx + 2 {
-                        // One line gap - still place directly on the regards line
                         adjustedSignatureY = regardsY + 2
                     } else {
-                        // Multiple lines - still position right at regards line
                         adjustedSignatureY = regardsY + 2
                     }
                 } else if let regardsIdx = regardsLineIndex, regardsIdx < origins.count {
-                    // Only have regards line - position right ON the regards line
-                    adjustedSignatureY = origins[regardsIdx].y + 5 // Right on the regards line
+                    adjustedSignatureY = origins[regardsIdx].y + 5
                 } else if let nameIdx = nameLineIndex, nameIdx < origins.count {
-                    // Only have name - position much higher than before
-                    adjustedSignatureY = origins[nameIdx].y + 45 // Far above name
+                    adjustedSignatureY = origins[nameIdx].y + 45
                 } else {
-                    // No clear positioning guidance, use safe default
                     adjustedSignatureY = textRect.origin.y + 100
                 }
 

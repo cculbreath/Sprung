@@ -5,25 +5,14 @@ import SwiftyJSON
 /// Owns all artifact state including timeline cards, knowledge cards, and uploaded documents.
 actor ArtifactRepository: OnboardingEventEmitter {
     // MARK: - Event System
-
     let eventBus: EventCoordinator
 
     // MARK: - Artifact Storage
-
+    // MARK: - Artifact Storage
     private var artifacts = OnboardingArtifacts()
 
-    struct OnboardingArtifacts {
-        var applicantProfile: JSON?
-        var skeletonTimeline: JSON?
-        var enabledSections: Set<String> = []
-        var experienceCards: [JSON] = []
-        var writingSamples: [JSON] = []
-        var artifactRecords: [JSON] = []
-        var knowledgeCards: [JSON] = [] // Phase 3: Knowledge card storage
-    }
 
     // MARK: - Synchronous Caches (for SwiftUI)
-
     nonisolated(unsafe) private(set) var artifactRecordsSync: [JSON] = []
     nonisolated(unsafe) private(set) var applicantProfileSync: JSON?
     nonisolated(unsafe) private(set) var skeletonTimelineSync: JSON?
@@ -31,7 +20,6 @@ actor ArtifactRepository: OnboardingEventEmitter {
     nonisolated(unsafe) private(set) var knowledgeCardsSync: [JSON] = []
 
     // MARK: - Initialization
-
     init(eventBus: EventCoordinator) {
         self.eventBus = eventBus
         Logger.info("📦 ArtifactRepository initialized", category: .ai)
@@ -43,7 +31,6 @@ actor ArtifactRepository: OnboardingEventEmitter {
     }
 
     // MARK: - Core Artifacts
-
     /// Set applicant profile artifact
     func setApplicantProfile(_ profile: JSON?) async {
         artifacts.applicantProfile = profile
@@ -94,7 +81,6 @@ actor ArtifactRepository: OnboardingEventEmitter {
     }
 
     // MARK: - Artifact Records
-
     /// Set artifact records (bulk restore)
     func setArtifactRecords(_ records: [JSON]) {
         artifacts.artifactRecords = records
@@ -189,7 +175,6 @@ actor ArtifactRepository: OnboardingEventEmitter {
     }
 
     // MARK: - Timeline Card Management
-
     /// Helper to get current timeline cards using TimelineCardAdapter
     private func currentTimelineCards() -> (cards: [TimelineCard], meta: JSON?) {
         let timelineJSON = artifacts.skeletonTimeline ?? JSON()
@@ -267,7 +252,6 @@ actor ArtifactRepository: OnboardingEventEmitter {
     }
 
     // MARK: - Experience & Knowledge Cards
-
     /// Add experience card
     func addExperienceCard(_ card: JSON) async {
         artifacts.experienceCards.append(card)
@@ -302,7 +286,6 @@ actor ArtifactRepository: OnboardingEventEmitter {
     }
 
     // MARK: - Writing Samples
-
     /// Add writing sample
     func addWritingSample(_ sample: JSON) async {
         artifacts.writingSamples.append(sample)
@@ -315,7 +298,6 @@ actor ArtifactRepository: OnboardingEventEmitter {
     }
 
     // MARK: - Scratchpad Summary
-
     /// Build artifact summary for LLM scratchpad
     func scratchpadSummary() -> [String] {
         var lines: [String] = []
@@ -359,7 +341,6 @@ actor ArtifactRepository: OnboardingEventEmitter {
     }
 
     // MARK: - State Management
-
     /// Reset all artifacts
     func reset() {
         artifacts = OnboardingArtifacts()

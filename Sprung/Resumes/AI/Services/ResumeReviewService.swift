@@ -8,7 +8,6 @@ import SwiftUI
 /// Service for handling resume review operations with LLM
 class ResumeReviewService: @unchecked Sendable {
     // MARK: - Properties
-    
     /// The LLM service for AI operations
     private let llm: LLMFacade
     
@@ -25,7 +24,6 @@ class ResumeReviewService: @unchecked Sendable {
     }
     
     // MARK: - Initialization
-    
     /// Initialize the LLM client
     @MainActor
     func initialize() {
@@ -34,7 +32,6 @@ class ResumeReviewService: @unchecked Sendable {
     }
     
     // MARK: - Public Methods
-    
     /// Sends a review request to the LLM
     /// - Parameters:
     ///   - reviewType: The type of review to perform
@@ -345,7 +342,6 @@ class ResumeReviewService: @unchecked Sendable {
     }
     
     // MARK: - Helper Methods
-    
     /// Apply skill reordering to the resume's tree structure
     @MainActor
     func applySkillReordering(resume: Resume, reorderedNodes: [ReorderedSkillNode]) -> Bool {
@@ -394,7 +390,6 @@ class ResumeReviewService: @unchecked Sendable {
     }
     
     // MARK: - Private Streaming Methods
-    
     /// Stream Grok Fix Fits request with reasoning support (text-only)
     @MainActor
     private func streamGrokFixFitsRequest(

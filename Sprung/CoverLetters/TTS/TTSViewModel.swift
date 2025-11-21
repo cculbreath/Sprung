@@ -16,7 +16,6 @@ import os.log
 @MainActor // Add MainActor to entire class since it interacts with OpenAITTSProvider
 class TTSViewModel {
     // MARK: - Properties
-
     /// Whether audio is currently playing
     var isSpeaking: Bool = false
 
@@ -33,7 +32,6 @@ class TTSViewModel {
     private var stateTimeoutTimer: Timer?
 
     // MARK: - Private Properties
-
     /// Flag to prevent premature state changes during streaming setup
     private var isInitialSetup: Bool = false
 
@@ -41,7 +39,6 @@ class TTSViewModel {
     private let ttsProvider: OpenAITTSProvider
 
     // MARK: - Initialization
-
     /// Creates a new TTS view model with the specified provider
     /// - Parameter ttsProvider: The TTS provider to use for speech synthesis
     init(ttsProvider: OpenAITTSProvider) {
@@ -70,7 +67,6 @@ class TTSViewModel {
     }
 
     // MARK: - Setup
-
     /// Configures callbacks from the TTS provider to update view model state
     private func setupCallbacks() {
         Logger.info("🔧 [TTSViewModel] Setting up TTS callbacks")
@@ -209,8 +205,6 @@ class TTSViewModel {
     }
 
     // MARK: - Public Methods
-    
-
     /// Starts playback of the provided content
     /// - Parameters:
     ///   - content: The text content to speak

@@ -581,7 +581,6 @@ struct TemplateManifest: Codable {
 }
 
 // MARK: - Encoding helpers
-
 extension TemplateManifest {
     static func decode(from data: Data) throws -> TemplateManifest {
         try JSONDecoder().decode(TemplateManifest.self, from: data)
@@ -595,7 +594,6 @@ extension TemplateManifest {
 }
 
 // MARK: - Applicant Profile Bindings
-
 extension TemplateManifest {
     struct ApplicantProfileBinding {
         let section: String
@@ -672,7 +670,6 @@ extension TemplateManifest {
 }
 
 // MARK: - Field Descriptor Synthesis
-
 private enum FieldDescriptorFactory {
     static func descriptors(
         forSectionKey sectionKey: String,

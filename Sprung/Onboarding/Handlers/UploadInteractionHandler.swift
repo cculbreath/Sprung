@@ -14,12 +14,10 @@ import SwiftyJSON
 @Observable
 final class UploadInteractionHandler {
     // MARK: - Observable State
-
     private(set) var pendingUploadRequests: [OnboardingUploadRequest] = []
     private(set) var uploadedItems: [OnboardingUploadedItem] = []
 
     // MARK: - Dependencies
-
     private let uploadFileService: UploadFileService
     private let uploadStorage: OnboardingUploadStorage
     private let applicantProfileStore: ApplicantProfileStore
@@ -28,7 +26,6 @@ final class UploadInteractionHandler {
     private var extractionProgressHandler: ExtractionProgressHandler?
 
     // MARK: - Init
-
     init(
         uploadFileService: UploadFileService,
         uploadStorage: OnboardingUploadStorage,
@@ -50,7 +47,6 @@ final class UploadInteractionHandler {
     }
 
     // MARK: - Presentation
-
     /// Presents an upload request to the user.
     func presentUploadRequest(_ request: OnboardingUploadRequest) {
         removeUploadRequest(id: request.id)
@@ -59,7 +55,6 @@ final class UploadInteractionHandler {
     }
 
     // MARK: - Resolution
-
     /// Completes an upload with local file URLs.
     func completeUpload(id: UUID, fileURLs: [URL]) async -> JSON? {
         await handleUploadCompletion(id: id, fileURLs: fileURLs, originalURL: nil, cancelReason: nil)
@@ -107,7 +102,6 @@ final class UploadInteractionHandler {
     }
 
     // MARK: - Private Helpers
-
     private func handleUploadCompletion(
         id: UUID,
         fileURLs: [URL],
@@ -367,7 +361,6 @@ final class UploadInteractionHandler {
     }
 
     // MARK: - Lifecycle
-
     /// Clears all pending uploads (for interview reset).
     func reset() {
         pendingUploadRequests.removeAll()

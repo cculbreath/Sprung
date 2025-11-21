@@ -205,7 +205,6 @@ class CoverLetterCommitteeSummaryGenerator {
     }
     
     // MARK: - Private Methods
-    
     private func buildSummaryPrompt(
         jobApp: JobApp,
         modelReasonings: [(model: String, response: BestCoverLetterResponse)],

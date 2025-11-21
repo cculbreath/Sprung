@@ -13,7 +13,6 @@ import SwiftUI
 @MainActor
 final class CoverLetterStore: SwiftDataStore {
     // MARK: - Properties
-
     unowned let modelContext: ModelContext
     var coverRefStore: CoverRefStore
     var cL: CoverLetter? // This is the currently selected/active cover letter instance
@@ -22,7 +21,6 @@ final class CoverLetterStore: SwiftDataStore {
     private let applicantProfileStore: ApplicantProfileStore
 
     // MARK: - Initialiser
-
     init(
         context: ModelContext,
         refStore: CoverRefStore,
@@ -136,7 +134,6 @@ final class CoverLetterStore: SwiftDataStore {
     // `saveContext()` now provided by `SwiftDataStore` default implementation.
 
     // MARK: - PDF Export
-
     func exportPDF(from coverLetter: CoverLetter) -> Data {
         let applicant = Applicant(profile: applicantProfileStore.currentProfile())
         return exportService.exportPDF(from: coverLetter, applicant: applicant)

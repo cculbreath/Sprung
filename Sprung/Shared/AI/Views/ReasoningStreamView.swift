@@ -205,7 +205,6 @@ struct ReasoningStreamView: View {
     }
     
     // MARK: - Markdown Parsing
-    
     /// Parse basic markdown for bold text (**text**)
     private func parseBasicMarkdown(_ text: String) -> AttributedString {
         var attributedString = AttributedString(text)
@@ -246,7 +245,6 @@ struct ReasoningStreamView: View {
 }
 
 // MARK: - Reasoning Stream Manager
-
 /// Manages the reasoning stream state and text accumulation
 @MainActor
 @Observable

@@ -191,7 +191,6 @@ private extension ExperienceSectionCodecs {
 }
 
 // MARK: - Encoding helpers
-
 private func encodeWork(_ draft: WorkExperienceDraft) -> [String: Any] {
     var payload: [String: Any] = [:]
     if let value = sanitized(draft.name) { payload["name"] = value }
@@ -312,7 +311,6 @@ private func encodeReference(_ draft: ReferenceExperienceDraft) -> [String: Any]
 }
 
 // MARK: - Decoding helpers
-
 private func decodeWork(_ json: JSON) -> WorkExperienceDraft {
     var draft = WorkExperienceDraft()
     draft.name = json["name"].stringValue.trimmed()

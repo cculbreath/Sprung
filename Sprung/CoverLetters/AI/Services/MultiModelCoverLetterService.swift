@@ -67,7 +67,6 @@ class MultiModelCoverLetterService {
     }
     
     // MARK: - Public Methods
-    
     func startMultiModelSelection(
         coverLetter: CoverLetter,
         selectedModels: Set<String>,
@@ -155,7 +154,6 @@ class MultiModelCoverLetterService {
     }
     
     // MARK: - Private Methods
-    
     private func clearAllCoverLetterVotes(in jobApp: JobApp) {
         Logger.info("🧹 Clearing all previous votes, points, and committee analysis for job app")
         

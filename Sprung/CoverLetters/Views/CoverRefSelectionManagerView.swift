@@ -180,7 +180,6 @@ struct CoverRefSelectionManagerView: View {
 }
 
 // MARK: - Add Cover Ref Sheet
-
 struct AddCoverRefSheet: View {
     let refType: CoverRefType
     let onAdd: (String, String) -> Void

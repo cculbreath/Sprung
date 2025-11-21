@@ -10,18 +10,11 @@ struct PhasePolicy {
 /// Thin orchestrator for onboarding state.
 /// Delegates domain logic to injected services and maintains sync caches for SwiftUI.
 actor StateCoordinator: OnboardingEventEmitter {
-    // MARK: - Type Aliases (Backward Compatibility)
-
-    typealias ObjectiveEntry = ObjectiveStore.ObjectiveEntry
-    typealias OnboardingArtifacts = ArtifactRepository.OnboardingArtifacts
-
     // MARK: - Event System
-
     let eventBus: EventCoordinator
     private var subscriptionTask: Task<Void, Never>?
 
     // MARK: - Domain Services (Injected)
-
     private let objectiveStore: ObjectiveStore
     private let artifactRepository: ArtifactRepository
     private let chatStore: ChatTranscriptStore
@@ -29,24 +22,16 @@ actor StateCoordinator: OnboardingEventEmitter {
     private let draftKnowledgeStore: DraftKnowledgeStore
 
     // MARK: - Phase Policy
-
     private let phasePolicy: PhasePolicy
 
     // Runtime tool exclusions (e.g., one-time bootstrap tools)
     private var excludedTools: Set<String> = []
 
     // MARK: - Core Interview State
-
     private(set) var phase: InterviewPhase = .phase1CoreFacts
     private(set) var evidenceRequirements: [EvidenceRequirement] = []
 
-    // MARK: - Synchronous Caches (Removed)
-    // StateCoordinator is now a pure actor for business logic.
-    // UI state is handled by OnboardingUIState in the coordinator.
-
-
     // MARK: - Wizard Progress (Computed from ObjectiveStore)
-
     enum WizardStep: String, CaseIterable {
         case introduction
         case resumeIntake
@@ -59,7 +44,6 @@ actor StateCoordinator: OnboardingEventEmitter {
     private(set) var completedWizardSteps: Set<WizardStep> = []
 
     // MARK: - Stream Queue Management (Ensures Serial LLM Streaming)
-
     enum StreamRequestType {
         case userMessage(payload: JSON, isSystemGenerated: Bool)
         case toolResponse(payload: JSON)
@@ -70,20 +54,17 @@ actor StateCoordinator: OnboardingEventEmitter {
     private(set) var hasStreamedFirstResponse = false
 
     // MARK: - LLM State (Single Source of Truth)
-
     private var allowedToolNames: Set<String> = []
     private var lastResponseId: String?
     private var currentModelId: String = "gpt-5.1"
     private var currentToolPaneCard: OnboardingToolPaneCard = .none
 
     // MARK: - State Accessors
-
     var pendingValidationPrompt: OnboardingValidationPrompt? {
         get async { await uiState.pendingValidationPrompt }
     }
 
     // MARK: - Initialization
-
     init(
         eventBus: EventCoordinator,
         phasePolicy: PhasePolicy,
@@ -105,7 +86,6 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
 
     // MARK: - Phase Management
-
     private static let nextPhaseMap: [InterviewPhase: InterviewPhase?] = [
         .phase1CoreFacts: .phase2DeepDive,
         .phase2DeepDive: .phase3WritingCorpus,
@@ -143,7 +123,6 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
 
     // MARK: - Wizard Progress (Queries ObjectiveStore)
-
     private func updateWizardProgress() async {
         // Query objective statuses from ObjectiveStore
         let hasProfile = await objectiveStore.getObjectiveStatus("applicant_profile") == .completed
@@ -195,32 +174,7 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
 
     // MARK: - Scratchpad Summary (Aggregates from Services)
-
-//    func scratchpadSummary(maxCharacters: Int = 1500) async -> String {
-//        var lines: [String] = []
-//
-//        lines.append("phase=\(phase.rawValue)")
-//
-//        // Objectives from ObjectiveStore
-//        let objectiveSummary = await objectiveStore.scratchpadSummary(for: phase)
-//        lines.append(objectiveSummary)
-//
-//        // Artifacts from ArtifactRepository
-//        let artifactLines = await artifactRepository.scratchpadSummary()
-//        lines.append(contentsOf: artifactLines)
-//
-//        let combined = lines.joined(separator: "\n")
-//        return truncateForScratchpad(combined, limit: maxCharacters)
-//    }
-//
-//    private func truncateForScratchpad(_ text: String, limit: Int) -> String {
-//        guard text.count > limit else { return text }
-//        let endIndex = text.index(text.startIndex, offsetBy: limit)
-//        return String(text[..<endIndex]) + "..."
-//    }
-//
-//    // MARK: - Event Subscription Setup
-
+    // MARK: - Event Subscription Setup
     func startEventSubscriptions() async {
         subscriptionTask?.cancel()
 
@@ -277,11 +231,6 @@ actor StateCoordinator: OnboardingEventEmitter {
                     }
                 }
 
-                group.addTask {
-                    for await event in await self.eventBus.stream(topic: .artifact) {
-                        await self.handleArtifactEvent(event)
-                    }
-                }
             }
         }
 
@@ -290,7 +239,6 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
 
     // MARK: - Event Handlers (Delegate to Services)
-
     private func handleStateEvent(_ event: OnboardingEvent) async {
         switch event {
         case .checkpointRequested:
@@ -547,7 +495,6 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
 
     // MARK: - Stream Queue Management
-
     /// Enqueue a stream request to be processed serially
     func enqueueStreamRequest(_ requestType: StreamRequestType) {
         streamQueue.append(requestType)
@@ -615,7 +562,6 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
 
     // MARK: - LLM State Accessors
-
     /// Get allowed tool names
     func getAllowedToolNames() -> Set<String> {
         return allowedToolNames
@@ -644,7 +590,6 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
 
     // MARK: - Snapshot Management
-
     struct StateSnapshot: Codable {
         let phase: InterviewPhase
         let objectives: [String: ObjectiveStore.ObjectiveEntry]
@@ -724,8 +669,6 @@ actor StateCoordinator: OnboardingEventEmitter {
         // Restore evidence requirements
         evidenceRequirements = snapshot.evidenceRequirements
 
-        // Update sync caches (Removed)
-
         Logger.info("📥 State restored from snapshot with conversation history", category: .ai)
     }
 
@@ -783,7 +726,6 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
 
     // MARK: - Reset
-
     func reset() async {
         phase = .phase1CoreFacts
         currentWizardStep = .introduction
@@ -802,7 +744,6 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
 
     // MARK: - ToolPane Card Tracking
-
     func setToolPaneCard(_ card: OnboardingToolPaneCard) {
         currentToolPaneCard = card
     }
@@ -812,7 +753,6 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
 
     // MARK: - Delegation Methods (Convenience APIs)
-
     /// Provides backward compatibility and convenience access to service methods.
     /// These delegate to the appropriate service actors.
 
@@ -858,10 +798,10 @@ actor StateCoordinator: OnboardingEventEmitter {
         await artifactRepository.setEnabledSections(sections)
     }
 
-    var artifacts: ArtifactRepository.OnboardingArtifacts {
+    var artifacts: OnboardingArtifacts {
         get async {
             // Reconstruct artifacts struct from repository
-            ArtifactRepository.OnboardingArtifacts(
+            OnboardingArtifacts(
                 applicantProfile: await artifactRepository.getApplicantProfile(),
                 skeletonTimeline: await artifactRepository.getSkeletonTimeline(),
                 enabledSections: await artifactRepository.getEnabledSections(),
@@ -981,5 +921,3 @@ actor StateCoordinator: OnboardingEventEmitter {
         }
     }
 }
-
-

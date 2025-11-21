@@ -111,7 +111,6 @@ struct NodeLeafView: View {
     }
 
     // MARK: - Actions
-
     private func toggleNodeStatus() {
         if node.status == LeafStatus.saved {
             node.status = .aiToReplace

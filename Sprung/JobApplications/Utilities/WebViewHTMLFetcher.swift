@@ -25,7 +25,6 @@ enum WebViewHTMLFetcher {
     }
 
     // MARK: – Internal helper ------------------------------------------------
-
     private final class Helper: NSObject, WKNavigationDelegate {
         private let url: URL
         private let timeout: TimeInterval
@@ -58,7 +57,6 @@ enum WebViewHTMLFetcher {
         }
 
         // MARK: – WKNavigationDelegate
-
         func webView(_ webView: WKWebView, didFinish _: WKNavigation!) {
             webView.evaluateJavaScript("document.documentElement.outerHTML.toString()") { [weak self] result, error in
                 guard let self else { return }
@@ -75,7 +73,6 @@ enum WebViewHTMLFetcher {
         }
 
         // MARK: – Completion helpers
-
         private func finish(_ html: String) {
             continuation?.resume(returning: html)
             cleanUp()

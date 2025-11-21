@@ -56,7 +56,6 @@ struct ResumeTemplateContextBuilder {
     }
 
     // MARK: - Private helpers
-
     private func profileContext(from profile: ApplicantProfile, manifest: TemplateManifest?, templateSlug: String?) -> [String: Any] {
         let fallbackContext = modernProfileContext(from: profile)
         guard let manifest else {
@@ -475,7 +474,6 @@ struct ResumeTemplateContextBuilder {
 }
 
 // MARK: - Seed normalization
-
 private struct SeedContextNormalizer {
     let manifest: TemplateManifest
 
@@ -523,7 +521,6 @@ private struct SeedContextNormalizer {
     }
 
     // MARK: - Section handlers
-
     private func normalizeArraySection(_ value: Any) -> Any {
         if let array = value as? [Any] {
             return array
@@ -623,7 +620,6 @@ private struct SeedContextNormalizer {
     }
 
     // MARK: - Entry helpers
-
     private func arrayEntries(
         from raw: Any,
         descriptor: TemplateManifest.Section.FieldDescriptor?

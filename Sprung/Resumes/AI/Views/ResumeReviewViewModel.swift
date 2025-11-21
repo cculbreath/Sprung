@@ -7,7 +7,6 @@ import SwiftUI
 @Observable
 class ResumeReviewViewModel {
     // MARK: - State Properties
-    
     // General review state
     private(set) var reviewResponseText: String = ""
     private(set) var isProcessingGeneral: Bool = false
@@ -30,7 +29,6 @@ class ResumeReviewViewModel {
     private var reorderSkillsService: ReorderSkillsService?
 
     // MARK: - Initialization
-
     func initialize(llmFacade: LLMFacade, exportCoordinator: ResumeExportCoordinator, reasoningStreamManager: ReasoningStreamManager, openRouterService: OpenRouterService) {
         self.reasoningStreamManager = reasoningStreamManager
         self.openRouterService = openRouterService
@@ -46,7 +44,6 @@ class ResumeReviewViewModel {
     }
     
     // MARK: - Public Methods
-    
     func handleSubmit(
         reviewType: ResumeReviewType,
         resume: Resume,
@@ -96,7 +93,6 @@ class ResumeReviewViewModel {
     }
     
     // MARK: - Private Methods
-    
     private func resetState() {
         reviewResponseText = ""
         fixOverflowStatusMessage = ""

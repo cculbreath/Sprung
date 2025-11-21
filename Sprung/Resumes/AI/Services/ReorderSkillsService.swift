@@ -68,7 +68,6 @@ class ReorderSkillsService {
     }
     
     // MARK: - Private Helper Methods
-    
     private func getReorderSuggestions(resume: Resume, selectedModel: String) async -> Result<ReorderSkillsResponse, Error> {
         await withCheckedContinuation { continuation in
             reviewService.sendReorderSkillsRequest(
@@ -163,7 +162,6 @@ class ReorderSkillsService {
 }
 
 // MARK: - Error Types
-
 enum ReorderSkillsError: LocalizedError {
     case noJobApplication
     case reorderingFailed(error: Error)

@@ -28,7 +28,6 @@ enum HandlebarsContextAugmentor {
     }
 
     // MARK: - Basics
-
     private static func augmentBasics(in context: inout [String: Any]) {
         guard var basics = context["basics"] as? [String: Any] else { return }
 
@@ -135,7 +134,6 @@ enum HandlebarsContextAugmentor {
     }
 
     // MARK: - Work
-
     private static func augmentWork(in context: inout [String: Any]) {
         guard var work = dictionaryArray(from: context["work"]) else { return }
 
@@ -279,7 +277,6 @@ enum HandlebarsContextAugmentor {
     }
 
     // MARK: - Helpers
-
     private static func truthy(_ value: Any?) -> Bool {
         guard let value else { return false }
         if let string = value as? String {
@@ -376,7 +373,6 @@ enum HandlebarsContextAugmentor {
     }
 
     // MARK: - Date Parsing
-
     private enum DatePartsParser {
         struct Components {
             let day: String?

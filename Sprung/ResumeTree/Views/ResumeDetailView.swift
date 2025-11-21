@@ -19,7 +19,6 @@ struct ResumeDetailView: View {
     @State private var vm: ResumeDetailVM
 
     // MARK: – Init ---------------------------------------------------------
-
     private var externalIsWide: Binding<Bool>?
 
     init(
@@ -34,7 +33,6 @@ struct ResumeDetailView: View {
     }
 
     // MARK: – Body ---------------------------------------------------------
-
     var body: some View {
         @Bindable var vm = vm // enable Observation bindings
 
@@ -97,7 +95,6 @@ struct ResumeDetailView: View {
 }
 
 // MARK: - Root-Level Leaf Disclosure ---------------------------------------
-
 private struct RootLeafDisclosureView: View {
     let node: TreeNode
 

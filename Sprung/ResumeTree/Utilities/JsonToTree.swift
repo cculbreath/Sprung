@@ -64,7 +64,6 @@ final class JsonToTree {
 }
 
 // MARK: - Shared helpers -----------------------------------------------------
-
 private extension JsonToTree {
     static func makeOrderedContext(
         from context: [String: Any],
@@ -218,7 +217,6 @@ private extension JsonToTree {
 }
 
 // MARK: - Manifest-driven renderer ------------------------------------------
-
 private final class ManifestRenderer {
     private unowned let host: JsonToTree
     private let manifest: TemplateManifest
@@ -868,7 +866,6 @@ private final class ManifestRenderer {
 }
 
 // MARK: - Manifest behaviours ------------------------------------------------
-
 private extension JsonToTree {
     func applyManifestBehaviors(using manifest: TemplateManifest) {
         if let keys = manifest.keysInEditor, keys.isEmpty == false {

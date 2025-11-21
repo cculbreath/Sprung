@@ -84,7 +84,6 @@ protocol PhaseScript {
 }
 
 // MARK: - Default Implementations
-
 extension PhaseScript {
     var objectiveWorkflows: [String: ObjectiveWorkflow] { [:] }
 

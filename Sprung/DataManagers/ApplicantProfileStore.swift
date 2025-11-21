@@ -17,7 +17,6 @@ protocol ApplicantProfileProviding: AnyObject {
 @MainActor
 final class ApplicantProfileStore: SwiftDataStore, ApplicantProfileProviding {
     // MARK: - Properties
-
     let modelContext: ModelContext
     private var cachedProfile: ApplicantProfile?
 
@@ -26,7 +25,6 @@ final class ApplicantProfileStore: SwiftDataStore, ApplicantProfileProviding {
     }
 
     // MARK: - Public API
-
     func currentProfile() -> ApplicantProfile {
         if let cachedProfile {
             return cachedProfile

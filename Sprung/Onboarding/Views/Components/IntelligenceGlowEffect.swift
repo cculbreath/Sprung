@@ -1,7 +1,6 @@
 import SwiftUI
 
 // MARK: - View Extensions
-
 extension View {
     @MainActor
     func intelligenceBackground<S: InsettableShape>(
@@ -19,7 +18,6 @@ extension View {
 }
 
 // MARK: - Shape Extension
-
 extension InsettableShape {
     @MainActor
     func intelligenceStroke(
@@ -42,7 +40,6 @@ extension InsettableShape {
 }
 
 // MARK: - Core Rendering View
-
 private struct IntelligenceStrokeView<S: InsettableShape>: View {
     let shape: S
     let lineWidths: [CGFloat]
@@ -82,7 +79,6 @@ private struct IntelligenceStrokeView<S: InsettableShape>: View {
 }
 
 // MARK: - Gradient Definition
-
 private extension Array where Element == Gradient.Stop {
     /// Rainbow spring gradient based on the SVG gradient:
     /// Uses colors from #0CF → #0059FF → #0014A8 → #764DFF → #B00068 → #CC008D → #F02C00 → #FF8A47 → #FFB700

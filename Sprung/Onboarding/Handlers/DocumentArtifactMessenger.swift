@@ -12,23 +12,19 @@ import SwiftyJSON
 /// Handles sending document artifacts to the LLM after production
 actor DocumentArtifactMessenger: OnboardingEventEmitter {
     // MARK: - Properties
-
     let eventBus: EventCoordinator
 
     // MARK: - Lifecycle State
-
     private var subscriptionTask: Task<Void, Never>?
     private var isActive = false
 
     // MARK: - Initialization
-
     init(eventBus: EventCoordinator) {
         self.eventBus = eventBus
         Logger.info("📤 DocumentArtifactMessenger initialized", category: .ai)
     }
 
     // MARK: - Lifecycle
-
     func start() {
         guard !isActive else { return }
         isActive = true
@@ -54,7 +50,6 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
     }
 
     // MARK: - Event Handling
-
     private func handleEvent(_ event: OnboardingEvent) async {
         guard case .artifactRecordProduced(let record) = event else {
             return

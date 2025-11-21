@@ -11,21 +11,17 @@ import SwiftUI
 /// Includes toggles for resume background and cover letter background facts
 struct BestJobModelSelectionSheet: View {
     // MARK: - Properties
-    
     @Binding var isPresented: Bool
     let onModelSelected: (String, Bool, Bool) -> Void
     
     // MARK: - Environment
-    
     // MARK: - State
-    
     @State private var selectedModel: String = ""
     @AppStorage("includeResumeBackground_best_job") private var includeResumeBackground: Bool = false
     @AppStorage("includeCoverLetterBackground_best_job") private var includeCoverLetterBackground: Bool = false
     @AppStorage("lastSelectedModel_best_job") private var lastSelectedModel: String = ""
     
     // MARK: - Body
-    
     var body: some View {
         NavigationStack {
             VStack(spacing: 20) {

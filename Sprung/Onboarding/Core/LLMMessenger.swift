@@ -18,7 +18,6 @@ import SwiftyJSON
 /// - Coordinate with NetworkRouter for stream processing
 actor LLMMessenger: OnboardingEventEmitter {
     // MARK: - Properties
-
     let eventBus: EventCoordinator
     private let networkRouter: NetworkRouter
     private let service: OpenAIService
@@ -34,7 +33,6 @@ actor LLMMessenger: OnboardingEventEmitter {
     private var currentStreamTask: Task<Void, Error>?
 
     // MARK: - Initialization
-
     init(
         service: OpenAIService,
         baseDeveloperMessage: String,
@@ -54,7 +52,6 @@ actor LLMMessenger: OnboardingEventEmitter {
     }
 
     // MARK: - Event Subscription
-
     /// Start listening to message request events
     func startEventSubscriptions() async {
         // Use unstructured tasks so they run independently but ensure streams are ready
@@ -77,7 +74,6 @@ actor LLMMessenger: OnboardingEventEmitter {
     }
 
     // MARK: - Event Handlers
-
     private func handleLLMEvent(_ event: OnboardingEvent) async {
         switch event {
         case .llmSendUserMessage(let payload, let isSystemGenerated):
@@ -114,7 +110,6 @@ actor LLMMessenger: OnboardingEventEmitter {
     }
 
     // MARK: - Message Sending
-
     /// Send user message to LLM (enqueues via event publication)
     private func sendUserMessage(_ payload: JSON, isSystemGenerated: Bool = false) async {
         guard isActive else {
@@ -149,11 +144,7 @@ actor LLMMessenger: OnboardingEventEmitter {
                 while retryCount <= maxRetries {
                     do {
                         Logger.info("🔍 About to call service.responseCreateStream, service type: \(type(of: service))", category: .ai)
-
-                        // Debug: Log request details
-                        Logger.debug("📋 Request model: \(request.model)", category: .ai)
-                        Logger.debug("📋 Request has previousResponseId: \(request.previousResponseId != nil)", category: .ai)
-                        Logger.debug("📋 Request store: \(String(describing: request.store))", category: .ai)
+                        Logger.debug("📋 Request model: \(request.model), prevId: \(request.previousResponseId != nil), store: \(String(describing: request.store))", category: .ai)
 
                         let stream = try await service.responseCreateStream(request)
                         for try await streamEvent in stream {
@@ -339,8 +330,6 @@ actor LLMMessenger: OnboardingEventEmitter {
             Logger.info("📤 Sending tool response for callId=\(String(callId.prefix(12)))...", category: .ai)
 
             let request = await buildToolResponseRequest(output: output, callId: callId, reasoningEffort: reasoningEffort)
-
-            // Log request details
             Logger.debug("📦 Tool response request: previousResponseId=\(request.previousResponseId ?? "nil")", category: .ai)
 
             let messageId = UUID().uuidString
@@ -419,7 +408,6 @@ actor LLMMessenger: OnboardingEventEmitter {
     }
 
     // MARK: - Request Building
-
     /// Determine if parallel tool calls should be enabled based on current state
     /// Enable for skeleton_timeline to allow LLM to create multiple cards at once
     private func shouldEnableParallelToolCalls() async -> Bool {
@@ -465,9 +453,7 @@ actor LLMMessenger: OnboardingEventEmitter {
     /// Determine appropriate tool_choice for the given message context
     private func determineToolChoice(for text: String, isSystemGenerated: Bool) async -> ToolChoiceMode {
         // For system-generated messages (like phase prompts), always allow tools
-        // The phase prompt itself will guide the LLM on what tools to use
         if isSystemGenerated {
-            Logger.info("✅ Allowing tools for system-generated message (phase prompt)", category: .ai)
             return .auto
         }
 
@@ -511,9 +497,7 @@ actor LLMMessenger: OnboardingEventEmitter {
         // Determine tool choice - force specific tool if requested
         let toolChoice: ToolChoiceMode
         if let toolName = toolChoiceName {
-            // Force the model to call this specific function using the tool_choice parameter
             toolChoice = .functionTool(FunctionTool(name: toolName))
-            Logger.debug("Tool choice set to force function: \(toolName)", category: .ai)
         } else {
             toolChoice = .auto
         }
@@ -586,7 +570,6 @@ actor LLMMessenger: OnboardingEventEmitter {
     }
 
     // MARK: - Lifecycle
-
     func activate() {
         isActive = true
         Logger.info("✅ LLMMessenger activated", category: .ai)
@@ -601,9 +584,7 @@ actor LLMMessenger: OnboardingEventEmitter {
         await stateCoordinator.setModelId(modelId)
     }
 
-
     // MARK: - Stream Cancellation (Phase 2)
-
     /// Cancel the currently running stream
     ///
     /// This method handles immediate cancellation of LLM streaming responses:
@@ -636,7 +617,6 @@ actor LLMMessenger: OnboardingEventEmitter {
     }
 
     // MARK: - Error Handling
-
     /// Determine if an error is retriable (transient failure vs permanent error)
     private func isRetriable(_ error: Error) -> Bool {
         // Check for APIError from SwiftOpenAI

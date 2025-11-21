@@ -10,7 +10,6 @@ import Foundation
 import SwiftOpenAI
 
 // MARK: - Type Aliases for SwiftOpenAI
-
 /// Use SwiftOpenAI's native message type throughout the application
 typealias LLMMessage = ChatCompletionParameters.Message
 
@@ -24,7 +23,6 @@ typealias ChatCompletionParameters = SwiftOpenAI.ChatCompletionParameters
 
 
 // MARK: - Convenience Extensions for LLMMessage
-
 extension ChatCompletionParameters.Message {
     
     /// Create a text-only message

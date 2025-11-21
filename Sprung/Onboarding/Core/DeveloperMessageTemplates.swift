@@ -214,7 +214,7 @@ struct DeveloperMessageTemplates {
     /// ```
     static func formatObjectiveStatus(
         phase: InterviewPhase,
-        objectives: [StateCoordinator.ObjectiveEntry]
+        objectives: [ObjectiveStore.ObjectiveEntry]
     ) -> String {
         guard !objectives.isEmpty else {
             return "\(phase.description) - No objectives defined"

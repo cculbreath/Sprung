@@ -16,7 +16,6 @@ import WebKit
 /// When adapting this helper to iOS, prefer persisting data via the keychain.
 final class CloudflareCookieManager: NSObject, WKNavigationDelegate {
     // MARK: Public -------------------------------------------------
-
     /// Ensures a valid `cf_clearance` cookie exists for the given URL’s host.
     /// - Returns: The cookie (newly fetched or cached) or `nil` if we failed.
     static func clearance(for url: URL) async -> HTTPCookie? {
@@ -48,7 +47,6 @@ final class CloudflareCookieManager: NSObject, WKNavigationDelegate {
     }
 
     // MARK: Internals ---------------------------------------------
-
     private let targetURL: URL
     private var continuation: CheckedContinuation<HTTPCookie?, Never>?
     private var webView: WKWebView!
@@ -78,7 +76,6 @@ final class CloudflareCookieManager: NSObject, WKNavigationDelegate {
     }
 
     // MARK: WKNavigationDelegate ----------------------------------
-
     func webView(_: WKWebView, didFinish _: WKNavigation!) {
         // Poll for up to 20 seconds (40 × 0.5 s) because Cloudflare sets the
         // cookie via JavaScript and then auto‑redirects.
@@ -112,7 +109,6 @@ final class CloudflareCookieManager: NSObject, WKNavigationDelegate {
     }
 
     // MARK: Persistence -------------------------------------------
-
     private static func key(for domain: String) -> String { "cf_clearance_\(domain)" }
 
     /// Directory where cookies are stored as plist files under Application Support.

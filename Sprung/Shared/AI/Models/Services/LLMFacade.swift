@@ -136,7 +136,6 @@ final class LLMFacade {
     }
 
     // MARK: - Capability Validation
-
     private func enabledModelRecord(for modelId: String) -> EnabledLLM? {
         enabledLLMStore?.enabledModels.first(where: { $0.modelId == modelId })
     }
@@ -362,7 +361,6 @@ final class LLMFacade {
     }
 
     // MARK: - Conversation (temporary pass-through to LLMService)
-
     func startConversationStreaming(
         systemPrompt: String? = nil,
         userMessage: String,

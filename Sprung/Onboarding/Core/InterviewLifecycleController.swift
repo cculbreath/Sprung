@@ -7,7 +7,6 @@ import SwiftOpenAI
 @MainActor
 final class InterviewLifecycleController {
     // MARK: - Dependencies
-
     private let state: StateCoordinator
     private let eventBus: EventCoordinator
     private let phaseRegistry: PhaseScriptRegistry
@@ -19,7 +18,6 @@ final class InterviewLifecycleController {
     private let dataStore: InterviewDataStore
 
     // MARK: - Lifecycle State
-
     private(set) var orchestrator: InterviewOrchestrator?
     private(set) var workflowEngine: ObjectiveWorkflowEngine?
     private(set) var artifactPersistenceHandler: ArtifactPersistenceHandler?
@@ -30,7 +28,6 @@ final class InterviewLifecycleController {
     private var stateUpdateTasks: [Task<Void, Never>] = []
 
     // MARK: - Initialization
-
     init(
         state: StateCoordinator,
         eventBus: EventCoordinator,
@@ -54,7 +51,6 @@ final class InterviewLifecycleController {
     }
 
     // MARK: - Interview Lifecycle
-
     func startInterview(isResuming: Bool = false) async -> Bool {
         Logger.info("🚀 Starting interview (lifecycle controller, resuming: \(isResuming))", category: .ai)
 
@@ -156,7 +152,6 @@ final class InterviewLifecycleController {
     }
 
     // MARK: - Event Subscriptions
-
     func subscribeToEvents(_ handler: @escaping (OnboardingEvent) async -> Void) {
         // Cancel any existing subscription
         eventSubscriptionTask?.cancel()
@@ -221,7 +216,6 @@ final class InterviewLifecycleController {
     }
 
     // MARK: - Factory Methods
-
     private func makeOrchestrator(
         service: OpenAIService,
         baseDeveloperMessage: String
@@ -237,7 +231,6 @@ final class InterviewLifecycleController {
 }
 
 // MARK: - State Update Handlers Protocol
-
 struct StateUpdateHandlers {
     let handleProcessingEvent: (OnboardingEvent) async -> Void
     let handleArtifactEvent: (OnboardingEvent) async -> Void
