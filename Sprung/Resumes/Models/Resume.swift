@@ -9,7 +9,7 @@ class Resume: Identifiable, Hashable {
     var needToFont: Bool = true
     @Relationship(deleteRule: .cascade)
     var rootNode: TreeNode? // The top-level node
-    
+
     @Relationship(deleteRule: .cascade, inverse: \FontSizeNode.resume)
     var fontSizeNodes: [FontSizeNode] = []
     var includeFonts: Bool = false
@@ -31,7 +31,7 @@ class Resume: Identifiable, Hashable {
         }
     }
     // Stored raw JSON data for imported editor keys; persisted as Data
-    var importedEditorKeysData: Data? = nil
+    var importedEditorKeysData: Data?
     /// Transient array of editor keys, backed by JSON in importedEditorKeysData
     var importedEditorKeys: [String] {
         get {
@@ -106,7 +106,7 @@ class Resume: Identifiable, Hashable {
             return [[:]]
         }
     }
-    
+
     /// Returns true if there are any nodes marked for AI replacement (aiToReplace status)
     var hasUpdatableNodes: Bool {
         guard let rootNode = rootNode else { return false }

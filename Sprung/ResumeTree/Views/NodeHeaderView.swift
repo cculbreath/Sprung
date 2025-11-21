@@ -24,7 +24,7 @@ struct NodeHeaderView: View {
     @State private var isHoveringNone = false
     var body: some View {
         HStack {
-            ToggleChevronView(isExpanded: isExpanded,)
+            ToggleChevronView(isExpanded: isExpanded, )
             if node.parent == nil {
                 HeaderTextRow()
             } else {
@@ -52,7 +52,7 @@ struct NodeHeaderView: View {
                     .buttonStyle(PlainButtonStyle())
                     .onHover { hovering in isHoveringAll = hovering }
                     .help("Mark all children for AI processing")
-                    
+
                     // None button
                     Button(action: { vm.setAllChildrenToNone(for: node) }) {
                         Text("None")
@@ -67,7 +67,7 @@ struct NodeHeaderView: View {
                     .onHover { hovering in isHoveringNone = hovering }
                     .help("Clear AI processing for all children")
                 }
-                
+
                 // Add child button when manifest allows manual mutations.
                 if node.allowsChildAddition {
                     Button(action: addChildAction) {

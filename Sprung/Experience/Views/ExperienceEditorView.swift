@@ -39,7 +39,7 @@ struct ExperienceEditorView: View {
         .task {
             await loadDraft()
         }
-        .onChange(of: draft) { oldValue, newValue in
+        .onChange(of: draft) { _, newValue in
             hasChanges = newValue != originalDraft
             if saveState == .saved {
                 saveState = .idle

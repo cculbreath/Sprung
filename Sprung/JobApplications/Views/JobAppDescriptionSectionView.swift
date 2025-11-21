@@ -174,7 +174,7 @@ struct RichTextView: View {
             }
             attributedString.append(part)
         }
-        
+
         return Text(attributedString)
             .foregroundColor(.primary)
     }
@@ -184,7 +184,7 @@ struct RichTextView: View {
     }
     private func bulletList(_ content: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            ForEach(Array(content.split(separator: "\n").enumerated()), id: \.offset) { index, line in
+            ForEach(Array(content.split(separator: "\n").enumerated()), id: \.offset) { _, line in
                 let lineText = String(line).trimmingCharacters(in: .whitespacesAndNewlines)
                 if lineText.hasPrefix("* ") || lineText.hasPrefix("• ") {
                     HStack(alignment: .top, spacing: 4) {

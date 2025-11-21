@@ -39,14 +39,14 @@ struct UnifiedToolbar: CustomizableToolbarContent {
             inspectorButtonGroup
         }
     }
-    
+
     private var navigationButtonsGroup: some CustomizableToolbarContent {
         Group {
             ToolbarItem(id: "newJobApp", placement: .navigation, showsByDefault: true) {
                 Button(action: {
                     showNewAppSheet = true
-                }){
-                    Label("Job App", systemImage:"note.text.badge.plus" ).font(.system(size: 14, weight: .light))
+                }) {
+                    Label("Job App", systemImage: "note.text.badge.plus" ).font(.system(size: 14, weight: .light))
                 }
                 .buttonStyle( .automatic )
                 .help("Create New Job Application")
@@ -100,7 +100,7 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 }) {
                     Label("Analyze", systemImage: "mail.and.text.magnifyingglass")
                         .font(.system(size: 14, weight: .light))
-                       
+
                 }
                 .buttonStyle( .automatic )
                 .help("Review Application")
@@ -163,10 +163,10 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                     }
                 }
                 .disabled(selectedTab != .resume && selectedTab != .coverLetter)
-                .help(selectedTab == .resume ? "Show Resume Inspector" : 
+                .help(selectedTab == .resume ? "Show Resume Inspector" :
                       selectedTab == .coverLetter ? "Show Cover Letter Inspector" : "Inspector")
             }
-            
+
             // Hidden by default but customizable toolbar items
             ToolbarItem(id: "settings", placement: .primaryAction, showsByDefault: false) {
                 Button("Settings", systemImage: "gear") {
@@ -174,7 +174,7 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 }
                 .help("Open Settings")
             }
-            
+
             // Legacy toolbar identifiers retained for existing customizations
             ToolbarItem(id: "ttsReadAloud", placement: .primaryAction, showsByDefault: false) {
                 Button("Read Aloud", systemImage: "speaker.wave.2") {

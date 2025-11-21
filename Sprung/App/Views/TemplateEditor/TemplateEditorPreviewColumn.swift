@@ -245,7 +245,7 @@ struct TemplateEditorPreviewColumn: View {
             pdfController.updatePagingState()
         }
     }
-    
+
     private func previewErrorView(_ message: String) -> some View {
         VStack(alignment: .center, spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")

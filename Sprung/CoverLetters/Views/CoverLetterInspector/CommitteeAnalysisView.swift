@@ -15,14 +15,14 @@ struct CommitteeAnalysisView: View {
     let getScoreColor: (Int) -> Color
     let getRankingText: (Int) -> String
     let pointsColor: (Int) -> Color
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Committee Analysis")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(.secondary)
                 .textCase(.uppercase)
-            
+
             VStack(alignment: .leading, spacing: 12) {
                 // Total score/votes with medal indicator
                 HStack(spacing: 12) {
@@ -49,7 +49,7 @@ struct CommitteeAnalysisView: View {
                                     Text("\(coverLetter.voteCount)")
                                         .font(.system(size: 11, weight: .medium))
                                 }
-                                
+
                                 HStack(spacing: 4) {
                                     Text("Points:")
                                         .font(.system(size: 11))
@@ -63,9 +63,9 @@ struct CommitteeAnalysisView: View {
                             .glassEffect(.regular, in: .rect(cornerRadius: 6))
                         }
                     }
-                    
+
                     Spacer()
-                    
+
                     // Medal and ranking on the right
                     if let ranking = getRanking(coverLetter) {
                         VStack(spacing: 8) {
@@ -77,7 +77,7 @@ struct CommitteeAnalysisView: View {
                                     .padding(10)
                                     .glassEffect(.regular.tint(getMedalColor(coverLetter).opacity(0.3)), in: .circle)
                             }
-                            
+
                             Text(getRankingText(ranking))
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(.primary)
@@ -89,12 +89,12 @@ struct CommitteeAnalysisView: View {
                         }
                     }
                 }
-                
+
                 // Detailed committee feedback if available
                 if let feedback = coverLetter.committeeFeedback {
                     Divider()
                         .padding(.vertical, 4)
-                    
+
                     VStack(alignment: .leading, spacing: 12) {
                         if !feedback.summaryOfModelAnalysis.isEmpty {
                             VStack(alignment: .leading, spacing: 4) {
@@ -109,22 +109,22 @@ struct CommitteeAnalysisView: View {
                                 }
                             }
                         }
-                        
+
                         if !feedback.pointsAwarded.isEmpty {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("Points Breakdown")
                                     .font(.system(size: 10, weight: .semibold))
                                     .foregroundColor(.secondary)
-                                
+
                                 VStack(spacing: 2) {
                                     ForEach(feedback.pointsAwarded, id: \.model) { award in
                                         HStack {
                                             Text(openRouterService.friendlyModelName(for: award.model))
                                                 .font(.system(size: 10))
                                                 .foregroundColor(.secondary)
-                                            
+
                                             Spacer()
-                                            
+
                                             Text("\(award.points)")
                                                 .font(.system(size: 10, weight: .medium, design: .monospaced))
                                                 .foregroundColor(pointsColor(award.points))
@@ -133,17 +133,17 @@ struct CommitteeAnalysisView: View {
                                                 .foregroundColor(.secondary)
                                         }
                                     }
-                                    
+
                                     Divider()
                                         .padding(.vertical, 2)
-                                    
+
                                     let totalPoints = feedback.pointsAwarded.reduce(0) { $0 + $1.points }
                                     HStack {
                                         Text("Total")
                                             .font(.system(size: 10, weight: .semibold))
-                                        
+
                                         Spacer()
-                                        
+
                                         Text("\(totalPoints)")
                                             .font(.system(size: 11, weight: .bold, design: .monospaced))
                                             .foregroundColor(pointsColor(totalPoints))
@@ -154,14 +154,14 @@ struct CommitteeAnalysisView: View {
                                 }
                             }
                         }
-                        
+
                         // Vote-by-vote breakdown if available
                         if !feedback.modelVotes.isEmpty {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("Vote-by-Vote Breakdown")
                                     .font(.system(size: 10, weight: .semibold))
                                     .foregroundColor(.secondary)
-                                
+
                                 VStack(spacing: 2) {
                                     ForEach(feedback.modelVotes, id: \.model) { vote in
                                         if let jobApp = coverLetter.jobApp,
@@ -170,13 +170,13 @@ struct CommitteeAnalysisView: View {
                                                 Text(openRouterService.friendlyModelName(for: vote.model))
                                                     .font(.system(size: 10))
                                                     .foregroundColor(.secondary)
-                                                
+
                                                 Spacer()
-                                                
+
                                                 Image(systemName: "arrow.right")
                                                     .font(.system(size: 8))
                                                     .foregroundColor(.secondary)
-                                                
+
                                                 Text(votedLetter.sequencedName)
                                                     .font(.system(size: 10, weight: .medium))
                                                     .foregroundColor(.primary)

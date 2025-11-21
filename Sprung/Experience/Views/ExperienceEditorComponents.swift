@@ -10,7 +10,7 @@ struct ExperienceSectionViewCallbacks {
 }
 struct ExperienceCard<Content: View>: View {
     let onDelete: () -> Void
-    var onToggleEdit: (() -> Void)? = nil
+    var onToggleEdit: (() -> Void)?
     var isEditing: Bool = false
     let content: Content
     @State private var isHovered = false

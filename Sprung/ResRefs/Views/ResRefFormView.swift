@@ -14,7 +14,7 @@ struct ResRefFormView: View {
     @State private var dropErrorMessage: String?
     @Binding var isSheetPresented: Bool
     @Environment(ResRefStore.self) private var resRefStore: ResRefStore
-    var existingResRef: ResRef? = nil
+    var existingResRef: ResRef?
     init(isSheetPresented: Binding<Bool>, existingResRef: ResRef? = nil) {
         _isSheetPresented = isSheetPresented
         self.existingResRef = existingResRef

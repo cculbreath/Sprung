@@ -110,7 +110,7 @@ struct UploadRequestCard: View {
     }
     private func loadURL(from provider: NSItemProvider) async -> URL? {
         await withCheckedContinuation { continuation in
-            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, error in
+            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
                 if let url = item as? URL {
                     continuation.resume(returning: url)
                 } else if let data = item as? Data,

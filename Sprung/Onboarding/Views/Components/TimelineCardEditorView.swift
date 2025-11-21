@@ -8,8 +8,8 @@ struct TimelineCardEditorView: View {
     let timeline: JSON
     let coordinator: OnboardingInterviewCoordinator
     var mode: Mode = .editor
-    var onValidationSubmit: ((String) -> Void)? = nil  // Callback for validation mode: "confirmed" or "confirmed_with_changes"
-    var onSubmitChangesOnly: (() -> Void)? = nil  // Callback for "Submit Changes Only" - saves and lets LLM reassess
+    var onValidationSubmit: ((String) -> Void)?  // Callback for validation mode: "confirmed" or "confirmed_with_changes"
+    var onSubmitChangesOnly: (() -> Void)?  // Callback for "Submit Changes Only" - saves and lets LLM reassess
     @State private var drafts: [WorkExperienceDraft] = []
     @State private var baselineCards: [TimelineCard] = []
     @State private var meta: JSON?

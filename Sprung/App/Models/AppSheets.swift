@@ -14,7 +14,7 @@ struct AppSheets {
     var showMultiModelChooseBest = false
     var showBatchCoverLetter = false
     var showNewJobApp = false
-    
+
     // UI state that was previously in ResumeButtons
     var showResumeInspector = false
     var showCoverLetterInspector = false
@@ -24,7 +24,7 @@ struct AppSheetsModifier: ViewModifier {
     @Binding var sheets: AppSheets
     @Binding var clarifyingQuestions: [ClarifyingQuestion]
     @Binding var refPopup: Bool
-    
+
     @Environment(JobAppStore.self) private var jobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
@@ -38,7 +38,7 @@ struct AppSheetsModifier: ViewModifier {
             }
         )
     }
-    
+
     func body(content: Content) -> some View {
         content
             .sheet(isPresented: $sheets.showNewJobApp) {

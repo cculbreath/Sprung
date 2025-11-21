@@ -21,12 +21,12 @@ struct ProposedRevisionNode: Codable, Equatable {
     // provide a hierarchical hint when an ID match is ambiguous.
     // Default initializer
     init() {}
-    
+
     /// Get the original text for this revision node, with fallback logic
     /// Moved from ReviewView for better encapsulation
     func originalText(using updateNodes: [[String: Any]]) -> String {
         let trimmedOld = oldValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        
+
         // Debug logging to help diagnose the issue
         Logger.debug("🔍 ProposedRevisionNode.originalText - ID: \(id), isTitleNode: \(isTitleNode), oldValue: '\(oldValue)'")
         if !trimmedOld.isEmpty {
@@ -34,9 +34,9 @@ struct ProposedRevisionNode: Codable, Equatable {
             return trimmedOld
         }
         // Find the matching node in updateNodes by ID and isTitleNode flag
-        if let dict = updateNodes.first(where: { 
-            ($0["id"] as? String) == id && 
-            ($0["isTitleNode"] as? Bool) == isTitleNode 
+        if let dict = updateNodes.first(where: {
+            ($0["id"] as? String) == id &&
+            ($0["isTitleNode"] as? Bool) == isTitleNode
         }) {
             Logger.debug("🎯 Found matching updateNode: \(dict)")
             // Always use the "value" field from updateNodes - this contains the correct content
@@ -56,11 +56,11 @@ struct ProposedRevisionNode: Codable, Equatable {
                 Logger.debug("  updateNode[\(index)]: id=\(nodeId), isTitleNode=\(nodeIsTitleNode), value='\(nodeValue.prefix(50))...'")
             }
         }
-        
+
         Logger.debug("⚠️ Fallback to '(no text)'")
         return "(no text)"
     }
-    
+
     /// Create a FeedbackNode from this ProposedRevisionNode
     func createFeedbackNode() -> FeedbackNode {
         return FeedbackNode(
@@ -72,7 +72,7 @@ struct ProposedRevisionNode: Codable, Equatable {
             isTitleNode: isTitleNode
         )
     }
-    
+
     enum CodingKeys: String, CodingKey {
         case id
         case oldValue
@@ -98,35 +98,35 @@ struct ProposedRevisionNode: Codable, Equatable {
 }
 struct RevisionsContainer: Codable {
     var revArray: [ProposedRevisionNode]
-    
+
     /// Custom coding keys to handle case variations from different LLM responses
     enum CodingKeys: String, CodingKey {
         case revArray = "revArray"
         case RevArray = "RevArray"  // Handle uppercase variant
     }
-    
+
     /// Custom decoder to handle both revArray and RevArray keys
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        
+
         // Try lowercase first, then uppercase
         if let array = try? container.decode([ProposedRevisionNode].self, forKey: .revArray) {
             self.revArray = array
         } else if let array = try? container.decode([ProposedRevisionNode].self, forKey: .RevArray) {
             self.revArray = array
         } else {
-            throw DecodingError.keyNotFound(CodingKeys.revArray, 
-                DecodingError.Context(codingPath: decoder.codingPath, 
+            throw DecodingError.keyNotFound(CodingKeys.revArray,
+                DecodingError.Context(codingPath: decoder.codingPath,
                                     debugDescription: "Neither 'revArray' nor 'RevArray' found in response"))
         }
     }
-    
+
     /// Custom encoder to always use lowercase revArray
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(revArray, forKey: .revArray)
     }
-    
+
 }
 enum PostReviewAction: String, Codable {
     case accepted = "No action required. Revision Accepted."
@@ -148,7 +148,7 @@ enum PostReviewAction: String, Codable {
     var actionRequested: PostReviewAction = .unevaluated
     var reviewerComments: String = ""
     var isTitleNode: Bool = false
-    
+
     init(
         id: String = "",
         originalValue: String = "",
@@ -164,7 +164,7 @@ enum PostReviewAction: String, Codable {
         self.reviewerComments = reviewerComments
         self.isTitleNode = isTitleNode
     }
-    
+
     /// Check if this feedback node requires AI resubmission
     var requiresAIResubmission: Bool {
         let aiActions: Set<PostReviewAction> = [
@@ -172,16 +172,16 @@ enum PostReviewAction: String, Codable {
         ]
         return aiActions.contains(actionRequested)
     }
-    
+
     /// Check if this feedback node should be applied to the resume
     var shouldBeApplied: Bool {
         return actionRequested == .accepted || actionRequested == .acceptedWithChanges
     }
-    
+
     /// Apply this feedback node's changes to a resume tree node
     func applyToResume(_ resume: Resume) {
         guard shouldBeApplied else { return }
-        
+
         if let treeNode = resume.nodes.first(where: { $0.id == id }) {
             // Apply the change based on whether this feedback is for title or value
             if isTitleNode {
@@ -197,11 +197,11 @@ enum PostReviewAction: String, Codable {
             Logger.debug("⚠️ Could not find TreeNode with ID: \(id) to apply changes")
         }
     }
-    
+
     /// Handle the action for saveAndNext workflow
     func processAction(_ action: PostReviewAction) {
         self.actionRequested = action
-        
+
         switch action {
         case .restored:
             self.proposedRevision = self.originalValue
@@ -237,17 +237,17 @@ extension FeedbackNode: Encodable {
 // MARK: - Collection Extensions for Review Workflow Logic
 @MainActor
 extension Array where Element == FeedbackNode {
-    
+
     /// Apply all accepted changes to the resume
     /// Moved from ReviewView for better encapsulation
     func applyAcceptedChanges(to resume: Resume, exportCoordinator: ResumeExportCoordinator) {
         Logger.debug("✅ Applying accepted changes to resume")
-        
+
         let acceptedNodes = filter { $0.shouldBeApplied }
         for node in acceptedNodes {
             node.applyToResume(resume)
         }
-        
+
         // After applying all changes, check for nodes that should be deleted
         // Delete any TreeNodes where both name and value are empty
         let nodesToDelete = resume.nodes.filter { treeNode in
@@ -255,7 +255,7 @@ extension Array where Element == FeedbackNode {
             let valueIsEmpty = treeNode.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             return nameIsEmpty && valueIsEmpty
         }
-        
+
         if !nodesToDelete.isEmpty {
             Logger.debug("🗑️ Deleting \(nodesToDelete.count) empty nodes")
             if let context = resume.modelContext {
@@ -265,7 +265,7 @@ extension Array where Element == FeedbackNode {
                     for nodeToDelete in nodesToDelete {
                         TreeNode.deleteTreeNode(node: nodeToDelete, context: context)
                     }
-                    
+
                     // Save once after all deletions
                     do {
                         try context.save()
@@ -276,17 +276,17 @@ extension Array where Element == FeedbackNode {
                 }
             }
         }
-        
+
         // Trigger PDF refresh
         exportCoordinator.debounceExport(resume: resume)
         Logger.debug("✅ Applied \(acceptedNodes.count) accepted changes")
     }
-    
+
     /// Get nodes that require AI resubmission
     var nodesRequiringAIResubmission: [FeedbackNode] {
         return filter { $0.requiresAIResubmission }
     }
-    
+
     /// Log feedback statistics (moved from ReviewView)
     func logFeedbackStatistics() {
         Logger.debug("\n===== FEEDBACK NODE STATISTICS =====")
@@ -309,7 +309,7 @@ extension Array where Element == FeedbackNode {
         Logger.debug("Mandated change (no comments): \(mandatedChangeNoCommentCount)")
         Logger.debug("==================================\n")
     }
-    
+
     /// Log resubmission summary (moved from ReviewView)
     func logResubmissionSummary() {
         Logger.debug("\n===== SUBMITTING REVISION REQUEST =====")
@@ -325,7 +325,7 @@ extension Array where Element == FeedbackNode {
         let nodeIds = map { $0.id }.joined(separator: ", ")
         Logger.debug("Node IDs: \(nodeIds)")
         Logger.debug("========================================\n")
-        
+
         // Log individual nodes
         for (index, node) in enumerated() {
             Logger.debug("Node \(index + 1)/\(count) for revision:")

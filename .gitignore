@@ -61,3 +61,8 @@ planning/
 consolelog.pid
 Agents.md
 Agents.md
+
+# SwiftLint reports
+swiftlint-report.txt
+swiftlint-autofix.log
+swiftlint-report-after-fix.txt

@@ -17,7 +17,7 @@ struct ResumeExportView: View {
     // State for toast notification
     @State private var showToast: Bool = false
     @State private var toastMessage: String = ""
-    @State private var toastTimer: Timer? = nil
+    @State private var toastTimer: Timer?
     var body: some View {
         // Only show if we actually have a selected JobApp in the store
         if let jobApp = jobAppStore.selectedApp {
@@ -27,7 +27,7 @@ struct ResumeExportView: View {
                     Text("Export Documents")
                         .font(.title3)
                         .fontWeight(.semibold)
-                    
+
                     Text("\(jobApp.jobPosition) at \(jobApp.companyName)")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
@@ -35,7 +35,7 @@ struct ResumeExportView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 20)
                 .padding(.bottom, 16)
-                
+
                 Form {
                     // MARK: - Document Status
                     Section {
@@ -62,7 +62,7 @@ struct ResumeExportView: View {
                                 .foregroundColor(jobApp.selectedRes != nil ? .green : .secondary)
                                 .fontWeight(.medium)
                         }
-                        
+
                         HStack {
                             Image(systemName: "doc.text.fill")
                                 .foregroundColor(jobApp.selectedCover != nil ? .green : .secondary)
@@ -89,7 +89,7 @@ struct ResumeExportView: View {
                     } header: {
                         Text("Documents")
                     }
-                    
+
                     // MARK: - Actions
                     if let primaryURL = getPrimaryApplyURL(for: jobApp) {
                         Section {
@@ -105,19 +105,19 @@ struct ResumeExportView: View {
                             Text("Application")
                         }
                     }
-                    
+
                     // MARK: - Resume Export
                     Section {
                         Button("Export PDF") {
                             exportResumePDF()
                         }
                         .disabled(jobApp.selectedRes == nil)
-                        
+
                         Button("Export Text") {
                             exportResumeText()
                         }
                         .disabled(jobApp.selectedRes == nil)
-                        
+
                         Button("Export JSON") {
                             exportResumeJSON()
                         }
@@ -125,19 +125,19 @@ struct ResumeExportView: View {
                     } header: {
                         Text("Resume Export")
                     }
-                    
+
                     // MARK: - Cover Letter Export
                     Section {
                         Button("Export PDF") {
                             exportCoverLetterPDF()
                         }
                         .disabled(jobApp.selectedCover == nil)
-                        
+
                         Button("Export Text") {
                             exportCoverLetterText()
                         }
                         .disabled(jobApp.selectedCover == nil)
-                        
+
                         Button("Export All Options") {
                             exportAllCoverLetters()
                         }
@@ -145,7 +145,7 @@ struct ResumeExportView: View {
                     } header: {
                         Text("Cover Letter Export")
                     }
-                    
+
                     // MARK: - Complete Application
                     Section {
                         HStack {
@@ -160,7 +160,7 @@ struct ResumeExportView: View {
                     } footer: {
                         Text("Combines resume and cover letter into a single PDF")
                     }
-                    
+
                     // MARK: - Status
                     Section {
                         Picker("Status", selection: $selectedStatus) {
@@ -175,7 +175,7 @@ struct ResumeExportView: View {
                     } header: {
                         Text("Application Status")
                     }
-                    
+
                     // MARK: - Notes
                     Section {
                         TextEditor(text: $notes)
@@ -280,7 +280,7 @@ struct ResumeExportView: View {
         }
         // Show exporting status
         showToastNotification("Generating fresh PDF...")
-        
+
         // Trigger debounced export to ensure fresh PDF data before exporting
         appEnvironment.resumeExportCoordinator.debounceExport(
             resume: resume,
@@ -294,7 +294,7 @@ struct ResumeExportView: View {
             }
         )
     }
-    
+
     private func performPDFExport(for resume: Resume) {
         guard let pdfData = resume.pdfData else {
             showToastNotification("Failed to generate PDF data. Please try again.")
@@ -325,7 +325,7 @@ struct ResumeExportView: View {
         }
         // Show regenerating status
         showToastNotification("Generating fresh text resume...")
-        
+
         // Trigger debounced export to ensure fresh text data before exporting
         appEnvironment.resumeExportCoordinator.debounceExport(
             resume: resume,
@@ -496,7 +496,7 @@ struct ResumeExportView: View {
         }
         return combinedText
     }
-    
+
     // MARK: - Helper Functions
     /// Returns the primary URL for applying to the job (apply URL if available, otherwise posting URL)
     private func getPrimaryApplyURL(for jobApp: JobApp) -> String? {
@@ -512,7 +512,7 @@ struct ResumeExportView: View {
 struct MacOSToastOverlay: View {
     let showToast: Bool
     let message: String
-    
+
     var body: some View {
         ZStack {
             if showToast {

@@ -15,7 +15,7 @@ struct TextToSpeechSettingsView: View {
     // State for managing TTS preview
     @State private var ttsProvider: OpenAITTSProvider?
     @State private var isPreviewingVoice: Bool = false
-    @State private var ttsError: String? = nil
+    @State private var ttsError: String?
     @State private var showTTSErrorAlert: Bool = false // Use a different name to avoid conflict
     // Default instructions constant
     private let defaultInstructions = """

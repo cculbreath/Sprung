@@ -8,15 +8,15 @@ class ResumeReviewViewModel {
     // General review state
     private(set) var reviewResponseText: String = ""
     private(set) var isProcessingGeneral: Bool = false
-    private(set) var generalError: String? = nil
-    
+    private(set) var generalError: String?
+
     // Fix Overflow state
     private(set) var fixOverflowStatusMessage: String = ""
     private(set) var fixOverflowChangeMessage: String = ""
     private(set) var isProcessingFixOverflow: Bool = false
-    private(set) var fixOverflowError: String? = nil
+    private(set) var fixOverflowError: String?
     private(set) var currentOverflowLineCount: Int = 0
-    
+
     // MARK: - Dependencies
     private var reasoningStreamManager: ReasoningStreamManager?
     private var openRouterService: OpenRouterService?
@@ -37,7 +37,7 @@ class ResumeReviewViewModel {
         }
         resetChangeMessage()
     }
-    
+
     // MARK: - Public Methods
     func handleSubmit(
         reviewType: ResumeReviewType,
@@ -47,7 +47,7 @@ class ResumeReviewViewModel {
         allowEntityMerge: Bool
     ) {
         resetState()
-        
+
         switch reviewType {
         case .fixOverflow:
             Task {
@@ -66,14 +66,14 @@ class ResumeReviewViewModel {
             )
         }
     }
-    
+
     func cancelRequest() {
         reviewService?.cancelRequest()
         isProcessingGeneral = false
         isProcessingFixOverflow = false
         fixOverflowStatusMessage = "Operation stopped by user."
     }
-    
+
     func resetOnReviewTypeChange() {
         reviewResponseText = ""
         fixOverflowStatusMessage = ""
@@ -82,11 +82,11 @@ class ResumeReviewViewModel {
         generalError = nil
         fixOverflowError = nil
     }
-    
+
     func resetChangeMessage() {
         fixOverflowChangeMessage = ""
     }
-    
+
     // MARK: - Private Methods
     private func resetState() {
         reviewResponseText = ""
@@ -95,7 +95,7 @@ class ResumeReviewViewModel {
         generalError = nil
         fixOverflowError = nil
     }
-    
+
     private func performGeneralReview(
         reviewType: ResumeReviewType,
         resume: Resume,
@@ -104,7 +104,7 @@ class ResumeReviewViewModel {
     ) {
         isProcessingGeneral = true
         reviewResponseText = "Submitting request..."
-        
+
         reviewService?.sendReviewRequest(
             reviewType: reviewType,
             resume: resume,
@@ -113,8 +113,8 @@ class ResumeReviewViewModel {
             onProgress: { [weak self] contentChunk in
                 Task { @MainActor in
                     guard let self = self else { return }
-                    if self.reviewResponseText == "Submitting request..." { 
-                        self.reviewResponseText = "" 
+                    if self.reviewResponseText == "Submitting request..." {
+                        self.reviewResponseText = ""
                     }
                     self.reviewResponseText += contentChunk
                 }
@@ -141,7 +141,7 @@ class ResumeReviewViewModel {
             }
         )
     }
-    
+
     private func handleGeneralError(_ error: Error) {
         if let nsError = error as NSError? {
             if nsError.domain == "OpenAIAPI" {
@@ -155,7 +155,7 @@ class ResumeReviewViewModel {
             generalError = "Error: \(error.localizedDescription)"
         }
     }
-    
+
     private func performFixOverflow(resume: Resume, allowEntityMerge: Bool, selectedModel: String) async {
         isProcessingFixOverflow = true
         fixOverflowStatusMessage = "Starting skills optimization..."
@@ -175,7 +175,7 @@ class ResumeReviewViewModel {
         if supportsReasoning {
             reasoningStreamManager.startReasoning(modelName: selectedModel)
         }
-        
+
         let result = await fixOverflowService?.performFixOverflow(
             resume: resume,
             allowEntityMerge: allowEntityMerge,
@@ -191,7 +191,7 @@ class ResumeReviewViewModel {
             },
             onReasoningUpdate: reasoningCallback
         )
-        
+
         switch result {
         case .success(let finalStatus):
             fixOverflowStatusMessage = finalStatus
@@ -200,18 +200,18 @@ class ResumeReviewViewModel {
         case .none:
             fixOverflowError = "Fix Overflow service unavailable."
         }
-        
+
         // Complete reasoning stream
         if supportsReasoning {
             reasoningStreamManager.stopStream()
         }
         isProcessingFixOverflow = false
     }
-    
+
     private func performReorderSkills(resume: Resume, selectedModel: String) async {
         isProcessingFixOverflow = true
         fixOverflowStatusMessage = "Starting skills reordering..."
-        
+
         let result = await reorderSkillsService?.performReorderSkills(
             resume: resume,
             selectedModel: selectedModel
@@ -221,7 +221,7 @@ class ResumeReviewViewModel {
                 self?.fixOverflowChangeMessage = status.changeMessage
             }
         }
-        
+
         switch result {
         case .success(let finalStatus):
             fixOverflowStatusMessage = finalStatus
@@ -230,7 +230,7 @@ class ResumeReviewViewModel {
         case .none:
             fixOverflowError = "Reorder Skills service unavailable."
         }
-        
+
         isProcessingFixOverflow = false
     }
 }

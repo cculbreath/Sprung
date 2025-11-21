@@ -18,7 +18,7 @@ final class TTSAudioStreamer {
     private var totalBufferedSize: Int = 0
     /// Maximum buffer size allowed (50MB) - increased for better caching
     private let maxBufferSize: Int = 50 * 1024 * 1024
-    
+
     /// Cache of all received audio data for persistent playback
     private var completeAudioCache: Data = Data()
     /// Count of received chunks for monitoring
@@ -57,13 +57,13 @@ final class TTSAudioStreamer {
                 self.isPausedFlag = false
                 self.setBufferingState(false)
                 if let error = self.player.currentError {
-                    Task { @MainActor in 
+                    Task { @MainActor in
                         if let errorHandler = self.onError {
                             errorHandler(error)
                         }
                     }
                 } else {
-                    Task { @MainActor in 
+                    Task { @MainActor in
                         if let finishHandler = self.onFinish {
                             finishHandler()
                         }
@@ -77,7 +77,7 @@ final class TTSAudioStreamer {
     var onReady: (() -> Void)?
     /// Called when playback has finished
     var onFinish: (() -> Void)?
-    
+
     /// Called on playback or decoding error
     var onError: ((Error) -> Void)?
     /// Called when buffering state changes
@@ -125,7 +125,7 @@ final class TTSAudioStreamer {
     func append(_ data: Data) {
         // First, add to our complete audio cache for persistent playback
         completeAudioCache.append(data)
-        
+
         // Check buffer limits before processing new data
         totalBufferedSize += data.count
         chunkCount += 1
@@ -136,7 +136,7 @@ final class TTSAudioStreamer {
                 domain: "TTSAudioStreamer",
                 code: 1001,
                 userInfo: [
-                    NSLocalizedDescriptionKey: "Buffer size limit exceeded",
+                    NSLocalizedDescriptionKey: "Buffer size limit exceeded"
                 ]
             )
             // Must dispatch to MainActor for stop() call
@@ -149,21 +149,21 @@ final class TTSAudioStreamer {
         // Check if we've received too many chunks - but allow audio to continue playing
         if chunkCount > maxChunkCount {
             Logger.warning("TTSAudioStreamer: Many chunks accumulated (\(chunkCount)/\(maxChunkCount)). Forcing stream completion to prevent overflow.")
-            
+
             // Report overflow condition but CONTINUE playback of existing audio
             // Create a specific overflow error that can be handled specially
             let overflowError = NSError(
                 domain: "TTSAudioStreamer",
                 code: 1002,
                 userInfo: [
-                    NSLocalizedDescriptionKey: "Chunk limit exceeded, but continuing playback",
+                    NSLocalizedDescriptionKey: "Chunk limit exceeded, but continuing playback"
                 ]
             )
-            
+
             Task { @MainActor in
                 // Call onError with the special error code that won't stop playback
                 self.onError?(overflowError)
-                
+
                 // Reset buffer metrics but DON'T stop the stream
                 self.resetBufferMetrics()
             }
@@ -224,9 +224,9 @@ final class TTSAudioStreamer {
         }
         // Already started, yield chunks immediately
         else {
-            guard let cont = continuation else { 
+            guard let cont = continuation else {
                 Logger.warning("TTSAudioStreamer: Tried to append chunk but no continuation available")
-                return 
+                return
             }
             Logger.debug("TTSAudioStreamer: Yielding chunk directly to player, size: \(data.count), total: \(totalBufferedSize)")
             Task { @MainActor in
@@ -254,7 +254,7 @@ final class TTSAudioStreamer {
                 setBufferingState(false)
             }
             player.stop()
-            Task { @MainActor in 
+            Task { @MainActor in
                 if let finishHandler = self.onFinish {
                     finishHandler()
                 }

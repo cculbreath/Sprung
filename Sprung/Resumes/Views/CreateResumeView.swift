@@ -11,11 +11,11 @@ struct CreateResumeView: View {
     @Environment(TemplateStore.self) private var templateStore: TemplateStore
     @Environment(ResRefStore.self) private var resRefStore: ResRefStore
     var onCreateResume: (Template, [ResRef]) -> Void
-    
+
     @State private var selectedTemplateID: UUID?
-    
+
     @Environment(\.dismiss) private var dismiss
-    
+
     var body: some View {
         let templates = templateStore.templates()
         VStack(alignment: .leading, spacing: 20) {
@@ -23,12 +23,12 @@ struct CreateResumeView: View {
                 .font(.title)
                 .fontWeight(.bold)
                 .padding(.bottom, 10)
-            
+
             // Resume Model Selector
             VStack(alignment: .leading, spacing: 8) {
                 Text("Select Template")
                     .font(.headline)
-                    
+
                 Picker("Select Template", selection: $selectedTemplateID) {
                     Text("Select a template").tag(nil as UUID?)
                     ForEach(templates) { template in
@@ -36,7 +36,7 @@ struct CreateResumeView: View {
                     }
                 }
                 .frame(minWidth: 200)
-                
+
                 if templates.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("No templates available")
@@ -47,7 +47,7 @@ struct CreateResumeView: View {
                         .buttonStyle(.borderedProminent)
                     }
                 }
-                
+
                 if let templateID = selectedTemplateID,
                    let selectedTemplate = templates.first(where: { $0.id == templateID }) {
                     HStack {
@@ -59,18 +59,18 @@ struct CreateResumeView: View {
                 }
             }
             .padding(.bottom, 10)
-            
+
             Spacer()
-            
+
             // Action buttons
             HStack {
                 Button("Cancel") {
                     dismiss()
                 }
                 .buttonStyle(.bordered)
-                
+
                 Spacer()
-                
+
                 Button(action: {
                     guard
                         let templateID = selectedTemplateID,

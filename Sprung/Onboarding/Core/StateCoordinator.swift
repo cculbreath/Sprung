@@ -234,6 +234,7 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
     private func handleLLMEvent(_ event: OnboardingEvent) async {
         switch event {
+        case .llmUserMessageSent(_, let payload, let isSystemGenerated):
             if isSystemGenerated {
                 let text = payload["text"].stringValue
                 _ = await chatStore.appendUserMessage(text, isSystemGenerated: isSystemGenerated)

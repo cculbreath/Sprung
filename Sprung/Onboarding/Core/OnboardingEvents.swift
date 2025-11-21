@@ -316,7 +316,7 @@ actor EventCoordinator {
         // Toolpane events
         case .choicePromptRequested, .choicePromptCleared, .uploadRequestPresented,
              .uploadRequestCancelled, .validationPromptRequested, .validationPromptCleared,
-             .applicantProfileIntakeRequested, .profileSummaryUpdateRequested(_), .applicantProfileIntakeCleared, .profileSummaryDismissRequested,
+             .applicantProfileIntakeRequested, .profileSummaryUpdateRequested, .applicantProfileIntakeCleared, .profileSummaryDismissRequested,
              .sectionToggleRequested, .sectionToggleCleared, .toolPaneCardRestored:
             return .toolpane
         // Timeline events
@@ -510,7 +510,7 @@ actor EventCoordinator {
             }
         case .uploadCompleted(let files, let requestKind, _, _):
             description = "Upload completed: \(files.count) file(s), kind: \(requestKind)"
-            case .profileSummaryUpdateRequested(profile:_):
+            case .profileSummaryUpdateRequested:
                 description = "Profile Summary Update Requested"
             case .profileSummaryDismissRequested:
                 description = "Dismiss Profile Summary Requested"

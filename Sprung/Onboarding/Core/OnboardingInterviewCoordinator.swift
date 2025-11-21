@@ -45,17 +45,17 @@ final class OnboardingInterviewCoordinator {
     private var toolInteractionCoordinator: ToolInteractionCoordinator!
     // MARK: - UI State
     let ui: OnboardingUIState
-    
+
     // MARK: - Tool Registration
     // MARK: - Computed Properties (Read from StateCoordinator)
     var currentPhase: InterviewPhase {
         get async { await state.phase }
     }
-    
+
     func currentApplicantProfile() -> ApplicantProfile {
         applicantProfileStore.currentProfile()
     }
-    
+
     var artifacts: OnboardingArtifacts {
         get async { await state.artifacts }
     }
@@ -114,7 +114,7 @@ final class OnboardingInterviewCoordinator {
             })
         )
         self.ui = OnboardingUIState(preferences: preferences)
-        
+
         let objectiveStore = ObjectiveStore(eventBus: eventBus, phasePolicy: phasePolicy, initialPhase: .phase1CoreFacts)
         let artifactRepository = ArtifactRepository(eventBus: eventBus)
         let chatTranscriptStore = ChatTranscriptStore(eventBus: eventBus)
@@ -271,7 +271,7 @@ final class OnboardingInterviewCoordinator {
             eventBus: eventBus,
             coordinator: self
         )
-        
+
         self.toolInteractionCoordinator = ToolInteractionCoordinator(
             eventBus: eventBus,
             toolRouter: toolRouter,
@@ -284,12 +284,12 @@ final class OnboardingInterviewCoordinator {
                 self?.ui.modelAvailabilityMessage = message
             }
         )
-        
+
         Logger.info("🎯 OnboardingInterviewCoordinator initialized with event-driven architecture", category: .ai)
         Task { await subscribeToEvents() }
-        
+
         Task { await profilePersistenceHandler.start() }
-        
+
         Task { await ingestionCoordinator.start() }
     }
     // MARK: - Event Subscription
@@ -323,26 +323,22 @@ final class OnboardingInterviewCoordinator {
             ui.updateProcessing(isProcessing: isProcessing, statusMessage: statusMessage)
             Logger.info("🎨 UI Update: Chat glow/spinner \(isProcessing ? "ACTIVATED ✨" : "DEACTIVATED") - isProcessing=\(isProcessing), status: \(ui.currentStatusMessage ?? "none")", category: .ai)
             await syncWizardProgressFromState()
-        case .streamingStatusUpdated(_, let statusMessage):
+            case .streamingStatusUpdated(_, let statusMessage):
             if let statusMessage = statusMessage {
                 ui.currentStatusMessage = statusMessage
             }
-            break
-        case .waitingStateChanged(_, let statusMessage):
+            case .waitingStateChanged(_, let statusMessage):
             if let statusMessage = statusMessage {
                 ui.currentStatusMessage = statusMessage
             }
-            break
-        case .toolCallRequested(_, let statusMessage):
+            case .toolCallRequested(_, let statusMessage):
             if let statusMessage = statusMessage {
                 ui.currentStatusMessage = statusMessage
             }
-            break
-        case .toolCallCompleted(_, _, let statusMessage):
+            case .toolCallCompleted(_, _, let statusMessage):
             if let statusMessage = statusMessage {
                 ui.currentStatusMessage = statusMessage
             }
-            break
         default:
             break
         }

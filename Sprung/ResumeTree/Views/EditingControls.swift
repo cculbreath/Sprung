@@ -1,4 +1,3 @@
-
 //  EditingControls.swift
 //  Sprung
 //

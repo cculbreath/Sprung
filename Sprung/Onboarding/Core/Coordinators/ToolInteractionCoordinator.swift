@@ -14,7 +14,7 @@ final class ToolInteractionCoordinator {
     private let eventBus: EventCoordinator
     private let toolRouter: ToolHandler
     private let dataStore: InterviewDataStore
-    
+
     // MARK: - Initialization
     init(
         eventBus: EventCoordinator,
@@ -25,26 +25,26 @@ final class ToolInteractionCoordinator {
         self.toolRouter = toolRouter
         self.dataStore = dataStore
     }
-    
+
     // MARK: - Tool UI Presentations
     func presentUploadRequest(_ request: OnboardingUploadRequest) {
         Task {
             await eventBus.publish(.uploadRequestPresented(request: request))
         }
     }
-    
+
     func presentChoicePrompt(_ prompt: OnboardingChoicePrompt) {
         Task {
             await eventBus.publish(.choicePromptRequested(prompt: prompt))
         }
     }
-    
+
     func presentValidationPrompt(_ prompt: OnboardingValidationPrompt) {
         Task {
             await eventBus.publish(.validationPromptRequested(prompt: prompt))
         }
     }
-    
+
     // MARK: - Tool Response Handling
     func completeUpload(id: UUID, fileURLs: [URL]) async -> JSON? {
         let result = await toolRouter.completeUpload(id: id, fileURLs: fileURLs)
@@ -53,7 +53,7 @@ final class ToolInteractionCoordinator {
         }
         return result
     }
-    
+
     func skipUpload(id: UUID) async -> JSON? {
         let result = await toolRouter.skipUpload(id: id)
         Task {
@@ -61,7 +61,7 @@ final class ToolInteractionCoordinator {
         }
         return result
     }
-    
+
     func submitChoice(optionId: String) -> JSON? {
         let result = toolRouter.promptHandler.resolveChoice(selectionIds: [optionId])
         if result != nil {
@@ -71,7 +71,7 @@ final class ToolInteractionCoordinator {
         }
         return result
     }
-    
+
     func submitValidationResponse(
         status: String,
         updatedData: JSON?,
@@ -79,7 +79,7 @@ final class ToolInteractionCoordinator {
         notes: String?
     ) async -> JSON? {
         let pendingValidation = toolRouter.pendingValidationPrompt
-        
+
         // Special handling for knowledge card persistence
         if let validation = pendingValidation,
            validation.dataType == "knowledge_card",
@@ -91,10 +91,10 @@ final class ToolInteractionCoordinator {
             } catch {
                 Logger.error("Failed to persist knowledge card: \\(error)", category: .ai)
             }
-            
+
             await eventBus.publish(.knowledgeCardPersisted(card: data))
         }
-        
+
         let result = toolRouter.submitValidationResponse(
             status: status,
             updatedData: updatedData,
@@ -108,24 +108,24 @@ final class ToolInteractionCoordinator {
         }
         return result
     }
-    
+
     // MARK: - Applicant Profile Intake Facades
     func beginProfileUpload() -> OnboardingUploadRequest {
         toolRouter.beginApplicantProfileUpload()
     }
-    
+
     func beginProfileURLEntry() {
         toolRouter.beginApplicantProfileURL()
     }
-    
+
     func beginProfileContactsFetch() {
         toolRouter.beginApplicantProfileContactsFetch()
     }
-    
+
     func beginProfileManualEntry() {
         toolRouter.beginApplicantProfileManualEntry()
     }
-    
+
     func resetProfileIntakeToOptions() {
         toolRouter.resetApplicantProfileIntakeToOptions()
     }

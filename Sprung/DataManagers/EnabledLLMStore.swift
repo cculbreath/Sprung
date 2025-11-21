@@ -31,13 +31,13 @@ class EnabledLLMStore: SwiftDataStore {
         ("x-ai/grok-4", "Grok 4", "xAI"),
         ("x-ai/grok-4-fast", "Grok 4 Fast", "xAI")
     ]
-    
+
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
         loadEnabledModels()
         seedDefaultModelsIfNeeded()
     }
-    
+
     private func loadEnabledModels() {
         do {
             let descriptor = FetchDescriptor<EnabledLLM>(
@@ -50,22 +50,22 @@ class EnabledLLMStore: SwiftDataStore {
             enabledModels = []
         }
     }
-    
+
     /// Get or create an EnabledLLM for the given model ID
     func getOrCreateModel(id: String, displayName: String, provider: String = "") -> EnabledLLM {
         if let existing = enabledModels.first(where: { $0.modelId == id }) {
             return existing
         }
-        
+
         let newModel = EnabledLLM(modelId: id, displayName: displayName, provider: provider)
         enabledModels.append(newModel)
-        
+
         modelContext.insert(newModel)
         try? modelContext.save()
-        
+
         return newModel
     }
-    
+
     /// Update model capabilities from OpenRouter model info
     func updateModelCapabilities(from openRouterModel: OpenRouterModel) {
         let enabledModel = getOrCreateModel(
@@ -73,27 +73,27 @@ class EnabledLLMStore: SwiftDataStore {
             displayName: openRouterModel.name,
             provider: openRouterModel.providerName
         )
-        
+
         // Update capabilities from OpenRouter metadata
         enabledModel.supportsImages = openRouterModel.supportsImages
         enabledModel.supportsReasoning = openRouterModel.supportsReasoning
         enabledModel.isTextToText = openRouterModel.isTextToText
         enabledModel.contextLength = openRouterModel.contextLength ?? 0
         enabledModel.pricingTier = openRouterModel.costLevelDescription()
-        
+
         // Initially assume structured output support, will be verified on first use
         enabledModel.supportsStructuredOutput = openRouterModel.supportsStructuredOutput
         enabledModel.supportsJSONSchema = openRouterModel.supportsStructuredOutput
-        
+
         // Ensure model is enabled when capabilities are updated
         enabledModel.isEnabled = true
-        
+
         try? modelContext.save()
-        
+
         // Refresh in-memory state to reflect database changes
         refreshEnabledModels()
     }
-    
+
     /// Record that a model failed with JSON schema
     func recordJSONSchemaFailure(modelId: String, reason: String) {
         if let model = enabledModels.first(where: { $0.modelId == modelId }) {
@@ -101,7 +101,7 @@ class EnabledLLMStore: SwiftDataStore {
             try? modelContext.save()
         }
     }
-    
+
     /// Record that a model succeeded with JSON schema
     func recordJSONSchemaSuccess(modelId: String) {
         if let model = enabledModels.first(where: { $0.modelId == modelId }) {
@@ -109,12 +109,12 @@ class EnabledLLMStore: SwiftDataStore {
             try? modelContext.save()
         }
     }
-    
+
     /// Check if model should avoid JSON schema
     func shouldAvoidJSONSchema(modelId: String) -> Bool {
         return enabledModels.first(where: { $0.modelId == modelId })?.shouldAvoidJSONSchema ?? false
     }
-    
+
     /// Update model capabilities from validation results
     func updateModelCapabilities(
         modelId: String,
@@ -126,7 +126,7 @@ class EnabledLLMStore: SwiftDataStore {
         guard let model = enabledModels.first(where: { $0.modelId == modelId }) else {
             return
         }
-        
+
         if let supportsJSONSchema {
             model.supportsJSONSchema = supportsJSONSchema
             model.supportsStructuredOutput = supportsJSONSchema
@@ -140,7 +140,7 @@ class EnabledLLMStore: SwiftDataStore {
         if let isTextToText {
             model.isTextToText = isTextToText
         }
-        
+
         model.lastUsed = Date()
         try? modelContext.save()
         refreshEnabledModels()
@@ -148,19 +148,19 @@ class EnabledLLMStore: SwiftDataStore {
         let imagesDescription = supportsImages.map { "\($0)" } ?? "<unchanged>"
         Logger.debug("📊 Updated capabilities for \(modelId): JSON Schema=\(schemaDescription), Images=\(imagesDescription)")
     }
-    
+
     /// Disable a model by ID
     func disableModel(id: String) {
         // Update database record
         let enabledModel = getOrCreateModel(id: id, displayName: id)
         enabledModel.isEnabled = false
-        
+
         try? modelContext.save()
-        
+
         // Refresh in-memory state to reflect database changes
         refreshEnabledModels()
     }
-    
+
     /// Refresh the in-memory enabled models array from the database
     func refreshEnabledModels() {
         do {
@@ -178,7 +178,7 @@ class EnabledLLMStore: SwiftDataStore {
     var enabledModelIds: [String] {
         return enabledModels.map(\.modelId)
     }
-    
+
     /// Returns true if the provided model ID is marked as enabled
     func isModelEnabled(_ modelId: String) -> Bool {
         guard let model = enabledModels.first(where: { $0.modelId == modelId }) else {

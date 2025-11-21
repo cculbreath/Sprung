@@ -1,5 +1,3 @@
-
-
 //
 //  AppDelegate.swift
 //  Sprung
@@ -51,7 +49,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let possibleAboutTitles = [
             "About \(appName)",
             "About Sprung",
-            "About Physics Cloud Résumé",
+            "About Physics Cloud Résumé"
         ]
         var aboutItemIndex = -1
         for title in possibleAboutTitles {
@@ -70,8 +68,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // Insert separator if needed
         if aboutSeparatorIndex < appMenu.numberOfItems &&
-            !appMenu.item(at: aboutSeparatorIndex)!.isSeparatorItem
-        {
+            !appMenu.item(at: aboutSeparatorIndex)!.isSeparatorItem {
             appMenu.insertItem(NSMenuItem.separator(), at: aboutSeparatorIndex)
         }
         // Add Applicant Profile menu item after separator
@@ -82,7 +79,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         profileMenuItem.target = self
         appMenu.insertItem(profileMenuItem, at: aboutSeparatorIndex + 1)
-        
+
         // Add Template Editor menu item
         let templateMenuItem = NSMenuItem(
             title: "Template Editor...",
@@ -104,7 +101,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor @objc func showSettingsWindow() {
         if settingsWindow == nil {
             let settingsView = SettingsView()
-            
+
             // Create hosting view with proper environment objects
             let hostingView: NSHostingView<AnyView>
             if let appEnvironment = self.appEnvironment,
@@ -150,7 +147,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     )
                 )
             }
-            
+
             settingsWindow = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 400, height: 200),
                 styleMask: [.titled, .closable],
@@ -222,17 +219,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             experienceEditorWindow = nil
         }
     }
-    
+
     @objc func showTemplateEditorWindow() {
         // If window exists but was closed, reset it
         if let window = templateEditorWindow, !window.isVisible {
             templateEditorWindow = nil
         }
-        
+
         if templateEditorWindow == nil {
             let editorView = TemplateEditorView()
             let hostingView: NSHostingView<AnyView>
-            
+
             if let modelContainer = self.modelContainer,
                let appEnvironment = self.appEnvironment {
                 hostingView = NSHostingView(rootView: AnyView(
@@ -250,7 +247,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 hostingView = NSHostingView(rootView: AnyView(editorView))
             }
-            
+
             templateEditorWindow = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 1200, height: 760),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -261,14 +258,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             templateEditorWindow?.contentView = hostingView
             templateEditorWindow?.isReleasedWhenClosed = false
             templateEditorWindow?.center()
-            
+
             // Set a minimum size for the window
             templateEditorWindow?.minSize = NSSize(width: 960, height: 640)
         }
-        
+
         // Bring the window to the front
         templateEditorWindow?.makeKeyAndOrderFront(nil)
-        
+
         // Activate the app to ensure focus
         NSApp.activate(ignoringOtherApps: true)
     }

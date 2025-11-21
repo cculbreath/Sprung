@@ -7,10 +7,10 @@
 import SwiftUI
 struct CustomTextEditor: View {
     @Binding var sourceContent: String
-    var placeholder: String? = nil
+    var placeholder: String?
     var minimumHeight: CGFloat = 130
     var maximumHeight: CGFloat? = 150
-    var onChange: (() -> Void)? = nil
+    var onChange: (() -> Void)?
     @FocusState private var isFocused: Bool
     var body: some View {
         ZStack(alignment: .topLeading) {

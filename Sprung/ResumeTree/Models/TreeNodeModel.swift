@@ -14,8 +14,8 @@ enum LeafStatus: String, Codable, Hashable {
     var value: String
     var includeInEditor: Bool = false
     var myIndex: Int = -1 // Represents order within its parent's children array
-    @Relationship(deleteRule: .cascade) var children: [TreeNode]? = nil
-    @Relationship(deleteRule: .cascade) var viewChildren: [TreeNode]? = nil
+    @Relationship(deleteRule: .cascade) var children: [TreeNode]?
+    @Relationship(deleteRule: .cascade) var viewChildren: [TreeNode]?
     weak var parent: TreeNode?
     var label: String { return resume.label(name) } // Assumes resume.label handles missing keys
     var editorLabel: String?
@@ -122,8 +122,7 @@ enum LeafStatus: String, Codable, Hashable {
         return child
     }
     static func traverseAndExportNodes(node: TreeNode, currentPath _: String = "")
-        -> [[String: Any]]
-    {
+        -> [[String: Any]] {
         var result: [[String: Any]] = []
         let newPath = node.buildTreePath() // Use the instance method
         // Export node if it's marked for AI replacement OR if it's a title node (even if not for replacement, LLM might need context)
@@ -138,7 +137,7 @@ enum LeafStatus: String, Codable, Hashable {
                     "value": node.name, // Exporting node.name as "value" for the LLM
                     "name": node.name, // Also include the actual name field for context
                     "tree_path": newPath, // Path to this node
-                    "isTitleNode": true, // Explicitly mark as title node
+                    "isTitleNode": true // Explicitly mark as title node
                 ]
                 result.append(titleNodeData)
             }
@@ -149,7 +148,7 @@ enum LeafStatus: String, Codable, Hashable {
                     "value": node.value, // Exporting node.value
                     "name": node.name, // Include name for context/reference
                     "tree_path": newPath,
-                    "isTitleNode": false, // Explicitly mark as not a title node
+                    "isTitleNode": false // Explicitly mark as not a title node
                 ]
                 result.append(valueNodeData)
             }

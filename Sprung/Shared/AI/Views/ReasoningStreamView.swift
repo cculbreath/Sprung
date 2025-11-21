@@ -10,12 +10,12 @@ struct ReasoningStreamView: View {
     @Binding var reasoningText: String
     @Binding var isStreaming: Bool
     let modelName: String
-    
+
     // Modal appearance
     var modalWidth: CGFloat = 700
     var modalHeight: CGFloat = 500
     var backgroundColor: Color = Color(NSColor.windowBackgroundColor)
-    
+
     var body: some View {
         ZStack {
             if isVisible {
@@ -27,7 +27,7 @@ struct ReasoningStreamView: View {
                             isVisible = false
                         }
                     }
-                
+
                 // Modal content
                 VStack(spacing: 0) {
                     // Header with gradient background
@@ -41,7 +41,7 @@ struct ReasoningStreamView: View {
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
-                        
+
                         HStack {
                             // Brain emoji with subtle animation
                             ZStack {
@@ -49,18 +49,18 @@ struct ReasoningStreamView: View {
                                     .fill(Color.white.opacity(0.9))
                                     .frame(width: 70, height: 70)
                                     .shadow(color: .blue.opacity(0.2), radius: 8, x: 0, y: 4)
-                                
+
                                 Text("🧠")
                                     .font(.system(size: 48))
                                     .rotationEffect(.degrees(-10))
                             }
                             .padding(.leading, 8)
-                            
+
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(modelName)
                                     .font(.system(size: 16, weight: .semibold, design: .rounded))
                                     .foregroundColor(.primary)
-                                
+
                                 HStack(spacing: 6) {
                                     Circle()
                                         .fill(Color.green)
@@ -73,16 +73,16 @@ struct ReasoningStreamView: View {
                                                 .opacity(isStreaming ? 0 : 1)
                                                 .animation(.easeInOut(duration: 1).repeatForever(autoreverses: false), value: isStreaming)
                                         )
-                                    
+
                                     Text("Reasoning in progress...")
                                         .font(.system(size: 14, weight: .medium))
                                         .foregroundColor(.secondary)
                                 }
                             }
                             .padding(.leading, 12)
-                            
+
                             Spacer()
-                            
+
                             // Close button with hover effect
                             Button(action: {
                                 withAnimation(.easeInOut(duration: 0.3)) {
@@ -93,7 +93,7 @@ struct ReasoningStreamView: View {
                                     Circle()
                                         .fill(Color.gray.opacity(0.1))
                                         .frame(width: 32, height: 32)
-                                    
+
                                     Image(systemName: "xmark")
                                         .font(.system(size: 14, weight: .semibold))
                                         .foregroundColor(.secondary)
@@ -107,7 +107,7 @@ struct ReasoningStreamView: View {
                         .padding(.horizontal, 16)
                     }
                     .frame(height: 100)
-                    
+
                     // Divider with gradient
                     Rectangle()
                         .fill(
@@ -122,7 +122,7 @@ struct ReasoningStreamView: View {
                             )
                         )
                         .frame(height: 1)
-                    
+
                     // Reasoning content with improved styling
                     ScrollViewReader { proxy in
                         ScrollView {
@@ -133,7 +133,7 @@ struct ReasoningStreamView: View {
                                             .font(.system(size: 40))
                                             .foregroundColor(.secondary.opacity(0.5))
                                             .symbolEffect(.pulse)
-                                        
+
                                         Text("AI is thinking...")
                                             .font(.system(.body, design: .rounded))
                                             .foregroundColor(.secondary)
@@ -153,7 +153,7 @@ struct ReasoningStreamView: View {
                                         .padding(.horizontal, 24)
                                         .padding(.vertical, 20)
                                         .id("bottom")
-                                    
+
                                     // Subtle typing indicator at bottom
                                     if isStreaming {
                                         HStack(spacing: 4) {
@@ -201,20 +201,20 @@ struct ReasoningStreamView: View {
             }
         }
     }
-    
+
     // MARK: - Markdown Parsing
     /// Parse basic markdown for bold text (**text**)
     private func parseBasicMarkdown(_ text: String) -> AttributedString {
         var attributedString = AttributedString(text)
-        
+
         // Find all **bold** patterns
         let pattern = "\\*\\*([^*]+)\\*\\*"
-        
+
         do {
             let regex = try NSRegularExpression(pattern: pattern)
             let nsString = text as NSString
             let matches = regex.matches(in: text, range: NSRange(location: 0, length: nsString.length))
-            
+
             // Process matches in reverse order to maintain correct ranges
             for match in matches.reversed() {
                 if let range = Range(match.range, in: text),
@@ -222,10 +222,10 @@ struct ReasoningStreamView: View {
                     // Get the text without asterisks (capture group 1)
                     if let contentRange = Range(match.range(at: 1), in: text) {
                         let boldText = String(text[contentRange])
-                        
+
                         // Replace the entire match with just the bold text
                         attributedString.replaceSubrange(attributedRange, with: AttributedString(boldText))
-                        
+
                         // Apply bold formatting to the replacement
                         if let newRange = attributedString.range(of: boldText, options: [], locale: nil) {
                             attributedString[newRange].font = .system(.body, design: .default).bold()
@@ -237,7 +237,7 @@ struct ReasoningStreamView: View {
             // If regex fails, return plain text
             Logger.debug("Failed to parse markdown: \(error)", category: .ui)
         }
-        
+
         return attributedString
     }
 }
@@ -250,12 +250,12 @@ class ReasoningStreamManager {
     var reasoningText: String = ""
     var modelName: String = ""
     var isStreaming: Bool = false
-    
+
     /// Stop the current stream
     func stopStream() {
         isStreaming = false
     }
-    
+
     /// Clear all reasoning state
     func clear() {
         reasoningText = ""
@@ -267,7 +267,7 @@ class ReasoningStreamManager {
         clear()
         isVisible = false
     }
-    
+
     /// Start a new reasoning session with model information
     func startReasoning(modelName: String) {
         self.modelName = modelName

@@ -2,13 +2,13 @@ import SwiftUI
 import UniformTypeIdentifiers
 struct EvidenceRequestView: View {
     let coordinator: OnboardingInterviewCoordinator
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Evidence Requests")
                 .font(.headline)
                 .foregroundStyle(.secondary)
-            
+
             if coordinator.ui.evidenceRequirements.isEmpty {
                 ContentUnavailableView(
                     "No Requests Yet",
@@ -39,9 +39,9 @@ struct EvidenceRequestView: View {
 struct EvidenceRequestCard: View {
     let req: EvidenceRequirement
     let coordinator: OnboardingInterviewCoordinator
-    
+
     @State private var isTargeted = false
-    
+
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             // Status Icon
@@ -49,12 +49,12 @@ struct EvidenceRequestCard: View {
                 .font(.title2)
                 .foregroundStyle(statusColor)
                 .frame(width: 32)
-            
+
             VStack(alignment: .leading, spacing: 4) {
                 Text(req.description)
                     .font(.body)
                     .fontWeight(.medium)
-                
+
                 HStack {
                     Text(req.category.rawValue.capitalized)
                         .font(.caption)
@@ -62,7 +62,7 @@ struct EvidenceRequestCard: View {
                         .padding(.vertical, 2)
                         .background(Color.secondary.opacity(0.1))
                         .cornerRadius(4)
-                    
+
                     if req.status == .fulfilled {
                         Text("Fulfilled")
                             .font(.caption)
@@ -74,7 +74,7 @@ struct EvidenceRequestCard: View {
                     }
                 }
             }
-            
+
             Spacer()
         }
         .padding(12)
@@ -86,10 +86,10 @@ struct EvidenceRequestCard: View {
         )
         .onDrop(of: [.fileURL], isTargeted: $isTargeted) { providers in
             guard req.status != .fulfilled else { return false }
-            
+
             guard let provider = providers.first else { return false }
-            
-            _ = provider.loadObject(ofClass: URL.self) { url, error in
+
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
                 if let url = url {
                     Task { @MainActor in
                         await coordinator.handleEvidenceUpload(url: url, requirementId: req.id)
@@ -99,7 +99,7 @@ struct EvidenceRequestCard: View {
             return true
         }
     }
-    
+
     var statusIcon: String {
         switch req.status {
         case .requested: return "doc.badge.arrow.up"
@@ -107,7 +107,7 @@ struct EvidenceRequestCard: View {
         case .skipped: return "xmark.circle"
         }
     }
-    
+
     var statusColor: Color {
         switch req.status {
         case .requested: return .blue

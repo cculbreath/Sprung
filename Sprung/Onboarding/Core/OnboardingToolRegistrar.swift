@@ -6,7 +6,7 @@ final class OnboardingToolRegistrar {
     private let toolRegistry: ToolRegistry
     private let dataStore: InterviewDataStore
     private let eventBus: EventCoordinator
-    
+
     init(
         coordinator: OnboardingInterviewCoordinator,
         toolRegistry: ToolRegistry,
@@ -18,14 +18,14 @@ final class OnboardingToolRegistrar {
         self.dataStore = dataStore
         self.eventBus = eventBus
     }
-    
+
     func registerTools(
         documentExtractionService: DocumentExtractionService,
         knowledgeCardAgent: KnowledgeCardAgent?,
         onModelAvailabilityIssue: @escaping (String) -> Void
     ) {
         guard let coordinator = coordinator else { return }
-        
+
         // Set up extraction progress handler
         Task {
             await documentExtractionService.setInvalidModelHandler { [weak self] modelId in
@@ -34,14 +34,14 @@ final class OnboardingToolRegistrar {
                     // Notify coordinator (or UI state directly if we had access)
                     // For now, we'll use the callback
                     onModelAvailabilityIssue("Your selected model (\(modelId)) is not available. Choose another model in Settings.")
-                    
+
                     // We might want to call a method on coordinator to handle this notification
                     // coordinator.notifyInvalidModel(id: modelId) 
                     // (Assuming this method exists or will be exposed)
                 }
             }
         }
-        
+
         // Register all tools with coordinator reference
         toolRegistry.register(GetUserOptionTool(coordinator: coordinator))
         toolRegistry.register(GetUserUploadTool(coordinator: coordinator))
@@ -64,11 +64,11 @@ final class OnboardingToolRegistrar {
         toolRegistry.register(GetValidatedApplicantProfileTool(coordinator: coordinator))
         toolRegistry.register(ConfigureEnabledSectionsTool(coordinator: coordinator))
         toolRegistry.register(AgentReadyTool())
-        
+
         if let agent = knowledgeCardAgent {
             toolRegistry.register(GenerateKnowledgeCardTool(agentProvider: { agent }))
         }
-        
+
         Logger.info("✅ Registered \(toolRegistry.allTools().count) tools", category: .ai)
     }
 }

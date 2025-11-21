@@ -13,9 +13,9 @@ struct NewAppSheetView: View {
     @State private var delayed: Bool = false
     @State private var verydelayed: Bool = false
     @State private var showCloudflareChallenge: Bool = false
-    @State private var challengeURL: URL? = nil
+    @State private var challengeURL: URL?
     @State private var baddomain: Bool = false
-    @State private var errorMessage: String? = nil
+    @State private var errorMessage: String?
     @State private var showError: Bool = false
     @State private var showLinkedInLogin: Bool = false
     @State private var isProcessingJob: Bool = false
@@ -86,23 +86,23 @@ struct NewAppSheetView: View {
                         Text("Add New Job Application")
                             .font(.title2)
                             .fontWeight(.semibold)
-                        
+
                         Text("Import job details from LinkedIn, Indeed, or Apple")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                     }
-                    
+
                     // LinkedIn session status
                     LinkedInSessionStatusView(sessionManager: linkedInSessionManager)
-                    
+
                     // URL input section
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Job URL")
                             .font(.subheadline)
                             .fontWeight(.medium)
-                        
+
                         TextField(
-                            "https://www.linkedin.com/jobs/view/4261198037", 
+                            "https://www.linkedin.com/jobs/view/4261198037",
                             text: $urlText
                         )
                         .textFieldStyle(.roundedBorder)
@@ -118,9 +118,9 @@ struct NewAppSheetView: View {
                             isPresented = false
                         }
                         .buttonStyle(.bordered)
-                        
+
                         Spacer()
-                        
+
                         Button("Import Job") {
                             Task {
                                 await handleNewApp()
@@ -140,8 +140,7 @@ struct NewAppSheetView: View {
                     Task {
                         isLoading = true
                         if let urlString = challengeURL.absoluteString as String?,
-                           let _ = await JobApp.importFromIndeed(urlString: urlString, jobAppStore: jobAppStore)
-                        {
+                           let _ = await JobApp.importFromIndeed(urlString: urlString, jobAppStore: jobAppStore) {
                             isLoading = false
                             isPresented = false
                         } else {
@@ -227,25 +226,25 @@ struct NewAppSheetView: View {
             showError = true
         }
     }
-    
+
     private func handleLinkedInJob(url: URL) async {
         // Prevent duplicate processing
         guard !isProcessingJob else {
             Logger.debug("🔄 [NewAppSheetView] Already processing LinkedIn job, ignoring duplicate call")
             return
         }
-        
+
         await MainActor.run {
             isProcessingJob = true
             isLoading = true
         }
-        
+
         defer {
             Task { @MainActor in
                 isProcessingJob = false
             }
         }
-        
+
         // Check if user is logged in to LinkedIn
         if !linkedInSessionManager.isLoggedIn {
             await MainActor.run {
@@ -254,7 +253,7 @@ struct NewAppSheetView: View {
             }
             return
         }
-        
+
         // Try direct LinkedIn extraction first
         if await JobApp.extractLinkedInJobDetails(
             from: url.absoluteString,
@@ -267,7 +266,7 @@ struct NewAppSheetView: View {
             }
             return
         }
-        
+
         // Fallback to ScrapingDog if a key is configured
         guard let scrapingDogApiKey = APIKeyManager.get(.scrapingDog),
               !scrapingDogApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
@@ -292,11 +291,10 @@ struct NewAppSheetView: View {
             config.timeoutIntervalForRequest = 60.0
             config.timeoutIntervalForResource = 60.0
             let session = URLSession(configuration: config)
-            
+
             let (data, response) = try await session.data(from: url)
             if let httpResponse = response as? HTTPURLResponse,
-               httpResponse.statusCode != 200
-            {
+               httpResponse.statusCode != 200 {
                 // Handle HTTP error (non-200 status code)
                 Logger.error("🚨 ScrapingDog HTTP error: \(httpResponse.statusCode)")
                 await MainActor.run {

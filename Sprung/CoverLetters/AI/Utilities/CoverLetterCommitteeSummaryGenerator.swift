@@ -13,11 +13,11 @@ enum CoverLetterCommitteeSummaryError: LocalizedError {
 }
 class CoverLetterCommitteeSummaryGenerator {
     private var llmFacade: LLMFacade?
-    
+
     func configure(llmFacade: LLMFacade) {
         self.llmFacade = llmFacade
     }
-    
+
     @MainActor
     func generateSummary(
         coverLetters: [CoverLetter],
@@ -29,12 +29,12 @@ class CoverLetterCommitteeSummaryGenerator {
         preferredModelId: String? = nil
     ) async throws -> String {
         Logger.info("🧠 Generating reasoning summary...")
-        
+
         var letterAnalyses: [LetterAnalysis] = []
-        
+
         for letter in coverLetters {
             let letterAnalysis: LetterAnalysis
-            
+
             if selectedVotingScheme == .firstPastThePost {
                 let votes = voteTally[letter.id] ?? 0
                 let modelComments = modelReasonings.compactMap { reasoning -> String? in
@@ -44,7 +44,7 @@ class CoverLetterCommitteeSummaryGenerator {
                     }
                     return nil
                 }
-                
+
                 // Track individual votes for first-past-the-post
                 let modelVotes = modelReasonings.compactMap { reasoning -> ModelVote? in
                     if let bestUuid = reasoning.response.bestLetterUuid,
@@ -56,7 +56,7 @@ class CoverLetterCommitteeSummaryGenerator {
                     }
                     return nil
                 }
-                
+
                 letterAnalysis = LetterAnalysis(
                     letterId: letter.id.uuidString,
                     summaryOfModelAnalysis: modelComments.isEmpty ? "No specific comments from voting models." : modelComments.joined(separator: " | "),
@@ -67,7 +67,7 @@ class CoverLetterCommitteeSummaryGenerator {
                 var pointsFromModels: [ModelPointsAwarded] = []
                 var modelComments: [String] = []
                 var modelVotes: [ModelVote] = []
-                
+
                 for reasoning in modelReasonings {
                     if let scoreAllocations = reasoning.response.scoreAllocations,
                        let allocation = scoreAllocations.first(where: { $0.letterUuid == letter.id.uuidString }) {
@@ -77,7 +77,7 @@ class CoverLetterCommitteeSummaryGenerator {
                             comment += " (Score reasoning: \(allocationReasoning))"
                         }
                         modelComments.append(comment)
-                        
+
                         // Track individual votes for score voting (points allocation)
                         modelVotes.append(ModelVote(
                             model: reasoning.model,
@@ -85,7 +85,7 @@ class CoverLetterCommitteeSummaryGenerator {
                         ))
                     }
                 }
-                
+
                 letterAnalysis = LetterAnalysis(
                     letterId: letter.id.uuidString,
                     summaryOfModelAnalysis: modelComments.isEmpty ? "No specific analysis provided." : modelComments.joined(separator: " | "),
@@ -93,12 +93,12 @@ class CoverLetterCommitteeSummaryGenerator {
                     modelVotes: modelVotes
                 )
             }
-            
+
             letterAnalyses.append(letterAnalysis)
         }
-        
-        let _ = CommitteeSummaryResponse(letterAnalyses: letterAnalyses)
-        
+
+        _ = CommitteeSummaryResponse(letterAnalyses: letterAnalyses)
+
         let summaryPrompt = buildSummaryPrompt(
             jobApp: jobApp,
             modelReasonings: modelReasonings,
@@ -106,7 +106,7 @@ class CoverLetterCommitteeSummaryGenerator {
             scoreTally: scoreTally,
             selectedVotingScheme: selectedVotingScheme
         )
-        
+
         let jsonSchema = createJSONSchema()
         guard let llm = llmFacade else {
             throw CoverLetterCommitteeSummaryError.facadeUnavailable
@@ -120,7 +120,7 @@ class CoverLetterCommitteeSummaryGenerator {
                 jsonSchema: jsonSchema
         )
         Logger.info("🧠 Analysis summary generated using model \(summaryModelId)")
-        
+
         Logger.debug("🔍 Processing \(summaryResponse.letterAnalyses.count) letter analyses")
         for analysis in summaryResponse.letterAnalyses {
             Logger.debug("🔍 Processing analysis for letterId: \(analysis.letterId)")
@@ -136,7 +136,7 @@ class CoverLetterCommitteeSummaryGenerator {
                 Logger.debug("❌ Could not find letter for ID: \(analysis.letterId)")
             }
         }
-        
+
         var displaySummary = "Committee Analysis Summary:\n\n"
         Logger.debug("🔍 Building display summary from \(summaryResponse.letterAnalyses.count) analyses")
         for analysis in summaryResponse.letterAnalyses {
@@ -151,14 +151,14 @@ class CoverLetterCommitteeSummaryGenerator {
                 Logger.debug("🔍 Available letter IDs: \(availableIds)")
             }
         }
-        
+
         Logger.info("✅ Analysis summary generation completed")
         Logger.debug("🔍 Summary length: \(displaySummary.count) characters")
         Logger.debug("🔍 Summary preview: \(String(displaySummary.prefix(100)))...")
-        
+
         return displaySummary
     }
-    
+
     func createFallbackSummary(
         coverLetter: CoverLetter,
         coverLetters: [CoverLetter],
@@ -169,7 +169,7 @@ class CoverLetterCommitteeSummaryGenerator {
     ) -> String {
         var fallbackSummary = "Committee Analysis Summary:\n\n"
         fallbackSummary += "**Voting Results:**\n"
-        
+
         if selectedVotingScheme == .firstPastThePost {
             for (letterId, votes) in voteTally.sorted(by: { $0.value > $1.value }) {
                 if let letter = coverLetters.first(where: { $0.id == letterId }) {
@@ -183,7 +183,7 @@ class CoverLetterCommitteeSummaryGenerator {
                 }
             }
         }
-        
+
         fallbackSummary += "\n**Model Verdicts:**\n"
         for reasoning in modelReasonings {
             if let jobApp = coverLetter.jobApp {
@@ -192,12 +192,12 @@ class CoverLetterCommitteeSummaryGenerator {
                 fallbackSummary += "• **\(reasoning.model)**: \(reasoning.response.verdict)\n"
             }
         }
-        
+
         fallbackSummary += "\n*Note: Detailed analysis generation failed, showing basic voting summary.*"
-        
+
         return fallbackSummary
     }
-    
+
     // MARK: - Private Methods
     private func buildSummaryPrompt(
         jobApp: JobApp,
@@ -207,19 +207,19 @@ class CoverLetterCommitteeSummaryGenerator {
         selectedVotingScheme: VotingScheme
     ) -> String {
         var summaryPrompt = "You are analyzing the reasoning from multiple AI models that evaluated cover letters for a \(jobApp.jobPosition) position at \(jobApp.companyName). "
-        
+
         if selectedVotingScheme == .firstPastThePost {
             summaryPrompt += "Each model voted for their single preferred cover letter using a first-past-the-post voting system. "
         } else {
             summaryPrompt += "Each model allocated 20 points among all cover letters using a score voting system. "
         }
-        
+
         summaryPrompt += "Based on the voting results and model reasoning provided, create a structured analysis for each cover letter that includes:\n"
         summaryPrompt += "1. A comprehensive summary of what the models said about this specific letter\n"
         summaryPrompt += "2. The points/votes awarded by each model\n"
         summaryPrompt += "3. Key themes in the model feedback\n\n"
         summaryPrompt += "Here are the model reasonings and vote allocations:\n\n"
-        
+
         for reasoning in modelReasonings {
             if selectedVotingScheme == .firstPastThePost {
                 let letterUuid = reasoning.response.bestLetterUuid ?? "Unknown"
@@ -239,7 +239,7 @@ class CoverLetterCommitteeSummaryGenerator {
             summaryPrompt += "Analysis: \(reasoning.response.strengthAndVoiceAnalysis)\n"
             summaryPrompt += "Verdict: \(reasoning.response.verdict)\n\n"
         }
-        
+
         if selectedVotingScheme == .firstPastThePost {
             summaryPrompt += "Final vote tally:\n"
             for (letterId, votes) in voteTally {
@@ -251,7 +251,7 @@ class CoverLetterCommitteeSummaryGenerator {
                 summaryPrompt += "- \(letterId.uuidString): \(score) points\n"
             }
         }
-        
+
         summaryPrompt += "\n\nProvide your analysis as a JSON response following this structure:\n"
         summaryPrompt += "```json\n"
         summaryPrompt += "{\n"
@@ -268,10 +268,10 @@ class CoverLetterCommitteeSummaryGenerator {
         summaryPrompt += "  ]\n"
         summaryPrompt += "}\n"
         summaryPrompt += "```"
-        
+
         return summaryPrompt
     }
-    
+
     private func createJSONSchema() -> JSONSchema {
         return JSONSchema(
             type: .object,

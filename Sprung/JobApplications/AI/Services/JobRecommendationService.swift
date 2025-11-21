@@ -9,11 +9,11 @@ import Foundation
 /// Replaces JobRecommendationProvider with cleaner LLMService integration
 @MainActor
 class JobRecommendationService {
-    
+
     // MARK: - Dependencies
     private let llm: LLMFacade
     private var resumeContextCache: [UUID: String] = [:]
-    
+
     // MARK: - Configuration
     private let systemPrompt = """
     You are an expert career advisor specializing in job application prioritization. Your task is to analyze a list of job applications and recommend the one that best matches the candidate's qualifications and career goals. You will be provided with job descriptions, the candidate's resume, and additional background information. Choose the job that offers the best match in terms of skills, experience, and potential career growth.
@@ -21,11 +21,11 @@ class JobRecommendationService {
     IMPORTANT: Output ONLY the JSON object with the fields "recommendedJobId" and "reason". Do not include any additional commentary, explanation, or text outside the JSON.
     """
     private let maxResumeContextBytes = 120_000
-    
+
     init(llmFacade: LLMFacade) {
         self.llm = llmFacade
     }
-    
+
     // MARK: - Public Interface
     /// Fetch job recommendation using LLMService
     /// - Parameters:
@@ -40,10 +40,10 @@ class JobRecommendationService {
         includeResumeBackground: Bool = true,
         includeCoverLetterBackground: Bool = false
     ) async throws -> (UUID, String) {
-        
+
         // Find the most recently edited resume from job apps with priority status
         let resume = findMostRecentResume(from: jobApps)
-        
+
         // If no resume found, check if we have background information to proceed
         if resume == nil {
             if !includeResumeBackground && !includeCoverLetterBackground {
@@ -56,29 +56,29 @@ class JobRecommendationService {
                 throw JobRecommendationError.noResumeOrBackgroundInfo
             }
         }
-        
+
         let newJobApps = jobApps.filter { $0.status == .new }
         guard !newJobApps.isEmpty else {
             throw JobRecommendationError.noNewJobApplications
         }
-        
+
         // Note: Capability gating to be centralized in facade in a later slice
-        
+
         // Build the recommendation prompt
         let prompt = buildPrompt(
-            newJobApps: newJobApps, 
-            resume: resume, 
+            newJobApps: newJobApps,
+            resume: resume,
             includeResumeBackground: includeResumeBackground,
             includeCoverLetterBackground: includeCoverLetterBackground
         )
-        
+
         // Debug logging if enabled
         if UserDefaults.standard.bool(forKey: "saveDebugPrompts") {
             saveDebugPrompt(content: prompt, fileName: "jobRecommendationPrompt.txt")
         }
-        
+
         Logger.debug("🎯 Requesting job recommendation with \(newJobApps.count) new jobs")
-        
+
         // Execute structured request
         let recommendation: JobRecommendation = try await llm.executeStructured(
             prompt: "\(systemPrompt)\n\n\(prompt)",
@@ -86,28 +86,28 @@ class JobRecommendationService {
             as: JobRecommendation.self,
             temperature: nil
         )
-        
+
         // Validate response
         guard recommendation.validate() else {
             throw JobRecommendationError.invalidResponse("Failed validation")
         }
-        
+
         guard let uuid = UUID(uuidString: recommendation.recommendedJobId) else {
             throw JobRecommendationError.invalidUUID(recommendation.recommendedJobId)
         }
-        
+
         Logger.debug("✅ Job recommendation successful: \(recommendation.recommendedJobId)")
         return (uuid, recommendation.reason)
     }
-    
+
     // MARK: - Private Helpers
     /// Find the most recently edited resume based on job app status priority
     private func findMostRecentResume(from jobApps: [JobApp]) -> Resume? {
         // Status priority: "interview pending" > "submitted" > "rejected"
         let statusPriority: [Statuses] = [.interview, .submitted, .rejected]
-        
+
         var candidateResumes: [(Resume, Date, Int)] = []
-        
+
         for jobApp in jobApps {
             for resume in jobApp.resumes {
                 let lastModified = resume.dateCreated
@@ -115,7 +115,7 @@ class JobRecommendationService {
                 candidateResumes.append((resume, lastModified, priorityScore))
             }
         }
-        
+
         // Sort by priority first, then by most recent modification date
         candidateResumes.sort { lhs, rhs in
             if lhs.2 != rhs.2 {
@@ -123,23 +123,23 @@ class JobRecommendationService {
             }
             return lhs.1 > rhs.1  // More recent date
         }
-        
+
         return candidateResumes.first?.0
     }
-    
+
     /// Build the recommendation prompt with job listings and resume data
     private func buildPrompt(
-        newJobApps: [JobApp], 
-        resume: Resume?, 
+        newJobApps: [JobApp],
+        resume: Resume?,
         includeResumeBackground: Bool,
         includeCoverLetterBackground: Bool
     ) -> String {
         let resumeText = resume.flatMap { resumeContextString(for: $0) } ?? ""
-        
+
         // Build background documentation
         let backgroundDocs = includeResumeBackground ? buildBackgroundDocs(from: resume) : ""
         let coverLetterBackgroundDocs = includeCoverLetterBackground ? buildCoverLetterBackgroundDocs(from: newJobApps) : ""
-        
+
         // Create JSON array of job listings
         var jobsArray: [[String: Any]] = []
         for app in newJobApps {
@@ -148,11 +148,11 @@ class JobRecommendationService {
                 "position": app.jobPosition,
                 "company": app.companyName,
                 "location": app.jobLocation,
-                "description": app.jobDescription,
+                "description": app.jobDescription
             ]
             jobsArray.append(jobDict)
         }
-        
+
         // Convert to JSON string
         let jsonString: String
         if let jsonData = try? JSONSerialization.data(withJSONObject: jobsArray, options: [.prettyPrinted]) {
@@ -160,7 +160,7 @@ class JobRecommendationService {
         } else {
             jsonString = "[]"
         }
-        
+
         let prompt = """
         TASK:
         Analyze the candidate's information and the list of new job applications. Recommend the ONE job that is the best match for the candidate's qualifications and career goals.
@@ -191,10 +191,10 @@ class JobRecommendationService {
           "reason": "This job aligns with the candidate's experience in..."
         }
         """
-        
+
         return prompt
     }
-    
+
     private func resumeContextString(for resume: Resume) -> String {
         if let cached = resumeContextCache[resume.id] {
             return cached
@@ -249,11 +249,11 @@ class JobRecommendationService {
             return enabledSources.map { $0.name + ":\n" + $0.content + "\n\n" }.joined()
         }
     }
-    
+
     /// Build cover letter background facts from job applications
     private func buildCoverLetterBackgroundDocs(from jobApps: [JobApp]) -> String {
         var backgroundFacts: [String] = []
-        
+
         for jobApp in jobApps {
             for coverLetter in jobApp.coverLetters {
                 let facts = coverLetter.backgroundItemsString
@@ -262,10 +262,10 @@ class JobRecommendationService {
                 }
             }
         }
-        
+
         return backgroundFacts.joined(separator: "\n\n")
     }
-    
+
     /// Check if job apps have resume background content
     private func hasResumeBackgroundContent(from jobApps: [JobApp]) -> Bool {
         for jobApp in jobApps {
@@ -277,7 +277,7 @@ class JobRecommendationService {
         }
         return false
     }
-    
+
     /// Check if job apps have cover letter background content
     private func hasCoverLetterBackgroundContent(from jobApps: [JobApp]) -> Bool {
         for jobApp in jobApps {
@@ -289,7 +289,7 @@ class JobRecommendationService {
         }
         return false
     }
-    
+
     /// Save debug prompt to file if debug mode is enabled
     private func saveDebugPrompt(content: String, fileName: String) {
         let fileManager = FileManager.default
@@ -321,7 +321,7 @@ enum JobRecommendationError: LocalizedError {
     case noResumeOrBackgroundInfo
     case invalidResponse(String)
     case invalidUUID(String)
-    
+
     var errorDescription: String? {
         switch self {
         case .noResumeAvailable:
@@ -341,7 +341,7 @@ enum JobRecommendationError: LocalizedError {
 struct JobRecommendation: Codable {
     let recommendedJobId: String
     let reason: String
-    
+
     /// Validate that the recommendedJobId is a valid UUID
     func validate() -> Bool {
         return UUID(uuidString: recommendedJobId) != nil

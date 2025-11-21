@@ -86,7 +86,7 @@ final class CoverLetterStore: SwiftDataStore {
             saveContext() // Save the deletion
         }
     }
-    
+
     /// Deletes all ungenerated draft cover letters to prevent accumulation of blank letters
     func deleteUngeneratedDrafts() {
         do {
@@ -97,7 +97,7 @@ final class CoverLetterStore: SwiftDataStore {
                 }
             )
             let ungeneratedDrafts = try modelContext.fetch(descriptor)
-            
+
             // Delete each ungenerated draft
             for letter in ungeneratedDrafts {
                 if let jobApp = letter.jobApp {
@@ -107,12 +107,12 @@ final class CoverLetterStore: SwiftDataStore {
                 }
                 modelContext.delete(letter)
             }
-            
+
             if !ungeneratedDrafts.isEmpty {
                 Logger.debug("🧹 Cleaned up \(ungeneratedDrafts.count) ungenerated draft letters")
                 saveContext()
             }
-            
+
         } catch {
             Logger.error("Failed to cleanup ungenerated drafts: \(error.localizedDescription)")
         }

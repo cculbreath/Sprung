@@ -54,7 +54,7 @@ extension JobApp {
                 "You have been blocked",
                 "Blocked - Indeed.com",
                 "Security Check - Indeed.com",
-                "Additional Verification Required",
+                "Additional Verification Required"
             ]
             if cfIndicators.contains(where: { htmlContent.contains($0) }) {
                 // Refresh clearance cookie via interactive challenge (if headless fails)

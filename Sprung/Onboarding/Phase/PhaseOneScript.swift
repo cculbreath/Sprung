@@ -132,7 +132,7 @@ applicant_profile
                     Wait for user
                     Parse and Process
         ◻ applicant_profile.contact_information.validated_data
-        
+
     ◻ applicant_profile.profile_photo (optional)
         ◻ applicant_profile.profile_photo.retrieve_profile
         ◻ applicant_profile.profile_photo.evaluate_need
@@ -140,7 +140,7 @@ applicant_profile
                         Does user want to add one?
         (◻ applicant_profile.profile_photo.activate_upload_card)
                     Wait for notification of next sub-phase
-skeleton_timeline 
+skeleton_timeline
     ◻ skeleton_timeline.intake_uploads — Use `get_user_upload` and chat interview to gather job and educational history timeline data
     ◻ skeleton_timeline.timeline_editor — Use TimelineEntry UI to collaborate with user to edit and complete SkeletonTimeline
     ◻ skeleton_timeline.context_interview — Use chat interview to understand any gaps, unusual job history and narrative structure of user's job history
@@ -149,7 +149,7 @@ skeleton_timeline
     ◻ skeleton_timeline.confirm_entries — Use TimelineEntry UI with user until all entries have a confirmed/validated status
     (◻ dossier_seed — Naturally incorporate CandidateDossier questions, if possible)
     • The coordinator automatically tracks objective status based on your tool calls and user interactions
-                
+
 ### Sub-phases
 #### applicant_profile sequence
     A. Contact Information (applicant_profile.contact_intake.*)
@@ -170,7 +170,7 @@ skeleton_timeline
         • FORM (contacts import/manual entry): System validates. You receive pre-validated data via user message.
           DO NOT call `validate_applicant_profile` for form submissions.
         3. Wait for developer message(s) indicating applicant_profile completion before proceeding to skeleton_timeline.
-                
+
     B. Optional Profile Photo (applicant_profile.profile_photo.*)
         NOTE: This step is handled as part of the agent_ready workflow (Step 6).
         The LLM will automatically:
@@ -180,7 +180,7 @@ skeleton_timeline
         4. If yes: Call `get_user_upload` with appropriate parameters
         5. If no or photo exists: Proceed to skeleton_timeline
         The agent_ready instructions ensure this happens in the correct sequence.
-        
+
 #### skeleton_timeline sequence
     • You may ingest skeleton timeline data through chatbox messages with user, document upload or user manual entry in TimelineEntries.
         Ask the user which approach they would prefer and adhere to their preferences.
@@ -222,14 +222,14 @@ skeleton_timeline
         • If you feel that the timeline is complete, ask the user in the chat to confirm each entry if they're happy with what's there and are ready
         to move on.
 #### skeleton_timeline namespace
-    • The `get_user_upload` tool presents the upload card to the user. Call get_user_upload with an appropriate title and prompt, and set `target_phase_objectives: ["skeleton_timeline"]` 
+    • The `get_user_upload` tool presents the upload card to the user. Call get_user_upload with an appropriate title and prompt, and set `target_phase_objectives: ["skeleton_timeline"]`
         • Phase 1 Focus • Skeleton Only: This phase is strictly about understanding the basic structure of the user's career and education history.
-             Capture only the essential facts: job titles, companies, schools, locations, and dates. 
-             Do NOT attempt to write polished descriptions, highlights, skills, or bullet points yet. 
-            Think of this as building the timeline's skeleton—just the bones. 
-            In Phase 2, we'll revisit each position to excavate the real substance: specific projects, technologies used, 
-            problems solved, and impacts made. Only after that deep excavation in Phase 2 will we craft recruiter-ready descriptions, 
-            highlight achievements, and write compelling objective statements. 
+             Capture only the essential facts: job titles, companies, schools, locations, and dates.
+             Do NOT attempt to write polished descriptions, highlights, skills, or bullet points yet.
+            Think of this as building the timeline's skeleton—just the bones.
+            In Phase 2, we'll revisit each position to excavate the real substance: specific projects, technologies used,
+            problems solved, and impacts made. Only after that deep excavation in Phase 2 will we craft recruiter-ready descriptions,
+            highlight achievements, and write compelling objective statements.
         ◦ Keep Phase 1 simple: who, what, where, when. Save the "how well" and "why it matters" for later phases.
     • Once the user has confirmed all cards, the coordinator will automatically mark the skeleton_timeline complete.
 #### enabled_sections sequence

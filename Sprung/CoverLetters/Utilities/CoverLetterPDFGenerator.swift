@@ -55,7 +55,7 @@ enum CoverLetterPDFGenerator {
         // First check if we have "best regards" or similar closing text
         let commonClosings = [
             "Best Regards", "Best regards", "Sincerely", "Thank you,",
-            "Thank you for your consideration,", "Regards,", "Best,", "Yours,",
+            "Thank you for your consideration,", "Regards,", "Best,", "Yours,"
         ]
         let lines = content.components(separatedBy: .newlines)
         // Find the start and end indices
@@ -136,7 +136,7 @@ enum CoverLetterPDFGenerator {
     private static func containsAddressKeyword(_ text: String) -> Bool {
         let keywords = [
             "street", "st.", "avenue", "ave", "road", "rd.", "boulevard", "blvd",
-            "suite", "apt", "lane", "ln.", "drive", "dr.", "city", "state", "zip",
+            "suite", "apt", "lane", "ln.", "drive", "dr.", "city", "state", "zip"
         ]
         let lowercased = text.lowercased()
         return keywords.contains(where: { lowercased.contains($0) })
@@ -155,7 +155,7 @@ enum CoverLetterPDFGenerator {
         } else {
             let futuraPaths = [
                 "/Library/Fonts/futuralight.ttf",
-                "/System/Library/Fonts/Supplemental/Futura.ttc",
+                "/System/Library/Fonts/Supplemental/Futura.ttc"
             ]
             for path in futuraPaths {
                 if FileManager.default.fileExists(atPath: path) {
@@ -186,7 +186,7 @@ enum CoverLetterPDFGenerator {
             let testFont = NSFont(name: "Futura Light", size: fontSize) ?? NSFont.systemFont(ofSize: fontSize)
             let testAttributes: [NSAttributedString.Key: Any] = [
                 .font: testFont,
-                .paragraphStyle: paragraphStyleTest,
+                .paragraphStyle: paragraphStyleTest
             ]
             let testString = NSMutableAttributedString(string: text, attributes: testAttributes)
             let framesetter = CTFramesetterCreateWithAttributedString(testString as CFAttributedString)
@@ -260,13 +260,13 @@ enum CoverLetterPDFGenerator {
         let attributes: [NSAttributedString.Key: Any] = [
             .font: finalFont,
             .foregroundColor: NSColor.black,
-            .paragraphStyle: paragraphStyle,
+            .paragraphStyle: paragraphStyle
         ]
         let urlAttributes: [NSAttributedString.Key: Any] = [
             .font: finalFont,
             .foregroundColor: NSColor.black,
             .underlineStyle: NSUnderlineStyle.single.rawValue,
-            .underlineColor: NSColor.black,
+            .underlineColor: NSColor.black
         ]
         let attributedString = NSMutableAttributedString(string: text, attributes: attributes)
         let fullRange = NSRange(location: 0, length: attributedString.length)
@@ -274,8 +274,7 @@ enum CoverLetterPDFGenerator {
         let emailPattern = #"[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,64}"#
         let urlPattern = #"(https?://)?(www\.)?[A-Za-z0-9.-]+\.(com|org|net|edu|io|dev)"#
         if let emailRegex = try? NSRegularExpression(pattern: emailPattern),
-           let urlRegex = try? NSRegularExpression(pattern: urlPattern)
-        {
+           let urlRegex = try? NSRegularExpression(pattern: urlPattern) {
             emailRegex.enumerateMatches(in: attributedString.string, options: [], range: fullRange) { match, _, _ in
                 if let match = match {
                     let email = (attributedString.string as NSString).substring(with: match.range)
@@ -337,7 +336,7 @@ enum CoverLetterPDFGenerator {
         let data = NSMutableData()
         let pdfMetaData = [
             kCGPDFContextCreator: "Sprung" as CFString,
-            kCGPDFContextTitle: "Cover Letter" as CFString,
+            kCGPDFContextTitle: "Cover Letter" as CFString
         ] as CFDictionary
         var mediaBoxCopy = pageRect
         guard let pdfContext = CGContext(consumer: CGDataConsumer(data: data as CFMutableData)!,
@@ -379,7 +378,7 @@ enum CoverLetterPDFGenerator {
                     "Regards,", "Regards",
                     "Warm Regards,", "Warm regards,", "Warm Regards", "Warm regards",
                     "Yours truly,", "Yours Truly,", "Yours truly", "Yours Truly",
-                    "Respectfully,", "Respectfully",
+                    "Respectfully,", "Respectfully"
                 ]
                 let nameMarker = applicantName
                 // Get all lines from the frame for proper positioning
@@ -462,8 +461,7 @@ enum CoverLetterPDFGenerator {
                 let hasContactLines = contactInfoLineIndex != nil || emailLineIndex != nil
                 // Refine positioning if we have both regards and name lines
                 if let regardsIdx = regardsLineIndex, let nameIdx = nameLineIndex,
-                   regardsIdx < origins.count, nameIdx < origins.count
-                {
+                   regardsIdx < origins.count, nameIdx < origins.count {
                     let regardsY = origins[regardsIdx].y
                     if nameIdx == regardsIdx + 1 {
                         adjustedSignatureY = regardsY + 5

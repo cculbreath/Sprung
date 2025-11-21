@@ -233,7 +233,7 @@ actor ObjectiveStore: OnboardingEventEmitter {
         Logger.info("✅ Objective \(id): \(oldStatus) → \(status)", category: .ai)
         // Auto-completion: If this objective is completed/skipped and has a parent,
         // check if all siblings are done and auto-complete parent
-        if (status == .completed || status == .skipped), let parentId = objective.parentId {
+        if status == .completed || status == .skipped, let parentId = objective.parentId {
             await checkAndAutoCompleteParent(parentId)
         }
     }

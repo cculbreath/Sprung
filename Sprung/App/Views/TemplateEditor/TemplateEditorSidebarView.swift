@@ -20,7 +20,7 @@ struct TemplateEditorSidebarView: View {
     @Binding var renamingTemplate: String?
     @Binding var tempTemplateName: String
     let textFilters: [TextFilterInfo]
-    
+
     @FocusState private var isRenamingFocused: Bool
     var body: some View {
         VStack(spacing: 0) {
@@ -100,7 +100,7 @@ struct TemplateEditorSidebarView: View {
                             startRenaming(template)
                         }
                 }
-                
+
                 if templateMatchesCurrentResume(template) {
                     Text("Current resume")
                         .font(.caption2)
@@ -137,25 +137,25 @@ struct TemplateEditorSidebarView: View {
             .disabled(availableTemplates.count <= 1)
         }
     }
-    
+
     private func startRenaming(_ template: String) {
         renamingTemplate = template
         tempTemplateName = templateDisplayName(template)
     }
-    
+
     private func finishRenaming() {
         guard let template = renamingTemplate else { return }
         let trimmedName = tempTemplateName.trimmingCharacters(in: .whitespacesAndNewlines)
-        
+
         if !trimmedName.isEmpty && trimmedName != templateDisplayName(template) {
             onRenameTemplate(template, trimmedName)
         }
-        
+
         renamingTemplate = nil
         tempTemplateName = ""
         isRenamingFocused = false
     }
-    
+
     private func cancelRenaming() {
         renamingTemplate = nil
         tempTemplateName = ""

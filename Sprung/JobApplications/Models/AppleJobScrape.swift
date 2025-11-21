@@ -25,15 +25,15 @@ extension JobApp {
                     let unescapedJson = escapedJson
                         .replacingOccurrences(of: "\\\"", with: "\"")
                         .replacingOccurrences(of: "\\\\", with: "\\")
-                    
+
                     if let jsonData = unescapedJson.data(using: .utf8),
                        let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
                        let loaderData = json["loaderData"] as? [String: Any],
                        let detailsData = loaderData["routes/external.jobdetails.$positionId"] as? [String: Any] {
-                        
+
                         // Extract data from JSON
                         jobApp.jobPosition = (detailsData["postingTitle"] as? String ?? "").decodingHTMLEntities()
-                        
+
                         if let localeLocation = detailsData["localeLocation"] as? [[String: Any]],
                            let firstLocation = localeLocation.first {
                             let city = firstLocation["city"] as? String ?? ""
@@ -44,10 +44,10 @@ extension JobApp {
                                 .map { $0.decodingHTMLEntities() }
                                 .joined(separator: ", ")
                         }
-                        
+
                         jobApp.companyName = "Apple"
                         jobApp.jobPostingTime = detailsData["postingDate"] as? String ?? ""
-                        
+
                         // Build description from various fields
                         var desc = ""
                         if let summary = detailsData["descriptionOfRole"] as? String {
@@ -60,13 +60,13 @@ extension JobApp {
                             desc += "Preferred Qualifications:\n" + prefQual
                         }
                         jobApp.jobDescription = desc.trimmingCharacters(in: .whitespacesAndNewlines).decodingHTMLEntities()
-                        
+
                         if let location = detailsData["location"] as? [String: Any],
                            let teams = location["teams"] as? [[String: Any]],
                            let firstTeam = teams.first {
                             jobApp.jobFunction = (firstTeam["name"] as? String ?? "").decodingHTMLEntities()
                         }
-                        
+
                         jobApp.postingURL = url
                         jobApp.status = .new
                         jobAppStore.selectedApp = jobAppStore.addJobApp(jobApp)
@@ -74,7 +74,7 @@ extension JobApp {
                     }
                 }
             }
-            
+
             // Fallback to HTML parsing with new selectors
             // Title
             if let titleEl = try doc.select("#jobdetails-postingtitle").first() {
@@ -91,27 +91,27 @@ extension JobApp {
             }
             // Description (summary + description + min & preferred qualifications)
             var desc = ""
-            
+
             // Summary
             if let summaryEl = try doc.select("#jobdetails-jobdetails-jobsummary-content-row").first() {
                 desc += try summaryEl.text() + "\n\n"
             }
-            
+
             // Main description
             if let mainEl = try doc.select("#jobdetails-jobdetails-jobdescription-content-row").first() {
                 desc += try mainEl.text() + "\n\n"
             }
-            
+
             // Minimum qualifications
             if let minQEl = try doc.select("#jobdetails-jobdetails-minimumqualifications-content-row").first() {
                 desc += "Minimum Qualifications:\n" + (try minQEl.text()) + "\n\n"
             }
-            
+
             // Preferred qualifications
             if let prefQEl = try doc.select("#jobdetails-jobdetails-preferredqualifications-content-row").first() {
                 desc += "Preferred Qualifications:\n" + (try prefQEl.text())
             }
-            
+
             jobApp.jobDescription = desc.trimmingCharacters(in: .whitespacesAndNewlines).decodingHTMLEntities()
             // Team / Function
             if let teamEl = try doc.select("#jobdetails-teamname").first() {

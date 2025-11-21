@@ -60,6 +60,6 @@ struct CustomApplicationReviewOptions: Equatable {
     var includeResumeText: Bool = true
     var includeResumeImage: Bool = true
     var includeBackgroundDocs: Bool = false
-    var selectedCoverLetter: CoverLetter? = nil
+    var selectedCoverLetter: CoverLetter?
     var customPrompt: String = ""
 }

@@ -5,62 +5,62 @@ import SwiftyJSON
 actor DraftKnowledgeStore: OnboardingEventEmitter {
     // MARK: - Event System
     let eventBus: EventCoordinator
-    
+
     // MARK: - State
     private var drafts: [KnowledgeCardDraft] = []
-    
+
     // MARK: - Synchronous Caches (for SwiftUI)
     nonisolated(unsafe) private(set) var draftsSync: [KnowledgeCardDraft] = []
-    
+
     // MARK: - Initialization
     init(eventBus: EventCoordinator) {
         self.eventBus = eventBus
         Logger.info("📝 DraftKnowledgeStore initialized", category: .ai)
     }
-    
+
     // MARK: - Draft Management
     /// Add a new draft
     func addDraft(_ draft: KnowledgeCardDraft) async {
         drafts.append(draft)
         draftsSync = drafts
         Logger.info("📝 Draft added: \(draft.title) (total: \(drafts.count))", category: .ai)
-        
+
         await emit(.draftKnowledgeCardProduced(draft))
     }
-    
+
     /// Update an existing draft
     func updateDraft(_ draft: KnowledgeCardDraft) async {
         guard let index = drafts.firstIndex(where: { $0.id == draft.id }) else {
             Logger.warning("⚠️ Draft not found for update: \(draft.id)", category: .ai)
             return
         }
-        
+
         drafts[index] = draft
         draftsSync = drafts
         Logger.info("📝 Draft updated: \(draft.title)", category: .ai)
-        
+
         await emit(.draftKnowledgeCardUpdated(draft))
     }
-    
+
     /// Remove a draft (e.g. after promotion or deletion)
     func removeDraft(id: UUID) async {
         drafts.removeAll { $0.id == id }
         draftsSync = drafts
         Logger.info("📝 Draft removed: \(id)", category: .ai)
-        
+
         await emit(.draftKnowledgeCardRemoved(id))
     }
-    
+
     /// Get all drafts
     func getDrafts() -> [KnowledgeCardDraft] {
         return drafts
     }
-    
+
     /// Get a specific draft
     func getDraft(id: UUID) -> KnowledgeCardDraft? {
         return drafts.first { $0.id == id }
     }
-    
+
     /// Clear all drafts
     func clearAll() async {
         drafts.removeAll()

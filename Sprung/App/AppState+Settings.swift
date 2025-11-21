@@ -21,7 +21,7 @@ extension AppState {
                 UserDefaults.standard.set(Array(newValue), forKey: "batchCoverLetterModels")
             }
         }
-        
+
         /// Gets the selected models for multi-model cover letter selection
         var multiModelSelectedModels: Set<String> {
             get {
@@ -35,7 +35,7 @@ extension AppState {
             }
         }
     }
-    
+
     /// The settings manager for the application
     var settings: SettingsManager {
         return SettingsManager()

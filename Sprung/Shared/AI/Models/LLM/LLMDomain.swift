@@ -36,7 +36,7 @@ struct LLMMessageDTO: Codable, Sendable, Identifiable {
 struct LLMStreamChunkDTO: Sendable {
     var content: String?
     var reasoning: String?
-    var event: LLMStreamEvent? = nil
+    var event: LLMStreamEvent?
     var isFinished: Bool
 }
 enum LLMStreamEvent: Sendable {

@@ -69,7 +69,7 @@ struct TemplateEditorView: View {
     @State var overlayFilename: String?
     @State var overlayPageSelection: Int = 0
     @State var availableTemplates: [String] = []
-    @State var defaultTemplateSlug: String? = nil
+    @State var defaultTemplateSlug: String?
     @State var showSidebar: Bool = true
     @State var sidebarWidth: CGFloat = 150
     private let sidebarWidthRange: ClosedRange<CGFloat> = 140...300
@@ -77,11 +77,11 @@ struct TemplateEditorView: View {
     @StateObject private var pdfController = PDFPreviewController()
     @State var templatePendingDeletion: String?
     @State var showRevertConfirmation: Bool = false
-    
+
     private var textFilterReference: [TextFilterInfo] {
         TemplateTextFilters.reference
     }
-    
+
     var selectedResume: Resume? {
         navigationState.selectedResume
     }
@@ -140,8 +140,7 @@ struct TemplateEditorView: View {
             NSApp.sendAction(#selector(AppDelegate.showExperienceEditorWindow), to: nil, from: nil)
         }
     }
-    
-    
+
     private var resumeTemplateIdentifier: String? {
         guard let resume = selectedResume else { return nil }
         if let slug = resume.template?.slug, !slug.isEmpty {
@@ -152,7 +151,7 @@ struct TemplateEditorView: View {
         }
         return nil
     }
-    
+
     private var hasAnyUnsavedChanges: Bool {
         htmlHasChanges || textHasChanges || manifestHasChanges || seedHasChanges
     }
@@ -206,7 +205,7 @@ struct TemplateEditorView: View {
             Button("Add") {
                 addNewTemplate()
             }
-            Button("Cancel", role: .cancel) { 
+            Button("Cancel", role: .cancel) {
                 newTemplateName = ""
             }
         } message: {

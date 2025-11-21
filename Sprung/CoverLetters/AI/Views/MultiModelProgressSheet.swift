@@ -15,31 +15,31 @@ struct MultiModelProgressSheet: View {
     @Environment(LLMFacade.self) var llmFacade: LLMFacade
     @Environment(AppEnvironment.self) var appEnvironment: AppEnvironment
     @Environment(ApplicantProfileStore.self) var applicantProfileStore: ApplicantProfileStore
-    
+
     @Binding var coverLetter: CoverLetter
     let selectedModels: Set<String>
     let selectedVotingScheme: VotingScheme
     let onCompletion: () -> Void
-    
+
     @State private var service = MultiModelCoverLetterService()
-    
+
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
                 headerSection
-                
+
                 if service.isProcessing {
                     progressSection
                 }
-                
+
                 if !service.voteTally.isEmpty || !service.scoreTally.isEmpty || service.isProcessing {
                     resultsSection
                 }
-                
+
                 if !service.failedModels.isEmpty {
                     failedModelsSection
                 }
-                
+
                 if !service.modelReasonings.isEmpty || service.reasoningSummary != nil || service.isGeneratingSummary {
                     reasoningsSection
                 }
@@ -72,30 +72,30 @@ struct MultiModelProgressSheet: View {
             service.cleanup()
         }
     }
-    
+
     private var headerSection: some View {
         VStack(spacing: 8) {
             Text("Multi-Model Cover Letter Analysis")
                 .font(.title2)
                 .fontWeight(.semibold)
-            
+
             Text("Running \(selectedVotingScheme.rawValue) with \(selectedModels.count) models")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
     }
-    
+
     private var progressSection: some View {
         VStack(spacing: 12) {
             ProgressView(value: service.progress, total: 1.0)
                 .progressViewStyle(LinearProgressViewStyle())
-            
+
             Text("Processing \(service.completedOperations) of \(service.totalOperations) models...")
                 .font(.caption)
                 .foregroundColor(.secondary)
-            
+
             // Show pending models when down to last few
-            if service.pendingModels.count <= 3 && service.pendingModels.count > 0 && !service.isCompleted {
+            if service.pendingModels.count <= 3 && !service.pendingModels.isEmpty && !service.isCompleted {
                 let modelNames = Array(service.pendingModels).sorted()
                 let formattedNames = service.formatModelNames(modelNames)
                 Text("Awaiting response from \(formattedNames)")
@@ -103,7 +103,7 @@ struct MultiModelProgressSheet: View {
                     .foregroundColor(.orange)
                     .italic()
             }
-            
+
             if service.isGeneratingSummary {
                 HStack {
                     ProgressView()
@@ -115,7 +115,7 @@ struct MultiModelProgressSheet: View {
             }
         }
     }
-    
+
     private var resultsSection: some View {
         GroupBox(selectedVotingScheme == .firstPastThePost ? "Live Vote Tally" : "Live Score Tally") {
             if let jobApp = jobAppStore.selectedApp {
@@ -126,7 +126,7 @@ struct MultiModelProgressSheet: View {
                             .foregroundColor(.secondary)
                             .italic()
                     }
-                    
+
                     ForEach(jobApp.coverLetters.sorted(by: { $0.sequencedName < $1.sequencedName }), id: \.id) { letter in
                         HStack {
                             Text(letter.sequencedName)
@@ -145,12 +145,12 @@ struct MultiModelProgressSheet: View {
                             }
                         }
                     }
-                    
+
                     // Delete 0-vote letters button
                     if service.isCompleted && service.hasZeroVoteLetters(for: selectedVotingScheme) {
                         Divider()
                             .padding(.vertical, 4)
-                        
+
                         Button(action: { service.deleteZeroVoteLetters(for: selectedVotingScheme) }) {
                             HStack {
                                 Image(systemName: "trash")
@@ -165,7 +165,7 @@ struct MultiModelProgressSheet: View {
             }
         }
     }
-    
+
     private var failedModelsSection: some View {
         GroupBox("Failed Models") {
             VStack(alignment: .leading, spacing: 8) {
@@ -179,14 +179,14 @@ struct MultiModelProgressSheet: View {
                                 .fontWeight(.medium)
                             Spacer()
                         }
-                        
+
                         Text(errorReason)
                             .font(.caption2)
                             .foregroundColor(.secondary)
                             .lineLimit(2)
                     }
                     .padding(.vertical, 2)
-                    
+
                     if modelId != service.failedModels.keys.sorted().last {
                         Divider()
                     }
@@ -195,7 +195,7 @@ struct MultiModelProgressSheet: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
-    
+
     private var reasoningsSection: some View {
         GroupBox("Analysis Summary") {
             if service.isGeneratingSummary {
@@ -229,7 +229,7 @@ struct MultiModelProgressSheet: View {
                                     .font(.caption)
                                     .fontWeight(.semibold)
                                     .foregroundColor(.secondary)
-                                
+
                                 if selectedVotingScheme == .firstPastThePost {
                                     if let bestUuid = reasoning.response.bestLetterUuid {
                                         Text("Selected: \(service.getLetterName(for: bestUuid) ?? "Unknown")")
@@ -257,7 +257,7 @@ struct MultiModelProgressSheet: View {
                                         }
                                     }
                                 }
-                                
+
                                 // Replace UUIDs with letter names in the verdict text
                                 if let jobApp = coverLetter.jobApp {
                                     Text(jobApp.replaceUUIDsWithLetterNames(in: reasoning.response.verdict))
@@ -268,7 +268,7 @@ struct MultiModelProgressSheet: View {
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
-                                
+
                                 Divider()
                             }
                         }
@@ -279,7 +279,7 @@ struct MultiModelProgressSheet: View {
             }
         }
     }
-    
+
     private var actionSection: some View {
         HStack {
             if let errorMessage = service.errorMessage {
@@ -287,9 +287,9 @@ struct MultiModelProgressSheet: View {
                     .font(.caption)
                     .foregroundColor(.red)
             }
-            
+
             Spacer()
-            
+
             if service.isProcessing {
                 Button("Cancel") {
                     service.cancelSelection()

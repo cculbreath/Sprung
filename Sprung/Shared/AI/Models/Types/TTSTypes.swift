@@ -14,7 +14,7 @@ protocol TTSCapable {
         instructions: String?,
         onComplete: @escaping (Result<Data, Error>) -> Void
     )
-    
+
     /// Sends a streaming TTS request with callbacks for audio chunks and completion
     func sendTTSStreamingRequest(
         text: String,

@@ -7,7 +7,7 @@ struct EvidenceRequirement: Codable, Identifiable, Equatable {
     let category: EvidenceCategory
     var status: EvidenceStatus
     var linkedArtifactId: String?
-    
+
     enum EvidenceCategory: String, Codable {
         case paper
         case code
@@ -16,13 +16,13 @@ struct EvidenceRequirement: Codable, Identifiable, Equatable {
         case degree
         case other
     }
-    
+
     enum EvidenceStatus: String, Codable {
         case requested
         case fulfilled
         case skipped
     }
-    
+
     init(
         id: String = UUID().uuidString,
         timelineEntryId: String,

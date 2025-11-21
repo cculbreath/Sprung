@@ -7,7 +7,7 @@
 import Foundation
 import SwiftUI
 extension TemplateEditorView {
-    
+
     // MARK: - Template Asset Loading
     func loadTemplateAssets() {
         guard selectedTemplate.isEmpty == false else {
@@ -76,7 +76,7 @@ extension TemplateEditorView {
             return ""
         }
     }
-    
+
     // MARK: - Template Management
     func loadAvailableTemplates() {
         let templates = appEnvironment.templateStore.templates()
@@ -176,12 +176,12 @@ extension TemplateEditorView {
         loadManifest()
         loadSeed()
     }
-    
+
     func renameTemplate(slug: String, newName: String) {
         let trimmedName = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
         guard let template = appEnvironment.templateStore.template(slug: slug) else { return }
-        
+
         appEnvironment.templateStore.upsertTemplate(
             slug: slug,
             name: trimmedName,
@@ -190,7 +190,7 @@ extension TemplateEditorView {
             cssContent: template.cssContent,
             isCustom: template.isCustom
         )
-        
+
         loadAvailableTemplates()
     }
 }
