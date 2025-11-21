@@ -4,12 +4,9 @@
 //
 //  Created by Christopher Culbreath on 2/27/25.
 //
-
 import SwiftUI
-
 struct ToggleChevronView: View {
     @Binding var isExpanded: Bool
-
     var body: some View {
         Image(systemName: "chevron.right")
             .rotationEffect(.degrees(isExpanded ? 90 : 0))

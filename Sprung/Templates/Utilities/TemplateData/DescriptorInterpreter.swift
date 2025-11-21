@@ -1,5 +1,4 @@
 import Foundation
-
 struct DescriptorInterpreter {
     let resume: Resume
     let manifest: TemplateManifest?
@@ -11,11 +10,9 @@ struct DescriptorInterpreter {
     let nodeValueProvider: (TreeNode) -> Any?
     let fontSizesFallback: () -> [String: String]?
     let rawSectionBuilder: (String, SectionType) -> Any?
-
     func buildSection(named sectionName: String, section: TemplateManifest.Section) -> Any? {
         let sectionNode = sectionNodeProvider(sectionName)
         let descriptors = section.fields
-
         switch section.type {
         case .string:
             guard let descriptor = descriptors.first else {
@@ -23,14 +20,12 @@ struct DescriptorInterpreter {
             }
             let valueNode = node(for: descriptor, in: sectionNode)
             return buildValue(for: descriptor, node: valueNode)
-
         case .array, .arrayOfObjects:
             guard let descriptor = descriptors.first else {
                 return rawBuild(sectionName, kind: section.type)
             }
             let arrayNode = node(for: descriptor, in: sectionNode)
             return buildValue(for: descriptor, node: arrayNode)
-
         case .mapOfStrings:
             guard let sectionNode else { return nil }
             var result: [String: String] = [:]
@@ -41,7 +36,6 @@ struct DescriptorInterpreter {
                 }
             }
             return result.isEmpty ? nil : result
-
         case .fontSizes:
             guard let sectionNode else { return nil }
             var result: [String: String] = [:]
@@ -53,7 +47,6 @@ struct DescriptorInterpreter {
             }
             guard result.isEmpty == false else { return nil }
             return fontScaler.scaleFontSizes(result)
-
         case .object:
             guard let sectionNode else { return nil }
             var result: [String: Any] = [:]
@@ -64,7 +57,6 @@ struct DescriptorInterpreter {
                 }
             }
             return result.isEmpty ? nil : result
-
         case .objectOfObjects:
             guard let sectionNode else { return nil }
             let entryDescriptor = descriptors.first(where: { $0.key == "*" })
@@ -73,7 +65,6 @@ struct DescriptorInterpreter {
                 let keyCandidate = (child.schemaSourceKey?.isEmpty == false ? child.schemaSourceKey! : nil)
                     ?? (child.name.isEmpty ? child.value : child.name)
                 guard keyCandidate.isEmpty == false else { continue }
-
                 if let entryDescriptor,
                    let children = entryDescriptor.children,
                    !children.isEmpty,
@@ -96,12 +87,10 @@ struct DescriptorInterpreter {
             return nil
         }
     }
-
     private func rawBuild(_ sectionName: String, kind: TemplateManifest.Section.Kind) -> Any? {
         guard let sectionType = SectionType(manifestKind: kind) else { return nil }
         return rawSectionBuilder(sectionName, sectionType)
     }
-
     private func node(
         for descriptor: TemplateManifest.Section.FieldDescriptor,
         in parent: TreeNode?
@@ -118,7 +107,6 @@ struct DescriptorInterpreter {
         }
         return nil
     }
-
     private func buildValue(
         for descriptor: TemplateManifest.Section.FieldDescriptor,
         node: TreeNode?
@@ -126,7 +114,6 @@ struct DescriptorInterpreter {
         if let bindingValue = resolveBinding(descriptor.binding) {
             return bindingValue
         }
-
         if descriptor.repeatable {
             if let node {
                 if let childrenDescriptors = descriptor.children, !childrenDescriptors.isEmpty {
@@ -160,42 +147,34 @@ struct DescriptorInterpreter {
                     }
                 }
             }
-
             if let behavior = descriptor.behavior {
                 return fallbackValue(for: behavior, node: node)
             }
             return nil
         }
-
         if let childrenDescriptors = descriptor.children, !childrenDescriptors.isEmpty {
             if let node,
                let object = buildObject(using: childrenDescriptors, node: node) {
                 return valueNormalizer.normalize(object, for: descriptor.behavior)
             }
-
             if let behavior = descriptor.behavior {
                 return fallbackValue(for: behavior, node: node)
             }
             return nil
         }
-
         if let node {
             if node.hasChildren, let nested = nodeValueProvider(node) {
                 return valueNormalizer.normalize(nested, for: descriptor.behavior)
             }
-
             if node.value.isEmpty == false {
                 return valueNormalizer.normalize(node.value, for: descriptor.behavior)
             }
         }
-
         if let behavior = descriptor.behavior {
             return fallbackValue(for: behavior, node: node)
         }
-
         return nil
     }
-
     private func buildObject(
         using descriptors: [TemplateManifest.Section.FieldDescriptor],
         node: TreeNode
@@ -207,14 +186,11 @@ struct DescriptorInterpreter {
                 result[descriptor.key] = value
             }
         }
-
         if result.isEmpty {
             return nodeValueProvider(node) as? [String: Any]
         }
-
         return result
     }
-
     private func resolveBinding(
         _ binding: TemplateManifest.Section.FieldDescriptor.Binding?
     ) -> Any? {
@@ -224,7 +200,6 @@ struct DescriptorInterpreter {
             return nil
         }
     }
-
     private func fallbackValue(
         for behavior: TemplateManifest.Section.FieldDescriptor.Behavior,
         node: TreeNode?
@@ -236,31 +211,25 @@ struct DescriptorInterpreter {
                 return normalized
             }
         }
-
         switch behavior {
         case .fontSizes:
             if let fallback = fontSizesFallback() {
                 return valueNormalizer.normalize(fallback, for: behavior)
             }
             return nil
-
         case .includeFonts:
             let includeFonts = resume.includeFonts ? "true" : "false"
             return valueNormalizer.normalize(includeFonts, for: behavior)
-
         case .editorKeys:
             guard resume.importedEditorKeys.isEmpty == false else { return nil }
             return valueNormalizer.normalize(resume.importedEditorKeys, for: behavior)
-
         case .sectionLabels:
             guard resume.keyLabels.isEmpty == false else { return nil }
             return valueNormalizer.normalize(resume.keyLabels, for: behavior)
-
         case .applicantProfile:
             return nil
         }
     }
-
     private func resolvedKey(from node: TreeNode, fallback: String) -> String {
         if let source = node.schemaSourceKey, source.isEmpty == false {
             return source
@@ -273,20 +242,16 @@ struct DescriptorInterpreter {
         }
         return fallback
     }
-
     private func decorateEntry(
         _ entry: inout [String: Any],
         descriptor: TemplateManifest.Section.FieldDescriptor?,
         key: String
     ) {
         guard key.isEmpty == false else { return }
-
         if entry["__key"] == nil {
             entry["__key"] = key
         }
-
         guard let descriptor else { return }
-
         if let template = descriptor.titleTemplate {
             for placeholder in titleRenderer.placeholders(in: template) {
                 guard entry[placeholder] == nil else { continue }
@@ -295,18 +260,15 @@ struct DescriptorInterpreter {
                 }
             }
         }
-
         var titleContext = entry
         if titleContext["__key"] == nil {
             titleContext["__key"] = key
         }
-
         var meta: [String: Any] = [:]
         if let template = descriptor.titleTemplate,
            let computed = titleRenderer.render(template, context: titleContext) {
             meta["title"] = computed
         }
-
         let validation = validator.validate(entry, descriptor: descriptor)
         if descriptor.required || descriptor.validation != nil || validation.isValid == false {
             meta["isValid"] = validation.isValid
@@ -314,7 +276,6 @@ struct DescriptorInterpreter {
                 meta["message"] = message
             }
         }
-
         if meta.isEmpty == false {
             meta["key"] = key
             entry["__meta"] = meta

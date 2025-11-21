@@ -2,12 +2,10 @@
 //  ApplicationReviewService.swift
 //  Sprung
 //
-
 import Foundation
 import PDFKit
 import AppKit
 import SwiftUI
-
 /// Service responsible for sending application packet reviews (cover letter + resume)
 @MainActor
 class ApplicationReviewService: @unchecked Sendable {
@@ -29,7 +27,6 @@ class ApplicationReviewService: @unchecked Sendable {
         self.exportCoordinator = exportCoordinator
     }
     
-
     // MARK: - Core Review Operations
     // MARK: - LLM Request (non-image handled by client, image via raw call)
     func sendReviewRequest(
@@ -88,7 +85,6 @@ class ApplicationReviewService: @unchecked Sendable {
                 return
             }
         }
-
         // Build the prompt using ApplicationReviewQuery
         let fullPrompt = query.systemPrompt() + "\n\n" + query.buildReviewPrompt(
             reviewType: reviewType,
@@ -98,7 +94,6 @@ class ApplicationReviewService: @unchecked Sendable {
             includeImage: !imageData.isEmpty,
             customOptions: customOptions
         )
-
         let requestID = UUID()
         currentRequestID = requestID
         
@@ -107,7 +102,6 @@ class ApplicationReviewService: @unchecked Sendable {
         Logger.debug("📤 [ApplicationReview] Model: \(modelId)")
         Logger.debug("📤 [ApplicationReview] Prompt length: \(fullPrompt.count) characters")
         Logger.debug("📤 [ApplicationReview] Image included: \(!imageData.isEmpty)")
-
         Task {
             do {
                 let response: String
@@ -154,7 +148,6 @@ class ApplicationReviewService: @unchecked Sendable {
             }
         }
     }
-
     /// Cancel the current request
     func cancelRequest() {
         if let requestID = currentRequestID {

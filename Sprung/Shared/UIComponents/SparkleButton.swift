@@ -4,14 +4,11 @@
 //
 //  Created by Christopher Culbreath on 1/31/25.
 //
-
 import SwiftUI
-
 struct SparkleButton: View {
     @Binding var node: TreeNode
     @Binding var isHovering: Bool
     var toggleNodeStatus: () -> Void
-
     var body: some View {
         Button(action: toggleNodeStatus) {
             Image(systemName: "sparkles")

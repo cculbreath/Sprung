@@ -4,10 +4,8 @@
 //
 //  Created by Christopher Culbreath on 4/19/25.
 //
-
 import Foundation
 import SwiftSoup
-
 // MARK: - Indeed HTML → JobApp
 extension JobApp {
     /// Attempts to parse an Indeed job‑posting HTML page and create a populated `JobApp`.
@@ -26,13 +24,10 @@ extension JobApp {
         do {
             // 1. Parse the HTML.
             let doc: Document = try SwiftSoup.parse(html)
-
             // 2. Find the JobPosting JSON‑LD block. Indeed may add whitespace or
             // wrap several JSON‑LD objects in an array, so we parse each script
             // tag instead of relying on a raw substring search.
-
             let scriptTags = try doc.select("script[type=application/ld+json]")
-
             func containsJobPostingType(in dict: [String: Any]) -> Bool {
                 if let typeStr = dict["@type"] as? String, typeStr.lowercased() == "jobposting" {
                     return true
@@ -42,7 +37,6 @@ extension JobApp {
                 }
                 return false
             }
-
             func jobPostingDictionary(from json: Any) -> [String: Any]? {
                 if let dict = json as? [String: Any], containsJobPostingType(in: dict) {
                     return dict
@@ -59,25 +53,19 @@ extension JobApp {
                 }
                 return nil
             }
-
             var jobDict: [String: Any]?
-
             outer: for tag in scriptTags.array() {
                 var content = try tag.html()
-
                 // Remove HTML comment markers if present.
                 content = content.replacingOccurrences(of: "<!--", with: "")
                     .replacingOccurrences(of: "-->", with: "")
-
                 guard let data = content.data(using: .utf8) else { continue }
-
                 if let topObj = try? JSONSerialization.jsonObject(with: data, options: []),
                    let posting = jobPostingDictionary(from: topObj) {
                     jobDict = posting
                     break outer
                 }
             }
-
             guard let jobDict else {
                 // Dump HTML for debugging so the user can provide the file.
                 if UserDefaults.standard.bool(forKey: "saveDebugPrompts") {
@@ -94,7 +82,6 @@ extension JobApp {
                         return mapEmbeddedJobInfo(info, url: url, store: jobAppStore)
                     }
                 }
-
                 // -------- Fallback Path 2: Mosaic provider script --------
                 if let mosaicScript = try? doc.select("script[id^=mosaic-provider-jobsearch-viewjob]").first() {
                     // Use `.html()` to get raw JSON without entity decoding.
@@ -112,18 +99,14 @@ extension JobApp {
                         }
                     }
                 }
-
                 return nil
             }
-
             // 4. Map JSON → JobApp
             let jobApp = JobApp()
-
             // Title
             if let title = jobDict["title"] as? String {
                 jobApp.jobPosition = title.decodingHTMLEntities()
             }
-
             // Description (HTML in JSON – strip tags quickly).
             if let descriptionHTML = jobDict["description"] as? String {
                 // Attempt to remove HTML tags using a tiny helper.
@@ -132,42 +115,34 @@ extension JobApp {
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                     .decodingHTMLEntities()
             }
-
             // Company
             if let org = jobDict["hiringOrganization"] as? [String: Any],
                let companyName = org["name"] as? String
             {
                 jobApp.companyName = companyName.decodingHTMLEntities()
             }
-
             // Employment type
             if let employmentType = jobDict["employmentType"] as? String {
                 jobApp.employmentType = employmentType
             }
-
             // Date posted
             if let datePosted = jobDict["datePosted"] as? String {
                 jobApp.jobPostingTime = datePosted
             }
-
             // Location – the JobPosting schema nests Address inside JobLocation.
             if let jobLocation = jobDict["jobLocation"] {
                 // jobLocation can be an array or a single dict.
                 func extractAddress(from loc: Any) -> String? {
                     guard let locDict = loc as? [String: Any],
                           let addr = locDict["address"] as? [String: Any] else { return nil }
-
                     let locality = addr["addressLocality"] as? String ?? ""
                     let region = addr["addressRegion"] as? String ?? ""
                     let country = addr["addressCountry"] as? String ?? ""
-
                     // Assemble non‑empty parts.
                     let parts = [locality, region, country].filter { !$0.isEmpty }
                     return parts.isEmpty ? nil : parts.joined(separator: ", ")
                 }
-
                 var locationString: String?
-
                 if let locArray = jobLocation as? [[String: Any]] {
                     // Prefer the first location.
                     if let first = locArray.first {
@@ -176,28 +151,22 @@ extension JobApp {
                 } else {
                     locationString = extractAddress(from: jobLocation)
                 }
-
                 if let locationString {
                     jobApp.jobLocation = locationString.decodingHTMLEntities()
                 }
             }
-
             // Apply URL (not always present).
             if let applyLink = jobDict["url"] as? String {
                 jobApp.jobApplyLink = applyLink
             }
-
             // Industries are not exposed directly; attempt to derive from category.
             if let industry = jobDict["industry"] as? String {
                 jobApp.industries = industry
             }
-
             // Store the original Indeed posting link.
             jobApp.postingURL = url
-
             // Default status.
             jobApp.status = .new
-
             // 5. Check for duplicates before persisting
             // Check if a job with the same URL already exists
             let existingJobWithURL = jobAppStore.jobApps.first { $0.postingURL == url }
@@ -206,7 +175,6 @@ extension JobApp {
                 jobAppStore.selectedApp = existingJob
                 return existingJob
             }
-
             // Or check if a job with the same position and company already exists
             let existingJob = jobAppStore.jobApps.first {
                 $0.jobPosition == jobApp.jobPosition &&
@@ -217,21 +185,17 @@ extension JobApp {
                 jobAppStore.selectedApp = existing
                 return existing
             }
-
             // No duplicate found, persist in the store and return
             jobAppStore.selectedApp = jobAppStore.addJobApp(jobApp)
             return jobApp
-
         } catch {
             return nil
         }
     }
-
     // MARK: - EmbeddedData mapping fallback
     @MainActor
     private static func mapEmbeddedJobInfo(_ info: [String: Any], url: String, store: JobAppStore) -> JobApp? {
         let jobApp = JobApp()
-
         if let title = info["jobTitle"] as? String {
             jobApp.jobPosition = title.decodingHTMLEntities()
         }
@@ -247,14 +211,11 @@ extension JobApp {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .decodingHTMLEntities()
         }
-
         jobApp.postingURL = url
         jobApp.status = .new
-
         store.selectedApp = store.addJobApp(jobApp)
         return jobApp
     }
-
     /// Convenience wrapper – fetches the Indeed page, parses it, and returns the resulting `JobApp`.
     @discardableResult
     @MainActor
@@ -263,7 +224,6 @@ extension JobApp {
         jobAppStore: JobAppStore
     ) async -> JobApp? {
         let html: String?
-
         if let primary = try? await JobApp.fetchHTMLContent(from: urlString) {
             html = primary
         } else if let url = URL(string: urlString),
@@ -274,11 +234,9 @@ extension JobApp {
         } else {
             html = nil
         }
-
         guard let html else {
             return nil
         }
-
         return JobApp.parseIndeedJobListing(jobAppStore: jobAppStore, html: html, url: urlString)
     }
 }

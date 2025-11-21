@@ -1,13 +1,11 @@
 import Foundation
 import OrderedCollections
-
 struct TemplateManifestOverrides: Codable {
     struct Styling: Codable {
         var fontSizes: [String: String]?
         var pageMargins: [String: String]?
         var includeFonts: Bool?
     }
-
     struct Custom: Codable {
         var sectionLabels: [String: String]?
         var contactLabels: [String: String]?
@@ -16,7 +14,6 @@ struct TemplateManifestOverrides: Codable {
         var layout: [String: String]?
         var meta: [String: String]?
         var fields: [TemplateManifest.Section.FieldDescriptor]?
-
         enum CodingKeys: String, CodingKey {
             case sectionLabels
             case contactLabels
@@ -27,7 +24,6 @@ struct TemplateManifestOverrides: Codable {
             case fields
         }
     }
-
     var sectionOrder: [String]?
     var styling: Styling?
     var custom: Custom?
@@ -36,7 +32,6 @@ struct TemplateManifestOverrides: Codable {
     var transparentKeys: [String]?
     var keysInEditor: [String]?
     var editorLabels: [String: String]?
-
     enum CodingKeys: String, CodingKey {
         case sectionOrder
         case styling
@@ -48,9 +43,7 @@ struct TemplateManifestOverrides: Codable {
         case editorLabels
     }
 }
-
 enum TemplateManifestDefaults {
-
     // MARK: - Public API
     static let defaultSectionOrder: [String] = [
         "basics",
@@ -68,7 +61,6 @@ enum TemplateManifestDefaults {
         "custom",
         "styling"
     ]
-
     static let defaultSectionVisibilityDefaults: [String: Bool] = [
         "work": true,
         "volunteer": true,
@@ -82,7 +74,6 @@ enum TemplateManifestDefaults {
         "interests": true,
         "references": true
     ]
-
     static let defaultSectionVisibilityLabels: [String: String] = [
         "work": "Work Experience",
         "volunteer": "Volunteer",
@@ -97,7 +88,6 @@ enum TemplateManifestDefaults {
         "references": "References",
         "meta": "Metadata"
     ]
-
     static let recommendedFontSizes: [String: String] = [
         "boxTitles": "16pt",
         "contact": "8pt",
@@ -116,14 +106,12 @@ enum TemplateManifestDefaults {
         "workDates": "8pt",
         "workHighlights": "7.5pt"
     ]
-
     static let recommendedPageMargins: [String: String] = [
         "top": "0.5in",
         "right": "0.5in",
         "bottom": "0.5in",
         "left": "0.5in"
     ]
-
     static func baseManifest(for slug: String) -> TemplateManifest {
         TemplateManifest(
             slug: slug,
@@ -137,41 +125,33 @@ enum TemplateManifestDefaults {
             sectionVisibilityLabels: defaultSectionVisibilityLabels
         )
     }
-
     static func manifest(for template: Template) -> TemplateManifest {
         let base = baseManifest(for: template.slug)
         guard let data = template.manifestData, !data.isEmpty else {
             Logger.debug("TemplateManifestDefaults: no overrides for slug \(template.slug), using base manifest")
             return base
         }
-
         if let overrides = try? JSONDecoder().decode(TemplateManifestOverrides.self, from: data) {
             Logger.debug("TemplateManifestDefaults: applying overrides for slug \(template.slug)")
             return apply(overrides: overrides, to: base, slug: template.slug)
         }
-
         Logger.warning("TemplateManifestDefaults: Unable to decode manifest overrides for slug \(template.slug); falling back to defaults.")
         return base
     }
-
     static func apply(overrides: TemplateManifestOverrides, to base: TemplateManifest, slug: String) -> TemplateManifest {
         var sections = base.sections
-
         if let stylingOverride = overrides.styling {
             sections["styling"] = sections["styling"]?.applyingStylingOverride(stylingOverride)
         }
-
         if let customOverride = overrides.custom {
             sections["custom"] = sections["custom"]?.applyingCustomOverride(customOverride)
         }
-
         let sectionOrder = overrides.sectionOrder ?? base.sectionOrder
         let sectionVisibilityDefaults = overrides.sectionVisibility ?? base.sectionVisibilityDefaults
         let sectionVisibilityLabels = overrides.sectionVisibilityLabels ?? base.sectionVisibilityLabels
         let transparentKeys = overrides.transparentKeys ?? base.transparentKeys
         let keysInEditor = overrides.keysInEditor ?? base.keysInEditor
         let editorLabels = overrides.editorLabels ?? base.editorLabels
-
         return TemplateManifest(
             slug: slug,
             schemaVersion: TemplateManifest.currentSchemaVersion,
@@ -184,7 +164,6 @@ enum TemplateManifestDefaults {
             sectionVisibilityLabels: sectionVisibilityLabels
         )
     }
-
     // MARK: - Base Manifest Construction
     private static let baseSections: [String: TemplateManifest.Section] = {
         var sections: [String: TemplateManifest.Section] = [:]
@@ -204,7 +183,6 @@ enum TemplateManifestDefaults {
         sections["styling"] = stylingSection()
         return sections
     }()
-
     // MARK: - Section Builders
     private static func basicsSection() -> TemplateManifest.Section {
         let fields: [TemplateManifest.Section.FieldDescriptor] = [
@@ -219,14 +197,12 @@ enum TemplateManifestDefaults {
             locationField(),
             profilesField()
         ]
-
         return TemplateManifest.Section(
             type: .object,
             defaultValue: nil,
             fields: fields
         )
     }
-
     private static func workSection() -> TemplateManifest.Section {
         let children: [TemplateManifest.Section.FieldDescriptor] = [
             field("name", input: .text, required: true, title: "Employer"),
@@ -238,10 +214,8 @@ enum TemplateManifestDefaults {
             field("summary", input: .textarea),
             field("highlights", input: .textarea, repeatable: true, allowsManualMutations: true)
         ]
-
         return arraySection(children: children, titleTemplate: "{{position}} at {{name}}")
     }
-
     private static func volunteerSection() -> TemplateManifest.Section {
         let children: [TemplateManifest.Section.FieldDescriptor] = [
             field("organization", input: .text, required: true),
@@ -252,10 +226,8 @@ enum TemplateManifestDefaults {
             field("summary", input: .textarea),
             field("highlights", input: .textarea, repeatable: true, allowsManualMutations: true)
         ]
-
         return arraySection(children: children, titleTemplate: "{{position}} at {{organization}}")
     }
-
     private static func educationSection() -> TemplateManifest.Section {
         let children: [TemplateManifest.Section.FieldDescriptor] = [
             field("institution", input: .text, required: true),
@@ -267,10 +239,8 @@ enum TemplateManifestDefaults {
             field("score", input: .text),
             field("courses", input: .text, repeatable: true, allowsManualMutations: true)
         ]
-
         return arraySection(children: children, titleTemplate: "{{studyType}} in {{area}}")
     }
-
     private static func projectsSection() -> TemplateManifest.Section {
         let children: [TemplateManifest.Section.FieldDescriptor] = [
             field("name", input: .text, required: true),
@@ -284,20 +254,16 @@ enum TemplateManifestDefaults {
             field("entity", input: .text),
             field("type", input: .text)
         ]
-
         return arraySection(children: children, titleTemplate: "{{name}}")
     }
-
     private static func skillsSection() -> TemplateManifest.Section {
         let children: [TemplateManifest.Section.FieldDescriptor] = [
             field("name", input: .text, required: true),
             field("level", input: .text),
             field("keywords", input: .chips, repeatable: true, allowsManualMutations: true)
         ]
-
         return arraySection(children: children, titleTemplate: "{{name}}")
     }
-
     private static func awardsSection() -> TemplateManifest.Section {
         let children: [TemplateManifest.Section.FieldDescriptor] = [
             field("title", input: .text, required: true),
@@ -305,10 +271,8 @@ enum TemplateManifestDefaults {
             field("awarder", input: .text),
             field("summary", input: .textarea)
         ]
-
         return arraySection(children: children, titleTemplate: "{{title}}")
     }
-
     private static func certificatesSection() -> TemplateManifest.Section {
         let children: [TemplateManifest.Section.FieldDescriptor] = [
             field("name", input: .text, required: true),
@@ -316,10 +280,8 @@ enum TemplateManifestDefaults {
             field("issuer", input: .text),
             field("url", input: .url)
         ]
-
         return arraySection(children: children, titleTemplate: "{{name}}")
     }
-
     private static func publicationsSection() -> TemplateManifest.Section {
         let children: [TemplateManifest.Section.FieldDescriptor] = [
             field("name", input: .text, required: true),
@@ -328,38 +290,30 @@ enum TemplateManifestDefaults {
             field("url", input: .url),
             field("summary", input: .textarea)
         ]
-
         return arraySection(children: children, titleTemplate: "{{name}}")
     }
-
     private static func languagesSection() -> TemplateManifest.Section {
         let children: [TemplateManifest.Section.FieldDescriptor] = [
             field("language", input: .text, required: true),
             field("fluency", input: .text)
         ]
-
         return arraySection(children: children, titleTemplate: "{{language}}")
     }
-
     private static func interestsSection() -> TemplateManifest.Section {
         let children: [TemplateManifest.Section.FieldDescriptor] = [
             field("name", input: .text, required: true),
             field("keywords", input: .chips, repeatable: true, allowsManualMutations: true)
         ]
-
         return arraySection(children: children, titleTemplate: "{{name}}")
     }
-
     private static func referencesSection() -> TemplateManifest.Section {
         let children: [TemplateManifest.Section.FieldDescriptor] = [
             field("name", input: .text, required: true),
             field("reference", input: .textarea),
             field("url", input: .url)
         ]
-
         return arraySection(children: children, titleTemplate: "{{name}}")
     }
-
     private static func customSection() -> TemplateManifest.Section {
         TemplateManifest.Section(
             type: .object,
@@ -367,7 +321,6 @@ enum TemplateManifestDefaults {
             fields: []
         )
     }
-
     private static func stylingSection() -> TemplateManifest.Section {
         let fields: [TemplateManifest.Section.FieldDescriptor] = [
             mapField("fontSizes"),
@@ -382,7 +335,6 @@ enum TemplateManifestDefaults {
             ),
             field("includeFonts", input: .toggle, behavior: .includeFonts)
         ]
-
         return TemplateManifest.Section(
             type: .object,
             defaultValue: nil,
@@ -390,7 +342,6 @@ enum TemplateManifestDefaults {
             behavior: .styling
         )
     }
-
     // MARK: - Field Helper Builders
     private static func field(
         _ key: String,
@@ -417,7 +368,6 @@ enum TemplateManifestDefaults {
             allowsManualMutations: allowsManualMutations
         )
     }
-
     private static func locationField() -> TemplateManifest.Section.FieldDescriptor {
         TemplateManifest.Section.FieldDescriptor(
             key: "location",
@@ -439,7 +389,6 @@ enum TemplateManifestDefaults {
             allowsManualMutations: false
         )
     }
-
     private static func profilesField() -> TemplateManifest.Section.FieldDescriptor {
         TemplateManifest.Section.FieldDescriptor(
             key: "profiles",
@@ -473,7 +422,6 @@ enum TemplateManifestDefaults {
             allowsManualMutations: false
         )
     }
-
     private static func arraySection(children: [TemplateManifest.Section.FieldDescriptor], titleTemplate: String) -> TemplateManifest.Section {
         let arrayDescriptor = TemplateManifest.Section.FieldDescriptor(
             key: "*",
@@ -488,14 +436,12 @@ enum TemplateManifestDefaults {
             binding: nil,
             allowsManualMutations: true
         )
-
         return TemplateManifest.Section(
             type: .arrayOfObjects,
             defaultValue: nil,
             fields: [arrayDescriptor]
         )
     }
-
     private static func objectField(
         _ key: String,
         children: [TemplateManifest.Section.FieldDescriptor]
@@ -514,7 +460,6 @@ enum TemplateManifestDefaults {
             allowsManualMutations: false
         )
     }
-
     private static func mapField(_ key: String) -> TemplateManifest.Section.FieldDescriptor {
         TemplateManifest.Section.FieldDescriptor(
             key: key,
@@ -531,110 +476,86 @@ enum TemplateManifestDefaults {
         )
     }
 }
-
 // MARK: - Section Mutation Helpers
 private extension TemplateManifest.Section {
     func applyingStylingOverride(_ override: TemplateManifestOverrides.Styling) -> TemplateManifest.Section {
         var dictionary = dictionaryDefaultValue()
-
         if let fontSizes = override.fontSizes {
             dictionary["fontSizes"] = fontSizes
         }
-
         if let pageMargins = override.pageMargins {
             dictionary["pageMargins"] = pageMargins
         }
-
         if let includeFonts = override.includeFonts {
             dictionary["includeFonts"] = includeFonts
         }
-
         return updatingDefault(dictionary)
     }
-
     func applyingCustomOverride(_ override: TemplateManifestOverrides.Custom) -> TemplateManifest.Section {
         var updated = self
-
         if let fields = override.fields {
             updated.fields = fields
         }
-
         var dictionary = dictionaryDefaultValue()
-
         if let sectionLabels = override.sectionLabels {
             var existing = dictionary["sectionLabels"] as? [String: Any] ?? [:]
             sectionLabels.forEach { existing[$0.key] = $0.value }
             dictionary["sectionLabels"] = existing
         }
-
         if let contactLabels = override.contactLabels {
             var existing = dictionary["contactLabels"] as? [String: Any] ?? [:]
             contactLabels.forEach { existing[$0.key] = $0.value }
             dictionary["contactLabels"] = existing
         }
-
         if let labels = override.labels {
             var existing = dictionary["labels"] as? [String: Any] ?? [:]
             labels.forEach { existing[$0.key] = $0.value }
             dictionary["labels"] = existing
         }
-
         if let colors = override.colors {
             var existing = dictionary["colors"] as? [String: Any] ?? [:]
             colors.forEach { existing[$0.key] = $0.value }
             dictionary["colors"] = existing
         }
-
         if let layout = override.layout {
             var existing = dictionary["layout"] as? [String: Any] ?? [:]
             layout.forEach { existing[$0.key] = $0.value }
             dictionary["layout"] = existing
         }
-
         if let meta = override.meta {
             var existing = dictionary["meta"] as? [String: Any] ?? [:]
             meta.forEach { existing[$0.key] = $0.value }
             dictionary["meta"] = existing
         }
-
         return updated.updatingDefault(dictionary)
     }
-
     func stylingOverride(relativeTo base: TemplateManifest.Section) -> TemplateManifestOverrides.Styling? {
         var override = TemplateManifestOverrides.Styling()
         let current = dictionaryDefaultValue()
         let baseline = base.dictionaryDefaultValue()
-
         if let fonts = current["fontSizes"] as? [String: String],
            fonts != baseline["fontSizes"] as? [String: String] {
             override.fontSizes = fonts
         }
-
         if let margins = current["pageMargins"] as? [String: String],
            margins != baseline["pageMargins"] as? [String: String] {
             override.pageMargins = margins
         }
-
         if let includeFonts = current["includeFonts"] as? Bool,
            includeFonts != (baseline["includeFonts"] as? Bool ?? false) {
             override.includeFonts = includeFonts
         }
-
         if override.fontSizes == nil,
            override.pageMargins == nil,
            override.includeFonts == nil {
             return nil
         }
-
         return override
     }
-
     func customOverride(relativeTo base: TemplateManifest.Section) -> TemplateManifestOverrides.Custom? {
         var override = TemplateManifestOverrides.Custom()
-
         let dictionary = dictionaryDefaultValue()
         let baseline = base.dictionaryDefaultValue()
-
         func diffDictionary(_ key: String) -> [String: String]? {
             guard let current = dictionary[key] as? [String: Any] else { return nil }
             let baselineEntries = baseline[key] as? [String: Any] ?? [:]
@@ -648,18 +569,15 @@ private extension TemplateManifest.Section {
             }
             return diff.isEmpty ? nil : diff
         }
-
         override.sectionLabels = diffDictionary("sectionLabels")
         override.contactLabels = diffDictionary("contactLabels")
         override.labels = diffDictionary("labels")
         override.colors = diffDictionary("colors")
         override.layout = diffDictionary("layout")
         override.meta = diffDictionary("meta")
-
         if !fieldsEqual(self.fields, base.fields) {
             override.fields = self.fields
         }
-
         if override.sectionLabels == nil,
            override.contactLabels == nil,
            override.labels == nil,
@@ -669,14 +587,11 @@ private extension TemplateManifest.Section {
            override.fields == nil {
             return nil
         }
-
         return override
     }
-
     func dictionaryDefaultValue() -> [String: Any] {
         jsonValueToDictionary(defaultValue?.value)
     }
-
     func updatingDefault(_ dictionary: [String: Any]) -> TemplateManifest.Section {
         TemplateManifest.Section(
             type: type,
@@ -686,7 +601,6 @@ private extension TemplateManifest.Section {
             behavior: behavior
         )
     }
-
     private func jsonValueToDictionary(_ value: Any?) -> [String: Any] {
         guard let value else { return [:] }
         if let ordered = value as? OrderedDictionary<String, Any> {
@@ -694,7 +608,6 @@ private extension TemplateManifest.Section {
         }
         return value as? [String: Any] ?? [:]
     }
-
     private func fieldsEqual(
         _ lhs: [TemplateManifest.Section.FieldDescriptor],
         _ rhs: [TemplateManifest.Section.FieldDescriptor]

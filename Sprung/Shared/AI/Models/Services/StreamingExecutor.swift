@@ -4,22 +4,17 @@
 //
 //  Wraps LLM streaming execution with DTO mapping and optional accumulation.
 //
-
 import Foundation
-
 final class StreamingExecutor {
     private let requestExecutor: LLMRequestExecutor
-
     init(requestExecutor: LLMRequestExecutor) {
         self.requestExecutor = requestExecutor
     }
-
     func applyReasoning(_ reasoning: OpenRouterReasoning?, to parameters: inout ChatCompletionParameters) {
         guard let reasoning else { return }
         let hasOverride =
             reasoning.maxTokens != nil ||
             (reasoning.exclude != nil && reasoning.exclude != false)
-
         if hasOverride {
             parameters.reasoningEffort = nil
             parameters.reasoning = ChatCompletionParameters.ReasoningOverrides(
@@ -36,7 +31,6 @@ final class StreamingExecutor {
             parameters.reasoningEffort = reasoning.effort
         }
     }
-
     func stream(
         parameters: ChatCompletionParameters,
         accumulateContent: Bool,
@@ -53,20 +47,17 @@ final class StreamingExecutor {
                             cancelled = true
                             break
                         }
-
                         let dto = LLMVendorMapper.streamChunkDTO(from: chunk)
                         if accumulateContent, let content = dto.content {
                             accumulated? += content
                         }
                         continuation.yield(dto)
                     }
-
                     if cancelled {
                         onCompletion(.failure(CancellationError()))
                         continuation.finish()
                         return
                     }
-
                     onCompletion(.success(accumulated))
                     continuation.finish()
                 } catch {

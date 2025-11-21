@@ -4,10 +4,8 @@
 //
 //  Created on 6/9/25.
 //
-
 import SwiftUI
 import SwiftData
-
 /// A reusable view for managing cover letter reference selections
 /// Used in both Generate Cover Letter and Batch Generate Cover Letter sheets
 struct CoverRefSelectionManagerView: View {
@@ -178,7 +176,6 @@ struct CoverRefSelectionManagerView: View {
     }
     
 }
-
 // MARK: - Add Cover Ref Sheet
 struct AddCoverRefSheet: View {
     let refType: CoverRefType

@@ -4,22 +4,17 @@
 //
 //  Created by Christopher Culbreath on .
 //
-
 import SwiftData
 import SwiftUI
-
 struct SidebarView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     // Live query – any insertion / deletion in SwiftData refreshes the list
     @Query(sort: \JobApp.jobPosition) private var jobApps: [JobApp]
     @Binding var tabRefresh: Bool // Pass down if needed by DraggableSlidingSourceListView
-
     // Binding for the main list selection
     @Binding var selectedApp: JobApp?
-
     // State for the sliding list visibility
     @Binding var showSlidingList: Bool
-
     var body: some View {
         VStack(spacing: 0) {
             // --- Main Content ---
@@ -40,7 +35,6 @@ struct SidebarView: View {
                 .padding(.top, 8) // This padding acts as a spacer
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
-
                 ForEach(Statuses.allCases, id: \.self) { status in
                     let filteredApps = jobApps.filter { $0.status == status }
                     if !filteredApps.isEmpty {
@@ -59,7 +53,6 @@ struct SidebarView: View {
             }
             .listStyle(.sidebar)
             .frame(maxHeight: .infinity) // List takes remaining space
-
             // Draggable Sliding Source List (conditionally shown)
             if showSlidingList {
                 DraggableSlidingSourceListView(refresh: $tabRefresh, isVisible: $showSlidingList)

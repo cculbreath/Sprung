@@ -5,9 +5,7 @@
 //  ViewChildren operations for TreeNode.
 //  Handles the presentation hierarchy (viewChildren) separately from the data hierarchy (children).
 //
-
 import Foundation
-
 // MARK: - ViewChildren Operations
 extension TreeNode {
     /// Rebuilds the viewChildren hierarchy for v4+ manifests after mutations.
@@ -20,7 +18,6 @@ extension TreeNode {
             clearViewHierarchyState()
             return
         }
-
         clearViewHierarchyState()
         viewDepth = 0
         let context = ViewHierarchyContext(
@@ -28,11 +25,9 @@ extension TreeNode {
             editorLabels: manifest.editorLabels ?? [:]
         )
         var viewChildren: [TreeNode] = []
-
         for (index, keyPath) in keysInEditor.enumerated() {
             let pathComponents = keyPath.split(separator: ".").map(String.init)
             guard !pathComponents.isEmpty else { continue }
-
             guard let node = TreeNode.findNode(
                 in: self,
                 path: pathComponents,
@@ -41,7 +36,6 @@ extension TreeNode {
                 Logger.warning("TreeNode.rebuildViewHierarchy: missing node for keyPath '\(keyPath)'")
                 continue
             }
-
             node.applyEditorLabel(forPath: pathComponents, context: context)
             node.rebuildViewSubtree(
                 using: context,
@@ -51,10 +45,8 @@ extension TreeNode {
             node.myIndex = index
             viewChildren.append(node)
         }
-
         self.viewChildren = viewChildren.isEmpty ? nil : viewChildren
     }
-
     /// Finds a node in the data tree by following a path, skipping transparent containers.
     ///
     /// - Parameters:
@@ -72,13 +64,11 @@ extension TreeNode {
         )
     }
 }
-
 // MARK: - View Hierarchy Helpers
 private extension TreeNode {
     struct ViewHierarchyContext {
         let transparentKeys: Set<String>
         let editorLabels: [String: String]
-
         func label(for path: [String]) -> String? {
             guard let last = path.last else { return nil }
             if let label = editorLabels[path.joined(separator: ".")] {
@@ -87,7 +77,6 @@ private extension TreeNode {
             return editorLabels[last]
         }
     }
-
     func clearViewHierarchyState() {
         editorLabel = nil
         viewChildren = nil
@@ -96,7 +85,6 @@ private extension TreeNode {
             child.clearViewHierarchyState()
         }
     }
-
     static func findNode(
         current: TreeNode,
         path: [String],
@@ -105,7 +93,6 @@ private extension TreeNode {
     ) -> TreeNode? {
         guard pathIndex < path.count else { return nil }
         let key = path[pathIndex]
-
         for child in current.children ?? [] {
             if child.matchesEditorKey(key) {
                 if pathIndex == path.count - 1 {
@@ -118,7 +105,6 @@ private extension TreeNode {
                     transparentKeys: transparentKeys
                 )
             }
-
             if transparentKeys.contains(child.name) || child.editorTransparent {
                 if let match = findNode(
                     current: child,
@@ -130,24 +116,19 @@ private extension TreeNode {
                 }
             }
         }
-
         return nil
     }
-
     func matchesEditorKey(_ key: String) -> Bool {
         if name == key { return true }
         if let schemaKey, schemaKey == key { return true }
         return sanitized(name) == sanitized(key)
     }
-
     func sanitized(_ value: String) -> String {
         value.lowercased().replacingOccurrences(of: "-", with: "")
     }
-
     func applyEditorLabel(forPath path: [String], context: ViewHierarchyContext) {
         editorLabel = context.label(for: path)
     }
-
     func rebuildViewSubtree(
         using context: ViewHierarchyContext,
         path: [String],
@@ -158,13 +139,10 @@ private extension TreeNode {
             viewChildren = nil
             return
         }
-
         let ordered = rawChildren.sorted { $0.myIndex < $1.myIndex }
         var visibleChildren: [TreeNode] = []
-
         for child in ordered {
             let childPath = path + [child.name]
-
             if context.transparentKeys.contains(child.name) || child.editorTransparent {
                 child.applyEditorLabel(forPath: childPath, context: context)
                 child.rebuildViewSubtree(
@@ -180,7 +158,6 @@ private extension TreeNode {
                 }
                 continue
             }
-
             child.applyEditorLabel(forPath: childPath, context: context)
             child.rebuildViewSubtree(
                 using: context,
@@ -189,11 +166,9 @@ private extension TreeNode {
             )
             visibleChildren.append(child)
         }
-
         for (index, child) in visibleChildren.enumerated() {
             child.myIndex = index
         }
-
         viewChildren = visibleChildren.isEmpty ? nil : visibleChildren
     }
 }

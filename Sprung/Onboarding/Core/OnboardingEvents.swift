@@ -5,10 +5,8 @@
 //  Event-driven architecture for the onboarding system.
 //  Replaces the 13+ callback struct with clean, unidirectional events.
 //
-
 import Foundation
 import SwiftyJSON
-
 // MARK: - Supporting Types
 /// Information about a processed upload file
 struct ProcessedUploadInfo {
@@ -16,33 +14,27 @@ struct ProcessedUploadInfo {
     let contentType: String?
     let filename: String
 }
-
 /// All events that can occur during the onboarding interview
 enum OnboardingEvent {
     // MARK: - Processing State
     case processingStateChanged(Bool, statusMessage: String? = nil)
-
     // MARK: - Messages
     case streamingMessageBegan(id: UUID, text: String, reasoningExpected: Bool, statusMessage: String? = nil)
     case streamingMessageUpdated(id: UUID, delta: String, statusMessage: String? = nil)
     case streamingMessageFinalized(id: UUID, finalText: String, toolCalls: [OnboardingMessage.ToolCallInfo]? = nil, statusMessage: String? = nil)
-
     // MARK: - Status Updates
     case streamingStatusUpdated(String?, statusMessage: String? = nil)
     case waitingStateChanged(String?, statusMessage: String? = nil)
     case pendingExtractionUpdated(OnboardingPendingExtraction?, statusMessage: String? = nil)
     case errorOccurred(String)
-
     // MARK: - Data Storage
     case applicantProfileStored(JSON)
     case skeletonTimelineStored(JSON)
     case enabledSectionsUpdated(Set<String>)
     case checkpointRequested
-
     // MARK: - Tool Execution
     case toolCallRequested(ToolCall, statusMessage: String? = nil)
     case toolCallCompleted(id: UUID, result: JSON, statusMessage: String? = nil)
-
     // MARK: - Tool UI Requests
     case choicePromptRequested(prompt: OnboardingChoicePrompt)
     case choicePromptCleared
@@ -61,53 +53,43 @@ enum OnboardingEvent {
     case phaseAdvanceDismissed
     case phaseAdvanceApproved(request: OnboardingPhaseAdvanceRequest)
     case phaseAdvanceDenied(feedback: String?)
-
     // MARK: - Artifact Management (§4.8 spec)
     case artifactGetRequested(id: UUID)
     case artifactNewRequested(fileURL: URL, kind: OnboardingUploadKind, performExtraction: Bool)
     case artifactAdded(id: UUID, kind: OnboardingUploadKind)
     case artifactUpdated(id: UUID, extractedText: String?)
     case artifactDeleted(id: UUID)
-
     // Upload completion (generic)
     case uploadCompleted(files: [ProcessedUploadInfo], requestKind: String, callId: String?, metadata: JSON)
-
     // Artifact pipeline (tool → state → persistence)
     case artifactRecordProduced(record: JSON)  // emitted when a tool returns an artifact_record
     case artifactRecordPersisted(record: JSON) // emitted after persistence/index update succeeds
     case artifactRecordsReplaced(records: [JSON]) // emitted when persisted artifact records replace in-memory state
     case artifactMetadataUpdateRequested(artifactId: String, updates: JSON) // emitted when LLM requests metadata update
     case artifactMetadataUpdated(artifact: JSON) // emitted after StateCoordinator updates metadata (includes full artifact)
-
     // MARK: - Knowledge Card Operations
     case knowledgeCardPersisted(card: JSON) // emitted when a knowledge card is approved and persisted
     case knowledgeCardsReplaced(cards: [JSON]) // emitted when persisted knowledge cards replace in-memory state
-
     // MARK: - Draft Knowledge Cards
     case draftKnowledgeCardProduced(KnowledgeCardDraft)
     case draftKnowledgeCardUpdated(KnowledgeCardDraft)
     case draftKnowledgeCardRemoved(UUID)
-
     // MARK: - Evidence Requirements
     case evidenceRequirementAdded(EvidenceRequirement)
     case evidenceRequirementUpdated(EvidenceRequirement)
     case evidenceRequirementRemoved(String)
-
     // MARK: - Timeline Operations
     case timelineCardCreated(card: JSON)
     case timelineCardUpdated(id: String, fields: JSON)
     case timelineCardDeleted(id: String)
     case timelineCardsReordered(ids: [String])
-
     // MARK: - Objective Management
     case objectiveStatusRequested(id: String, response: (String?) -> Void)
     case objectiveStatusUpdateRequested(id: String, status: String, source: String?, notes: String?, details: [String: String]?)
     case objectiveStatusChanged(id: String, oldStatus: String?, newStatus: String, phase: String, source: String?, notes: String?, details: [String: String]?)
-
     // MARK: - State Management (§6 spec)
     case stateSnapshot(updatedKeys: [String], snapshot: JSON)
     case stateAllowedToolsUpdated(tools: Set<String>)
-
     // MARK: - LLM Topics (§6 spec)
     case chatboxUserMessageAdded(messageId: String)  // Emitted when chatbox adds message to transcript immediately
     case llmUserMessageSent(messageId: String, payload: JSON, isSystemGenerated: Bool = false)
@@ -127,22 +109,18 @@ enum OnboardingEvent {
     case llmReasoningSummaryDelta(delta: String)  // Incremental reasoning text for sidebar
     case llmReasoningSummaryComplete(text: String)  // Final reasoning text for sidebar
     case llmReasoningItemsForToolCalls(ids: [String])  // Reasoning item IDs to pass back with tool outputs
-
     // MARK: - Phase Management (§6 spec)
     case phaseTransitionRequested(from: String, to: String, reason: String?)
     case phaseTransitionApplied(phase: String, timestamp: Date)
-
     // MARK: - Phase 3: Workflow Automation & Robustness
     case llmCancelRequested
     case skeletonTimelineReplaced(timeline: JSON, diff: TimelineDiff?, meta: JSON?)
 }
-
 enum LLMStatus: String {
     case busy
     case idle
     case error
 }
-
 /// Event topics for routing (spec §6)
 enum EventTopic: String, CaseIterable {
     case llm = "LLM"
@@ -156,40 +134,32 @@ enum EventTopic: String, CaseIterable {
     case timeline = "Timeline"
     case processing = "Processing"
 }
-
 /// Event bus that manages event distribution using AsyncStream
 actor EventCoordinator {
     // Broadcast continuations: each topic has multiple subscriber continuations
     private var subscriberContinuations: [EventTopic: [UUID: AsyncStream<OnboardingEvent>.Continuation]] = [:]
-
     // Event history for debugging
     private var eventHistory: [OnboardingEvent] = []
     private let maxHistorySize = 10000  // Large enough to capture full sessions without losing important events
-
     // Streaming consolidation state
     private var lastStreamingMessageId: UUID?
     private var consolidatedStreamingUpdates = 0
     private var consolidatedStreamingChars = 0
-
     // Metrics
     private var metrics = EventMetrics()
-
     struct EventMetrics {
         var publishedCount: [EventTopic: Int] = [:]
         var queueDepth: [EventTopic: Int] = [:]
         var lastPublishTime: [EventTopic: Date] = [:]
     }
-
     init() {
         // Initialize subscriber dictionaries for each topic
         for topic in EventTopic.allCases {
             subscriberContinuations[topic] = [:]
             metrics.publishedCount[topic] = 0
         }
-
         Logger.info("📡 EventCoordinator initialized with AsyncStream broadcast architecture", category: .ai)
     }
-
     deinit {
         // Clean up all continuations
         for continuations in subscriberContinuations.values {
@@ -198,7 +168,6 @@ actor EventCoordinator {
             }
         }
     }
-
     /// Subscribe to events for a specific topic
     /// Each subscriber gets their own stream that receives ALL events for the topic
     func stream(topic: EventTopic) -> AsyncStream<OnboardingEvent> {
@@ -208,26 +177,21 @@ actor EventCoordinator {
                 // Register this continuation for the topic
                 await self?.registerSubscriber(subscriberId, continuation: continuation, for: topic)
             }
-
             continuation.onTermination = { [weak self] _ in
                 Task { [weak self] in
                     await self?.unregisterSubscriber(subscriberId, for: topic)
                 }
             }
         }
-
         Logger.debug("[EventBus] Subscriber \(subscriberId) connected to topic: \(topic.rawValue)", category: .ai)
         return stream
     }
-
     private func registerSubscriber(_ id: UUID, continuation: AsyncStream<OnboardingEvent>.Continuation, for topic: EventTopic) {
         subscriberContinuations[topic, default: [:]][id] = continuation
     }
-
     private func unregisterSubscriber(_ id: UUID, for topic: EventTopic) {
         subscriberContinuations[topic]?[id] = nil
     }
-
     /// Subscribe to all events (for compatibility/debugging)
     func streamAll() -> AsyncStream<OnboardingEvent> {
         let subscriberId = UUID()
@@ -238,7 +202,6 @@ actor EventCoordinator {
                     await self?.registerSubscriber(subscriberId, continuation: continuation, for: topic)
                 }
             }
-
             continuation.onTermination = { [weak self] _ in
                 Task { [weak self] in
                     for topic in EventTopic.allCases {
@@ -247,25 +210,19 @@ actor EventCoordinator {
                 }
             }
         }
-
         Logger.debug("[EventBus] Subscriber \(subscriberId) connected to ALL topics", category: .ai)
         return stream
     }
-
     /// Publish an event to its appropriate topic
     func publish(_ event: OnboardingEvent) async {
         let topic = extractTopic(from: event)
-
         // Log the event
         logEvent(event)
-
         // Update metrics
         metrics.publishedCount[topic, default: 0] += 1
         metrics.lastPublishTime[topic] = Date()
-
         // Add to history with streaming event consolidation
         addToHistoryWithConsolidation(event)
-
         // Broadcast to ALL subscriber continuations for this topic
         if let continuations = subscriberContinuations[topic] {
             for continuation in continuations.values {
@@ -275,7 +232,6 @@ actor EventCoordinator {
             Logger.warning("[EventBus] No subscribers for topic: \(topic)", category: .ai)
         }
     }
-
     /// Add event to history with consolidation of streaming delta events
     private func addToHistoryWithConsolidation(_ event: OnboardingEvent) {
         // Check if this is a streaming message update
@@ -285,7 +241,6 @@ actor EventCoordinator {
                 // Consolidate: increment counter and accumulate chars
                 consolidatedStreamingUpdates += 1
                 consolidatedStreamingChars += delta.count
-
                 // Replace the last event with updated consolidation
                 if let lastIndex = eventHistory.lastIndex(where: {
                     if case .streamingMessageUpdated(let lastId, _, _) = $0 {
@@ -315,14 +270,12 @@ actor EventCoordinator {
             consolidatedStreamingUpdates = 0
             consolidatedStreamingChars = 0
         }
-
         // Append event to history
         eventHistory.append(event)
         if eventHistory.count > maxHistorySize {
             eventHistory.removeFirst(eventHistory.count - maxHistorySize)
         }
     }
-
     /// Extract topic from event type
     private func extractTopic(from event: OnboardingEvent) -> EventTopic {
         switch event {
@@ -334,26 +287,21 @@ actor EventCoordinator {
              .llmReasoningSummaryDelta, .llmReasoningSummaryComplete, .llmReasoningItemsForToolCalls, .llmCancelRequested,
              .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized:
             return .llm
-
         // State events
         case .stateSnapshot, .stateAllowedToolsUpdated,
              .applicantProfileStored, .skeletonTimelineStored, .enabledSectionsUpdated,
              .checkpointRequested:
             return .state
-
         // Phase events
         case .phaseTransitionRequested, .phaseTransitionApplied, .phaseAdvanceRequested, .phaseAdvanceDismissed,
              .phaseAdvanceApproved, .phaseAdvanceDenied:
             return .phase
-
         // Objective events
         case .objectiveStatusRequested, .objectiveStatusUpdateRequested, .objectiveStatusChanged:
             return .objective
-
         // Tool events
         case .toolCallRequested, .toolCallCompleted:
             return .tool
-
         // Artifact events
         case .uploadCompleted,
              .artifactGetRequested, .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted,
@@ -362,45 +310,37 @@ actor EventCoordinator {
              .knowledgeCardPersisted, .knowledgeCardsReplaced,
              .draftKnowledgeCardProduced, .draftKnowledgeCardUpdated, .draftKnowledgeCardRemoved:
             return .artifact
-
         // Evidence Requirements (treated as state/objectives)
         case .evidenceRequirementAdded, .evidenceRequirementUpdated, .evidenceRequirementRemoved:
             return .state
-
         // Toolpane events
         case .choicePromptRequested, .choicePromptCleared, .uploadRequestPresented,
              .uploadRequestCancelled, .validationPromptRequested, .validationPromptCleared,
              .applicantProfileIntakeRequested, .profileSummaryUpdateRequested(_), .applicantProfileIntakeCleared, .profileSummaryDismissRequested,
              .sectionToggleRequested, .sectionToggleCleared, .toolPaneCardRestored:
             return .toolpane
-
         // Timeline events
         case .timelineCardCreated, .timelineCardUpdated, .timelineCardDeleted, .timelineCardsReordered,
              .skeletonTimelineReplaced:
             return .timeline
-
         // Processing events
         case .processingStateChanged, .streamingStatusUpdated, .waitingStateChanged,
              .pendingExtractionUpdated, .errorOccurred:
             return .processing
         }
     }
-
     /// Get metrics for monitoring
     func getMetrics() -> EventMetrics {
         metrics
     }
-
     /// Get recent event history
     func getRecentEvents(count: Int = 10) -> [OnboardingEvent] {
         Array(eventHistory.suffix(count))
     }
-
     /// Clear event history
     func clearHistory() {
         eventHistory.removeAll()
     }
-
     // MARK: - Private
     private func logEvent(_ event: OnboardingEvent) {
         let description: String
@@ -577,30 +517,24 @@ actor EventCoordinator {
             case .toolPaneCardRestored(let card):
                 description = "ToolPane card restored: \(card.rawValue)"
         }
-
         Logger.debug("[Event] \(description)", category: .ai)
     }
 }
-
 /// Protocol for components that can emit events
 protocol OnboardingEventEmitter {
     var eventBus: EventCoordinator { get }
 }
-
 /// Extension to make event emission convenient
 extension OnboardingEventEmitter {
     func emit(_ event: OnboardingEvent) async {
         await eventBus.publish(event)
     }
 }
-
 /// Protocol for components that handle events
 protocol OnboardingEventHandler {
     func handleEvent(_ event: OnboardingEvent) async
 }
-
 // Tool call structure now uses the one from ToolProtocol.swift
-
 
 // MARK: - TimelineDiff Summary Extension
 /// Extension to provide a summary string for the detailed TimelineDiff type
@@ -614,4 +548,3 @@ extension TimelineDiff {
         return parts.isEmpty ? "no changes" : parts.joined(separator: ", ")
     }
 }
-

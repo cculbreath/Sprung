@@ -4,10 +4,8 @@
 //
 //  Created by Christopher Culbreath on 6/10/25.
 //
-
 import SwiftUI
 import SwiftData
-
 struct MultiModelProgressSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) var appState: AppState

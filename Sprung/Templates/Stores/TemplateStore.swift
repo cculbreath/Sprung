@@ -1,39 +1,31 @@
 import Foundation
 import Observation
 import SwiftData
-
 @MainActor
 @Observable
 final class TemplateStore {
     private let context: ModelContext
-
     init(context: ModelContext) {
         self.context = context
     }
-
     func templates() -> [Template] {
         let descriptor = FetchDescriptor<Template>(sortBy: [SortDescriptor(\Template.name, order: .forward)])
         return (try? context.fetch(descriptor)) ?? []
     }
-
     func template(slug: String) -> Template? {
         let normalized = slug.lowercased()
         let descriptor = FetchDescriptor<Template>(predicate: #Predicate { $0.slug == normalized })
         return try? context.fetch(descriptor).first
     }
-
     func htmlTemplateContent(slug: String) -> String? {
         template(slug: slug)?.htmlContent
     }
-
     func textTemplateContent(slug: String) -> String? {
         template(slug: slug)?.textContent
     }
-
     func cssTemplateContent(slug: String) -> String? {
         template(slug: slug)?.cssContent
     }
-
     func defaultTemplate() -> Template? {
         let descriptor = FetchDescriptor<Template>(
             predicate: #Predicate { $0.isDefault == true },
@@ -47,7 +39,6 @@ final class TemplateStore {
         )
         return try? context.fetch(fallbackDescriptor).first
     }
-
     @discardableResult
     func upsertTemplate(
         slug: String,
@@ -93,7 +84,6 @@ final class TemplateStore {
             return template
         }
     }
-
     func setDefault(_ template: Template) {
         guard template.isDefault == false else { return }
         let descriptor = FetchDescriptor<Template>(predicate: #Predicate { $0.isDefault == true })
@@ -104,7 +94,6 @@ final class TemplateStore {
         template.updatedAt = Date()
         try? context.save()
     }
-
     func updateManifest(slug: String, manifestData: Data?) throws {
         guard let template = template(slug: slug) else {
             throw TemplateStoreError.templateNotFound(slug)
@@ -113,11 +102,9 @@ final class TemplateStore {
         template.updatedAt = Date()
         try context.save()
     }
-
     func saveContext() {
         try? context.save()
     }
-
     func deleteTemplate(slug: String) {
         guard let template = template(slug: slug) else { return }
         let wasDefault = template.isDefault
@@ -130,7 +117,6 @@ final class TemplateStore {
         }
     }
 }
-
 enum TemplateStoreError: Error {
     case templateNotFound(String)
 }

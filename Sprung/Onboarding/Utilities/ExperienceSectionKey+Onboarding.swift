@@ -1,12 +1,10 @@
 import Foundation
-
 extension ExperienceSectionKey {
     static func fromOnboardingIdentifier(_ identifier: String) -> ExperienceSectionKey? {
         let normalized = identifier
             .lowercased()
             .replacingOccurrences(of: " ", with: "_")
             .replacingOccurrences(of: "-", with: "_")
-
         switch normalized {
         case "work", "work_experience", "jobs", "employment":
             return .work

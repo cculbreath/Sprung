@@ -1,7 +1,6 @@
 import Foundation
 import Observation
 import SwiftyJSON
-
 /// Observable state container for the Onboarding UI.
 /// This class holds all state required by SwiftUI views, updated via events from the Coordinator.
 @MainActor

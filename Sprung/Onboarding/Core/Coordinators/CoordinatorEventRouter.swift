@@ -1,6 +1,5 @@
 import Foundation
 import SwiftyJSON
-
 /// Router responsible for subscribing to and routing coordinator-level events.
 /// This component centralizes the event handling logic that was previously in `OnboardingInterviewCoordinator`.
 @MainActor
@@ -47,67 +46,49 @@ final class CoordinatorEventRouter {
         switch event {
         case .objectiveStatusChanged(let id, _, let newStatus, _, _, _, _):
             checkpointManager.scheduleCheckpoint()
-
             if id == "applicant_profile" && newStatus == "completed" {
                 toolRouter.profileHandler.dismissProfileSummary()
             }
-
         case .timelineCardCreated, .timelineCardUpdated,
              .timelineCardDeleted, .timelineCardsReordered, .skeletonTimelineReplaced:
             let timeline = await state.artifacts.skeletonTimeline
             ui.updateTimeline(timeline)
             checkpointManager.scheduleCheckpoint()
-
         case .artifactRecordPersisted, .phaseTransitionApplied:
             checkpointManager.scheduleCheckpoint()
             
         case .processingStateChanged:
             break
-
         case .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized:
             break
-
         case .llmReasoningSummaryDelta, .llmReasoningSummaryComplete:
             break
-
         case .streamingStatusUpdated:
             break
-
         case .waitingStateChanged:
             break
-
         case .errorOccurred(let error):
             Logger.error("Interview error: \(error)", category: .ai)
-
         case .applicantProfileStored:
             // Handled by ProfilePersistenceHandler
             break
-
         case .skeletonTimelineStored, .enabledSectionsUpdated:
             await checkpointManager.saveCheckpoint()
-
         case .checkpointRequested:
             await checkpointManager.saveCheckpoint()
-
         case .toolCallRequested:
             break
-
         case .toolCallCompleted:
             break
-
         case .objectiveStatusRequested(let id, let response):
             let status = await state.getObjectiveStatus(id)?.rawValue
             response(status)
-
         case .phaseAdvanceRequested:
             break
-
         case .phaseAdvanceDismissed:
             break
-
         case .phaseAdvanceApproved, .phaseAdvanceDenied:
             break
-
         case .choicePromptRequested, .choicePromptCleared,
              .uploadRequestPresented, .uploadRequestCancelled,
              .validationPromptRequested, .validationPromptCleared,
@@ -124,13 +105,11 @@ final class CoordinatorEventRouter {
              .llmSendUserMessage, .llmSendDeveloperMessage, .llmToolResponseMessage, .llmStatus,
              .phaseTransitionRequested, .timelineCardUpdated:
             break
-
         case .phaseTransitionApplied(let phaseName, _):
             await phaseTransitionController.handlePhaseTransition(phaseName)
             if let phase = InterviewPhase(rawValue: phaseName) {
                 ui.phase = phase
             }
-
         case .profileSummaryUpdateRequested, .profileSummaryDismissRequested,
              .sectionToggleRequested, .sectionToggleCleared,
              .artifactMetadataUpdated,
@@ -142,7 +121,6 @@ final class CoordinatorEventRouter {
              .chatboxUserMessageAdded,
              .skeletonTimelineReplaced:
             break
-
         @unknown default:
             break
         }

@@ -2,10 +2,8 @@
 //  AppSheets.swift
 //  Sprung
 //
-
 import Foundation
 import SwiftUI
-
 /// Centralized sheet and UI state management for the main app window
 /// Replaces individual Bool bindings with a single organized struct
 struct AppSheets {
@@ -21,7 +19,6 @@ struct AppSheets {
     var showResumeInspector = false
     var showCoverLetterInspector = false
 }
-
 // MARK: - Sheet Presentation ViewModifier
 struct AppSheetsModifier: ViewModifier {
     @Binding var sheets: AppSheets
@@ -33,7 +30,6 @@ struct AppSheetsModifier: ViewModifier {
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(AppState.self) private var appState
     @Environment(ResumeReviseViewModel.self) private var resumeReviseViewModel
-
     private var revisionSheetBinding: Binding<Bool> {
         Binding(
             get: { resumeReviseViewModel.showResumeRevisionSheet },
@@ -112,7 +108,6 @@ struct AppSheetsModifier: ViewModifier {
             }
     }
 }
-
 // MARK: - Helper View Extension
 extension View {
     func appSheets(sheets: Binding<AppSheets>, clarifyingQuestions: Binding<[ClarifyingQuestion]>, refPopup: Binding<Bool>) -> some View {

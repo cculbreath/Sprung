@@ -1,6 +1,5 @@
 import Foundation
 import SwiftyJSON
-
 /// Handler responsible for persisting applicant profile data to SwiftData.
 /// Listens to `.applicantProfileStored` events and syncs with SwiftData storage.
 @MainActor

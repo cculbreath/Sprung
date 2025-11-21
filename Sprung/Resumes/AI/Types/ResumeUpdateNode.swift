@@ -4,13 +4,11 @@
 //
 //  Created by Christopher Culbreath on 9/9/24.
 //
-
 import Foundation
 import PDFKit
 import AppKit
 import SwiftUI
 import SwiftData
-
 struct ProposedRevisionNode: Codable, Equatable {
     var id: String = ""
     var oldValue: String = ""
@@ -19,10 +17,8 @@ struct ProposedRevisionNode: Codable, Equatable {
     var isTitleNode: Bool = false
     var why: String = ""
     var treePath: String = ""
-
     // `value` has been removed. `treePath` is retained so the model can
     // provide a hierarchical hint when an ID match is ambiguous.
-
     // Default initializer
     init() {}
     
@@ -33,12 +29,10 @@ struct ProposedRevisionNode: Codable, Equatable {
         
         // Debug logging to help diagnose the issue
         Logger.debug("🔍 ProposedRevisionNode.originalText - ID: \(id), isTitleNode: \(isTitleNode), oldValue: '\(oldValue)'")
-
         if !trimmedOld.isEmpty {
             Logger.debug("✅ Using oldValue: '\(trimmedOld)'")
             return trimmedOld
         }
-
         // Find the matching node in updateNodes by ID and isTitleNode flag
         if let dict = updateNodes.first(where: { 
             ($0["id"] as? String) == id && 
@@ -79,7 +73,6 @@ struct ProposedRevisionNode: Codable, Equatable {
         )
     }
     
-
     enum CodingKeys: String, CodingKey {
         case id
         case oldValue
@@ -89,12 +82,10 @@ struct ProposedRevisionNode: Codable, Equatable {
         case why
         case treePath
     }
-
     // Custom decoder so that the struct stays compatible with older
     // responses that may *not* include `treePath`.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-
         id = try container.decodeIfPresent(String.self, forKey: .id) ?? ""
         oldValue = try container.decodeIfPresent(String.self, forKey: .oldValue) ?? ""
         newValue = try container.decodeIfPresent(String.self, forKey: .newValue) ?? ""
@@ -105,7 +96,6 @@ struct ProposedRevisionNode: Codable, Equatable {
     }
     // Encodable synthesis is fine.
 }
-
 struct RevisionsContainer: Codable {
     var revArray: [ProposedRevisionNode]
     
@@ -138,7 +128,6 @@ struct RevisionsContainer: Codable {
     }
     
 }
-
 enum PostReviewAction: String, Codable {
     case accepted = "No action required. Revision Accepted."
     case acceptedWithChanges = "No action required. Revision Accepted with reviewer changes."
@@ -152,7 +141,6 @@ enum PostReviewAction: String, Codable {
         "Action Required: Proposal to maintain original value rejected. Please propose a  revised value for this field and incorporate reviewer comments"
     case unevaluated = "Unevaluated"
 }
-
 @Observable class FeedbackNode {
     var id: String
     var originalValue: String
@@ -226,7 +214,6 @@ enum PostReviewAction: String, Codable {
         }
     }
 }
-
 extension FeedbackNode: Encodable {
     enum CodingKeys: String, CodingKey {
         case id
@@ -236,7 +223,6 @@ extension FeedbackNode: Encodable {
         case reviewerComments
         case isTitleNode
     }
-
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
@@ -247,7 +233,6 @@ extension FeedbackNode: Encodable {
         try container.encode(isTitleNode, forKey: .isTitleNode)
     }
 }
-
 
 // MARK: - Collection Extensions for Review Workflow Logic
 @MainActor
@@ -306,7 +291,6 @@ extension Array where Element == FeedbackNode {
     func logFeedbackStatistics() {
         Logger.debug("\n===== FEEDBACK NODE STATISTICS =====")
         Logger.debug("Total feedback nodes: \(count)")
-
         let acceptedCount = filter { $0.actionRequested == .accepted }.count
         let acceptedWithChangesCount = filter { $0.actionRequested == .acceptedWithChanges }.count
         let noChangeCount = filter { $0.actionRequested == .noChange }.count
@@ -315,7 +299,6 @@ extension Array where Element == FeedbackNode {
         let rewriteNoCommentCount = filter { $0.actionRequested == .rewriteNoComment }.count
         let mandatedChangeCount = filter { $0.actionRequested == .mandatedChange }.count
         let mandatedChangeNoCommentCount = filter { $0.actionRequested == .mandatedChangeNoComment }.count
-
         Logger.debug("Accepted: \(acceptedCount)")
         Logger.debug("Accepted with changes: \(acceptedWithChangesCount)")
         Logger.debug("No change needed: \(noChangeCount)")
@@ -331,16 +314,13 @@ extension Array where Element == FeedbackNode {
     func logResubmissionSummary() {
         Logger.debug("\n===== SUBMITTING REVISION REQUEST =====")
         Logger.debug("Number of nodes to revise: \(count)")
-
         // Count by feedback type
         let typeCount = reduce(into: [PostReviewAction: Int]()) { counts, node in
             counts[node.actionRequested, default: 0] += 1
         }
-
         for (action, count) in typeCount.sorted(by: { $0.value > $1.value }) {
             Logger.debug("  - \(action.rawValue): \(count) nodes")
         }
-
         // List node IDs being submitted
         let nodeIds = map { $0.id }.joined(separator: ", ")
         Logger.debug("Node IDs: \(nodeIds)")

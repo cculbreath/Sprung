@@ -1,13 +1,11 @@
 import AppKit
 import Foundation
 import SwiftyJSON
-
 struct ApplicantSocialProfileDraft: Identifiable, Equatable {
     var id: UUID
     var network: String
     var username: String
     var url: String
-
     init(
         id: UUID = UUID(),
         network: String = "",
@@ -19,14 +17,12 @@ struct ApplicantSocialProfileDraft: Identifiable, Equatable {
         self.username = username
         self.url = url
     }
-
     init(model: ApplicantSocialProfile) {
         self.id = model.id
         self.network = model.network
         self.username = model.username
         self.url = model.url
     }
-
     func toModel(existing: ApplicantSocialProfile? = nil) -> ApplicantSocialProfile {
         if let existing {
             existing.network = network
@@ -43,7 +39,6 @@ struct ApplicantSocialProfileDraft: Identifiable, Equatable {
         return profile
     }
 }
-
 struct ApplicantProfileDraft: Equatable {
     private enum Field: CaseIterable, Hashable {
         case name
@@ -60,9 +55,7 @@ struct ApplicantProfileDraft: Equatable {
         case socialProfiles
         case picture
     }
-
     private var providedFields: Set<Field> = []
-
     var name: String {
         didSet { providedFields.insert(.name) }
     }
@@ -102,7 +95,6 @@ struct ApplicantProfileDraft: Equatable {
     var pictureData: Data?
     var pictureMimeType: String?
     var suggestedEmails: [String] = []
-
     init(
         name: String = "",
         label: String = "",
@@ -137,7 +129,6 @@ struct ApplicantProfileDraft: Equatable {
         self.providedFields = Set(Field.allCases)
         self.suggestedEmails = suggestedEmails.uniquedPreservingOrder()
     }
-
     init(profile: ApplicantProfile) {
         self.name = profile.name
         self.label = profile.label
@@ -156,38 +147,30 @@ struct ApplicantProfileDraft: Equatable {
         self.providedFields = Set(Field.allCases)
         self.suggestedEmails = []
     }
-
     init(json: JSON) {
         self.providedFields = []
         let basics = json["basics"]
-
         let nameSource = basics != .null ? basics["name"] : json["name"]
         self.name = nameSource.stringValue
         if nameSource != .null { providedFields.insert(.name) }
-
         let labelSource = basics != .null ? basics["label"] : json["label"]
         self.label = labelSource.stringValue
         if labelSource != .null { providedFields.insert(.label) }
-
         let summarySource = basics != .null ? basics["summary"] : json["summary"]
         self.summary = summarySource.stringValue
         if summarySource != .null { providedFields.insert(.summary) }
-
         let locationJSON: JSON
         if basics != .null, basics["location"] != .null {
             locationJSON = basics["location"]
         } else {
             locationJSON = json["location"]
         }
-
         let addressSource = locationJSON["address"] != .null ? locationJSON["address"] : json["address"]
         self.address = addressSource.stringValue
         if addressSource != .null { providedFields.insert(.address) }
-
         let citySource = locationJSON["city"] != .null ? locationJSON["city"] : json["city"]
         self.city = citySource.stringValue
         if citySource != .null { providedFields.insert(.city) }
-
         let stateSources: [JSON] = [
             locationJSON["state"],
             locationJSON["region"],
@@ -199,7 +182,6 @@ struct ApplicantProfileDraft: Equatable {
         } else {
             self.state = ""
         }
-
         let zipSources: [JSON] = [
             locationJSON["postalCode"],
             locationJSON["zip"],
@@ -211,18 +193,15 @@ struct ApplicantProfileDraft: Equatable {
         } else {
             self.zip = ""
         }
-
         let countrySource = locationJSON["countryCode"] != .null ? locationJSON["countryCode"] : json["country"]
         self.countryCode = countrySource.stringValue
         if countrySource != .null { providedFields.insert(.countryCode) }
-
         func firstString(from candidates: [JSON]) -> (String, Bool) {
             if let source = candidates.first(where: { $0 != .null }) {
                 return (source.stringValue, true)
             }
             return ("", false)
         }
-
         let (websiteValue, websiteProvided) = firstString(from: [
             basics["url"],
             basics["website"],
@@ -233,12 +212,10 @@ struct ApplicantProfileDraft: Equatable {
         ])
         self.website = websiteValue
         if websiteProvided { providedFields.insert(.website) }
-
         let contactEmailOptions = json["__contact_email_options"].arrayValue
             .compactMap { $0.string?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
         self.suggestedEmails = contactEmailOptions.uniquedPreservingOrder()
-
         let (emailValue, emailProvided) = firstString(from: [
             basics["email"],
             json["email"]
@@ -248,14 +225,12 @@ struct ApplicantProfileDraft: Equatable {
         if !emailProvided, let firstSuggestion = suggestedEmails.first {
             self.email = firstSuggestion
         }
-
         let (phoneValue, phoneProvided) = firstString(from: [
             basics["phone"],
             json["phone"]
         ])
         self.phone = phoneValue
         if phoneProvided { providedFields.insert(.phone) }
-
         let profilesJSON: JSON
         if basics != .null, basics["profiles"] != .null {
             profilesJSON = basics["profiles"]
@@ -272,18 +247,15 @@ struct ApplicantProfileDraft: Equatable {
             )
         }
         if profilesJSON != .null { providedFields.insert(.socialProfiles) }
-
         let imageJSON: JSON
         if basics != .null, basics["image"] != .null {
             imageJSON = basics["image"]
         } else {
             imageJSON = json["image"]
         }
-
         if let image = imageJSON.string, let data = Data(base64Encoded: image) {
             self.pictureData = data
             providedFields.insert(.picture)
-
             if basics != .null,
                let mime = basics["image_mime_type"].string ?? basics["imageMimeType"].string {
                 self.pictureMimeType = mime
@@ -298,13 +270,11 @@ struct ApplicantProfileDraft: Equatable {
             self.pictureMimeType = nil
         }
     }
-
     mutating func updatePicture(data: Data?, mimeType: String?) {
         pictureData = data
         pictureMimeType = data == nil ? nil : (mimeType ?? pictureMimeType ?? "image/png")
         providedFields.insert(.picture)
     }
-
     func merging(_ other: ApplicantProfileDraft) -> ApplicantProfileDraft {
         var merged = self
         merged.providedFields.formUnion(other.providedFields)
@@ -331,7 +301,6 @@ struct ApplicantProfileDraft: Equatable {
         }
         return merged
     }
-
     func apply(to profile: ApplicantProfile, replaceMissing: Bool = true) {
         if replaceMissing || shouldUse(.name, isEmpty: name.isEmpty) { profile.name = name }
         if replaceMissing || shouldUse(.label, isEmpty: label.isEmpty) { profile.label = label }
@@ -344,7 +313,6 @@ struct ApplicantProfileDraft: Equatable {
         if replaceMissing || shouldUse(.website, isEmpty: website.isEmpty) { profile.websites = website }
         if replaceMissing || shouldUse(.email, isEmpty: email.isEmpty) { profile.email = email }
         if replaceMissing || shouldUse(.phone, isEmpty: phone.isEmpty) { profile.phone = phone }
-
         if replaceMissing || shouldUse(.socialProfiles, isEmpty: socialProfiles.isEmpty) {
             var existing = Dictionary(uniqueKeysWithValues: profile.profiles.map { ($0.id, $0) })
             var updatedProfiles: [ApplicantSocialProfile] = []
@@ -355,13 +323,11 @@ struct ApplicantProfileDraft: Equatable {
             }
             profile.profiles = updatedProfiles
         }
-
         if replaceMissing || shouldUse(.picture, isEmpty: pictureData == nil) {
             profile.pictureData = pictureData
             profile.pictureMimeType = pictureMimeType
         }
     }
-
     func toJSON() -> JSON {
         var location: [String: Any] = [:]
         if providedFields.contains(.address) || !address.isEmpty { location["address"] = address }
@@ -369,18 +335,15 @@ struct ApplicantProfileDraft: Equatable {
         if providedFields.contains(.state) || !state.isEmpty { location["region"] = state }
         if providedFields.contains(.zip) || !zip.isEmpty { location["postalCode"] = zip }
         if providedFields.contains(.countryCode) || !countryCode.isEmpty { location["countryCode"] = countryCode }
-
         var payload: [String: Any] = [
             "name": name,
             "email": email,
             "phone": phone,
             "url": website
         ]
-
         if !location.isEmpty {
             payload["location"] = location
         }
-
         if providedFields.contains(.socialProfiles) || !socialProfiles.isEmpty {
             payload["profiles"] = socialProfiles.map { profile in
                 [
@@ -391,29 +354,23 @@ struct ApplicantProfileDraft: Equatable {
                 ]
             }
         }
-
         if let pictureData, !pictureData.isEmpty {
             payload["image"] = pictureData.base64EncodedString()
             if let mimeType = pictureMimeType {
                 payload["image_mime_type"] = mimeType
             }
         }
-
         if payload["location"] == nil {
             payload["location"] = [:]
         }
-
         if !suggestedEmails.isEmpty {
             payload["__contact_email_options"] = JSON(suggestedEmails)
         }
-
         return JSON(payload)
     }
-
     func toSafeJSON() -> JSON {
         ApplicantProfileDraft.removeHiddenEmailOptions(from: toJSON())
     }
-
     static func removeHiddenEmailOptions(from json: JSON) -> JSON {
         var sanitized = json
         if var dictionary = sanitized.dictionaryObject {
@@ -424,17 +381,14 @@ struct ApplicantProfileDraft: Equatable {
         }
         return sanitized
     }
-
     private func shouldUse(_ field: Field, isEmpty: Bool) -> Bool {
         providedFields.contains(field) || !isEmpty
     }
-
     var pictureImage: NSImage? {
         guard let pictureData else { return nil }
         return NSImage(data: pictureData)
     }
 }
-
 private extension Array where Element: Hashable {
     func uniquedPreservingOrder() -> [Element] {
         var seen: Set<Element> = []

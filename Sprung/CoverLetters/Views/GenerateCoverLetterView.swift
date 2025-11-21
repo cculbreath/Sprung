@@ -4,10 +4,8 @@
 //
 //  Created on 6/9/25.
 //
-
 import SwiftUI
 import SwiftData
-
 /// A unified view for generating cover letters that combines model selection with source management
 struct GenerateCoverLetterView: View {
     @Environment(\.dismiss) private var dismiss
@@ -120,7 +118,6 @@ struct GenerateCoverLetterView: View {
         }
     }
 }
-
 /// A row showing a checkable reference with delete capability
 struct CheckableRefRow: View {
     let ref: CoverRef

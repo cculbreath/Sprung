@@ -5,17 +5,13 @@
 //  Dialog for user approval when LLM requests phase advancement with incomplete objectives.
 //  Implements the approval flow specified in next_phase_tool.md §4.
 //
-
 import SwiftUI
-
 struct OnboardingPhaseAdvanceDialog: View {
     enum Decision: String, CaseIterable, Identifiable {
         case approved
         case denied
         case deniedWithFeedback
-
         var id: String { rawValue }
-
         var label: String {
             switch self {
             case .approved: return "Approve"
@@ -23,7 +19,6 @@ struct OnboardingPhaseAdvanceDialog: View {
             case .deniedWithFeedback: return "Deny & Tell"
             }
         }
-
         var systemImage: String {
             switch self {
             case .approved: return "checkmark.circle"
@@ -32,14 +27,11 @@ struct OnboardingPhaseAdvanceDialog: View {
             }
         }
     }
-
     let request: OnboardingPhaseAdvanceRequest
     let onSubmit: (Decision, String?) -> Void
     let onCancel: (() -> Void)?
-
     @State private var decision: Decision = .approved
     @State private var feedback: String = ""
-
     private var nextPhaseDisplayName: String {
         switch request.nextPhase {
         case .phase1CoreFacts:
@@ -52,15 +44,12 @@ struct OnboardingPhaseAdvanceDialog: View {
             return "Complete"
         }
     }
-
     private var hasIncompleteObjectives: Bool {
         !request.missingObjectives.isEmpty
     }
-
     private var hasProposedOverrides: Bool {
         !request.proposedOverrides.isEmpty
     }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             // Header
@@ -68,14 +57,11 @@ struct OnboardingPhaseAdvanceDialog: View {
                 Image(systemName: "arrow.right.circle.fill")
                     .font(.title2)
                     .foregroundStyle(.blue)
-
                 Text("Move to next phase?")
                     .font(.title2)
                     .fontWeight(.semibold)
             }
-
             Divider()
-
             // Phase transition info
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
@@ -84,7 +70,6 @@ struct OnboardingPhaseAdvanceDialog: View {
                     Text(currentPhaseDisplayName)
                         .fontWeight(.medium)
                 }
-
                 HStack {
                     Image(systemName: "arrow.down")
                         .foregroundStyle(.secondary)
@@ -92,7 +77,6 @@ struct OnboardingPhaseAdvanceDialog: View {
                     Spacer()
                 }
                 .padding(.leading, 8)
-
                 HStack {
                     Text("Next Phase:")
                         .foregroundStyle(.secondary)
@@ -102,7 +86,6 @@ struct OnboardingPhaseAdvanceDialog: View {
                 }
             }
             .font(.callout)
-
             // Incomplete objectives warning
             if hasIncompleteObjectives {
                 VStack(alignment: .leading, spacing: 12) {
@@ -113,18 +96,15 @@ struct OnboardingPhaseAdvanceDialog: View {
                             .font(.headline)
                             .foregroundStyle(.orange)
                     }
-
                     Text("The interviewer would like to proceed despite the following not being marked complete:")
                         .font(.callout)
                         .foregroundStyle(.secondary)
-
                     VStack(alignment: .leading, spacing: 6) {
                         ForEach(request.missingObjectives, id: \.self) { objective in
                             HStack(spacing: 8) {
                                 Image(systemName: "circle")
                                     .font(.system(size: 6))
                                     .foregroundStyle(.orange)
-
                                 Text(formatObjectiveName(objective))
                                     .font(.callout)
                             }
@@ -138,7 +118,6 @@ struct OnboardingPhaseAdvanceDialog: View {
                         .fill(Color.orange.opacity(0.1))
                 )
             }
-
             if hasProposedOverrides {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
@@ -148,11 +127,9 @@ struct OnboardingPhaseAdvanceDialog: View {
                             .font(.headline)
                             .foregroundStyle(.blue)
                     }
-
                     Text("The interviewer suggests bypassing the following objectives:")
                         .font(.callout)
                         .foregroundStyle(.secondary)
-
                     VStack(alignment: .leading, spacing: 6) {
                         ForEach(request.proposedOverrides, id: \.self) { objective in
                             HStack(spacing: 8) {
@@ -172,7 +149,6 @@ struct OnboardingPhaseAdvanceDialog: View {
                         .fill(Color.blue.opacity(0.08))
                 )
             }
-
             // Reason from LLM
             if let reason = request.reason, !reason.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
@@ -184,7 +160,6 @@ struct OnboardingPhaseAdvanceDialog: View {
                             .font(.subheadline)
                             .fontWeight(.medium)
                     }
-
                     Text("\"\(reason)\"")
                         .font(.callout)
                         .italic()
@@ -197,13 +172,10 @@ struct OnboardingPhaseAdvanceDialog: View {
                         )
                 }
             }
-
             Divider()
-
             // Decision prompt
             Text("Do you approve advancing to \(nextPhaseDisplayName)?")
                 .font(.headline)
-
             // Decision picker
             Picker("Decision", selection: $decision) {
                 ForEach(Decision.allCases) { option in
@@ -213,18 +185,15 @@ struct OnboardingPhaseAdvanceDialog: View {
             }
             .pickerStyle(.segmented)
             .padding(.vertical, 4)
-
             // Feedback field (conditional on Deny & Tell)
             if decision == .deniedWithFeedback {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Instructions for interviewer")
                         .font(.subheadline)
                         .fontWeight(.medium)
-
                     Text("Tell the interviewer what to do next")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-
                     TextEditor(text: $feedback)
                         .font(.body)
                         .frame(minHeight: 100)
@@ -236,7 +205,6 @@ struct OnboardingPhaseAdvanceDialog: View {
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
-
             // Action buttons
             HStack(spacing: 12) {
                 if let onCancel {
@@ -245,9 +213,7 @@ struct OnboardingPhaseAdvanceDialog: View {
                     }
                     .keyboardShortcut(.cancelAction)
                 }
-
                 Spacer()
-
                 Button {
                     submitDecision()
                 } label: {
@@ -267,7 +233,6 @@ struct OnboardingPhaseAdvanceDialog: View {
         .frame(width: 540)
         .background(Color(nsColor: .windowBackgroundColor))
     }
-
     // MARK: - Helpers
     private var currentPhaseDisplayName: String {
         switch request.currentPhase {
@@ -281,13 +246,11 @@ struct OnboardingPhaseAdvanceDialog: View {
             return "Complete"
         }
     }
-
     private func formatObjectiveName(_ objective: String) -> String {
         objective
             .replacingOccurrences(of: "_", with: " ")
             .capitalized
     }
-
     private func submitDecision() {
         let feedbackText = decision == .deniedWithFeedback ? feedback.trimmingCharacters(in: .whitespacesAndNewlines) : nil
         onSubmit(decision, feedbackText)

@@ -4,15 +4,12 @@
 //
 //  Created on 6/9/25.
 //
-
 import SwiftUI
-
 /// A view showing metadata about the cover letter generation and committee feedback
 struct CoverLetterInspectorView: View {
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(OpenRouterService.self) private var openRouterService: OpenRouterService
-
     @Binding var isEditing: Bool
     @Namespace private var namespace
     
@@ -230,7 +227,6 @@ struct CoverLetterInspectorView: View {
         }
     }
 }
-
 // Helper view for consistent metadata rows
 struct MetadataRow: View {
     let label: String
@@ -252,7 +248,6 @@ struct MetadataRow: View {
         .frame(height: 24)
     }
 }
-
 // Helper button components
 struct EditToggleButton: View {
     @Binding var isEditing: Bool
@@ -295,7 +290,6 @@ struct EditToggleButton: View {
         }
     }
 }
-
 struct StarToggleButton: View {
     let coverLetter: CoverLetter
     let action: () -> Void
@@ -345,7 +339,6 @@ struct StarToggleButton: View {
         }
     }
 }
-
 struct DeleteButton: View {
     let action: () -> Void
     let namespace: Namespace.ID
@@ -367,7 +360,6 @@ struct DeleteButton: View {
         }
     }
 }
-
 
 struct CoverLetterNavigationButtons: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
@@ -475,4 +467,3 @@ struct CoverLetterNavigationButtons: View {
         }
     }
 }
-

@@ -1,51 +1,40 @@
 import AppKit
 import SwiftUI
-
 struct OnboardingInterviewView: View {
     @Environment(OnboardingInterviewCoordinator.self) private var interviewCoordinator
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(AppEnvironment.self) private var appEnvironment
     @Environment(DebugSettingsStore.self) private var debugSettings
     private let onboardingFallbackModelId = "openai/gpt-5.1"
-
     @State private var viewModel = OnboardingInterviewViewModel(
         fallbackModelId: "openai/gpt-5.1"
     )
-
     @State private var showResumeOptions = false
     @State private var pendingStartModelId: String?
-
     #if DEBUG
     @State private var showEventDump = false
     #endif
-
     @AppStorage("onboardingInterviewDefaultModelId") private var defaultModelId = "openai/gpt-5.1"
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var defaultWebSearchAllowed = true
     @AppStorage("onboardingInterviewAllowWritingAnalysisDefault") private var defaultWritingAnalysisAllowed = true
-
     @Namespace private var wizardTransition
-
     var body: some View {
         bodyContent
     }
-
     private var bodyContent: some View {
         @Bindable var coordinator = interviewCoordinator
         @Bindable var uiState = viewModel
-
         // --- Card visual constants ---
         let corner: CGFloat = 44
         let shadowR: CGFloat = 30
         let shadowY: CGFloat = 22
         let cardShape = RoundedRectangle(cornerRadius: corner, style: .continuous)
-
         let contentStack = VStack(spacing: 0) {
             // Progress bar anchored close to top
             OnboardingInterviewStepProgressView(coordinator: coordinator)
                 .padding(.top, 16)
                 .padding(.bottom, 24)
                 .padding(.horizontal, 32)
-
             // Main body centered within available space
             VStack(spacing: 8) {
                 mainCard(
@@ -53,9 +42,7 @@ struct OnboardingInterviewView: View {
                     state: uiState
                 )
                 .animation(.spring(response: 0.4, dampingFraction: 0.82), value: coordinator.wizardTracker.currentStep)
-
                 Spacer(minLength: 16) // centers body relative to bottom bar
-
                 OnboardingInterviewBottomBar(
                     showBack: shouldShowBackButton(for: coordinator.wizardTracker.currentStep),
                     continueTitle: continueButtonTitle(for: coordinator.wizardTracker.currentStep),
@@ -71,7 +58,6 @@ struct OnboardingInterviewView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal,32)
         }
-
         let styledContent = contentStack
             .frame(minWidth: 1040)
             .padding(.horizontal, 32)
@@ -88,7 +74,6 @@ struct OnboardingInterviewView: View {
             .padding(.leading, shadowR)
             .padding(.trailing, shadowR)
             .padding(.bottom, shadowR + abs(shadowY))
-
         let withResumeOverlay = styledContent
             .overlay {
                 if showResumeOptions {
@@ -100,7 +85,6 @@ struct OnboardingInterviewView: View {
                                 pendingStartModelId = nil
                                 showResumeOptions = false
                             }
-
                         ResumeInterviewPromptView(
                             onResume: {
                                 respondToResumeChoice(resume: true)
@@ -120,7 +104,6 @@ struct OnboardingInterviewView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: showResumeOptions)
-
         // --- Lifecycle bindings and tasks ---
         let withLifecycle = withResumeOverlay
             .task {
@@ -166,7 +149,6 @@ struct OnboardingInterviewView: View {
             .onChange(of: enabledLLMStore.enabledModels) { _, _ in
                 applyPreferredModel()
             }
-
         let withSheets = withLifecycle
             .sheet(isPresented: Binding(
                 get: { coordinator.ui.pendingExtraction != nil },
@@ -200,7 +182,6 @@ struct OnboardingInterviewView: View {
             } message: { message in
                 Text(message)
             }
-
         return withSheets
             #if DEBUG
             .overlay(alignment: .bottomTrailing) {
@@ -213,7 +194,6 @@ struct OnboardingInterviewView: View {
             }
             #endif
     }
-
     #if DEBUG
     private var debugButton: some View {
         Button {
@@ -231,12 +211,10 @@ struct OnboardingInterviewView: View {
     }
     #endif
 }
-
 private struct ResumeInterviewPromptView: View {
     let onResume: () -> Void
     let onStartOver: () -> Void
     let onCancel: () -> Void
-
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 16) {
@@ -246,7 +224,6 @@ private struct ResumeInterviewPromptView: View {
                     .foregroundStyle(.secondary)
                     .scaledToFit()
                     .frame(width: 42, height: 42)
-
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Resume previous interview?")
                         .font(.headline)
@@ -255,7 +232,6 @@ private struct ResumeInterviewPromptView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-
             HStack(spacing: 14) {
                 Button("Start over", role: .destructive) {
                     onStartOver()
@@ -263,15 +239,12 @@ private struct ResumeInterviewPromptView: View {
                 .buttonStyle(.bordered)
                 .tint(.red)
                 .controlSize(.large)
-
                 Spacer()
-
                 HStack(spacing: 12) {
                     Button("Cancel") {
                         onCancel()
                     }
                     .buttonStyle(.bordered)
-
                     Button("Resume") {
                         onResume()
                     }
@@ -289,7 +262,6 @@ private struct ResumeInterviewPromptView: View {
                 .frame(width: 420)
     }
 }
-
 // MARK: - Layout
 private extension OnboardingInterviewView {
     func mainCard(
@@ -322,7 +294,6 @@ private extension OnboardingInterviewView {
         .padding(.horizontal, 40)
         .padding(.top, 30)
     }
-
     func continueButtonTitle(for step: OnboardingWizardStep) -> String {
         switch step {
             case .wrapUp:
@@ -333,11 +304,9 @@ private extension OnboardingInterviewView {
                 return "Continue"
         }
     }
-
     func shouldShowBackButton(for step: OnboardingWizardStep) -> Bool {
         step != .introduction
     }
-
     func isContinueDisabled(
         coordinator: OnboardingInterviewCoordinator
     ) -> Bool {
@@ -356,7 +325,6 @@ private extension OnboardingInterviewView {
                 return coordinator.ui.isProcessing
         }
     }
-
     func handleContinue(
         coordinator: OnboardingInterviewCoordinator
     ) {
@@ -376,7 +344,6 @@ private extension OnboardingInterviewView {
                 handleCancel()
         }
     }
-
     func handleBack(
         coordinator: OnboardingInterviewCoordinator
     ) {
@@ -397,7 +364,6 @@ private extension OnboardingInterviewView {
                 break
         }
     }
-
     func handleCancel() {
         Task {
             await interviewCoordinator.endInterview()
@@ -408,29 +374,24 @@ private extension OnboardingInterviewView {
         }
     }
 }
-
 // MARK: - Helpers
 private extension OnboardingInterviewView {
     func updateServiceDefaults() {
         applyPreferredModel()
     }
-
     func openSettings() {
         NSApp.sendAction(#selector(AppDelegate.showSettingsWindow), to: nil, from: nil)
     }
-
     func modelStatusDescription(coordinator: OnboardingInterviewCoordinator) -> String {
         let rawId = viewModel.currentModelId
         let display = rawId.split(separator: "/").last.map(String.init) ?? rawId
         let webText = coordinator.ui.preferences.allowWebSearch ? "on" : "off"
         return "Using \(display) with web search \(webText)."
     }
-
     func beginInterview() {
         let modelId = viewModel.currentModelId
         Task { @MainActor in
             guard interviewCoordinator.ui.isActive == false else { return }
-
             // Check if there's an existing checkpoint to resume
             if interviewCoordinator.checkpoints.hasCheckpoint() {
                 Logger.info("✅ Found existing checkpoint - showing resume dialog", category: .ai)
@@ -444,7 +405,6 @@ private extension OnboardingInterviewView {
             }
         }
     }
-
     @MainActor
     func launchInterview(modelId: String, resume: Bool) async {
         _ = await interviewCoordinator.startInterview(resumeExisting: resume)
@@ -453,18 +413,15 @@ private extension OnboardingInterviewView {
         pendingStartModelId = nil
         showResumeOptions = false
     }
-
     func respondToResumeChoice(resume: Bool) {
         guard let modelId = pendingStartModelId else { return }
         Logger.info("📝 User chose to \(resume ? "resume" : "start fresh") interview", category: .ai)
         pendingStartModelId = nil
         showResumeOptions = false
-
         Task { @MainActor in
             await launchInterview(modelId: modelId, resume: resume)
         }
     }
-
     var openAIModels: [EnabledLLM] {
         enabledLLMStore.enabledModels
             .filter { $0.modelId.lowercased().hasPrefix("openai/") }
@@ -473,7 +430,6 @@ private extension OnboardingInterviewView {
                 < (rhs.displayName.isEmpty ? rhs.modelId : rhs.displayName)
             }
     }
-
     func reinitializeUIState() {
         viewModel.configureIfNeeded(
             coordinator: interviewCoordinator,
@@ -484,7 +440,6 @@ private extension OnboardingInterviewView {
         )
         applyPreferredModel()
     }
-
     func applyPreferredModel(requestedId: String? = nil) {
         // Note: Model configuration is handled via OpenAIService and ModelProvider
         //

@@ -1,5 +1,4 @@
 import SwiftUI
-
 struct CitationRow: View {
     let claim: String
     let evidence: EvidenceItem
@@ -7,7 +6,6 @@ struct CitationRow: View {
     let isRejected: Bool
     let onToggleExpand: () -> Void
     let onToggleReject: () -> Void
-
     init(
         claim: String,
         evidence: EvidenceItem,
@@ -23,7 +21,6 @@ struct CitationRow: View {
         self.onToggleExpand = onToggleExpand
         self.onToggleReject = onToggleReject
     }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
@@ -34,13 +31,10 @@ struct CitationRow: View {
                     EmptyView()
                 }
                 .toggleStyle(.checkbox)
-
                 Text(claim)
                     .strikethrough(isRejected, pattern: .solid, color: .secondary)
                     .foregroundStyle(isRejected ? .secondary : .primary)
-
                 Spacer()
-
                 Button(action: onToggleExpand) {
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                         .foregroundStyle(.secondary)
@@ -48,14 +42,12 @@ struct CitationRow: View {
                 .buttonStyle(.plain)
                 .help(isExpanded ? "Hide citation" : "Show citation")
             }
-
             if isExpanded {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("\"\(evidence.quote)\"")
                         .italic()
                         .padding(.leading, 22)
                         .foregroundStyle(.secondary)
-
                     HStack(spacing: 6) {
                         Image(systemName: "doc.text")
                             .foregroundStyle(.blue)

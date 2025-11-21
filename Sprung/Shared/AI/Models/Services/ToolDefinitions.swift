@@ -1,13 +1,11 @@
 import Foundation
 import SwiftOpenAI
-
 struct ToolDefinition: Codable, Sendable {
     let name: String
     let description: String
     let parameters: ToolParameters
     let strict: Bool
     let displayMessage: String?
-
     init(
         name: String,
         description: String,
@@ -22,13 +20,11 @@ struct ToolDefinition: Codable, Sendable {
         self.displayMessage = displayMessage
     }
 }
-
 struct ToolParameters: Codable, Sendable {
     let type: String
     let properties: [String: ToolProperty]
     let required: [String]?
 }
-
 struct ToolProperty: Codable, Sendable {
     let type: String
     let description: String?
@@ -37,7 +33,6 @@ struct ToolProperty: Codable, Sendable {
     let required: [String]?
     let allowAdditionalProperties: Bool?
     let nullable: Bool
-
     init(
         type: String,
         description: String? = nil,
@@ -56,14 +51,12 @@ struct ToolProperty: Codable, Sendable {
         self.nullable = nullable
     }
 }
-
 struct ToolArrayItems: Codable, Sendable {
     let type: String
     let description: String?
     let properties: [String: ToolProperty]?
     let required: [String]?
     let allowAdditionalProperties: Bool?
-
     init(
         type: String,
         description: String? = nil,
@@ -78,7 +71,6 @@ struct ToolArrayItems: Codable, Sendable {
         self.allowAdditionalProperties = allowAdditionalProperties
     }
 }
-
 extension ToolDefinition {
     var asFunctionTool: Tool {
         .function(
@@ -91,13 +83,11 @@ extension ToolDefinition {
         )
     }
 }
-
 private extension ToolParameters {
     func asJSONSchema(description: String?) -> JSONSchema {
         let propertySchemas = properties.reduce(into: [String: JSONSchema]()) { result, entry in
             result[entry.key] = entry.value.asJSONSchema()
         }
-
         return JSONSchema(
             type: .object,
             description: description,
@@ -107,11 +97,9 @@ private extension ToolParameters {
         )
     }
 }
-
 private extension ToolProperty {
     func asJSONSchema() -> JSONSchema {
         let schemaType = resolvedSchemaType()
-
         return JSONSchema(
             type: finalSchemaType(basedOn: schemaType),
             description: description,
@@ -121,7 +109,6 @@ private extension ToolProperty {
             additionalProperties: resolvedAdditionalProperties
         )
     }
-
     func resolvedSchemaType() -> JSONSchemaType {
         switch type.lowercased() {
         case "string":
@@ -142,12 +129,10 @@ private extension ToolProperty {
             return .string
         }
     }
-
     func finalSchemaType(basedOn baseType: JSONSchemaType) -> JSONSchemaType {
         guard nullable else {
             return baseType
         }
-
         switch baseType {
         case .union(let types):
             if types.contains(.null) {
@@ -159,12 +144,10 @@ private extension ToolProperty {
             return .union([baseType, .null])
         }
     }
-
     var resolvedAdditionalProperties: Bool {
         return allowAdditionalProperties ?? false
     }
 }
-
 private extension ToolArrayItems {
     func asJSONSchema() -> JSONSchema {
         JSONSchema(
@@ -175,7 +158,6 @@ private extension ToolArrayItems {
             additionalProperties: resolvedAdditionalProperties
         )
     }
-
     func resolvedSchemaType() -> JSONSchemaType {
         switch type.lowercased() {
         case "string":
@@ -196,7 +178,6 @@ private extension ToolArrayItems {
             return .string
         }
     }
-
     var resolvedAdditionalProperties: Bool {
         return allowAdditionalProperties ?? false
     }

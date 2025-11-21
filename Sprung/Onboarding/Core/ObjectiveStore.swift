@@ -1,19 +1,15 @@
 import Foundation
 import SwiftyJSON
-
 /// Domain service for objective tracking and management.
 /// Owns all objective state and provides async APIs for updates.
 actor ObjectiveStore: OnboardingEventEmitter {
     // MARK: - Event System
     let eventBus: EventCoordinator
-
     // MARK: - Policy
     private let phasePolicy: PhasePolicy
-
     // MARK: - Objective Storage
     /// The ONLY objective tracking storage
     private var objectives: [String: ObjectiveEntry] = [:]
-
     struct ObjectiveEntry: Codable {
         let id: String
         let label: String
@@ -25,7 +21,6 @@ actor ObjectiveStore: OnboardingEventEmitter {
         var details: [String: String]?  // Rich metadata for workflow context
         let parentId: String?      // Parent objective ID (e.g., "applicant_profile" for "applicant_profile.contact_intake")
         let level: Int              // Hierarchy level: 0=top, 1=sub, 2=sub-sub, etc.
-
         init(
             id: String,
             label: String,
@@ -50,16 +45,13 @@ actor ObjectiveStore: OnboardingEventEmitter {
             self.level = level
         }
     }
-
     // MARK: - Synchronous Caches (for SwiftUI)
     /// Sync cache of all objectives for SwiftUI access
     nonisolated(unsafe) private(set) var objectivesSync: [String: ObjectiveEntry] = [:]
-
     // MARK: - Initialization
     init(eventBus: EventCoordinator, phasePolicy: PhasePolicy, initialPhase: InterviewPhase) {
         self.eventBus = eventBus
         self.phasePolicy = phasePolicy
-
         // Register initial objectives for the starting phase
         let descriptors = Self.objectivesForPhase(initialPhase, policy: phasePolicy)
         for descriptor in descriptors {
@@ -75,11 +67,9 @@ actor ObjectiveStore: OnboardingEventEmitter {
                 level: descriptor.level
             )
         }
-
         objectivesSync = objectives
         Logger.info("🎯 ObjectiveStore initialized with \(objectives.count) objectives", category: .ai)
     }
-
     // MARK: - Objective Catalog
     /// Hierarchical objective metadata for each phase.
     /// Structure matches the objective tree in PhaseOneScript.swift prompt.
@@ -94,20 +84,16 @@ actor ObjectiveStore: OnboardingEventEmitter {
             ("applicant_profile.profile_photo.retrieve_profile", "Retrieve ApplicantProfile", "applicant_profile.profile_photo"),
             ("applicant_profile.profile_photo.evaluate_need", "Check if photo upload required", "applicant_profile.profile_photo"),
             ("applicant_profile.profile_photo.collect_upload", "Activate photo upload card", "applicant_profile.profile_photo"),
-
             // skeleton_timeline (top-level)
             ("skeleton_timeline", "Skeleton timeline", nil),
             ("skeleton_timeline.intake_artifacts", "Use get_user_upload and chat interview to gather timeline data", "skeleton_timeline"),
             ("skeleton_timeline.timeline_editor", "Use TimelineEntry UI to collaborate with user", "skeleton_timeline"),
             ("skeleton_timeline.context_interview", "Use chat interview to understand gaps and narrative structure", "skeleton_timeline"),
             ("skeleton_timeline.completeness_signal", "Set status when skeleton timeline data gathering is complete", "skeleton_timeline"),
-
             // enabled_sections (top-level)
             ("enabled_sections", "Enabled sections", nil),
-
             // dossier_seed (top-level)
             ("dossier_seed", "Dossier seed questions", nil),
-
             ("contact_source_selected", "Contact source selected", nil),
             ("contact_data_collected", "Contact data collected", nil),
             ("contact_data_validated", "Contact data validated", nil),
@@ -135,7 +121,6 @@ actor ObjectiveStore: OnboardingEventEmitter {
         ],
         .complete: []
     ]
-
     private static func objectivesForPhase(
         _ phase: InterviewPhase,
         policy: PhasePolicy
@@ -145,7 +130,6 @@ actor ObjectiveStore: OnboardingEventEmitter {
             // Auto-detect level from ID format (e.g., "applicant_profile.contact_intake.persisted" → level 3)
             let parts = meta.id.split(separator: ".")
             let level = max(0, parts.count - 1)
-
             return (
                 id: meta.id,
                 label: meta.label,
@@ -156,7 +140,6 @@ actor ObjectiveStore: OnboardingEventEmitter {
             )
         }
     }
-
     // MARK: - Registration
     /// Register default objectives for a given phase
     func registerDefaultObjectives(for phase: InterviewPhase) {
@@ -172,7 +155,6 @@ actor ObjectiveStore: OnboardingEventEmitter {
             )
         }
     }
-
     /// Register a new objective
     func registerObjective(
         _ id: String,
@@ -186,7 +168,6 @@ actor ObjectiveStore: OnboardingEventEmitter {
             Logger.debug("Objective \(id) already registered, skipping", category: .ai)
             return
         }
-
         // Auto-detect level from ID format if not provided (e.g., "applicant_profile.contact_intake.persisted" → level 3)
         let detectedLevel: Int
         if let level = level {
@@ -196,7 +177,6 @@ actor ObjectiveStore: OnboardingEventEmitter {
             let parts = id.split(separator: ".")
             detectedLevel = max(0, parts.count - 1)
         }
-
         objectives[id] = ObjectiveEntry(
             id: id,
             label: label,
@@ -208,11 +188,9 @@ actor ObjectiveStore: OnboardingEventEmitter {
             parentId: parentId,
             level: detectedLevel
         )
-
         objectivesSync = objectives // Update sync cache
         Logger.info("📋 Objective registered: \(id) for \(phase)", category: .ai)
     }
-
     // MARK: - Status Updates
     /// Update objective status (main API)
     func setObjectiveStatus(
@@ -226,29 +204,22 @@ actor ObjectiveStore: OnboardingEventEmitter {
             Logger.warning("⚠️ Attempted to update unknown objective: \(id)", category: .ai)
             return
         }
-
         let oldStatus = objective.status
         objective.status = status
-
         if let source = source {
             objective.source = source
         }
-
         if let notes = notes {
             objective.notes = notes
         }
-
         if let details = details {
             objective.details = details
         }
-
         if status == .completed && objective.completedAt == nil {
             objective.completedAt = Date()
         }
-
         objectives[id] = objective
         objectivesSync = objectives // Update sync cache
-
         // Emit event to notify listeners (e.g., ObjectiveWorkflowEngine, StateCoordinator)
         await emit(.objectiveStatusChanged(
             id: id,
@@ -259,24 +230,19 @@ actor ObjectiveStore: OnboardingEventEmitter {
             notes: objective.notes,
             details: objective.details
         ))
-
         Logger.info("✅ Objective \(id): \(oldStatus) → \(status)", category: .ai)
-
         // Auto-completion: If this objective is completed/skipped and has a parent,
         // check if all siblings are done and auto-complete parent
         if (status == .completed || status == .skipped), let parentId = objective.parentId {
             await checkAndAutoCompleteParent(parentId)
         }
     }
-
     // MARK: - Hierarchical Logic
     /// Recursively check if parent should be auto-completed
     private func checkAndAutoCompleteParent(_ parentId: String) async {
         guard let parent = objectives[parentId] else { return }
-
         // Only auto-complete if parent is still pending or in-progress
         guard parent.status == .pending || parent.status == .inProgress else { return }
-
         // Check if all children are complete
         if areAllChildrenComplete(parentId) {
             Logger.info("🎯 Auto-completing parent objective: \(parentId)", category: .ai)
@@ -286,52 +252,43 @@ actor ObjectiveStore: OnboardingEventEmitter {
                 source: "auto_completed",
                 notes: "All sub-objectives completed"
             )
-
             // Recursively check grandparent
             if let grandparentId = parent.parentId {
                 await checkAndAutoCompleteParent(grandparentId)
             }
         }
     }
-
     /// Check if all children of a parent are completed or skipped
     private func areAllChildrenComplete(_ parentId: String) -> Bool {
         let children = getChildObjectives(parentId)
         guard !children.isEmpty else { return false }
         return children.allSatisfy { $0.status == .completed || $0.status == .skipped }
     }
-
     // MARK: - Query Methods
     /// Get objective status by ID
     func getObjectiveStatus(_ id: String) -> ObjectiveStatus? {
         objectives[id]?.status
     }
-
     /// Get all objectives
     func getAllObjectives() -> [ObjectiveEntry] {
         Array(objectives.values)
     }
-
     /// Get all children of a given parent objective
     func getChildObjectives(_ parentId: String) -> [ObjectiveEntry] {
         objectives.values.filter { $0.parentId == parentId }
     }
-
     /// Get objectives for a specific phase
     func getObjectivesForPhase(_ phase: InterviewPhase) -> [ObjectiveEntry] {
         objectives.values.filter { $0.phase == phase }
     }
-
     /// Get missing objectives for current phase
     func getMissingObjectives(for phase: InterviewPhase) -> [String] {
         let requiredForPhase = phasePolicy.requiredObjectives[phase] ?? []
-
         return requiredForPhase.filter { id in
             let status = objectives[id]?.status
             return status != .completed && status != .skipped
         }
     }
-
     /// Check if phase can advance (all required objectives complete)
     func canAdvancePhase(from phase: InterviewPhase) -> Bool {
         guard let requiredObjectives = phasePolicy.requiredObjectives[phase] else {
@@ -342,21 +299,18 @@ actor ObjectiveStore: OnboardingEventEmitter {
             objectives[objectiveId]?.status == .skipped
         }
     }
-
     // MARK: - Scratchpad Summary
     /// Build a condensed scratchpad summary for LLM metadata
     func scratchpadSummary(for phase: InterviewPhase) -> String {
         let phaseObjectives = getObjectivesForPhase(phase)
             .sorted { $0.id < $1.id }
             .map { "\($0.id)=\($0.status.rawValue)" }
-
         if phaseObjectives.isEmpty {
             return "objectives[\(phase.rawValue)]=none"
         } else {
             return "objectives[\(phase.rawValue)]=\(phaseObjectives.joined(separator: ", "))"
         }
     }
-
     // MARK: - State Management
     /// Restore objectives from snapshot
     func restore(objectives: [String: ObjectiveEntry]) {
@@ -364,7 +318,6 @@ actor ObjectiveStore: OnboardingEventEmitter {
         self.objectivesSync = objectives
         Logger.info("📥 Objectives restored from snapshot (\(objectives.count) objectives)", category: .ai)
     }
-
     /// Reset all objectives
     func reset() {
         objectives.removeAll()

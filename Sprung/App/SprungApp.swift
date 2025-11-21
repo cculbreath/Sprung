@@ -4,12 +4,10 @@
 //
 //  Created by Christopher Culbreath on 9/1/24.
 //
-
 import Foundation
 import SwiftData
 import SwiftUI
 import AppKit
-
 
 @main
 struct SprungApp: App {
@@ -23,14 +21,12 @@ struct SprungApp: App {
         SwiftDataBackupManager.performPreflightBackupIfNeeded()
         var resolvedContainer: ModelContainer
         var launchState: AppEnvironment.LaunchState = .ready
-
         // Attempt to create the migration-aware container first
         do {
             resolvedContainer = try ModelContainer.createWithMigration()
             Logger.debug("✅ ModelContainer created with migration support (Schema V4)", category: .appLifecycle)
         } catch {
             Logger.error("❌ Failed to create ModelContainer with migrations: \(error)", category: .appLifecycle)
-
             do {
                 resolvedContainer = try Self.makeDirectModelContainer()
                 launchState = .readOnly(message: Self.migrationFailureMessage(from: error))
@@ -53,7 +49,6 @@ struct SprungApp: App {
                 }
             }
         }
-
         self.modelContainer = resolvedContainer
         let dependencies = AppDependencies(modelContext: resolvedContainer.mainContext)
         dependencies.appEnvironment.launchState = launchState
@@ -95,9 +90,7 @@ struct SprungApp: App {
                     appDelegate.showSettingsWindow()
                 }
                 .keyboardShortcut(",", modifiers: .command)
-
                 Divider()
-
                 Button("Applicant Profile...") {
                     appDelegate.showApplicantProfileWindow()
                 }
@@ -266,7 +259,6 @@ struct SprungApp: App {
         }
     }
 }
-
 private extension SprungApp {
     static func makeDirectModelContainer(configuration: ModelConfiguration? = nil) throws -> ModelContainer {
         if let configuration {
@@ -304,7 +296,6 @@ private extension SprungApp {
             )
         }
     }
-
     static func migrationFailureMessage(from error: Error) -> String {
         """
         Sprung couldn't prepare its data store (migration error: \(error.localizedDescription)).
@@ -312,7 +303,6 @@ private extension SprungApp {
         Try restoring the latest backup below, then quit and relaunch the app to resume editing.
         """
     }
-
     static func backupRestoreRequiredMessage(from error: Error) -> String {
         """
         Sprung couldn't open its data files (error: \(error.localizedDescription)).

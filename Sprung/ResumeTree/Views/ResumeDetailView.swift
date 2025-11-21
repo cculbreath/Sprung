@@ -4,23 +4,18 @@
 //
 //  Created by Christopher Culbreath on 1/31/25.
 //
-
 import SwiftData
 import SwiftUI
-
 /// Tree-editor panel showing resume nodes and the optional font-size panel.
 /// It no longer mutates the model directly; all actions are routed through
 /// `ResumeDetailVM`.
 struct ResumeDetailView: View {
     // External navigation bindings
     @Binding var tab: TabList
-
     // View-model (owns UI state)
     @State private var vm: ResumeDetailVM
-
     // MARK: – Init ---------------------------------------------------------
     private var externalIsWide: Binding<Bool>?
-
     init(
         resume: Resume,
         tab: Binding<TabList>,
@@ -31,11 +26,9 @@ struct ResumeDetailView: View {
         _vm = State(wrappedValue: ResumeDetailVM(resume: resume, exportCoordinator: exportCoordinator))
         externalIsWide = isWide
     }
-
     // MARK: – Body ---------------------------------------------------------
     var body: some View {
         @Bindable var vm = vm // enable Observation bindings
-
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 if let root = vm.rootNode {
@@ -44,12 +37,10 @@ struct ResumeDetailView: View {
                         .fontWeight(.semibold)
                         .padding(.horizontal, 10)
                         .padding(.top, 12)
-
                     ForEach(root.orderedViewChildren, id: \.id) { viewNode in
                         topLevelNodeView(viewNode)
                     }
                 }
-
                 let hasStylePanels = vm.hasFontSizeNodes || vm.hasSectionVisibilityOptions
                 if hasStylePanels {
                     Text("Style")
@@ -57,7 +48,6 @@ struct ResumeDetailView: View {
                         .fontWeight(.semibold)
                         .padding(.horizontal, 10)
                         .padding(.top, 16)
-
                     VStack(alignment: .leading, spacing: 8) {
                         if vm.hasSectionVisibilityOptions {
                             SectionVisibilityPanelView()
@@ -83,7 +73,6 @@ struct ResumeDetailView: View {
             if let newVal { vm.isWide = newVal }
         }
     }
-
     @ViewBuilder
     private func topLevelNodeView(_ node: TreeNode) -> some View {
         if node.orderedViewChildren.isEmpty {
@@ -93,25 +82,20 @@ struct ResumeDetailView: View {
         }
     }
 }
-
 // MARK: - Root-Level Leaf Disclosure ---------------------------------------
 private struct RootLeafDisclosureView: View {
     let node: TreeNode
-
     @Environment(ResumeDetailVM.self) private var vm: ResumeDetailVM
-
     private var expansionBinding: Binding<Bool> {
         Binding(
             get: { vm.isExpanded(node) },
             set: { _ in vm.toggleExpansion(for: node) }
         )
     }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 ToggleChevronView(isExpanded: expansionBinding)
-
                 AlignedTextRow(
                     leadingText: node.displayLabel,
                     trailingText: nil,
@@ -127,10 +111,8 @@ private struct RootLeafDisclosureView: View {
             .onTapGesture {
                 vm.toggleExpansion(for: node)
             }
-
             if vm.isExpanded(node) {
                 Divider()
-
                 NodeLeafView(node: node)
                     .padding(.leading, CGFloat(node.viewDepth) * 20)
                     .padding(.vertical, 4)

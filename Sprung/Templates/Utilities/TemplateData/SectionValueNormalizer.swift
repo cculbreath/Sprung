@@ -1,17 +1,14 @@
 import Foundation
 import OrderedCollections
-
 struct SectionValueNormalizer {
     let resume: Resume
     let manifest: TemplateManifest?
     let fontScaler: FontSizeScaler
-
     func normalize(
         _ value: Any,
         for behavior: TemplateManifest.Section.FieldDescriptor.Behavior?
     ) -> Any {
         guard let behavior else { return value }
-
         switch behavior {
         case .includeFonts:
             if let string = value as? String {
@@ -24,7 +21,6 @@ struct SectionValueNormalizer {
                 return number.boolValue ? "true" : "false"
             }
             return "\(value)"
-
         case .fontSizes:
             if let dict = value as? [String: String] {
                 return fontScaler.scaleFontSizes(dict)
@@ -41,7 +37,6 @@ struct SectionValueNormalizer {
                 return fontScaler.scaleFontSizes(normalized)
             }
             return value
-
         case .editorKeys:
             if let strings = value as? [String] {
                 return strings
@@ -58,7 +53,6 @@ struct SectionValueNormalizer {
                 return [single]
             }
             return value
-
         case .sectionLabels:
             if let dict = value as? [String: String] {
                 return dict
@@ -73,12 +67,10 @@ struct SectionValueNormalizer {
                 return normalized
             }
             return value
-
         case .applicantProfile:
             return value
         }
     }
-
     func isEmpty(_ value: Any) -> Bool {
         switch value {
         case let string as String:
@@ -95,7 +87,6 @@ struct SectionValueNormalizer {
             return false
         }
     }
-
     func defaultFontSizes() -> [String: String]? {
         guard let defaults = manifestDefaultDictionary(for: "styling"),
               let fontSizes = defaults["fontSizes"] else {
@@ -106,7 +97,6 @@ struct SectionValueNormalizer {
         Logger.debug("ResumeTemplateDataBuilder: manifest fontSizes default => \(normalized ?? [:])")
         return normalized
     }
-
     func defaultPageMargins() -> [String: String]? {
         guard let defaults = manifestDefaultDictionary(for: "styling"),
               let margins = defaults["pageMargins"] else {
@@ -117,7 +107,6 @@ struct SectionValueNormalizer {
         Logger.debug("ResumeTemplateDataBuilder: manifest pageMargins default => \(normalized ?? [:])")
         return normalized
     }
-
     func defaultIncludeFonts() -> Bool? {
         guard let defaults = manifestDefaultDictionary(for: "styling"),
               let include = defaults["includeFonts"] else { return nil }
@@ -127,7 +116,6 @@ struct SectionValueNormalizer {
         }
         return nil
     }
-
     private func manifestDefaultDictionary(for section: String) -> [String: Any]? {
         guard let value = manifest?.section(for: section)?.defaultValue?.value else { return nil }
         if let dict = value as? [String: Any] {
@@ -138,7 +126,6 @@ struct SectionValueNormalizer {
         }
         return nil
     }
-
     private func normalizeStringMap(_ value: Any) -> [String: String]? {
         if let dict = value as? [String: Any] {
             var result: [String: String] = [:]

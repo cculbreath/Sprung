@@ -4,12 +4,10 @@
 //
 //  Template editor for resume templates
 //
-
 import SwiftUI
 import SwiftData
 import AppKit
 import PDFKit
-
 extension Color {
     func toNSColor(fallback: NSColor = .systemBlue) -> NSColor {
 #if os(macOS)
@@ -23,11 +21,9 @@ extension Color {
         return fallback
     }
 }
-
 struct TemplateEditorView: View {
     @Environment(NavigationStateService.self) var navigationState
     @Environment(AppEnvironment.self) var appEnvironment
-
     @State var selectedTemplate: String = ""
     @State var selectedTab: TemplateEditorTab = .pdfTemplate
     @State var htmlContent: String = ""
@@ -45,12 +41,10 @@ struct TemplateEditorView: View {
     @State var seedValidationMessage: String?
     @State var customFieldWarningMessage: String?
     @State var pendingProfileUpdate: ProfileUpdatePrompt?
-
     // Template renaming state
     @State var renamingTemplate: String?
     @State var tempTemplateName: String = ""
     @State var templateRefreshTrigger: Int = 0  // Force UI refresh
-
     // Live preview state
     @State var previewPDFData: Data?
     @State var previewTextContent: String?
@@ -61,7 +55,6 @@ struct TemplateEditorView: View {
     @State var showInspector: Bool = true
     @State var debounceTimer: Timer?
     @State var isGeneratingLivePreview: Bool = false
-
     // Overlay state
     @State var showOverlay: Bool = false
     @State var overlayPDFDocument: PDFDocument?
@@ -75,10 +68,8 @@ struct TemplateEditorView: View {
     @State var overlayPageCount: Int = 0
     @State var overlayFilename: String?
     @State var overlayPageSelection: Int = 0
-
     @State var availableTemplates: [String] = []
     @State var defaultTemplateSlug: String? = nil
-
     @State var showSidebar: Bool = true
     @State var sidebarWidth: CGFloat = 150
     private let sidebarWidthRange: ClosedRange<CGFloat> = 140...300
@@ -90,12 +81,10 @@ struct TemplateEditorView: View {
     private var textFilterReference: [TextFilterInfo] {
         TemplateTextFilters.reference
     }
-
     
     var selectedResume: Resume? {
         navigationState.selectedResume
     }
-
     func templateDisplayName(_ template: String) -> String {
         if let record = appEnvironment.templateStore.template(slug: template) {
             return record.name
@@ -105,27 +94,22 @@ struct TemplateEditorView: View {
             .replacingOccurrences(of: "_", with: " ")
             .capitalized
     }
-
     private func templateIconName(for template: String) -> String {
         templateMatchesSelectedResume(template) ? "doc.text.fill" : "doc.text"
     }
-
     private func templateMatchesSelectedResume(_ template: String) -> Bool {
         guard let resumeTemplateIdentifier else { return false }
         return resumeTemplateIdentifier == template.lowercased()
     }
-
     private func templateIsDefault(_ template: String) -> Bool {
         guard let defaultTemplateSlug else { return false }
         return defaultTemplateSlug.lowercased() == template.lowercased()
     }
-
     private func makeTemplateDefault(slug: String) {
         guard let record = appEnvironment.templateStore.template(slug: slug) else { return }
         appEnvironment.templateStore.setDefault(record)
         defaultTemplateSlug = slug
     }
-
     private func handleTemplateDraftUpdate(for tab: TemplateEditorTab, content: String) {
         switch tab {
         case .pdfTemplate:
@@ -136,13 +120,11 @@ struct TemplateEditorView: View {
             break
         }
     }
-
     private func toggleSidebar() {
         withAnimation(.easeInOut(duration: 0.2)) {
             showSidebar.toggle()
         }
     }
-
     private func openApplicantEditor() {
         Task { @MainActor in
             NotificationCenter.default.post(name: .showApplicantProfile, object: nil)
@@ -152,7 +134,6 @@ struct TemplateEditorView: View {
             }
         }
     }
-
     private func openExperienceEditor() {
         Task { @MainActor in
             NotificationCenter.default.post(name: .showExperienceEditor, object: nil)
@@ -175,7 +156,6 @@ struct TemplateEditorView: View {
     private var hasAnyUnsavedChanges: Bool {
         htmlHasChanges || textHasChanges || manifestHasChanges || seedHasChanges
     }
-
     private var templateSelectionBinding: Binding<String?> {
         Binding<String?>(
             get: { selectedTemplate.isEmpty ? nil : selectedTemplate },
@@ -184,7 +164,6 @@ struct TemplateEditorView: View {
             }
         )
     }
-
     var body: some View {
         HStack(spacing: 0) {
             if showSidebar {
@@ -193,7 +172,6 @@ struct TemplateEditorView: View {
                     .frame(width: sidebarWidth)
                     .transition(.move(edge: .leading))
             }
-
             mainContent()
         }
         .frame(minWidth: 1024, minHeight: 640)
@@ -321,7 +299,6 @@ struct TemplateEditorView: View {
         }
         .toolbarRole(.editor)
     }
-
     @ViewBuilder
     private func mainContent() -> some View {
         if availableTemplates.isEmpty {
@@ -351,7 +328,6 @@ struct TemplateEditorView: View {
             .background(Color(NSColor.textBackgroundColor))
         }
     }
-
     private var editorColumn: some View {
         TemplateEditorEditorColumn(
             selectedTab: $selectedTab,
@@ -378,7 +354,6 @@ struct TemplateEditorView: View {
             onValidateSeed: validateSeedFormat
         )
     }
-
     private var previewColumn: some View {
         TemplateEditorPreviewColumn(
             previewPDFData: previewPDFData,
@@ -399,7 +374,6 @@ struct TemplateEditorView: View {
             onPrepareOverlayOptions: prepareOverlayOptions
         )
     }
-
     @ViewBuilder
     private func sidebarContainer() -> some View {
         TemplateEditorSidebarView(
@@ -424,7 +398,6 @@ struct TemplateEditorView: View {
             .background(Color(NSColor.controlBackgroundColor))
             .overlay(sidebarGrip, alignment: .trailing)
     }
-
     private var sidebarGrip: some View {
         Rectangle()
             .fill(Color(NSColor.separatorColor).opacity(0.0001))
@@ -450,12 +423,9 @@ struct TemplateEditorView: View {
 #endif
             }
     }
-
 }
-
 private struct TemplateEditorEmptyState: View {
     @Binding var showingAddTemplate: Bool
-
     var body: some View {
         VStack(spacing: 16) {
             Text("No templates found")
@@ -473,10 +443,8 @@ private struct TemplateEditorEmptyState: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
-
 private struct TemplateSelectionState: View {
     @Binding var showingAddTemplate: Bool
-
     var body: some View {
         VStack(spacing: 12) {
             Text("Select a template to begin")

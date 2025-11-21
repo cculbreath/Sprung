@@ -1,34 +1,27 @@
 <!DOCTYPE html>
 <html lang="en">
-
     <head>
         <meta charset="UTF-8" />
         <title>{{{basics.name}}}</title>
         <style>
             /* 1. Font Definitions - Fixed to match actual PostScript names */
-
 			@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,100..900&display=swap');
 			
 			/* Use in CSS as: font-family: "Fraunces", serif; */
-
             /* 2. CSS Variables and Resets */
             :root {
                 --debug-border-color: transparent;
                 --debug-border-color-secondary: transparent;
                 --debug-border-width: 0;
             }
-
             *, *::before, *::after { box-sizing: border-box; }
-
             html, body {
                 margin: 0;
                 padding: 0;
                 word-break: keep-all;
                 hyphens: none;
             }
-
             a { text-decoration: none; color: black; }
-
             /* 3. Layout Containers */
             .page-wrapper {
                 margin-top: 0.180in;
@@ -71,7 +64,6 @@
             .right-column {
                 border: var(--debug-border-width) solid var(--debug-border-color);
             }
-
             /* 4. Typography & Headings */
             .header-text {
                 font-family: 'Fraunces';
@@ -115,10 +107,8 @@
             }
             .right-column h4 { margin-top: -2px; margin-bottom: 0px; }
             .right-column h3 { margin-top: 0; }
-
             .light { font-family: 'Fraunces'; font-weight: 400; }
             .project { font-family: 'Fraunces'; font-weight: 600; }
-
             /* 5. Section Titles & Decorative */
             .section-title {
                 display: flex;
@@ -141,7 +131,6 @@
                 border-top: 0.21825pt solid black;
                 margin: 0;
             }
-
             /* 6. Contact Info */
             .contact {
                 font-family: 'Fraunces';
@@ -165,7 +154,6 @@
                 margin-right: 6pt;
                 fill: currentColor;
             }
-
             /* 7. Info and Education Boxes */
             .info-box {
                 font-family: 'Fraunces', serif;
@@ -219,7 +207,6 @@
 	margin-top: 0.2rem;
 }
 .light { font-weight: 50 !important;}
-
             /* 9. Top Box (Work Experience Bullets) */
             .top-box {
                 border: var(--debug-border-width) solid var(--debug-border-color-secondary);
@@ -242,7 +229,6 @@
                 left: 0;
                 top: 0;
             }
-
             /* 10. Projects & Bottom Box */
             .projects {
                 border: var(--debug-border-width) solid var(--debug-border-color-secondary);
@@ -264,7 +250,6 @@
                 font-weight: 600;
                 padding: 3pt;
             }
-
             /* 11. Right Column List Adjustments */
             .right-column ul {
                 font-family: 'Fraunces';
@@ -274,7 +259,6 @@
             }
             .right-column li { margin-bottom: 0; }
             .right-column strong { font-family: 'Fraunces'; font-weight: 400; }
-
             /* 12. Objective and Paragraphs */
             .objective {
                 font-family: 'Fraunces';
@@ -301,7 +285,6 @@
 			.edu-box {
 				padding-bottom: 0;
 			}
-
             /* 13. Hidden/Visually Hidden */
             .visually-hidden {
                 position: absolute;
@@ -322,13 +305,11 @@
                 white-space: nowrap;
             }
 			.edu-head::before { content: '★ '; }
-
             /* 14. Print Styles */
             @page { size: letter; margin: 0; }
             @media print {
                 body { margin: 0; padding: 0; }
             }
-
             /* 15. Dynamic font sizes (Handlebars template variables) */
             .header-text { font-size: {{{styling.fontSizes.name}}}; }
             .subheader { font-size: {{{styling.fontSizes.jobTitles}}}; }
@@ -348,14 +329,12 @@
             .project-list li { font-size: {{{styling.fontSizes.projectText}}}; }
             .bottom-box { font-size: {{{styling.fontSizes.moreInfo}}}; }
             .bottom-box li { font-size: {{{styling.fontSizes.projectText}}}; }
-
             .right-column ul li,
             .top-box ul li {
                 font-style: normal;
             }
         </style>
     </head>
-
     <body>
         <div class="page-wrapper">
             <div class="header">

@@ -1,12 +1,9 @@
 import SwiftUI
-
 struct SkeletonTimelineReviewView: View {
     @Binding var draft: ExperienceDefaultsDraft
     @Binding var editingEntries: Set<UUID>
     var onChange: () -> Void
-
     private let renderers = ExperienceSectionRenderers.all
-
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             GroupBox {
@@ -24,7 +21,6 @@ struct SkeletonTimelineReviewView: View {
                 Text("Enabled Sections")
                     .font(.headline)
             }
-
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     ForEach(renderers) { renderer in
@@ -42,7 +38,6 @@ struct SkeletonTimelineReviewView: View {
             }
         }
     }
-
     private func binding(for section: ExperienceSchemaSection) -> Binding<Bool> {
         let base = section.metadata.toggleBinding(in: $draft)
         return Binding(
@@ -53,7 +48,6 @@ struct SkeletonTimelineReviewView: View {
             }
         )
     }
-
     private func callbacks() -> ExperienceSectionViewCallbacks {
         ExperienceSectionViewCallbacks(
             isEditing: { id in editingEntries.contains(id) },

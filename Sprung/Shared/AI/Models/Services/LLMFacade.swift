@@ -5,23 +5,19 @@
 //  A thin facade over LLMClient that centralizes capability gating (future) and
 //  exposes a stable surface to callers.
 //
-
 import Foundation
 import Observation
-
 struct LLMStreamingHandle {
     let conversationId: UUID?
     let stream: AsyncThrowingStream<LLMStreamChunkDTO, Error>
     let cancel: @Sendable () -> Void
 }
-
 @Observable
 @MainActor
 final class LLMFacade {
     enum Backend: CaseIterable {
         case openRouter
         case openAI
-
         var displayName: String {
             switch self {
             case .openRouter: return "OpenRouter"
@@ -29,7 +25,6 @@ final class LLMFacade {
             }
         }
     }
-
     private let client: LLMClient
     private let llmService: LLMService // temporary bridge for conversation flows
     private let openRouterService: OpenRouterService
@@ -38,7 +33,6 @@ final class LLMFacade {
     private var activeStreamingTasks: [UUID: Task<Void, Never>] = [:]
     private var backendClients: [Backend: LLMClient] = [:]
     private var conversationServices: [Backend: LLMConversationService] = [:]
-
     init(
         client: LLMClient,
         llmService: LLMService,
@@ -54,45 +48,36 @@ final class LLMFacade {
         backendClients[.openRouter] = client
         conversationServices[.openRouter] = OpenRouterConversationService(service: llmService)
     }
-
     func registerClient(_ client: LLMClient, for backend: Backend) {
         backendClients[backend] = client
     }
-
     func registerConversationService(_ service: LLMConversationService, for backend: Backend) {
         conversationServices[backend] = service
     }
-
     func availableBackends() -> [Backend] {
         Backend.allCases.filter { backendClients[$0] != nil }
     }
-
     func hasBackend(_ backend: Backend) -> Bool {
         backendClients[backend] != nil
     }
-
     func supportsConversations(for backend: Backend) -> Bool {
         conversationServices[backend] != nil
     }
-
     private func resolveClient(for backend: Backend) throws -> LLMClient {
         guard let resolved = backendClients[backend] else {
             throw LLMError.clientError("Backend \(backend.displayName) is not configured")
         }
         return resolved
     }
-
     private func registerStreamingTask(_ task: Task<Void, Never>, for handleId: UUID) {
         activeStreamingTasks[handleId]?.cancel()
         activeStreamingTasks[handleId] = task
     }
-
     private func cancelStreaming(handleId: UUID) {
         if let task = activeStreamingTasks.removeValue(forKey: handleId) {
             task.cancel()
         }
     }
-
     private func makeStreamingHandle(
         conversationId: UUID?,
         sourceStream: AsyncThrowingStream<LLMStreamChunkDTO, Error>
@@ -118,28 +103,23 @@ final class LLMFacade {
                 }
             }
             registerStreamingTask(task, for: handleId)
-
             continuation.onTermination = { @Sendable _ in
                 Task { @MainActor in
                     self.cancelStreaming(handleId: handleId)
                 }
             }
         }
-
         let cancelClosure: @Sendable () -> Void = { [weak self] in
             Task { @MainActor in
                 self?.cancelStreaming(handleId: handleId)
             }
         }
-
         return LLMStreamingHandle(conversationId: conversationId, stream: stream, cancel: cancelClosure)
     }
-
     // MARK: - Capability Validation
     private func enabledModelRecord(for modelId: String) -> EnabledLLM? {
         enabledLLMStore?.enabledModels.first(where: { $0.modelId == modelId })
     }
-
     private func supports(_ capability: ModelCapability, metadata: OpenRouterModel?, record: EnabledLLM?) -> Bool {
         switch capability {
         case .vision:
@@ -158,7 +138,6 @@ final class LLMFacade {
             return isTextOnly && !supportsVision
         }
     }
-
     private func missingCapabilities(
         metadata: OpenRouterModel?,
         record: EnabledLLM?,
@@ -166,25 +145,19 @@ final class LLMFacade {
     ) -> [ModelCapability] {
         capabilities.filter { !supports($0, metadata: metadata, record: record) }
     }
-
     private func validate(modelId: String, requires capabilities: [ModelCapability]) async throws {
         if let store = enabledLLMStore, !store.isModelEnabled(modelId) {
             throw LLMError.clientError("Model '\(modelId)' is disabled. Enable it in AI Settings before use.")
         }
-
         let metadata = openRouterService.findModel(id: modelId)
         let record = enabledModelRecord(for: modelId)
-
         guard metadata != nil || record != nil else {
             throw LLMError.clientError("Model '\(modelId)' not found")
         }
-
         var missing = missingCapabilities(metadata: metadata, record: record, requires: capabilities)
         guard !missing.isEmpty else { return }
-
         // Attempt to refresh capabilities using validation service
         let validationResult = await modelValidationService.validateModel(modelId)
-
         if let capabilitiesInfo = validationResult.actualCapabilities {
             let supportsSchema = capabilitiesInfo.supportsStructuredOutputs || capabilitiesInfo.supportsResponseFormat
             let supportsReasoning = capabilitiesInfo.supportedParameters.contains { $0.lowercased().contains("reasoning") }
@@ -195,11 +168,9 @@ final class LLMFacade {
                 supportsReasoning: supportsReasoning
             )
         }
-
         let refreshedRecord = enabledModelRecord(for: modelId)
         let refreshedMetadata = openRouterService.findModel(id: modelId)
         missing = missingCapabilities(metadata: refreshedMetadata, record: refreshedRecord, requires: capabilities)
-
         guard missing.isEmpty else {
             let missingNames = missing.map { $0.displayName }.joined(separator: ", ")
             if let errorMessage = validationResult.error {
@@ -209,7 +180,6 @@ final class LLMFacade {
             }
         }
     }
-
     // Text
     func executeText(
         prompt: String,
@@ -221,11 +191,9 @@ final class LLMFacade {
             try await validate(modelId: modelId, requires: [])
             return try await client.executeText(prompt: prompt, modelId: modelId, temperature: temperature)
         }
-
         let altClient = try resolveClient(for: backend)
         return try await altClient.executeText(prompt: prompt, modelId: modelId, temperature: temperature)
     }
-
     func executeTextWithImages(
         prompt: String,
         modelId: String,
@@ -237,11 +205,9 @@ final class LLMFacade {
             try await validate(modelId: modelId, requires: [.vision])
             return try await client.executeTextWithImages(prompt: prompt, modelId: modelId, images: images, temperature: temperature)
         }
-
         let altClient = try resolveClient(for: backend)
         return try await altClient.executeTextWithImages(prompt: prompt, modelId: modelId, images: images, temperature: temperature)
     }
-
     // Structured
     func executeStructured<T: Codable & Sendable>(
         prompt: String,
@@ -254,11 +220,9 @@ final class LLMFacade {
             try await validate(modelId: modelId, requires: [.structuredOutput])
             return try await client.executeStructured(prompt: prompt, modelId: modelId, as: type, temperature: temperature)
         }
-
         let altClient = try resolveClient(for: backend)
         return try await altClient.executeStructured(prompt: prompt, modelId: modelId, as: type, temperature: temperature)
     }
-
     func executeStructuredWithImages<T: Codable & Sendable>(
         prompt: String,
         modelId: String,
@@ -271,11 +235,9 @@ final class LLMFacade {
             try await validate(modelId: modelId, requires: [.vision, .structuredOutput])
             return try await client.executeStructuredWithImages(prompt: prompt, modelId: modelId, images: images, as: type, temperature: temperature)
         }
-
         let altClient = try resolveClient(for: backend)
         return try await altClient.executeStructuredWithImages(prompt: prompt, modelId: modelId, images: images, as: type, temperature: temperature)
     }
-
     func executeFlexibleJSON<T: Codable & Sendable>(
         prompt: String,
         modelId: String,
@@ -295,7 +257,6 @@ final class LLMFacade {
                 jsonSchema: jsonSchema
             )
         }
-
         let altClient = try resolveClient(for: backend)
         return try await altClient.executeStructured(
             prompt: prompt,
@@ -304,7 +265,6 @@ final class LLMFacade {
             temperature: temperature
         )
     }
-
     func executeStructuredStreaming<T: Codable & Sendable>(
         prompt: String,
         modelId: String,
@@ -320,7 +280,6 @@ final class LLMFacade {
         var required: [ModelCapability] = [.structuredOutput]
         if reasoning != nil { required.append(.reasoning) }
         try await validate(modelId: modelId, requires: required)
-
         let handleId = UUID()
         let sourceStream = llmService.executeStructuredStreaming(
             prompt: prompt,
@@ -330,7 +289,6 @@ final class LLMFacade {
             reasoning: reasoning,
             jsonSchema: jsonSchema
         )
-
         let stream = AsyncThrowingStream<LLMStreamChunkDTO, Error> { continuation in
             let task = Task {
                 defer {
@@ -350,16 +308,13 @@ final class LLMFacade {
             }
             registerStreamingTask(task, for: handleId)
         }
-
         let cancelClosure: @Sendable () -> Void = { [weak self] in
             Task { @MainActor in
                 self?.cancelStreaming(handleId: handleId)
             }
         }
-
         return LLMStreamingHandle(conversationId: nil, stream: stream, cancel: cancelClosure)
     }
-
     // MARK: - Conversation (temporary pass-through to LLMService)
     func startConversationStreaming(
         systemPrompt: String? = nil,
@@ -379,7 +334,6 @@ final class LLMFacade {
             backend: .openRouter
         )
     }
-
     func startConversationStreaming(
         systemPrompt: String? = nil,
         userMessage: String,
@@ -395,7 +349,6 @@ final class LLMFacade {
             if reasoning != nil { required.append(.reasoning) }
             if jsonSchema != nil { required.append(.structuredOutput) }
             try await validate(modelId: modelId, requires: required)
-
             let (conversationId, sourceStream) = try await llmService.startConversationStreaming(
                 systemPrompt: systemPrompt,
                 userMessage: userMessage,
@@ -404,10 +357,8 @@ final class LLMFacade {
                 reasoning: reasoning,
                 jsonSchema: jsonSchema
             )
-
             return makeStreamingHandle(conversationId: conversationId, sourceStream: sourceStream)
         }
-
         if backend == .openAI {
             guard reasoning == nil else {
                 throw LLMError.clientError("Reasoning mode is not supported for OpenAI Responses streaming")
@@ -427,10 +378,8 @@ final class LLMFacade {
             )
             return makeStreamingHandle(conversationId: conversationId, sourceStream: sourceStream)
         }
-
         throw LLMError.clientError("Streaming conversations are not supported for backend \(backend.displayName)")
     }
-
     func continueConversationStreaming(
         userMessage: String,
         modelId: String,
@@ -446,7 +395,6 @@ final class LLMFacade {
             if reasoning != nil { required.append(.reasoning) }
             if jsonSchema != nil { required.append(.structuredOutput) }
             try await validate(modelId: modelId, requires: required)
-
             let sourceStream = llmService.continueConversationStreaming(
                 userMessage: userMessage,
                 modelId: modelId,
@@ -456,10 +404,8 @@ final class LLMFacade {
                 reasoning: reasoning,
                 jsonSchema: jsonSchema
             )
-
             return makeStreamingHandle(conversationId: conversationId, sourceStream: sourceStream)
         }
-
         if backend == .openAI {
             guard reasoning == nil else {
                 throw LLMError.clientError("Reasoning mode is not supported for OpenAI Responses streaming")
@@ -479,10 +425,8 @@ final class LLMFacade {
             )
             return makeStreamingHandle(conversationId: conversationId, sourceStream: sourceStream)
         }
-
         throw LLMError.clientError("Streaming conversations are not supported for backend \(backend.displayName)")
     }
-
     func continueConversation(
         userMessage: String,
         modelId: String,
@@ -494,7 +438,6 @@ final class LLMFacade {
         if backend == .openRouter {
             let required: [ModelCapability] = images.isEmpty ? [] : [.vision]
             try await validate(modelId: modelId, requires: required)
-
             return try await llmService.continueConversation(
                 userMessage: userMessage,
                 modelId: modelId,
@@ -503,7 +446,6 @@ final class LLMFacade {
                 temperature: temperature
             )
         }
-
         guard let service = conversationServices[backend] else {
             throw LLMError.clientError("Selected backend does not support conversations")
         }
@@ -515,7 +457,6 @@ final class LLMFacade {
             temperature: temperature
         )
     }
-
     func continueConversationStructured<T: Codable & Sendable>(
         userMessage: String,
         modelId: String,
@@ -532,7 +473,6 @@ final class LLMFacade {
         var required: [ModelCapability] = [.structuredOutput]
         if !images.isEmpty { required.append(.vision) }
         try await validate(modelId: modelId, requires: required)
-
         return try await llmService.continueConversationStructured(
             userMessage: userMessage,
             modelId: modelId,
@@ -543,7 +483,6 @@ final class LLMFacade {
             jsonSchema: jsonSchema
         )
     }
-
     func startConversation(
         systemPrompt: String? = nil,
         userMessage: String,
@@ -560,7 +499,6 @@ final class LLMFacade {
                 temperature: temperature
             )
         }
-
         guard let service = conversationServices[backend] else {
             throw LLMError.clientError("Selected backend does not support conversations")
         }
@@ -571,7 +509,6 @@ final class LLMFacade {
             temperature: temperature
         )
     }
-
     func cancelAllRequests() {
         for task in activeStreamingTasks.values {
             task.cancel()

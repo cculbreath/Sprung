@@ -1,6 +1,5 @@
 // Sprung/App/Views/ToolbarButtons/ClarifyingQuestionsButton.swift
 import SwiftUI
-
 struct ClarifyingQuestionsButton: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(LLMFacade.self) private var llmFacade
@@ -128,7 +127,6 @@ struct ClarifyingQuestionsButton: View {
             }
             
             isGeneratingQuestions = false
-
         } catch {
             Logger.error("Error starting clarifying questions workflow: \(error.localizedDescription)")
             isGeneratingQuestions = false

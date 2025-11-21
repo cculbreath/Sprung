@@ -4,11 +4,9 @@
 //
 //  Created by Christopher Culbreath on 9/1/24.
 //
-
 import Foundation
 import SwiftData
 import SwiftUI
-
 @Observable
 @MainActor
 final class ResStore: SwiftDataStore {
@@ -18,7 +16,6 @@ final class ResStore: SwiftDataStore {
     private let applicantProfileStore: ApplicantProfileStore
     private let templateSeedStore: TemplateSeedStore
     private let experienceDefaultsStore: ExperienceDefaultsStore
-
     // MARK: - Initialiser
     init(
         context: ModelContext,
@@ -33,14 +30,11 @@ final class ResStore: SwiftDataStore {
         self.templateSeedStore = templateSeedStore
         self.experienceDefaultsStore = experienceDefaultsStore
     }
-
     @discardableResult
     func create(jobApp: JobApp, sources: [ResRef], template: Template) -> Resume? {
         // ModelContext is guaranteed to exist
         let modelContext = self.modelContext
-
         let resume = Resume(jobApp: jobApp, enabledSources: sources, template: template)
-
         if jobApp.selectedRes == nil {
             jobApp.selectedRes = resume
         }
@@ -49,7 +43,6 @@ final class ResStore: SwiftDataStore {
         if jobApp.status == .new {
             jobApp.status = .inProgress
         }
-
         let contextBuilder = ResumeTemplateContextBuilder(
             templateSeedStore: templateSeedStore,
             experienceDefaultsStore: experienceDefaultsStore
@@ -62,9 +55,7 @@ final class ResStore: SwiftDataStore {
             Logger.error("ResStore.create: Failed to build resume context dictionary for template \(template.slug)")
             return nil
         }
-
         let manifest = TemplateManifestLoader.manifest(for: template)
-
         guard let rootNode = buildTree(
             for: resume,
             context: context,
@@ -74,7 +65,6 @@ final class ResStore: SwiftDataStore {
             return nil
         }
         resume.rootNode = rootNode
-
         // Persist new resume (and trigger observers)
         withAnimation(.spring(response: 0.45, dampingFraction: 0.82, blendDuration: 0.1)) {
             jobApp.addResume(resume)
@@ -89,10 +79,8 @@ final class ResStore: SwiftDataStore {
                 Logger.error("ResStore.create: Failed to render initial PDF for resume \(resume.id): \(error)")
             }
         }
-
         return resume
     }
-
     private func buildTree(
         for resume: Resume,
         context: [String: Any],
@@ -108,7 +96,6 @@ final class ResStore: SwiftDataStore {
         }
         return root
     }
-
     @discardableResult
     func duplicate(_ originalResume: Resume) -> Resume? {
         guard let jobApp = originalResume.jobApp else { return nil }
@@ -168,7 +155,6 @@ final class ResStore: SwiftDataStore {
             resume: resume,
             isTitleNode: original.isTitleNode
         )
-
         newNode.myIndex = original.myIndex
         newNode.depth = original.depth
         newNode.editorLabel = original.editorLabel
@@ -188,14 +174,12 @@ final class ResStore: SwiftDataStore {
         newNode.schemaAllowsChildMutation = original.schemaAllowsChildMutation
         newNode.schemaAllowsNodeDeletion = original.schemaAllowsNodeDeletion
         newNode.editorTransparent = original.editorTransparent
-
         // Recursively duplicate children
         if let originalChildren = original.children {
             newNode.children = originalChildren.map { child in
                 duplicateTreeNode(child, for: resume, parent: newNode)
             }
         }
-
         // Recursively duplicate viewChildren (references to data nodes)
         // Note: viewChildren are references to nodes in the children tree,
         // so we need to map them to the corresponding new nodes
@@ -205,17 +189,14 @@ final class ResStore: SwiftDataStore {
                 findCorrespondingNode(in: newNode, matching: viewChild) ?? viewChild
             }
         }
-
         return newNode
     }
-
     private func findCorrespondingNode(in newTree: TreeNode, matching original: TreeNode) -> TreeNode? {
         // Simple approach: find by name and path
         // This assumes the structure is identical, which it should be for duplicates
         if newTree.name == original.name && newTree.value == original.value {
             return newTree
         }
-
         guard let children = newTree.children else { return nil }
         for child in children {
             if let found = findCorrespondingNode(in: child, matching: original) {
@@ -233,26 +214,21 @@ final class ResStore: SwiftDataStore {
             resume: resume
         )
     }
-
     func deleteRes(_ res: Resume) {
         // Handle jobApp relationship updates and remove the resume from the jobApp
         if let jobApp = res.jobApp {
             // First update selection if needed
             jobApp.resumeDeletePrep(candidate: res)
-
             // Then remove from the array if it exists
             if let parentIndex = jobApp.resumes.firstIndex(of: res) {
                 jobApp.resumes.remove(at: parentIndex)
             }
-
             // Clear the reference to prevent invalid access
             res.jobApp = nil
         }
-
         // Clear references to prevent potential access to deleted objects
         res.rootNode = nil
         res.enabledSources = []
-
         // Delete the resume and save
         modelContext.delete(res)
         saveContext()

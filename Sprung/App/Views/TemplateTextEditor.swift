@@ -4,25 +4,20 @@
 //
 //  Custom text editor with native macOS find functionality
 //
-
 import SwiftUI
 import AppKit
-
 struct TextEditorInsertionRequest: Identifiable, Equatable {
     let id = UUID()
     let text: String
-
     static func == (lhs: TextEditorInsertionRequest, rhs: TextEditorInsertionRequest) -> Bool {
         lhs.id == rhs.id
     }
 }
-
 struct TemplateTextEditor: NSViewRepresentable {
     @Binding var text: String
     @Binding var insertionRequest: TextEditorInsertionRequest?
     let font: NSFont = .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
     var onTextChange: (() -> Void)?
-
     init(
         text: Binding<String>,
         insertionRequest: Binding<TextEditorInsertionRequest?> = .constant(nil),
@@ -87,17 +82,14 @@ struct TemplateTextEditor: NSViewRepresentable {
             parent.text = textView.string
             parent.onTextChange?()
         }
-
         func handleInsertionRequest(_ request: TextEditorInsertionRequest?) {
             guard let request, lastHandledRequestID != request.id else { return }
             guard let textView else { return }
             lastHandledRequestID = request.id
-
             let selectedRange = textView.selectedRange()
             textView.insertText(request.text, replacementRange: selectedRange)
             parent.text = textView.string
             parent.onTextChange?()
-
             DispatchQueue.main.async {
                 if self.parent.insertionRequest?.id == request.id {
                     self.parent.insertionRequest = nil

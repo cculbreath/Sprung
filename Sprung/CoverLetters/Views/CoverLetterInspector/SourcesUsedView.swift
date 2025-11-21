@@ -4,9 +4,7 @@
 //
 //  Created on 6/13/25.
 //
-
 import SwiftUI
-
 struct SourcesUsedView: View {
     let coverLetter: CoverLetter
     

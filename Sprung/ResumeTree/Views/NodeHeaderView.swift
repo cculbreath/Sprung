@@ -4,17 +4,13 @@
 //
 //  Created by Christopher Culbreath on 2/27/25.
 //
-
 import SwiftUI
-
 /// Header row for a parent node.  No state lives here; it queries and mutates
 /// expansion state through `ResumeDetailVM`.
 struct NodeHeaderView: View {
     let node: TreeNode
     let addChildAction: () -> Void
-
     @Environment(ResumeDetailVM.self) private var vm: ResumeDetailVM
-
     // Bindings that forward to the view‑model properties.
     private var isExpanded: Binding<Bool> {
         Binding(
@@ -22,17 +18,13 @@ struct NodeHeaderView: View {
             set: { _ in vm.toggleExpansion(for: node) }
         )
     }
-
     // Accessors kept for future controls if needed.
-
     @State private var isHoveringAdd = false
     @State private var isHoveringAll = false
     @State private var isHoveringNone = false
-
     var body: some View {
         HStack {
             ToggleChevronView(isExpanded: isExpanded,)
-
             if node.parent == nil {
                 HeaderTextRow()
             } else {
@@ -42,9 +34,7 @@ struct NodeHeaderView: View {
                     nodeStatus: node.status
                 )
             }
-
             Spacer()
-
             // Show controls when node is expanded and has children
             if vm.isExpanded(node) && node.parent != nil {
                 // All/None buttons for bulk operations if there are children
@@ -98,7 +88,6 @@ struct NodeHeaderView: View {
                     .onHover { hovering in isHoveringAdd = hovering }
                 }
             }
-
             StatusBadgeView(node: node, isExpanded: vm.isExpanded(node))
         }
         .padding(.horizontal, 10)

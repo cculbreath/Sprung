@@ -4,10 +4,8 @@
 //
 //  Created by Christopher Culbreath on 4/21/25.
 //
-
 import Foundation
 import SwiftUI
-
 /// A reusable picker for selecting a CoverLetter
 struct CoverLetterPicker: View {
     /// The list of cover letters to choose from (ideally pre-sorted)
@@ -20,7 +18,6 @@ struct CoverLetterPicker: View {
     var noneLabel: String = "None"
     /// Title label for the picker
     var label: String = "Select a Cover Letter"
-
     var body: some View {
         Picker(label, selection: $selection) {
             if includeNoneOption {

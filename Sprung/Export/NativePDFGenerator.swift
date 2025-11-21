@@ -2,7 +2,6 @@ import Foundation
 import Mustache
 import OrderedCollections
 import WebKit
-
 @MainActor
 class NativePDFGenerator: NSObject, ObservableObject {
     private let templateStore: TemplateStore
@@ -19,11 +18,9 @@ class NativePDFGenerator: NSObject, ObservableObject {
     
     private func setupWebView() {
         let configuration = WKWebViewConfiguration()
-
         // Full letter size - margins will be handled in CSS
         let pageRect = CGRect(x: 0, y: 0, width: 612, height: 792)
         webView = WKWebView(frame: pageRect, configuration: configuration)
-
         webView?.navigationDelegate = self
     }
     
@@ -63,18 +60,15 @@ class NativePDFGenerator: NSObject, ObservableObject {
                     let mustacheTemplate = try Mustache.Template(string: finalContent)
                     TemplateFilters.register(on: mustacheTemplate)
                     let htmlContent = try mustacheTemplate.render(context)
-
                     // Mirror standard export path: persist debug HTML when enabled so preview output is inspectable.
                     if let templateSlug = resume.template?.slug ?? resume.template?.name {
                         saveDebugHTML(htmlContent, template: templateSlug, format: "html")
                     } else {
                         saveDebugHTML(htmlContent, template: "custom-preview", format: "html")
                     }
-
                     currentCompletion = { result in
                         continuation.resume(with: result)
                     }
-
                     webView?.loadHTMLString(htmlContent, baseURL: nil)
                 } catch {
                     continuation.resume(throwing: error)
@@ -99,15 +93,12 @@ class NativePDFGenerator: NSObject, ObservableObject {
     private func renderTemplate(for resume: Resume, template: String, format: String) throws -> String {
         let normalizedTemplate = template.lowercased()
         let resourceName = "\(normalizedTemplate)-template"
-
         var templateContent: String?
-
         if format == "html", let stored = templateStore.htmlTemplateContent(slug: normalizedTemplate) {
             templateContent = stored
         } else if format == "txt", let stored = templateStore.textTemplateContent(slug: normalizedTemplate) {
             templateContent = stored
         }
-
         guard let content = templateContent else {
             throw PDFGeneratorError.templateNotFound("\(resourceName).\(format)")
         }
@@ -142,20 +133,17 @@ class NativePDFGenerator: NSObject, ObservableObject {
     private func createTemplateContext(from resume: Resume) throws -> [String: Any] {
         try ResumeTemplateDataBuilder.buildContext(from: resume)
     }
-
     private func preprocessContextForTemplate(_ context: [String: Any], from resume: Resume) -> [String: Any] {
         // Merge ApplicantProfile data back into context
         guard let template = resume.template,
               let manifest = TemplateManifestLoader.manifest(for: template) else {
             return context
         }
-
         let profile = profileProvider.currentProfile()
         let profileContext = buildApplicantProfileContext(
             profile: profile,
             manifest: manifest
         )
-
         // Merge profile context into the template context
         var merged = context
         for (key, value) in profileContext {
@@ -170,7 +158,6 @@ class NativePDFGenerator: NSObject, ObservableObject {
                 merged[key] = value
             }
         }
-
 #if DEBUG
         if Logger.isVerboseEnabled, let basics = merged["basics"] as? [String: Any] {
             var sanitized = basics
@@ -180,22 +167,18 @@ class NativePDFGenerator: NSObject, ObservableObject {
             Logger.debug("NativePDFGenerator: basics context => \(sanitized)")
         }
 #endif
-
         applySectionVisibility(overrides: &merged, manifest: manifest, resume: resume)
         return merged
     }
-
     private func buildApplicantProfileContext(
         profile: ApplicantProfile,
         manifest: TemplateManifest
     ) -> [String: Any] {
         var payload: [String: Any] = [:]
         let bindings = manifest.applicantProfileBindings()
-
         for binding in bindings {
             guard let value = applicantProfileValue(for: binding.binding.path, profile: profile),
                   !isEmptyValue(value) else { continue }
-
             let updatedSection = setProfileValue(
                 value,
                 for: binding.path,
@@ -203,10 +186,8 @@ class NativePDFGenerator: NSObject, ObservableObject {
             )
             payload[binding.section] = updatedSection
         }
-
         return payload
     }
-
     private func applicantProfileValue(for path: [String], profile: ApplicantProfile) -> Any? {
         guard let first = path.first else { return nil }
         switch first {
@@ -241,7 +222,6 @@ class NativePDFGenerator: NSObject, ObservableObject {
             return nil
         }
     }
-
     private func isEmptyValue(_ value: Any) -> Bool {
         if let string = value as? String {
             return string.isEmpty
@@ -251,7 +231,6 @@ class NativePDFGenerator: NSObject, ObservableObject {
         }
         return false
     }
-
     private func setProfileValue(
         _ value: Any,
         for path: [String],
@@ -268,7 +247,6 @@ class NativePDFGenerator: NSObject, ObservableObject {
         }
         return dictionary
     }
-
     private func applySectionVisibility(
         overrides context: inout [String: Any],
         manifest: TemplateManifest,
@@ -279,9 +257,7 @@ class NativePDFGenerator: NSObject, ObservableObject {
         for (key, value) in resumeOverrides {
             visibility[key] = value
         }
-
         guard visibility.isEmpty == false else { return }
-
         for (sectionKey, shouldDisplay) in visibility {
             let boolKey = "\(sectionKey)Bool"
             let baseVisible: Bool
@@ -297,7 +273,6 @@ class NativePDFGenerator: NSObject, ObservableObject {
             context[boolKey] = baseVisible && shouldDisplay
         }
     }
-
     private func dictionaryValue(from value: Any?) -> [String: Any]? {
         guard let value else { return nil }
         if let dict = value as? [String: Any] {
@@ -305,7 +280,6 @@ class NativePDFGenerator: NSObject, ObservableObject {
         }
         return nil
     }
-
     private func truthy(_ value: Any) -> Bool {
         switch value {
         case let number as NSNumber:
@@ -322,7 +296,6 @@ class NativePDFGenerator: NSObject, ObservableObject {
             return true
         }
     }
-
     private func preprocessTemplateForGRMustache(_ template: String) -> String {
         var processed = template
         
@@ -402,17 +375,14 @@ heightRatio=\(String(format: "%.2f", metrics.scrollHeight / metrics.viewportHeig
             )
         }
         #endif
-
         let configuration = WKPDFConfiguration()
         configuration.rect = CGRect(x: 0, y: 0, width: 612, height: 792) // Letter size in points
-
         do {
             return try await webView.pdf(configuration: configuration)
         } catch {
             throw PDFGeneratorError.pdfGenerationFailed
         }
     }
-
     @MainActor
     private func fetchDocumentHeightMetrics(from webView: WKWebView) async throws -> (scrollHeight: CGFloat, viewportHeight: CGFloat) {
         let script = """
@@ -430,14 +400,12 @@ heightRatio=\(String(format: "%.2f", metrics.scrollHeight / metrics.viewportHeig
             return { scrollHeight, viewportHeight };
         })();
         """
-
         return try await withCheckedThrowingContinuation { continuation in
             webView.evaluateJavaScript(script) { result, error in
                 if let error {
                     continuation.resume(throwing: error)
                     return
                 }
-
                 guard let dict = result as? [String: Any],
                       let scrollNumber = dict["scrollHeight"] as? NSNumber,
                       let viewportNumber = dict["viewportHeight"] as? NSNumber else {
@@ -446,7 +414,6 @@ heightRatio=\(String(format: "%.2f", metrics.scrollHeight / metrics.viewportHeig
                     )
                     return
                 }
-
                 continuation.resume(
                     returning: (
                         scrollHeight: CGFloat(truncating: scrollNumber),
@@ -457,7 +424,6 @@ heightRatio=\(String(format: "%.2f", metrics.scrollHeight / metrics.viewportHeig
         }
     }
 }
-
 extension NativePDFGenerator: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         // Wait a bit for any dynamic content to load
@@ -480,7 +446,6 @@ extension NativePDFGenerator: WKNavigationDelegate {
         currentCompletion = nil
     }
 }
-
 enum PDFGeneratorError: Error, LocalizedError {
     case templateNotFound(String)
     case webViewNotInitialized

@@ -1,22 +1,17 @@
 // Sprung/App/Views/ContentViewLaunch.swift
-
 import AppKit
 import SwiftUI
-
 struct ContentViewLaunch: View {
     let deps: AppDependencies
     @Environment(AppEnvironment.self) private var appEnvironment
-
     @State private var restoreStatus: RestoreStatus?
     @State private var isRestoring = false
     @State private var isResetting = false
-
     var body: some View {
         ZStack {
             coreContent
                 .disabled(appEnvironment.launchState.isReadOnly)
                 .blur(radius: appEnvironment.launchState.isReadOnly ? 4 : 0)
-
             if case .readOnly(let message) = appEnvironment.launchState {
                 LaunchStateOverlay(
                     message: message,
@@ -33,7 +28,6 @@ struct ContentViewLaunch: View {
         }
         .animation(.easeInOut, value: appEnvironment.launchState)
     }
-
     private var coreContent: some View {
         ContentView()
             .environment(deps.appEnvironment)
@@ -57,12 +51,10 @@ struct ContentViewLaunch: View {
             .environment(deps.reasoningStreamManager)
             .environment(deps.resumeReviseViewModel)
     }
-
     private func restoreLatestBackup() {
         guard !isRestoring else { return }
         isRestoring = true
         restoreStatus = nil
-
         Task {
             do {
                 try SwiftDataBackupManager.restoreMostRecentBackup()
@@ -74,13 +66,11 @@ struct ContentViewLaunch: View {
                     restoreStatus = .failure(error.localizedDescription)
                 }
             }
-
             await MainActor.run {
                 isRestoring = false
             }
         }
     }
-
     private func openBackupFolder() {
         guard let backupURL = backupRootURL() else {
             restoreStatus = .failure("Backup folder not found. A backup may not exist yet.")
@@ -89,12 +79,10 @@ struct ContentViewLaunch: View {
         NSWorkspace.shared.activateFileViewerSelecting([backupURL])
         restoreStatus = .success("Opened backup folder in Finder.")
     }
-
     private func resetDataStore() {
         guard !isResetting else { return }
         isResetting = true
         restoreStatus = nil
-
         Task {
             do {
                 try SwiftDataBackupManager.destroyCurrentStore()
@@ -106,13 +94,11 @@ struct ContentViewLaunch: View {
                     restoreStatus = .failure(error.localizedDescription)
                 }
             }
-
             await MainActor.run {
                 isResetting = false
             }
         }
     }
-
     private func backupRootURL() -> URL? {
         guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             return nil
@@ -124,18 +110,15 @@ struct ContentViewLaunch: View {
         return backupRoot
     }
 }
-
 private enum RestoreStatus {
     case success(String)
     case failure(String)
-
     var message: String {
         switch self {
         case .success(let text), .failure(let text):
             return text
         }
     }
-
     var tint: Color {
         switch self {
         case .success:
@@ -145,7 +128,6 @@ private enum RestoreStatus {
         }
     }
 }
-
 private struct LaunchStateOverlay: View {
     let message: String
     let isRestoring: Bool
@@ -154,40 +136,32 @@ private struct LaunchStateOverlay: View {
     let restoreAction: () -> Void
     let openBackupsAction: () -> Void
     let resetAction: () -> Void
-
     var body: some View {
         let isBusy = isRestoring || isResetting
-
         VStack(spacing: 16) {
             Text("Read-Only Mode")
                 .font(.title2)
                 .bold()
-
             Text(message)
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
-
             if let status {
                 Text(status.message)
                     .font(.callout)
                     .foregroundColor(status.tint)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-
             if isBusy {
                 ProgressView()
                     .progressViewStyle(.circular)
             }
-
             VStack(alignment: .leading, spacing: 12) {
                 Button("Restore Latest Backup", action: restoreAction)
                     .buttonStyle(.borderedProminent)
                     .disabled(isBusy)
-
                 Button("Open Backup Folder", action: openBackupsAction)
                     .buttonStyle(.bordered)
                     .disabled(isBusy)
-
                 Button {
                     resetAction()
                 } label: {
@@ -199,7 +173,6 @@ private struct LaunchStateOverlay: View {
                 .disabled(isBusy)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-
             Text("After restoring or resetting, quit and relaunch Sprung.")
                 .font(.footnote)
                 .foregroundColor(.secondary)

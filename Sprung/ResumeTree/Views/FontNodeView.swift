@@ -4,19 +4,14 @@
 //
 //  Created by Christopher Culbreath on 2/27/25.
 //
-
 import SwiftData
 import SwiftUI
-
 struct FontNodeView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(AppEnvironment.self) private var appEnvironment: AppEnvironment
-
     @State var node: FontSizeNode
-
     // State variables for editing and hover actions.
     @State private var isEditing: Bool = false
-
     var body: some View {
         Stepper {
             HStack {
@@ -40,12 +35,10 @@ struct FontNodeView: View {
                                 Logger.debug("FontNodeView: No selected resume to export after edit submission")
                             }
                         }.padding(.trailing, 0)
-
                         Text("pt") // Postfix text (unit)
                             .foregroundColor(.secondary).padding(.leading, 0)
                     }
                 }
-
             }.frame(maxWidth: .infinity)
         } onIncrement: {
             node.fontValue += 0.5
@@ -62,7 +55,6 @@ struct FontNodeView: View {
                 }
             }
         }
-
         .cornerRadius(5)
     }
 }

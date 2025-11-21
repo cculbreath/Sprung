@@ -4,14 +4,11 @@
 //
 //  Registry for phase scripts, providing access to phase-specific behavior.
 //
-
 import Foundation
-
 @MainActor
 final class PhaseScriptRegistry {
     // MARK: - Properties
     private let scripts: [InterviewPhase: PhaseScript]
-
     // MARK: - Init
     init() {
         self.scripts = [
@@ -20,24 +17,20 @@ final class PhaseScriptRegistry {
             .phase3WritingCorpus: PhaseThreeScript()
         ]
     }
-
     // MARK: - Public API
     /// Returns the script for the given phase.
     func script(for phase: InterviewPhase) -> PhaseScript? {
         scripts[phase]
     }
-
     /// Returns the script for the current phase.
     func currentScript(for phase: InterviewPhase) -> PhaseScript? {
         script(for: phase)
     }
-
     /// Returns the base developer message text (sent once on first request, persists via previous_response_id).
     /// Phase introductory prompts are sent as additional developer messages at phase start.
     func buildSystemPrompt(for phase: InterviewPhase) -> String {
         Self.baseDeveloperMessage()
     }
-
     // MARK: - Base Developer Message
     private static func baseDeveloperMessage() -> String {
         """
@@ -101,10 +94,8 @@ final class PhaseScriptRegistry {
         • list_artifacts / get_artifact / request_raw_file — artifact queries
         • set_objective_status — mark objectives pending/in_progress/completed/skipped
         • next_phase — request advancing to the next phase (may require user approval if objectives are incomplete)
-
         TOOL CALL CONSTRAINTS
         - CRITICAL: set_objective_status is ATOMIC and may NEVER be called in the same turn as an assistant message. If you need to update objective status, do so in a separate response with NO assistant message text. Status updates are fire-and-forget operations that do not require user communication.
-
         ARTIFACT RECORDS
         - Any user upload or captured data form produces an artifact record containing plain text and metadata. 
         - Use list_artifacts to enumerate, get_artifact for full metadata/content, and request_raw_file to retrieve the original file path/URL when available.

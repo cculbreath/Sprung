@@ -4,10 +4,8 @@
 //
 //  Created by Christopher Culbreath on 6/10/25.
 //
-
 import Foundation
 import SwiftOpenAI
-
 /// Reasoning configuration for OpenRouter (matches their API format exactly)
 struct OpenRouterReasoning: Codable {
     /// Effort level: "high", "medium", or "low"
@@ -30,7 +28,6 @@ struct OpenRouterReasoning: Codable {
         self.maxTokens = maxTokens
     }
 }
-
 /// Factory for assembling ChatCompletionParameters objects
 struct LLMRequestBuilder {
     
@@ -215,7 +212,6 @@ struct LLMRequestBuilder {
             temperature: temperature
         )
     }
-
     /// Build parameters for structured conversation requests
     static func buildStructuredConversationRequest<T: Codable>(
         messages: [LLMMessageDTO],
@@ -248,5 +244,4 @@ struct LLMRequestBuilder {
             )
         }
     }
-
 }

@@ -2,26 +2,21 @@ import AppKit
 import SwiftyJSON
 import SwiftUI
 import UniformTypeIdentifiers
-
 struct OnboardingInterviewToolPane: View {
     @Environment(ApplicantProfileStore.self) private var applicantProfileStore
     @Environment(ExperienceDefaultsStore.self) private var experienceDefaultsStore
-
     @Bindable var coordinator: OnboardingInterviewCoordinator
     @Binding var isOccupied: Bool
-
     var body: some View {
         let paneOccupied = isPaneOccupied(coordinator: coordinator)
         let isLLMActive = coordinator.ui.isProcessing || coordinator.ui.pendingStreamingStatus != nil
         // Always show spinner during any busy state, regardless of what cards are shown
         let showSpinner = coordinator.ui.pendingExtraction != nil || isLLMActive
-
         return VStack(alignment: .leading, spacing: 16) {
             if coordinator.ui.pendingExtraction != nil {
                 Spacer(minLength: 0)
             } else {
                 let uploads = uploadRequests()
-
                 if !uploads.isEmpty {
                     uploadRequestsView(uploads)
                 } else if let intake = coordinator.pendingApplicantProfileIntake {
@@ -164,7 +159,6 @@ struct OnboardingInterviewToolPane: View {
                     // Use currentStatusMessage if available, otherwise fall back to pendingStreamingStatusSync
                     let statusText = coordinator.ui.currentStatusMessage ?? coordinator.ui.pendingStreamingStatus?
                         .trimmingCharacters(in: .whitespacesAndNewlines)
-
                     AnimatedThinkingText(statusMessage: statusText)
                         .padding(.vertical, 32)
                         .padding(.horizontal, 32)
@@ -194,7 +188,6 @@ struct OnboardingInterviewToolPane: View {
             isOccupied = newValue
         }
     }
-
     @ViewBuilder
     private func supportingContent() -> some View {
         if let extraction = coordinator.ui.pendingExtraction {
@@ -206,7 +199,6 @@ struct OnboardingInterviewToolPane: View {
             summaryContent()
         }
     }
-
     @ViewBuilder
     private func summaryContent() -> some View {
         if coordinator.ui.phase == .phase2DeepDive {
@@ -218,7 +210,6 @@ struct OnboardingInterviewToolPane: View {
             Spacer()
         }
     }
-
     @ViewBuilder
     private func uploadRequestsView(_ requests: [OnboardingUploadRequest]) -> some View {
         ScrollView {
@@ -242,7 +233,6 @@ struct OnboardingInterviewToolPane: View {
             }
         }
     }
-
     private func uploadRequests() -> [OnboardingUploadRequest] {
         var filtered: [OnboardingUploadRequest]
         switch coordinator.wizardTracker.currentStep {
@@ -262,22 +252,18 @@ struct OnboardingInterviewToolPane: View {
                 $0.kind == .generic && $0.metadata.targetKey == "basics.image"
             }
         }
-
         if filtered.count != coordinator.pendingUploadRequests.count {
             let headshotRequests = coordinator.pendingUploadRequests.filter { $0.metadata.targetKey == "basics.image" }
             for request in headshotRequests where filtered.contains(where: { $0.id == request.id }) == false {
                 filtered.append(request)
             }
         }
-
         if !filtered.isEmpty {
             let kinds = filtered.map { $0.kind.rawValue }.joined(separator: ",")
             Logger.debug("📤 Pending upload requests surfaced in tool pane (step: \(coordinator.wizardTracker.currentStep.rawValue), kinds: \(kinds))", category: .ai)
         }
-
         return filtered
     }
-
     private func openPanel(for request: OnboardingUploadRequest) {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = request.metadata.allowMultiple
@@ -285,7 +271,6 @@ struct OnboardingInterviewToolPane: View {
         if let allowed = allowedContentTypes(for: request) {
             panel.allowedContentTypes = allowed
         }
-
         panel.begin { result in
             guard result == .OK else { return }
             let urls: [URL]
@@ -299,7 +284,6 @@ struct OnboardingInterviewToolPane: View {
             }
         }
     }
-
     private func allowedContentTypes(for request: OnboardingUploadRequest) -> [UTType]? {
         var candidates = request.metadata.accepts.map {
             $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -318,16 +302,13 @@ struct OnboardingInterviewToolPane: View {
                 return nil
             }
         }
-
         let mapped = candidates.compactMap { UTType(filenameExtension: $0) }
         return mapped.isEmpty ? nil : mapped
     }
-
     private func isPaneOccupied(coordinator: OnboardingInterviewCoordinator) -> Bool {
         hasInteractiveCard(coordinator: coordinator) ||
             hasSummaryCard(coordinator: coordinator)
     }
-
     private func hasInteractiveCard(coordinator: OnboardingInterviewCoordinator) -> Bool {
         if coordinator.ui.pendingExtraction != nil { return true }
         if !uploadRequests().isEmpty { return true }
@@ -343,7 +324,6 @@ struct OnboardingInterviewToolPane: View {
         if coordinator.ui.pendingPhaseAdvanceRequest != nil { return true }
         return false
     }
-
     private func hasSummaryCard(
         coordinator: OnboardingInterviewCoordinator
     ) -> Bool {
@@ -354,25 +334,20 @@ struct OnboardingInterviewToolPane: View {
         return false
     }
 }
-
 private struct ExtractionProgressOverlay: View {
     let items: [ExtractionProgressItem]
     let statusText: String?
-
     private var trimmedStatus: String? {
         guard let statusText else { return nil }
         let trimmed = statusText.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
-
     var body: some View {
         VStack(spacing: 28) {
             AnimatedThinkingText(statusMessage: statusText)
-
             VStack(alignment: .leading, spacing: 18) {
                 Text("Processing résumé…")
                     .font(.headline)
-
                 ExtractionProgressChecklistView(items: items)
             }
             .padding(.vertical, 26)
@@ -394,14 +369,11 @@ private struct ExtractionProgressOverlay: View {
         .allowsHitTesting(false)
     }
 }
-
 private struct KnowledgeCardValidationHost: View {
     let prompt: OnboardingValidationPrompt
     let coordinator: OnboardingInterviewCoordinator
-
     @State private var draft: KnowledgeCardDraft
     private let artifactRecords: [ArtifactRecord]
-
     init(
         prompt: OnboardingValidationPrompt,
         artifactsJSON: [JSON],
@@ -412,7 +384,6 @@ private struct KnowledgeCardValidationHost: View {
         _draft = State(initialValue: KnowledgeCardDraft(json: prompt.payload))
         artifactRecords = artifactsJSON.map { ArtifactRecord(json: $0) }
     }
-
     var body: some View {
         KnowledgeCardReviewCard(
             card: $draft,
@@ -449,11 +420,9 @@ private struct KnowledgeCardValidationHost: View {
         }
     }
 }
-
 private struct ApplicantProfileSummaryCard: View {
     let profile: JSON
     let imageData: Data?
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Applicant Profile")
@@ -500,27 +469,22 @@ private struct ApplicantProfileSummaryCard: View {
         .background(Color(nsColor: .textBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
-
     private func nonEmpty(_ value: String?) -> String? {
         guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         return value
     }
-
     private var avatarImage: Image? {
         if let base64 = profile["image"].string?.trimmingCharacters(in: .whitespacesAndNewlines),
            let data = Data(base64Encoded: base64, options: .ignoreUnknownCharacters),
            let nsImage = NSImage(data: data) {
             return Image(nsImage: nsImage)
         }
-
         if let imageData,
            let nsImage = NSImage(data: imageData) {
             return Image(nsImage: nsImage)
         }
-
         return nil
     }
-
     private func formattedLocation(_ json: JSON) -> String? {
         guard json != .null else { return nil }
         var components: [String] = []
@@ -546,10 +510,8 @@ private struct ApplicantProfileSummaryCard: View {
         return components.isEmpty ? nil : components.joined(separator: ", ")
     }
 }
-
 private struct EnabledSectionsSummaryCard: View {
     let sections: Set<String>
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Enabled Résumé Sections")
@@ -568,7 +530,6 @@ private struct EnabledSectionsSummaryCard: View {
         .background(Color(nsColor: .textBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
-
     private func formattedSections() -> [String] {
         sections.sorted().compactMap { identifier in
             ExperienceSectionKey.fromOnboardingIdentifier(identifier)?.metadata.title

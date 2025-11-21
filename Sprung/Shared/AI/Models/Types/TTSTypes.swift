@@ -4,9 +4,7 @@
 //
 //  Created by Christopher Culbreath on 5/21/25.
 //
-
 import Foundation
-
 /// Protocol that marks an LLM client as capable of handling Text-to-Speech requests
 protocol TTSCapable {
     /// Sends a non-streaming TTS request and calls the completion handler with the result
@@ -26,16 +24,13 @@ protocol TTSCapable {
         onComplete: @escaping (Error?) -> Void
     )
 }
-
 /// A fallback implementation used when no TTS provider is configured.
 /// Logs a warning and surfaces a consistent error to the caller.
 final class UnavailableTTSClient: TTSCapable {
     private let errorMessage: String
-
     init(errorMessage: String = "TTS service unavailable") {
         self.errorMessage = errorMessage
     }
-
     func sendTTSRequest(
         text: String,
         voice: String,
@@ -48,7 +43,6 @@ final class UnavailableTTSClient: TTSCapable {
         )
         onComplete(.failure(makeError()))
     }
-
     func sendTTSStreamingRequest(
         text: String,
         voice: String,
@@ -62,7 +56,6 @@ final class UnavailableTTSClient: TTSCapable {
         )
         onComplete(makeError())
     }
-
     private func makeError() -> NSError {
         NSError(
             domain: "TTSCapable.Unavailable",

@@ -1,6 +1,5 @@
 // Sprung/App/Views/ToolbarButtons/CoverLetterGenerateButton.swift
 import SwiftUI
-
 struct CoverLetterGenerateButton: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore

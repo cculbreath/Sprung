@@ -1,10 +1,8 @@
 // Sprung/AI/Models/ResumeReviewService.swift
-
 import Foundation
 import PDFKit
 import AppKit
 import SwiftUI
-
 /// Service for handling resume review operations with LLM
 class ResumeReviewService: @unchecked Sendable {
     // MARK: - Properties
@@ -283,7 +281,6 @@ class ResumeReviewService: @unchecked Sendable {
             Logger.debug("Error: Resume has no rootNode for skills extraction")
             return nil
         }
-
         // Find the skills section
         guard let skillsSection = rootNode.children?.first(where: {
             $0.name.lowercased() == "skills-and-expertise" || $0.name.lowercased() == "skills and expertise"
@@ -291,7 +288,6 @@ class ResumeReviewService: @unchecked Sendable {
             Logger.debug("Error: 'Skills and Expertise' section not found")
             return nil
         }
-
         // Extract skills as a simple JSON structure
         return skillsSection.toJSONString()
     }

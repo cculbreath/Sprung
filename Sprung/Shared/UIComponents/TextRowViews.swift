@@ -4,9 +4,7 @@
 //
 //  Created by Christopher Culbreath on 2/27/25.
 //
-
 import SwiftUI
-
 struct HeaderTextRow: View {
     var body: some View {
         HStack {
@@ -17,12 +15,10 @@ struct HeaderTextRow: View {
         .padding(.vertical, 2)
     }
 }
-
 struct AlignedTextRow: View {
     let leadingText: String
     let trailingText: String?
     let nodeStatus: LeafStatus
-
     var body: some View {
         let indent: CGFloat = 100.0
         HStack {
@@ -44,12 +40,10 @@ struct AlignedTextRow: View {
         .padding(.vertical, 2)
     }
 }
-
 struct StackedTextRow: View {
     let title: String
     let description: String
     let nodeStatus: LeafStatus
-
     var body: some View {
         let indent: CGFloat = 100.0
         VStack(alignment: .leading) {

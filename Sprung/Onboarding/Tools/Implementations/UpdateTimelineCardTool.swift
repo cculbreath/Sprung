@@ -1,7 +1,6 @@
 import Foundation
 import SwiftyJSON
 import SwiftOpenAI
-
 struct UpdateTimelineCardTool: InterviewTool {
     private static let schema: JSONSchema = {
         let fieldsSchema = JSONSchema(
@@ -36,18 +35,13 @@ struct UpdateTimelineCardTool: InterviewTool {
             required: [],
             additionalProperties: false
         )
-
         return JSONSchema(
             type: .object,
             description: """
                 Update an existing timeline card with partial field changes (PATCH semantics).
-
                 Only include fields you want to change - omitted fields remain unchanged. Use this to correct errors or add missing information to existing cards.
-
                 RETURNS: { "success": true, "id": "<card-id>" }
-
                 USAGE: Call when user provides corrections or additional details for an existing timeline entry. The UI will reflect changes immediately.
-
                 DO NOT: Include summary or highlights in Phase 1 - skeleton cards contain only basic facts.
                 """,
             properties: [
@@ -61,13 +55,10 @@ struct UpdateTimelineCardTool: InterviewTool {
             additionalProperties: false
         )
     }()
-
     private unowned let coordinator: OnboardingInterviewCoordinator
-
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
-
     var name: String { "update_timeline_card" }
     var description: String { "Update existing timeline card with partial changes (PATCH). Returns {success, id}. Only include changed fields." }
     var parameters: JSONSchema { Self.schema }
@@ -79,21 +70,17 @@ struct UpdateTimelineCardTool: InterviewTool {
         guard let fields = params["fields"].dictionary else {
             throw ToolError.invalidParameters("fields must be provided")
         }
-
         // Normalize fields for Phase 1 skeleton timeline constraints
         let normalizedFields = try normalizePhaseOneFields(JSON(fields))
-
         // Update timeline card via coordinator (which emits events)
         let result = await coordinator.updateTimelineCard(id: id, fields: normalizedFields)
         return .immediate(result)
     }
-
     /// Normalizes timeline card fields to enforce Phase 1 skeleton-only constraints.
     /// Keeps only: title, organization, location, start, end, url
     /// Validates ISO 8601 date strings and drops summary/highlights.
     private func normalizePhaseOneFields(_ fields: JSON) throws -> JSON {
         var normalized = JSON()
-
         // Keep allowed Phase 1 fields
         if let title = fields["title"].string {
             normalized["title"].string = title
@@ -107,7 +94,6 @@ struct UpdateTimelineCardTool: InterviewTool {
         if let url = fields["url"].string {
             normalized["url"].string = url
         }
-
         // Validate and keep start date if provided
         if let start = fields["start"].string {
             guard isValidISO8601Date(start) else {
@@ -115,7 +101,6 @@ struct UpdateTimelineCardTool: InterviewTool {
             }
             normalized["start"].string = start
         }
-
         // Validate and keep end date if provided (empty string means "present")
         if fields["end"].exists() {
             let end = fields["end"].string ?? ""
@@ -126,38 +111,30 @@ struct UpdateTimelineCardTool: InterviewTool {
             }
             normalized["end"].string = end
         }
-
         // Phase 1: explicitly drop summary and highlights
         // (They will be added in Phase 2)
-
         return normalized
     }
-
     /// Validates that a string is a valid ISO 8601 date (YYYY-MM-DD format or partial formats).
     private func isValidISO8601Date(_ dateString: String) -> Bool {
         let trimmed = dateString.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { return false }
-
         let iso8601Formatter = ISO8601DateFormatter()
         iso8601Formatter.formatOptions = [.withFullDate]
-
         // Try full date first (YYYY-MM-DD)
         if iso8601Formatter.date(from: trimmed) != nil {
             return true
         }
-
         // Also accept year-month (YYYY-MM) format
         let yearMonthPattern = "^\\d{4}-\\d{2}$"
         if trimmed.range(of: yearMonthPattern, options: .regularExpression) != nil {
             return true
         }
-
         // Also accept year-only (YYYY) format
         let yearPattern = "^\\d{4}$"
         if trimmed.range(of: yearPattern, options: .regularExpression) != nil {
             return true
         }
-
         return false
     }
 }

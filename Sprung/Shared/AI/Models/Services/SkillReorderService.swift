@@ -4,9 +4,7 @@
 //
 //  Created by Christopher Culbreath on 6/4/25.
 //
-
 import Foundation
-
 /// Service for skill reordering using the unified LLM facade
 /// Replaces ReorderSkillsProvider with cleaner LLM integration
 @MainActor
@@ -18,9 +16,7 @@ class SkillReorderService {
     // MARK: - Configuration
     private let systemPrompt = """
     You are an expert resume optimizer specializing in skills prioritization. Your task is to analyze a list of skills and expertise items and reorder them based on their relevance to a specific job description. Place the most relevant and impressive skills at the top of the list.
-
     IMPORTANT: Your response must be a valid JSON object conforming to the JSON schema provided. The id field for each skill must contain the exact UUID string from the input. Do not modify the UUID format in any way.
-
     IMPORTANT: Output ONLY the JSON object with the "reordered_skills_and_expertise" array. Do not include any additional commentary, explanation, or text outside the JSON.
     """
     
@@ -98,23 +94,19 @@ class SkillReorderService {
             Logger.debug("Error: Resume has no rootNode.")
             return nil
         }
-
         // Attempt to find the "Skills and Expertise" section node.
         var skillsSectionNode: TreeNode? = actualRootNode.children?.first(where: {
             $0.name.lowercased() == "skills-and-expertise" || $0.name.lowercased() == "skills and expertise"
         })
-
         // If not found with primary names, try the fallback key.
         if skillsSectionNode == nil {
             skillsSectionNode = actualRootNode.children?.first(where: { $0.name == "skills-and-expertise" })
         }
-
         // If still not found after both attempts, print an error and return nil.
         guard let finalSkillsSectionNode = skillsSectionNode else {
             Logger.debug("Error: 'Skills and Expertise' section node not found in the resume under rootNode.")
             return nil
         }
-
         // Extract the tree structure as JSON using TreeNode extension
         return finalSkillsSectionNode.toJSONString()
     }
@@ -125,13 +117,10 @@ class SkillReorderService {
         let prompt = """
         TASK:
         Analyze the provided skills and expertise items along with the job description. Reorder the skills to place the most relevant and impressive skills at the top of the list based on their relevance to the job requirements.
-
         CURRENT SKILLS AND EXPERTISE (in JSON format - contains just name, id, and current order):
         \(skillsJsonString)
-
         JOB DESCRIPTION:
         \(jobDescription)
-
         RESPONSE REQUIREMENTS:
         - You MUST respond with a valid JSON object containing exactly one field: "reordered_skills_and_expertise"
         - This field must contain an array of skill objects
@@ -144,7 +133,6 @@ class SkillReorderService {
         - Do not add or remove any skills, only reorder them
         - Do not include any text, comments, or explanations outside the JSON object
         - Your entire response must be a valid JSON structure
-
         Example response format:
         {
           "reordered_skills_and_expertise": [
@@ -187,7 +175,6 @@ class SkillReorderService {
         }
     }
 }
-
 // MARK: - Supporting Types
 /// Errors specific to skill reorder service
 enum SkillReorderError: LocalizedError {
@@ -206,7 +193,6 @@ enum SkillReorderError: LocalizedError {
         }
     }
 }
-
 // MARK: - Note: Using existing types from ReorderSkillsProvider
 // - ReorderSkillsResponse (with reorderedSkillsAndExpertise property)
 // - ReorderedSkillNode (the final output type)

@@ -1,7 +1,6 @@
 import Foundation
 import SwiftOpenAI
 import SwiftyJSON
-
 enum KnowledgeCardAgentError: LocalizedError {
     case emptyResponse
     case invalidEncoding
@@ -10,7 +9,6 @@ enum KnowledgeCardAgentError: LocalizedError {
     case emptyClaim
     case missingEvidence(claim: String)
     case citationNotFound(claim: String)
-
     var errorDescription: String? {
         switch self {
         case .emptyResponse:
@@ -30,23 +28,18 @@ enum KnowledgeCardAgentError: LocalizedError {
         }
     }
 }
-
 final class KnowledgeCardAgent {
     private let client: OpenAIService
     private let maxArtifactCharacters = 4_000
     private let maxTranscriptCharacters = 6_000
-
     init(client: OpenAIService) {
         self.client = client
     }
-
     func generateCard(for context: ExperienceContext) async throws -> KnowledgeCardDraft {
         let config = ModelProvider.forTask(.knowledgeCard)
         let textConfig = TextConfiguration(format: .jsonObject, verbosity: config.defaultVerbosity)
-
         let systemMessage = InputMessage(role: "system", content: .text(systemInstruction))
         let userMessage = InputMessage(role: "user", content: .text(buildPrompt(for: context)))
-
         var parameters = ModelResponseParameter(
             input: .array([
                 .message(systemMessage),
@@ -55,11 +48,9 @@ final class KnowledgeCardAgent {
             model: .custom(config.id),
             text: textConfig
         )
-
         if let effort = config.defaultReasoningEffort {
             parameters.reasoning = Reasoning(effort: effort, summary: .auto)
         }
-
         let response = try await client.responseCreate(parameters)
         guard let output = response.outputText, !output.isEmpty else {
             throw KnowledgeCardAgentError.emptyResponse
@@ -67,18 +58,15 @@ final class KnowledgeCardAgent {
         guard let data = output.data(using: .utf8) else {
             throw KnowledgeCardAgentError.invalidEncoding
         }
-
         let json: JSON
         do {
             json = try JSON(data: data)
         } catch {
             throw KnowledgeCardAgentError.decodingFailed
         }
-
         let draft = KnowledgeCardDraft(json: json)
         return try validateCitations(in: draft, artifacts: context.artifacts)
     }
-
     private var systemInstruction: String {
         """
         You are Sprung's knowledge card generator. Produce a single JSON object with the keys:
@@ -93,10 +81,8 @@ final class KnowledgeCardAgent {
         - Return JSON only with no additional prose.
         """
     }
-
     private func buildPrompt(for context: ExperienceContext) -> String {
         let experienceJSON = context.timelineEntry.rawString(.utf8, options: [.prettyPrinted]) ?? context.timelineEntry.description
-
         let artifactSnippets = context.artifacts.map { artifact -> String in
             let truncated = truncate(artifact.extractedContent, limit: maxArtifactCharacters)
             let purpose = artifact.metadata["purpose"].string ?? "unspecified"
@@ -109,61 +95,48 @@ final class KnowledgeCardAgent {
             """
         }
         .joined(separator: "\n\n")
-
         let transcript = truncate(context.transcript, limit: maxTranscriptCharacters)
-
         return """
         EXPERIENCE CONTEXT (JSON):
         \(experienceJSON)
-
         INTERVIEW TRANSCRIPT:
         \(transcript.isEmpty ? "(No transcript provided)" : transcript)
-
         EVIDENCE ARTIFACTS:
         \(artifactSnippets.isEmpty ? "(No artifacts provided)" : artifactSnippets)
-
         Generate the knowledge card JSON now.
         """
     }
-
     private func truncate(_ text: String, limit: Int) -> String {
         guard text.count > limit else { return text }
         let index = text.index(text.startIndex, offsetBy: limit)
         return String(text[text.startIndex..<index]) + "…"
     }
-
     private func validateCitations(in draft: KnowledgeCardDraft, artifacts: [ArtifactRecord]) throws -> KnowledgeCardDraft {
         guard !draft.achievements.isEmpty else {
             throw KnowledgeCardAgentError.missingClaims
         }
-
         for achievement in draft.achievements {
             let claim = achievement.claim.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !claim.isEmpty else {
                 throw KnowledgeCardAgentError.emptyClaim
             }
-
             let quote = achievement.evidence.quote.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !quote.isEmpty else {
                 throw KnowledgeCardAgentError.missingEvidence(claim: claim)
             }
-
             let candidateArtifacts: [ArtifactRecord]
             if let sha = achievement.evidence.artifactSHA, !sha.isEmpty {
                 candidateArtifacts = artifacts.filter { $0.sha256 == sha }
             } else {
                 candidateArtifacts = artifacts
             }
-
             let found = candidateArtifacts.contains { artifact in
                 artifact.extractedContent.localizedCaseInsensitiveContains(quote)
             }
-
             if !found {
                 throw KnowledgeCardAgentError.citationNotFound(claim: claim)
             }
         }
-
         return draft
     }
 }

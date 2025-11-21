@@ -4,9 +4,7 @@
 //
 //  Created on 6/13/25.
 //
-
 import SwiftUI
-
 struct ActionButtonsView: View {
     let coverLetter: CoverLetter
     @Binding var isEditing: Bool

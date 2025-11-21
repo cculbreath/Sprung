@@ -1,9 +1,7 @@
 import SwiftUI
-
 struct WorkExperienceSectionView: View {
     @Binding var items: [WorkExperienceDraft]
     let callbacks: ExperienceSectionViewCallbacks
-
     var body: some View {
         GenericExperienceSectionView(
             items: $items,
@@ -20,24 +18,20 @@ struct WorkExperienceSectionView: View {
             }
         )
     }
-
     private static func title(for entry: WorkExperienceDraft) -> String {
         if entry.position.trimmed().isEmpty == false { return entry.position.trimmed() }
         if entry.name.trimmed().isEmpty == false { return entry.name.trimmed() }
         return "Work Role"
     }
-
     private static func subtitle(for entry: WorkExperienceDraft) -> String? {
         let company = entry.position.trimmed().isEmpty ? entry.name.trimmed() : nil
         let range = dateRangeDescription(entry.startDate, entry.endDate)
         return summarySubtitle(primary: company, secondary: range)
     }
 }
-
 struct VolunteerExperienceSectionView: View {
     @Binding var items: [VolunteerExperienceDraft]
     let callbacks: ExperienceSectionViewCallbacks
-
     var body: some View {
         GenericExperienceSectionView(
             items: $items,
@@ -54,24 +48,20 @@ struct VolunteerExperienceSectionView: View {
             }
         )
     }
-
     private static func title(for entry: VolunteerExperienceDraft) -> String {
         if entry.position.trimmed().isEmpty == false { return entry.position.trimmed() }
         if entry.organization.trimmed().isEmpty == false { return entry.organization.trimmed() }
         return "Volunteer Role"
     }
-
     private static func subtitle(for entry: VolunteerExperienceDraft) -> String? {
         let organization = entry.position.trimmed().isEmpty ? entry.organization.trimmed() : nil
         let range = dateRangeDescription(entry.startDate, entry.endDate)
         return summarySubtitle(primary: organization, secondary: range)
     }
 }
-
 struct EducationExperienceSectionView: View {
     @Binding var items: [EducationExperienceDraft]
     let callbacks: ExperienceSectionViewCallbacks
-
     var body: some View {
         GenericExperienceSectionView(
             items: $items,
@@ -88,7 +78,6 @@ struct EducationExperienceSectionView: View {
             }
         )
     }
-
     private static func title(for entry: EducationExperienceDraft) -> String {
         let study = entry.studyType.trimmed()
         let area = entry.area.trimmed()
@@ -98,18 +87,15 @@ struct EducationExperienceSectionView: View {
         if entry.institution.trimmed().isEmpty == false { return entry.institution.trimmed() }
         return "Education"
     }
-
     private static func subtitle(for entry: EducationExperienceDraft) -> String? {
         let institution = entry.institution.trimmed()
         let range = dateRangeDescription(entry.startDate, entry.endDate)
         return summarySubtitle(primary: institution, secondary: range)
     }
 }
-
 struct ProjectExperienceSectionView: View {
     @Binding var items: [ProjectExperienceDraft]
     let callbacks: ExperienceSectionViewCallbacks
-
     var body: some View {
         GenericExperienceSectionView(
             items: $items,
@@ -126,23 +112,19 @@ struct ProjectExperienceSectionView: View {
             }
         )
     }
-
     private static func title(for entry: ProjectExperienceDraft) -> String {
         let name = entry.name.trimmed()
         return name.isEmpty ? "Project" : name
     }
-
     private static func subtitle(for entry: ProjectExperienceDraft) -> String? {
         let organization = entry.organization.trimmed()
         let range = dateRangeDescription(entry.startDate, entry.endDate)
         return summarySubtitle(primary: organization, secondary: range)
     }
 }
-
 struct SkillExperienceSectionView: View {
     @Binding var items: [SkillExperienceDraft]
     let callbacks: ExperienceSectionViewCallbacks
-
     var body: some View {
         GenericExperienceSectionView(
             items: $items,
@@ -159,22 +141,18 @@ struct SkillExperienceSectionView: View {
             }
         )
     }
-
     private static func title(for entry: SkillExperienceDraft) -> String {
         let name = entry.name.trimmed()
         return name.isEmpty ? "Skill" : name
     }
-
     private static func subtitle(for entry: SkillExperienceDraft) -> String? {
         let level = entry.level.trimmed()
         return level.isEmpty ? nil : level
     }
 }
-
 struct AwardExperienceSectionView: View {
     @Binding var items: [AwardExperienceDraft]
     let callbacks: ExperienceSectionViewCallbacks
-
     var body: some View {
         GenericExperienceSectionView(
             items: $items,
@@ -191,21 +169,17 @@ struct AwardExperienceSectionView: View {
             }
         )
     }
-
     private static func title(for entry: AwardExperienceDraft) -> String {
         let title = entry.title.trimmed()
         return title.isEmpty ? "Award" : title
     }
-
     private static func subtitle(for entry: AwardExperienceDraft) -> String? {
         summarySubtitle(primary: entry.awarder.trimmed(), secondary: entry.date.trimmed())
     }
 }
-
 struct CertificateExperienceSectionView: View {
     @Binding var items: [CertificateExperienceDraft]
     let callbacks: ExperienceSectionViewCallbacks
-
     var body: some View {
         GenericExperienceSectionView(
             items: $items,
@@ -222,21 +196,17 @@ struct CertificateExperienceSectionView: View {
             }
         )
     }
-
     private static func title(for entry: CertificateExperienceDraft) -> String {
         let name = entry.name.trimmed()
         return name.isEmpty ? "Certificate" : name
     }
-
     private static func subtitle(for entry: CertificateExperienceDraft) -> String? {
         summarySubtitle(primary: entry.issuer.trimmed(), secondary: entry.date.trimmed())
     }
 }
-
 struct PublicationExperienceSectionView: View {
     @Binding var items: [PublicationExperienceDraft]
     let callbacks: ExperienceSectionViewCallbacks
-
     var body: some View {
         GenericExperienceSectionView(
             items: $items,
@@ -253,21 +223,17 @@ struct PublicationExperienceSectionView: View {
             }
         )
     }
-
     private static func title(for entry: PublicationExperienceDraft) -> String {
         let name = entry.name.trimmed()
         return name.isEmpty ? "Publication" : name
     }
-
     private static func subtitle(for entry: PublicationExperienceDraft) -> String? {
         summarySubtitle(primary: entry.publisher.trimmed(), secondary: entry.releaseDate.trimmed())
     }
 }
-
 struct LanguageExperienceSectionView: View {
     @Binding var items: [LanguageExperienceDraft]
     let callbacks: ExperienceSectionViewCallbacks
-
     var body: some View {
         GenericExperienceSectionView(
             items: $items,
@@ -284,22 +250,18 @@ struct LanguageExperienceSectionView: View {
             }
         )
     }
-
     private static func title(for entry: LanguageExperienceDraft) -> String {
         let language = entry.language.trimmed()
         return language.isEmpty ? "Language" : language
     }
-
     private static func subtitle(for entry: LanguageExperienceDraft) -> String? {
         let fluency = entry.fluency.trimmed()
         return fluency.isEmpty ? nil : fluency
     }
 }
-
 struct InterestExperienceSectionView: View {
     @Binding var items: [InterestExperienceDraft]
     let callbacks: ExperienceSectionViewCallbacks
-
     var body: some View {
         GenericExperienceSectionView(
             items: $items,
@@ -316,17 +278,14 @@ struct InterestExperienceSectionView: View {
             }
         )
     }
-
     private static func title(for entry: InterestExperienceDraft) -> String {
         let name = entry.name.trimmed()
         return name.isEmpty ? "Interest" : name
     }
 }
-
 struct ReferenceExperienceSectionView: View {
     @Binding var items: [ReferenceExperienceDraft]
     let callbacks: ExperienceSectionViewCallbacks
-
     var body: some View {
         GenericExperienceSectionView(
             items: $items,
@@ -343,20 +302,16 @@ struct ReferenceExperienceSectionView: View {
             }
         )
     }
-
     private static func title(for entry: ReferenceExperienceDraft) -> String {
         let name = entry.name.trimmed()
         return name.isEmpty ? "Reference" : name
     }
 }
-
 struct AnyExperienceSectionRenderer: Identifiable {
     let key: ExperienceSectionKey
     private let isEnabledClosure: (ExperienceDefaultsDraft) -> Bool
     private let renderClosure: (Binding<ExperienceDefaultsDraft>, ExperienceSectionViewCallbacks) -> AnyView
-
     var id: ExperienceSectionKey { key }
-
     init<Item, Editor: View, Summary: View>(
         key: ExperienceSectionKey,
         metadata: ExperienceSectionMetadata,
@@ -368,11 +323,9 @@ struct AnyExperienceSectionRenderer: Identifiable {
         summaryBuilder: @escaping (Item) -> Summary
     ) where Item: Identifiable & Equatable, Item.ID == UUID {
         self.key = key
-
         isEnabledClosure = { draft in
             draft[keyPath: metadata.isEnabledKeyPath]
         }
-
         renderClosure = { draftBinding, callbacks in
             let itemsBinding = Binding(
                 get: { draftBinding.wrappedValue[keyPath: itemsKeyPath] },
@@ -380,7 +333,6 @@ struct AnyExperienceSectionRenderer: Identifiable {
                     draftBinding.wrappedValue[keyPath: itemsKeyPath] = newValue
                 }
             )
-
             return AnyView(
                 GenericExperienceSectionView(
                     items: itemsBinding,
@@ -395,16 +347,13 @@ struct AnyExperienceSectionRenderer: Identifiable {
             )
         }
     }
-
     func isEnabled(in draft: ExperienceDefaultsDraft) -> Bool {
         isEnabledClosure(draft)
     }
-
     func render(in draft: Binding<ExperienceDefaultsDraft>, callbacks: ExperienceSectionViewCallbacks) -> AnyView {
         renderClosure(draft, callbacks)
     }
 }
-
 enum ExperienceSectionRenderers {
     static let all: [AnyExperienceSectionRenderer] = [
         WorkExperienceSectionView.renderer(),
@@ -420,7 +369,6 @@ enum ExperienceSectionRenderers {
         ReferenceExperienceSectionView.renderer()
     ]
 }
-
 extension WorkExperienceSectionView {
     static func renderer() -> AnyExperienceSectionRenderer {
         AnyExperienceSectionRenderer(
@@ -439,7 +387,6 @@ extension WorkExperienceSectionView {
         )
     }
 }
-
 extension VolunteerExperienceSectionView {
     static func renderer() -> AnyExperienceSectionRenderer {
         AnyExperienceSectionRenderer(
@@ -458,7 +405,6 @@ extension VolunteerExperienceSectionView {
         )
     }
 }
-
 extension EducationExperienceSectionView {
     static func renderer() -> AnyExperienceSectionRenderer {
         AnyExperienceSectionRenderer(
@@ -477,7 +423,6 @@ extension EducationExperienceSectionView {
         )
     }
 }
-
 extension ProjectExperienceSectionView {
     static func renderer() -> AnyExperienceSectionRenderer {
         AnyExperienceSectionRenderer(
@@ -496,7 +441,6 @@ extension ProjectExperienceSectionView {
         )
     }
 }
-
 extension SkillExperienceSectionView {
     static func renderer() -> AnyExperienceSectionRenderer {
         AnyExperienceSectionRenderer(
@@ -515,7 +459,6 @@ extension SkillExperienceSectionView {
         )
     }
 }
-
 extension AwardExperienceSectionView {
     static func renderer() -> AnyExperienceSectionRenderer {
         AnyExperienceSectionRenderer(
@@ -534,7 +477,6 @@ extension AwardExperienceSectionView {
         )
     }
 }
-
 extension CertificateExperienceSectionView {
     static func renderer() -> AnyExperienceSectionRenderer {
         AnyExperienceSectionRenderer(
@@ -553,7 +495,6 @@ extension CertificateExperienceSectionView {
         )
     }
 }
-
 extension PublicationExperienceSectionView {
     static func renderer() -> AnyExperienceSectionRenderer {
         AnyExperienceSectionRenderer(
@@ -572,7 +513,6 @@ extension PublicationExperienceSectionView {
         )
     }
 }
-
 extension LanguageExperienceSectionView {
     static func renderer() -> AnyExperienceSectionRenderer {
         AnyExperienceSectionRenderer(
@@ -591,7 +531,6 @@ extension LanguageExperienceSectionView {
         )
     }
 }
-
 extension InterestExperienceSectionView {
     static func renderer() -> AnyExperienceSectionRenderer {
         AnyExperienceSectionRenderer(
@@ -610,7 +549,6 @@ extension InterestExperienceSectionView {
         )
     }
 }
-
 extension ReferenceExperienceSectionView {
     static func renderer() -> AnyExperienceSectionRenderer {
         AnyExperienceSectionRenderer(

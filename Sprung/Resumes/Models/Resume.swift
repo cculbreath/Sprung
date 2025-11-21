@@ -1,16 +1,12 @@
 // Sprung/Resumes/Models/Resume.swift
-
 import Foundation
 import SwiftData
-
 @Model
 class Resume: Identifiable, Hashable {
     @Attribute(.unique) var id: UUID = UUID()
 
-
     var needToTree: Bool = true
     var needToFont: Bool = true
-
     @Relationship(deleteRule: .cascade)
     var rootNode: TreeNode? // The top-level node
     
@@ -46,10 +42,8 @@ class Resume: Identifiable, Hashable {
             importedEditorKeysData = try? JSONEncoder().encode(newValue)
         }
     }
-
     @Attribute(.externalStorage)
     private var sectionVisibilityData: Data?
-
     var sectionVisibilityOverrides: [String: Bool] {
         get {
             guard let sectionVisibilityData,
@@ -62,7 +56,6 @@ class Resume: Identifiable, Hashable {
             sectionVisibilityData = try? JSONEncoder().encode(newValue)
         }
     }
-
     func label(_ key: String) -> String {
         if let myLabel = keyLabels[key] {
             return myLabel
@@ -70,13 +63,11 @@ class Resume: Identifiable, Hashable {
             return key
         }
     }
-
     /// Computed list of all `TreeNode`s that belong to this resume.
     var nodes: [TreeNode] {
         guard let rootNode else { return [] }
         return Resume.collectNodes(from: rootNode)
     }
-
     private static func collectNodes(from node: TreeNode) -> [TreeNode] {
         var all: [TreeNode] = [node]
         for child in node.children ?? [] {
@@ -84,10 +75,8 @@ class Resume: Identifiable, Hashable {
         }
         return all
     }
-
     var dateCreated: Date = Date()
     weak var jobApp: JobApp?
-
     @Relationship(deleteRule: .nullify, inverse: \ResRef.enabledResumes)
     var enabledSources: [ResRef]
     var createdDateString: String {
@@ -95,11 +84,9 @@ class Resume: Identifiable, Hashable {
         dateFormatter.dateFormat = "hh:mm a 'on' MM/dd/yy"
         return dateFormatter.string(from: dateCreated)
     }
-
     @Attribute(originalName: "textRes")
     var textResume: String = ""
     var pdfData: Data?
-
     @Transient
     var isExporting: Bool = false
     var jsonTxt: String {
@@ -112,7 +99,6 @@ class Resume: Identifiable, Hashable {
             return ""
         }
     }
-
     func getUpdatableNodes() -> [[String: Any]] {
         if let node = rootNode {
             return TreeNode.traverseAndExportNodes(node: node)
@@ -126,9 +112,7 @@ class Resume: Identifiable, Hashable {
         guard let rootNode = rootNode else { return false }
         return rootNode.aiStatusChildren > 0
     }
-
     var meta: String = "\"format\": \"FRESH@0.6.0\", \"version\": \"0.1.0\""
-
     init(
         jobApp: JobApp,
         enabledSources: [ResRef],
@@ -139,12 +123,10 @@ class Resume: Identifiable, Hashable {
         dateCreated = Date()
         self.enabledSources = enabledSources
     }
-
     // MARK: - Hashable
     static func == (lhs: Resume, rhs: Resume) -> Bool {
         lhs.id == rhs.id
     }
-
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }

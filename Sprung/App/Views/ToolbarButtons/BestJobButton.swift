@@ -1,6 +1,5 @@
 // Sprung/App/Views/ToolbarButtons/BestJobButton.swift
 import SwiftUI
-
 struct BestJobButton: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(LLMFacade.self) private var llmFacade
@@ -19,11 +18,9 @@ struct BestJobButton: View {
                 Label("Best Job", systemImage: "sparkle").fontWeight(.bold).foregroundColor(.blue)
                     .symbolEffect(.rotate.byLayer)
                     .font(.system(size: 14, weight: .light))
-
             } else {
                 Label("Best Job", systemImage: "medal")
                     .font(.system(size: 14, weight: .light))
-
             }
         }
         .buttonStyle( .automatic )
@@ -77,7 +74,6 @@ struct BestJobButton: View {
                 includeResumeBackground: includeResumeBackground,
                 includeCoverLetterBackground: includeCoverLetterBackground
             )
-
             if let recommendedJob = jobAppStore.jobApps.first(where: { $0.id == jobId }) {
                 jobAppStore.selectedApp = recommendedJob
                 bestJobResult = "Recommended: \(recommendedJob.jobPosition) at \(recommendedJob.companyName)\n\nReason: \(reason)"
@@ -86,7 +82,6 @@ struct BestJobButton: View {
                 bestJobResult = "Recommended job not found"
                 showBestJobAlert = true
             }
-
             isProcessingBestJob = false
             
         } catch {

@@ -1,12 +1,10 @@
 import Foundation
 import SwiftyJSON
-
 struct KnowledgeCardDraft: Identifiable, Equatable {
     struct Achievement: Identifiable, Equatable {
         var id: UUID
         var claim: String
         var evidence: EvidenceItem
-
         init(
             id: UUID = UUID(),
             claim: String,
@@ -16,13 +14,11 @@ struct KnowledgeCardDraft: Identifiable, Equatable {
             self.claim = claim
             self.evidence = evidence
         }
-
         init(json: JSON) {
             id = UUID(uuidString: json["id"].stringValue) ?? UUID()
             claim = json["claim"].stringValue
             evidence = EvidenceItem(json: json["evidence"])
         }
-
         func toJSON() -> JSON {
             var json = JSON()
             json["id"].string = id.uuidString
@@ -31,7 +27,6 @@ struct KnowledgeCardDraft: Identifiable, Equatable {
             return json
         }
     }
-
     var id: UUID
     var title: String
     var summary: String
@@ -39,7 +34,6 @@ struct KnowledgeCardDraft: Identifiable, Equatable {
     var achievements: [Achievement]
     var metrics: [String]
     var skills: [String]
-
     init(
         id: UUID = UUID(),
         title: String = "",
@@ -57,7 +51,6 @@ struct KnowledgeCardDraft: Identifiable, Equatable {
         self.metrics = metrics
         self.skills = skills
     }
-
     init(json: JSON) {
         id = UUID(uuidString: json["id"].stringValue) ?? UUID()
         title = json["title"].stringValue
@@ -67,7 +60,6 @@ struct KnowledgeCardDraft: Identifiable, Equatable {
         metrics = json["metrics"].arrayValue.compactMap { $0.string }
         skills = json["skills"].arrayValue.compactMap { $0.string }
     }
-
     func toJSON() -> JSON {
         var json = JSON()
         json["id"].string = id.uuidString
@@ -81,7 +73,6 @@ struct KnowledgeCardDraft: Identifiable, Equatable {
         json["skills"] = JSON(skills)
         return json
     }
-
     func removing(claims identifiers: Set<UUID>) -> KnowledgeCardDraft {
         guard !identifiers.isEmpty else { return self }
         var copy = self
@@ -89,13 +80,11 @@ struct KnowledgeCardDraft: Identifiable, Equatable {
         return copy
     }
 }
-
 struct EvidenceItem: Equatable {
     var quote: String
     var source: String
     var locator: String?
     var artifactSHA: String?
-
     init(
         quote: String,
         source: String,
@@ -107,14 +96,12 @@ struct EvidenceItem: Equatable {
         self.locator = locator
         self.artifactSHA = artifactSHA
     }
-
     init(json: JSON) {
         quote = json["quote"].stringValue
         source = json["source"].stringValue
         locator = json["locator"].string
         artifactSHA = json["artifact_sha"].string
     }
-
     func toJSON() -> JSON {
         var json = JSON()
         json["quote"].string = quote
@@ -128,7 +115,6 @@ struct EvidenceItem: Equatable {
         return json
     }
 }
-
 struct ArtifactRecord: Identifiable, Equatable {
     var id: String
     var filename: String
@@ -137,7 +123,6 @@ struct ArtifactRecord: Identifiable, Equatable {
     var sha256: String?
     var extractedContent: String
     var metadata: JSON
-
     init(
         id: String = UUID().uuidString,
         filename: String,
@@ -155,7 +140,6 @@ struct ArtifactRecord: Identifiable, Equatable {
         self.extractedContent = extractedContent
         self.metadata = metadata
     }
-
     init(json: JSON) {
         let identifier = json["id"].string
         let sha = json["sha256"].string
@@ -173,7 +157,6 @@ struct ArtifactRecord: Identifiable, Equatable {
         extractedContent = json["extracted_content"].stringValue
         metadata = json["metadata"]
     }
-
     func toJSON() -> JSON {
         var json = JSON()
         json["id"].string = id
@@ -190,12 +173,10 @@ struct ArtifactRecord: Identifiable, Equatable {
         return json
     }
 }
-
 struct ExperienceContext {
     var timelineEntry: JSON
     var artifacts: [ArtifactRecord]
     var transcript: String
-
     init(timelineEntry: JSON, artifacts: [ArtifactRecord] = [], transcript: String = "") {
         self.timelineEntry = timelineEntry
         self.artifacts = artifacts

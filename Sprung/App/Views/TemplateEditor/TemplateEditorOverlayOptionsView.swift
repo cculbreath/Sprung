@@ -2,9 +2,7 @@
 //  TemplateEditorOverlayOptionsView.swift
 //  Sprung
 //
-
 import SwiftUI
-
 struct TemplateEditorOverlayOptionsView: View {
     let overlayFilename: String?
     let overlayPageCount: Int
@@ -17,13 +15,11 @@ struct TemplateEditorOverlayOptionsView: View {
     let onCancel: () -> Void
     let onSave: () -> Void
     let onDismiss: () -> Void
-
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             Text("Overlay Options")
                 .font(.title3)
                 .fontWeight(.semibold)
-
             VStack(alignment: .leading, spacing: 8) {
                 Text(overlayFilename ?? "No overlay selected")
                     .font(.subheadline)
@@ -34,7 +30,6 @@ struct TemplateEditorOverlayOptionsView: View {
                     }
                 }
             }
-
             if overlayPageCount > 0 {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Overlay Page")
@@ -45,11 +40,8 @@ struct TemplateEditorOverlayOptionsView: View {
                     }
                 }
             }
-
             ColorPicker("Overlay Color", selection: $overlayColorSelection, supportsOpacity: true)
-
             Spacer()
-
             HStack {
                 Button("Cancel", role: .cancel, action: onCancel)
                 Spacer()
@@ -62,4 +54,3 @@ struct TemplateEditorOverlayOptionsView: View {
         .onDisappear(perform: onDismiss)
     }
 }
-

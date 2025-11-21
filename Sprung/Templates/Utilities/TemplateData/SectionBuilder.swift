@@ -1,10 +1,8 @@
 import Foundation
-
 struct SectionBuilder {
     let resume: Resume
     let sectionNodeProvider: (String) -> TreeNode?
     let nodeValueProvider: (TreeNode) -> Any?
-
     init(
         resume: Resume,
         sectionNodeProvider: @escaping (String) -> TreeNode?,
@@ -14,7 +12,6 @@ struct SectionBuilder {
         self.sectionNodeProvider = sectionNodeProvider
         self.nodeValueProvider = nodeValueProvider
     }
-
     func buildSection(named sectionName: String, type: SectionType) -> Any? {
         switch type {
         case .object:
@@ -33,24 +30,19 @@ struct SectionBuilder {
             return nil
         }
     }
-
     private func buildObjectSection(named sectionName: String) -> [String: Any]? {
         guard let sectionNode = sectionNodeProvider(sectionName) else { return nil }
         var result: [String: Any] = [:]
-
         for child in sectionNode.orderedChildren {
             guard !child.name.isEmpty else { continue }
-
             if let nested = nodeValueProvider(child) {
                 result[child.name] = nested
             } else if !child.value.isEmpty {
                 result[child.name] = child.value
             }
         }
-
         return result.isEmpty ? nil : result
     }
-
     private func buildMapOfStringsSection(named sectionName: String) -> [String: String]? {
         guard let sectionNode = sectionNodeProvider(sectionName) else { return nil }
         var result: [String: String] = [:]
@@ -60,28 +52,22 @@ struct SectionBuilder {
         }
         return result.isEmpty ? nil : result
     }
-
     private func buildArraySection(named sectionName: String) -> [Any]? {
         guard let sectionNode = sectionNodeProvider(sectionName) else { return nil }
-
         let values = sectionNode.orderedChildren
             .map { $0.value }
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-
         return values.isEmpty ? nil : values
     }
-
     private func buildStringSection(named sectionName: String) -> Any? {
         guard let sectionNode = sectionNodeProvider(sectionName) else { return nil }
         guard let firstChild = sectionNode.orderedChildren.first else { return nil }
         let value = firstChild.value
         return value.isEmpty ? nil : value
     }
-
     private func buildArrayOfObjectsSection(named sectionName: String) -> [Any]? {
         guard let sectionNode = sectionNodeProvider(sectionName) else { return nil }
-
         var items: [[String: Any]] = []
         for child in sectionNode.orderedChildren {
             var entry: [String: Any] = [:]
@@ -92,27 +78,21 @@ struct SectionBuilder {
                     entry[grandchild.name] = grandchild.value
                 }
             }
-
             if entry.isEmpty {
                 if !child.value.isEmpty { entry["value"] = child.value }
                 if !child.name.isEmpty { entry["title"] = child.name }
             }
-
             if !entry.isEmpty {
                 items.append(entry)
             }
         }
-
         return items.isEmpty ? nil : items
     }
-
     private func buildComplexSection(named sectionName: String) -> Any? {
         guard let sectionNode = sectionNodeProvider(sectionName) else { return nil }
         let children = sectionNode.orderedChildren
         guard !children.isEmpty else { return nil }
-
         let hasNamedChild = children.contains { !$0.name.isEmpty }
-
         if hasNamedChild {
             var dictionary: [String: Any] = [:]
             for child in children where !child.name.isEmpty {

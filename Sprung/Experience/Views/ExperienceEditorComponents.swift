@@ -1,7 +1,6 @@
 import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
-
 struct ExperienceSectionViewCallbacks {
     var isEditing: (UUID) -> Bool
     var beginEditing: (UUID) -> Void
@@ -9,21 +8,18 @@ struct ExperienceSectionViewCallbacks {
     var endEditing: (UUID) -> Void
     var onChange: () -> Void
 }
-
 struct ExperienceCard<Content: View>: View {
     let onDelete: () -> Void
     var onToggleEdit: (() -> Void)? = nil
     var isEditing: Bool = false
     let content: Content
     @State private var isHovered = false
-
     init(onDelete: @escaping () -> Void, onToggleEdit: (() -> Void)? = nil, isEditing: Bool = false, @ViewBuilder content: () -> Content) {
         self.onDelete = onDelete
         self.onToggleEdit = onToggleEdit
         self.isEditing = isEditing
         self.content = content()
     }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             content
@@ -48,7 +44,6 @@ struct ExperienceCard<Content: View>: View {
                         .controlSize(.small)
                         .accessibilityLabel(isEditing ? "Finish Editing" : "Edit Entry")
                     }
-
                     Button(role: .destructive, action: onDelete) {
                         Image(systemName: "trash")
                     }
@@ -66,16 +61,13 @@ struct ExperienceCard<Content: View>: View {
         }
     }
 }
-
 struct ExperienceSectionHeader: View {
     let title: String
     let subtitle: String?
-
     init(_ title: String, subtitle: String? = nil) {
         self.title = title
         self.subtitle = subtitle
     }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
@@ -88,38 +80,31 @@ struct ExperienceSectionHeader: View {
         }
     }
 }
-
 struct ExperienceAddButton: View {
     let title: String
     let action: () -> Void
-
     var body: some View {
         Button(title, action: action)
             .buttonStyle(.bordered)
     }
 }
-
 struct ExperienceFieldRow<Content: View>: View {
     @ViewBuilder var content: Content
-
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
             content
         }
     }
 }
-
 struct ExperienceTextField: View {
     let title: String
     @Binding var text: String
     var onChange: () -> Void
-
     init(_ title: String, text: Binding<String>, onChange: @escaping () -> Void) {
         self.title = title
         _text = text
         self.onChange = onChange
     }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
@@ -131,18 +116,15 @@ struct ExperienceTextField: View {
         .onChange(of: text) { _, _ in onChange() }
     }
 }
-
 struct ExperienceTextEditor: View {
     let title: String
     @Binding var text: String
     var onChange: () -> Void
-
     init(_ title: String, text: Binding<String>, onChange: @escaping () -> Void) {
         self.title = title
         _text = text
         self.onChange = onChange
     }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
@@ -160,7 +142,6 @@ struct ExperienceTextEditor: View {
         .onChange(of: text) { _, _ in onChange() }
     }
 }
-
 @ViewBuilder
 func sectionContainer<Content: View>(title: String, subtitle: String? = nil, @ViewBuilder content: () -> Content) -> some View {
     VStack(alignment: .leading, spacing: 12) {
@@ -169,7 +150,6 @@ func sectionContainer<Content: View>(title: String, subtitle: String? = nil, @Vi
     }
     .frame(maxWidth: .infinity, alignment: .leading)
 }
-
 func summarySubtitle(primary: String?, secondary: String?) -> String? {
     let first = primary?.trimmed()
     let second = secondary?.trimmed()
@@ -179,7 +159,6 @@ func summarySubtitle(primary: String?, secondary: String?) -> String? {
     }
     return parts.isEmpty ? nil : parts.joined(separator: " • ")
 }
-
 func dateRangeDescription(_ start: String, _ end: String) -> String? {
     let startTrim = start.trimmed()
     let endTrim = end.trimmed()
@@ -194,7 +173,6 @@ func dateRangeDescription(_ start: String, _ end: String) -> String? {
         return "\(startTrim) – \(endTrim)"
     }
 }
-
 struct GenericExperienceSectionView<Item, Editor: View, Summary: View>: View where Item: Identifiable & Equatable, Item.ID == UUID {
     @Binding var items: [Item]
     let metadata: ExperienceSectionMetadata
@@ -205,7 +183,6 @@ struct GenericExperienceSectionView<Item, Editor: View, Summary: View>: View whe
     let editorBuilder: (Binding<Item>, ExperienceSectionViewCallbacks) -> Editor
     let summaryBuilder: (Item) -> Summary
     @State private var draggingID: UUID?
-
     var body: some View {
         sectionContainer(title: metadata.title, subtitle: metadata.subtitle) {
             ForEach($items) { item in
@@ -221,7 +198,6 @@ struct GenericExperienceSectionView<Item, Editor: View, Summary: View>: View whe
                         title: title(entry),
                         subtitle: subtitle(entry)
                     )
-
                     if editing {
                         editorBuilder(item, callbacks)
                     } else {
@@ -242,7 +218,6 @@ struct GenericExperienceSectionView<Item, Editor: View, Summary: View>: View whe
                     )
                 )
             }
-
             if items.isEmpty == false {
                 ExperienceSectionTrailingDropArea(
                     items: $items,
@@ -250,13 +225,11 @@ struct GenericExperienceSectionView<Item, Editor: View, Summary: View>: View whe
                     onChange: callbacks.onChange
                 )
             }
-
             ExperienceAddButton(title: metadata.addButtonTitle) {
                 addNewItem()
             }
         }
     }
-
     private func delete(_ id: UUID) {
         if let index = items.firstIndex(where: { $0.id == id }) {
             callbacks.endEditing(id)
@@ -264,7 +237,6 @@ struct GenericExperienceSectionView<Item, Editor: View, Summary: View>: View whe
             callbacks.onChange()
         }
     }
-
     private func addNewItem() {
         let entry = newItem()
         let entryID = entry.id
@@ -273,12 +245,10 @@ struct GenericExperienceSectionView<Item, Editor: View, Summary: View>: View whe
         callbacks.onChange()
     }
 }
-
 struct ExperienceSectionTrailingDropArea<Item: Identifiable & Equatable>: View where Item.ID == UUID {
     @Binding var items: [Item]
     @Binding var draggingID: UUID?
     var onChange: () -> Void
-
     var body: some View {
         Color.clear
             .frame(height: 10)
@@ -293,36 +263,29 @@ struct ExperienceSectionTrailingDropArea<Item: Identifiable & Equatable>: View w
             )
     }
 }
-
 struct ExperienceFieldDescriptor<Model> {
     enum Control {
         case textField
         case textEditor
     }
-
     let label: String
     let keyPath: WritableKeyPath<Model, String>
     let control: Control
-
     static func textField(_ label: String, _ keyPath: WritableKeyPath<Model, String>) -> ExperienceFieldDescriptor<Model> {
         ExperienceFieldDescriptor(label: label, keyPath: keyPath, control: .textField)
     }
-
     static func textEditor(_ label: String, _ keyPath: WritableKeyPath<Model, String>) -> ExperienceFieldDescriptor<Model> {
         ExperienceFieldDescriptor(label: label, keyPath: keyPath, control: .textEditor)
     }
 }
-
 enum ExperienceFieldLayout<Model> {
     case row([ExperienceFieldDescriptor<Model>])
     case block(ExperienceFieldDescriptor<Model>)
 }
-
 struct ExperienceFieldFactory<Model>: View {
     let layout: [ExperienceFieldLayout<Model>]
     @Binding var model: Model
     let onChange: () -> Void
-
     var body: some View {
         ForEach(Array(layout.enumerated()), id: \.offset) { _, layout in
             switch layout {
@@ -337,14 +300,12 @@ struct ExperienceFieldFactory<Model>: View {
             }
         }
     }
-
     @ViewBuilder
     private func fieldView(_ descriptor: ExperienceFieldDescriptor<Model>) -> some View {
         let binding = Binding(
             get: { model[keyPath: descriptor.keyPath] },
             set: { model[keyPath: descriptor.keyPath] = $0 }
         )
-
         switch descriptor.control {
         case .textField:
             ExperienceTextField(descriptor.label, text: binding, onChange: onChange)
@@ -353,46 +314,38 @@ struct ExperienceFieldFactory<Model>: View {
         }
     }
 }
-
 struct SummaryFieldDescriptor<Model> {
     let render: (Model) -> AnyView
-
     static func row(label: String, keyPath: KeyPath<Model, String>) -> SummaryFieldDescriptor<Model> {
         SummaryFieldDescriptor { entry in
             AnyView(SummaryRow(label: label, value: entry[keyPath: keyPath]))
         }
     }
-
     static func optionalRow(label: String, value: @escaping (Model) -> String?) -> SummaryFieldDescriptor<Model> {
         SummaryFieldDescriptor { entry in
             let renderedValue = value(entry) ?? ""
             return AnyView(SummaryRow(label: label, value: renderedValue))
         }
     }
-
     static func textBlock(label: String, keyPath: KeyPath<Model, String>) -> SummaryFieldDescriptor<Model> {
         SummaryFieldDescriptor { entry in
             AnyView(SummaryTextBlock(label: label, value: entry[keyPath: keyPath]))
         }
     }
-
     static func bulletList(label: String? = nil, values: @escaping (Model) -> [String]) -> SummaryFieldDescriptor<Model> {
         SummaryFieldDescriptor { entry in
             AnyView(SummaryBulletList(label: label, items: values(entry)))
         }
     }
-
     static func chipGroup(label: String, values: @escaping (Model) -> [String]) -> SummaryFieldDescriptor<Model> {
         SummaryFieldDescriptor { entry in
             AnyView(SummaryChipGroup(label: label, values: values(entry)))
         }
     }
 }
-
 struct SummarySectionFactory<Model>: View {
     let entry: Model
     let descriptors: [SummaryFieldDescriptor<Model>]
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(Array(descriptors.enumerated()), id: \.offset) { _, descriptor in

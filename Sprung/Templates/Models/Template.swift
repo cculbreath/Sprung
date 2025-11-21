@@ -1,6 +1,5 @@
 import Foundation
 import SwiftData
-
 @Model
 final class Template {
     @Attribute(.unique) var id: UUID
@@ -14,13 +13,10 @@ final class Template {
     var updatedAt: Date
     var isCustom: Bool
     var isDefault: Bool
-
     @Relationship(deleteRule: .cascade)
     var seeds: [TemplateSeed]
-
     @Relationship(deleteRule: .nullify)
     var resumes: [Resume]
-
     init(
         id: UUID = UUID(),
         name: String,

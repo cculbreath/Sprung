@@ -1,13 +1,10 @@
 import SwiftUI
-
 struct ResumeSectionsToggleCard: View {
     let request: OnboardingSectionToggleRequest
     let existingDraft: ExperienceDefaultsDraft
     let onConfirm: ([String]) -> Void
     let onCancel: () -> Void
-
     @State private var draft: ExperienceDefaultsDraft
-
     init(
         request: OnboardingSectionToggleRequest,
         existingDraft: ExperienceDefaultsDraft,
@@ -18,7 +15,6 @@ struct ResumeSectionsToggleCard: View {
         self.existingDraft = existingDraft
         self.onConfirm = onConfirm
         self.onCancel = onCancel
-
         var initial = existingDraft
         let proposedKeys = Set(request.proposedSections.compactMap { ExperienceSectionKey.fromOnboardingIdentifier($0) })
         if !proposedKeys.isEmpty {
@@ -26,43 +22,35 @@ struct ResumeSectionsToggleCard: View {
         }
         _draft = State(initialValue: initial)
     }
-
     private var suggestedSections: [ExperienceSectionKey] {
         let identifiers = request.availableSections
         return identifiers.compactMap { ExperienceSectionKey.fromOnboardingIdentifier($0) }
     }
-
     private var recommendedSections: Set<ExperienceSectionKey> {
         Set(request.proposedSections.compactMap { ExperienceSectionKey.fromOnboardingIdentifier($0) })
     }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Select Résumé Sections")
                 .font(.headline)
-
             if let rationale = request.rationale, !rationale.isEmpty {
                 Text(rationale)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
-
             Text("Choose the sections that apply to your résumé. You can adjust these later if needed.")
                 .font(.callout)
-
             if !suggestedSections.isEmpty {
                 Text("Suggested sections: \(suggestedSections.map { $0.metadata.title }.joined(separator: ", "))")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
-
             ScrollView(.vertical, showsIndicators: true) {
                 ResumeSectionToggleGrid(draft: $draft, recommended: recommendedSections)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 8)
             }
             .frame(maxHeight: 240)
-
             HStack {
                 Button("Cancel", action: onCancel)
                 Spacer()
@@ -80,16 +68,13 @@ struct ResumeSectionsToggleCard: View {
         )
     }
 }
-
 private struct ResumeSectionToggleGrid: View {
     @Binding var draft: ExperienceDefaultsDraft
     let recommended: Set<ExperienceSectionKey>
-
     private let columns = [
         GridItem(.flexible(minimum: 140), spacing: 12),
         GridItem(.flexible(minimum: 140), spacing: 12)
     ]
-
     var body: some View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: 18) {
             ForEach(ExperienceSectionKey.allCases) { key in

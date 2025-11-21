@@ -1,9 +1,7 @@
 import SwiftUI
-
 struct SectionVisibilityPanelView: View {
     @State private var isExpanded: Bool = true
     @Environment(ResumeDetailVM.self) private var vm: ResumeDetailVM
-
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
@@ -16,7 +14,6 @@ struct SectionVisibilityPanelView: View {
                 withAnimation { isExpanded.toggle() }
             }
             .padding(.vertical, 2)
-
             if isExpanded {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(vm.sectionVisibilityKeysOrdered(), id: \.self) { key in

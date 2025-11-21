@@ -1,12 +1,9 @@
 import SwiftUI
-
 struct ApplicantProfileIntakeCard: View {
     let state: OnboardingApplicantProfileIntakeState
     let coordinator: OnboardingInterviewCoordinator
-
     @State private var draft: ApplicantProfileDraft
     @State private var urlString: String
-
     init(
         state: OnboardingApplicantProfileIntakeState,
         coordinator: OnboardingInterviewCoordinator
@@ -16,7 +13,6 @@ struct ApplicantProfileIntakeCard: View {
         _draft = State(initialValue: state.draft)
         _urlString = State(initialValue: state.urlString)
     }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             content
@@ -38,7 +34,6 @@ struct ApplicantProfileIntakeCard: View {
             urlString = newValue.urlString
         }
     }
-
     @ViewBuilder
     private var content: some View {
         switch state.mode {
@@ -52,18 +47,15 @@ struct ApplicantProfileIntakeCard: View {
             urlEntryView
         }
     }
-
     private var intakeOptions: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("How would you like to start building your profile?")
                 .font(.headline)
-
             if let error = state.errorMessage {
                 Text(error)
                     .font(.footnote)
                     .foregroundStyle(.red)
             }
-
             VStack(alignment: .leading, spacing: 12) {
                 optionButton(
                     title: "Upload Résumé",
@@ -72,7 +64,6 @@ struct ApplicantProfileIntakeCard: View {
                 ) {
                     coordinator.beginProfileUpload()
                 }
-
                 optionButton(
                     title: "Paste Résumé URL",
                     subtitle: "Provide a link to your resume or LinkedIn profile",
@@ -80,7 +71,6 @@ struct ApplicantProfileIntakeCard: View {
                 ) {
                     coordinator.beginProfileURLEntry()
                 }
-
                 optionButton(
                     title: "Use Contact Card",
                     subtitle: "Import details from your macOS Contacts or vCard",
@@ -88,7 +78,6 @@ struct ApplicantProfileIntakeCard: View {
                 ) {
                     coordinator.beginProfileContactsFetch()
                 }
-
                 optionButton(
                     title: "Enter Manually",
                     subtitle: "Fill in your contact details step by step",
@@ -97,11 +86,9 @@ struct ApplicantProfileIntakeCard: View {
                     coordinator.beginProfileManualEntry()
                 }
             }
-
             Spacer(minLength: 0)
         }
     }
-
     private func optionButton(title: String, subtitle: String, icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(alignment: .top, spacing: 12) {
@@ -128,7 +115,6 @@ struct ApplicantProfileIntakeCard: View {
         }
         .buttonStyle(.plain)
     }
-
     private func loadingView(message: String) -> some View {
         HStack(spacing: 12) {
             ProgressView()
@@ -136,12 +122,10 @@ struct ApplicantProfileIntakeCard: View {
                 .font(.body)
         }
     }
-
     private func manualEntryView(source: OnboardingApplicantProfileIntakeState.Source) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(source == .contacts ? "Review imported contact details" : "Enter your contact information")
                 .font(.headline)
-
             ScrollView {
                 ApplicantProfileEditor(
                     draft: $draft,
@@ -153,15 +137,12 @@ struct ApplicantProfileIntakeCard: View {
                 .padding(.bottom, 8)
             }
             .frame(maxHeight: 340)
-
             HStack {
                 Button("Back") {
                     coordinator.resetProfileIntakeToOptions()
                 }
                 .buttonStyle(.bordered)
-
                 Spacer()
-
                 Button("Save & Continue") {
                     Task {
                         await coordinator.submitProfileDraft(draft: draft, source: source)
@@ -171,29 +152,23 @@ struct ApplicantProfileIntakeCard: View {
             }
         }
     }
-
     private var urlEntryView: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Paste a link to your resume or online profile")
                 .font(.headline)
-
             TextField("https://…", text: $urlString)
                 .textFieldStyle(.roundedBorder)
-
             if let error = state.errorMessage {
                 Text(error)
                     .font(.footnote)
                     .foregroundStyle(.red)
             }
-
             HStack {
                 Button("Back") {
                     coordinator.resetProfileIntakeToOptions()
                 }
                 .buttonStyle(.bordered)
-
                 Spacer()
-
                 Button("Submit URL") {
                     Task {
                         await coordinator.submitProfileURL(urlString)

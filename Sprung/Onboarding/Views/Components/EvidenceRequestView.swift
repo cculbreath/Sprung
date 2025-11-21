@@ -1,6 +1,5 @@
 import SwiftUI
 import UniformTypeIdentifiers
-
 struct EvidenceRequestView: View {
     let coordinator: OnboardingInterviewCoordinator
     
@@ -37,7 +36,6 @@ struct EvidenceRequestView: View {
         )
     }
 }
-
 struct EvidenceRequestCard: View {
     let req: EvidenceRequirement
     let coordinator: OnboardingInterviewCoordinator

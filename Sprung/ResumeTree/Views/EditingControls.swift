@@ -4,9 +4,7 @@
 //
 //  Created by Christopher Culbreath on 1/29/25.
 //
-
 import SwiftUI
-
 struct EditingControls: View {
     @Binding var isEditing: Bool
     @Binding var tempName: String
@@ -14,16 +12,13 @@ struct EditingControls: View {
     let node: TreeNode
     var validationError: String?
     var allowNameEditing: Bool = true
-
     var saveChanges: () -> Void
     var cancelChanges: () -> Void
     var deleteNode: () -> Void
     var clearValidation: () -> Void
-
     @State private var isHoveringSave: Bool = false
     @State private var isHoveringCancel: Bool = false
     @State private var isHoveringDelete: Bool = false
-
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
@@ -38,7 +33,6 @@ struct EditingControls: View {
                     .buttonStyle(PlainButtonStyle())
                     .onHover { isHoveringDelete = $0 }
                 }
-
                 VStack(alignment: .leading, spacing: 8) {
                     if allowNameEditing {
                         TextField("Name", text: $tempName)
@@ -46,12 +40,10 @@ struct EditingControls: View {
                             .frame(maxWidth: .infinity)
                             .onChange(of: tempName) { _, _ in clearValidation() }
                     }
-
                     Group {
                         valueEditor()
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-
                     if let validationError, !validationError.isEmpty {
                         Text(validationError)
                             .font(.footnote)
@@ -64,7 +56,6 @@ struct EditingControls: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-
             HStack(spacing: 16) {
                 Button(action: saveChanges) {
                     Label("Save", systemImage: "checkmark.circle.fill")
@@ -72,7 +63,6 @@ struct EditingControls: View {
                 }
                 .buttonStyle(PlainButtonStyle())
                 .onHover { isHoveringSave = $0 }
-
                 Button(action: cancelChanges) {
                     Label("Cancel", systemImage: "xmark.circle.fill")
                         .foregroundColor(isHoveringCancel ? .red : .secondary)
@@ -82,7 +72,6 @@ struct EditingControls: View {
             }
         }
     }
-
     private func valueEditor() -> some View {
         let inputKind = node.schemaInputKind ?? node.parent?.schemaInputKind
         let requiresMultilineEditor = shouldUseMultilineEditor(for: inputKind)
@@ -96,7 +85,6 @@ struct EditingControls: View {
             tempValueLength=\(tempValue.count)
             """
         )
-
         return Group {
             switch inputKind {
             case .textarea, .markdown:
@@ -164,7 +152,6 @@ struct EditingControls: View {
             }
         }
     }
-
     private var helperText: String? {
         if node.schemaRepeatable {
             return "Repeatable field"
@@ -177,7 +164,6 @@ struct EditingControls: View {
         }
         return nil
     }
-
     private func stringToDate(_ string: String) -> Date? {
         if string.isEmpty { return nil }
         if let iso = ISO8601DateFormatter().date(from: string) {
@@ -187,11 +173,9 @@ struct EditingControls: View {
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.date(from: string)
     }
-
     private func dateToString(_ date: Date) -> String {
         ISO8601DateFormatter().string(from: date)
     }
-
     private func selectionPicker(options: [String]) -> AnyView {
         if options.count <= 3 {
             return AnyView(
@@ -203,7 +187,6 @@ struct EditingControls: View {
                 .pickerStyle(.segmented)
             )
         }
-
         return AnyView(
             Menu {
                 ForEach(options, id: \.self) { option in
@@ -228,7 +211,6 @@ struct EditingControls: View {
             }
         )
     }
-
     private func shouldUseMultilineEditor(
         for inputKind: TemplateManifest.Section.FieldDescriptor.InputKind?
     ) -> Bool {
@@ -246,14 +228,12 @@ struct EditingControls: View {
         }
     }
 }
-
 // MARK: - Supporting Views
 private struct ChipsEditor: View {
     @Binding var text: String
     var placeholder: String?
     @State private var chips: [String] = []
     @State private var newChip: String = ""
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ScrollView(.horizontal, showsIndicators: false) {
@@ -277,7 +257,6 @@ private struct ChipsEditor: View {
                     }
                 }
             }
-
             HStack {
                 TextField("Add item", text: $newChip)
                 Button("Add") {
@@ -297,18 +276,15 @@ private struct ChipsEditor: View {
             text = newValue.joined(separator: ", ")
         }
     }
-
     private func addChip() {
         let trimmed = newChip.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         chips.append(trimmed)
         newChip = ""
     }
-
     private func remove(_ chip: String) {
         chips.removeAll { $0 == chip }
     }
-
     private func parse(text: String) -> [String] {
         text.split(whereSeparator: { ",;\n".contains($0) })
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }

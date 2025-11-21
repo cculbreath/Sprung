@@ -4,9 +4,7 @@
 //
 //  Created by Christopher Culbreath on 6/11/25.
 //
-
 import Foundation
-
 class CoverLetterModelNameFormatter {
     
     func formatModelNames(_ modelIds: [String]) -> String {

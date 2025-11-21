@@ -5,17 +5,13 @@
 //  Actor responsible for persisting conversation history using SwiftData and
 //  domain DTOs.
 //
-
 import Foundation
 import SwiftData
-
 actor LLMConversationStore {
     private let modelContext: ModelContext?
-
     init(modelContext: ModelContext?) {
         self.modelContext = modelContext
     }
-
     func loadMessages(conversationId: UUID) async -> [LLMMessageDTO] {
         guard let context = modelContext else { return [] }
         let descriptor = FetchDescriptor<ConversationContext>(predicate: #Predicate { $0.id == conversationId }, sortBy: [])
@@ -24,7 +20,6 @@ actor LLMConversationStore {
         }
         return []
     }
-
     func saveMessages(
         conversationId: UUID,
         objectId: UUID? = nil,
@@ -39,7 +34,6 @@ actor LLMConversationStore {
             objectId: objectId,
             objectType: objectType ?? .general
         )
-
         if let objectId {
             conversation.objectId = objectId
         }
@@ -47,7 +41,6 @@ actor LLMConversationStore {
             conversation.objectType = objectType.rawValue
         }
         conversation.lastUpdated = Date()
-
         // Replace messages
         conversation.messages.removeAll()
         messages.forEach { dto in
@@ -55,16 +48,13 @@ actor LLMConversationStore {
             stored.context = conversation
             conversation.messages.append(stored)
         }
-
         if existing == nil {
             context.insert(conversation)
         }
-
         do {
             try context.save()
         } catch {
             Logger.error("❌ Failed to save conversation: \(error)", category: .storage)
         }
     }
-
 }

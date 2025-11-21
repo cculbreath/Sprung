@@ -1,21 +1,17 @@
 // Sprung/AI/Views/MarkdownView.swift
 import SwiftUI
 import WebKit
-
 // Create a wrapper View struct that contains the NSViewRepresentable
 struct MarkdownView: View {
     let markdown: String
-
     var body: some View {
         MarkdownWebView(markdown: markdown)
     }
 }
-
 // Rename the original NSViewRepresentable to MarkdownWebView
 struct MarkdownWebView: NSViewRepresentable {
     let markdown: String
     @Environment(\.colorScheme) var colorScheme
-
     // HTML template that includes marked.js from a CDN and basic styling
     // Placeholders will be replaced with dynamic values (e.g., for dark mode)
     private func getHtmlTemplate() -> String {
@@ -137,7 +133,6 @@ struct MarkdownWebView: NSViewRepresentable {
         </html>
         """
     }
-
     func makeNSView(context: Context) -> WKWebView {
         let webView = WKWebView(frame: .zero)
         // For macOS, to make the background transparent:
@@ -145,24 +140,19 @@ struct MarkdownWebView: NSViewRepresentable {
         webView.navigationDelegate = context.coordinator
         return webView
     }
-
     func updateNSView(_ nsView: WKWebView, context _: Context) {
         // URL-encode the markdown string to safely inject it into the JavaScript block
         guard let encodedMarkdown = markdown.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
             nsView.loadHTMLString("<html><body>Error: Could not encode markdown content.</body></html>", baseURL: nil)
             return
         }
-
         let finalHtml = getHtmlTemplate().replacingOccurrences(of: "MARKDOWN_JS_PLACEHOLDER", with: encodedMarkdown)
         nsView.loadHTMLString(finalHtml, baseURL: nil)
     }
-
     func makeCoordinator() -> Coordinator {
         Coordinator()
     }
-
     class Coordinator: NSObject, WKNavigationDelegate {
-
         // Example: Open external links in the system browser
         func webView(_: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
             if navigationAction.navigationType == .linkActivated, let url = navigationAction.request.url {

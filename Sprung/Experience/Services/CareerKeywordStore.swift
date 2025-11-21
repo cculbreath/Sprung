@@ -1,15 +1,12 @@
 import Foundation
 import Observation
-
 @MainActor
 @Observable
 final class CareerKeywordStore {
     private(set) var keywords: [String] = []
-
     private let fileManager = FileManager.default
     private let appSupportDirectory: URL
     private let keywordsFileURL: URL
-
     init() {
         let baseSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support", isDirectory: true)
         let appDirectory = baseSupport.appendingPathComponent("Sprung", isDirectory: true)
@@ -18,7 +15,6 @@ final class CareerKeywordStore {
         prepareStorage()
         loadKeywords()
     }
-
     func suggestions(
         matching query: String,
         excluding existing: Set<String>,
@@ -26,10 +22,8 @@ final class CareerKeywordStore {
     ) -> [String] {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmedQuery.isEmpty == false else { return [] }
-
         let lowercasedQuery = trimmedQuery.lowercased()
         var results: [String] = []
-
         for keyword in keywords {
             let normalized = keyword.lowercased()
             if normalized.hasPrefix(lowercasedQuery) || normalized.contains(lowercasedQuery) {
@@ -41,35 +35,28 @@ final class CareerKeywordStore {
                 break
             }
         }
-
         return results
     }
-
     func registerKeyword(_ keyword: String) {
         let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false else { return }
-
         if keywords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) {
             return
         }
-
         keywords.append(trimmed)
         keywords.sort { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
         persistKeywords()
     }
-
     // MARK: - Private Helpers
     private func prepareStorage() {
         if fileManager.fileExists(atPath: keywordsFileURL.path) {
             return
         }
-
         do {
             try fileManager.createDirectory(at: appSupportDirectory, withIntermediateDirectories: true)
         } catch {
             Logger.warning("CareerKeywordStore: Failed to create Application Support directory: \(error)")
         }
-
         if let bundledURL = Bundle.main.url(forResource: "DefaultCareerKeywords", withExtension: "json") {
             do {
                 try fileManager.copyItem(at: bundledURL, to: keywordsFileURL)
@@ -81,13 +68,11 @@ final class CareerKeywordStore {
             try? Data("[]".utf8).write(to: keywordsFileURL)
         }
     }
-
     private func loadKeywords() {
         guard let data = try? Data(contentsOf: keywordsFileURL) else {
             keywords = []
             return
         }
-
         if let decoded = try? JSONDecoder().decode([String].self, from: data) {
             keywords = decoded.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
         } else {
@@ -95,7 +80,6 @@ final class CareerKeywordStore {
             keywords = []
         }
     }
-
     private func persistKeywords() {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -106,24 +90,20 @@ final class CareerKeywordStore {
             Logger.warning("CareerKeywordStore: Failed to persist keywords: \(error)")
         }
     }
-
     func resetAfterDataClear() {
         if fileManager.fileExists(atPath: keywordsFileURL.path) {
             try? fileManager.removeItem(at: keywordsFileURL)
         }
-
         do {
             try fileManager.createDirectory(at: appSupportDirectory, withIntermediateDirectories: true)
         } catch {
             Logger.warning("CareerKeywordStore: Failed to recreate Application Support directory: \(error)")
         }
-
         if let bundledURL = Bundle.main.url(forResource: "DefaultCareerKeywords", withExtension: "json") {
             try? fileManager.copyItem(at: bundledURL, to: keywordsFileURL)
         } else {
             try? Data("[]".utf8).write(to: keywordsFileURL)
         }
-
         loadKeywords()
         Logger.debug("✅ CareerKeywordStore: Keywords reset after data clear")
     }

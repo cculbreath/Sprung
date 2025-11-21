@@ -5,16 +5,13 @@
 //  Created by Christopher Culbreath on 1/31/25.
 //
 import SwiftUI
-
 struct CustomTextEditor: View {
     @Binding var sourceContent: String
     var placeholder: String? = nil
     var minimumHeight: CGFloat = 130
     var maximumHeight: CGFloat? = 150
     var onChange: (() -> Void)? = nil
-
     @FocusState private var isFocused: Bool
-
     var body: some View {
         ZStack(alignment: .topLeading) {
             if sourceContent.isEmpty, let placeholder, !placeholder.isEmpty {
@@ -23,7 +20,6 @@ struct CustomTextEditor: View {
                     .padding(.vertical, 8)
                     .padding(.horizontal, 6)
             }
-
             TextEditor(text: $sourceContent)
                 .padding(.horizontal, 2)
                 .padding(.vertical, 4)

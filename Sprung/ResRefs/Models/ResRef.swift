@@ -4,19 +4,15 @@
 //
 //  Created by Christopher Culbreath on 9/1/24.
 //
-
 import Foundation
 import SwiftData
-
 @Model
 class ResRef: Identifiable, Codable {
     var id: UUID
     var content: String
     var name: String
     var enabledByDefault: Bool
-
     var enabledResumes: [Resume] = []
-
     init(
         name: String = "", content: String = "",
         enabledByDefault: Bool = false
@@ -26,7 +22,6 @@ class ResRef: Identifiable, Codable {
         self.name = name
         self.enabledByDefault = enabledByDefault
     }
-
     // MARK: - Codable
     enum CodingKeys: String, CodingKey {
         case id
@@ -34,7 +29,6 @@ class ResRef: Identifiable, Codable {
         case name
         case enabledByDefault
     }
-
     required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
@@ -42,7 +36,6 @@ class ResRef: Identifiable, Codable {
         name = try container.decode(String.self, forKey: .name)
         enabledByDefault = try container.decode(Bool.self, forKey: .enabledByDefault)
     }
-
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)

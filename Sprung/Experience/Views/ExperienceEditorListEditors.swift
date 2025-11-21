@@ -1,16 +1,13 @@
 import AppKit
 import SwiftUI
-
 struct HighlightListEditor: View {
     let title: String
     @Binding var items: [HighlightDraft]
     var onChange: () -> Void
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.headline)
-
             ForEach($items) { item in
                 let entryID = item.wrappedValue.id
                 ExperienceCard(onDelete: {
@@ -22,7 +19,6 @@ struct HighlightListEditor: View {
                     ExperienceTextEditor("Highlight", text: item.text, onChange: onChange)
                 }
             }
-
             Button("Add Highlight") {
                 items.append(HighlightDraft())
                 onChange()
@@ -31,16 +27,13 @@ struct HighlightListEditor: View {
         }
     }
 }
-
 struct SingleLineHighlightListEditor: View {
     @Binding var items: [HighlightDraft]
     var onChange: () -> Void
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Highlights")
                 .font(.headline)
-
             ForEach($items) { item in
                 let entryID = item.wrappedValue.id
                 ExperienceCard(onDelete: {
@@ -54,7 +47,6 @@ struct SingleLineHighlightListEditor: View {
                     }
                 }
             }
-
             Button("Add Highlight") {
                 items.append(HighlightDraft())
                 onChange()
@@ -63,16 +55,13 @@ struct SingleLineHighlightListEditor: View {
         }
     }
 }
-
 struct VolunteerHighlightListEditor: View {
     @Binding var items: [VolunteerHighlightDraft]
     var onChange: () -> Void
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Highlights")
                 .font(.headline)
-
             ForEach($items) { item in
                 let entryID = item.wrappedValue.id
                 ExperienceCard(onDelete: {
@@ -84,7 +73,6 @@ struct VolunteerHighlightListEditor: View {
                     ExperienceTextEditor("Highlight", text: item.text, onChange: onChange)
                 }
             }
-
             Button("Add Highlight") {
                 items.append(VolunteerHighlightDraft())
                 onChange()
@@ -93,16 +81,13 @@ struct VolunteerHighlightListEditor: View {
         }
     }
 }
-
 struct ProjectHighlightListEditor: View {
     @Binding var items: [ProjectHighlightDraft]
     var onChange: () -> Void
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Highlights")
                 .font(.headline)
-
             ForEach($items) { item in
                 let entryID = item.wrappedValue.id
                 ExperienceCard(onDelete: {
@@ -114,7 +99,6 @@ struct ProjectHighlightListEditor: View {
                     ExperienceTextEditor("Highlight", text: item.text, onChange: onChange)
                 }
             }
-
             Button("Add Highlight") {
                 items.append(ProjectHighlightDraft())
                 onChange()
@@ -123,16 +107,13 @@ struct ProjectHighlightListEditor: View {
         }
     }
 }
-
 struct CourseListEditor: View {
     @Binding var items: [CourseDraft]
     var onChange: () -> Void
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Courses")
                 .font(.headline)
-
             ForEach($items) { item in
                 let entryID = item.wrappedValue.id
                 ExperienceCard(onDelete: {
@@ -144,7 +125,6 @@ struct CourseListEditor: View {
                     ExperienceTextField("Course", text: item.name, onChange: onChange)
                 }
             }
-
             Button("Add Course") {
                 items.append(CourseDraft())
                 onChange()
@@ -153,33 +133,26 @@ struct CourseListEditor: View {
         }
     }
 }
-
 struct KeywordChipsEditor: View {
     let title: String
     @Binding var keywords: [KeywordDraft]
     var onChange: () -> Void
-
     @Environment(CareerKeywordStore.self) private var keywordStore: CareerKeywordStore
     @State private var inputText: String = ""
     @FocusState private var isInputFocused: Bool
-
     private var normalizedExisting: Set<String> {
         Set(keywords.map { $0.keyword.lowercased() })
     }
-
     private var suggestions: [String] {
         keywordStore.suggestions(matching: inputText, excluding: normalizedExisting)
     }
-
     private let chipGridColumns: [GridItem] = [
         GridItem(.adaptive(minimum: 120), spacing: 8, alignment: .leading)
     ]
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.headline)
-
             LazyVGrid(columns: chipGridColumns, alignment: .leading, spacing: 8) {
                 ForEach(keywords) { keyword in
                     KeywordChip(keyword: keyword.keyword) {
@@ -187,7 +160,6 @@ struct KeywordChipsEditor: View {
                     }
                 }
             }
-
             ZStack(alignment: .topLeading) {
                 VStack(alignment: .leading, spacing: 4) {
                     TextField("Add keyword", text: $inputText)
@@ -200,7 +172,6 @@ struct KeywordChipsEditor: View {
                         .onChange(of: isInputFocused) { _, isFocused in
                             handleFocusChange(isFocused)
                         }
-
                     if suggestions.isEmpty == false {
                         SuggestionList(
                             suggestions: suggestions,
@@ -214,33 +185,26 @@ struct KeywordChipsEditor: View {
             }
         }
     }
-
     private func handleDelimitedInput(_ newValue: String) {
         guard newValue.contains(",") else { return }
-
         let parts = newValue.split(separator: ",", omittingEmptySubsequences: false)
         guard parts.count > 1 else { return }
-
         for part in parts.dropLast() {
             addKeyword(String(part))
         }
-
         let trailing = parts.last.map(String.init) ?? ""
         let trimmedTrailing = trailing.trimmed()
         inputText = trailing.hasSuffix(" ") ? trimmedTrailing + " " : trimmedTrailing
     }
-
     private func handleFocusChange(_ isFocused: Bool) {
         guard isFocused == false else { return }
         let pending = inputText.trimmed()
         guard pending.isEmpty == false else { return }
         addKeyword(pending, shouldRefocus: false)
     }
-
     private func commitPendingKeyword() {
         addKeyword(inputText)
     }
-
     private func addKeyword(_ rawValue: String, shouldRefocus: Bool = true) {
         let trimmed = rawValue.trimmed()
         guard trimmed.isEmpty == false else {
@@ -248,13 +212,11 @@ struct KeywordChipsEditor: View {
             if shouldRefocus { isInputFocused = true }
             return
         }
-
         guard normalizedExisting.contains(trimmed.lowercased()) == false else {
             inputText = ""
             if shouldRefocus { isInputFocused = true }
             return
         }
-
         var newKeyword = KeywordDraft()
         newKeyword.keyword = trimmed
         keywords.append(newKeyword)
@@ -265,7 +227,6 @@ struct KeywordChipsEditor: View {
         }
         onChange()
     }
-
     private func removeKeyword(_ keyword: KeywordDraft) {
         if let index = keywords.firstIndex(where: { $0.id == keyword.id }) {
             keywords.remove(at: index)
@@ -273,19 +234,16 @@ struct KeywordChipsEditor: View {
         }
     }
 }
-
 struct KeywordChip: View {
     let keyword: String
     var onRemove: (() -> Void)? = nil
     @State private var isHovered = false
-
     var body: some View {
         HStack(spacing: 6) {
             Text(keyword)
                 .font(.subheadline)
                 .foregroundStyle(.primary)
                 .lineLimit(1)
-
             if isHovered, let onRemove {
                 Button(action: onRemove) {
                     Image(systemName: "xmark.circle.fill")
@@ -314,11 +272,9 @@ struct KeywordChip: View {
         }
     }
 }
-
 struct SuggestionList: View {
     let suggestions: [String]
     var onSelect: (String) -> Void
-
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
@@ -333,7 +289,6 @@ struct SuggestionList: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.primary)
-
                     if suggestion != suggestions.last {
                         Divider()
                     }
@@ -353,17 +308,14 @@ struct SuggestionList: View {
         .frame(maxWidth: 320, maxHeight: 180)
     }
 }
-
 struct RoleListEditor: View {
     let title: String
     @Binding var items: [RoleDraft]
     var onChange: () -> Void
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.headline)
-
             ForEach($items) { item in
                 let entryID = item.wrappedValue.id
                 ExperienceCard(onDelete: {
@@ -375,7 +327,6 @@ struct RoleListEditor: View {
                     ExperienceTextField("Role", text: item.role, onChange: onChange)
                 }
             }
-
             Button("Add Role") {
                 items.append(RoleDraft())
                 onChange()

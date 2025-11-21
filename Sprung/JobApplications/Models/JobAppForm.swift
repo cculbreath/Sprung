@@ -4,9 +4,7 @@
 //
 //  Created by Christopher Culbreath on 9/1/24.
 //
-
 import SwiftData
-
 @Observable class JobAppForm {
     var jobPosition: String = ""
     var jobLocation: String = ""
@@ -20,9 +18,7 @@ import SwiftData
     var industries: String = ""
     var jobApplyLink: String = ""
     var postingURL: String = ""
-
     init() {}
-
     func populateFormFromObj(_ source: JobApp) {
         jobPosition = source.jobPosition
         jobLocation = source.jobLocation

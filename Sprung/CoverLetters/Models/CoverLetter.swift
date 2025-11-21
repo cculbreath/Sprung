@@ -1,37 +1,31 @@
 import Foundation
 import SwiftData
-
 /// Assessment data for multi-model cover letter evaluation
 struct AssessmentData: Codable {
     var voteCount: Int = 0
     var scoreCount: Int = 0
     var hasBeenAssessed: Bool = false
 }
-
 /// Committee feedback summary for a cover letter
 struct CommitteeFeedbackSummary: Codable {
     let summaryOfModelAnalysis: String
     let pointsAwarded: [ModelPointsAwarded]
     let modelVotes: [ModelVote]
 }
-
 /// Points awarded by a specific model
 struct ModelPointsAwarded: Codable {
     let model: String
     let points: Int
 }
-
 /// Individual model vote tracking
 struct ModelVote: Codable {
     let model: String
     let votedForLetterId: String
 }
-
 /// Structured summary response for committee analysis
 struct CommitteeSummaryResponse: Codable {
     let letterAnalyses: [LetterAnalysis]
 }
-
 /// Analysis for a specific letter from the committee
 struct LetterAnalysis: Codable {
     let letterId: String
@@ -39,12 +33,10 @@ struct LetterAnalysis: Codable {
     let pointsAwarded: [ModelPointsAwarded]
     let modelVotes: [ModelVote]
 }
-
 @Model
 class CoverLetter: Identifiable, Hashable {
     var jobApp: JobApp? = nil
     @Attribute(.unique) var id: UUID = UUID() // Explicit id field
-
 
     var createdDate: Date = Date()
     var moddedDate: Date = Date()
@@ -79,7 +71,6 @@ class CoverLetter: Identifiable, Hashable {
         dateFormatter.dateFormat = "hh:mm a 'on' MM/dd/yy"
         return dateFormatter.string(from: moddedDate)
     }
-
     // Computed properties to decode arrays
     var enabledRefs: [CoverRef] {
         get {
@@ -90,7 +81,6 @@ class CoverLetter: Identifiable, Hashable {
             encodedEnabledRefs = try? JSONEncoder().encode(newValue)
         }
     }
-
     
     /// Multi-model assessment data computed properties
     var assessmentData: AssessmentData {
@@ -184,7 +174,6 @@ class CoverLetter: Identifiable, Hashable {
             }
         }
     }
-
     init(
         enabledRefs: [CoverRef],
         jobApp: JobApp?
@@ -192,17 +181,14 @@ class CoverLetter: Identifiable, Hashable {
         encodedEnabledRefs = try? JSONEncoder().encode(enabledRefs)
         self.jobApp = jobApp ?? nil
     }
-
     var backgroundItemsString: String {
         return enabledRefs.filter { $0.type == CoverRefType.backgroundFact }
             .map { $0.content }.joined(separator: "\n\n")
     }
-
     var writingSamplesString: String {
         return enabledRefs.filter { $0.type == CoverRefType.writingSample }
             .map { $0.content }.joined(separator: "\n\n")
     }
-
     /// 1-based index of this cover letter within its job application (ordered by creation date)
     /// This remains dynamic and is used for assigning the *initial* "Option X" label.
     var sequenceNumber: Int {
@@ -211,7 +197,6 @@ class CoverLetter: Identifiable, Hashable {
         guard let index = sortedLetters.firstIndex(where: { $0.id == self.id }) else { return 0 }
         return index + 1
     }
-
     /// Converts a positive integer into letters: 1->A, 2->B, ..., 27->AA, etc.
     static func letterLabel(for number: Int) -> String {
         guard number > 0 else { return "" }
@@ -226,7 +211,6 @@ class CoverLetter: Identifiable, Hashable {
         }
         return label
     }
-
     /// A friendly name for display. If `name` is set (which it should be for generated letters),
     /// it will be used directly. Otherwise, provides a fallback.
     var sequencedName: String {
@@ -244,7 +228,6 @@ class CoverLetter: Identifiable, Hashable {
         // If name is not empty, it's expected to contain the persistent "Option X: ..." label.
         return name
     }
-
     /// Extract the option letter from the cover letter name
     var optionLetter: String {
         // Extract the part before the colon for option letter
@@ -259,17 +242,14 @@ class CoverLetter: Identifiable, Hashable {
         }
         return ""
     }
-
     /// Get the next available option letter based on all letters in the job app
     /// This ensures we never reuse an option letter, even when others are deleted
     func getNextOptionLetter() -> String {
         guard let jobApp = jobApp else { return "A" }
-
         // Get all used option letters, including from deleted letters
         let usedLetters = Set(jobApp.coverLetters.compactMap { letter -> String in
             return letter.optionLetter
         }.filter { !$0.isEmpty })
-
         // Start with position 1 (A) and increment until we find an unused letter
         var position = 1
         while true {
@@ -280,7 +260,6 @@ class CoverLetter: Identifiable, Hashable {
             position += 1
         }
     }
-
     /// Get editable portion of the name (part after the colon)
     var editableName: String {
         let nameParts = name.split(separator: ":", maxSplits: 1)
@@ -289,7 +268,6 @@ class CoverLetter: Identifiable, Hashable {
         }
         return name // If no colon, return the full name
     }
-
     /// Set editable portion of the name while preserving the Option prefix
     func setEditableName(_ newContent: String) {
         let nameParts = name.split(separator: ":", maxSplits: 1)
@@ -318,13 +296,11 @@ class CoverLetter: Identifiable, Hashable {
         self.isChosenSubmissionDraft = true
     }
 }
-
 @Model
 class MessageParams: Identifiable, Codable {
     var id: String = UUID().uuidString
     var content: String
     var role: MessageRole
-
 
     // Manual Codable implementation
     enum CodingKeys: String, CodingKey {
@@ -332,7 +308,6 @@ class MessageParams: Identifiable, Codable {
         case content
         case role
     }
-
     // Required initializer for Decodable
     required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -340,7 +315,6 @@ class MessageParams: Identifiable, Codable {
         content = try container.decode(String.self, forKey: .content)
         role = try container.decode(MessageRole.self, forKey: .role)
     }
-
     // Required function for Encodable
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -348,7 +322,6 @@ class MessageParams: Identifiable, Codable {
         try container.encode(content, forKey: .content)
         try container.encode(role, forKey: .role)
     }
-
     enum MessageRole: String, Codable {
         case user
         case assistant

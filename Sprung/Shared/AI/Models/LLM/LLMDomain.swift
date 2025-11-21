@@ -6,9 +6,7 @@
 //  models. SwiftOpenAI-specific types are confined to adapter implementations
 //  that translate between these structures and provider SDKs.
 //
-
 import Foundation
-
 // MARK: - Roles & Attachments
 enum LLMRole: String, Codable, Sendable {
     case system
@@ -16,12 +14,10 @@ enum LLMRole: String, Codable, Sendable {
     case assistant
     case tool
 }
-
 struct LLMAttachment: Codable, Sendable {
     var data: Data
     var mimeType: String
 }
-
 // MARK: - Messages
 struct LLMMessageDTO: Codable, Sendable, Identifiable {
     var id: UUID
@@ -29,7 +25,6 @@ struct LLMMessageDTO: Codable, Sendable, Identifiable {
     var text: String?
     var attachments: [LLMAttachment]
     var createdAt: Date?
-
     init(id: UUID = UUID(), role: LLMRole, text: String?, attachments: [LLMAttachment] = [], createdAt: Date? = nil) {
         self.id = id
         self.role = role
@@ -38,19 +33,16 @@ struct LLMMessageDTO: Codable, Sendable, Identifiable {
         self.createdAt = createdAt
     }
 }
-
 struct LLMStreamChunkDTO: Sendable {
     var content: String?
     var reasoning: String?
     var event: LLMStreamEvent? = nil
     var isFinished: Bool
 }
-
 enum LLMStreamEvent: Sendable {
     case tool(LLMToolStreamEvent)
     case status(message: String, isComplete: Bool)
 }
-
 struct LLMToolStreamEvent: Sendable {
     var callId: String
     var status: String?
@@ -59,16 +51,13 @@ struct LLMToolStreamEvent: Sendable {
     var isComplete: Bool
     var toolName: String?
 }
-
 // MARK: - Responses
 struct LLMResponseChoiceDTO: Codable, Sendable {
     var message: LLMMessageDTO?
 }
-
 struct LLMResponseDTO: Codable, Sendable {
     var choices: [LLMResponseChoiceDTO]
 }
-
 // MARK: - Convenience Helpers
 extension LLMMessageDTO {
     static func text(_ text: String, role: LLMRole) -> LLMMessageDTO {

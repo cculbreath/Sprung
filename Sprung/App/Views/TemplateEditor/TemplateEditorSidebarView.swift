@@ -2,9 +2,7 @@
 //  TemplateEditorSidebarView.swift
 //  Sprung
 //
-
 import SwiftUI
-
 struct TemplateEditorSidebarView: View {
     let availableTemplates: [String]
     let selection: Binding<String?>
@@ -24,7 +22,6 @@ struct TemplateEditorSidebarView: View {
     let textFilters: [TextFilterInfo]
     
     @FocusState private var isRenamingFocused: Bool
-
     var body: some View {
         VStack(spacing: 0) {
             templateList()
@@ -36,7 +33,6 @@ struct TemplateEditorSidebarView: View {
         }
         .background(Color(NSColor.controlBackgroundColor))
     }
-
     @ViewBuilder
     private func templateList() -> some View {
         List(selection: selection) {
@@ -61,7 +57,6 @@ struct TemplateEditorSidebarView: View {
                     }
                 }
             }
-
             Section {
                 Button {
                     showingAddTemplate = true
@@ -78,7 +73,6 @@ struct TemplateEditorSidebarView: View {
         .background(Color(NSColor.controlBackgroundColor))
         .padding(.top, 4)
     }
-
     @ViewBuilder
     private func templateRow(_ template: String) -> some View {
         HStack(spacing: 10) {
@@ -167,7 +161,6 @@ struct TemplateEditorSidebarView: View {
         tempTemplateName = ""
         isRenamingFocused = false
     }
-
     @ViewBuilder
     private func textSnippetPanel() -> some View {
         ScrollView {

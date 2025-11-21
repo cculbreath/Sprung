@@ -1,8 +1,6 @@
 // Sprung/App/Views/SettingsView.swift
-
 import SwiftUI
 import SwiftData
-
 struct SettingsView: View {
     @AppStorage("fixOverflowMaxIterations") private var fixOverflowMaxIterations: Int = 3
     @AppStorage("reasoningEffort") private var reasoningEffort: String = "medium"
@@ -10,14 +8,12 @@ struct SettingsView: View {
     @AppStorage("onboardingPDFExtractionModelId") private var pdfExtractionModelId: String = "google/gemini-2.0-flash-001"
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var onboardingWebSearchAllowed: Bool = true
     @AppStorage("onboardingInterviewAllowWritingAnalysisDefault") private var onboardingWritingAllowed: Bool = false
-
     @Environment(OnboardingInterviewCoordinator.self) private var onboardingCoordinator
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(ApplicantProfileStore.self) private var applicantProfileStore
     @Environment(ExperienceDefaultsStore.self) private var experienceDefaultsStore
     @Environment(CareerKeywordStore.self) private var careerKeywordStore
     @Environment(\.modelContext) private var modelContext
-
     @State private var showFactoryResetConfirmation = false
     @State private var showFinalResetConfirmation = false
     @State private var resetError: String?
@@ -25,14 +21,12 @@ struct SettingsView: View {
     private let dataResetService = DataResetService()
     private let onboardingDefaultModelFallback = "openai/gpt-5.1"
     private let pdfExtractionFallbackModelId = "google/gemini-2.0-flash-001"
-
     private let reasoningOptions: [(value: String, label: String, detail: String)] = [
         ("minimal", "Minimal", "Fastest responses; rely on tools and concise reasoning"),
         ("low", "Low", "Faster responses with basic reasoning"),
         ("medium", "Medium", "Balanced speed and reasoning depth"),
         ("high", "High", "Thorough reasoning with detailed analysis"),
     ]
-
     var body: some View {
         Form {
             Section {
@@ -40,7 +34,6 @@ struct SettingsView: View {
             } header: {
                 SettingsSectionHeader(title: "API Keys", systemImage: "key.2.on.ring")
             }
-
             Section {
                 Picker("Reasoning Effort", selection: $reasoningEffort) {
                     ForEach(reasoningOptions, id: \.value) { option in
@@ -55,7 +48,6 @@ struct SettingsView: View {
                     }
                 }
                 .pickerStyle(.radioGroup)
-
                 Stepper(value: $fixOverflowMaxIterations, in: 1 ... 10) {
                     Text("Fix Overflow Attempts: \(fixOverflowMaxIterations)")
                 }
@@ -66,12 +58,9 @@ struct SettingsView: View {
             } header: {
                 SettingsSectionHeader(title: "AI Reasoning", systemImage: "sparkles")
             }
-
             Section {
                 onboardingInterviewModelPicker
-
                 pdfExtractionModelPicker
-
                 Toggle("Allow web search during interviews by default", isOn: Binding(
                     get: { onboardingWebSearchAllowed },
                     set: { newValue in
@@ -80,7 +69,6 @@ struct SettingsView: View {
                     }
                 ))
                 .toggleStyle(.switch)
-
                 Toggle("Allow writing-style analysis by default", isOn: Binding(
                     get: { onboardingWritingAllowed },
                     set: { newValue in
@@ -92,25 +80,21 @@ struct SettingsView: View {
             } header: {
                 SettingsSectionHeader(title: "Onboarding Interview", systemImage: "wand.and.stars")
             }
-
             Section {
                 TextToSpeechSettingsView()
             } header: {
                 SettingsSectionHeader(title: "Voice & Audio", systemImage: "speaker.wave.2.fill")
             }
-
             Section {
                 DebugSettingsView()
             } header: {
                 SettingsSectionHeader(title: "Debugging", systemImage: "wrench.and.screwdriver")
             }
-
             Section {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Resetting will permanently delete all your data, including:")
                         .font(.callout)
                         .foregroundStyle(.secondary)
-
                     VStack(alignment: .leading, spacing: 6) {
                         Label("All resumes and cover letters", systemImage: "doc.fill")
                             .font(.callout)
@@ -124,7 +108,6 @@ struct SettingsView: View {
                             .font(.callout)
                     }
                     .foregroundStyle(.orange)
-
                     Button(action: { showFactoryResetConfirmation = true }) {
                         HStack {
                             Image(systemName: "exclamationmark.triangle.fill")
@@ -176,11 +159,9 @@ struct SettingsView: View {
             sanitizePDFExtractionModelIfNeeded()
         }
     }
-
     private func performReset() async {
         isResetting = true
         defer { isResetting = false }
-
         do {
             try await dataResetService.performFactoryReset(
                 modelContext: modelContext,
@@ -189,12 +170,9 @@ struct SettingsView: View {
                 enabledLLMStore: enabledLLMStore,
                 careerKeywordStore: careerKeywordStore
             )
-
             resetError = ""
-
             // Brief delay before exiting to allow UI to update
             try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
-
             // Exit the app cleanly - user can relaunch
             NSApplication.shared.terminate(nil)
         } catch {
@@ -202,11 +180,9 @@ struct SettingsView: View {
         }
     }
 }
-
 private struct SettingsSectionHeader: View {
     let title: String
     let systemImage: String
-
     var body: some View {
         Label {
             Text(title)
@@ -220,7 +196,6 @@ private struct SettingsSectionHeader: View {
         .foregroundStyle(.primary)
     }
 }
-
 private extension SettingsView {
     var onboardingInterviewModelPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -243,7 +218,6 @@ private extension SettingsView {
                 }
                 .pickerStyle(.menu)
                 .disabled(onboardingInterviewModels.count == 1)
-
                 Text("Currently, only GPT-5.1 is supported for onboarding interviews.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -251,7 +225,6 @@ private extension SettingsView {
             }
         }
     }
-
     var pdfExtractionModelPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
             if allOpenRouterModels.isEmpty {
@@ -272,7 +245,6 @@ private extension SettingsView {
                     }
                 }
                 .pickerStyle(.menu)
-
                 Text("Model used to extract structured data from resume PDFs. Gemini 2.0 Flash is recommended for cost-effective multimodal extraction.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -280,13 +252,11 @@ private extension SettingsView {
             }
         }
     }
-
     var onboardingInterviewModels: [EnabledLLM] {
         // For now, only GPT-5.1 is supported for onboarding interviews
         enabledLLMStore.enabledModels
             .filter { $0.modelId == "openai/gpt-5.1" }
     }
-
     var openAIModels: [EnabledLLM] {
         enabledLLMStore.enabledModels
             .filter { $0.modelId.lowercased().hasPrefix("openai/") }
@@ -295,7 +265,6 @@ private extension SettingsView {
                     < (rhs.displayName.isEmpty ? rhs.modelId : rhs.displayName)
             }
     }
-
     var allOpenRouterModels: [EnabledLLM] {
         enabledLLMStore.enabledModels
             .sorted { lhs, rhs in
@@ -306,7 +275,6 @@ private extension SettingsView {
                     < (rhs.displayName.isEmpty ? rhs.modelId : rhs.displayName)
             }
     }
-
     @discardableResult
     func sanitizeOnboardingModelIfNeeded() -> String {
         let ids = onboardingInterviewModels.map(\.modelId)
@@ -320,7 +288,6 @@ private extension SettingsView {
         }
         return sanitized
     }
-
     @discardableResult
     func sanitizePDFExtractionModelIfNeeded() -> String {
         let ids = allOpenRouterModels.map(\.modelId)

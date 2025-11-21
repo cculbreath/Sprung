@@ -1,14 +1,11 @@
 import SwiftUI
 import SwiftyJSON
-
 struct OnboardingValidationReviewCard: View {
     enum Decision: String, CaseIterable, Identifiable {
         case approved
         case modified
         case rejected
-
         var id: String { rawValue }
-
         var label: String {
             switch self {
             case .approved: return "Approve"
@@ -17,27 +14,22 @@ struct OnboardingValidationReviewCard: View {
             }
         }
     }
-
     let prompt: OnboardingValidationPrompt
     let onSubmit: (_ status: Decision, _ updated: JSON?, _ notes: String?) -> Void
     let onCancel: () -> Void
-
     @State private var decision: Decision
     @State private var notes: String
     @State private var updatedPayloadText: String
     @State private var errorMessage: String?
-
     @State private var applicantDraft: ApplicantProfileDraft
     @State private var baselineApplicantDraft: ApplicantProfileDraft
     @State private var applicantHasChanges: Bool
     private let baselineApplicantJSON: String
-
     @State private var timelineDraft: ExperienceDefaultsDraft
     @State private var baselineTimelineDraft: ExperienceDefaultsDraft
     @State private var timelineHasChanges: Bool
     @State private var timelineEditingEntries: Set<UUID>
     private let baselineTimelineJSON: String
-
     init(
         prompt: OnboardingValidationPrompt,
         onSubmit: @escaping (_ status: Decision, _ updated: JSON?, _ notes: String?) -> Void,
@@ -46,12 +38,10 @@ struct OnboardingValidationReviewCard: View {
         self.prompt = prompt
         self.onSubmit = onSubmit
         self.onCancel = onCancel
-
         _decision = State(initialValue: .approved)
         _notes = State(initialValue: "")
         _updatedPayloadText = State(initialValue: "")
         _errorMessage = State(initialValue: nil)
-
         if prompt.dataType == "applicant_profile" {
             let draft = ApplicantProfileDraft(json: prompt.payload)
             _applicantDraft = State(initialValue: draft)
@@ -65,7 +55,6 @@ struct OnboardingValidationReviewCard: View {
             _applicantHasChanges = State(initialValue: false)
             baselineApplicantJSON = ""
         }
-
         if prompt.dataType == "skeleton_timeline" {
             let draft = ExperienceDefaultsDecoder.draft(from: prompt.payload)
             _timelineDraft = State(initialValue: draft)
@@ -82,27 +71,22 @@ struct OnboardingValidationReviewCard: View {
             baselineTimelineJSON = ""
         }
     }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Review \(displayTitle)")
                 .font(.headline)
-
             if let message = prompt.message, !message.isEmpty {
                 Text(message)
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
-
             contentView
-
             Picker("Decision", selection: $decision) {
                 ForEach(Decision.allCases) { option in
                     Text(option.label).tag(option)
                 }
             }
             .pickerStyle(.segmented)
-
             if shouldShowRawEditor {
                 rawJSONEditor
             } else if decision == .modified {
@@ -110,15 +94,12 @@ struct OnboardingValidationReviewCard: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
-
             notesEditor
-
             if let errorMessage {
                 Text(errorMessage)
                     .font(.footnote)
                     .foregroundStyle(.red)
             }
-
             HStack {
                 Button("Cancel", action: onCancel)
                 Spacer()
@@ -157,7 +138,6 @@ struct OnboardingValidationReviewCard: View {
             }
         }
     }
-
     @ViewBuilder
     private var contentView: some View {
         if isApplicantProfile {
@@ -165,7 +145,6 @@ struct OnboardingValidationReviewCard: View {
                 Text(decision == .modified ? "Update any fields below." : "Switch to Modify to edit these details.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
-
                 ApplicantProfileEditor(
                     draft: $applicantDraft,
                     showPhotoSection: false,
@@ -174,7 +153,6 @@ struct OnboardingValidationReviewCard: View {
                     emailSuggestions: applicantDraft.suggestedEmails
                 )
                 .disabled(decision != .modified)
-
                 HStack {
                     Button("Reset to Proposed") {
                         applicantDraft = baselineApplicantDraft
@@ -182,7 +160,6 @@ struct OnboardingValidationReviewCard: View {
                     }
                     .buttonStyle(.bordered)
                     .disabled(!applicantHasChanges)
-
                     Spacer()
                 }
             }
@@ -191,7 +168,6 @@ struct OnboardingValidationReviewCard: View {
                 Text(decision == .modified ? "Adjust the generated timeline." : "Switch to Modify to make timeline changes.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
-
                 SkeletonTimelineReviewView(
                     draft: $timelineDraft,
                     editingEntries: $timelineEditingEntries,
@@ -202,7 +178,6 @@ struct OnboardingValidationReviewCard: View {
                     }
                 )
                 .disabled(decision != .modified)
-
                 HStack {
                     Button("Reset to Proposed") {
                         timelineDraft = baselineTimelineDraft
@@ -211,7 +186,6 @@ struct OnboardingValidationReviewCard: View {
                     }
                     .buttonStyle(.bordered)
                     .disabled(!timelineHasChanges)
-
                     Spacer()
                 }
             }
@@ -229,27 +203,21 @@ struct OnboardingValidationReviewCard: View {
             .frame(minHeight: 160)
         }
     }
-
     private var shouldShowRawEditor: Bool {
         !isStructuredType && decision == .modified
     }
-
     private var isApplicantProfile: Bool {
         prompt.dataType == "applicant_profile"
     }
-
     private var isSkeletonTimeline: Bool {
         prompt.dataType == "skeleton_timeline"
     }
-
     private var isStructuredType: Bool {
         isApplicantProfile || isSkeletonTimeline
     }
-
     private var displayTitle: String {
         prompt.dataType.replacingOccurrences(of: "_", with: " ").capitalized
     }
-
     private var prettyPayload: String {
         if let data = try? prompt.payload.rawData(options: [.prettyPrinted]),
            let string = String(data: data, encoding: .utf8) {
@@ -257,7 +225,6 @@ struct OnboardingValidationReviewCard: View {
         }
         return prompt.payload.description
     }
-
     private var rawJSONEditor: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Provide updated JSON")
@@ -271,7 +238,6 @@ struct OnboardingValidationReviewCard: View {
                 )
         }
     }
-
     private var notesEditor: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Notes (optional)")
@@ -284,7 +250,6 @@ struct OnboardingValidationReviewCard: View {
                 )
         }
     }
-
     private var disableSubmit: Bool {
         if decision == .modified {
             if isApplicantProfile { return false }
@@ -293,7 +258,6 @@ struct OnboardingValidationReviewCard: View {
         }
         return false
     }
-
     private func resetStructuredEditors() {
         if isApplicantProfile {
             applicantDraft = baselineApplicantDraft
@@ -305,10 +269,8 @@ struct OnboardingValidationReviewCard: View {
             timelineHasChanges = false
         }
     }
-
     private func submit() {
         var updatedJSON: JSON?
-
         switch decision {
         case .approved:
             updatedJSON = nil
@@ -333,18 +295,15 @@ struct OnboardingValidationReviewCard: View {
                 updatedJSON = parsed
             }
         }
-
         errorMessage = nil
         let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         onSubmit(decision, updatedJSON, trimmedNotes.isEmpty ? nil : trimmedNotes)
         updatedPayloadText = ""
         notes = ""
     }
-
     private static func normalizedJSONString(from json: JSON) -> String {
         json.rawString(options: .sortedKeys) ?? json.rawString() ?? ""
     }
-
     private static func timelineJSON(from draft: ExperienceDefaultsDraft) -> JSON {
         let dictionary = ExperienceDefaultsEncoder.makeSeedDictionary(from: draft)
         return JSON(dictionary)

@@ -4,21 +4,17 @@
 //
 //  Provides a shared refresh/save button that animates using SF Symbol effects.
 //
-
 import SwiftUI
-
 struct TemplateRefreshButton: View {
     var hasUnsavedChanges: Bool
     var isAnimating: Bool
     var isEnabled: Bool = true
     var help: String?
     var action: () -> Void
-
     enum State {
         case dirty
         case saving
         case clean
-
         init(hasUnsavedChanges: Bool, isAnimating: Bool) {
             if isAnimating {
                 self = .saving
@@ -28,7 +24,6 @@ struct TemplateRefreshButton: View {
                 self = .clean
             }
         }
-
         var symbolName: String {
             switch self {
             case .dirty:
@@ -39,7 +34,6 @@ struct TemplateRefreshButton: View {
                 return "checkmark.arrow.trianglehead.counterclockwise"
             }
         }
-
         func helpText(custom: String?) -> String {
             if let custom { return custom }
             switch self {
@@ -52,7 +46,6 @@ struct TemplateRefreshButton: View {
             }
         }
     }
-
     var body: some View {
         let state = State(hasUnsavedChanges: hasUnsavedChanges, isAnimating: isAnimating)
         Button(action: action) {
@@ -67,7 +60,6 @@ struct TemplateRefreshButton: View {
         .help(state.helpText(custom: help))
         .disabled(!isEnabled)
     }
-
     @ViewBuilder
     private func refreshImage(for symbolName: String) -> some View {
         if symbolName.hasPrefix("custom.") {

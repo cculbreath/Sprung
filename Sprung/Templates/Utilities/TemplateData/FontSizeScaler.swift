@@ -1,5 +1,4 @@
 import Foundation
-
 struct FontSizeScaler {
     private static let scaleFactor = Decimal(3) / Decimal(4)
     private static let formatter: NumberFormatter = {
@@ -10,7 +9,6 @@ struct FontSizeScaler {
         formatter.usesGroupingSeparator = false
         return formatter
     }()
-
     func buildFontSizes(from nodes: [FontSizeNode]) -> [String: String]? {
         guard nodes.isEmpty == false else { return nil }
         var result: [String: String] = [:]
@@ -19,7 +17,6 @@ struct FontSizeScaler {
         }
         return result
     }
-
     func scaleFontSizes(_ fontSizes: [String: String]) -> [String: String] {
         var scaled: [String: String] = [:]
         for (key, value) in fontSizes {
@@ -27,16 +24,13 @@ struct FontSizeScaler {
         }
         return scaled
     }
-
     private func scaledFontSizeString(from value: String) -> String {
         guard let decimal = parseFontSizeValue(from: value) else {
             return value
         }
-
         let scaledDecimal = decimal * Self.scaleFactor
         let formatted = formatFontDecimal(scaledDecimal)
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-
         if trimmed.hasSuffix("pt") {
             return "\(formatted)pt"
         }
@@ -45,16 +39,13 @@ struct FontSizeScaler {
         }
         return formatted
     }
-
     private func parseFontSizeValue(from string: String) -> Decimal? {
         let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false else { return nil }
-
         let lowercased = trimmed.lowercased()
         if lowercased == "inherit" || lowercased == "auto" {
             return nil
         }
-
         var sanitized = trimmed
         if lowercased.hasSuffix("pt") || lowercased.hasSuffix("px") {
             sanitized = String(sanitized.dropLast(2))
@@ -62,7 +53,6 @@ struct FontSizeScaler {
         sanitized = sanitized.trimmingCharacters(in: .whitespacesAndNewlines)
         return Decimal(string: sanitized)
     }
-
     private func formatFontDecimal(_ decimal: Decimal) -> String {
         let number = NSDecimalNumber(decimal: decimal)
         if let formatted = Self.formatter.string(from: number) {

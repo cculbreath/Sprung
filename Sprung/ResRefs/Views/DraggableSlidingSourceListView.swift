@@ -4,16 +4,13 @@
 //
 //  Created by Christopher Culbreath on 2/27/25.
 //
-
 import SwiftUI
-
 struct DraggableSlidingSourceListView: View {
     @Binding var refresh: Bool
     @Binding var isVisible: Bool // Add this to control visibility from parent
     @State private var height: CGFloat = 300
     @State private var isDragging = false
     @GestureState private var dragOffset: CGFloat = 0
-
     var body: some View {
         GeometryReader { geometry in
             VStack(spacing: 0) {

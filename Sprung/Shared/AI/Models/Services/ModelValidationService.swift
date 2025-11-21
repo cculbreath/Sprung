@@ -4,10 +4,8 @@
 //
 //  Validates model availability and capabilities by calling OpenRouter endpoints
 //
-
 import Foundation
 import SwiftUI
-
 @MainActor
 @Observable
 class ModelValidationService {

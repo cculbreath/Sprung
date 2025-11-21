@@ -4,22 +4,18 @@
 //
 //  Created by Christopher Culbreath on 1/31/25.
 //
-
 import SwiftData
 import SwiftUI
-
 struct CreateNewResumeView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(TemplateStore.self) private var templateStore: TemplateStore
     @Environment(ResRefStore.self) private var resRefStore: ResRefStore
     @Environment(ResStore.self) private var resStore: ResStore
     @Binding var refresh: Bool
-
     // State variables
     @State private var selectedTemplateID: UUID?
     @State private var showErrorMessage = false
     @State private var errorMessage = ""
-
     var body: some View {
         // Safely unwrap the selected job application
         if let selApp: JobApp = jobAppStore.selectedApp {
@@ -27,7 +23,6 @@ struct CreateNewResumeView: View {
                 Text("Create a New Résumé")
                     .font(.title)
                     .padding(.top)
-
                 // Standard SwiftUI Picker - going back to basics
                 let templates = templateStore.templates()
                 if templates.isEmpty {
@@ -53,7 +48,6 @@ struct CreateNewResumeView: View {
                 }
                 .pickerStyle(.menu)
                 .padding()
-
                 // Display selected model info
                 if let template = templates.first(where: { $0.id == selectedTemplateID }) {
                     Text("Selected: \(template.name)")
@@ -68,7 +62,6 @@ struct CreateNewResumeView: View {
                         .font(.subheadline)
                         .foregroundColor(.gray)
                 }
-
                 // Standard SwiftUI Button - using the original approach
                 Button(action: {
                     createResume(with: selApp, templates: templates)
@@ -84,7 +77,6 @@ struct CreateNewResumeView: View {
                 .padding(.horizontal)
                 .buttonStyle(PlainButtonStyle())
                 .disabled(templates.isEmpty)
-
                 // Error message display
                 if showErrorMessage {
                     Text(errorMessage)
@@ -107,7 +99,6 @@ struct CreateNewResumeView: View {
                 .padding()
         }
     }
-
     // Separate function to handle resume creation
     private func createResume(with jobApp: JobApp, templates: [Template]) {
         guard let templateID = selectedTemplateID,
@@ -116,7 +107,6 @@ struct CreateNewResumeView: View {
             showErrorMessage = true
             return
         }
-
         if resStore.create(
             jobApp: jobApp,
             sources: resRefStore.defaultSources,
@@ -124,7 +114,6 @@ struct CreateNewResumeView: View {
         ) != nil {
             // Update UI
             refresh.toggle()
-
             // Ensure the UI updates fully
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 refresh.toggle()

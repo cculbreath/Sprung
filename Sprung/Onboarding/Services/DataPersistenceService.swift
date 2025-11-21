@@ -5,10 +5,8 @@
 //  Service for managing data persistence and artifact loading.
 //  Extracted from OnboardingInterviewCoordinator to reduce complexity.
 //
-
 import Foundation
 import SwiftyJSON
-
 /// Service that handles data persistence operations
 actor DataPersistenceService: OnboardingEventEmitter {
     // MARK: - Properties
@@ -18,7 +16,6 @@ actor DataPersistenceService: OnboardingEventEmitter {
     private let applicantProfileStore: ApplicantProfileStore
     private let toolRouter: ToolHandler
     private let wizardTracker: WizardProgressTracker
-
     // MARK: - Initialization
     init(
         eventBus: EventCoordinator,
@@ -35,31 +32,25 @@ actor DataPersistenceService: OnboardingEventEmitter {
         self.toolRouter = toolRouter
         self.wizardTracker = wizardTracker
     }
-
     // MARK: - Artifact Loading
     func loadPersistedArtifacts() async {
         let profileRecords = (await dataStore.list(dataType: "applicant_profile")).filter { $0 != .null }
         let timelineRecords = (await dataStore.list(dataType: "skeleton_timeline")).filter { $0 != .null }
         let artifactRecords = (await dataStore.list(dataType: "artifact_record")).filter { $0 != .null }
         let knowledgeCardRecords = (await dataStore.list(dataType: "knowledge_card")).filter { $0 != .null }
-
         if let profile = profileRecords.last {
             // Publish event instead of direct state mutation
             await eventBus.publish(.applicantProfileStored(profile))
             await persistApplicantProfileToSwiftData(json: profile)
         }
-
         if let timeline = timelineRecords.last {
             // Publish event instead of direct state mutation
             await eventBus.publish(.skeletonTimelineStored(timeline))
         }
-
         // Replace in-memory artifacts with the persisted snapshot (even if empty)
         await eventBus.publish(.artifactRecordsReplaced(records: artifactRecords))
-
         // Replace in-memory knowledge cards with the persisted snapshot (even if empty)
         await eventBus.publish(.knowledgeCardsReplaced(cards: knowledgeCardRecords))
-
         if profileRecords.isEmpty && timelineRecords.isEmpty && artifactRecords.isEmpty && knowledgeCardRecords.isEmpty {
             Logger.info("📂 No persisted artifacts discovered", category: .ai)
         } else {
@@ -75,12 +66,10 @@ actor DataPersistenceService: OnboardingEventEmitter {
             )
         }
     }
-
     // MARK: - Store Management
     func clearArtifacts() async {
         await dataStore.reset()
     }
-
     func resetStore() async {
         await eventBus.publish(.processingStateChanged(false))
         await eventBus.publish(.waitingStateChanged(nil))
@@ -90,7 +79,6 @@ actor DataPersistenceService: OnboardingEventEmitter {
             wizardTracker.reset()
         }
     }
-
     // MARK: - Persistence Helpers
     private func persistApplicantProfileToSwiftData(json: JSON) async {
         await MainActor.run {

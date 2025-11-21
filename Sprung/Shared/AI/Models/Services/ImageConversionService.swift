@@ -4,12 +4,10 @@
 //
 //  Created by Team on 5/13/25.
 //
-
 import Foundation
 import PDFKit
 import AppKit
 import SwiftUI
-
 /// Service for converting PDF data to images
 class ImageConversionService {
     /// Shared instance of the service
@@ -26,10 +24,8 @@ class ImageConversionService {
         else {
             return nil
         }
-
         let pageRect = pdfPage.bounds(for: .mediaBox)
         let renderer = NSImage(size: pageRect.size)
-
         renderer.lockFocus()
         NSGraphicsContext.current?.imageInterpolation = .high
         NSColor.white.set() // Ensure a white background
@@ -41,7 +37,6 @@ class ImageConversionService {
             return nil
         }
         renderer.unlockFocus()
-
         guard let tiffData = renderer.tiffRepresentation,
               let bitmapImage = NSBitmapImageRep(data: tiffData),
               let pngData = bitmapImage.representation(using: .png, properties: [:])

@@ -1,5 +1,4 @@
 import SwiftUI
-
 struct OnboardingInterviewIntroductionCard: View {
     var body: some View {
         VStack(spacing: 28) {
@@ -9,7 +8,6 @@ struct OnboardingInterviewIntroductionCard: View {
                 .foregroundColor(.accentColor)
                 .scaledToFit()
                 .frame(width: 160, height: 160)
-
             VStack(spacing: 8) {
                 Text("Welcome to Sprung!")
                     .font(.system(size: 34, weight: .bold, design: .default))
@@ -19,7 +17,6 @@ struct OnboardingInterviewIntroductionCard: View {
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
             }
-
             OnboardingInterviewHighlights()
                 .frame(maxWidth: 520)
         }
@@ -27,14 +24,12 @@ struct OnboardingInterviewIntroductionCard: View {
         .padding(.vertical, 25)
     }
 }
-
 private struct OnboardingInterviewHighlights: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Part 1 Goals")
                 .font(.headline)
                 .foregroundStyle(.primary)
-
             VStack(alignment: .leading, spacing: 12) {
                 highlightRow(
                     systemImage: "person.text.rectangle",
@@ -52,7 +47,6 @@ private struct OnboardingInterviewHighlights: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
-
     private func highlightRow(systemImage: String, text: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: systemImage)

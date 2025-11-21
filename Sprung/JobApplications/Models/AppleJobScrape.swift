@@ -4,10 +4,8 @@
 //
 //  Created by Christopher Culbreath on 1/31/25.
 //
-
 import Foundation
 import SwiftSoup
-
 extension JobApp {
     /// Parse Apple careers HTML and populate a JobApp. Returns the newly added
     /// instance that is also selected in `jobAppStore`.
@@ -16,7 +14,6 @@ extension JobApp {
         do {
             let doc: Document = try SwiftSoup.parse(html)
             let jobApp = JobApp()
-
             // Try to parse from JSON data first (more reliable)
             if html.contains("window.__staticRouterHydrationData") {
                 let jsonPattern = "window\\.__staticRouterHydrationData = JSON\\.parse\\(\"(.*)\"\\);"
@@ -83,19 +80,15 @@ extension JobApp {
             if let titleEl = try doc.select("#jobdetails-postingtitle").first() {
                 jobApp.jobPosition = try titleEl.text().decodingHTMLEntities()
             }
-
             // Location
             if let locEl = try doc.select("#jobdetails-joblocation").first() {
                 jobApp.jobLocation = try locEl.text().decodingHTMLEntities()
             }
-
             jobApp.companyName = "Apple"
-
             // Posting time
             if let dateEl = try doc.select("#jobdetails-jobpostdate").first() {
                 jobApp.jobPostingTime = try dateEl.text()
             }
-
             // Description (summary + description + min & preferred qualifications)
             var desc = ""
             
@@ -120,17 +113,13 @@ extension JobApp {
             }
             
             jobApp.jobDescription = desc.trimmingCharacters(in: .whitespacesAndNewlines).decodingHTMLEntities()
-
             // Team / Function
             if let teamEl = try doc.select("#jobdetails-teamname").first() {
                 jobApp.jobFunction = try teamEl.text().decodingHTMLEntities()
             }
-
             jobApp.postingURL = url
             jobApp.status = .new
-
             jobAppStore.selectedApp = jobAppStore.addJobApp(jobApp)
-
         } catch {
             Logger.error("🚨 Failed to parse Apple job listing: \(error.localizedDescription)")
         }

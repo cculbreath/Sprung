@@ -1,5 +1,4 @@
 import SwiftUI
-
 /// Reusable container that provides a consistent header with save/cancel controls
 /// and surfaces editing callbacks to its child content.
 struct ValidationCardContainer<Draft: Equatable, Content: View>: View {
@@ -9,18 +8,15 @@ struct ValidationCardContainer<Draft: Equatable, Content: View>: View {
         case saved
         case error(String)
     }
-
     @Binding private var draft: Draft
     private let title: String?
     private let onSave: (Draft) async -> Bool
     private let onCancel: () -> Void
     private let content: (EditableContentCallbacks) -> Content
-
     @State private var baselineDraft: Draft
     @State private var hasChanges = false
     @State private var saveState: SaveState = .idle
     @State private var editingEntries: Set<UUID> = []
-
     init(
         draft: Binding<Draft>,
         originalDraft: Draft,
@@ -36,7 +32,6 @@ struct ValidationCardContainer<Draft: Equatable, Content: View>: View {
         self.onCancel = onCancel
         self.content = content
     }
-
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -55,7 +50,6 @@ struct ValidationCardContainer<Draft: Equatable, Content: View>: View {
             updateDirtyState()
         }
     }
-
     private var callbacks: EditableContentCallbacks {
         EditableContentCallbacks(
             isEditing: { id in
@@ -79,7 +73,6 @@ struct ValidationCardContainer<Draft: Equatable, Content: View>: View {
             }
         )
     }
-
     @ViewBuilder
     private var header: some View {
         HStack(spacing: 16) {
@@ -87,7 +80,6 @@ struct ValidationCardContainer<Draft: Equatable, Content: View>: View {
                 Text(title)
                     .font(.headline)
             }
-
             switch saveState {
             case .saved:
                 Text("✅ Changes saved")
@@ -103,13 +95,10 @@ struct ValidationCardContainer<Draft: Equatable, Content: View>: View {
             case .idle:
                 EmptyView()
             }
-
             Spacer()
-
             Button("Cancel") {
                 cancelChanges()
             }
-
             Button("Save") {
                 handleSave()
             }
@@ -119,14 +108,12 @@ struct ValidationCardContainer<Draft: Equatable, Content: View>: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
     }
-
     private func markDirty() {
         hasChanges = true
         if case .saved = saveState {
             saveState = .idle
         }
     }
-
     private func updateDirtyState() {
         let dirty = draft != baselineDraft
         if dirty != hasChanges {
@@ -136,11 +123,9 @@ struct ValidationCardContainer<Draft: Equatable, Content: View>: View {
             saveState = .idle
         }
     }
-
     private func handleSave() {
         guard saveState != .saving else { return }
         saveState = .saving
-
         let currentDraft = draft
         Task {
             let didSave = await onSave(currentDraft)
@@ -156,7 +141,6 @@ struct ValidationCardContainer<Draft: Equatable, Content: View>: View {
             }
         }
     }
-
     private func cancelChanges() {
         if hasChanges {
             draft = baselineDraft

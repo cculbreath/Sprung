@@ -5,10 +5,8 @@
 //  Tool execution coordination (Spec §4.6)
 //  Subscribes to tool call events and executes tools via ToolExecutor
 //
-
 import Foundation
 import SwiftyJSON
-
 /// Coordinates tool execution
 /// Responsibilities (Spec §4.6):
 /// - Subscribe to LLM.toolCallReceived events
@@ -20,7 +18,6 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
     let eventBus: EventCoordinator
     private let toolExecutor: ToolExecutor
     private let stateCoordinator: StateCoordinator
-
     // MARK: - Initialization
     init(
         eventBus: EventCoordinator,
@@ -32,7 +29,6 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
         self.stateCoordinator = stateCoordinator
         Logger.info("🔧 ToolExecutionCoordinator initialized", category: .ai)
     }
-
     // MARK: - Event Subscriptions
     /// Start listening to tool call events
     func startEventSubscriptions() async {
@@ -41,24 +37,19 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
                 await handleToolEvent(event)
             }
         }
-
         // Small delay to ensure stream is connected
         try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
-
         Logger.info("📡 ToolExecutionCoordinator subscribed to tool events", category: .ai)
     }
-
     // MARK: - Event Handlers
     private func handleToolEvent(_ event: OnboardingEvent) async {
         switch event {
         case .toolCallRequested(let call, _):
             await handleToolCall(call)
-
         default:
             break
         }
     }
-
     // MARK: - Tool Execution
     /// Execute a tool call
     private func handleToolCall(_ call: ToolCall) async {
@@ -69,7 +60,6 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             let timelineTools = ["create_timeline_card", "update_timeline_card", "delete_timeline_card", "reorder_timeline_cards"]
             let isTimelineTool = timelineTools.contains(call.name)
             let isValidationState = waitingState == .validation
-
             // Block non-timeline tools during validation, and all tools during other waiting states
             if !isTimelineTool || !isValidationState {
                 Logger.warning("🚫 Tool call '\(call.name)' blocked - system in waiting state: \(waitingState.rawValue)", category: .ai)
@@ -79,10 +69,8 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
                 )
                 return
             }
-
             Logger.info("✅ Timeline tool '\(call.name)' allowed during validation state", category: .ai)
         }
-
         // Validate against allowed tools
         let allowedTools = await stateCoordinator.getAllowedToolsForCurrentPhase()
         guard allowedTools.contains(call.name) else {
@@ -90,7 +78,6 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             await emitToolError(callId: call.callId, message: "Tool '\(call.name)' is not available in the current phase")
             return
         }
-
         // Execute tool
         Logger.debug("🔧 Executing tool: \(call.name)", category: .ai)
         do {
@@ -101,7 +88,6 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             await emitToolError(callId: call.callId, message: "Tool execution failed: \(error.localizedDescription)")
         }
     }
-
     /// Handle tool execution result
     private func handleToolResult(_ result: ToolResult, callId: String, toolName: String?) async {
         switch result {
@@ -109,7 +95,6 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             // Special handling for extract_document tool - emit artifact record produced event
             if toolName == "extract_document", output["artifact_record"] != .null {
                 await emit(.artifactRecordProduced(record: output["artifact_record"]))
-
                 // Optional: Emit developer message about artifact storage
                 var devPayload = JSON()
                 devPayload["text"].string = "Developer status: Artifact stored"
@@ -121,7 +106,6 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
                 devPayload["payload"] = output["artifact_record"]
                 await emit(.llmSendDeveloperMessage(payload: devPayload))
             }
-
             // Determine reasoning effort for specific tools
             let reasoningEffort: String? = {
                 if toolName == "agent_ready" || toolName == "get_applicant_profile" {
@@ -129,17 +113,14 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
                 }
                 return nil
             }()
-
             // Tool completed - send response to LLM
             await emitToolResponse(callId: callId, output: output, reasoningEffort: reasoningEffort)
-
             // Special handling for agent_ready tool - remove from allowed tools after use
             if toolName == "agent_ready", output["disable_after_use"].bool == true {
                 // Remove agent_ready from allowed tools (one-time bootstrap tool)
                 await stateCoordinator.excludeTool("agent_ready")
                 Logger.info("🚀 Agent ready acknowledged and excluded from future tool calls", category: .ai)
             }
-
         case .error(let error):
             // Tool execution error
             var errorOutput = JSON()
@@ -148,23 +129,19 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             await emitToolResponse(callId: callId, output: errorOutput)
         }
     }
-
     // MARK: - Event Emission
     /// Emit tool response to LLM
     private func emitToolResponse(callId: String, output: JSON, reasoningEffort: String? = nil) async {
         var payload = JSON()
         payload["callId"].string = callId
         payload["output"] = output
-
         if let effort = reasoningEffort {
             payload["reasoningEffort"].string = effort
         }
-
         await emit(.llmToolResponseMessage(payload: payload))
         Logger.info("📤 Tool response sent to LLM (call: \(callId.prefix(8)))", category: .ai)
         Logger.debug("📤 Full tool response payload: callId=\(callId), output=\(output)", category: .ai)
     }
-
     /// Emit tool error
     private func emitToolError(callId: String, message: String) async {
         var errorOutput = JSON()

@@ -1,8 +1,6 @@
 // Sprung/Shared/Extensions/String+Extensions.swift
-
 import Foundation
 import SwiftUI
-
 extension String {
     /// Decodes common HTML entities without altering existing whitespace.
     func decodingHTMLEntities() -> String {
@@ -12,18 +10,15 @@ extension String {
         }
         return self
     }
-
     /// Returns the string trimmed of surrounding whitespace and newlines.
     func trimmed() -> String {
         trimmingCharacters(in: .whitespacesAndNewlines)
     }
-
     /// Collapses runs of three or more newlines into a single blank line while
     /// preserving intentional single blank lines between sections.
     func collapsingConsecutiveBlankLines() -> String {
         var resultLines: [String] = []
         var previousWasBlank = false
-
         for line in self.split(separator: "\n", omittingEmptySubsequences: false) {
             let isBlank = line.trimmingCharacters(in: .whitespaces).isEmpty
             if isBlank {
@@ -36,15 +31,12 @@ extension String {
             }
             resultLines.append(String(line))
         }
-
         while let first = resultLines.first, first.trimmingCharacters(in: .whitespaces).isEmpty {
             resultLines.removeFirst()
         }
-
         while let last = resultLines.last, last.trimmingCharacters(in: .whitespaces).isEmpty {
             resultLines.removeLast()
         }
-
         return resultLines.joined(separator: "\n")
     }
 }

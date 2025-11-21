@@ -4,9 +4,7 @@
 //
 //  Created by Christopher Culbreath on 9/9/24.
 //
-
 import SwiftUI
-
 struct ImageButton: View {
     let systemName: String?
     let name: String?
@@ -15,10 +13,8 @@ struct ImageButton: View {
     let imageSize: CGFloat
     let action: () -> Void
     let externalIsActive: Bool?
-
     @State private var isHovered = false
     @State private var isActive = false
-
     init(
         systemName: String? = nil, name: String? = nil, imageSize: CGFloat = 35,
         defaultColor: Color? = Color.secondary, activeColor: Color? = Color.accentColor,
@@ -36,7 +32,6 @@ struct ImageButton: View {
             resolvedSystemName = "questionmark.circle"
             resolvedName = nil
         }
-
         self.imageSize = imageSize
         self.systemName = resolvedSystemName
         self.name = resolvedName
@@ -45,7 +40,6 @@ struct ImageButton: View {
         self.externalIsActive = isActive
         self.action = action
     }
-
     var body: some View {
         imageView()
             .resizable()
@@ -65,7 +59,6 @@ struct ImageButton: View {
                 }
             }
     }
-
     private func imageView() -> Image {
         let baseName = currentImageName()
         // Check if systemName is nil or not, and use the appropriate initializer
@@ -75,7 +68,6 @@ struct ImageButton: View {
             return Image(baseName)
         }
     }
-
     private func currentImageName() -> String {
         let baseName = systemName ?? name ?? ""
         return (isActive || (externalIsActive == true)) ? baseName + ".fill" : baseName

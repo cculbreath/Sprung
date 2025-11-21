@@ -4,19 +4,15 @@
 //
 //  Created by Christopher Culbreath on 5/23/25.
 //
-
 import SwiftUI
 import SwiftData
-
 struct MultiModelChooseBestCoverLetterSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) var appState: AppState
     @Environment(OpenRouterService.self) private var openRouterService: OpenRouterService
-
     @State private var selectedModels: Set<String> = []
     @State private var selectedVotingScheme: VotingScheme = .firstPastThePost
     @State private var showProgressSheet = false
-
     @Binding var coverLetter: CoverLetter
     
     var body: some View {

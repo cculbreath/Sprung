@@ -4,13 +4,10 @@
 //
 //  Adds derived fields expected by common Handlebars-based JSON Resume themes.
 //
-
 import Foundation
-
 enum HandlebarsContextAugmentor {
     static func augment(_ context: [String: Any]) -> [String: Any] {
         var augmented = context
-
         augmentBasics(in: &augmented)
         augmentTopLevelSectionFlags(in: &augmented)
         augmentWork(in: &augmented)
@@ -23,14 +20,11 @@ enum HandlebarsContextAugmentor {
         augmentInterests(in: &augmented)
         augmentLanguages(in: &augmented)
         augmentReferences(in: &augmented)
-
         return augmented
     }
-
     // MARK: - Basics
     private static func augmentBasics(in context: inout [String: Any]) {
         guard var basics = context["basics"] as? [String: Any] else { return }
-
         if let image = stringValue(basics["image"]), !image.isEmpty,
            (stringValue(basics["picture"])?.isEmpty ?? true) {
             basics["picture"] = image
@@ -39,14 +33,12 @@ enum HandlebarsContextAugmentor {
            (stringValue(basics["image"])?.isEmpty ?? true) {
             basics["image"] = picture
         }
-
         if let name = stringValue(basics["name"]), !name.isEmpty {
             basics["capitalName"] = name.uppercased()
         }
         if let label = stringValue(basics["label"]), !label.isEmpty {
             basics["capitalLabel"] = label.uppercased()
         }
-
         if var location = basics["location"] as? [String: Any] {
             if let state = stringValue(location["state"]), !state.isEmpty,
                (stringValue(location["region"])?.isEmpty ?? true) {
@@ -57,15 +49,12 @@ enum HandlebarsContextAugmentor {
             }
             basics["location"] = location
         }
-
         let contactPieces = buildContactPieces(from: basics)
         basics["contactLinePieces"] = contactPieces
-
         context["basics"] = basics
         if !contactPieces.isEmpty {
             context["contactLinePieces"] = contactPieces
         }
-
         // Root-level toggles expected by common themes
         let basicsPicture = basics["picture"] ?? basics["image"]
         context["pictureBool"] = truthy(basicsPicture)
@@ -74,47 +63,38 @@ enum HandlebarsContextAugmentor {
         context["websiteBool"] = truthy(basics["website"])
         context["profilesBool"] = truthy(basics["profiles"])
         context["aboutBool"] = truthy(basics["summary"])
-
         if let location = basics["location"] as? [String: Any] {
             context["locationBool"] = truthy(location)
         }
     }
-
     private static func buildContactPieces(from basics: [String: Any]) -> [String] {
         var pieces: [String] = []
-
         if let location = basics["location"] as? [String: Any] {
             let city = stringValue(location["city"])
             let region = stringValue(location["region"])
             let country = stringValue(location["countryCode"]) ?? stringValue(location["country"])
-
             var locationParts: [String] = []
             if let city, !city.isEmpty { locationParts.append(city) }
             if let region, !region.isEmpty { locationParts.append(region) }
             if let country, !country.isEmpty { locationParts.append(country) }
-
             let locationString = locationParts.joined(separator: ", ")
             if locationString.isEmpty == false {
                 pieces.append(locationString)
             }
         }
-
         if let phone = stringValue(basics["phone"]), !phone.isEmpty {
             pieces.append(phone)
         }
         if let email = stringValue(basics["email"]), !email.isEmpty {
             pieces.append(email)
         }
-
         if let website = stringValue(basics["website"]), !website.isEmpty {
             pieces.append(website)
         } else if let url = stringValue(basics["url"]), !url.isEmpty {
             pieces.append(url)
         }
-
         return pieces
     }
-
     private static func augmentTopLevelSectionFlags(in context: inout [String: Any]) {
         let sections: [(flag: String, key: String)] = [
             ("workBool", "work"),
@@ -127,45 +107,35 @@ enum HandlebarsContextAugmentor {
             ("languagesBool", "languages"),
             ("referencesBool", "references")
         ]
-
         for section in sections {
             context[section.flag] = truthy(context[section.key])
         }
     }
-
     // MARK: - Work
     private static func augmentWork(in context: inout [String: Any]) {
         guard var work = dictionaryArray(from: context["work"]) else { return }
-
         for index in work.indices {
             var item = work[index]
             applyMonthYearFields(to: &item, startKey: "startDate", endKey: "endDate")
-
             if let endDate = stringValue(item["endDate"]), endDate.isEmpty,
                truthy(item["current"] ?? item["isCurrent"]) {
                 item["endDateYear"] = "Present"
             }
-
             item["workHighlights"] = truthy(item["highlights"])
             work[index] = item
         }
-
         context["work"] = work
     }
-
     private static func augmentVolunteer(in context: inout [String: Any]) {
         guard var volunteer = dictionaryArray(from: context["volunteer"]) else { return }
-
         for index in volunteer.indices {
             var item = volunteer[index]
             applyMonthYearFields(to: &item, startKey: "startDate", endKey: "endDate")
             item["volunteerHighlights"] = truthy(item["highlights"])
             volunteer[index] = item
         }
-
         context["volunteer"] = volunteer
     }
-
     private static func augmentSkills(in context: inout [String: Any]) {
         guard var skills = dictionaryArray(from: context["skills"]) else { return }
         for index in skills.indices {
@@ -175,10 +145,8 @@ enum HandlebarsContextAugmentor {
         }
         context["skills"] = skills
     }
-
     private static func augmentEducation(in context: inout [String: Any]) {
         guard var education = dictionaryArray(from: context["education"]) else { return }
-
         for index in education.indices {
             var item = education[index]
             applyMonthYearFields(to: &item, startKey: "startDate", endKey: "endDate")
@@ -186,43 +154,32 @@ enum HandlebarsContextAugmentor {
             item["educationCourses"] = truthy(item["courses"])
             education[index] = item
         }
-
         context["education"] = education
     }
-
     private static func augmentAwards(in context: inout [String: Any]) {
         guard var awards = dictionaryArray(from: context["awards"]) else { return }
-
         for index in awards.indices {
             var item = awards[index]
             applyDayMonthYearFields(to: &item, dateKey: "date")
             awards[index] = item
         }
-
         context["awards"] = awards
     }
-
     private static func augmentPublications(in context: inout [String: Any]) {
         guard var publications = dictionaryArray(from: context["publications"]) else { return }
-
         for index in publications.indices {
             var item = publications[index]
             applyDayMonthYearFields(to: &item, dateKey: "releaseDate")
             publications[index] = item
         }
-
         context["publications"] = publications
     }
-
     private static func augmentProjects(in context: inout [String: Any]) {
         guard var projects = dictionaryArray(from: context["projects"]) else { return }
-
         for index in projects.indices {
             var item = projects[index]
-
             let name = stringValue(item["name"])?.trimmingCharacters(in: .whitespacesAndNewlines)
             let description = stringValue(item["description"])?.trimmingCharacters(in: .whitespacesAndNewlines)
-
             var combined = ""
             if let name, !name.isEmpty {
                 combined = name
@@ -233,14 +190,11 @@ enum HandlebarsContextAugmentor {
             if !combined.isEmpty {
                 item["projectLine"] = combined
             }
-
             item["projectKeywords"] = truthy(item["keywords"])
             projects[index] = item
         }
-
         context["projects"] = projects
     }
-
     private static func augmentInterests(in context: inout [String: Any]) {
         guard var interests = dictionaryArray(from: context["interests"]) else { return }
         for index in interests.indices {
@@ -250,7 +204,6 @@ enum HandlebarsContextAugmentor {
         }
         context["interests"] = interests
     }
-
     private static func augmentLanguages(in context: inout [String: Any]) {
         guard var languages = dictionaryArray(from: context["languages"]) else { return }
         for index in languages.indices {
@@ -263,7 +216,6 @@ enum HandlebarsContextAugmentor {
         }
         context["languages"] = languages
     }
-
     private static func augmentReferences(in context: inout [String: Any]) {
         guard var references = dictionaryArray(from: context["references"]) else { return }
         for index in references.indices {
@@ -275,7 +227,6 @@ enum HandlebarsContextAugmentor {
         }
         context["references"] = references
     }
-
     // MARK: - Helpers
     private static func truthy(_ value: Any?) -> Bool {
         guard let value else { return false }
@@ -293,7 +244,6 @@ enum HandlebarsContextAugmentor {
         }
         return true
     }
-
     private static func stringValue(_ value: Any?) -> String? {
         guard let value else { return nil }
         if let string = value as? String {
@@ -305,7 +255,6 @@ enum HandlebarsContextAugmentor {
         }
         return nil
     }
-
     private static func dictionaryArray(from value: Any?) -> [[String: Any]]? {
         if let array = value as? [[String: Any]] {
             return array
@@ -321,7 +270,6 @@ enum HandlebarsContextAugmentor {
         }
         return nil
     }
-
     private static func applyMonthYearFields(
         to item: inout [String: Any],
         startKey: String,
@@ -337,7 +285,6 @@ enum HandlebarsContextAugmentor {
                 item["startDateYear"] = year
             }
         }
-
         if stringValue(item["endDateMonth"]) == nil || stringValue(item["endDateYear"]) == nil {
             if let endString = stringValue(item[endKey]),
                let parts = DatePartsParser.monthYear(from: endString) {
@@ -352,7 +299,6 @@ enum HandlebarsContextAugmentor {
             }
         }
     }
-
     private static func applyDayMonthYearFields(
         to item: inout [String: Any],
         dateKey: String
@@ -371,7 +317,6 @@ enum HandlebarsContextAugmentor {
             item["year"] = year
         }
     }
-
     // MARK: - Date Parsing
     private enum DatePartsParser {
         struct Components {
@@ -379,7 +324,6 @@ enum HandlebarsContextAugmentor {
             let month: String?
             let year: String?
         }
-
         static func monthYear(from string: String) -> Components? {
             guard let date = parseDate(from: string, formats: ["yyyy-MM-dd", "yyyy-MM", "yyyy"]) else {
                 return nil
@@ -389,7 +333,6 @@ enum HandlebarsContextAugmentor {
             let monthWithSpace = month.map { $0.isEmpty ? "" : "\($0) " }
             return Components(day: nil, month: monthWithSpace, year: year)
         }
-
         static func dayMonthYear(from string: String) -> Components? {
             guard let date = parseDate(
                 from: string,
@@ -407,7 +350,6 @@ enum HandlebarsContextAugmentor {
             let year = yearFormatter.string(from: date)
             return Components(day: dayString, month: month, year: year)
         }
-
         private static func parseDate(from string: String, formats: [String]) -> Date? {
             let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
             for format in formats {
@@ -418,14 +360,12 @@ enum HandlebarsContextAugmentor {
             }
             return nil
         }
-
         private static let dateFormatter: DateFormatter = {
             let formatter = DateFormatter()
             formatter.locale = Locale(identifier: "en_US_POSIX")
             formatter.timeZone = TimeZone(secondsFromGMT: 0)
             return formatter
         }()
-
         private static let monthFormatter: DateFormatter = {
             let formatter = DateFormatter()
             formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -433,7 +373,6 @@ enum HandlebarsContextAugmentor {
             formatter.dateFormat = "MMM"
             return formatter
         }()
-
         private static let yearFormatter: DateFormatter = {
             let formatter = DateFormatter()
             formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -441,7 +380,6 @@ enum HandlebarsContextAugmentor {
             formatter.dateFormat = "yyyy"
             return formatter
         }()
-
         private static let dayFormatter: DateFormatter = {
             let formatter = DateFormatter()
             formatter.locale = Locale(identifier: "en_US_POSIX")

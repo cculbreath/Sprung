@@ -2,9 +2,7 @@
 //  ResumeReviewQuery.swift
 //  Sprung
 //
-
 import Foundation
-
 /// Centralized prompt management for resume review operations
 /// Follows the architecture pattern from ResumeQuery.swift and CoverLetterQuery.swift
 @Observable class ResumeReviewQuery {
@@ -26,25 +24,19 @@ import Foundation
         guard let jobApp = resume.jobApp else {
             return "Error: No job application associated with this resume."
         }
-
         var prompt = reviewType.promptTemplate()
-
         // Handle custom build if necessary
         if reviewType == .custom, let opt = customOptions {
             prompt = buildCustomPrompt(options: opt)
         }
-
         prompt = prompt.replacingOccurrences(of: "{jobPosition}", with: jobApp.jobPosition)
         prompt = prompt.replacingOccurrences(of: "{companyName}", with: jobApp.companyName)
         prompt = prompt.replacingOccurrences(of: "{jobDescription}", with: jobApp.jobDescription)
-
         let resumeText = resume.textResume
         prompt = prompt.replacingOccurrences(of: "{resumeText}", with: resumeText)
-
         if includeImage {
             prompt += "\n\nAdditionally, I am including a PDF image of the resume for visual context."
         }
-
         return prompt
     }
     
@@ -90,24 +82,20 @@ import Foundation
         
         return """
         You are an expert resume optimizer specializing in content efficiency. Your task is to analyze and revise skills entries to ensure they fit properly within the allocated space while maintaining maximum impact.
-
         Here are the current skills and expertise entries in JSON format:
         \(skillsJsonString)
-
         TASK:
         Revise the skills and expertise content to be more concise while preserving meaning and impact. Focus on:
         1. Shortening verbose descriptions without losing key information
         2. Using more concise language and removing redundant words
         3. Maintaining technical accuracy and professional tone
         4. Ensuring each revision is clearly more concise than the original
-
         IMPORTANT FORMATTING REQUIREMENTS:
         - Entry titles typically display about 28 characters per line before wrapping
         - Entry descriptions typically display about 44 characters per line before wrapping
         - Each entry starts on its own line
         - Aim to reduce the overall character count while maintaining impact
         \(mergeInstructions)
-
         RESPONSE FORMAT:
         You must respond with a valid JSON object containing exactly this structure:
         {
@@ -121,7 +109,6 @@ import Foundation
             }
           ]
         }
-
         - Use the exact UUID from the input data
         - Set new_title to null if no revision is needed for the title
         - Set new_description to null if no revision is needed for the description
@@ -145,13 +132,10 @@ import Foundation
         
         return """
         You are an expert resume optimizer specializing in content efficiency for tight layouts. Your task is to analyze and revise skills entries to ensure they fit properly within the allocated space.
-
         CONTEXT:
         \(overflowGuidance)
-
         Here are the current skills and expertise entries in JSON format:
         \(skillsJsonString)
-
         TASK:
         Revise the skills and expertise content to be more concise while preserving meaning and impact. Since no visual reference is available, use these guidelines:
         1. Entry titles should be concise (aim for under 28 characters when possible)
@@ -160,7 +144,6 @@ import Foundation
         4. Maintain technical accuracy and professional tone
         5. Focus on the most impactful content
         \(mergeInstructions)
-
         RESPONSE FORMAT:
         You must respond with a valid JSON object containing exactly this structure:
         {
@@ -174,7 +157,6 @@ import Foundation
             }
           ]
         }
-
         - Use the exact UUID from the input data
         - Set new_title to null if no revision is needed for the title
         - Set new_description to null if no revision is needed for the description

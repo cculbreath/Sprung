@@ -2,21 +2,17 @@
 //  Applicant.swift
 //  Sprung
 //
-
 import Foundation
 import SwiftData
 import SwiftUI
-
 @Model
 final class ApplicantSocialProfile {
     @Attribute(.unique) var id: UUID
     var network: String
     var username: String
     var url: String
-
     @Relationship(deleteRule: .nullify, inverse: \ApplicantProfile.profiles)
     var applicant: ApplicantProfile?
-
     init(
         id: UUID = UUID(),
         network: String = "",
@@ -31,7 +27,6 @@ final class ApplicantSocialProfile {
         self.applicant = applicant
     }
 }
-
 @Model
 class ApplicantProfile {
     var name: String
@@ -49,7 +44,6 @@ class ApplicantProfile {
     @Attribute(.externalStorage) var pictureData: Data?
     var pictureMimeType: String?
     var signatureData: Data?
-
     init(
         name: String = "John Doe",
         label: String = "Software Engineer",
@@ -83,18 +77,14 @@ class ApplicantProfile {
         self.pictureMimeType = pictureMimeType
         self.signatureData = signatureData
     }
-
     // Helper to convert signature data to image
     func getSignatureImage() -> Image? {
         guard let data = signatureData else { return nil }
-
         if let nsImage = NSImage(data: data) {
             return Image(nsImage: nsImage)
         }
-
         return nil
     }
-
     func getPictureImage() -> Image? {
         guard let data = pictureData,
               let nsImage = NSImage(data: data) else {
@@ -102,27 +92,22 @@ class ApplicantProfile {
         }
         return Image(nsImage: nsImage)
     }
-
     func pictureDataURL() -> String? {
         guard let pictureData else { return nil }
         let mimeType = pictureMimeType ?? "image/png"
         let base64 = pictureData.base64EncodedString()
         return "data:\(mimeType);base64,\(base64)"
     }
-
     func updatePicture(data: Data?, mimeType: String?) {
         pictureData = data
         pictureMimeType = data == nil ? nil : (mimeType ?? pictureMimeType ?? "image/png")
     }
 }
-
 struct Applicant {
     var profile: ApplicantProfile
-
     init(profile: ApplicantProfile) {
         self.profile = profile
     }
-
     init(
         name: String,
         label: String,
@@ -155,7 +140,6 @@ struct Applicant {
             pictureMimeType: pictureMimeType
         )
     }
-
     // Forward properties to maintain backward compatibility
     var name: String { profile.name }
     var label: String { profile.label }
@@ -169,9 +153,7 @@ struct Applicant {
     var phone: String { profile.phone }
     var pictureDataURL: String? { profile.pictureDataURL() }
     var picture: String { profileDataURL ?? "" }
-
     private var profileDataURL: String? { profile.pictureDataURL() }
-
     /// Provides a non-empty placeholder applicant for previews and fallbacks.
     static var placeholder: Applicant {
         Applicant(

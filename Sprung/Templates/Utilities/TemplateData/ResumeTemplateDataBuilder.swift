@@ -2,17 +2,14 @@
 //  ResumeTemplateDataBuilder.swift
 //  Sprung
 //
-
 import Foundation
 import OrderedCollections
-
 /// Builds a Mustache/JSON template context from a `Resume`'s tree representation
 /// without manual string concatenation. Replaces the legacy `TreeToJson` helper.
 struct ResumeTemplateDataBuilder {
     enum BuilderError: Error {
         case missingRootNode
     }
-
     static func buildContext(from resume: Resume) throws -> [String: Any] {
         guard let rootNode = resume.rootNode else {
             throw BuilderError.missingRootNode
@@ -24,7 +21,6 @@ struct ResumeTemplateDataBuilder {
         return implementation.buildContext()
     }
 }
-
 // MARK: - Private Implementation
 private final class Implementation {
     let resume: Resume
@@ -61,19 +57,15 @@ private final class Implementation {
             }
         )
     }()
-
     init(resume: Resume, rootNode: TreeNode, manifest: TemplateManifest?) {
         self.resume = resume
         self.rootNode = rootNode
         self.manifest = manifest
     }
-
     func buildContext() -> [String: Any] {
         var context: [String: Any] = [:]
-
         // Get keys from tree nodes
         var keys = rootNode.orderedChildren.map { $0.name }
-
         // Also include sections from manifest that have special behaviors
         if let manifest = manifest {
             for (sectionKey, section) in manifest.sections {
@@ -84,54 +76,43 @@ private final class Implementation {
                 }
             }
         }
-
         let orderedKeys = Self.orderedKeys(from: keys, manifest: manifest)
-
         for sectionKey in orderedKeys {
             guard let value = buildSection(named: sectionKey) else { continue }
             context[sectionKey] = value
         }
-
         // Fallback for editor keys when the node is absent but metadata exists.
         if context["keys-in-editor"] == nil, !resume.importedEditorKeys.isEmpty {
             context["keys-in-editor"] = resume.importedEditorKeys
         }
-
         if let manifest {
             applySectionVisibility(to: &context, manifest: manifest)
         }
-
         return context
     }
-
     private func buildSection(named sectionName: String) -> Any? {
         if let manifest,
            let behavior = manifest.behavior(forSection: sectionName),
            let override = buildSectionValue(for: behavior, sectionName: sectionName) {
             return override
         }
-
         if let manifest,
            let section = manifest.section(for: sectionName),
            manifest.isFieldMetadataSynthesized(for: sectionName) == false,
            let value = descriptorInterpreter.buildSection(named: sectionName, section: section) {
             return value
         }
-
         if let manifestKind = manifest?.section(for: sectionName)?.type,
             let sectionType = SectionType(manifestKind: manifestKind) {
             return buildSection(named: sectionName, type: sectionType)
         }
-
         return nodeValue(named: sectionName)
     }
-
     private func buildSectionValue(
         for behavior: TemplateManifest.Section.Behavior,
         sectionName: String
     ) -> Any? {
         let sectionNode = sectionNode(named: sectionName)
-
         switch behavior {
         case .fontSizes:
             if let sectionNode,
@@ -146,7 +127,6 @@ private final class Implementation {
                 return valueNormalizer.normalize(fallback, for: .fontSizes)
             }
             return nil
-
         case .includeFonts:
             if let sectionNode,
                let value = buildNodeValue(sectionNode) {
@@ -157,7 +137,6 @@ private final class Implementation {
             }
             let includeFonts = resume.includeFonts ? "true" : "false"
             return valueNormalizer.normalize(includeFonts, for: .includeFonts)
-
         case .editorKeys:
             if let sectionNode,
                let value = buildNodeValue(sectionNode) {
@@ -168,7 +147,6 @@ private final class Implementation {
             }
             guard resume.importedEditorKeys.isEmpty == false else { return nil }
             return valueNormalizer.normalize(resume.importedEditorKeys, for: .editorKeys)
-
         case .styling:
             // Build the styling section including fontSizes
             var styling: [String: Any] = [:]
@@ -189,12 +167,10 @@ private final class Implementation {
                 Logger.debug("ResumeTemplateDataBuilder: includeFonts set from resume flag")
             }
             return styling.isEmpty ? nil : styling
-
         case .metadata, .applicantProfile:
             return nil
         }
     }
-
     private func buildSection(named sectionName: String, type: SectionType) -> Any? {
         switch type {
         case .fontSizes:
@@ -204,7 +180,6 @@ private final class Implementation {
             return sectionBuilder.buildSection(named: sectionName, type: type)
         }
     }
-
     // MARK: Section Builders
     private func applySectionVisibility(
         to context: inout [String: Any],
@@ -216,7 +191,6 @@ private final class Implementation {
             visibility[key] = value
         }
         guard visibility.isEmpty == false else { return }
-
         for (sectionKey, isVisible) in visibility {
             let boolKey = "\(sectionKey)Bool"
             let baseVisible: Bool
@@ -232,14 +206,12 @@ private final class Implementation {
             context[boolKey] = baseVisible && isVisible
         }
     }
-
     private func buildFontSizesSection() -> [String: String]? {
         fontScaler.buildFontSizes(from: resume.fontSizeNodes)
     }
     private func sectionNode(named name: String) -> TreeNode? {
         rootNode.children?.first(where: { $0.name == name })
     }
-
     private func nodeValue(named sectionName: String) -> Any? {
         guard let node = sectionNode(named: sectionName) else { return nil }
         if node.orderedChildren.isEmpty {
@@ -247,17 +219,14 @@ private final class Implementation {
         }
         return buildNodeValue(node)
     }
-
     private func buildNodeValue(_ node: TreeNode) -> Any? {
         let children = node.orderedChildren
         if children.isEmpty {
             return node.value.isEmpty ? nil : node.value
         }
-
         var dictionary: [String: Any] = [:]
         var arrayElements: [Any] = []
         var sawArrayElement = false
-
         for child in children {
             if child.hasChildren {
                 guard let nested = buildNodeValue(child) else { continue }
@@ -276,13 +245,11 @@ private final class Implementation {
                 dictionary[child.name] = child.value
             }
         }
-
         if sawArrayElement && dictionary.isEmpty {
             return arrayElements.isEmpty ? nil : arrayElements
         }
         return dictionary.isEmpty ? nil : dictionary
     }
-
     private static func orderedKeys(from keys: [String], manifest: TemplateManifest?) -> [String] {
         guard let manifest else { return keys }
         var ordered: [String] = []
@@ -294,7 +261,6 @@ private final class Implementation {
         }
         return ordered
     }
-
     private func truthy(_ value: Any) -> Bool {
         switch value {
         case let number as NSNumber:

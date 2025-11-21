@@ -7,10 +7,8 @@
 //  set changes (e.g. adding TemplateSeed). No custom migration plan is
 //  required while we're only adding new entities.
 //
-
 import Foundation
 import SwiftData
-
 enum SprungSchema {
     static let models: [any PersistentModel.Type] = [
         JobApp.self,
@@ -49,12 +47,10 @@ enum SprungSchema {
         InterestKeywordDefault.self,
         ReferenceExperienceDefault.self
     ]
-
     static var schema: Schema {
         Schema(models)
     }
 }
-
 extension ModelContainer {
     /// Creates a model container using the canonical schema. SwiftData will
     /// automatically perform lightweight migration when we add new models.
@@ -64,11 +60,9 @@ extension ModelContainer {
             isStoredInMemoryOnly: false,
             allowsSave: true
         )
-
         return try ModelContainer(
             for: SprungSchema.schema,
             configurations: configuration
         )
     }
-
 }

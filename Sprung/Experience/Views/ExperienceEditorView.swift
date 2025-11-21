@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-
 struct ExperienceEditorView: View {
     @Environment(ExperienceDefaultsStore.self) private var defaultsStore: ExperienceDefaultsStore
     @Environment(\.dismiss) private var dismiss
@@ -11,14 +10,12 @@ struct ExperienceEditorView: View {
     @State private var hasChanges = false
     @State private var saveState: SaveState = .idle
     @State private var editingEntries: Set<UUID> = []
-
     private enum SaveState: Equatable {
         case idle
         case saving
         case saved
         case error(String)
     }
-
     private var sectionCallbacks: ExperienceSectionViewCallbacks {
         ExperienceSectionViewCallbacks(
             isEditing: isEditingEntry,
@@ -28,11 +25,9 @@ struct ExperienceEditorView: View {
             onChange: markDirty
         )
     }
-
     private var activeSectionRenderers: [AnyExperienceSectionRenderer] {
         ExperienceSectionRenderers.all.filter { $0.isEnabled(in: draft) }
     }
-
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -51,7 +46,6 @@ struct ExperienceEditorView: View {
             }
         }
     }
-
     // MARK: - Header
     private var header: some View {
         HStack(spacing: 16) {
@@ -63,7 +57,6 @@ struct ExperienceEditorView: View {
                 Label(showSectionBrowser ? "Hide Sections" : "Enable Sections", systemImage: "slider.horizontal.3")
             }
             .buttonStyle(.bordered)
-
             if case .saved = saveState {
                 Text("✅ Changes saved")
                     .foregroundStyle(.green)
@@ -73,14 +66,11 @@ struct ExperienceEditorView: View {
                     .foregroundStyle(.red)
                     .font(.callout)
             }
-
             Spacer()
-
             Button("Cancel") {
                 cancelAndClose()
             }
             .disabled(isLoading || hasChanges == false)
-
             Button("Save") {
                 Task {
                     let didSave = await saveDraft()
@@ -95,7 +85,6 @@ struct ExperienceEditorView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
     }
-
     // MARK: - Content
     private var content: some View {
         HStack(spacing: 0) {
@@ -106,9 +95,7 @@ struct ExperienceEditorView: View {
                     .transition(.move(edge: .leading))
                     .padding(.trailing, 1)
             }
-
             Divider()
-
             if isLoading {
                 ProgressView("Loading experience defaults…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -126,7 +113,6 @@ struct ExperienceEditorView: View {
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.82), value: showSectionBrowser)
     }
-
     // MARK: - Actions
     private func markDirty() {
         hasChanges = true
@@ -134,7 +120,6 @@ struct ExperienceEditorView: View {
             saveState = .idle
         }
     }
-
     @MainActor
     private func loadDraft() async {
         let loadedDraft = defaultsStore.loadDraft()
@@ -144,7 +129,6 @@ struct ExperienceEditorView: View {
         isLoading = false
         clearEditingEntries()
     }
-
     @MainActor
     private func saveDraft() async -> Bool {
         guard hasChanges else { return true }
@@ -156,7 +140,6 @@ struct ExperienceEditorView: View {
         clearEditingEntries()
         return true
     }
-
     private func cancelAndClose() {
         draft = originalDraft
         hasChanges = false
@@ -164,11 +147,9 @@ struct ExperienceEditorView: View {
         clearEditingEntries()
         dismiss()
     }
-
     private func isEditingEntry(_ id: UUID) -> Bool {
         editingEntries.contains(id)
     }
-
     private func toggleEditingEntry(_ id: UUID) {
         if editingEntries.contains(id) {
             editingEntries.remove(id)
@@ -176,15 +157,12 @@ struct ExperienceEditorView: View {
             editingEntries.insert(id)
         }
     }
-
     private func beginEditingEntry(_ id: UUID) {
         editingEntries.insert(id)
     }
-
     private func endEditingEntry(_ id: UUID) {
         editingEntries.remove(id)
     }
-
     private func clearEditingEntries() {
         editingEntries.removeAll()
     }

@@ -1,8 +1,6 @@
 import SwiftUI
-
 struct ExtractionProgressChecklistView: View {
     let items: [ExtractionProgressItem]
-
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ForEach(items) { item in
@@ -12,29 +10,24 @@ struct ExtractionProgressChecklistView: View {
         .animation(.spring(response: 0.35, dampingFraction: 0.78), value: items)
     }
 }
-
 private struct ExtractionProgressRowView: View {
     let item: ExtractionProgressItem
-
     @State private var isPulsing = false
     @State private var showCheckmark = false
     @State private var highlightStrength: CGFloat = 0
     @State private var detailText: String = ""
     @State private var showDetail = false
-
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
             iconView
                 .frame(width: 26, height: 26)
                 .accessibilityHidden(true)
-
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.stage.title)
                     .font(.subheadline)
                     .fontWeight(item.state == .completed ? .semibold : .regular)
                     .foregroundStyle(titleColor(for: item.state))
                     .transition(.opacity.combined(with: .scale))
-
                 if showDetail {
                     Text(detailText)
                         .font(.footnote)
@@ -63,7 +56,6 @@ private struct ExtractionProgressRowView: View {
             handleDetailChange(newDetail)
         }
     }
-
     private var iconView: some View {
         ZStack {
             if item.state == .active {
@@ -76,7 +68,6 @@ private struct ExtractionProgressRowView: View {
                         value: isPulsing
                     )
             }
-
             switch item.state {
             case .pending:
                 Image(systemName: "circle")
@@ -100,7 +91,6 @@ private struct ExtractionProgressRowView: View {
             }
         }
     }
-
     private func handleStateChange(_ state: ExtractionProgressStageState) {
         switch state {
         case .pending:
@@ -133,7 +123,6 @@ private struct ExtractionProgressRowView: View {
             }
         }
     }
-
     private func handleDetailChange(_ detail: String?) {
         let trimmed = detail?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if trimmed.isEmpty {
@@ -148,7 +137,6 @@ private struct ExtractionProgressRowView: View {
             }
         }
     }
-
     private func titleColor(for state: ExtractionProgressStageState) -> Color {
         switch state {
         case .pending:

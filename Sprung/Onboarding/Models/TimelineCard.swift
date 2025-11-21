@@ -1,6 +1,5 @@
 import Foundation
 import SwiftyJSON
-
 struct TimelineCard: Identifiable, Equatable {
     var id: String
     var title: String
@@ -10,7 +9,6 @@ struct TimelineCard: Identifiable, Equatable {
     var end: String
     var summary: String
     var highlights: [String]
-
     init(
         id: String = UUID().uuidString,
         title: String = "",
@@ -30,7 +28,6 @@ struct TimelineCard: Identifiable, Equatable {
         self.summary = summary
         self.highlights = highlights
     }
-
     init?(json: JSON) {
         let rawId = json["id"].string ?? json["identifier"].string
         guard let resolvedId = rawId?.trimmingCharacters(in: .whitespacesAndNewlines), !resolvedId.isEmpty else {
@@ -48,7 +45,6 @@ struct TimelineCard: Identifiable, Equatable {
             return trimmed.isEmpty ? nil : trimmed
         }
     }
-
     init(id: String = UUID().uuidString, fields: JSON) {
         self.id = id
         title = fields["title"].stringValue
@@ -62,7 +58,6 @@ struct TimelineCard: Identifiable, Equatable {
             return trimmed.isEmpty ? nil : trimmed
         }
     }
-
     func applying(fields: JSON) -> TimelineCard {
         TimelineCard(
             id: id,
@@ -80,7 +75,6 @@ struct TimelineCard: Identifiable, Equatable {
             } ?? highlights
         )
     }
-
     var json: JSON {
         var payload = JSON()
         payload["id"].string = id
@@ -94,11 +88,9 @@ struct TimelineCard: Identifiable, Equatable {
         return payload
     }
 }
-
 enum TimelineCardError: Error, LocalizedError {
     case cardNotFound(String)
     case invalidOrder([String])
-
     var errorDescription: String? {
         switch self {
         case .cardNotFound(let identifier):

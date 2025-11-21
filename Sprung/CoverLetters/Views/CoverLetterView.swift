@@ -5,16 +5,13 @@
 //  Created by Christopher Culbreath on 9/12/24.
 //  Simplified after removing legacy button management
 //
-
 import SwiftUI
-
 struct CoverLetterView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     
     @Binding var showCoverLetterInspector: Bool
     @State private var isEditing = false
-
     var body: some View {
         HStack {
             contentView()
@@ -25,12 +22,10 @@ struct CoverLetterView: View {
             CoverLetterInspectorView(isEditing: $isEditing)
         }
     }
-
     @ViewBuilder
     private func contentView() -> some View {
         @Bindable var coverLetterStore = coverLetterStore
         @Bindable var jobAppStore = jobAppStore
-
         if jobAppStore.selectedApp != nil {
             VStack {
                 CoverLetterContentView(
@@ -47,13 +42,11 @@ struct CoverLetterView: View {
     }
 }
 
-
 struct CoverLetterContentView: View {
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(ApplicantProfileStore.self) private var applicantProfileStore: ApplicantProfileStore
     @Binding var isEditing: Bool
-
     var body: some View {
         @Bindable var coverLetterStore = coverLetterStore
         @Bindable var jobAppStore = jobAppStore
@@ -63,14 +56,12 @@ struct CoverLetterContentView: View {
             @Bindable var bindApp = app
             let selectableLetters = bindApp.coverLetters.filter { $0.generated || !$0.content.isEmpty }
             let hasGeneratedLetters = app.coverLetters.contains(where: \.generated)
-
             VStack(spacing: 0) {
                 CoverLetterActionsBar(
                     coverLetters: selectableLetters,
                     selection: $bindApp.selectedCover
                 )
                 Divider()
-
                 if !hasGeneratedLetters {
                     // Show encourage generation view when no cover letters exist
                     VStack(spacing: 40) {
@@ -90,7 +81,6 @@ struct CoverLetterContentView: View {
                                         Circle()
                                             .stroke(Color.indigo.opacity(0.2), lineWidth: 1)
                                     )
-
                                 Image(systemName: "append.page")
                                     .font(.system(size: 60, weight: .light))
                                     .foregroundStyle(
@@ -103,7 +93,6 @@ struct CoverLetterContentView: View {
                                     .symbolRenderingMode(.hierarchical)
                             }
                             .shadow(color: .indigo.opacity(0.1), radius: 20, x: 0, y: 10)
-
                             VStack(spacing: 12) {
                                 Text("Create Your First Cover Letter")
                                     .font(.system(size: 28, weight: .semibold, design: .rounded))
@@ -114,14 +103,12 @@ struct CoverLetterContentView: View {
                                             endPoint: .trailing
                                         )
                                     )
-
                                 Text("Choose how you'd like to get started")
                                     .font(.system(size: 16, weight: .regular))
                                     .foregroundColor(.secondary)
                             }
                         }
                         .padding(.top, 40)
-
                         // Action buttons section
                         VStack(spacing: 16) {
                             if coverLetterStore.isGeneratingCoverLetter {
@@ -133,14 +120,12 @@ struct CoverLetterContentView: View {
                                     // Generate Cover Letter Button
                                     GenerateCoverLetterButtonView()
                                         .frame(maxWidth: 280)
-
                                     // Batch Cover Letter Button
                                     BatchCoverLetterButtonView()
                                         .frame(maxWidth: 280)
                                 }
                             }
                         }
-
                         Spacer()
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -148,7 +133,6 @@ struct CoverLetterContentView: View {
                         // Subtle background pattern
                         ZStack {
                             Color(NSColor.windowBackgroundColor)
-
                             // Gradient overlay
                             LinearGradient(
                                 colors: [
@@ -194,7 +178,6 @@ struct CoverLetterContentView: View {
                             Text("PDF Preview - Generated \(cL.modDate)")
                                 .font(.caption)
                                 .italic()
-
                             if cL.generated {
                                 CoverLetterPDFView(
                                     coverLetter: cL,
@@ -218,7 +201,6 @@ struct CoverLetterContentView: View {
         }
     }
 }
-
 private struct CoverLetterActionsBar: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
@@ -283,7 +265,6 @@ private struct CoverLetterActionsBar: View {
         .padding(.bottom, 6)
     }
 }
-
 // MARK: - Generate Cover Letter Button Component
 struct GenerateCoverLetterButtonView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
@@ -367,7 +348,6 @@ struct GenerateCoverLetterButtonView: View {
         }
     }
 }
-
 // MARK: - Batch Cover Letter Button Component
 struct BatchCoverLetterButtonView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore

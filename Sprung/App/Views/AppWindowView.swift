@@ -5,15 +5,12 @@
 //  Created by Christopher Culbreath on 9/1/24.
 //  Renamed from TabWrapperView to better reflect responsibility
 //
-
 import SwiftUI
 import AppKit
-
 struct AppWindowView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(AppState.self) private var appState: AppState
-
     @State private var listingButtons: SaveButtons = .init(edit: false, save: false, cancel: false)
     @Binding var selectedTab: TabList
     @Binding var refPopup: Bool
@@ -24,7 +21,6 @@ struct AppWindowView: View {
     // Centralized sheet state management for all app windows/modals
     @Binding var sheets: AppSheets
     @Binding var clarifyingQuestions: [ClarifyingQuestion]
-
     var body: some View {
         @Bindable var jobAppStore = jobAppStore
         mainContent
@@ -65,7 +61,6 @@ struct AppWindowView: View {
                     Label(TabList.listing.rawValue, systemImage: "newspaper")
                 }
                 .tag(TabList.listing)
-
             ResumeSplitView(
                 isWide: .constant(true),
                 tab: $selectedTab,
@@ -78,7 +73,6 @@ struct AppWindowView: View {
                     Label(TabList.resume.rawValue, systemImage: "person.crop.rectangle.stack")
                 }
                 .tag(TabList.resume)
-
             CoverLetterView(showCoverLetterInspector: $sheets.showCoverLetterInspector)
                 .tabItem {
                     Label(TabList.coverLetter.rawValue, systemImage: "person.2.crop.square.stack")
@@ -95,7 +89,6 @@ struct AppWindowView: View {
         }
     }
     
-
     // MARK: - Toolbar Action Methods
     func updateMyLetter() {
         if let selectedApp = jobAppStore.selectedApp {
@@ -113,13 +106,11 @@ struct AppWindowView: View {
         }
     }
 }
-
 struct SaveButtons {
     var edit: Bool = false
     var save: Bool = false
     var cancel: Bool = false
 }
-
 // MARK: - View Modifiers
 struct AppWindowViewModifiers: ViewModifier {
     let jobAppStore: JobAppStore

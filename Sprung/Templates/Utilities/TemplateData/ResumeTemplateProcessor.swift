@@ -2,9 +2,7 @@
 //  ResumeTemplateProcessor.swift
 //  Sprung
 //
-
 import Foundation
-
 /// Shared template processing logic for resume generation
 @MainActor
 class ResumeTemplateProcessor {

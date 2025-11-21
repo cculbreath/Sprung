@@ -1,6 +1,5 @@
 // Sprung/App/Views/ToolbarButtons/ResumeCustomizeButton.swift
 import SwiftUI
-
 struct ResumeCustomizeButton: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(ResumeReviseViewModel.self) private var resumeReviseViewModel: ResumeReviseViewModel

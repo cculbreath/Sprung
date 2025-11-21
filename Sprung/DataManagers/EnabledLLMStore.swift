@@ -4,11 +4,9 @@
 //
 //  Store for managing enabled LLM models with SwiftData persistence
 //
-
 import Foundation
 import SwiftData
 import Combine
-
 /// Store for managing enabled LLM models
 @MainActor
 @Observable
@@ -176,7 +174,6 @@ class EnabledLLMStore: SwiftDataStore {
             Logger.error("❌ Failed to refresh enabled models: \\(error)")
         }
     }
-
     /// Get all enabled model IDs
     var enabledModelIds: [String] {
         return enabledModels.map(\.modelId)
@@ -189,14 +186,11 @@ class EnabledLLMStore: SwiftDataStore {
         }
         return model.isEnabled
     }
-
     func clearCache() {
         enabledModels.removeAll()
     }
-
     private func seedDefaultModelsIfNeeded() {
         guard enabledModels.isEmpty else { return }
-
         let now = Date()
         for seed in defaultModelSeeds {
             let record = getOrCreateModel(id: seed.id, displayName: seed.displayName, provider: seed.provider)

@@ -4,12 +4,9 @@
 //
 //  Created by Christopher Culbreath on 2/27/25.
 //
-
 import SwiftUI
-
 struct NodeChildrenListView: View {
     let children: [TreeNode]
-
     var body: some View {
         LazyVStack(alignment: .leading, spacing: 0) {
             ForEach(children, id: \.id) { child in

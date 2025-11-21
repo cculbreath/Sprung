@@ -1,6 +1,5 @@
 import Foundation
 import SwiftData
-
 @Model
 final class TemplateSeed {
     @Attribute(.unique) var id: UUID
@@ -8,10 +7,8 @@ final class TemplateSeed {
     var seedData: Data
     var createdAt: Date
     var updatedAt: Date
-
     @Relationship(deleteRule: .nullify, inverse: \Template.seeds)
     var template: Template?
-
     init(
         id: UUID = UUID(),
         slug: String,
@@ -27,7 +24,6 @@ final class TemplateSeed {
         self.updatedAt = updatedAt
         self.template = template
     }
-
     var jsonString: String {
         get {
             String(data: seedData, encoding: .utf8) ?? "{}"

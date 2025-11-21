@@ -4,10 +4,8 @@
 //
 //  Created by Christopher Culbreath on 6/4/25.
 //
-
 import Foundation
 import SwiftUI
-
 /// ViewModel for managing the clarifying questions workflow
 /// Handles the flow: Generate Questions → User Answers → Generate Revisions → Show ReviewView
 @MainActor
@@ -484,7 +482,6 @@ class ClarifyingQuestionsViewModel {
         return text
     }
 }
-
 // MARK: - Error Types
 enum ClarifyingQuestionsError: LocalizedError {
     case noActiveConversation

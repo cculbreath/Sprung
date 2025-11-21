@@ -1,8 +1,6 @@
 import SwiftUI
-
 struct OnboardingInterviewStepProgressView: View {
     @Bindable var coordinator: OnboardingInterviewCoordinator
-
     var body: some View {
         HStack(alignment: .center, spacing: 28) {
             // Note: Wizard step status tracking is handled by WizardProgressTracker
@@ -17,20 +15,16 @@ struct OnboardingInterviewStepProgressView: View {
         }
     }
 }
-
 private struct OnboardingStepProgressItem: View {
     let title: String
     let status: OnboardingWizardStepStatus
-
     @State private var measuredLabelWidth: CGFloat = 0
     @State private var animatedProgress: CGFloat = 0
-
     private let bubbleSize: CGFloat = 20
     private let capsuleHeight: CGFloat = 34
     private let horizontalPadding: CGFloat = 24
     private let verticalPadding: CGFloat = 10
     private let contentSpacing: CGFloat = 12
-
     var body: some View {
         let font = status == .current ? Font.headline : Font.subheadline
         let textColor: Color = status == .pending ? .secondary : .primary
@@ -41,7 +35,6 @@ private struct OnboardingStepProgressItem: View {
         let bubbleContribution = (bubbleSize + contentSpacing) * animatedProgress
         let currentWidth = baseWidth + bubbleContribution
         let spacing = animatedProgress > 0 ? contentSpacing : 0
-
         ZStack(alignment: .leading) {
             Capsule()
                 .fill(.ultraThinMaterial)
@@ -51,7 +44,6 @@ private struct OnboardingStepProgressItem: View {
                         .shadow(color: Color.white.opacity(0.4), radius: 1.5, x: 0, y: 1)
                 )
                 .shadow(color: Color.black.opacity(0.08), radius: 10, x: 0, y: 6)
-
             HStack(spacing: spacing) {
                 if animatedProgress > 0 {
                     ZStack {
@@ -73,7 +65,6 @@ private struct OnboardingStepProgressItem: View {
                             .stroke(Color.white.opacity(0.25 * animatedProgress), lineWidth: 0.8)
                     }
                 }
-
                 Text(title)
                     .font(font)
                     .foregroundStyle(textColor)
@@ -99,7 +90,6 @@ private struct OnboardingStepProgressItem: View {
             }
         }
     }
-
     private func progress(for status: OnboardingWizardStepStatus) -> CGFloat {
         switch status {
         case .pending:
@@ -108,7 +98,6 @@ private struct OnboardingStepProgressItem: View {
             return 1
         }
     }
-
     private func indicatorColor(for status: OnboardingWizardStepStatus) -> Color {
         switch status {
         case .pending:
@@ -120,12 +109,10 @@ private struct OnboardingStepProgressItem: View {
         }
     }
 }
-
 private struct StepLabelWidthReader: View {
     let text: String
     let font: Font
     @Binding var width: CGFloat
-
     var body: some View {
         Text(text)
             .font(font)
@@ -143,10 +130,8 @@ private struct StepLabelWidthReader: View {
             }
     }
 }
-
 private struct StepLabelWidthKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
-
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = max(value, nextValue())
     }

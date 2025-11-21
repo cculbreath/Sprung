@@ -1,15 +1,12 @@
 import SwiftUI
-
 struct OpenRouterModelSelectionSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(OpenRouterService.self) private var openRouterService
-
     @State private var searchText = ""
     @State private var selectedProvider: String?
     @State private var showOnlySelected = false
     @State private var isSearchCollapsed = true
-
     // Capability filters
     @State private var filterStructuredOutput = false
     @State private var filterVision = false
@@ -274,7 +271,6 @@ struct OpenRouterModelSelectionSheet: View {
         }
     }
 }
-
 struct OpenRouterModelRow: View {
     let model: OpenRouterModel
     let isSelected: Bool
@@ -377,7 +373,6 @@ struct OpenRouterModelRow: View {
         }
     }
 }
-
 struct CapabilityIndicator: View {
     let icon: String
     let isSupported: Bool
@@ -389,4 +384,3 @@ struct CapabilityIndicator: View {
             .opacity(isSupported ? 1.0 : 0.3)
     }
 }
-

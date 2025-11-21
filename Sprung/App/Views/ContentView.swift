@@ -1,9 +1,7 @@
 // Sprung/App/Views/ContentView.swift
-
 import SwiftData
 import SwiftUI
 import AppKit
-
 struct ContentView: View {
     // MARK: - Injected dependencies via SwiftUI Environment
     @Environment(AppEnvironment.self) private var appEnvironment
@@ -12,7 +10,6 @@ struct ContentView: View {
     @Environment(NavigationStateService.self) private var navigationState
     @Environment(ReasoningStreamManager.self) private var reasoningStreamManager
     // DragInfo is inherited from ContentViewLaunch
-
     // States managed by ContentView
     @State var tabRefresh: Bool = false
     @State var showSlidingList: Bool = false
@@ -24,12 +21,10 @@ struct ContentView: View {
     @State private var refPopup: Bool = false
     @State private var didPromptTemplateEditor = false
     @State private var menuHandler = MenuNotificationHandler()
-
     var body: some View {
         // Bindable references for selection binding
         @Bindable var jobAppStore = jobAppStore
         @Bindable var navigationState = navigationState
-
         NavigationSplitView(columnVisibility: $sidebarVisibility) {
             // --- Sidebar Column ---
             SidebarView(
@@ -38,7 +33,6 @@ struct ContentView: View {
                 showSlidingList: $showSlidingList // Pass sliding list state
             )
             .frame(minWidth: 220, maxWidth: .infinity) // Keep min width for sidebar
-
         } detail: {
             // --- Detail Column ---
             VStack(alignment: .leading) {
@@ -142,19 +136,15 @@ struct ContentView: View {
                 selectedTab: $navigationState.selectedTab,
                 showSlidingList: $showSlidingList
             )
-
             Logger.debug(
                 "🟡 ContentView appeared - restoring navigation state",
                 category: .ui
             )
-
             // Restore persistent state
             navigationState.restoreSelectedJobApp(from: jobAppStore)
-
             // Initialize cover letter state
             updateMyLetter()
             hasVisitedResumeTab = false
-
             // Initial setup or logging can remain here
             if let storeURL = FileManager.default
                 .urls(for: .applicationSupportDirectory, in: .userDomainMask)
@@ -163,7 +153,6 @@ struct ContentView: View {
             {
                 Logger.debug("Store URL: \(storeURL.path)")
             }
-
             if appEnvironment.requiresTemplateSetup && !didPromptTemplateEditor {
                 openTemplateEditor()
                 didPromptTemplateEditor = true
@@ -198,9 +187,7 @@ struct ContentView: View {
         }
     }
 }
-
 private struct TemplateSetupOverlay: View {
-
     var body: some View {
         VStack(spacing: 12) {
             Text("Add a Template to Get Started")
@@ -219,12 +206,10 @@ private struct TemplateSetupOverlay: View {
         .cornerRadius(16)
         .shadow(radius: 8)
     }
-
     private func openTemplateEditor() {
         presentTemplateEditorWindow()
     }
 }
-
 private func presentTemplateEditorWindow() {
     Task { @MainActor in
         NotificationCenter.default.post(name: .showTemplateEditor, object: nil)

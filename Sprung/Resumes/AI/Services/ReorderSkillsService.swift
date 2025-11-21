@@ -1,12 +1,9 @@
 // Sprung/Resumes/AI/Services/ReorderSkillsService.swift
-
 import Foundation
-
 struct ReorderSkillsStatus {
     let statusMessage: String
     let changeMessage: String
 }
-
 @MainActor
 class ReorderSkillsService {
     private let reviewService: ResumeReviewService
@@ -160,7 +157,6 @@ class ReorderSkillsService {
         return (statusMessage, changeMessage)
     }
 }
-
 // MARK: - Error Types
 enum ReorderSkillsError: LocalizedError {
     case noJobApplication

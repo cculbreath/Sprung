@@ -1,6 +1,5 @@
 import Foundation
 import SwiftUI
-
 enum ExperienceSectionKey: String, CaseIterable, Identifiable {
     case work
     case volunteer
@@ -13,40 +12,31 @@ enum ExperienceSectionKey: String, CaseIterable, Identifiable {
     case languages
     case interests
     case references
-
     var id: String { rawValue }
-
     var displayName: String {
         metadata.title
     }
-
     var addButtonTitle: String {
         metadata.addButtonTitle
     }
-
     var metadata: ExperienceSectionMetadata {
         ExperienceSectionMetadata.forKey(self)
     }
 }
-
 struct ExperienceSchemaNode: Identifiable {
     enum NodeKind {
         case field(String)
         case group(String, [ExperienceSchemaNode])
     }
-
     let id = UUID()
     let kind: NodeKind
 }
-
 struct ExperienceSchemaSection: Identifiable {
     let key: ExperienceSectionKey
     let nodes: [ExperienceSchemaNode]
-
     var id: ExperienceSectionKey { key }
     var metadata: ExperienceSectionMetadata { key.metadata }
 }
-
 enum ExperienceSchema {
     static let sections: [ExperienceSchemaSection] = [
         ExperienceSchemaSection(
@@ -161,11 +151,9 @@ enum ExperienceSchema {
             ]
         )
     ]
-
     static let sectionsByKey: [ExperienceSectionKey: ExperienceSchemaSection] = {
         Dictionary(uniqueKeysWithValues: sections.map { ($0.key, $0) })
     }()
-
     static func section(for key: ExperienceSectionKey) -> ExperienceSchemaSection {
         if let section = sectionsByKey[key] {
             return section
@@ -173,23 +161,19 @@ enum ExperienceSchema {
         Logger.warning("📚 Missing experience schema section for key \(key.rawValue)")
         return ExperienceSchemaSection(key: key, nodes: [])
     }
-
     private static func field(_ name: String) -> ExperienceSchemaNode {
         ExperienceSchemaNode(kind: .field(name))
     }
-
     private static func group(_ name: String, children: [ExperienceSchemaNode]) -> ExperienceSchemaNode {
         ExperienceSchemaNode(kind: .group(name, children))
     }
 }
-
 struct ExperienceSectionMetadata {
     let key: ExperienceSectionKey
     let title: String
     let subtitle: String?
     let addButtonTitle: String
     let isEnabledKeyPath: WritableKeyPath<ExperienceDefaultsDraft, Bool>
-
     func toggleBinding(in draft: Binding<ExperienceDefaultsDraft>) -> Binding<Bool> {
         Binding(
             get: { draft.wrappedValue[keyPath: isEnabledKeyPath] },
@@ -199,7 +183,6 @@ struct ExperienceSectionMetadata {
         )
     }
 }
-
 extension ExperienceSectionMetadata {
     static func forKey(_ key: ExperienceSectionKey) -> ExperienceSectionMetadata {
         switch key {
