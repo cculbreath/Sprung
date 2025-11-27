@@ -135,7 +135,6 @@ actor LLMMessenger: OnboardingEventEmitter {
                     }
                 }
 
-
                 if let error = lastError {
                     Logger.error("❌ User message failed after \(maxRetries) retries: \(error)", category: .ai)
                     throw error
@@ -253,7 +252,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             let messageId = UUID().uuidString
             // Emit message sent event
             await emit(.llmSentToolResponseMessage(messageId: messageId, payload: payload))
-            
+
             // Process stream via NetworkRouter with retry logic
             currentStreamTask = Task {
                 var retryCount = 0
@@ -346,7 +345,10 @@ actor LLMMessenger: OnboardingEventEmitter {
         parameters.toolChoice = toolChoice
         parameters.tools = tools
         parameters.parallelToolCalls = await shouldEnableParallelToolCalls()
-        Logger.info("📝 Built request: previousResponseId=\(previousResponseId?.description ?? "nil"), inputItems=\(inputItems.count), parallelToolCalls=\(parameters.parallelToolCalls?.description ?? "nil")", category: .ai)
+        Logger.info(
+            "📝 Built request: previousResponseId=\(previousResponseId?.description ?? "nil"), inputItems=\(inputItems.count), parallelToolCalls=\(parameters.parallelToolCalls?.description ?? "nil")",
+            category: .ai
+        )
         return parameters
     }
     /// Determine appropriate tool_choice for the given message context
@@ -405,7 +407,16 @@ actor LLMMessenger: OnboardingEventEmitter {
         if let effort = reasoningEffort {
             parameters.reasoning = Reasoning(effort: effort)
         }
-        Logger.info("📝 Built developer message request: previousResponseId=\(previousResponseId?.description ?? "nil"), inputItems=\(inputItems.count), parallelToolCalls=\(parameters.parallelToolCalls?.description ?? "nil"), reasoningEffort=\(reasoningEffort ?? "default")", category: .ai)
+        Logger.info(
+            """
+            📝 Built developer message request: \
+            previousResponseId=\(previousResponseId?.description ?? "nil"), \
+            inputItems=\(inputItems.count), \
+            parallelToolCalls=\(parameters.parallelToolCalls?.description ?? "nil"), \
+            reasoningEffort=\(reasoningEffort ?? "default")
+            """,
+            category: .ai
+        )
         return parameters
     }
     private func buildToolResponseRequest(output: JSON, callId: String, reasoningEffort: String? = nil) async -> ModelResponseParameter {

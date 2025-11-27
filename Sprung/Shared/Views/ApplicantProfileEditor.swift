@@ -7,7 +7,6 @@ struct ApplicantProfileEditor: View {
     var showsSummary: Bool = true
     var showsProfessionalLabel: Bool = true
     var emailSuggestions: [String] = []
-    var onPhotoPicked: (() -> Void)?
     @State private var selectedProfileID: UUID?
     @State private var hoveredProfileID: UUID?
     var body: some View {

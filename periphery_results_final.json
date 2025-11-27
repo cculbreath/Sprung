@@ -1,0 +1,5136 @@
+[
+  {
+    "attributes" : [
+
+    ],
+    "accessibility" : "internal",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/App/AppDependencies.swift:30:9",
+    "modules" : [
+      "Sprung"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "kind" : "var.instance",
+    "name" : "documentExtractionService",
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung15AppDependenciesC25documentExtractionServiceAA08DocumenteF0Cvp"
+    ]
+  },
+  {
+    "name" : "getPictureImage()",
+    "accessibility" : "internal",
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "modifiers" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/App/Applicant.swift:88:10",
+    "ids" : [
+      "s:6Sprung16ApplicantProfileC15getPictureImage7SwiftUI0F0VSgyF"
+    ],
+    "kind" : "function.method.instance"
+  },
+  {
+    "attributes" : [
+
+    ],
+    "kind" : "function.method.instance",
+    "modifiers" : [
+
+    ],
+    "accessibility" : "internal",
+    "name" : "updatePicture(data:mimeType:)",
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "ids" : [
+      "s:6Sprung16ApplicantProfileC13updatePicture4data8mimeTypey10Foundation4DataVSg_SSSgtF"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/App/Applicant.swift:101:10"
+  },
+  {
+    "name" : "label",
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "ids" : [
+      "s:6Sprung9ApplicantV5labelSSvp"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/App/Applicant.swift:145:9",
+    "modifiers" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "accessibility" : "internal",
+    "kind" : "var.instance"
+  },
+  {
+    "hints" : [
+      "unused"
+    ],
+    "modifiers" : [
+
+    ],
+    "kind" : "var.instance",
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "summary",
+    "attributes" : [
+
+    ],
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung9ApplicantV7summarySSvp"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/App/Applicant.swift:146:9"
+  },
+  {
+    "kind" : "var.instance",
+    "accessibility" : "internal",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/App/Applicant.swift:154:9",
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "name" : "pictureDataURL",
+    "ids" : [
+      "s:6Sprung9ApplicantV14pictureDataURLSSSgvp"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "modifiers" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "accessibility" : "internal",
+    "attributes" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/App/Applicant.swift:155:9",
+    "kind" : "var.instance",
+    "ids" : [
+      "s:6Sprung9ApplicantV7pictureSSvp"
+    ],
+    "name" : "picture"
+  },
+  {
+    "accessibility" : "private",
+    "ids" : [
+      "s:6Sprung9ApplicantV14profileDataURL33_2624D577D3C6935B028C0B1100ABBD7ALLSSSgvp"
+    ],
+    "kind" : "var.instance",
+    "modifiers" : [
+      "private"
+    ],
+    "name" : "profileDataURL",
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/App/Applicant.swift:156:17",
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "kind" : "var.instance",
+    "modules" : [
+      "Sprung"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/App/Views/SettingsView.swift:11:67",
+    "attributes" : [
+      "Environment"
+    ],
+    "accessibility" : "private",
+    "ids" : [
+      "s:6Sprung12SettingsViewV21onboardingCoordinator33_265D7D63D89D482681878E59F816D4D5LLAA019OnboardingInterviewE0Cvp"
+    ],
+    "modifiers" : [
+      "private"
+    ],
+    "name" : "onboardingCoordinator",
+    "hints" : [
+      "unused"
+    ]
+  },
+  {
+    "name" : "openAIModels",
+    "ids" : [
+      "s:6Sprung12SettingsViewV12openAIModels33_265D7D63D89D482681878E59F816D4D5LLSayAA10EnabledLLMCGvp"
+    ],
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "modifiers" : [
+
+    ],
+    "accessibility" : "private",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/App/Views/SettingsView.swift:260:9",
+    "kind" : "var.instance",
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "modules" : [
+      "Sprung"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/App/Views/TemplateEditor/TemplateEditorView+DataManagement.swift:75:31",
+    "kind" : "var.parameter",
+    "name" : "slug",
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "param-slug-emptyManifest(slug:)-s:6Sprung18TemplateEditorViewV13emptyManifest4slugS2S_tFZ"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "modifiers" : [
+
+    ],
+    "accessibility" : "internal"
+  },
+  {
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "param-slug-decodeManifestOverrides(from:slug:)-s:6Sprung18TemplateEditorViewV23decodeManifestOverrides4from4slugAA0bfG0VSg10Foundation4DataV_SStF"
+    ],
+    "accessibility" : "internal",
+    "modules" : [
+      "Sprung"
+    ],
+    "kind" : "var.parameter",
+    "attributes" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/App/Views/TemplateEditor/TemplateEditorView+DataManagement.swift:94:51",
+    "hints" : [
+      "unused"
+    ],
+    "name" : "slug"
+  },
+  {
+    "kind" : "var.instance",
+    "modules" : [
+      "Sprung"
+    ],
+    "accessibility" : "internal",
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/App/Views/TemplateEditor/TemplateEditorView+DataManagement.swift:498:13",
+    "name" : "keyPath",
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "ids" : [
+      "s:6Sprung18TemplateEditorViewV19ProfileUpdateChangeV7keyPaths011WritableKeyI0CyAA09ApplicantE0CSSGvp"
+    ]
+  },
+  {
+    "modules" : [
+      "Sprung"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/CoverLetters/TTS/Services/OpenAITTSProvider.swift:163:58",
+    "name" : "instructions",
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "kind" : "var.parameter",
+    "ids" : [
+      "param-instructions-speakText(_:voice:instructions:onComplete:)-s:6Sprung17OpenAITTSProviderC9speakText_5voice12instructions10onCompleteySS_AC5VoiceOSSSgys5Error_pSgctF"
+    ],
+    "accessibility" : "internal"
+  },
+  {
+    "modules" : [
+      "Sprung"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/CoverLetters/TTS/Services/OpenAITTSProvider.swift:389:9",
+    "ids" : [
+      "param-instructions-streamSingleChunk(_:voice:instructions:onStart:onComplete:)-s:6Sprung17OpenAITTSProviderC17streamSingleChunk33_ABF89ECD7BB677DABEB233A8D8557475LL_5voice12instructions7onStart0O8CompleteySS_AC5VoiceOSSSgyycSgys5Error_pSgctF"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "name" : "instructions",
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "kind" : "var.parameter",
+    "accessibility" : "internal"
+  },
+  {
+    "modules" : [
+      "Sprung"
+    ],
+    "modifiers" : [
+
+    ],
+    "kind" : "function.method.instance",
+    "name" : "save(_:)",
+    "ids" : [
+      "s:6Sprung25ApplicantProfileProvidingP4saveyyAA0bC0CF"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/DataManagers/ApplicantProfileStore.swift:11:10",
+    "accessibility" : "internal",
+    "attributes" : [
+
+    ]
+  },
+  {
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/DataManagers/ExperienceDefaultsStore.swift:5:10",
+    "attributes" : [
+      "MainActor"
+    ],
+    "accessibility" : "internal",
+    "kind" : "protocol",
+    "ids" : [
+      "s:6Sprung27ExperienceDefaultsProvidingP"
+    ],
+    "hints" : [
+      "redundantProtocol"
+    ],
+    "name" : "ExperienceDefaultsProviding",
+    "modules" : [
+      "Sprung"
+    ],
+    "modifiers" : [
+
+    ]
+  },
+  {
+    "modifiers" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/DataManagers/ExperienceDefaultsStore.swift:13:54",
+    "name" : "ExperienceDefaultsProviding",
+    "accessibility" : "",
+    "ids" : [
+      "s:6Sprung27ExperienceDefaultsProvidingP"
+    ],
+    "hints" : [
+      "redundantConformance"
+    ],
+    "kind" : "protocol",
+    "attributes" : [
+
+    ]
+  },
+  {
+    "modifiers" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung23ExperienceDefaultsStoreC4saveyyAA0bC0CF"
+    ],
+    "kind" : "function.method.instance",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/DataManagers/ExperienceDefaultsStore.swift:33:10",
+    "name" : "save(_:)",
+    "accessibility" : "internal",
+    "hints" : [
+      "unused"
+    ]
+  },
+  {
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "displayName",
+    "kind" : "var.instance",
+    "attributes" : [
+
+    ],
+    "accessibility" : "internal",
+    "hints" : [
+      "unused"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Experience/Models/ExperienceSchema.swift:16:9",
+    "ids" : [
+      "s:6Sprung20ExperienceSectionKeyO11displayNameSSvp"
+    ],
+    "modifiers" : [
+
+    ]
+  },
+  {
+    "kind" : "var.instance",
+    "accessibility" : "internal",
+    "modifiers" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Experience/Models/ExperienceSchema.swift:19:9",
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "name" : "addButtonTitle",
+    "ids" : [
+      "s:6Sprung20ExperienceSectionKeyO14addButtonTitleSSvp"
+    ]
+  },
+  {
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Experience/Models/ExperienceSchema.swift:154:16",
+    "ids" : [
+      "s:6Sprung16ExperienceSchemaO13sectionsByKeySDyAA0b7SectionF0OAA0bcG0VGvpZ"
+    ],
+    "kind" : "var.static",
+    "name" : "sectionsByKey",
+    "accessibility" : "internal",
+    "modifiers" : [
+      "static"
+    ],
+    "hints" : [
+      "unused"
+    ]
+  },
+  {
+    "kind" : "function.method.static",
+    "modifiers" : [
+      "static"
+    ],
+    "name" : "section(for:)",
+    "hints" : [
+      "unused"
+    ],
+    "accessibility" : "internal",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Experience/Models/ExperienceSchema.swift:157:17",
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung16ExperienceSchemaO7section3forAA0bC7SectionVAA0bF3KeyO_tFZ"
+    ]
+  },
+  {
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Experience/Models/ExperienceSchema.swift:172:9",
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "accessibility" : "internal",
+    "name" : "key",
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung25ExperienceSectionMetadataV3keyAA0bC3KeyOvp"
+    ],
+    "kind" : "var.instance",
+    "hints" : [
+      "assignOnlyProperty"
+    ]
+  },
+  {
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "isEnabled(in:)",
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung25AnyExperienceSectionCodecV9isEnabled2inSbAA0C13DefaultsDraftV_tF"
+    ],
+    "kind" : "function.method.instance",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Experience/Utilities/ExperienceSectionCodec.swift:43:10",
+    "accessibility" : "internal"
+  },
+  {
+    "hints" : [
+      "unused"
+    ],
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung19HighlightListEditorV"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Experience/Views/ExperienceEditorListEditors.swift:3:8",
+    "name" : "HighlightListEditor",
+    "modifiers" : [
+
+    ],
+    "kind" : "struct",
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ]
+  },
+  {
+    "hints" : [
+      "unused"
+    ],
+    "name" : "pillColor(_:)",
+    "kind" : "function.method.static",
+    "ids" : [
+      "s:6Sprung6JobAppC9pillColory7SwiftUI0E0VSSFZ"
+    ],
+    "modifiers" : [
+      "static"
+    ],
+    "attributes" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/JobApplications/Models/JobApp+Color.swift:27:17",
+    "modules" : [
+      "Sprung"
+    ],
+    "accessibility" : "internal"
+  },
+  {
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "modifiers" : [
+      "private"
+    ],
+    "accessibility" : "private",
+    "name" : "selfRetain",
+    "ids" : [
+      "s:6Sprung23CloudflareCookieManagerC10selfRetain33_913A0686B8B5CFD09DB0283CAE891473LLACSgvp"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/JobApplications/Utilities/CloudflareCookieManager.swift:47:17",
+    "kind" : "var.instance",
+    "attributes" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "kind" : "var.instance",
+    "modifiers" : [
+      "private"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "selfRetain",
+    "attributes" : [
+
+    ],
+    "accessibility" : "private",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/JobApplications/Utilities/WebViewHTMLFetcher.swift:29:21",
+    "ids" : [
+      "s:6Sprung18WebViewHTMLFetcherO6Helper33_FE7F7305425A9B4931C3C1DE9A2304E8LLC10selfRetainAFSgvp"
+    ]
+  },
+  {
+    "accessibility" : "private",
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "modifiers" : [
+      "nonisolated",
+      "private"
+    ],
+    "name" : "artifactRecordsSync",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ArtifactRepository.swift:13:42",
+    "kind" : "var.instance",
+    "attributes" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "ids" : [
+      "s:6Sprung18ArtifactRepositoryC19artifactRecordsSyncSay10SwiftyJSON0H0VGvp"
+    ]
+  },
+  {
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "applicantProfileSync",
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "kind" : "var.instance",
+    "attributes" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ArtifactRepository.swift:14:42",
+    "accessibility" : "private",
+    "ids" : [
+      "s:6Sprung18ArtifactRepositoryC20applicantProfileSync10SwiftyJSON0H0VSgvp"
+    ],
+    "modifiers" : [
+      "nonisolated",
+      "private"
+    ]
+  },
+  {
+    "name" : "enabledSectionsSync",
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "ids" : [
+      "s:6Sprung18ArtifactRepositoryC19enabledSectionsSyncShySSGvp"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ArtifactRepository.swift:16:42",
+    "accessibility" : "private",
+    "modules" : [
+      "Sprung"
+    ],
+    "kind" : "var.instance",
+    "modifiers" : [
+      "nonisolated",
+      "private"
+    ]
+  },
+  {
+    "accessibility" : "private",
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "knowledgeCardsSync",
+    "attributes" : [
+
+    ],
+    "modifiers" : [
+      "nonisolated",
+      "private"
+    ],
+    "kind" : "var.instance",
+    "ids" : [
+      "s:6Sprung18ArtifactRepositoryC18knowledgeCardsSyncSay10SwiftyJSON0H0VGvp"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ArtifactRepository.swift:17:42"
+  },
+  {
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung18ArtifactRepositoryC03addB6Recordyy10SwiftyJSON0G0VF"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ArtifactRepository.swift:76:10",
+    "modifiers" : [
+
+    ],
+    "name" : "addArtifactRecord(_:)",
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "kind" : "function.method.instance",
+    "accessibility" : "internal"
+  },
+  {
+    "kind" : "function.method.instance",
+    "accessibility" : "internal",
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung18ArtifactRepositoryC17addExperienceCardyy10SwiftyJSON0H0VYaF"
+    ],
+    "name" : "addExperienceCard(_:)",
+    "modules" : [
+      "Sprung"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ArtifactRepository.swift:211:10",
+    "attributes" : [
+
+    ]
+  },
+  {
+    "modifiers" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung18ArtifactRepositoryC16addWritingSampleyy10SwiftyJSON0H0VYaF"
+    ],
+    "attributes" : [
+
+    ],
+    "kind" : "function.method.instance",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ArtifactRepository.swift:239:10",
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "addWritingSample(_:)"
+  },
+  {
+    "kind" : "function.method.instance",
+    "hints" : [
+      "unused"
+    ],
+    "name" : "scratchpadSummary()",
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung18ArtifactRepositoryC17scratchpadSummarySaySSGyF"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ArtifactRepository.swift:249:10",
+    "attributes" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "accessibility" : "internal"
+  },
+  {
+    "name" : "reasoningExpected",
+    "modules" : [
+      "Sprung"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "accessibility" : "internal",
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung19ChatTranscriptStoreC16StreamingMessageV17reasoningExpectedSbvp"
+    ],
+    "modifiers" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ChatTranscriptStore.swift:16:13",
+    "kind" : "var.instance"
+  },
+  {
+    "modifiers" : [
+      "nonisolated",
+      "private"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "kind" : "var.instance",
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ChatTranscriptStore.swift:22:42",
+    "accessibility" : "private",
+    "name" : "messagesSync",
+    "ids" : [
+      "s:6Sprung19ChatTranscriptStoreC12messagesSyncSayAA17OnboardingMessageVGvp"
+    ]
+  },
+  {
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ChatTranscriptStore.swift:23:42",
+    "accessibility" : "private",
+    "name" : "streamingMessageSync",
+    "modules" : [
+      "Sprung"
+    ],
+    "kind" : "var.instance",
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung19ChatTranscriptStoreC20streamingMessageSyncAC09StreamingF0VSgvp"
+    ],
+    "modifiers" : [
+      "nonisolated",
+      "private"
+    ]
+  },
+  {
+    "accessibility" : "private",
+    "name" : "currentReasoningSummarySync",
+    "kind" : "var.instance",
+    "modules" : [
+      "Sprung"
+    ],
+    "ids" : [
+      "s:6Sprung19ChatTranscriptStoreC27currentReasoningSummarySyncSSSgvp"
+    ],
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "modifiers" : [
+      "nonisolated",
+      "private"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ChatTranscriptStore.swift:24:42"
+  },
+  {
+    "ids" : [
+      "s:6Sprung19ChatTranscriptStoreC22appendAssistantMessagey10Foundation4UUIDVSSF"
+    ],
+    "attributes" : [
+
+    ],
+    "name" : "appendAssistantMessage(_:)",
+    "modules" : [
+      "Sprung"
+    ],
+    "modifiers" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "accessibility" : "internal",
+    "kind" : "function.method.instance",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ChatTranscriptStore.swift:46:10"
+  },
+  {
+    "hints" : [
+      "unused"
+    ],
+    "ids" : [
+      "s:6Sprung19ChatTranscriptStoreC15getMessageCountSiyF"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "modifiers" : [
+
+    ],
+    "accessibility" : "internal",
+    "kind" : "function.method.instance",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ChatTranscriptStore.swift:62:10",
+    "attributes" : [
+
+    ],
+    "name" : "getMessageCount()"
+  },
+  {
+    "modifiers" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "kind" : "function.method.instance",
+    "name" : "beginStreamingMessage(initialText:reasoningExpected:)",
+    "ids" : [
+      "s:6Sprung19ChatTranscriptStoreC21beginStreamingMessage11initialText17reasoningExpected10Foundation4UUIDVSS_SbtF"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "accessibility" : "internal",
+    "attributes" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ChatTranscriptStore.swift:76:10"
+  },
+  {
+    "kind" : "function.method.instance",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ChatTranscriptStore.swift:120:10",
+    "modifiers" : [
+
+    ],
+    "accessibility" : "internal",
+    "attributes" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "getStreamingMessage()",
+    "hints" : [
+      "unused"
+    ],
+    "ids" : [
+      "s:6Sprung19ChatTranscriptStoreC19getStreamingMessageAC0fG0VSgyF"
+    ]
+  },
+  {
+    "name" : "clearReasoningSummary()",
+    "accessibility" : "internal",
+    "kind" : "function.method.instance",
+    "attributes" : [
+
+    ],
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung19ChatTranscriptStoreC21clearReasoningSummaryyyF"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ChatTranscriptStore.swift:146:10"
+  },
+  {
+    "modifiers" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "ids" : [
+      "s:6Sprung19ChatTranscriptStoreC25getLatestReasoningSummarySSSgyF"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "getLatestReasoningSummary()",
+    "attributes" : [
+
+    ],
+    "kind" : "function.method.instance",
+    "accessibility" : "internal",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ChatTranscriptStore.swift:154:10"
+  },
+  {
+    "accessibility" : "internal",
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung19ChatTranscriptStoreC26getCurrentReasoningSummarySSSgyF"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ChatTranscriptStore.swift:158:10",
+    "name" : "getCurrentReasoningSummary()",
+    "kind" : "function.method.instance",
+    "modules" : [
+      "Sprung"
+    ],
+    "hints" : [
+      "unused"
+    ]
+  },
+  {
+    "ids" : [
+      "s:6Sprung19ChatTranscriptStoreC20getIsReasoningActiveSbyF"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "name" : "getIsReasoningActive()",
+    "accessibility" : "internal",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ChatTranscriptStore.swift:162:10",
+    "kind" : "function.method.instance",
+    "modules" : [
+      "Sprung"
+    ],
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ]
+  },
+  {
+    "kind" : "var.instance",
+    "accessibility" : "private",
+    "name" : "eventBus",
+    "ids" : [
+      "s:6Sprung17CheckpointManagerC8eventBus33_42961D22F00663571BDBDFFA0D07851ELLAA16EventCoordinatorCvp"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/CheckpointManager.swift:9:17",
+    "modules" : [
+      "Sprung"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "attributes" : [
+
+    ],
+    "modifiers" : [
+      "private"
+    ]
+  },
+  {
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "buildForUserMessage(text:)",
+    "hints" : [
+      "unused"
+    ],
+    "kind" : "function.method.instance",
+    "ids" : [
+      "s:6Sprung28ConversationContextAssemblerC19buildForUserMessage4textSay11SwiftOpenAI9InputItemOGSS_tYaF"
+    ],
+    "accessibility" : "internal",
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ConversationContextAssembler.swift:23:10"
+  },
+  {
+    "accessibility" : "internal",
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung28ConversationContextAssemblerC24buildForDeveloperMessage4textSay11SwiftOpenAI9InputItemOGSS_tYaF"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ConversationContextAssembler.swift:51:10",
+    "attributes" : [
+
+    ],
+    "name" : "buildForDeveloperMessage(text:)",
+    "kind" : "function.method.instance"
+  },
+  {
+    "modifiers" : [
+      "private"
+    ],
+    "name" : "buildStateCues()",
+    "kind" : "function.method.instance",
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "accessibility" : "private",
+    "hints" : [
+      "unused"
+    ],
+    "ids" : [
+      "s:6Sprung28ConversationContextAssemblerC14buildStateCues33_E39C91AD7301BF4A6661AC34B1B2AF47LLSSyYaF"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ConversationContextAssembler.swift:85:18"
+  },
+  {
+    "attributes" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "name" : "buildConversationHistory()",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ConversationContextAssembler.swift:104:18",
+    "ids" : [
+      "s:6Sprung28ConversationContextAssemblerC05buildB7History33_E39C91AD7301BF4A6661AC34B1B2AF47LLSay11SwiftOpenAI9InputItemOGyYaF"
+    ],
+    "modifiers" : [
+      "private"
+    ],
+    "kind" : "function.method.instance",
+    "accessibility" : "private"
+  },
+  {
+    "modifiers" : [
+
+    ],
+    "kind" : "function.method.instance",
+    "name" : "buildScratchpadSummary()",
+    "hints" : [
+      "unused"
+    ],
+    "ids" : [
+      "s:6Sprung28ConversationContextAssemblerC22buildScratchpadSummarySSyYaF"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "accessibility" : "internal",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ConversationContextAssembler.swift:124:10",
+    "attributes" : [
+
+    ]
+  },
+  {
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/Coordinators/CoordinatorEventRouter.swift:12:17",
+    "modifiers" : [
+      "private"
+    ],
+    "kind" : "var.instance",
+    "accessibility" : "private",
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "applicantProfileStore",
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung22CoordinatorEventRouterC21applicantProfileStore33_850AF313DAAE87C3A434651C0212784DLLAA09ApplicantfG0Cvp"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ]
+  },
+  {
+    "name" : "eventBus",
+    "kind" : "var.instance",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/Coordinators/CoordinatorEventRouter.swift:13:17",
+    "accessibility" : "private",
+    "modules" : [
+      "Sprung"
+    ],
+    "ids" : [
+      "s:6Sprung22CoordinatorEventRouterC8eventBus33_850AF313DAAE87C3A434651C0212784DLLAA0cB0Cvp"
+    ],
+    "attributes" : [
+
+    ],
+    "modifiers" : [
+      "private"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ]
+  },
+  {
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "ids" : [
+      "s:6Sprung22CoordinatorEventRouterC11coordinator33_850AF313DAAE87C3A434651C0212784DLLAA019OnboardingInterviewB0CSgvp"
+    ],
+    "name" : "coordinator",
+    "kind" : "var.instance",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/Coordinators/CoordinatorEventRouter.swift:17:22",
+    "attributes" : [
+
+    ],
+    "modifiers" : [
+      "private",
+      "weak"
+    ],
+    "accessibility" : "private"
+  },
+  {
+    "ids" : [
+      "s:6Sprung26ToolInteractionCoordinatorC19presentChoicePromptyyAA010OnboardingfG0VF"
+    ],
+    "name" : "presentChoicePrompt(_:)",
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/Coordinators/ToolInteractionCoordinator.swift:36:10",
+    "accessibility" : "internal",
+    "kind" : "function.method.instance",
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "presentValidationPrompt(_:)",
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung26ToolInteractionCoordinatorC23presentValidationPromptyyAA010OnboardingfG0VF"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "accessibility" : "internal",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/Coordinators/ToolInteractionCoordinator.swift:42:10",
+    "kind" : "function.method.instance",
+    "modifiers" : [
+
+    ]
+  },
+  {
+    "modules" : [
+      "Sprung"
+    ],
+    "accessibility" : "internal",
+    "kind" : "function.method.instance",
+    "name" : "submitChoice(optionId:)",
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung26ToolInteractionCoordinatorC12submitChoice8optionId10SwiftyJSON0J0VSgSS_tF"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/Coordinators/ToolInteractionCoordinator.swift:65:10"
+  },
+  {
+    "modifiers" : [
+
+    ],
+    "kind" : "function.method.instance",
+    "name" : "completeUploadAndResume(id:link:coordinator:)",
+    "modules" : [
+      "Sprung"
+    ],
+    "accessibility" : "internal",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/Coordinators/UIResponseCoordinator.swift:54:10",
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung21UIResponseCoordinatorC23completeUploadAndResume2id4link11coordinatory10Foundation4UUIDV_AH3URLVAA019OnboardingInterviewC0CtYaF"
+    ],
+    "hints" : [
+      "unused"
+    ]
+  },
+  {
+    "kind" : "function.method.instance",
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "notifyInvalidModel(id:)",
+    "modifiers" : [
+
+    ],
+    "accessibility" : "internal",
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung21UIResponseCoordinatorC18notifyInvalidModel2idySS_tF"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/Coordinators/UIResponseCoordinator.swift:223:10"
+  },
+  {
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/DeveloperMessageTemplates.swift:3:8",
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "modifiers" : [
+
+    ],
+    "name" : "DeveloperMessageTemplates",
+    "attributes" : [
+
+    ],
+    "kind" : "struct",
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung25DeveloperMessageTemplatesV"
+    ]
+  },
+  {
+    "kind" : "extension.struct",
+    "ids" : [
+      "s:e:s:6Sprung25DeveloperMessageTemplatesV17timelineCardLabel33_6F5480B20EFB83EEB2568824AF12CC07LLySSAA08TimelineF0VFZ-Sprung"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "attributes" : [
+
+    ],
+    "accessibility" : "private",
+    "modifiers" : [
+      "private"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/DeveloperMessageTemplates.swift:216:19",
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "DeveloperMessageTemplates"
+  },
+  {
+    "kind" : "function.method.instance",
+    "name" : "stop()",
+    "attributes" : [
+
+    ],
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung25ProfilePersistenceHandlerC4stopyyF"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "modifiers" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/Handlers/ProfilePersistenceHandler.swift:41:10"
+  },
+  {
+    "kind" : "var.instance",
+    "name" : "state",
+    "accessibility" : "private",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/InterviewOrchestrator.swift:17:17",
+    "attributes" : [
+
+    ],
+    "modifiers" : [
+      "private"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "ids" : [
+      "s:6Sprung21InterviewOrchestratorC5state33_50EEA7BFFA3919D0E076AF1562BFB587LLAA16StateCoordinatorCvp"
+    ],
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "accessibility" : "private",
+    "modifiers" : [
+      "private"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/InterviewOrchestrator.swift:20:17",
+    "kind" : "var.instance",
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "service",
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung21InterviewOrchestratorC7service33_50EEA7BFFA3919D0E076AF1562BFB587LL11SwiftOpenAI0L9AIService_pvp"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ]
+  },
+  {
+    "modifiers" : [
+      "private"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/InterviewOrchestrator.swift:21:17",
+    "kind" : "var.instance",
+    "attributes" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "accessibility" : "private",
+    "ids" : [
+      "s:6Sprung21InterviewOrchestratorC20baseDeveloperMessage33_50EEA7BFFA3919D0E076AF1562BFB587LLSSvp"
+    ],
+    "name" : "baseDeveloperMessage",
+    "hints" : [
+      "assignOnlyProperty"
+    ]
+  },
+  {
+    "modules" : [
+      "Sprung"
+    ],
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung21InterviewOrchestratorC15sendUserMessageyySSYaKF"
+    ],
+    "attributes" : [
+
+    ],
+    "accessibility" : "internal",
+    "name" : "sendUserMessage(_:)",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/InterviewOrchestrator.swift:87:10",
+    "kind" : "function.method.instance",
+    "hints" : [
+      "unused"
+    ]
+  },
+  {
+    "accessibility" : "internal",
+    "attributes" : [
+
+    ],
+    "kind" : "var.parameter",
+    "modules" : [
+      "Sprung"
+    ],
+    "ids" : [
+      "param-event-handleUserInputEvent(_:)-s:6Sprung12LLMMessengerC20handleUserInputEvent33_5D612184687CD21417BA69D79E6EECFBLLyyAA010OnboardingF0OYaF"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "name" : "event",
+    "modifiers" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/LLMMessenger.swift:80:41"
+  },
+  {
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/LLMMessenger.swift:355:42",
+    "attributes" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "accessibility" : "internal",
+    "hints" : [
+      "unused"
+    ],
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "param-text-determineToolChoice(for:isSystemGenerated:)-s:6Sprung12LLMMessengerC19determineToolChoice33_5D612184687CD21417BA69D79E6EECFBLL3for17isSystemGenerated11SwiftOpenAI0dE4ModeOSS_SbtYaF"
+    ],
+    "kind" : "var.parameter",
+    "name" : "text"
+  },
+  {
+    "modules" : [
+      "Sprung"
+    ],
+    "modifiers" : [
+      "static"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "name" : "escalate(_:)",
+    "attributes" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ModelProvider.swift:49:17",
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung13ModelProviderV8escalateyAC6ConfigVAFFZ"
+    ],
+    "kind" : "function.method.static"
+  },
+  {
+    "accessibility" : "internal",
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "name" : "startedAt",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/NetworkRouter.swift:25:13",
+    "ids" : [
+      "s:6Sprung13NetworkRouterC12StreamBuffer33_8E26EDDB82F07D9DBB615C881BF53468LLV9startedAt10Foundation4DateVvp"
+    ],
+    "kind" : "var.instance",
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung13NetworkRouterC12StreamBuffer33_8E26EDDB82F07D9DBB615C881BF53468LLV16firstDeltaLoggedSbvp"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "attributes" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "kind" : "var.instance",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/NetworkRouter.swift:26:13",
+    "accessibility" : "internal",
+    "name" : "firstDeltaLogged"
+  },
+  {
+    "accessibility" : "private",
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "modifiers" : [
+      "private"
+    ],
+    "name" : "lastMessageUUID",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/NetworkRouter.swift:31:17",
+    "ids" : [
+      "s:6Sprung13NetworkRouterC15lastMessageUUID33_8E26EDDB82F07D9DBB615C881BF53468LL10Foundation0F0VSgvp"
+    ],
+    "kind" : "var.instance",
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ]
+  },
+  {
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ObjectiveStore.swift:15:13",
+    "modifiers" : [
+
+    ],
+    "name" : "label",
+    "kind" : "var.instance",
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "accessibility" : "internal",
+    "modules" : [
+      "Sprung"
+    ],
+    "ids" : [
+      "s:6Sprung14ObjectiveStoreC0B5EntryV5labelSSvp"
+    ]
+  },
+  {
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ObjectiveStore.swift:50:42",
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "kind" : "var.instance",
+    "accessibility" : "private",
+    "name" : "objectivesSync",
+    "ids" : [
+      "s:6Sprung14ObjectiveStoreC14objectivesSyncSDySSAC0B5EntryVGvp"
+    ],
+    "modifiers" : [
+      "nonisolated",
+      "private"
+    ],
+    "attributes" : [
+
+    ]
+  },
+  {
+    "kind" : "var.parameter",
+    "modifiers" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "name" : "policy",
+    "ids" : [
+      "param-policy-objectivesForPhase(_:policy:)-s:6Sprung14ObjectiveStoreC18objectivesForPhase33_71B19D792DF0AAF79714821BB70A5B8DLL_6policySaySS2id_SS5labelAA09InterviewF0O5phaseSS6sourceSSSg8parentIdSi5leveltGAJ_AA0F6PolicyVtFZ"
+    ],
+    "accessibility" : "internal",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ObjectiveStore.swift:126:9"
+  },
+  {
+    "modules" : [
+      "Sprung"
+    ],
+    "ids" : [
+      "s:6Sprung14ObjectiveStoreC15canAdvancePhase4fromSbAA09InterviewF0O_tF"
+    ],
+    "kind" : "function.method.instance",
+    "attributes" : [
+
+    ],
+    "modifiers" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "name" : "canAdvancePhase(from:)",
+    "accessibility" : "internal",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ObjectiveStore.swift:293:10"
+  },
+  {
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "scratchpadSummary(for:)",
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung14ObjectiveStoreC17scratchpadSummary3forSSAA14InterviewPhaseO_tF"
+    ],
+    "accessibility" : "internal",
+    "kind" : "function.method.instance",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ObjectiveStore.swift:304:10",
+    "attributes" : [
+
+    ]
+  },
+  {
+    "kind" : "var.parameter",
+    "accessibility" : "internal",
+    "modifiers" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "param-objectiveId-processWorkflowOutput(_:objectiveId:)-s:6Sprung23ObjectiveWorkflowEngineC07processC6Output33_71842910848A66C8AFB11CB66E97FDE3LL_11objectiveIdyAA0bcF0O_SStYaF"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ObjectiveWorkflowEngine.swift:165:75",
+    "name" : "objectiveId"
+  },
+  {
+    "modifiers" : [
+
+    ],
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung19ProcessedUploadInfoV11contentTypeSSSgvp"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "kind" : "var.instance",
+    "name" : "contentType",
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "attributes" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingEvents.swift:14:9"
+  },
+  {
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung16EventCoordinatorC0B7MetricsV10queueDepthSDyAA0B5TopicOSiGvp"
+    ],
+    "name" : "queueDepth",
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingEvents.swift:152:13",
+    "modifiers" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "kind" : "var.instance"
+  },
+  {
+    "name" : "OnboardingEventHandler",
+    "kind" : "protocol",
+    "modifiers" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung22OnboardingEventHandlerP"
+    ],
+    "accessibility" : "internal",
+    "hints" : [
+      "redundantProtocol"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingEvents.swift:534:10"
+  },
+  {
+    "accessibility" : "",
+    "ids" : [
+      "s:6Sprung22OnboardingEventHandlerP"
+    ],
+    "hints" : [
+      "redundantConformance"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/IngestionCoordinator.swift:5:29",
+    "name" : "OnboardingEventHandler",
+    "attributes" : [
+
+    ],
+    "kind" : "protocol",
+    "modifiers" : [
+
+    ]
+  },
+  {
+    "name" : "phaseRegistry",
+    "attributes" : [
+
+    ],
+    "accessibility" : "internal",
+    "modules" : [
+      "Sprung"
+    ],
+    "kind" : "var.instance",
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung30OnboardingInterviewCoordinatorC13phaseRegistryAA011PhaseScriptF0Cvp"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:16:9"
+  },
+  {
+    "accessibility" : "internal",
+    "kind" : "var.instance",
+    "attributes" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "ids" : [
+      "s:6Sprung30OnboardingInterviewCoordinatorC12toolRegistryAA04ToolF0Cvp"
+    ],
+    "modifiers" : [
+
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "name" : "toolRegistry",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:17:9"
+  },
+  {
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "name" : "openAIService",
+    "kind" : "var.instance",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:19:17",
+    "modifiers" : [
+      "private"
+    ],
+    "ids" : [
+      "s:6Sprung30OnboardingInterviewCoordinatorC13openAIService33_A406CE1A2186249D77A1D0C83B4B080CLL11SwiftOpenAI0qF0_pSgvp"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "accessibility" : "private"
+  },
+  {
+    "kind" : "var.instance",
+    "ids" : [
+      "s:6Sprung30OnboardingInterviewCoordinatorC25documentExtractionService33_A406CE1A2186249D77A1D0C83B4B080CLLAA08DocumentfG0Cvp"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:20:17",
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "name" : "documentExtractionService",
+    "modifiers" : [
+      "private"
+    ],
+    "accessibility" : "private",
+    "attributes" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung30OnboardingInterviewCoordinatorC9dataStore33_A406CE1A2186249D77A1D0C83B4B080CLLAA0c4DataF0Cvp"
+    ],
+    "name" : "dataStore",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:33:17",
+    "accessibility" : "private",
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "kind" : "var.instance",
+    "modifiers" : [
+      "private"
+    ]
+  },
+  {
+    "ids" : [
+      "s:6Sprung30OnboardingInterviewCoordinatorC19draftKnowledgeStore33_A406CE1A2186249D77A1D0C83B4B080CLLAA05DraftfG0Cvp"
+    ],
+    "name" : "draftKnowledgeStore",
+    "modules" : [
+      "Sprung"
+    ],
+    "modifiers" : [
+      "private"
+    ],
+    "attributes" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:35:17",
+    "accessibility" : "private",
+    "kind" : "var.instance",
+    "hints" : [
+      "assignOnlyProperty"
+    ]
+  },
+  {
+    "hints" : [
+      "unused"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:59:9",
+    "modules" : [
+      "Sprung"
+    ],
+    "kind" : "var.instance",
+    "accessibility" : "internal",
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung30OnboardingInterviewCoordinatorC9artifactsAA0B9ArtifactsVvp"
+    ],
+    "modifiers" : [
+
+    ],
+    "name" : "artifacts"
+  },
+  {
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:84:9",
+    "kind" : "var.instance",
+    "hints" : [
+      "unused"
+    ],
+    "attributes" : [
+
+    ],
+    "name" : "pendingPhaseAdvanceRequest",
+    "accessibility" : "internal",
+    "modules" : [
+      "Sprung"
+    ],
+    "ids" : [
+      "s:6Sprung30OnboardingInterviewCoordinatorC26pendingPhaseAdvanceRequestAA0bfgH0VSgvp"
+    ],
+    "modifiers" : [
+
+    ]
+  },
+  {
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung30OnboardingInterviewCoordinatorC11eventStream3forScSyAA0B5EventOGAA0H5TopicO_tYaF"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "kind" : "function.method.instance",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:89:10",
+    "name" : "eventStream(for:)",
+    "accessibility" : "internal",
+    "hints" : [
+      "unused"
+    ],
+    "modifiers" : [
+
+    ]
+  },
+  {
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "accessibility" : "internal",
+    "kind" : "function.method.instance",
+    "name" : "advancePhase()",
+    "attributes" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:468:10",
+    "ids" : [
+      "s:6Sprung30OnboardingInterviewCoordinatorC12advancePhaseAA0cF0OSgyYaF"
+    ],
+    "modifiers" : [
+
+    ]
+  },
+  {
+    "hints" : [
+      "unused"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:475:10",
+    "modifiers" : [
+
+    ],
+    "kind" : "function.method.instance",
+    "attributes" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "getCompletedObjectiveIds()",
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung30OnboardingInterviewCoordinatorC24getCompletedObjectiveIdsShySSGyYaF"
+    ]
+  },
+  {
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "name" : "listArtifactRecords()",
+    "kind" : "function.method.instance",
+    "accessibility" : "internal",
+    "hints" : [
+      "unused"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:525:10",
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung30OnboardingInterviewCoordinatorC19listArtifactRecordsSay10SwiftyJSON0I0VGyYaF"
+    ]
+  },
+  {
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "modifiers" : [
+
+    ],
+    "name" : "getArtifact(id:)",
+    "ids" : [
+      "s:6Sprung30OnboardingInterviewCoordinatorC11getArtifact2id10SwiftyJSON0I0VSgSS_tYaF"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "accessibility" : "internal",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:534:10",
+    "kind" : "function.method.instance"
+  },
+  {
+    "modifiers" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:547:10",
+    "kind" : "function.method.instance",
+    "hints" : [
+      "unused"
+    ],
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung30OnboardingInterviewCoordinatorC9nextPhaseAA0cF0OSgyYaF"
+    ],
+    "accessibility" : "internal",
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "nextPhase()"
+  },
+  {
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung30OnboardingInterviewCoordinatorC24updateExtractionProgress4withyAA0fG6UpdateV_tF"
+    ],
+    "accessibility" : "internal",
+    "kind" : "function.method.instance",
+    "name" : "updateExtractionProgress(with:)",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:559:10",
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung30OnboardingInterviewCoordinatorC18setStreamingStatusyySSSgYaF"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:562:10",
+    "modifiers" : [
+
+    ],
+    "name" : "setStreamingStatus(_:)",
+    "attributes" : [
+
+    ],
+    "kind" : "function.method.instance",
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "ids" : [
+      "s:6Sprung30OnboardingInterviewCoordinatorC24synchronizeWizardTracker33_A406CE1A2186249D77A1D0C83B4B080CLL11currentStep14completedStepsyAA05StateD0C0fR0O_ShyAKGtF"
+    ],
+    "modifiers" : [
+      "private"
+    ],
+    "kind" : "function.method.instance",
+    "name" : "synchronizeWizardTracker(currentStep:completedSteps:)",
+    "accessibility" : "private",
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:565:18",
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung30OnboardingInterviewCoordinatorC19presentChoicePromptyyAA0bfG0VF"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "name" : "presentChoicePrompt(_:)",
+    "kind" : "function.method.instance",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:584:10"
+  },
+  {
+    "kind" : "function.method.instance",
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "accessibility" : "internal",
+    "name" : "submitChoice(optionId:)",
+    "hints" : [
+      "unused"
+    ],
+    "ids" : [
+      "s:6Sprung30OnboardingInterviewCoordinatorC12submitChoice8optionId10SwiftyJSON0J0VSgSS_tF"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:587:10",
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "presentValidationPrompt(_:)",
+    "hints" : [
+      "unused"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:590:10",
+    "kind" : "function.method.instance",
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung30OnboardingInterviewCoordinatorC23presentValidationPromptyyAA0bfG0VF"
+    ],
+    "accessibility" : "internal"
+  },
+  {
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:644:10",
+    "name" : "completeUploadAndResume(id:link:)",
+    "modifiers" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung30OnboardingInterviewCoordinatorC23completeUploadAndResume2id4linky10Foundation4UUIDV_AG3URLVtYaF"
+    ],
+    "kind" : "function.method.instance",
+    "attributes" : [
+
+    ]
+  },
+  {
+    "name" : "notifyInvalidModel(id:)",
+    "modules" : [
+      "Sprung"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "kind" : "function.method.instance",
+    "attributes" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:700:10",
+    "ids" : [
+      "s:6Sprung30OnboardingInterviewCoordinatorC18notifyInvalidModel2idySS_tF"
+    ],
+    "modifiers" : [
+
+    ],
+    "accessibility" : "internal"
+  },
+  {
+    "accessibility" : "internal",
+    "name" : "buildSystemPrompt(for:)",
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung30OnboardingInterviewCoordinatorC17buildSystemPrompt3forSSAA0C5PhaseO_tF"
+    ],
+    "kind" : "function.method.instance",
+    "hints" : [
+      "unused"
+    ],
+    "attributes" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:711:10",
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "kind" : "var.instance",
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "name" : "lifecycleController",
+    "modifiers" : [
+      "private",
+      "weak"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/PhaseTransitionController.swift:11:22",
+    "accessibility" : "private",
+    "ids" : [
+      "s:6Sprung25PhaseTransitionControllerC09lifecycleD033_0849F8821E85042DA5CA231FCD2EC7EELLAA018InterviewLifecycleD0CSgvp"
+    ]
+  },
+  {
+    "hints" : [
+      "unused"
+    ],
+    "name" : "advancePhase()",
+    "modifiers" : [
+
+    ],
+    "kind" : "function.method.instance",
+    "modules" : [
+      "Sprung"
+    ],
+    "accessibility" : "internal",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/PhaseTransitionController.swift:95:10",
+    "ids" : [
+      "s:6Sprung25PhaseTransitionControllerC07advanceB0AA09InterviewB0OSgyYaF"
+    ],
+    "attributes" : [
+
+    ]
+  },
+  {
+    "attributes" : [
+
+    ],
+    "accessibility" : "internal",
+    "modifiers" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "ids" : [
+      "s:6Sprung25PhaseTransitionControllerC04nextB0AA09InterviewB0OSgyYaF"
+    ],
+    "name" : "nextPhase()",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/PhaseTransitionController.swift:102:10",
+    "kind" : "function.method.instance",
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "accessibility" : "internal",
+    "name" : "getCompletedObjectiveIds()",
+    "modifiers" : [
+
+    ],
+    "kind" : "function.method.instance",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/PhaseTransitionController.swift:132:10",
+    "ids" : [
+      "s:6Sprung25PhaseTransitionControllerC24getCompletedObjectiveIdsShySSGyYaF"
+    ],
+    "attributes" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "hints" : [
+      "unused"
+    ]
+  },
+  {
+    "name" : "buildSystemPrompt(for:)",
+    "kind" : "function.method.instance",
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung25PhaseTransitionControllerC17buildSystemPrompt3forSSAA09InterviewB0O_tF"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "attributes" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/PhaseTransitionController.swift:139:10",
+    "modifiers" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "name" : "pendingUploadRequest",
+    "modifiers" : [
+      "private"
+    ],
+    "accessibility" : "private",
+    "ids" : [
+      "s:6Sprung14SessionUIStateC20pendingUploadRequestAA010OnboardingeF0VSgvp"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/SessionUIState.swift:25:22",
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "kind" : "var.instance"
+  },
+  {
+    "kind" : "var.instance",
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "modifiers" : [
+      "private"
+    ],
+    "accessibility" : "private",
+    "ids" : [
+      "s:6Sprung14SessionUIStateC19pendingChoicePromptAA010OnboardingeF0VSgvp"
+    ],
+    "name" : "pendingChoicePrompt",
+    "attributes" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/SessionUIState.swift:26:22",
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "accessibility" : "private",
+    "kind" : "var.instance",
+    "name" : "pendingStreamingStatus",
+    "ids" : [
+      "s:6Sprung14SessionUIStateC22pendingStreamingStatusSSSgvp"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/SessionUIState.swift:29:22",
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "modifiers" : [
+      "private"
+    ]
+  },
+  {
+    "kind" : "var.instance",
+    "modules" : [
+      "Sprung"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "ids" : [
+      "s:6Sprung14SessionUIStateC21pendingExtractionSyncAA017OnboardingPendingE0VSgvp"
+    ],
+    "modifiers" : [
+      "nonisolated",
+      "private"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/SessionUIState.swift:34:42",
+    "accessibility" : "private",
+    "name" : "pendingExtractionSync",
+    "attributes" : [
+
+    ]
+  },
+  {
+    "ids" : [
+      "s:6Sprung14SessionUIStateC26pendingStreamingStatusSyncSSSgvp"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/SessionUIState.swift:35:42",
+    "modifiers" : [
+      "nonisolated",
+      "private"
+    ],
+    "accessibility" : "private",
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "kind" : "var.instance",
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "pendingStreamingStatusSync",
+    "attributes" : [
+
+    ]
+  },
+  {
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/SessionUIState.swift:36:42",
+    "accessibility" : "private",
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "modifiers" : [
+      "nonisolated",
+      "private"
+    ],
+    "kind" : "var.instance",
+    "name" : "pendingPhaseAdvanceRequestSync",
+    "ids" : [
+      "s:6Sprung14SessionUIStateC30pendingPhaseAdvanceRequestSyncAA010OnboardingefG0VSgvp"
+    ]
+  },
+  {
+    "modifiers" : [
+
+    ],
+    "name" : "clearWaitingState()",
+    "kind" : "function.method.instance",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/SessionUIState.swift:84:10",
+    "accessibility" : "internal",
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung14SessionUIStateC17clearWaitingStateyyYaF"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/StateCoordinator.swift:74:24",
+    "kind" : "var.static",
+    "modifiers" : [
+      "private",
+      "static"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "accessibility" : "private",
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "name" : "nextPhaseMap",
+    "ids" : [
+      "s:6Sprung16StateCoordinatorC12nextPhaseMap33_C93A97F5A8BBD7471FB24BC12F65BEF5LLSDyAA09InterviewE0OAGSgGvpZ"
+    ]
+  },
+  {
+    "kind" : "function.method.instance",
+    "hints" : [
+      "unused"
+    ],
+    "accessibility" : "internal",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/StateCoordinator.swift:87:10",
+    "name" : "advanceToNextPhase()",
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung16StateCoordinatorC18advanceToNextPhaseAA09InterviewG0OSgyYaF"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "modifiers" : [
+
+    ]
+  },
+  {
+    "hints" : [
+      "unused"
+    ],
+    "kind" : "function.method.instance",
+    "name" : "canAdvancePhase()",
+    "accessibility" : "internal",
+    "modules" : [
+      "Sprung"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/StateCoordinator.swift:95:10",
+    "ids" : [
+      "s:6Sprung16StateCoordinatorC15canAdvancePhaseSbyYaF"
+    ],
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ]
+  },
+  {
+    "name" : "getLastResponseId()",
+    "ids" : [
+      "s:6Sprung16StateCoordinatorC17getLastResponseIdSSSgyF"
+    ],
+    "accessibility" : "internal",
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "kind" : "function.method.instance",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/StateCoordinator.swift:442:10"
+  },
+  {
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/StateCoordinator.swift:520:18",
+    "ids" : [
+      "s:6Sprung16StateCoordinatorC25backfillObjectiveStatuses33_C93A97F5A8BBD7471FB24BC12F65BEF5LL8snapshotyAC0B8SnapshotV_tYaF"
+    ],
+    "name" : "backfillObjectiveStatuses(snapshot:)",
+    "hints" : [
+      "unused"
+    ],
+    "kind" : "function.method.instance",
+    "modifiers" : [
+      "private"
+    ],
+    "attributes" : [
+
+    ],
+    "accessibility" : "private",
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "ids" : [
+      "param-reason-emitSnapshot(reason:)-s:6Sprung16StateCoordinatorC12emitSnapshot33_C93A97F5A8BBD7471FB24BC12F65BEF5LL6reasonySS_tYaF"
+    ],
+    "kind" : "var.parameter",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/StateCoordinator.swift:554:31",
+    "name" : "reason",
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "accessibility" : "internal",
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung16StateCoordinatorC15setToolPaneCardyyAA010OnboardingefG0OF"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/StateCoordinator.swift:576:10",
+    "modules" : [
+      "Sprung"
+    ],
+    "modifiers" : [
+
+    ],
+    "name" : "setToolPaneCard(_:)",
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "kind" : "function.method.instance"
+  },
+  {
+    "ids" : [
+      "s:6Sprung16StateCoordinatorC22getCurrentToolPaneCardAA010OnboardingfgH0OyF"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "accessibility" : "internal",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/StateCoordinator.swift:579:10",
+    "hints" : [
+      "unused"
+    ],
+    "modifiers" : [
+
+    ],
+    "kind" : "function.method.instance",
+    "name" : "getCurrentToolPaneCard()"
+  },
+  {
+    "accessibility" : "internal",
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung16StateCoordinatorC22latestReasoningSummarySSSgvp"
+    ],
+    "kind" : "var.instance",
+    "name" : "latestReasoningSummary",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/StateCoordinator.swift:638:9",
+    "modifiers" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "hints" : [
+      "unused"
+    ]
+  },
+  {
+    "attributes" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "accessibility" : "internal",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/StateCoordinator.swift:643:10",
+    "kind" : "function.method.instance",
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung16StateCoordinatorC17appendUserMessage_17isSystemGenerated10Foundation4UUIDVSS_SbtYaF"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "name" : "appendUserMessage(_:isSystemGenerated:)"
+  },
+  {
+    "modifiers" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/StateCoordinator.swift:647:10",
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "kind" : "function.method.instance",
+    "ids" : [
+      "s:6Sprung16StateCoordinatorC22appendAssistantMessagey10Foundation4UUIDVSSYaF"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "name" : "appendAssistantMessage(_:)",
+    "accessibility" : "internal"
+  },
+  {
+    "accessibility" : "internal",
+    "hints" : [
+      "unused"
+    ],
+    "attributes" : [
+
+    ],
+    "kind" : "function.method.instance",
+    "modifiers" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/StateCoordinator.swift:650:10",
+    "name" : "beginStreamingMessage(initialText:reasoningExpected:)",
+    "ids" : [
+      "s:6Sprung16StateCoordinatorC21beginStreamingMessage11initialText17reasoningExpected10Foundation4UUIDVSS_SbtYaF"
+    ]
+  },
+  {
+    "accessibility" : "internal",
+    "modules" : [
+      "Sprung"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/StateCoordinator.swift:653:10",
+    "name" : "updateStreamingMessage(id:delta:)",
+    "kind" : "function.method.instance",
+    "ids" : [
+      "s:6Sprung16StateCoordinatorC22updateStreamingMessage2id5deltay10Foundation4UUIDV_SStYaF"
+    ],
+    "modifiers" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "attributes" : [
+
+    ]
+  },
+  {
+    "accessibility" : "internal",
+    "name" : "finalizeStreamingMessage(id:finalText:toolCalls:)",
+    "modules" : [
+      "Sprung"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/StateCoordinator.swift:656:10",
+    "ids" : [
+      "s:6Sprung16StateCoordinatorC24finalizeStreamingMessage2id9finalText9toolCallsy10Foundation4UUIDV_SSSayAA010OnboardingF0V12ToolCallInfoVGSgtYaF"
+    ],
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "kind" : "function.method.instance"
+  },
+  {
+    "name" : "isProcessing",
+    "modifiers" : [
+
+    ],
+    "accessibility" : "internal",
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "kind" : "var.instance",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/StateCoordinator.swift:691:9",
+    "ids" : [
+      "s:6Sprung16StateCoordinatorC12isProcessingSbvp"
+    ]
+  },
+  {
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/StateCoordinator.swift:706:9",
+    "modifiers" : [
+
+    ],
+    "accessibility" : "internal",
+    "name" : "pendingStreamingStatus",
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "ids" : [
+      "s:6Sprung16StateCoordinatorC22pendingStreamingStatusSSSgvp"
+    ],
+    "kind" : "var.instance"
+  },
+  {
+    "accessibility" : "internal",
+    "modifiers" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ToolHandler.swift:23:5",
+    "kind" : "function.constructor",
+    "name" : "init(statuses:)",
+    "ids" : [
+      "s:6Sprung28OnboardingToolStatusSnapshotV8statusesACSDyAA0bC10IdentifierOAA0bcD0OG_tcfc"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ]
+  },
+  {
+    "name" : "status(for:)",
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung28OnboardingToolStatusSnapshotV6status3forAA0bcD0OAA0bC10IdentifierO_tF"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ToolHandler.swift:26:10",
+    "hints" : [
+      "unused"
+    ],
+    "accessibility" : "internal",
+    "modules" : [
+      "Sprung"
+    ],
+    "kind" : "function.method.instance",
+    "modifiers" : [
+
+    ]
+  },
+  {
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung28OnboardingToolStatusSnapshotV11rawValueMapSDyS2SGvp"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ToolHandler.swift:29:9",
+    "hints" : [
+      "unused"
+    ],
+    "name" : "rawValueMap",
+    "accessibility" : "internal",
+    "kind" : "var.instance",
+    "modules" : [
+      "Sprung"
+    ],
+    "modifiers" : [
+
+    ]
+  },
+  {
+    "attributes" : [
+
+    ],
+    "kind" : "var.instance",
+    "modules" : [
+      "Sprung"
+    ],
+    "accessibility" : "internal",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ToolHandler.swift:106:9",
+    "modifiers" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "name" : "statusSnapshot",
+    "ids" : [
+      "s:6Sprung11ToolHandlerC14statusSnapshotAA010Onboardingb6StatusE0Vvp"
+    ]
+  },
+  {
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung11ToolHandlerC13uploadedItemsSayAA22OnboardingUploadedItemVGvp"
+    ],
+    "accessibility" : "internal",
+    "name" : "uploadedItems",
+    "modules" : [
+      "Sprung"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "kind" : "var.instance",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ToolHandler.swift:129:9",
+    "attributes" : [
+
+    ]
+  },
+  {
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "name" : "cancelChoicePrompt(reason:)",
+    "kind" : "function.method.instance",
+    "modules" : [
+      "Sprung"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "ids" : [
+      "s:6Sprung11ToolHandlerC18cancelChoicePrompt6reason10SwiftyJSON0I0VSgSS_tF"
+    ],
+    "accessibility" : "internal",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ToolHandler.swift:145:10"
+  },
+  {
+    "attributes" : [
+
+    ],
+    "modifiers" : [
+
+    ],
+    "name" : "cancelValidation(reason:)",
+    "kind" : "function.method.instance",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ToolHandler.swift:168:10",
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung11ToolHandlerC16cancelValidation6reason10SwiftyJSON0H0VSgSS_tF"
+    ]
+  },
+  {
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "modifiers" : [
+
+    ],
+    "kind" : "function.method.instance",
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung11ToolHandlerC30presentApplicantProfileRequestyyAA010OnboardingefG0VF"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ToolHandler.swift:172:10",
+    "name" : "presentApplicantProfileRequest(_:)"
+  },
+  {
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ToolHandler.swift:175:10",
+    "accessibility" : "internal",
+    "name" : "clearApplicantProfileRequest()",
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung11ToolHandlerC28clearApplicantProfileRequestyyF"
+    ],
+    "kind" : "function.method.instance",
+    "modifiers" : [
+
+    ]
+  },
+  {
+    "accessibility" : "internal",
+    "hints" : [
+      "unused"
+    ],
+    "kind" : "function.method.instance",
+    "ids" : [
+      "s:6Sprung11ToolHandlerC28cancelApplicantProfileIntake6reason10SwiftyJSON0J0VSgSS_tF"
+    ],
+    "modifiers" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ToolHandler.swift:209:10",
+    "attributes" : [
+
+    ],
+    "name" : "cancelApplicantProfileIntake(reason:)",
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "modules" : [
+      "Sprung"
+    ],
+    "accessibility" : "internal",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ToolHandler.swift:222:10",
+    "name" : "completeUpload(id:link:)",
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "ids" : [
+      "s:6Sprung11ToolHandlerC14completeUpload2id4link10SwiftyJSON0I0VSg10Foundation4UUIDV_AK3URLVtYaF"
+    ],
+    "kind" : "function.method.instance"
+  },
+  {
+    "ids" : [
+      "s:6Sprung11ToolHandlerC12cancelUpload2id6reason10SwiftyJSON0I0VSg10Foundation4UUIDV_SSSgtYaF"
+    ],
+    "kind" : "function.method.instance",
+    "attributes" : [
+
+    ],
+    "accessibility" : "internal",
+    "hints" : [
+      "unused"
+    ],
+    "modifiers" : [
+
+    ],
+    "name" : "cancelUpload(id:reason:)",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ToolHandler.swift:228:10",
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "hints" : [
+      "unused"
+    ],
+    "accessibility" : "internal",
+    "attributes" : [
+
+    ],
+    "kind" : "function.method.instance",
+    "name" : "cancelPendingUpload(reason:)",
+    "modules" : [
+      "Sprung"
+    ],
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung11ToolHandlerC19cancelPendingUpload6reason10SwiftyJSON0I0VSgSSSg_tYaF"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ToolHandler.swift:231:10"
+  },
+  {
+    "ids" : [
+      "s:6Sprung14ChatboxHandlerC15sendUserMessageyySSYaF"
+    ],
+    "attributes" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Handlers/ChatboxHandler.swift:54:10",
+    "modifiers" : [
+
+    ],
+    "name" : "sendUserMessage(_:)",
+    "accessibility" : "internal",
+    "hints" : [
+      "unused"
+    ],
+    "kind" : "function.method.instance",
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "ids" : [
+      "s:6Sprung23DocumentArtifactHandlerC4stopyyF"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Handlers/DocumentArtifactHandler.swift:40:10",
+    "modules" : [
+      "Sprung"
+    ],
+    "accessibility" : "internal",
+    "name" : "stop()",
+    "hints" : [
+      "unused"
+    ],
+    "kind" : "function.method.instance",
+    "attributes" : [
+
+    ],
+    "modifiers" : [
+
+    ]
+  },
+  {
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Handlers/DocumentArtifactMessenger.swift:35:10",
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "stop()",
+    "attributes" : [
+
+    ],
+    "accessibility" : "internal",
+    "kind" : "function.method.instance",
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung25DocumentArtifactMessengerC4stopyyF"
+    ],
+    "hints" : [
+      "unused"
+    ]
+  },
+  {
+    "modules" : [
+      "Sprung"
+    ],
+    "ids" : [
+      "s:6Sprung25ProfileInteractionHandlerC07presentB7RequestyyAA019OnboardingApplicantbF0VF"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Handlers/ProfileInteractionHandler.swift:38:10",
+    "kind" : "function.method.instance",
+    "name" : "presentProfileRequest(_:)",
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "accessibility" : "internal",
+    "hints" : [
+      "unused"
+    ]
+  },
+  {
+    "ids" : [
+      "s:6Sprung25ProfileInteractionHandlerC12cancelIntake6reason10SwiftyJSON0I0VSgSS_tF"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Handlers/ProfileInteractionHandler.swift:202:10",
+    "modules" : [
+      "Sprung"
+    ],
+    "accessibility" : "internal",
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "name" : "cancelIntake(reason:)",
+    "kind" : "function.method.instance",
+    "modifiers" : [
+
+    ]
+  },
+  {
+    "modifiers" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Handlers/PromptInteractionHandler.swift:30:10",
+    "kind" : "function.method.instance",
+    "name" : "cancelChoicePrompt(reason:)",
+    "attributes" : [
+
+    ],
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung24PromptInteractionHandlerC012cancelChoiceB06reason10SwiftyJSON0I0VSgSS_tF"
+    ],
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "accessibility" : "internal",
+    "kind" : "function.method.instance",
+    "ids" : [
+      "s:6Sprung24PromptInteractionHandlerC16cancelValidation6reason10SwiftyJSON0I0VSgSS_tF"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Handlers/PromptInteractionHandler.swift:71:10",
+    "name" : "cancelValidation(reason:)",
+    "hints" : [
+      "unused"
+    ],
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "name" : "dataStore",
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "ids" : [
+      "s:6Sprung24UploadInteractionHandlerC9dataStore013_7A1DDE8D6BE5I18B02B40AA17C553D467LLAA013InterviewDataF0Cvp"
+    ],
+    "kind" : "var.instance",
+    "accessibility" : "private",
+    "modifiers" : [
+      "private"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Handlers/UploadInteractionHandler.swift:21:17"
+  },
+  {
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung24UploadInteractionHandlerC08completeB02id4link10SwiftyJSON0I0VSg10Foundation4UUIDV_AK3URLVtYaF"
+    ],
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Handlers/UploadInteractionHandler.swift:58:10",
+    "name" : "completeUpload(id:link:)",
+    "kind" : "function.method.instance",
+    "modifiers" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "attributes" : [
+
+    ],
+    "kind" : "function.method.instance",
+    "name" : "cancelUpload(id:reason:)",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Handlers/UploadInteractionHandler.swift:84:10",
+    "modules" : [
+      "Sprung"
+    ],
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung24UploadInteractionHandlerC06cancelB02id6reason10SwiftyJSON0I0VSg10Foundation4UUIDV_SSSgtYaF"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "modifiers" : [
+
+    ]
+  },
+  {
+    "modules" : [
+      "Sprung"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Handlers/UploadInteractionHandler.swift:87:10",
+    "name" : "cancelPendingUpload(reason:)",
+    "hints" : [
+      "unused"
+    ],
+    "ids" : [
+      "s:6Sprung24UploadInteractionHandlerC013cancelPendingB06reason10SwiftyJSON0I0VSgSSSg_tYaF"
+    ],
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "accessibility" : "internal",
+    "kind" : "function.method.instance"
+  },
+  {
+    "kind" : "function.method.instance",
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "resumeUpload(id:withError:)",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Handlers/UploadInteractionHandler.swift:288:18",
+    "ids" : [
+      "s:6Sprung24UploadInteractionHandlerC06resumeB0013_7A1DDE8D6BE5H18B02B40AA17C553D467LL2id9withError10SwiftyJSON0S0VSg10Foundation4UUIDV_SStYaF"
+    ],
+    "modifiers" : [
+      "private"
+    ],
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "accessibility" : "private"
+  },
+  {
+    "name" : "setStep(_:)",
+    "ids" : [
+      "s:6Sprung21WizardProgressTrackerC7setStepyyAA010OnboardingbF0OF"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "accessibility" : "internal",
+    "modifiers" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Managers/WizardProgressTracker.swift:18:10",
+    "attributes" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "kind" : "function.method.instance"
+  },
+  {
+    "accessibility" : "internal",
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "ids" : [
+      "s:6Sprung21WizardProgressTrackerC18updateWaitingStateyySSSgF"
+    ],
+    "name" : "updateWaitingState(_:)",
+    "attributes" : [
+
+    ],
+    "modifiers" : [
+
+    ],
+    "kind" : "function.method.instance",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Managers/WizardProgressTracker.swift:31:10"
+  },
+  {
+    "name" : "synchronize(currentStep:completedSteps:)",
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "kind" : "function.method.instance",
+    "ids" : [
+      "s:6Sprung21WizardProgressTrackerC11synchronize11currentStep14completedStepsyAA010OnboardingbG0O_ShyAHGtF"
+    ],
+    "modifiers" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Managers/WizardProgressTracker.swift:53:10",
+    "accessibility" : "internal"
+  },
+  {
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/EvidenceRequirement.swift:9:9",
+    "ids" : [
+      "s:6Sprung19EvidenceRequirementV16linkedArtifactIdSSSgvp"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "accessibility" : "internal",
+    "name" : "linkedArtifactId",
+    "modifiers" : [
+
+    ],
+    "kind" : "var.instance",
+    "attributes" : [
+
+    ]
+  },
+  {
+    "attributes" : [
+
+    ],
+    "modifiers" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "ids" : [
+      "s:6Sprung19EvidenceRequirementV2id15timelineEntryId11description8category6status014linkedArtifactG0ACSS_S2SAC0B8CategoryOAC0B6StatusOSSSgtcfc"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/EvidenceRequirement.swift:26:5",
+    "kind" : "function.constructor",
+    "accessibility" : "internal",
+    "name" : "init(id:timelineEntryId:description:category:status:linkedArtifactId:)",
+    "hints" : [
+      "unused"
+    ]
+  },
+  {
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/InterviewPhase.swift:15:9",
+    "modules" : [
+      "Sprung"
+    ],
+    "modifiers" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "accessibility" : "internal",
+    "attributes" : [
+
+    ],
+    "kind" : "var.instance",
+    "name" : "description",
+    "ids" : [
+      "s:6Sprung14InterviewPhaseO11descriptionSSvp"
+    ]
+  },
+  {
+    "name" : "shortName",
+    "hints" : [
+      "unused"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/InterviewPhase.swift:19:9",
+    "modules" : [
+      "Sprung"
+    ],
+    "kind" : "var.instance",
+    "attributes" : [
+
+    ],
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung14InterviewPhaseO9shortNameSSvp"
+    ],
+    "accessibility" : "internal"
+  },
+  {
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/KnowledgeCardDraft.swift:8:9",
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung18KnowledgeCardDraftV11AchievementV2id5claim8evidenceAE10Foundation4UUIDV_SSAA12EvidenceItemVtcfc"
+    ],
+    "name" : "init(id:claim:evidence:)",
+    "modifiers" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "kind" : "function.constructor"
+  },
+  {
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/KnowledgeCardDraft.swift:37:5",
+    "kind" : "function.constructor",
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung18KnowledgeCardDraftV2id5title7summary6source12achievements7metrics6skillsAC10Foundation4UUIDV_S3SSgSayAC11AchievementVGSaySSGARtcfc"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "init(id:title:summary:source:achievements:metrics:skills:)",
+    "attributes" : [
+
+    ],
+    "modifiers" : [
+
+    ]
+  },
+  {
+    "hints" : [
+      "unused"
+    ],
+    "modifiers" : [
+
+    ],
+    "kind" : "function.constructor",
+    "ids" : [
+      "s:6Sprung12EvidenceItemV5quote6source7locator11artifactSHAACSS_S2SSgAHtcfc"
+    ],
+    "name" : "init(quote:source:locator:artifactSHA:)",
+    "accessibility" : "internal",
+    "attributes" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/KnowledgeCardDraft.swift:88:5",
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "modules" : [
+      "Sprung"
+    ],
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung14ArtifactRecordV2id8filename11contentType11sizeInBytes6sha25616extractedContent8metadataACSS_S2SSgSiAKSS10SwiftyJSON0P0Vtcfc"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/KnowledgeCardDraft.swift:126:5",
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "kind" : "function.constructor",
+    "name" : "init(id:filename:contentType:sizeInBytes:sha256:extractedContent:metadata:)",
+    "modifiers" : [
+
+    ]
+  },
+  {
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/KnowledgeCardDraft.swift:160:10",
+    "name" : "toJSON()",
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung14ArtifactRecordV6toJSON06SwiftyE00E0VyF"
+    ],
+    "accessibility" : "internal",
+    "attributes" : [
+
+    ],
+    "kind" : "function.method.instance"
+  },
+  {
+    "modules" : [
+      "Sprung"
+    ],
+    "modifiers" : [
+
+    ],
+    "accessibility" : "internal",
+    "attributes" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPlaceholders.swift:21:9",
+    "name" : "toolCalls",
+    "kind" : "var.instance",
+    "ids" : [
+      "s:6Sprung17OnboardingMessageV9toolCallsSayAC12ToolCallInfoVGSgvp"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ]
+  },
+  {
+    "accessibility" : "internal",
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "kind" : "var.instance",
+    "name" : "id",
+    "ids" : [
+      "s:6Sprung17OnboardingMessageV12ToolCallInfoV2idSSvp"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPlaceholders.swift:23:13",
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "ids" : [
+      "s:6Sprung17OnboardingMessageV12ToolCallInfoV4nameSSvp"
+    ],
+    "modifiers" : [
+
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "kind" : "var.instance",
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPlaceholders.swift:24:13",
+    "name" : "name",
+    "accessibility" : "internal"
+  },
+  {
+    "attributes" : [
+
+    ],
+    "name" : "arguments",
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung17OnboardingMessageV12ToolCallInfoV9argumentsSSvp"
+    ],
+    "kind" : "var.instance",
+    "accessibility" : "internal",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPlaceholders.swift:25:13",
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "kind" : "var.instance",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPlaceholders.swift:51:9",
+    "name" : "icon",
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung22OnboardingChoiceOptionV4iconSSSgvp"
+    ],
+    "modifiers" : [
+
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ]
+  },
+  {
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "accessibility" : "internal",
+    "kind" : "var.instance",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPlaceholders.swift:58:9",
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "required",
+    "ids" : [
+      "s:6Sprung22OnboardingChoicePromptV8requiredSbvp"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ]
+  },
+  {
+    "attributes" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPlaceholders.swift:101:8",
+    "modifiers" : [
+
+    ],
+    "accessibility" : "internal",
+    "kind" : "struct",
+    "ids" : [
+      "s:6Sprung18OnboardingQuestionV"
+    ],
+    "name" : "OnboardingQuestion",
+    "hints" : [
+      "unused"
+    ]
+  },
+  {
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPlaceholders.swift:144:9",
+    "accessibility" : "internal",
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "attributes" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "ids" : [
+      "s:6Sprung22OnboardingUploadedItemV8filenameSSvp"
+    ],
+    "name" : "filename",
+    "modifiers" : [
+
+    ],
+    "kind" : "var.instance"
+  },
+  {
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPlaceholders.swift:145:9",
+    "accessibility" : "internal",
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "kind" : "var.instance",
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "url",
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung22OnboardingUploadedItemV3url10Foundation3URLVvp"
+    ],
+    "modifiers" : [
+
+    ]
+  },
+  {
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "accessibility" : "internal",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPlaceholders.swift:146:9",
+    "kind" : "var.instance",
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung22OnboardingUploadedItemV10uploadedAt10Foundation4DateVvp"
+    ],
+    "name" : "uploadedAt"
+  },
+  {
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPlaceholders.swift:229:5",
+    "name" : "init(proposedProfile:sources:)",
+    "attributes" : [
+
+    ],
+    "accessibility" : "internal",
+    "modules" : [
+      "Sprung"
+    ],
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung33OnboardingApplicantProfileRequestV08proposedD07sourcesAC10SwiftyJSON0I0V_SaySSGtcfc"
+    ],
+    "kind" : "function.constructor",
+    "hints" : [
+      "unused"
+    ]
+  },
+  {
+    "accessibility" : "internal",
+    "kind" : "var.instance",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPlaceholders.swift:235:9",
+    "name" : "id",
+    "modules" : [
+      "Sprung"
+    ],
+    "ids" : [
+      "s:6Sprung30OnboardingSectionToggleRequestV2id10Foundation4UUIDVvp"
+    ],
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ]
+  },
+  {
+    "ids" : [
+      "s:6Sprung27OnboardingPendingExtractionV2id5title7summary03rawD013uncertainties13progressItemsAC10Foundation4UUIDV_S2S10SwiftyJSON0O0VSaySSGSayAA0D12ProgressItemVGtcfc"
+    ],
+    "modifiers" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPlaceholders.swift:264:5",
+    "modules" : [
+      "Sprung"
+    ],
+    "kind" : "function.constructor",
+    "name" : "init(id:title:summary:rawExtraction:uncertainties:progressItems:)",
+    "accessibility" : "internal",
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ]
+  },
+  {
+    "modules" : [
+      "Sprung"
+    ],
+    "kind" : "function.method.instance",
+    "modifiers" : [
+      "mutating"
+    ],
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung27OnboardingPendingExtractionV20applyProgressUpdatesyySayAA0dF6UpdateVGF"
+    ],
+    "name" : "applyProgressUpdates(_:)",
+    "accessibility" : "internal",
+    "hints" : [
+      "unused"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPlaceholders.swift:307:19"
+  },
+  {
+    "accessibility" : "internal",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPreferences.swift:6:9",
+    "name" : "preferredBackend",
+    "kind" : "var.instance",
+    "modules" : [
+      "Sprung"
+    ],
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "ids" : [
+      "s:6Sprung21OnboardingPreferencesV16preferredBackendAA9LLMFacadeC0E0Ovp"
+    ]
+  },
+  {
+    "name" : "TimelineCardError",
+    "accessibility" : "internal",
+    "modifiers" : [
+
+    ],
+    "kind" : "enum",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/TimelineCard.swift:91:6",
+    "hints" : [
+      "unused"
+    ],
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung17TimelineCardErrorO"
+    ],
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Phase/PhaseOneScript.swift:9:9",
+    "ids" : [
+      "s:6Sprung14PhaseOneScriptV5phaseAA09InterviewB0Ovp"
+    ],
+    "name" : "phase",
+    "modifiers" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "kind" : "var.instance",
+    "accessibility" : "internal"
+  },
+  {
+    "modifiers" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Phase/PhaseScript.swift:12:9",
+    "kind" : "var.instance",
+    "attributes" : [
+
+    ],
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung24ObjectiveWorkflowContextV19completedObjectivesShySSGvp"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "name" : "completedObjectives"
+  },
+  {
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Phase/PhaseScript.swift:23:9",
+    "modules" : [
+      "Sprung"
+    ],
+    "accessibility" : "internal",
+    "kind" : "var.instance",
+    "ids" : [
+      "s:6Sprung17ObjectiveWorkflowV2idSSvp"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "name" : "id"
+  },
+  {
+    "ids" : [
+      "s:6Sprung11PhaseScriptP5phaseAA09InterviewB0Ovp"
+    ],
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Phase/PhaseScript.swift:55:9",
+    "kind" : "var.instance",
+    "accessibility" : "internal",
+    "name" : "phase"
+  },
+  {
+    "accessibility" : "internal",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Phase/PhaseScript.swift:67:10",
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung11PhaseScriptP10canAdvance19completedObjectivesSbShySSG_tF"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "kind" : "function.method.instance",
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "canAdvance(completedObjectives:)",
+    "attributes" : [
+
+    ]
+  },
+  {
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Phase/PhaseScript.swift:69:10",
+    "name" : "missingObjectives(completedObjectives:)",
+    "hints" : [
+      "unused"
+    ],
+    "attributes" : [
+
+    ],
+    "kind" : "function.method.instance",
+    "modules" : [
+      "Sprung"
+    ],
+    "ids" : [
+      "s:6Sprung11PhaseScriptP17missingObjectives09completedE0SaySSGShySSG_tF"
+    ],
+    "modifiers" : [
+
+    ],
+    "accessibility" : "internal"
+  },
+  {
+    "kind" : "function.method.instance",
+    "accessibility" : "internal",
+    "attributes" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Phase/PhaseScript.swift:77:10",
+    "name" : "canAdvance(completedObjectives:)",
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung11PhaseScriptPAAE10canAdvance19completedObjectivesSbShySSG_tF"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "accessibility" : "internal",
+    "modules" : [
+      "Sprung"
+    ],
+    "modifiers" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Phase/PhaseScript.swift:80:10",
+    "kind" : "function.method.instance",
+    "name" : "missingObjectives(completedObjectives:)",
+    "ids" : [
+      "s:6Sprung11PhaseScriptPAAE17missingObjectives09completedE0SaySSGShySSG_tF"
+    ]
+  },
+  {
+    "hints" : [
+      "unused"
+    ],
+    "kind" : "function.method.instance",
+    "attributes" : [
+
+    ],
+    "modifiers" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "currentScript(for:)",
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung19PhaseScriptRegistryC07currentC03forAA0bC0_pSgAA09InterviewB0O_tF"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Phase/PhaseScriptRegistry.swift:26:10"
+  },
+  {
+    "kind" : "var.parameter",
+    "hints" : [
+      "unused"
+    ],
+    "attributes" : [
+
+    ],
+    "accessibility" : "internal",
+    "ids" : [
+      "param-phase-buildSystemPrompt(for:)-s:6Sprung19PhaseScriptRegistryC17buildSystemPrompt3forSSAA09InterviewB0O_tF"
+    ],
+    "modifiers" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "phase",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Phase/PhaseScriptRegistry.swift:31:32"
+  },
+  {
+    "kind" : "var.instance",
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung16PhaseThreeScriptV5phaseAA09InterviewB0Ovp"
+    ],
+    "name" : "phase",
+    "modules" : [
+      "Sprung"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Phase/PhaseThreeScript.swift:9:9"
+  },
+  {
+    "hints" : [
+      "unused"
+    ],
+    "ids" : [
+      "s:6Sprung14PhaseTwoScriptV5phaseAA09InterviewB0Ovp"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Phase/PhaseTwoScript.swift:9:9",
+    "kind" : "var.instance",
+    "name" : "phase",
+    "attributes" : [
+
+    ],
+    "modifiers" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "accessibility" : "internal"
+  },
+  {
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentExtractionService.swift:15:13",
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "returnTypes",
+    "kind" : "var.instance",
+    "modifiers" : [
+
+    ],
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung25DocumentExtractionServiceC0C7RequestV11returnTypesSaySSGvp"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "attributes" : [
+
+    ]
+  },
+  {
+    "accessibility" : "internal",
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung25DocumentExtractionServiceC17ExtractedArtifactV8filenameSSvp"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentExtractionService.swift:21:13",
+    "kind" : "var.instance",
+    "name" : "filename",
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "kind" : "var.instance",
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "contentType",
+    "attributes" : [
+
+    ],
+    "modifiers" : [
+
+    ],
+    "accessibility" : "internal",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentExtractionService.swift:22:13",
+    "ids" : [
+      "s:6Sprung25DocumentExtractionServiceC17ExtractedArtifactV11contentTypeSSvp"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ]
+  },
+  {
+    "accessibility" : "internal",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentExtractionService.swift:26:13",
+    "kind" : "var.instance",
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "modifiers" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "metadata",
+    "ids" : [
+      "s:6Sprung25DocumentExtractionServiceC17ExtractedArtifactV8metadataSDySSypGvp"
+    ],
+    "attributes" : [
+
+    ]
+  },
+  {
+    "modifiers" : [
+
+    ],
+    "accessibility" : "internal",
+    "modules" : [
+      "Sprung"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "attributes" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentExtractionService.swift:29:13",
+    "name" : "confidence",
+    "ids" : [
+      "s:6Sprung25DocumentExtractionServiceC7QualityV10confidenceSdvp"
+    ],
+    "kind" : "var.instance"
+  },
+  {
+    "name" : "issues",
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "accessibility" : "internal",
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung25DocumentExtractionServiceC7QualityV6issuesSaySSGvp"
+    ],
+    "kind" : "var.instance",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentExtractionService.swift:30:13"
+  },
+  {
+    "modifiers" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "accessibility" : "internal",
+    "name" : "status",
+    "ids" : [
+      "s:6Sprung25DocumentExtractionServiceC0C6ResultV6statusAE6StatusOvp"
+    ],
+    "kind" : "var.instance",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentExtractionService.swift:38:13",
+    "attributes" : [
+
+    ]
+  },
+  {
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentExtractionService.swift:40:13",
+    "modules" : [
+      "Sprung"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "kind" : "var.instance",
+    "name" : "quality",
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung25DocumentExtractionServiceC0C6ResultV7qualityAC7QualityVvp"
+    ],
+    "accessibility" : "internal"
+  },
+  {
+    "ids" : [
+      "s:6Sprung25DocumentExtractionServiceC0C6ResultV23derivedApplicantProfile10SwiftyJSON0J0VSgvp"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "accessibility" : "internal",
+    "name" : "derivedApplicantProfile",
+    "modules" : [
+      "Sprung"
+    ],
+    "modifiers" : [
+
+    ],
+    "kind" : "var.instance",
+    "attributes" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentExtractionService.swift:41:13"
+  },
+  {
+    "kind" : "var.instance",
+    "accessibility" : "internal",
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung25DocumentExtractionServiceC0C6ResultV23derivedSkeletonTimeline10SwiftyJSON0J0VSgvp"
+    ],
+    "name" : "derivedSkeletonTimeline",
+    "attributes" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentExtractionService.swift:42:13"
+  },
+  {
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung25DocumentExtractionServiceC0C6ResultV9persistedSbvp"
+    ],
+    "accessibility" : "internal",
+    "modules" : [
+      "Sprung"
+    ],
+    "kind" : "var.instance",
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "attributes" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentExtractionService.swift:43:13",
+    "name" : "persisted"
+  },
+  {
+    "modules" : [
+      "Sprung"
+    ],
+    "ids" : [
+      "s:6Sprung25DocumentExtractionServiceC0C5ErrorO15unsupportedTypeyAESScAEmF"
+    ],
+    "modifiers" : [
+
+    ],
+    "name" : "unsupportedType(_:)",
+    "attributes" : [
+
+    ],
+    "accessibility" : "internal",
+    "kind" : "enumelement",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentExtractionService.swift:46:14",
+    "hints" : [
+      "unused"
+    ]
+  },
+  {
+    "accessibility" : "internal",
+    "hints" : [
+      "unused"
+    ],
+    "modifiers" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentExtractionService.swift:50:13",
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "name" : "userFacingMessage",
+    "ids" : [
+      "s:6Sprung25DocumentExtractionServiceC0C5ErrorO17userFacingMessageSSvp"
+    ],
+    "kind" : "var.instance"
+  },
+  {
+    "name" : "updateAvailableModels(_:)",
+    "attributes" : [
+
+    ],
+    "accessibility" : "internal",
+    "hints" : [
+      "unused"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "kind" : "function.method.instance",
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung25DocumentExtractionServiceC21updateAvailableModelsyySaySSGF"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentExtractionService.swift:71:10"
+  },
+  {
+    "hints" : [
+      "unused"
+    ],
+    "attributes" : [
+
+    ],
+    "name" : "timeout",
+    "ids" : [
+      "param-timeout-enrichText(_:purpose:timeout:)-s:6Sprung25DocumentExtractionServiceC10enrichText33_C020749888510215399B1DB02AA1F565LL_7purpose7timeoutSSSg_SaySSGtSS_SSSdSgtYaKF"
+    ],
+    "modifiers" : [
+
+    ],
+    "kind" : "var.parameter",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentExtractionService.swift:263:65",
+    "accessibility" : "internal",
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "modifiers" : [
+      "private"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "accessibility" : "private",
+    "kind" : "var.instance",
+    "name" : "dataStore",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentProcessingService.swift:15:17",
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "ids" : [
+      "s:6Sprung25DocumentProcessingServiceC9dataStore33_CAE440EA838EA9D8FDBD13800B9D72C8LLAA013InterviewDataF0Cvp"
+    ]
+  },
+  {
+    "kind" : "var.instance",
+    "name" : "draftsSync",
+    "attributes" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DraftKnowledgeStore.swift:13:42",
+    "ids" : [
+      "s:6Sprung19DraftKnowledgeStoreC10draftsSyncSayAA0c4CardB0VGvp"
+    ],
+    "accessibility" : "private",
+    "modifiers" : [
+      "nonisolated",
+      "private"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ]
+  },
+  {
+    "kind" : "function.method.instance",
+    "name" : "getDrafts()",
+    "attributes" : [
+
+    ],
+    "accessibility" : "internal",
+    "hints" : [
+      "unused"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DraftKnowledgeStore.swift:55:10",
+    "ids" : [
+      "s:6Sprung19DraftKnowledgeStoreC9getDraftsSayAA0c4CardB0VGyF"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "modifiers" : [
+
+    ]
+  },
+  {
+    "ids" : [
+      "s:6Sprung19DraftKnowledgeStoreC03getB02idAA0c4CardB0VSg10Foundation4UUIDV_tF"
+    ],
+    "name" : "getDraft(id:)",
+    "modules" : [
+      "Sprung"
+    ],
+    "accessibility" : "internal",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DraftKnowledgeStore.swift:60:10",
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "kind" : "function.method.instance",
+    "hints" : [
+      "unused"
+    ]
+  },
+  {
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung19DraftKnowledgeStoreC8clearAllyyYaF"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "modifiers" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DraftKnowledgeStore.swift:65:10",
+    "name" : "clearAll()",
+    "attributes" : [
+
+    ],
+    "kind" : "function.method.instance"
+  },
+  {
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung27ExtractionManagementServiceC18setStreamingStatusyySSSgYaF"
+    ],
+    "name" : "setStreamingStatus(_:)",
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "kind" : "function.method.instance",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/ExtractionManagementService.swift:118:10",
+    "modifiers" : [
+
+    ]
+  },
+  {
+    "hints" : [
+      "unused"
+    ],
+    "kind" : "function.method.instance",
+    "name" : "synchronizeWizardTracker(currentStep:completedSteps:)",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/ExtractionManagementService.swift:124:10",
+    "modifiers" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung27ExtractionManagementServiceC24synchronizeWizardTracker11currentStep14completedStepsyAA16StateCoordinatorC0fI0O_ShyAJGtF"
+    ]
+  },
+  {
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/TimelineManagementService.swift:26:10",
+    "kind" : "function.method.instance",
+    "name" : "applyUserTimelineUpdate(cards:meta:diff:)",
+    "ids" : [
+      "s:6Sprung25TimelineManagementServiceC09applyUserB6Update5cards4meta4diffySayAA0B4CardVG_10SwiftyJSON0M0VSgAA0B4DiffVtYaF"
+    ],
+    "modifiers" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "accessibility" : "internal"
+  },
+  {
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung17UploadFileServiceC014downloadRemoteC04from10Foundation3URLVAH_tYaKF"
+    ],
+    "kind" : "function.method.instance",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/UploadFileService.swift:14:10",
+    "hints" : [
+      "unused"
+    ],
+    "attributes" : [
+
+    ],
+    "modifiers" : [
+
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "downloadRemoteFile(from:)"
+  },
+  {
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/UploadFileService.swift:50:10",
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung17UploadFileServiceC016cleanupTemporaryC02aty10Foundation3URLV_tF"
+    ],
+    "modifiers" : [
+
+    ],
+    "name" : "cleanupTemporaryFile(at:)",
+    "kind" : "function.method.instance",
+    "modules" : [
+      "Sprung"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "attributes" : [
+
+    ]
+  },
+  {
+    "name" : "dateFormatter",
+    "modifiers" : [
+      "private"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "ids" : [
+      "s:6Sprung28ConfigureEnabledSectionsToolV13dateFormatter33_AFF6699FA7BDD88670516FABD09C56D9LLSo013NSISO8601DateG0Cvp"
+    ],
+    "attributes" : [
+
+    ],
+    "accessibility" : "private",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Tools/Implementations/ConfigureEnabledSectionsTool.swift:65:17",
+    "kind" : "var.instance"
+  },
+  {
+    "accessibility" : "private",
+    "ids" : [
+      "s:6Sprung17GetUserOptionToolV13dateFormatter33_91B4AD5FA961C3AB1FB57027BB8EC947LLSo013NSISO8601DateG0Cvp"
+    ],
+    "modifiers" : [
+      "private"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Tools/Implementations/GetUserOptionTool.swift:59:17",
+    "kind" : "var.instance",
+    "name" : "dateFormatter"
+  },
+  {
+    "modules" : [
+      "Sprung"
+    ],
+    "accessibility" : "private",
+    "hints" : [
+      "unused"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Tools/Implementations/GetUserUploadTool.swift:74:17",
+    "kind" : "var.instance",
+    "name" : "storage",
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung17GetUserUploadToolV7storage33_62B2FAB8C68DDF75D8D72F9DEA880595LLAA010OnboardingD7StorageVvp"
+    ],
+    "modifiers" : [
+      "private"
+    ]
+  },
+  {
+    "name" : "waitingMessage",
+    "ids" : [
+      "s:6Sprung20UploadRequestPayload33_62B2FAB8C68DDF75D8D72F9DEA880595LLV14waitingMessageSSvp"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Tools/Implementations/GetUserUploadTool.swift:106:9",
+    "accessibility" : "internal",
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "kind" : "var.instance",
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "hints" : [
+      "unused"
+    ],
+    "kind" : "function.method.static",
+    "modifiers" : [
+      "private",
+      "static"
+    ],
+    "attributes" : [
+
+    ],
+    "accessibility" : "private",
+    "name" : "defaultPrompt(for:)",
+    "ids" : [
+      "s:6Sprung20UploadRequestPayload33_62B2FAB8C68DDF75D8D72F9DEA880595LLV13defaultPrompt3forSSAA010OnboardingB4KindO_tFZ"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Tools/Implementations/GetUserUploadTool.swift:187:25"
+  },
+  {
+    "kind" : "struct",
+    "accessibility" : "private",
+    "attributes" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Tools/Implementations/GetUserUploadTool.swift:210:16",
+    "name" : "UploadUserResponse",
+    "modifiers" : [
+      "private"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "ids" : [
+      "s:6Sprung18UploadUserResponse33_62B2FAB8C68DDF75D8D72F9DEA880595LLV"
+    ],
+    "hints" : [
+      "unused"
+    ]
+  },
+  {
+    "modifiers" : [
+
+    ],
+    "accessibility" : "internal",
+    "hints" : [
+      "unused"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Tools/Implementations/RequestEvidenceTool.swift:3:8",
+    "name" : "RequestEvidenceTool",
+    "modules" : [
+      "Sprung"
+    ],
+    "ids" : [
+      "s:6Sprung19RequestEvidenceToolV"
+    ],
+    "attributes" : [
+
+    ],
+    "kind" : "struct"
+  },
+  {
+    "accessibility" : "internal",
+    "kind" : "function.method.instance",
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung12ToolExecutorC09availableB7Schemas12allowedNamesSay11SwiftOpenAI0B0OGShySSGSg_tYaF"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Tools/ToolExecutor.swift:15:10",
+    "attributes" : [
+
+    ],
+    "name" : "availableToolSchemas(allowedNames:)",
+    "hints" : [
+      "unused"
+    ]
+  },
+  {
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "id",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Tools/ToolProtocol.swift:34:9",
+    "modifiers" : [
+
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "accessibility" : "internal",
+    "attributes" : [
+
+    ],
+    "kind" : "var.instance",
+    "ids" : [
+      "s:6Sprung8ToolCallV2idSSvp"
+    ]
+  },
+  {
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Utilities/ExperienceDefaultsDraft+Onboarding.swift:9:19",
+    "kind" : "function.method.instance",
+    "modules" : [
+      "Sprung"
+    ],
+    "hints" : [
+      "unused"
+    ],
+    "name" : "replaceSection(_:with:)",
+    "modifiers" : [
+      "mutating"
+    ],
+    "attributes" : [
+
+    ],
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung23ExperienceDefaultsDraftV14replaceSection_4withyAA0bF3KeyO_ACtF"
+    ]
+  },
+  {
+    "attributes" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Utilities/TimelineDiff.swift:5:13",
+    "kind" : "var.instance",
+    "name" : "previous",
+    "accessibility" : "internal",
+    "ids" : [
+      "s:6Sprung12TimelineDiffV11FieldChangeV8previousSSvp"
+    ],
+    "modifiers" : [
+
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "name" : "current",
+    "kind" : "var.instance",
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "ids" : [
+      "s:6Sprung12TimelineDiffV11FieldChangeV7currentSSvp"
+    ],
+    "modifiers" : [
+
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Utilities/TimelineDiff.swift:6:13",
+    "accessibility" : "internal",
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "name" : "CollapsibleSidePanel",
+    "accessibility" : "internal",
+    "kind" : "struct",
+    "modifiers" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung20CollapsibleSidePanelV"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Views/Components/CollapsibleSidePanel.swift:4:8",
+    "modules" : [
+      "Sprung"
+    ],
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "unused"
+    ]
+  },
+  {
+    "hints" : [
+      "unused"
+    ],
+    "name" : "OnboardingInterviewBackgroundView",
+    "attributes" : [
+
+    ],
+    "modifiers" : [
+
+    ],
+    "accessibility" : "internal",
+    "kind" : "struct",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Views/Components/OnboardingInterviewBackgroundView.swift:3:8",
+    "ids" : [
+      "s:6Sprung33OnboardingInterviewBackgroundViewV"
+    ],
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "accessibility" : "internal",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Views/Components/ValidationProtocols.swift:4:9",
+    "ids" : [
+      "s:6Sprung24EditableContentCallbacksV9isEditingySb10Foundation4UUIDVcvp"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "modifiers" : [
+
+    ],
+    "attributes" : [
+
+    ],
+    "name" : "isEditing",
+    "kind" : "var.instance",
+    "modules" : [
+      "Sprung"
+    ]
+  },
+  {
+    "kind" : "var.instance",
+    "attributes" : [
+
+    ],
+    "ids" : [
+      "s:6Sprung24EditableContentCallbacksV12beginEditingyy10Foundation4UUIDVcvp"
+    ],
+    "modifiers" : [
+
+    ],
+    "name" : "beginEditing",
+    "accessibility" : "internal",
+    "modules" : [
+      "Sprung"
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Views/Components/ValidationProtocols.swift:5:9"
+  },
+  {
+    "attributes" : [
+
+    ],
+    "hints" : [
+      "assignOnlyProperty"
+    ],
+    "kind" : "var.instance",
+    "accessibility" : "internal",
+    "location" : "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Views/Components/ValidationProtocols.swift:6:9",
+    "ids" : [
+      "s:6Sprung24EditableContentCallbacksV13toggleEditingyy10Foundation4UUIDVcvp"
+    ],
+    "modules" : [
+      "Sprung"
+    ],
+    "name" : "toggleEditing",
+    "modifiers" : [
+
+    ]
+  }
+]

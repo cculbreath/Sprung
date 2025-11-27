@@ -529,66 +529,8 @@ private extension TemplateManifest.Section {
         }
         return updated.updatingDefault(dictionary)
     }
-    func stylingOverride(relativeTo base: TemplateManifest.Section) -> TemplateManifestOverrides.Styling? {
-        var override = TemplateManifestOverrides.Styling()
-        let current = dictionaryDefaultValue()
-        let baseline = base.dictionaryDefaultValue()
-        if let fonts = current["fontSizes"] as? [String: String],
-           fonts != baseline["fontSizes"] as? [String: String] {
-            override.fontSizes = fonts
-        }
-        if let margins = current["pageMargins"] as? [String: String],
-           margins != baseline["pageMargins"] as? [String: String] {
-            override.pageMargins = margins
-        }
-        if let includeFonts = current["includeFonts"] as? Bool,
-           includeFonts != (baseline["includeFonts"] as? Bool ?? false) {
-            override.includeFonts = includeFonts
-        }
-        if override.fontSizes == nil,
-           override.pageMargins == nil,
-           override.includeFonts == nil {
-            return nil
-        }
-        return override
-    }
-    func customOverride(relativeTo base: TemplateManifest.Section) -> TemplateManifestOverrides.Custom? {
-        var override = TemplateManifestOverrides.Custom()
-        let dictionary = dictionaryDefaultValue()
-        let baseline = base.dictionaryDefaultValue()
-        func diffDictionary(_ key: String) -> [String: String]? {
-            guard let current = dictionary[key] as? [String: Any] else { return nil }
-            let baselineEntries = baseline[key] as? [String: Any] ?? [:]
-            var diff: [String: String] = [:]
-            for (key, value) in current {
-                guard let stringValue = value as? String else { continue }
-                if let baselineValue = baselineEntries[key] as? String, baselineValue == stringValue {
-                    continue
-                }
-                diff[key] = stringValue
-            }
-            return diff.isEmpty ? nil : diff
-        }
-        override.sectionLabels = diffDictionary("sectionLabels")
-        override.contactLabels = diffDictionary("contactLabels")
-        override.labels = diffDictionary("labels")
-        override.colors = diffDictionary("colors")
-        override.layout = diffDictionary("layout")
-        override.meta = diffDictionary("meta")
-        if !fieldsEqual(self.fields, base.fields) {
-            override.fields = self.fields
-        }
-        if override.sectionLabels == nil,
-           override.contactLabels == nil,
-           override.labels == nil,
-           override.colors == nil,
-           override.layout == nil,
-           override.meta == nil,
-           override.fields == nil {
-            return nil
-        }
-        return override
-    }
+
+
     func dictionaryDefaultValue() -> [String: Any] {
         jsonValueToDictionary(defaultValue?.value)
     }
@@ -608,16 +550,5 @@ private extension TemplateManifest.Section {
         }
         return value as? [String: Any] ?? [:]
     }
-    private func fieldsEqual(
-        _ lhs: [TemplateManifest.Section.FieldDescriptor],
-        _ rhs: [TemplateManifest.Section.FieldDescriptor]
-    ) -> Bool {
-        if lhs.count != rhs.count { return false }
-        let encoder = JSONEncoder()
-        guard let lhsData = try? encoder.encode(lhs),
-              let rhsData = try? encoder.encode(rhs) else {
-            return false
-        }
-        return lhsData == rhsData
-    }
+
 }

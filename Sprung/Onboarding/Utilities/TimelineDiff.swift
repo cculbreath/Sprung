@@ -2,8 +2,6 @@ import Foundation
 struct TimelineDiff {
     struct FieldChange {
         let field: String
-        let previous: String
-        let current: String
     }
     struct HighlightChange {
         let added: [String]
@@ -13,7 +11,6 @@ struct TimelineDiff {
         }
     }
     struct CardChange {
-        let id: String
         let title: String
         let fieldChanges: [FieldChange]
         let highlightChange: HighlightChange?
@@ -41,7 +38,6 @@ enum TimelineDiffBuilder {
             let fieldChanges = collectFieldChanges(old: originalCard, new: updatedCard)
             let highlightChange = collectHighlightChange(old: originalCard.highlights, new: updatedCard.highlights)
             let change = TimelineDiff.CardChange(
-                id: identifier,
                 title: bestTitle(for: updatedCard, fallback: originalCard),
                 fieldChanges: fieldChanges,
                 highlightChange: highlightChange
@@ -88,9 +84,7 @@ enum TimelineDiffBuilder {
         if old != new {
             changes.append(
                 TimelineDiff.FieldChange(
-                    field: name,
-                    previous: old,
-                    current: new
+                    field: name
                 )
             )
         }

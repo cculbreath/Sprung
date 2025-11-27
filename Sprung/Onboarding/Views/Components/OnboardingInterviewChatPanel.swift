@@ -77,20 +77,20 @@ struct OnboardingInterviewChatPanel: View {
                         )
                 )
                 if coordinator.ui.isProcessing {
-                    Button {
+                    Button(action: {
                         Task {
                             await coordinator.requestCancelLLM()
                         }
-                    } label: {
+                    }, label: {
                         Label("Stop", systemImage: "stop.fill")
-                    }
+                    })
                     .buttonStyle(.bordered)
                 } else {
-                    Button {
+                    Button(action: {
                         send(state.userInput)
-                    } label: {
+                    }, label: {
                         Label("Send", systemImage: "paperplane.fill")
-                    }
+                    })
                     .buttonStyle(.borderedProminent)
                     .disabled(
                         state.userInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
@@ -178,16 +178,16 @@ struct OnboardingInterviewChatPanel: View {
     private func scrollToLatestButton(proxy: ScrollViewProxy) -> some View {
         Group {
             if showScrollToLatest {
-                Button {
+                Button(action: {
                     state.shouldAutoScroll = true
                     scrollToLatestMessage(proxy)
-                } label: {
+                }, label: {
                     Image(systemName: "arrow.down.circle.fill")
                         .font(.title2)
                         .foregroundStyle(Color.accentColor)
                         .padding(8)
                         .background(.thinMaterial, in: Circle())
-                }
+                })
                 .buttonStyle(.plain)
                 .padding(.trailing, 24)
                 .padding(.bottom, 24)
@@ -279,22 +279,7 @@ struct OnboardingInterviewChatPanel: View {
         return "Sprung Transcript \(stamp).txt"
     }
 }
-private struct ReasoningStatusBar: View {
-    let text: String
-    var body: some View {
-        HStack(spacing: 8) {
-            ProgressView()
-                .controlSize(.small)
-            Text(text)
-                .font(.footnote)
-                .italic()
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.leading)
-        }
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
+
 private struct ModelAvailabilityBanner: View {
     let text: String
     let onOpenSettings: () -> Void
@@ -312,12 +297,12 @@ private struct ModelAvailabilityBanner: View {
                 onOpenSettings()
             }
             .buttonStyle(.link)
-            Button {
+            Button(action: {
                 onDismiss()
-            } label: {
+            }, label: {
                 Image(systemName: "xmark")
                     .imageScale(.small)
-            }
+            })
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
         }

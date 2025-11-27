@@ -50,15 +50,6 @@ final class SwiftOpenAIClient: LLMClient {
             case .debug: return "debug"
             }
         }
-        init?(storageValue: String) {
-            switch storageValue.lowercased() {
-            case "quiet": self = .quiet
-            case "info": self = .info
-            case "verbose": self = .verbose
-            case "debug": self = .debug
-            default: return nil
-            }
-        }
     }
     /// Change the verbosity of SwiftOpenAI diagnostic logging at runtime.
     static func setLogLevel(_ level: LogLevel) {
@@ -110,13 +101,6 @@ final class SwiftOpenAIClient: LLMClient {
             return true
         }
         return false
-    }
-    static func logLevel(from storageValue: String) -> LogLevel {
-        LogLevel(storageValue: storageValue) ?? .info
-    }
-    static func applyStoredLogLevel() {
-        let stored = UserDefaults.standard.string(forKey: defaultsKey) ?? LogLevel.info.storageValue
-        setLogLevel(logLevel(from: stored))
     }
     init(executor: LLMRequestExecutor = LLMRequestExecutor()) {
         self.executor = executor

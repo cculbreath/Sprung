@@ -17,7 +17,6 @@ final class OpenAIServiceTTSWrapper: TTSCapable {
     func sendTTSRequest(
         text: String,
         voice: String,
-        instructions: String?,
         onComplete: @escaping (Result<Data, Error>) -> Void
     ) {
         Task {
@@ -41,7 +40,6 @@ final class OpenAIServiceTTSWrapper: TTSCapable {
     func sendTTSStreamingRequest(
         text: String,
         voice: String,
-        instructions: String?,
         onChunk: @escaping (Result<Data, Error>) -> Void,
         onComplete: @escaping (Error?) -> Void
     ) {

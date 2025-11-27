@@ -13,7 +13,7 @@ struct BestJobButton: View {
     var body: some View {
         Button(action: {
             showBestJobModelSheet = true
-        }) {
+        }, label: {
             if isProcessingBestJob {
                 Label("Best Job", systemImage: "sparkle").fontWeight(.bold).foregroundColor(.blue)
                     .symbolEffect(.rotate.byLayer)
@@ -22,7 +22,7 @@ struct BestJobButton: View {
                 Label("Best Job", systemImage: "medal")
                     .font(.system(size: 14, weight: .light))
             }
-        }
+        })
         .buttonStyle( .automatic )
         .help("Find the best job match based on your qualifications")
         .disabled(isProcessingBestJob)
@@ -44,15 +44,15 @@ struct BestJobButton: View {
                 }
             )
         }
-        .alert("Job Recommendation", isPresented: $showBestJobAlert) {
+        .alert("Job Recommendation", isPresented: $showBestJobAlert, actions: {
             Button("OK") {
                 bestJobResult = nil
             }
-        } message: {
+        }, message: {
             if let result = bestJobResult {
                 Text(result)
             }
-        }
+        })
         .onReceive(NotificationCenter.default.publisher(for: .triggerBestJobButton)) { _ in
             // Programmatically trigger the button action (from menu commands)
             showBestJobModelSheet = true

@@ -41,7 +41,7 @@ final class PhaseTransitionController {
         var introPayload = JSON()
         introPayload["text"].string = introPrompt
         introPayload["toolChoice"].string = "agent_ready"
-        introPayload["reasoningEffort"].string = "minimal"
+        introPayload["reasoningEffort"].string = "low"  // GPT-5.1 supports: none, low, medium, high
         await eventBus.publish(.llmSendDeveloperMessage(
             payload: introPayload
         ))

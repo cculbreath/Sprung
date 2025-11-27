@@ -60,10 +60,10 @@ struct CoverRefSelectionManagerView: View {
                     Button(action: {
                         newRefType = .backgroundFact
                         showAddSheet = true
-                    }) {
+                    }, label: {
                         Image(systemName: "plus.circle")
                             .foregroundColor(.accentColor)
-                    }
+                    })
                     .buttonStyle(.plain)
                 }
 
@@ -105,10 +105,10 @@ struct CoverRefSelectionManagerView: View {
                     Button(action: {
                         newRefType = .writingSample
                         showAddSheet = true
-                    }) {
+                    }, label: {
                         Image(systemName: "plus.circle")
                             .foregroundColor(.accentColor)
-                    }
+                    })
                     .buttonStyle(.plain)
                 }
 

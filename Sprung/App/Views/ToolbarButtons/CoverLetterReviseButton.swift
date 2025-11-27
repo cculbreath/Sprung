@@ -10,14 +10,14 @@ struct CoverLetterReviseButton: View {
     var body: some View {
         Button(action: {
             showReviseCoverLetterSheet = true
-        }) {
+        }, label: {
             Label {
                 Text("Revise")
             } icon: {
                 Image(systemName: "text.append")
                     .font(.system(size: 14, weight: .light))
             }
-        }
+        })
         .buttonStyle( .automatic )
         .help("Revise Cover Letter")
         .disabled(jobAppStore.selectedApp?.selectedCover?.generated != true)

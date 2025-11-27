@@ -107,9 +107,10 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
                 await emit(.llmSendDeveloperMessage(payload: devPayload))
             }
             // Determine reasoning effort for specific tools
+            // GPT-5.1 supports: none, low, medium, high (not "minimal")
             let reasoningEffort: String? = {
                 if toolName == "agent_ready" || toolName == "get_applicant_profile" {
-                    return "minimal"
+                    return "low"
                 }
                 return nil
             }()

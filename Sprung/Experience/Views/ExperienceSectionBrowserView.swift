@@ -9,7 +9,7 @@ struct ExperienceSectionBrowserView: View {
                     .font(.headline)
                     .padding(.top, 12)
                 ForEach(ExperienceSchema.sections) { section in
-                    DisclosureGroup(isExpanded: binding(for: section.key)) {
+                    DisclosureGroup(isExpanded: binding(for: section.key), content: {
                         VStack(alignment: .leading, spacing: 4) {
                             ForEach(section.nodes) { node in
                                 nodeView(node, indentLevel: 1)
@@ -17,7 +17,7 @@ struct ExperienceSectionBrowserView: View {
                         }
                         .padding(.leading, 4)
                         .padding(.bottom, 4)
-                    } label: {
+                    }, label: {
                         HStack {
                             Text(section.metadata.title)
                                 .font(.subheadline)
@@ -27,7 +27,7 @@ struct ExperienceSectionBrowserView: View {
                                 .toggleStyle(.checkbox)
                         }
                         .padding(.vertical, 4)
-                    }
+                    })
                     .disclosureGroupStyle(.automatic)
                 }
             }

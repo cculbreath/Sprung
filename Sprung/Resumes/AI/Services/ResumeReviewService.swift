@@ -52,7 +52,8 @@ class ResumeReviewService: @unchecked Sendable {
         Task { @MainActor in
             do {
                 // Determine if we need image input
-                let needsImage = (reviewType != .custom && reviewType != .fixOverflow) || (customOptions?.includeResumeImage ?? false)
+                let needsImage = (reviewType != .custom && reviewType != .fixOverflow) ||
+                    (customOptions?.includeResumeImage ?? false)
                 var imageData: [Data] = []
 
                 if needsImage, let pdfData = resume.pdfData {
@@ -62,7 +63,11 @@ class ResumeReviewService: @unchecked Sendable {
                         imageData = [pngData]
                     } else {
                         Logger.error("ResumeReviewService: Failed to convert PDF to image format")
-                        onComplete(.failure(NSError(domain: "ResumeReviewService", code: 1008, userInfo: [NSLocalizedDescriptionKey: "Failed to convert PDF to image format"])))
+                        onComplete(.failure(NSError(
+                            domain: "ResumeReviewService",
+                            code: 1008,
+                            userInfo: [NSLocalizedDescriptionKey: "Failed to convert PDF to image format"]
+                        )))
                         return
                     }
                 }
@@ -83,7 +88,12 @@ class ResumeReviewService: @unchecked Sendable {
                     response = try await llm.executeText(prompt: promptText, modelId: modelId, temperature: nil)
                 } else {
                     // Multimodal request
-                    response = try await llm.executeTextWithImages(prompt: promptText, modelId: modelId, images: imageData, temperature: nil)
+                    response = try await llm.executeTextWithImages(
+                        prompt: promptText,
+                        modelId: modelId,
+                        images: imageData,
+                        temperature: nil
+                    )
                 }
 
                 // Check if request was cancelled
@@ -171,7 +181,12 @@ class ResumeReviewService: @unchecked Sendable {
                         )
 
                         // Text-only structured request for Grok
-                        response = try await llm.executeStructured(prompt: grokPrompt, modelId: modelId, as: FixFitsResponseContainer.self, temperature: nil)
+                        response = try await llm.executeStructured(
+                            prompt: grokPrompt,
+                            modelId: modelId,
+                            as: FixFitsResponseContainer.self,
+                            temperature: nil
+                        )
                     } else {
                         Logger.debug("Using standard image-based approach for fix fits request")
 
@@ -187,7 +202,13 @@ class ResumeReviewService: @unchecked Sendable {
                         }
 
                         // Multimodal structured request
-                        response = try await llm.executeStructuredWithImages(prompt: prompt, modelId: modelId, images: [imageData], as: FixFitsResponseContainer.self, temperature: nil)
+                        response = try await llm.executeStructuredWithImages(
+                            prompt: prompt,
+                            modelId: modelId,
+                            images: [imageData],
+                            as: FixFitsResponseContainer.self,
+                            temperature: nil
+                        )
                     }
                 }
 
@@ -236,7 +257,11 @@ class ResumeReviewService: @unchecked Sendable {
 
                 // Convert base64Image back to Data for LLMService
                 guard let imageData = Data(base64Encoded: base64Image) else {
-                    throw NSError(domain: "ResumeReviewService", code: 1006, userInfo: [NSLocalizedDescriptionKey: "Failed to decode base64 image data for contents fit check"])
+                    throw NSError(
+                        domain: "ResumeReviewService",
+                        code: 1006,
+                        userInfo: [NSLocalizedDescriptionKey: "Failed to decode base64 image data for contents fit check"]
+                    )
                 }
 
                 // ContentsFit always uses images, so no streaming support
@@ -304,7 +329,11 @@ class ResumeReviewService: @unchecked Sendable {
         onComplete: @escaping (Result<ReorderSkillsResponse, Error>) -> Void
     ) {
         guard let jobApp = resume.jobApp else {
-            onComplete(.failure(NSError(domain: "ResumeReviewService", code: 1010, userInfo: [NSLocalizedDescriptionKey: "No job application associated with this resume."])))
+            onComplete(.failure(NSError(
+                domain: "ResumeReviewService",
+                code: 1010,
+                userInfo: [NSLocalizedDescriptionKey: "No job application associated with this resume."]
+            )))
             return
         }
 
@@ -502,6 +531,10 @@ class ResumeReviewService: @unchecked Sendable {
             }
         }
 
-        throw NSError(domain: "ResumeReviewService", code: 1007, userInfo: [NSLocalizedDescriptionKey: "Failed to parse JSON from response text"])
+        throw NSError(
+            domain: "ResumeReviewService",
+            code: 1007,
+            userInfo: [NSLocalizedDescriptionKey: "Failed to parse JSON from response text"]
+        )
     }
 }

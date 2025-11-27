@@ -28,16 +28,16 @@ opt_in_rules:
 
 # Disabled rules (uncomment to disable specific rules)
 disabled_rules:
+  - line_length  # Disabled - not valuable for codebase with lots of LLM prompts/descriptions
   # - trailing_whitespace  # We'll fix this with auto-fix first
-  # - line_length  # We'll adjust this below
 
 # Customize rule configurations
-line_length:
-  warning: 140  # More reasonable than 120 for modern screens
-  error: 200
-  ignores_function_declarations: true
-  ignores_comments: true
-  ignores_urls: true
+# line_length:  # DISABLED - see disabled_rules above
+#   warning: 140  # More reasonable than 120 for modern screens
+#   error: 200
+#   ignores_function_declarations: true
+#   ignores_comments: true
+#   ignores_urls: true
 
 file_length:
   warning: 500  # Slightly more lenient

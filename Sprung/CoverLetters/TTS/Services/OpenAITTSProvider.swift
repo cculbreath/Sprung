@@ -180,7 +180,6 @@ class OpenAITTSProvider {
         ttsClient.sendTTSRequest(
             text: textToSpeak,
             voice: voice.rawValue,
-            instructions: instructions,
             onComplete: { [weak self] result in
                 switch result {
                 case let .success(audioData):
@@ -476,7 +475,6 @@ class OpenAITTSProvider {
         ttsClient.sendTTSStreamingRequest(
             text: text,
             voice: voice.rawValue,
-            instructions: instructions,
             onChunk: { [weak self] result in
                 guard let self,
                       self.currentStreamID == streamID,

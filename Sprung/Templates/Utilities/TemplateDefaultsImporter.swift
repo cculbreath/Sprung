@@ -12,8 +12,7 @@ struct TemplateDefaultsCatalog: Decodable {
         let isDefault: Bool
         let paths: Paths
     }
-    let version: Int
-    let generatedAt: String?
+
     let templates: [Entry]
 }
 enum TemplateDefaultsImporterError: Error {

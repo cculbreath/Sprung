@@ -216,22 +216,22 @@ private struct CoverLetterActionsBar: View {
         HStack(spacing: 12) {
             CoverLetterReviseButton()
 
-            Button {
+            Button(action: {
                 NotificationCenter.default.post(name: .batchCoverLetter, object: nil)
-            } label: {
+            }, label: {
                 Label("Batch Letter", systemImage: "square.stack.3d.down.right")
                     .font(.system(size: 14, weight: .light))
-            }
+            })
             .buttonStyle(.automatic)
             .help("Batch Cover Letter Operations")
             .disabled(jobAppStore.selectedApp?.selectedRes == nil)
 
-            Button {
+            Button(action: {
                 NotificationCenter.default.post(name: .committee, object: nil)
-            } label: {
+            }, label: {
                 Label("Committee", systemImage: "trophy")
                     .font(.system(size: 14, weight: .light))
-            }
+            })
             .buttonStyle(.automatic)
             .help("Multi-model Choose Best Cover Letter")
             .disabled(!hasRequiredLettersForCommittee)
@@ -274,7 +274,7 @@ struct GenerateCoverLetterButtonView: View {
     var body: some View {
         Button(action: {
             NotificationCenter.default.post(name: .triggerGenerateCoverLetterButton, object: nil)
-        }) {
+        }, label: {
             VStack(spacing: 12) {
                 // Modern card design
                 RoundedRectangle(cornerRadius: 16)
@@ -340,7 +340,7 @@ struct GenerateCoverLetterButtonView: View {
             }
             .scaleEffect(isHovered ? 1.02 : 1.0)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isHovered)
-        }
+        })
         .buttonStyle(.plain)
         .disabled(jobAppStore.selectedApp?.selectedRes == nil)
         .onHover { hovering in
@@ -357,7 +357,7 @@ struct BatchCoverLetterButtonView: View {
     var body: some View {
         Button(action: {
             NotificationCenter.default.post(name: .batchCoverLetter, object: nil)
-        }) {
+        }, label: {
             VStack(spacing: 12) {
                 // Modern card design
                 RoundedRectangle(cornerRadius: 16)
@@ -421,7 +421,7 @@ struct BatchCoverLetterButtonView: View {
             }
             .scaleEffect(isHovered ? 1.02 : 1.0)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isHovered)
-        }
+        })
         .buttonStyle(.plain)
         .disabled(jobAppStore.selectedApp?.selectedRes == nil)
         .onHover { hovering in

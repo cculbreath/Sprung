@@ -45,9 +45,9 @@ struct UnifiedToolbar: CustomizableToolbarContent {
             ToolbarItem(id: "newJobApp", placement: .navigation, showsByDefault: true) {
                 Button(action: {
                     showNewAppSheet = true
-                }) {
+                }, label: {
                     Label("Job App", systemImage: "note.text.badge.plus" ).font(.system(size: 14, weight: .light))
-                }
+                })
                 .buttonStyle( .automatic )
                 .help("Create New Job Application")
             }
@@ -63,10 +63,10 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                             delegate.showApplicantProfileWindow()
                         }
                     }
-                }) {
+                }, label: {
                     Label("Profile", systemImage: "person")
                         .font(.system(size: 14, weight: .light))
-                }
+                })
                 .buttonStyle(.automatic)
                 .help("Open Applicant Profile")
             }
@@ -84,10 +84,10 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                             delegate.showOnboardingInterviewWindow()
                         }
                     }
-                }) {
+                }, label: {
                     Label("Interview", systemImage: "bubble.left.and.text.bubble.right")
                         .font(.system(size: 14, weight: .light))
-                }
+                })
                 .buttonStyle(.automatic)
                 .help("Launch onboarding interview")
             }
@@ -97,11 +97,11 @@ struct UnifiedToolbar: CustomizableToolbarContent {
             ToolbarItem(id: "analyze", placement: .secondaryAction, showsByDefault: true) {
                 Button(action: {
                     sheets.showApplicationReview = true
-                }) {
+                }, label: {
                     Label("Analyze", systemImage: "mail.and.text.magnifyingglass")
                         .font(.system(size: 14, weight: .light))
 
-                }
+                })
                 .buttonStyle( .automatic )
                 .help("Review Application")
                 .disabled(jobAppStore.selectedApp?.selectedRes == nil ||
@@ -118,10 +118,10 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                         NotificationCenter.default.post(name: .showTemplateEditor, object: nil)
                         NSApp.sendAction(#selector(AppDelegate.showTemplateEditorWindow), to: nil, from: nil)
                     }
-                }) {
+                }, label: {
                     Label("Templates", systemImage: "richtext.page")
                         .font(.system(size: 14, weight: .light))
-                }
+                })
                 .buttonStyle(.automatic)
                 .help("Open Template Editor")
             }
@@ -131,10 +131,10 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                         NotificationCenter.default.post(name: .showExperienceEditor, object: nil)
                         NSApp.sendAction(#selector(AppDelegate.showExperienceEditorWindow), to: nil, from: nil)
                     }
-                }) {
+                }, label: {
                     Label("Experience", systemImage: "briefcase")
                         .font(.system(size: 14, weight: .light))
-                }
+                })
                 .buttonStyle(.automatic)
                 .help("Open Experience Editor")
             }
@@ -143,10 +143,10 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                     withAnimation(.spring(response: 0.5, dampingFraction: 0.8, blendDuration: 0.2)) {
                         showSlidingList.toggle()
                     }
-                }) {
+                }, label: {
                     Label("Sources", systemImage: "newspaper")
                         .font(.system(size: 14, weight: .light))
-                }
+                })
                 .buttonStyle(.automatic)
                 .help("Show Sources")
                 .disabled(jobAppStore.selectedApp == nil)

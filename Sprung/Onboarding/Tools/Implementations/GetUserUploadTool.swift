@@ -14,10 +14,12 @@ struct GetUserUploadTool: InterviewTool {
             type: .object,
             description: """
                 Present an upload card in the tool pane to request files or URLs from the user.
-                Users can upload files directly or paste URLs. Uploaded files are automatically processed - text is extracted and packaged as ArtifactRecords.
+                Users can upload files directly or paste URLs. Uploaded files are automatically processed - \
+                text is extracted and packaged as ArtifactRecords.
                 RETURNS: { "message": "UI presented. Awaiting user input.", "status": "completed" }
                 The tool completes immediately after presenting UI. User uploads arrive as new user messages with artifact metadata.
-                USAGE: Use during skeleton_timeline to gather resume/LinkedIn/transcripts, or for profile photos. Always set target_phase_objectives to help route artifacts to correct workflow stages.
+                USAGE: Use during skeleton_timeline to gather resume/LinkedIn/transcripts, or for profile photos. \
+                Always set target_phase_objectives to help route artifacts to correct workflow stages.
                 WORKFLOW:
                 1. Call get_user_upload with appropriate prompt
                 2. Tool returns immediately - card is now active in tool pane
@@ -74,7 +76,9 @@ struct GetUserUploadTool: InterviewTool {
         self.coordinator = coordinator
     }
     var name: String { "get_user_upload" }
-    var description: String { "Present upload card for files/URLs. Returns immediately - uploads arrive as artifacts. Use for resume, LinkedIn, transcripts, photos." }
+    var description: String {
+        "Present upload card for files/URLs. Returns immediately - uploads arrive as artifacts. Use for resume, LinkedIn, transcripts, photos."
+    }
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {
         let requestPayload = try UploadRequestPayload(json: params)
@@ -105,7 +109,9 @@ private struct UploadRequestPayload {
     init(json: JSON) throws {
         if let rawType = json["upload_type"].string {
             let normalizedType = rawType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            guard let parsedKind = OnboardingUploadKind.allCases.first(where: { $0.rawValue.lowercased() == normalizedType }) else {
+        guard let parsedKind = OnboardingUploadKind.allCases.first(where: {
+            $0.rawValue.lowercased() == normalizedType
+        }) else {
                 let options = OnboardingUploadKind.allCases.map { $0.rawValue }.joined(separator: ", ")
                 throw ToolError.invalidParameters("upload_type must be one of: \(options)")
             }
@@ -116,7 +122,9 @@ private struct UploadRequestPayload {
         guard let prompt = json["prompt_to_user"].string?.trimmingCharacters(in: .whitespacesAndNewlines), !prompt.isEmpty else {
             throw ToolError.invalidParameters("prompt_to_user must be provided and non-empty.")
         }
-        let formats = (json["allowed_types"].arrayObject as? [String]) ?? ["pdf", "txt", "rtf", "doc", "docx", "jpg", "jpeg", "png", "gif", "md", "html", "htm"]
+        let formats = (json["allowed_types"].arrayObject as? [String]) ?? [
+            "pdf", "txt", "rtf", "doc", "docx", "jpg", "jpeg", "png", "gif", "md", "html", "htm"
+        ]
         let normalized = formats.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
         let allowMultiple = json["allow_multiple"].bool ?? (kind != .resume)
         let allowURL = json["allow_url"].bool ?? true

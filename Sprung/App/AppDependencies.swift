@@ -188,6 +188,42 @@ final class AppDependencies {
         )
         llmService.reconfigureClient()
         appEnvironment.requiresTemplateSetup = templateStore.templates().isEmpty
+        setupNotificationObservers()
         Logger.debug("✅ AppDependencies: ready", category: .appLifecycle)
+    }
+    private func setupNotificationObservers() {
+        NotificationCenter.default.addObserver(
+            forName: .apiKeysChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleAPIKeysChanged()
+        }
+    }
+    private func handleAPIKeysChanged() {
+        Logger.info("🔑 API keys changed - refreshing services", category: .appLifecycle)
+        // Re-check OpenAI key
+        if let openAIKey = APIKeyManager.get(.openAI)?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !openAIKey.isEmpty {
+            let debugEnabled = Logger.isVerboseEnabled
+            let responsesConfiguration = URLSessionConfiguration.default
+            responsesConfiguration.timeoutIntervalForRequest = 180
+            responsesConfiguration.timeoutIntervalForResource = 600
+            responsesConfiguration.waitsForConnectivity = true
+            let responsesSession = URLSession(configuration: responsesConfiguration)
+            let responsesHTTPClient = URLSessionHTTPClientAdapter(urlSession: responsesSession)
+            let openAIService = OpenAIServiceFactory.service(
+                apiKey: openAIKey,
+                httpClient: responsesHTTPClient,
+                debugEnabled: debugEnabled
+            )
+            // Update Onboarding Coordinator
+            onboardingCoordinator.updateOpenAIService(openAIService)
+            Logger.info("✅ Onboarding OpenAIService updated with new key", category: .appLifecycle)
+        } else {
+            // Key removed or empty
+            onboardingCoordinator.updateOpenAIService(nil)
+            Logger.info("⚠️ Onboarding OpenAIService cleared (no key)", category: .appLifecycle)
+        }
     }
 }

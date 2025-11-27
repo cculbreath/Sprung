@@ -259,12 +259,12 @@ struct EditToggleButton: View {
             withAnimation(.easeInOut(duration: 0.3)) {
                 isEditing.toggle()
             }
-        }) {
+        }, label: {
             Image(systemName: isEditing ? "doc.text.viewfinder" : "pencil")
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(buttonColor)
                 .frame(width: 32, height: 32)
-        }
+        })
         .buttonStyle(.plain)
         .glassEffect(.regular.tint(glassColor), in: .circle)
         .glassEffectID("edit", in: namespace)
@@ -297,13 +297,13 @@ struct StarToggleButton: View {
     @State private var isHovering = false
 
     var body: some View {
-        Button(action: action) {
+        Button(action: action, label: {
             Image(systemName: iconName)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(buttonColor)
                 .symbolRenderingMode(.hierarchical)
                 .frame(width: 32, height: 32)
-        }
+        })
         .buttonStyle(.plain)
         .glassEffect(.regular.tint(glassColor), in: .circle)
         .glassEffectID("star", in: namespace)
@@ -345,12 +345,12 @@ struct DeleteButton: View {
     @State private var isHovering = false
 
     var body: some View {
-        Button(action: action) {
+        Button(action: action, label: {
             Image(systemName: "trash")
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(isHovering ? .red : .secondary)
                 .frame(width: 32, height: 32)
-        }
+        })
         .buttonStyle(.plain)
         .glassEffect(.regular.tint(isHovering ? .red.opacity(0.3) : .secondary.opacity(0.1)), in: .circle)
         .glassEffectID("delete", in: namespace)
@@ -374,12 +374,12 @@ struct CoverLetterNavigationButtons: View {
     var body: some View {
         HStack(spacing: 8) {
             // Previous button
-            Button(action: navigateToPrevious) {
+            Button(action: navigateToPrevious, label: {
                 Image(systemName: "chevron.left.circle")
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(canNavigatePrevious ? (isHoveringPrev ? .accentColor : .secondary) : .secondary.opacity(0.3))
                     .frame(width: 28, height: 28)
-            }
+            })
             .buttonStyle(.plain)
             .glassEffect(.regular.tint(isHoveringPrev && canNavigatePrevious ? .accentColor.opacity(0.3) : .clear), in: .circle)
             .glassEffectID("nav-prev", in: namespace)
@@ -390,12 +390,12 @@ struct CoverLetterNavigationButtons: View {
             }
 
             // Next button
-            Button(action: navigateToNext) {
+            Button(action: navigateToNext, label: {
                 Image(systemName: "chevron.right.circle")
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(canNavigateNext ? (isHoveringNext ? .accentColor : .secondary) : .secondary.opacity(0.3))
                     .frame(width: 28, height: 28)
-            }
+            })
             .buttonStyle(.plain)
             .glassEffect(.regular.tint(isHoveringNext && canNavigateNext ? .accentColor.opacity(0.3) : .clear), in: .circle)
             .glassEffectID("nav-next", in: namespace)

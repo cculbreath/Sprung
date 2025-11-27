@@ -5,8 +5,9 @@ import SwiftyJSON
 actor IngestionCoordinator: OnboardingEventHandler {
     private let eventBus: EventCoordinator
     private let state: StateCoordinator
-    private let agentProvider: () -> KnowledgeCardAgent?
+    private var agentProvider: () -> KnowledgeCardAgent?
     private let documentProcessingService: DocumentProcessingService
+    private var subscriptionTask: Task<Void, Never>?
 
     init(
         eventBus: EventCoordinator,
@@ -22,13 +23,29 @@ actor IngestionCoordinator: OnboardingEventHandler {
         Logger.info("⚙️ IngestionCoordinator initialized", category: .ai)
     }
 
+    func updateAgentProvider(_ provider: @escaping () -> KnowledgeCardAgent?) {
+        self.agentProvider = provider
+    }
+
     func start() async {
+        // Cancel any existing subscription
+        subscriptionTask?.cancel()
+
         // Subscribe to artifact events
-        Task {
-            for await event in await eventBus.stream(topic: .artifact) {
-                await handleEvent(event)
+        subscriptionTask = Task { [weak self] in
+            guard let self else { return }
+            for await event in await self.eventBus.stream(topic: .artifact) {
+                if Task.isCancelled { break }
+                await self.handleEvent(event)
             }
         }
+        Logger.info("📡 IngestionCoordinator subscribed to artifact events", category: .ai)
+    }
+
+    func stop() {
+        subscriptionTask?.cancel()
+        subscriptionTask = nil
+        Logger.info("🛑 IngestionCoordinator stopped", category: .ai)
     }
     func handleEvidenceUpload(url: URL, requirementId: String) async {
         Logger.info("📎 Handling evidence upload for requirement: \(requirementId)", category: .ai)

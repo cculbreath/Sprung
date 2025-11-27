@@ -81,7 +81,8 @@ import Foundation
         let mergeInstructions = allowEntityMerge ? buildMergeInstructions() : ""
 
         return """
-        You are an expert resume optimizer specializing in content efficiency. Your task is to analyze and revise skills entries to ensure they fit properly within the allocated space while maintaining maximum impact.
+        You are an expert resume optimizer specializing in content efficiency. \
+        Your task is to analyze and revise skills entries to ensure they fit properly within the allocated space while maintaining maximum impact.
         Here are the current skills and expertise entries in JSON format:
         \(skillsJsonString)
         TASK:
@@ -131,7 +132,8 @@ import Foundation
         let mergeInstructions = allowEntityMerge ? buildMergeInstructions() : ""
 
         return """
-        You are an expert resume optimizer specializing in content efficiency for tight layouts. Your task is to analyze and revise skills entries to ensure they fit properly within the allocated space.
+        You are an expert resume optimizer specializing in content efficiency for tight layouts. \
+        Your task is to analyze and revise skills entries to ensure they fit properly within the allocated space.
         CONTEXT:
         \(overflowGuidance)
         Here are the current skills and expertise entries in JSON format:
@@ -170,7 +172,8 @@ import Foundation
         return """
 
         ENTITY MERGE OPTION:
-        You are allowed to merge two redundant or conceptually overlapping skill entries if it will help with fit and improve the resume's overall strength. When merging:
+        You are allowed to merge two redundant or conceptually overlapping skill entries if it will help with fit and improve the resume's overall strength. \
+        When merging:
         - Each skill entry in the JSON contains: id, title, description, original_title, and original_description
         - Only merge skill entries that are truly redundant or where combining them creates a stronger, more comprehensive statement
         - Combine the best elements of both entries into a single, more impactful skill entry
@@ -204,9 +207,11 @@ import Foundation
 
         Instructions:
         1. Look at the Education section in the resume image
-        2. Check if any text appears to be cut off at the bottom of the page. There should be a minimum of a 1/4-inch margin above the page edge.
+        2. Check if any text appears to be cut off at the bottom of the page. \
+        There should be a minimum of a 1/4-inch margin above the page edge.
         3. Look for any visual indicators of content overflow (text running beyond boundaries, partial lines, etc.)
-        4. Count approximately how many lines of text appear in the Skills and Expertise section must be removed to prevent the education section from extending off the bottom of the page.
+        4. Count approximately how many lines of text appear in the Skills and Expertise section must be removed \
+        to prevent the education section from extending off the bottom of the page.
 
         RESPONSE FORMAT:
         You must respond with a valid JSON object:
@@ -217,7 +222,8 @@ import Foundation
 
         - Set contentsFit to true if all content fits properly within the page boundaries
         - Set contentsFit to false if there appears to be text overflow or cut-off content
-        - Set overflow_line_count to the estimated number of lines in Skils and Expertise that must be removed to allow the content to fit on the page with a 0.25-inch margin
+        - Set overflow_line_count to the estimated number of lines in Skils and Expertise that must be removed \
+        to allow the content to fit on the page with a 0.25-inch margin
         - Do not include any text outside the JSON object
         """
     }

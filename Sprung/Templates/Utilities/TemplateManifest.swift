@@ -369,9 +369,7 @@ struct TemplateManifest: Codable {
     let keysInEditor: [String]?
     let sectionVisibilityDefaults: [String: Bool]?
     let sectionVisibilityLabels: [String: String]?
-    var usesSynthesizedMetadata: Bool {
-        !synthesizedSectionKeys.isEmpty
-    }
+
     init(
         slug: String,
         schemaVersion: Int = 1,
@@ -534,9 +532,7 @@ struct TemplateManifest: Codable {
 }
 // MARK: - Encoding helpers
 extension TemplateManifest {
-    static func decode(from data: Data) throws -> TemplateManifest {
-        try JSONDecoder().decode(TemplateManifest.self, from: data)
-    }
+
     func sectionVisibilityKeys() -> [String] {
         guard let defaultKeys = sectionVisibilityDefaults?.keys else { return [] }
         return Array(defaultKeys).sorted()

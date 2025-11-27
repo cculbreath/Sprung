@@ -36,13 +36,13 @@ struct ModelProvider {
             return Config(
                 id: "gpt-5-mini",
                 defaultVerbosity: "low",
-                defaultReasoningEffort: "minimal"
+                defaultReasoningEffort: "low"  // GPT-5.1 supports: none, low, medium, high
             )
         case .summarize:
             return Config(
                 id: "gpt-5-nano",
                 defaultVerbosity: "low",
-                defaultReasoningEffort: "minimal"
+                defaultReasoningEffort: "low"  // GPT-5.1 supports: none, low, medium, high
             )
         }
     }
@@ -53,11 +53,18 @@ struct ModelProvider {
             defaultReasoningEffort: nil
         )
     }
-    private static let supportedReasoningEfforts: Set<String> = ["minimal", "low", "medium", "high"]
+    // GPT-5.1 supports: none, low, medium, high (not "minimal")
+    private static let supportedReasoningEfforts: Set<String> = ["none", "low", "medium", "high"]
     private static func userReasoningEffort(defaultValue: String?) -> String? {
         let stored = UserDefaults.standard.string(forKey: "reasoningEffort")?.lowercased()
-        if let stored, supportedReasoningEfforts.contains(stored) {
-            return stored
+        if let stored {
+            // Migrate "minimal" → "low" for GPT-5.1 compatibility
+            if stored == "minimal" {
+                return "low"
+            }
+            if supportedReasoningEfforts.contains(stored) {
+                return stored
+            }
         }
         return defaultValue
     }
