@@ -131,7 +131,7 @@ struct CheckableRefRow: View {
         HStack(spacing: 8) {
             Button(action: {
                 onToggle(!isSelected)
-            }) {
+            }, label: {
                 HStack(spacing: 8) {
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                         .foregroundColor(isSelected ? .accentColor : .secondary)
@@ -153,15 +153,15 @@ struct CheckableRefRow: View {
 
                     Spacer()
                 }
-            }
+            })
             .buttonStyle(.plain)
 
             if isHovering {
-                Button(action: onDelete) {
+                Button(action: onDelete, label: {
                     Image(systemName: "trash")
                         .font(.caption)
                         .foregroundColor(.red)
-                }
+                })
                 .buttonStyle(.plain)
             }
         }

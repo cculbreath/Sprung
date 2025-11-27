@@ -510,12 +510,12 @@ actor EventCoordinator {
             }
         case .uploadCompleted(let files, let requestKind, _, _):
             description = "Upload completed: \(files.count) file(s), kind: \(requestKind)"
-            case .profileSummaryUpdateRequested:
-                description = "Profile Summary Update Requested"
-            case .profileSummaryDismissRequested:
-                description = "Dismiss Profile Summary Requested"
-            case .toolPaneCardRestored(let card):
-                description = "ToolPane card restored: \(card.rawValue)"
+        case .profileSummaryUpdateRequested:
+            description = "Profile Summary Update Requested"
+        case .profileSummaryDismissRequested:
+            description = "Dismiss Profile Summary Requested"
+        case .toolPaneCardRestored(let card):
+            description = "ToolPane card restored: \(card.rawValue)"
         }
         Logger.debug("[Event] \(description)", category: .ai)
     }

@@ -65,9 +65,6 @@ struct ValidationCardContainer<Draft: Equatable, Content: View>: View {
                     editingEntries.insert(id)
                 }
             },
-            endEditing: { id in
-                editingEntries.remove(id)
-            },
             onChange: {
                 markDirty()
             }

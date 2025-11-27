@@ -79,20 +79,6 @@ final class OnboardingInterviewViewModel {
             availableModelIds: availableModelIds
         )
     }
-    func syncConsentFromCoordinator(_ coordinator: OnboardingInterviewCoordinator?) {
-        guard let coordinator = coordinator else { return }
-        Task {
-            guard coordinator.ui.isActive else { return }
-            await MainActor.run {
-                webSearchAllowed = coordinator.ui.preferences.allowWebSearch
-                writingAnalysisAllowed = coordinator.ui.preferences.allowWritingAnalysis
-            }
-        }
-    }
-    func registerImportError(_ error: String) {
-        importErrorText = error
-        showImportError = true
-    }
     func clearImportError() {
         importErrorText = nil
         showImportError = false

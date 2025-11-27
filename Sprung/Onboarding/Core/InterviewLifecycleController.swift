@@ -12,7 +12,7 @@ final class InterviewLifecycleController {
     private let chatboxHandler: ChatboxHandler
     private let toolExecutionCoordinator: ToolExecutionCoordinator
     private let toolRouter: ToolHandler
-    private let openAIService: OpenAIService?
+    private var openAIService: OpenAIService?
     private let toolRegistry: ToolRegistry
     private let dataStore: InterviewDataStore
     // MARK: - Lifecycle State
@@ -55,12 +55,20 @@ final class InterviewLifecycleController {
         }
         // Set interview as active
         await state.setActiveState(true)
+        // Start event subscriptions BEFORE orchestrator sends initial message
+        // StateCoordinator must be listening for .llmEnqueueUserMessage events
+        // to process the queue and emit .llmExecuteUserMessage for LLMMessenger
+        await state.startEventSubscriptions()
+        await chatboxHandler.startEventSubscriptions()
+        await toolExecutionCoordinator.startEventSubscriptions()
+        await toolRouter.startEventSubscriptions()
         // Build orchestrator
         let phase = await state.phase
         let baseDeveloperMessage = phaseRegistry.buildSystemPrompt(for: phase)
         let orchestrator = makeOrchestrator(service: service, baseDeveloperMessage: baseDeveloperMessage)
         self.orchestrator = orchestrator
         // Initialize orchestrator with resume flag
+        // Now safe to send initial message - StateCoordinator is already subscribed
         do {
             try await orchestrator.startInterview(isResuming: isResuming)
         } catch {
@@ -68,11 +76,6 @@ final class InterviewLifecycleController {
             await state.setActiveState(false)
             return false
         }
-        // Start event subscriptions for all other handlers
-        await chatboxHandler.startEventSubscriptions()
-        await toolExecutionCoordinator.startEventSubscriptions()
-        await state.startEventSubscriptions()
-        await toolRouter.startEventSubscriptions()
         // NOW publish allowed tools - LLMMessenger is already subscribed
         await state.publishAllowedToolsNow()
         // Start workflow engine
@@ -105,6 +108,17 @@ final class InterviewLifecycleController {
             await eventBus.publish(.phaseTransitionApplied(phase: currentPhase.rawValue, timestamp: Date()))
         }
         return true
+    }
+    func updateOpenAIService(_ service: OpenAIService?) {
+        self.openAIService = service
+        if let orchestrator = orchestrator, let service = service {
+            // If we have an active orchestrator, we might need to update its service reference
+            // However, InterviewOrchestrator holds a let reference.
+            // For now, we'll just log. In a full implementation, we might need to restart the orchestrator
+            // or make its service updatable too.
+            // Given the current architecture, a restart of the interview might be cleaner if it was already running.
+            Logger.info("🔄 OpenAIService updated in LifecycleController", category: .ai)
+        }
     }
     func endInterview() async {
         Logger.info("🛑 Ending interview (lifecycle controller)", category: .ai)

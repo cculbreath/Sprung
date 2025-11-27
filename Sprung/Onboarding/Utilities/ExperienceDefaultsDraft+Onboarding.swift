@@ -6,43 +6,7 @@ extension ExperienceDefaultsDraft {
             setEnabled(isEnabled, for: key)
         }
     }
-    mutating func replaceSection(_ key: ExperienceSectionKey, with other: ExperienceDefaultsDraft) {
-        switch key {
-        case .work:
-            work = other.work
-            isWorkEnabled = !work.isEmpty
-        case .volunteer:
-            volunteer = other.volunteer
-            isVolunteerEnabled = !volunteer.isEmpty
-        case .education:
-            education = other.education
-            isEducationEnabled = !education.isEmpty
-        case .projects:
-            projects = other.projects
-            isProjectsEnabled = !projects.isEmpty
-        case .skills:
-            skills = other.skills
-            isSkillsEnabled = !skills.isEmpty
-        case .awards:
-            awards = other.awards
-            isAwardsEnabled = !awards.isEmpty
-        case .certificates:
-            certificates = other.certificates
-            isCertificatesEnabled = !certificates.isEmpty
-        case .publications:
-            publications = other.publications
-            isPublicationsEnabled = !publications.isEmpty
-        case .languages:
-            languages = other.languages
-            isLanguagesEnabled = !languages.isEmpty
-        case .interests:
-            interests = other.interests
-            isInterestsEnabled = !interests.isEmpty
-        case .references:
-            references = other.references
-            isReferencesEnabled = !references.isEmpty
-        }
-    }
+
     func enabledSectionKeys() -> [ExperienceSectionKey] {
         ExperienceSectionKey.allCases.filter { isEnabled(for: $0) }
     }

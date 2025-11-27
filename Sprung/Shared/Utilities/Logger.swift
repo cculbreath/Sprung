@@ -71,22 +71,22 @@ final class Logger {
         /// Returns a string representation of the log level.
         var label: String {
             switch self {
-                case .verbose:  return "VERBOSE"
-                case .debug:    return "DEBUG"
-                case .info:     return "INFO"
-                case .warning:  return "WARNING"
-                case .error:    return "ERROR"
+            case .verbose:  return "VERBOSE"
+            case .debug:    return "DEBUG"
+            case .info:     return "INFO"
+            case .warning:  return "WARNING"
+            case .error:    return "ERROR"
             }
         }
 
         /// Emoji for quick visual scanning in debug logs.
         var emoji: String {
             switch self {
-                case .verbose:  return "📋"
-                case .debug:    return "🔍"
-                case .info:     return "ℹ️"
-                case .warning:  return "⚠️"
-                case .error:    return "🚨"
+            case .verbose:  return "📋"
+            case .debug:    return "🔍"
+            case .info:     return "ℹ️"
+            case .warning:  return "⚠️"
+            case .error:    return "🚨"
             }
         }
     }
@@ -147,13 +147,6 @@ final class Logger {
 #if DEBUG
         configurationQueue.async(flags: .barrier) {
             configuration.enableFileLogging = isEnabled
-        }
-#endif
-    }
-    static func updateConsoleOutput(isEnabled: Bool) {
-#if DEBUG
-        configurationQueue.async(flags: .barrier) {
-            configuration.enableConsoleOutput = isEnabled
         }
 #endif
     }
@@ -293,11 +286,11 @@ final class Logger {
         // DebugSettingsStore.LogLevelSetting:
         // 0 = quiet, 1 = info, 2 = verbose, 3 = debug
         switch rawValue {
-            case 0: return .error      // quiet (errors only)
-            case 1: return .info       // info
-            case 2: return .verbose    // verbose
-            case 3: return .debug      // debug (most output)
-            default: return .info      // fallback
+        case 0: return .error      // quiet (errors only)
+        case 1: return .info       // info
+        case 2: return .verbose    // verbose
+        case 3: return .debug      // debug (most output)
+        default: return .info      // fallback
         }
     }
 
@@ -343,14 +336,14 @@ final class Logger {
 private extension Logger.Level {
     var osLogType: OSLogType {
         switch self {
-            case .verbose, .debug:
-                return .debug
-            case .info:
-                return .info
-            case .warning:
-                return .error
-            case .error:
-                return .fault
+        case .verbose, .debug:
+            return .debug
+        case .info:
+            return .info
+        case .warning:
+            return .error
+        case .error:
+            return .fault
         }
     }
 }

@@ -46,12 +46,12 @@ struct UploadRequestCard: View {
                     .foregroundStyle(.secondary)
             }
             HStack(spacing: 12) {
-                Button("Choose File…") {
+                Button("Choose File…", action: {
                     onSelectFile()
-                }
-                Button(skipButtonTitle) {
+                })
+                Button(skipButtonTitle, action: {
                     onDecline()
-                }
+                })
                 .buttonStyle(.borderless)
             }
         }

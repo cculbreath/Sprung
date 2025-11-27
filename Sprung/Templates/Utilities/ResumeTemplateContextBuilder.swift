@@ -25,7 +25,7 @@ struct ResumeTemplateContextBuilder {
         var context = manifest?.makeDefaultContext() ?? [:]
         merge(into: &context, with: sanitizedExperience)
         merge(into: &context, with: sanitizedSeed)
-        merge(into: &context, with: profileContext(from: applicantProfile, manifest: manifest, templateSlug: template.slug))
+        merge(into: &context, with: profileContext(from: applicantProfile, manifest: manifest))
         addMissingKeys(from: sanitizedExperience, to: &context)
         addMissingKeys(from: sanitizedSeed, to: &context)
         if let manifest {
@@ -46,7 +46,7 @@ struct ResumeTemplateContextBuilder {
         return context
     }
     // MARK: - Private helpers
-    private func profileContext(from profile: ApplicantProfile, manifest: TemplateManifest?, templateSlug: String?) -> [String: Any] {
+    private func profileContext(from profile: ApplicantProfile, manifest: TemplateManifest?) -> [String: Any] {
         let fallbackContext = modernProfileContext(from: profile)
         guard let manifest else {
             return fallbackContext

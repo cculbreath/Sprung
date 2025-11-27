@@ -151,13 +151,13 @@ struct MultiModelProgressSheet: View {
                         Divider()
                             .padding(.vertical, 4)
 
-                        Button(action: { service.deleteZeroVoteLetters(for: selectedVotingScheme) }) {
+                        Button(action: { service.deleteZeroVoteLetters(for: selectedVotingScheme) }, label: {
                             HStack {
                                 Image(systemName: "trash")
                                 Text("Delete letters with 0 \(selectedVotingScheme == .firstPastThePost ? "votes" : "points")")
                             }
                             .foregroundColor(.red)
-                        }
+                        })
                         .buttonStyle(.bordered)
                     }
                 }

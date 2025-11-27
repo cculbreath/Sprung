@@ -169,7 +169,6 @@ actor NetworkRouter: OnboardingEventEmitter {
                 let arguments = toolCall.arguments
                 let argsJSON = JSON(parseJSON: arguments)
                 let call = ToolCall(
-                    id: UUID().uuidString,
                     name: functionName,
                     arguments: argsJSON,
                     callId: toolCall.callId
@@ -225,7 +224,6 @@ actor NetworkRouter: OnboardingEventEmitter {
         let argsJSON = JSON(parseJSON: arguments)
         // Create tool call with OpenAI's call ID (important for continuations)
         let call = ToolCall(
-            id: UUID().uuidString,
             name: functionName,
             arguments: argsJSON,
             callId: toolCall.callId

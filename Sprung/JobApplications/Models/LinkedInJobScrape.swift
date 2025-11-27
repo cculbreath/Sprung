@@ -106,7 +106,9 @@ extension JobApp {
         } catch let error as URLError {
             switch error.code {
             case .timedOut:
-                Logger.error("🚨 LinkedIn job extraction timed out - page took too long to load")
+                Logger.error(
+                    "🚨 LinkedIn job extraction timed out - page took too long to load"
+                )
                 Logger.error("   This could be due to slow network, LinkedIn anti-bot detection, or heavy page content")
             case .notConnectedToInternet:
                 Logger.error("🚨 LinkedIn job extraction failed - no internet connection")
@@ -196,8 +198,14 @@ extension JobApp {
                 // Start by loading LinkedIn feed to establish session context
                 let feedURL = URL(string: "https://www.linkedin.com/feed/")!
                 var request = URLRequest(url: feedURL)
-                request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", forHTTPHeaderField: "User-Agent")
-                request.setValue("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", forHTTPHeaderField: "Accept")
+                request.setValue(
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    forHTTPHeaderField: "User-Agent"
+                )
+                request.setValue(
+                    "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    forHTTPHeaderField: "Accept"
+                )
                 request.setValue("en-US,en;q=0.5", forHTTPHeaderField: "Accept-Language")
                 request.setValue("gzip, deflate, br", forHTTPHeaderField: "Accept-Encoding")
                 request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
@@ -249,7 +257,9 @@ extension JobApp {
                                         )
                                         continuation.resume(throwing: htmlError)
                                     } else if let html = htmlResult as? String {
-                                        Logger.info("✅ [LinkedIn Scraper] Fallback successfully extracted HTML (\(html.count) characters)")
+                                        Logger.info(
+                                            "✅ [LinkedIn Scraper] Fallback successfully extracted HTML (\(html.count) characters)"
+                                        )
 
                                         // Debug: log the actual HTML if it's suspiciously short
                                         if html.count < 1000 {
@@ -308,7 +318,9 @@ extension JobApp {
                 DispatchQueue.main.asyncAfter(deadline: .now() + LinkedInScrapeTiming.ultimateTimeout) {
                     guard !hasResumed else { return }
                     hasResumed = true
-                    Logger.warning("⚠️ [LinkedIn Scraper] Timeout reached after 60 seconds - will fallback to ScrapingDog")
+                    Logger.warning(
+                        "⚠️ [LinkedIn Scraper] Timeout reached after 60 seconds - will fallback to ScrapingDog"
+                    )
 
                     // Restore original delegate and clean up to prevent crashes
                     webView.navigationDelegate = originalDelegate
@@ -321,7 +333,9 @@ extension JobApp {
                     )
 
                     // Keep debug window open longer on timeout so we can see what happened
-                    Logger.info("🪟 [LinkedIn Scraper] Debug window will stay open for 10 seconds so you can inspect the page")
+                    Logger.info(
+                        "🪟 [LinkedIn Scraper] Debug window will stay open for 10 seconds so you can inspect the page"
+                    )
                     DispatchQueue.main.asyncAfter(deadline: .now() + LinkedInScrapeTiming.timeoutDebugWindowDuration) {
                         debugWindow?.close()
                     }
@@ -417,7 +431,9 @@ extension JobApp {
             }
 
             // Extract location
-            if let locationElement = try? doc.select(".job-details-jobs-unified-top-card__primary-description-container .t-black--light, .jobs-unified-top-card__bullet").first() {
+            if let locationElement = try? doc.select(
+                ".job-details-jobs-unified-top-card__primary-description-container .t-black--light, .jobs-unified-top-card__bullet"
+            ).first() {
                 let locationText = try locationElement.text().trimmingCharacters(in: .whitespacesAndNewlines)
                 // LinkedIn often shows location with other info, extract just the location part
                 jobApp.jobLocation = locationText.components(separatedBy: " · ").first ?? locationText
@@ -425,7 +441,9 @@ extension JobApp {
             }
 
             // Extract job description
-            if let descriptionElement = try? doc.select("#job-details, .job-details-jobs-unified-top-card__job-description, .jobs-description-content__text").first() {
+            if let descriptionElement = try? doc.select(
+                "#job-details, .job-details-jobs-unified-top-card__job-description, .jobs-description-content__text"
+            ).first() {
                 let rawDescription = try descriptionElement.html()
                 // Clean up HTML tags and normalize whitespace
                 jobApp.jobDescription = cleanJobDescription(rawDescription)
@@ -433,7 +451,9 @@ extension JobApp {
             }
 
             // Extract apply link
-            if let applyElement = try? doc.select("a[data-test-id=\"job-apply-link\"], .jobs-apply-button, a[href*=\"apply\"]").first(),
+            if let applyElement = try? doc.select(
+                "a[data-test-id=\"job-apply-link\"], .jobs-apply-button, a[href*=\"apply\"]"
+            ).first(),
                let applyHref = try? applyElement.attr("href") {
                 if applyHref.hasPrefix("http") {
                     jobApp.jobApplyLink = applyHref
@@ -444,10 +464,13 @@ extension JobApp {
             }
 
             // Extract additional metadata if available
-            if let metaElements = try? doc.select(".job-details-jobs-unified-top-card__job-insight .job-details-jobs-unified-top-card__job-insight-view-model-secondary") {
+            if let metaElements = try? doc.select(
+                ".job-details-jobs-unified-top-card__job-insight .job-details-jobs-unified-top-card__job-insight-view-model-secondary"
+            ) {
                 for element in metaElements {
                     let text = try element.text().lowercased()
-                    if text.contains("employment type") || text.contains("full-time") || text.contains("part-time") || text.contains("contract") {
+                    if text.contains("employment type") || text.contains("full-time") ||
+                       text.contains("part-time") || text.contains("contract") {
                         jobApp.employmentType = try element.text()
                     } else if text.contains("seniority") || text.contains("level") {
                         jobApp.seniorityLevel = try element.text()
@@ -523,8 +546,14 @@ private class LinkedInJobScrapeDelegate: NSObject, WKNavigationDelegate {
             // Wait a moment for the feed to fully load, then navigate to job page
             DispatchQueue.main.asyncAfter(deadline: .now() + LinkedInScrapeTiming.navigationTransitionDelay) {
                 var request = URLRequest(url: self.targetURL)
-                request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", forHTTPHeaderField: "User-Agent")
-                request.setValue("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", forHTTPHeaderField: "Accept")
+                request.setValue(
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    forHTTPHeaderField: "User-Agent"
+                )
+                request.setValue(
+                    "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    forHTTPHeaderField: "Accept"
+                )
                 request.setValue("en-US,en;q=0.5", forHTTPHeaderField: "Accept-Language")
                 request.setValue("gzip, deflate, br", forHTTPHeaderField: "Accept-Encoding")
                 request.setValue("https://www.linkedin.com/feed/", forHTTPHeaderField: "Referer")
@@ -539,7 +568,9 @@ private class LinkedInJobScrapeDelegate: NSObject, WKNavigationDelegate {
 
             // Wait a moment for dynamic content to load
             DispatchQueue.main.asyncAfter(deadline: .now() + LinkedInScrapeTiming.dynamicContentDelay) {
-                Logger.debug("🔍 [LinkedInJobScrapeDelegate] Extracting HTML after \(LinkedInScrapeTiming.dynamicContentDelay) second delay...")
+                Logger.debug(
+                    "🔍 [LinkedInJobScrapeDelegate] Extracting HTML after \(LinkedInScrapeTiming.dynamicContentDelay) second delay..."
+                )
                 webView.evaluateJavaScript("document.documentElement.outerHTML") { result, error in
                     guard !self.hasCompleted else {
                         Logger.debug("🔍 [LinkedInJobScrapeDelegate] JavaScript completed but already handled")
@@ -559,11 +590,15 @@ private class LinkedInJobScrapeDelegate: NSObject, WKNavigationDelegate {
                         Logger.error("🚨 [LinkedInJobScrapeDelegate] JavaScript evaluation failed: \(error)")
                         self.completion(.failure(error))
                     } else if let html = result as? String {
-                        Logger.debug("✅ [LinkedInJobScrapeDelegate] Successfully extracted HTML (\(html.count) characters)")
+                        Logger.debug(
+                            "✅ [LinkedInJobScrapeDelegate] Successfully extracted HTML (\(html.count) characters)"
+                        )
 
                         // Debug: log the actual HTML if it's suspiciously short
                         if html.count < 1000 {
-                            Logger.warning("⚠️ [LinkedInJobScrapeDelegate] HTML content seems too short, here's what we got:")
+                            Logger.warning(
+                                "⚠️ [LinkedInJobScrapeDelegate] HTML content seems too short, here's what we got:"
+                            )
                             Logger.warning("   \(html.prefix(200))")
                         }
 
@@ -621,14 +656,18 @@ private class LinkedInJobScrapeDelegate: NSObject, WKNavigationDelegate {
             if url.absoluteString.contains("linkedin.com/checkpoint") ||
                url.absoluteString.contains("linkedin.com/challenge") ||
                url.absoluteString.contains("linkedin.com/security") {
-                Logger.warning("⚠️ [LinkedInJobScrapeDelegate] LinkedIn security challenge detected: \(url.absoluteString)")
+                Logger.warning(
+                    "⚠️ [LinkedInJobScrapeDelegate] LinkedIn security challenge detected: \(url.absoluteString)"
+                )
             }
 
             // Check for external redirects that might indicate bot detection
             if ((url.host?.contains("linkedin.com")) != nil) == true &&
                !url.absoluteString.hasPrefix("about:") &&
                !url.absoluteString.hasPrefix("data:") {
-                Logger.warning("⚠️ [LinkedInJobScrapeDelegate] External redirect detected (possible bot detection): \(url.absoluteString)")
+                Logger.warning(
+                    "⚠️ [LinkedInJobScrapeDelegate] External redirect detected (possible bot detection): \(url.absoluteString)"
+                )
             }
         }
         decisionHandler(.allow)

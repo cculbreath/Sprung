@@ -23,7 +23,7 @@ struct ClarifyingQuestionsButton: View {
             selectedTab = .resume
             // Don't clear questions here - they might be needed for the sheet
             showClarifyingQuestionsModelSheet = true
-        }) {
+        }, label: {
             let isBusy = isGeneratingQuestions || resumeReviseViewModel.isWorkflowBusy(.clarifying)
             if isBusy {
                 Label {
@@ -41,7 +41,7 @@ struct ClarifyingQuestionsButton: View {
                         .font(.system(size: 14, weight: .light))
                 }
             }
-        }
+        })
         .font(.system(size: 14, weight: .light))
         .buttonStyle( .automatic )
         .help("Create Resume Revisions with Clarifying Questions (requires nodes marked for AI revision)")

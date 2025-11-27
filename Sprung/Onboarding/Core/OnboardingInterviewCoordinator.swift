@@ -16,9 +16,9 @@ final class OnboardingInterviewCoordinator {
     let phaseRegistry: PhaseScriptRegistry
     let toolRegistry: ToolRegistry
     private let toolExecutor: ToolExecutor
-    private let openAIService: OpenAIService?
+    private var openAIService: OpenAIService?
     private let documentExtractionService: DocumentExtractionService
-    private let knowledgeCardAgent: KnowledgeCardAgent?
+    private var knowledgeCardAgent: KnowledgeCardAgent?
     // MARK: - Core Controllers (Decomposed Components)
     private let lifecycleController: InterviewLifecycleController
     private let checkpointManager: CheckpointManager
@@ -292,6 +292,27 @@ final class OnboardingInterviewCoordinator {
 
         Task { await ingestionCoordinator.start() }
     }
+    // MARK: - Service Updates
+    func updateOpenAIService(_ service: OpenAIService?) {
+        self.openAIService = service
+        self.knowledgeCardAgent = service.map { KnowledgeCardAgent(client: $0) }
+        lifecycleController.updateOpenAIService(service)
+        // Re-register tools with new agent if available
+        toolRegistrar.registerTools(
+            documentExtractionService: documentExtractionService,
+            knowledgeCardAgent: knowledgeCardAgent,
+            onModelAvailabilityIssue: { [weak self] message in
+                self?.ui.modelAvailabilityMessage = message
+            }
+        )
+        // Update ingestion coordinator
+        Task {
+            await ingestionCoordinator.updateAgentProvider { [service] in
+                service.map { KnowledgeCardAgent(client: $0) }
+            }
+        }
+        Logger.info("🔄 OpenAIService updated in Coordinator", category: .ai)
+    }
     // MARK: - Event Subscription
     private func subscribeToEvents() async {
         coordinatorEventRouter.subscribeToEvents(lifecycle: lifecycleController)
@@ -323,19 +344,19 @@ final class OnboardingInterviewCoordinator {
             ui.updateProcessing(isProcessing: isProcessing, statusMessage: statusMessage)
             Logger.info("🎨 UI Update: Chat glow/spinner \(isProcessing ? "ACTIVATED ✨" : "DEACTIVATED") - isProcessing=\(isProcessing), status: \(ui.currentStatusMessage ?? "none")", category: .ai)
             await syncWizardProgressFromState()
-            case .streamingStatusUpdated(_, let statusMessage):
+        case .streamingStatusUpdated(_, let statusMessage):
             if let statusMessage = statusMessage {
                 ui.currentStatusMessage = statusMessage
             }
-            case .waitingStateChanged(_, let statusMessage):
+        case .waitingStateChanged(_, let statusMessage):
             if let statusMessage = statusMessage {
                 ui.currentStatusMessage = statusMessage
             }
-            case .toolCallRequested(_, let statusMessage):
+        case .toolCallRequested(_, let statusMessage):
             if let statusMessage = statusMessage {
                 ui.currentStatusMessage = statusMessage
             }
-            case .toolCallCompleted(_, _, let statusMessage):
+        case .toolCallCompleted(_, _, let statusMessage):
             if let statusMessage = statusMessage {
                 ui.currentStatusMessage = statusMessage
             }
@@ -394,6 +415,14 @@ final class OnboardingInterviewCoordinator {
         let step = await state.currentWizardStep
         let completed = await state.completedWizardSteps
         ui.updateWizardProgress(step: step, completed: completed)
+        
+        // Sync WizardTracker for View binding
+        if let trackerStep = OnboardingWizardStep(rawValue: step.rawValue) {
+            let trackerCompleted = Set(completed.compactMap { OnboardingWizardStep(rawValue: $0.rawValue) })
+            await MainActor.run {
+                wizardTracker.synchronize(currentStep: trackerStep, completedSteps: trackerCompleted)
+            }
+        }
     }
     private func initialStateSync() async {
         await syncWizardProgressFromState()

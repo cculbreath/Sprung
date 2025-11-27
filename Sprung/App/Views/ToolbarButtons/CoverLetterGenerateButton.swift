@@ -11,7 +11,7 @@ struct CoverLetterGenerateButton: View {
     var body: some View {
         Button(action: {
             showCoverLetterModelSheet = true
-        }) {
+        }, label: {
             Label {
                 Text("Cover Letter")
             } icon: {
@@ -23,7 +23,7 @@ struct CoverLetterGenerateButton: View {
                             .font(.system(size: 14, weight: .light))
                 }
             }
-        }
+        })
         .font(.system(size: 14, weight: .light))
         .buttonStyle( .automatic )
         .help("Generate Cover Letter")

@@ -337,11 +337,7 @@ struct OnboardingInterviewToolPane: View {
 private struct ExtractionProgressOverlay: View {
     let items: [ExtractionProgressItem]
     let statusText: String?
-    private var trimmedStatus: String? {
-        guard let statusText else { return nil }
-        let trimmed = statusText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
-    }
+
     var body: some View {
         VStack(spacing: 28) {
             AnimatedThinkingText(statusMessage: statusText)
@@ -510,29 +506,4 @@ private struct ApplicantProfileSummaryCard: View {
         return components.isEmpty ? nil : components.joined(separator: ", ")
     }
 }
-private struct EnabledSectionsSummaryCard: View {
-    let sections: Set<String>
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Enabled Résumé Sections")
-                .font(.headline)
-            if sections.isEmpty {
-                Text("No sections selected yet.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            } else {
-                Text(formattedSections().joined(separator: ", "))
-                    .font(.body)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-        .padding(16)
-        .background(Color(nsColor: .textBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-    private func formattedSections() -> [String] {
-        sections.sorted().compactMap { identifier in
-            ExperienceSectionKey.fromOnboardingIdentifier(identifier)?.metadata.title
-        }
-    }
-}
+

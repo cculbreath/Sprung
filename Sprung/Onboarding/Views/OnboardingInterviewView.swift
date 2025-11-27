@@ -5,7 +5,6 @@ struct OnboardingInterviewView: View {
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(AppEnvironment.self) private var appEnvironment
     @Environment(DebugSettingsStore.self) private var debugSettings
-    private let onboardingFallbackModelId = "openai/gpt-5.1"
     @State private var viewModel = OnboardingInterviewViewModel(
         fallbackModelId: "openai/gpt-5.1"
     )
@@ -123,7 +122,7 @@ struct OnboardingInterviewView: View {
                     newValue: newValue,
                     availableModelIds: modelIds
                 )
-                applyPreferredModel(requestedId: newValue)
+                applyPreferredModel()
             }
             .onChange(of: defaultWebSearchAllowed) { _, newValue in
                 if !coordinator.ui.isActive {
@@ -177,11 +176,11 @@ struct OnboardingInterviewView: View {
                     )
                 }
             }
-            .alert("Import Failed", isPresented: $uiState.showImportError, presenting: uiState.importErrorText) { _ in
+            .alert("Import Failed", isPresented: $uiState.showImportError, presenting: uiState.importErrorText, actions: { _ in
                 Button("OK") { uiState.clearImportError() }
-            } message: { message in
+            }, message: { message in
                 Text(message)
-            }
+            })
         return withSheets
             #if DEBUG
             .overlay(alignment: .bottomTrailing) {
@@ -196,16 +195,16 @@ struct OnboardingInterviewView: View {
     }
     #if DEBUG
     private var debugButton: some View {
-        Button {
+        Button(action: {
             showEventDump.toggle()
-        } label: {
+        }, label: {
             Image(systemName: "ladybug.fill")
                 .font(.title2)
                 .foregroundStyle(.white)
                 .padding(12)
                 .background(.purple.gradient, in: Circle())
                 .shadow(radius: 4)
-        }
+        })
         .buttonStyle(.plain)
         .padding(24)
     }
@@ -296,12 +295,12 @@ private extension OnboardingInterviewView {
     }
     func continueButtonTitle(for step: OnboardingWizardStep) -> String {
         switch step {
-            case .wrapUp:
-                return "Finish"
-            case .introduction:
-                return "Begin Interview"
-            default:
-                return "Continue"
+        case .wrapUp:
+            return "Finish"
+        case .introduction:
+            return "Begin Interview"
+        default:
+            return "Continue"
         }
     }
     func shouldShowBackButton(for step: OnboardingWizardStep) -> Bool {
@@ -311,57 +310,57 @@ private extension OnboardingInterviewView {
         coordinator: OnboardingInterviewCoordinator
     ) -> Bool {
         switch coordinator.wizardTracker.currentStep {
-            case .introduction:
-                return openAIModels.isEmpty || appEnvironment.appState.openAiApiKey.isEmpty
-            case .resumeIntake:
-                return coordinator.ui.isProcessing ||
-                coordinator.pendingChoicePrompt != nil ||
-                coordinator.pendingApplicantProfileRequest != nil ||
-                coordinator.pendingApplicantProfileIntake != nil
-            case .artifactDiscovery:
-                return coordinator.ui.isProcessing ||
-                coordinator.pendingSectionToggleRequest != nil
-            default:
-                return coordinator.ui.isProcessing
+        case .introduction:
+            return openAIModels.isEmpty || appEnvironment.appState.openAiApiKey.isEmpty
+        case .resumeIntake:
+            return coordinator.ui.isProcessing ||
+            coordinator.pendingChoicePrompt != nil ||
+            coordinator.pendingApplicantProfileRequest != nil ||
+            coordinator.pendingApplicantProfileIntake != nil
+        case .artifactDiscovery:
+            return coordinator.ui.isProcessing ||
+            coordinator.pendingSectionToggleRequest != nil
+        default:
+            return coordinator.ui.isProcessing
         }
     }
     func handleContinue(
         coordinator: OnboardingInterviewCoordinator
     ) {
         switch coordinator.wizardTracker.currentStep {
-            case .introduction:
-                beginInterview()
-            case .resumeIntake:
-                // Wizard steps are now derived from objectives - no manual setting needed
-                break
-            case .artifactDiscovery:
-                // Wizard steps are now derived from objectives - no manual setting needed
-                break
-            case .writingCorpus:
-                // Wizard steps are now derived from objectives - no manual setting needed
-                break
-            case .wrapUp:
-                handleCancel()
+        case .introduction:
+            beginInterview()
+        case .resumeIntake:
+            // Wizard steps are now derived from objectives - no manual setting needed
+            break
+        case .artifactDiscovery:
+            // Wizard steps are now derived from objectives - no manual setting needed
+            break
+        case .writingCorpus:
+            // Wizard steps are now derived from objectives - no manual setting needed
+            break
+        case .wrapUp:
+            handleCancel()
         }
     }
     func handleBack(
         coordinator: OnboardingInterviewCoordinator
     ) {
         switch coordinator.wizardTracker.currentStep {
-            case .resumeIntake:
-                // Wizard steps are now derived from objectives - no manual reset needed
-                reinitializeUIState()
-            case .artifactDiscovery:
-                // Wizard steps are now derived from objectives - no manual setting needed
-                break
-            case .writingCorpus:
-                // Wizard steps are now derived from objectives - no manual setting needed
-                break
-            case .wrapUp:
-                // Wizard steps are now derived from objectives - no manual setting needed
-                break
-            case .introduction:
-                break
+        case .resumeIntake:
+            // Wizard steps are now derived from objectives - no manual reset needed
+            reinitializeUIState()
+        case .artifactDiscovery:
+            // Wizard steps are now derived from objectives - no manual setting needed
+            break
+        case .writingCorpus:
+            // Wizard steps are now derived from objectives - no manual setting needed
+            break
+        case .wrapUp:
+            // Wizard steps are now derived from objectives - no manual setting needed
+            break
+        case .introduction:
+            break
         }
     }
     func handleCancel() {
@@ -376,9 +375,6 @@ private extension OnboardingInterviewView {
 }
 // MARK: - Helpers
 private extension OnboardingInterviewView {
-    func updateServiceDefaults() {
-        applyPreferredModel()
-    }
     func openSettings() {
         NSApp.sendAction(#selector(AppDelegate.showSettingsWindow), to: nil, from: nil)
     }
@@ -401,12 +397,12 @@ private extension OnboardingInterviewView {
             } else {
                 Logger.info("📝 No checkpoint found - starting fresh interview", category: .ai)
                 // No checkpoint, start fresh
-                await launchInterview(modelId: modelId, resume: false)
+                await launchInterview(resume: false)
             }
         }
     }
     @MainActor
-    func launchInterview(modelId: String, resume: Bool) async {
+    func launchInterview(resume: Bool) async {
         _ = await interviewCoordinator.startInterview(resumeExisting: resume)
         // Note: modelId and backend are now configured via OpenAIService in AppDependencies
         // Writing analysis consent is part of OnboardingPreferences
@@ -414,12 +410,12 @@ private extension OnboardingInterviewView {
         showResumeOptions = false
     }
     func respondToResumeChoice(resume: Bool) {
-        guard let modelId = pendingStartModelId else { return }
+        guard pendingStartModelId != nil else { return }
         Logger.info("📝 User chose to \(resume ? "resume" : "start fresh") interview", category: .ai)
         pendingStartModelId = nil
         showResumeOptions = false
         Task { @MainActor in
-            await launchInterview(modelId: modelId, resume: resume)
+            await launchInterview(resume: resume)
         }
     }
     var openAIModels: [EnabledLLM] {
@@ -440,7 +436,7 @@ private extension OnboardingInterviewView {
         )
         applyPreferredModel()
     }
-    func applyPreferredModel(requestedId: String? = nil) {
+    func applyPreferredModel() {
         // Note: Model configuration is handled via OpenAIService and ModelProvider
         //
         // let resolvedId = interviewService.setPreferredDefaults(

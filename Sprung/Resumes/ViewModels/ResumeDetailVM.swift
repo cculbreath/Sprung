@@ -19,13 +19,6 @@ final class ResumeDetailVM {
     // MARK: - UI State ------------------------------------------------------
     /// Width toggle previously handled by the view hierarchy.
     var isWide: Bool = false
-    /// Whether the optional font‑size panel should be shown. This setting is
-    /// mirrored from the underlying model but owned by the view‑model so that
-    /// the view no longer touches the model layer directly.
-    var includeFonts: Bool {
-        get { resume.includeFonts }
-        set { resume.includeFonts = newValue }
-    }
     // Tracks which group nodes are expanded in the UI.
     private var expandedIDs: Set<String> = []
     /// Computed convenience access to the resume's root node.

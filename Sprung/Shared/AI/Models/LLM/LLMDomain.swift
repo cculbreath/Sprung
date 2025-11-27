@@ -36,20 +36,7 @@ struct LLMMessageDTO: Codable, Sendable, Identifiable {
 struct LLMStreamChunkDTO: Sendable {
     var content: String?
     var reasoning: String?
-    var event: LLMStreamEvent?
     var isFinished: Bool
-}
-enum LLMStreamEvent: Sendable {
-    case tool(LLMToolStreamEvent)
-    case status(message: String, isComplete: Bool)
-}
-struct LLMToolStreamEvent: Sendable {
-    var callId: String
-    var status: String?
-    var payload: String?
-    var appendsPayload: Bool
-    var isComplete: Bool
-    var toolName: String?
 }
 // MARK: - Responses
 struct LLMResponseChoiceDTO: Codable, Sendable {

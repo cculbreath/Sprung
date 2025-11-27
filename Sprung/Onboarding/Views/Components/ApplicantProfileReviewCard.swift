@@ -1,7 +1,6 @@
 import SwiftUI
 struct ApplicantProfileReviewCard: View {
     let request: OnboardingApplicantProfileRequest
-    let fallbackDraft: ApplicantProfileDraft
     let onConfirm: (ApplicantProfileDraft) -> Void
     let onCancel: () -> Void
     @State private var draft: ApplicantProfileDraft
@@ -12,7 +11,6 @@ struct ApplicantProfileReviewCard: View {
         onCancel: @escaping () -> Void
     ) {
         self.request = request
-        self.fallbackDraft = fallbackDraft
         self.onConfirm = onConfirm
         self.onCancel = onCancel
         let incomingDraft = ApplicantProfileDraft(json: request.proposedProfile)

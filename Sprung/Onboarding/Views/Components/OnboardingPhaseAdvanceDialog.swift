@@ -208,20 +208,20 @@ struct OnboardingPhaseAdvanceDialog: View {
             // Action buttons
             HStack(spacing: 12) {
                 if let onCancel {
-                    Button("Cancel") {
+                    Button("Cancel", action: {
                         onCancel()
-                    }
+                    })
                     .keyboardShortcut(.cancelAction)
                 }
                 Spacer()
-                Button {
+                Button(action: {
                     submitDecision()
-                } label: {
+                }, label: {
                     Label(
                         decision == .approved ? "Approve & Advance" : "Submit Decision",
                         systemImage: decision.systemImage
                     )
-                }
+                })
                 .buttonStyle(.borderedProminent)
                 .tint(decision == .approved ? .blue : .gray)
                 .keyboardShortcut(.defaultAction)

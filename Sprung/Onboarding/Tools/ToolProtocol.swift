@@ -31,7 +31,6 @@ enum ToolError: Error {
     case permissionDenied(String)
 }
 struct ToolCall {
-    let id: String
     let name: String
     let arguments: JSON
     let callId: String

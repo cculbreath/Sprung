@@ -19,16 +19,16 @@ actor DraftKnowledgeStore: OnboardingEventEmitter {
     }
 
     // MARK: - Draft Management
-    /// Add a new draft
+    /// Add a new draft (called by StateCoordinator in response to .draftKnowledgeCardProduced event)
+    /// NOTE: Does NOT re-emit the event to avoid infinite loops
     func addDraft(_ draft: KnowledgeCardDraft) async {
         drafts.append(draft)
         draftsSync = drafts
         Logger.info("📝 Draft added: \(draft.title) (total: \(drafts.count))", category: .ai)
-
-        await emit(.draftKnowledgeCardProduced(draft))
     }
 
-    /// Update an existing draft
+    /// Update an existing draft (called by StateCoordinator in response to .draftKnowledgeCardUpdated event)
+    /// NOTE: Does NOT re-emit the event to avoid infinite loops
     func updateDraft(_ draft: KnowledgeCardDraft) async {
         guard let index = drafts.firstIndex(where: { $0.id == draft.id }) else {
             Logger.warning("⚠️ Draft not found for update: \(draft.id)", category: .ai)
@@ -38,17 +38,14 @@ actor DraftKnowledgeStore: OnboardingEventEmitter {
         drafts[index] = draft
         draftsSync = drafts
         Logger.info("📝 Draft updated: \(draft.title)", category: .ai)
-
-        await emit(.draftKnowledgeCardUpdated(draft))
     }
 
-    /// Remove a draft (e.g. after promotion or deletion)
+    /// Remove a draft (called by StateCoordinator in response to .draftKnowledgeCardRemoved event)
+    /// NOTE: Does NOT re-emit the event to avoid infinite loops
     func removeDraft(id: UUID) async {
         drafts.removeAll { $0.id == id }
         draftsSync = drafts
         Logger.info("📝 Draft removed: \(id)", category: .ai)
-
-        await emit(.draftKnowledgeCardRemoved(id))
     }
 
     /// Get all drafts

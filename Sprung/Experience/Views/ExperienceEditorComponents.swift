@@ -37,16 +37,16 @@ struct ExperienceCard<Content: View>: View {
             if isHovered {
                 HStack(spacing: 6) {
                     if let onToggleEdit {
-                        Button(action: onToggleEdit) {
+                        Button(action: onToggleEdit, label: {
                             Image(systemName: isEditing ? "checkmark.circle.fill" : "pencil")
-                        }
+                        })
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                         .accessibilityLabel(isEditing ? "Finish Editing" : "Edit Entry")
                     }
-                    Button(role: .destructive, action: onDelete) {
+                    Button(role: .destructive, action: onDelete, label: {
                         Image(systemName: "trash")
-                    }
+                    })
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                     .accessibilityLabel("Delete Entry")

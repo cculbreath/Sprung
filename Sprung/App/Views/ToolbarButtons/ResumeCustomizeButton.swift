@@ -15,7 +15,7 @@ struct ResumeCustomizeButton: View {
         Button(action: {
             selectedTab = .resume
             showCustomizeModelSheet = true
-        }) {
+        }, label: {
             let isBusy = isGeneratingResume || resumeReviseViewModel.isWorkflowBusy(.customize)
             if isBusy {
                 Label("Customize", systemImage: "wand.and.rays").fontWeight(.bold).foregroundColor(.blue)
@@ -25,7 +25,7 @@ struct ResumeCustomizeButton: View {
                 Label("Customize", systemImage: "wand.and.sparkles")
                     .font(.system(size: 14, weight: .light))
             }
-        }
+        })
         .buttonStyle( .automatic )
         .help("Create Resume Revisions (requires nodes marked for AI revision)")
         .disabled(jobAppStore.selectedApp == nil ||

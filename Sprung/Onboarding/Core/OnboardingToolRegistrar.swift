@@ -64,6 +64,7 @@ final class OnboardingToolRegistrar {
         toolRegistry.register(GetValidatedApplicantProfileTool(coordinator: coordinator))
         toolRegistry.register(ConfigureEnabledSectionsTool(coordinator: coordinator))
         toolRegistry.register(AgentReadyTool())
+        toolRegistry.register(RequestEvidenceTool(coordinator: coordinator))
 
         if let agent = knowledgeCardAgent {
             toolRegistry.register(GenerateKnowledgeCardTool(agentProvider: { agent }))

@@ -97,13 +97,19 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
     // MARK: - Wizard Progress (Queries ObjectiveStore)
     private func updateWizardProgress() async {
+        // Phase 1 objectives
         let hasProfile = await objectiveStore.getObjectiveStatus("applicant_profile") == .completed
         let hasTimeline = await objectiveStore.getObjectiveStatus("skeleton_timeline") == .completed
         let hasSections = await objectiveStore.getObjectiveStatus("enabled_sections") == .completed
-        let hasExperienceInterview = await objectiveStore.getObjectiveStatus("interviewed_one_experience") == .completed
-        let hasKnowledgeCard = await objectiveStore.getObjectiveStatus("one_card_generated") == .completed
+
+        // Phase 2 objectives (updated for evidence-based flow)
+        let hasEvidenceAudit = await objectiveStore.getObjectiveStatus("evidence_audit_completed") == .completed
+        let hasCardsGenerated = await objectiveStore.getObjectiveStatus("cards_generated") == .completed
+
+        // Phase 3 objectives
         let hasWriting = await objectiveStore.getObjectiveStatus("one_writing_sample") == .completed
         let hasDossier = await objectiveStore.getObjectiveStatus("dossier_complete") == .completed
+
         // Start from introduction
         if currentWizardStep == .introduction {
             let allObjectives = await objectiveStore.getAllObjectives()
@@ -118,8 +124,8 @@ actor StateCoordinator: OnboardingEventEmitter {
                 currentWizardStep = .artifactDiscovery
             }
         }
-        // Artifact Discovery (Phase 2)
-        if hasExperienceInterview && hasKnowledgeCard {
+        // Artifact Discovery (Phase 2) - now based on evidence audit and card generation
+        if hasEvidenceAudit && hasCardsGenerated {
             completedWizardSteps.insert(.artifactDiscovery)
             if phase == .phase3WritingCorpus || phase == .complete {
                 currentWizardStep = .writingCorpus

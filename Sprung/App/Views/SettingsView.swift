@@ -21,20 +21,21 @@ struct SettingsView: View {
     private let dataResetService = DataResetService()
     private let onboardingDefaultModelFallback = "openai/gpt-5.1"
     private let pdfExtractionFallbackModelId = "google/gemini-2.0-flash-001"
+    // GPT-5.1 supports: none, low, medium, high (not "minimal")
     private let reasoningOptions: [(value: String, label: String, detail: String)] = [
-        ("minimal", "Minimal", "Fastest responses; rely on tools and concise reasoning"),
+        ("none", "None", "Fastest responses; no explicit reasoning"),
         ("low", "Low", "Faster responses with basic reasoning"),
         ("medium", "Medium", "Balanced speed and reasoning depth"),
         ("high", "High", "Thorough reasoning with detailed analysis")
     ]
     var body: some View {
         Form {
-            Section {
+            Section(content: {
                 APIKeysSettingsView()
-            } header: {
+            }, header: {
                 SettingsSectionHeader(title: "API Keys", systemImage: "key.2.on.ring")
-            }
-            Section {
+            })
+            Section(content: {
                 Picker("Reasoning Effort", selection: $reasoningEffort) {
                     ForEach(reasoningOptions, id: \.value) { option in
                         VStack(alignment: .leading, spacing: 2) {
@@ -55,10 +56,10 @@ struct SettingsView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .padding(.top, 4)
-            } header: {
+            }, header: {
                 SettingsSectionHeader(title: "AI Reasoning", systemImage: "sparkles")
-            }
-            Section {
+            })
+            Section(content: {
                 onboardingInterviewModelPicker
                 pdfExtractionModelPicker
                 Toggle("Allow web search during interviews by default", isOn: Binding(
@@ -77,20 +78,20 @@ struct SettingsView: View {
                     }
                 ))
                 .toggleStyle(.switch)
-            } header: {
+            }, header: {
                 SettingsSectionHeader(title: "Onboarding Interview", systemImage: "wand.and.stars")
-            }
-            Section {
+            })
+            Section(content: {
                 TextToSpeechSettingsView()
-            } header: {
+            }, header: {
                 SettingsSectionHeader(title: "Voice & Audio", systemImage: "speaker.wave.2.fill")
-            }
-            Section {
+            })
+            Section(content: {
                 DebugSettingsView()
-            } header: {
+            }, header: {
                 SettingsSectionHeader(title: "Debugging", systemImage: "wrench.and.screwdriver")
-            }
-            Section {
+            })
+            Section(content: {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Resetting will permanently delete all your data, including:")
                         .font(.callout)
@@ -120,25 +121,25 @@ struct SettingsView: View {
                     .disabled(isResetting)
                 }
                 .padding(.vertical, 4)
-            } header: {
+            }, header: {
                 SettingsSectionHeader(title: "Danger Zone", systemImage: "exclamationmark.octagon.fill")
-            }
+            })
         }
         .formStyle(.grouped)
         .frame(minWidth: 520, idealWidth: 680, maxWidth: 780,
                minHeight: 480, idealHeight: 640, maxHeight: .infinity)
         .padding(.vertical, 12)
-        .alert("⚠️ Factory Reset", isPresented: $showFactoryResetConfirmation) {
+        .alert("⚠️ Factory Reset", isPresented: $showFactoryResetConfirmation, actions: {
             Button("Cancel", role: .cancel) {
                 showFactoryResetConfirmation = false
             }
             Button("Continue to Confirmation", role: .destructive) {
                 showFinalResetConfirmation = true
             }
-        } message: {
+        }, message: {
             Text("This will permanently delete all resumes, cover letters, job applications, user profile data, and settings. This action cannot be undone.\n\nAre you sure?")
-        }
-        .alert("🔴 Confirm Factory Reset", isPresented: $showFinalResetConfirmation) {
+        })
+        .alert("🔴 Confirm Factory Reset", isPresented: $showFinalResetConfirmation, actions: {
             Button("Cancel", role: .cancel) {
                 showFinalResetConfirmation = false
             }
@@ -147,9 +148,9 @@ struct SettingsView: View {
                     await performReset()
                 }
             }
-        } message: {
+        }, message: {
             Text("This is your final chance to cancel. Once confirmed, all data will be deleted and the app will restart.")
-        }
+        })
         .task {
             sanitizeOnboardingModelIfNeeded()
             sanitizePDFExtractionModelIfNeeded()

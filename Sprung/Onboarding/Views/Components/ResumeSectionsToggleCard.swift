@@ -1,7 +1,6 @@
 import SwiftUI
 struct ResumeSectionsToggleCard: View {
     let request: OnboardingSectionToggleRequest
-    let existingDraft: ExperienceDefaultsDraft
     let onConfirm: ([String]) -> Void
     let onCancel: () -> Void
     @State private var draft: ExperienceDefaultsDraft
@@ -12,7 +11,6 @@ struct ResumeSectionsToggleCard: View {
         onCancel: @escaping () -> Void
     ) {
         self.request = request
-        self.existingDraft = existingDraft
         self.onConfirm = onConfirm
         self.onCancel = onCancel
         var initial = existingDraft
@@ -54,10 +52,10 @@ struct ResumeSectionsToggleCard: View {
             HStack {
                 Button("Cancel", action: onCancel)
                 Spacer()
-                Button("Confirm Sections") {
+                Button("Confirm Sections", action: {
                     let enabled = draft.enabledSectionKeys().map(\.rawValue)
                     onConfirm(enabled)
-                }
+                })
                 .buttonStyle(.borderedProminent)
             }
         }

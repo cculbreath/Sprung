@@ -9,12 +9,6 @@
 //
 import Foundation
 import SwiftOpenAI
-struct OpenAIConversationState: Codable, Equatable {
-    let remoteConversationId: String?
-    let lastResponseId: String
-    let systemPrompt: String?
-    let modelId: String
-}
 actor OpenAIResponsesConversationService: LLMStreamingConversationService {
     private struct ConversationState {
         let remoteConversationId: String?
@@ -105,39 +99,6 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
             images: images,
             streaming: true
         )
-        let localConversationId = UUID()
-        let stream = try await streamConversation(
-            parameters: parameters,
-            localConversationId: localConversationId,
-            existingState: nil,
-            systemPrompt: systemPrompt,
-            modelId: modelId
-        )
-        return (localConversationId, stream)
-    }
-    func startConversationStreamingWithHistory(
-        systemPrompt: String?,
-        messageHistory: [InputItem],
-        userMessage: String,
-        modelId: String,
-        temperature: Double?
-    ) async throws -> (UUID, AsyncThrowingStream<LLMStreamChunkDTO, Error>) {
-        var inputItems = messageHistory
-        let message = InputMessage(role: "user", content: .text(userMessage))
-        inputItems.append(.message(message))
-        var parameters = ModelResponseParameter(
-            input: .array(inputItems),
-            model: .custom(modelId),
-            conversation: nil,
-            instructions: systemPrompt,
-            previousResponseId: nil,
-            store: true,
-            temperature: temperature ?? defaultTemperature,
-            text: TextConfiguration(format: .text)
-        )
-        parameters.parallelToolCalls = false
-        parameters.tools = onboardingToolSchemas
-        parameters.stream = true
         let localConversationId = UUID()
         let stream = try await streamConversation(
             parameters: parameters,
@@ -277,16 +238,6 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
                                     LLMStreamChunkDTO(
                                         content: nil,
                                         reasoning: nil,
-                                        event: .tool(
-                                            LLMToolStreamEvent(
-                                                callId: functionCall.id,
-                                                status: functionCall.status ?? "Tool call started.",
-                                                payload: initialArguments.isEmpty ? nil : initialArguments,
-                                                appendsPayload: false,
-                                                isComplete: false,
-                                                toolName: functionCall.name
-                                            )
-                                        ),
                                         isFinished: false
                                     )
                                 )
@@ -296,16 +247,6 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
                                 LLMStreamChunkDTO(
                                     content: nil,
                                     reasoning: nil,
-                                    event: .tool(
-                                        LLMToolStreamEvent(
-                                            callId: delta.itemId,
-                                            status: "Receiving tool arguments…",
-                                            payload: delta.delta,
-                                            appendsPayload: true,
-                                            isComplete: false,
-                                            toolName: nil
-                                        )
-                                    ),
                                     isFinished: false
                                 )
                             )
@@ -315,16 +256,6 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
                                 LLMStreamChunkDTO(
                                     content: nil,
                                     reasoning: nil,
-                                    event: .tool(
-                                        LLMToolStreamEvent(
-                                            callId: done.itemId,
-                                            status: "Tool arguments finalized.",
-                                            payload: trimmed,
-                                            appendsPayload: false,
-                                            isComplete: true,
-                                            toolName: done.name
-                                        )
-                                    ),
                                     isFinished: false
                                 )
                             )
@@ -334,16 +265,6 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
                                 LLMStreamChunkDTO(
                                     content: nil,
                                     reasoning: nil,
-                                    event: .tool(
-                                        LLMToolStreamEvent(
-                                            callId: delta.itemId,
-                                            status: "Preparing tool input…",
-                                            payload: payload,
-                                            appendsPayload: true,
-                                            isComplete: false,
-                                            toolName: nil
-                                        )
-                                    ),
                                     isFinished: false
                                 )
                             )
@@ -353,16 +274,6 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
                                 LLMStreamChunkDTO(
                                     content: nil,
                                     reasoning: nil,
-                                    event: .tool(
-                                        LLMToolStreamEvent(
-                                            callId: done.itemId,
-                                            status: "Tool input submitted.",
-                                            payload: payload.isEmpty ? nil : payload,
-                                            appendsPayload: false,
-                                            isComplete: false,
-                                            toolName: nil
-                                        )
-                                    ),
                                     isFinished: false
                                 )
                             )
@@ -371,16 +282,6 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
                                 LLMStreamChunkDTO(
                                     content: nil,
                                     reasoning: nil,
-                                    event: .tool(
-                                        LLMToolStreamEvent(
-                                            callId: progress.itemId,
-                                            status: "Tool execution in progress…",
-                                            payload: nil,
-                                            appendsPayload: false,
-                                            isComplete: false,
-                                            toolName: nil
-                                        )
-                                    ),
                                     isFinished: false
                                 )
                             )
@@ -389,16 +290,6 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
                                 LLMStreamChunkDTO(
                                     content: nil,
                                     reasoning: nil,
-                                    event: .tool(
-                                        LLMToolStreamEvent(
-                                            callId: completed.itemId,
-                                            status: "Tool execution completed.",
-                                            payload: nil,
-                                            appendsPayload: false,
-                                            isComplete: true,
-                                            toolName: nil
-                                        )
-                                    ),
                                     isFinished: false
                                 )
                             )
@@ -407,16 +298,6 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
                                 LLMStreamChunkDTO(
                                     content: nil,
                                     reasoning: nil,
-                                    event: .tool(
-                                        LLMToolStreamEvent(
-                                            callId: failed.itemId,
-                                            status: "Tool execution failed.",
-                                            payload: nil,
-                                            appendsPayload: false,
-                                            isComplete: true,
-                                            toolName: nil
-                                        )
-                                    ),
                                     isFinished: false
                                 )
                             )
@@ -557,25 +438,5 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
     private func dataURL(for data: Data, mimeType: String = "image/png") -> String {
         let base64 = data.base64EncodedString()
         return "data:\(mimeType);base64,\(base64)"
-    }
-    func persistedState(for conversationId: UUID) -> OpenAIConversationState? {
-        guard let state = conversations[conversationId] else { return nil }
-        return OpenAIConversationState(
-            remoteConversationId: state.remoteConversationId,
-            lastResponseId: state.lastResponseId,
-            systemPrompt: state.systemPrompt,
-            modelId: state.modelId
-        )
-    }
-    func registerPersistedConversation(_ state: OpenAIConversationState) -> UUID {
-        let localId = UUID()
-        let stored = ConversationState(
-            remoteConversationId: state.remoteConversationId,
-            lastResponseId: state.lastResponseId,
-            systemPrompt: state.systemPrompt,
-            modelId: state.modelId
-        )
-        conversations[localId] = stored
-        return localId
     }
 }

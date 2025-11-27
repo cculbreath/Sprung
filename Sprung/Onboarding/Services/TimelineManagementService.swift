@@ -30,7 +30,11 @@ actor TimelineManagementService: OnboardingEventEmitter {
         await eventBus.publish(.skeletonTimelineReplaced(timeline: timeline, diff: diff, meta: meta))
         // Build developer message
         var payload = JSON()
-        payload["text"].string = "Developer status: Timeline cards updated by the user (\(diff.summary)). The skeleton_timeline artifact now reflects their edits. Do not re-validate unless new information is introduced."
+        payload["text"].string = """
+            Developer status: Timeline cards updated by the user (\(diff.summary)). \
+            The skeleton_timeline artifact now reflects their edits. \
+            Do not re-validate unless new information is introduced.
+            """
         var details = JSON()
         details["validation_state"].string = "user_validated"
         details["diff_summary"].string = diff.summary

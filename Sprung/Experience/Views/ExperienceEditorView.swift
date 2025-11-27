@@ -49,13 +49,13 @@ struct ExperienceEditorView: View {
     // MARK: - Header
     private var header: some View {
         HStack(spacing: 16) {
-            Button {
+            Button(action: {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
                     showSectionBrowser.toggle()
                 }
-            } label: {
+            }, label: {
                 Label(showSectionBrowser ? "Hide Sections" : "Enable Sections", systemImage: "slider.horizontal.3")
-            }
+            })
             .buttonStyle(.bordered)
             if case .saved = saveState {
                 Text("✅ Changes saved")

@@ -1,7 +1,7 @@
 import Foundation
 struct DescriptorInterpreter {
     let resume: Resume
-    let manifest: TemplateManifest?
+
     let fontScaler: FontSizeScaler
     let valueNormalizer: SectionValueNormalizer
     let titleRenderer: TitleTemplateRenderer

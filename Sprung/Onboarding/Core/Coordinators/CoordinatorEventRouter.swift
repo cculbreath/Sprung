@@ -54,7 +54,7 @@ final class CoordinatorEventRouter {
             let timeline = await state.artifacts.skeletonTimeline
             ui.updateTimeline(timeline)
             checkpointManager.scheduleCheckpoint()
-        case .artifactRecordPersisted, .phaseTransitionApplied:
+        case .artifactRecordPersisted:
             checkpointManager.scheduleCheckpoint()
 
         case .processingStateChanged:
@@ -69,6 +69,25 @@ final class CoordinatorEventRouter {
             break
         case .errorOccurred(let error):
             Logger.error("Interview error: \(error)", category: .ai)
+
+        // MARK: - Evidence & Draft Events (Phase 2)
+        case .evidenceRequirementAdded(let req):
+            ui.evidenceRequirements.append(req)
+        case .evidenceRequirementUpdated(let req):
+            if let index = ui.evidenceRequirements.firstIndex(where: { $0.id == req.id }) {
+                ui.evidenceRequirements[index] = req
+            }
+        case .evidenceRequirementRemoved(let id):
+            ui.evidenceRequirements.removeAll { $0.id == id }
+        case .draftKnowledgeCardProduced(let draft):
+            ui.drafts.append(draft)
+        case .draftKnowledgeCardUpdated(let draft):
+            if let index = ui.drafts.firstIndex(where: { $0.id == draft.id }) {
+                ui.drafts[index] = draft
+            }
+        case .draftKnowledgeCardRemoved(let id):
+            ui.drafts.removeAll { $0.id == id }
+
         case .applicantProfileStored:
             // Handled by ProfilePersistenceHandler
             break
@@ -83,45 +102,15 @@ final class CoordinatorEventRouter {
         case .objectiveStatusRequested(let id, let response):
             let status = await state.getObjectiveStatus(id)?.rawValue
             response(status)
-        case .phaseAdvanceRequested:
-            break
-        case .phaseAdvanceDismissed:
-            break
-        case .phaseAdvanceApproved, .phaseAdvanceDenied:
-            break
-        case .choicePromptRequested, .choicePromptCleared,
-             .uploadRequestPresented, .uploadRequestCancelled,
-             .validationPromptRequested, .validationPromptCleared,
-             .applicantProfileIntakeRequested, .applicantProfileIntakeCleared,
-             .toolPaneCardRestored,
-             .timelineCardCreated, .timelineCardDeleted, .timelineCardsReordered,
-             .artifactGetRequested, .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted,
-             .artifactRecordProduced, .artifactRecordPersisted, .artifactRecordsReplaced,
-             .knowledgeCardPersisted, .knowledgeCardsReplaced,
-             .uploadCompleted,
-             .objectiveStatusChanged, .objectiveStatusUpdateRequested,
-             .stateSnapshot, .stateAllowedToolsUpdated,
-             .llmUserMessageSent, .llmDeveloperMessageSent, .llmSentToolResponseMessage,
-             .llmSendUserMessage, .llmSendDeveloperMessage, .llmToolResponseMessage, .llmStatus,
-             .phaseTransitionRequested, .timelineCardUpdated:
-            break
         case .phaseTransitionApplied(let phaseName, _):
+            checkpointManager.scheduleCheckpoint()
             await phaseTransitionController.handlePhaseTransition(phaseName)
             if let phase = InterviewPhase(rawValue: phaseName) {
                 ui.phase = phase
             }
-        case .profileSummaryUpdateRequested, .profileSummaryDismissRequested,
-             .sectionToggleRequested, .sectionToggleCleared,
-             .artifactMetadataUpdated,
-             .llmReasoningItemsForToolCalls,
-             .pendingExtractionUpdated,
-             .llmEnqueueUserMessage, .llmEnqueueToolResponse,
-             .llmExecuteUserMessage, .llmExecuteToolResponse,
-             .llmCancelRequested,
-             .chatboxUserMessageAdded,
-             .skeletonTimelineReplaced:
-            break
-        @unknown default:
+
+        // All other events are handled elsewhere or don't need handling here
+        default:
             break
         }
     }

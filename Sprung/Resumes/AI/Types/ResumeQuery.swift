@@ -120,7 +120,10 @@ import SwiftUI
     let genericSystemMessage = LLMMessage.text(
         role: .system,
         content: """
-        You are an expert career coach with a specialization in crafting and refining technical resumes to optimize them for job applications. With extensive experience in helping candidates secure interviews at top companies, you understand the importance of aligning resume content with job descriptions and the subtleties of tailoring resumes to specific roles. Your goal is to propose revisions that truthfully showcase the candidate's relevant achievements, experiences, and skills. Make the resume compelling, concise, and closely aligned with the target job posting, without adding any fabricated details.
+        You are an expert career coach with a specialization in crafting and refining technical resumes to optimize them for job applications. \
+        With extensive experience in helping candidates secure interviews at top companies, you understand the importance of aligning resume content with job descriptions and the subtleties of tailoring resumes to specific roles. \
+        Your goal is to propose revisions that truthfully showcase the candidate's relevant achievements, experiences, and skills. \
+        Make the resume compelling, concise, and closely aligned with the target job posting, without adding any fabricated details.
         """
     )
     // Make this var instead of let so it can be updated
@@ -198,7 +201,8 @@ import SwiftUI
         LATEST RÉSUMÉ (PLAIN TEXT):
         \(resumeText)
         ================================================================================
-        This is the most recent version of \(applicant.name)'s résumé in plain text, generated from the following JSON data using a templating system. This system also builds HTML and PDF outputs from the same JSON.
+        This is the most recent version of \(applicant.name)'s résumé in plain text, generated from the following JSON data using a templating system. \
+        This system also builds HTML and PDF outputs from the same JSON.
         RÉSUMÉ SOURCE JSON:
         \(resumeJson)
         ================================================================================
@@ -221,7 +225,8 @@ import SwiftUI
         5. Avoid redundant phrasing among bullet points; keep language varied if multiple items share similar responsibilities or skills.
         6. Safeguard the broader skill set if it is relevant to roles beyond the target position, but do prioritize clarity and relevance to this specific job.
         7. Keep formatting cues consistent with the style implied by the existing resume content.
-        8. CRITICAL: Replacement content should be roughly the same length as the original to accommodate fixed text-box-sized layouts. Aim to match character count within ±10% when possible.
+        8. CRITICAL: Replacement content should be roughly the same length as the original to accommodate fixed text-box-sized layouts. \
+        Aim to match character count within ±10% when possible.
         ================================================================================
         EDITABLE NODES:
         \(updatableFieldsString)
@@ -236,7 +241,9 @@ import SwiftUI
         - The “why” field can be an empty string if the reason is self-explanatory.
         - Do **not** modify the "id" or "treePath" fields. Always return the exact same values you received for those fields for each node.
         SUMMARY:
-        Make the resume as compelling and accurate as possible for the target job. Keep it honest, relevant, and ensure that any additions or modifications support \(applicant.name)’s candidacy for the role. Use strategic language to highlight achievements, mirror core keywords from the job posting, and present a polished, stand-out resume.
+        Make the resume as compelling and accurate as possible for the target job. \
+        Keep it honest, relevant, and ensure that any additions or modifications support \(applicant.name)’s candidacy for the role. \
+        Use strategic language to highlight achievements, mirror core keywords from the job posting, and present a polished, stand-out resume.
         ================================================================================
         """
         // If debug flag is set, save the prompt to a text file in the user's Downloads folder.
@@ -340,7 +347,8 @@ import SwiftUI
         - For each field that needs no change, set newValue to "" and valueChanged to false
         - For each field that requires a change, propose newValue, set valueChanged to true, and include a "why" explanation if non-trivial
         - Do **not** modify the "id" or "treePath" fields. Always return the exact same values you received for those fields for each node
-        - CRITICAL: Replacement content should be roughly the same length as the original to accommodate fixed text-box-sized layouts. Aim to match character count within ±10% when possible
+        - CRITICAL: Replacement content should be roughly the same length as the original to accommodate fixed text-box-sized layouts. \
+        Aim to match character count within ±10% when possible
         OUTPUT INSTRUCTIONS:
         - Return your proposed revisions as JSON matching the RevNode array schema provided
         - For each original EditableNode, include exactly one RevNode in the RevArray

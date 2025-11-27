@@ -28,7 +28,6 @@ private final class Implementation {
     let manifest: TemplateManifest?
     private let fontScaler = FontSizeScaler()
     private lazy var valueNormalizer = SectionValueNormalizer(
-        resume: resume,
         manifest: manifest,
         fontScaler: fontScaler
     )
@@ -44,7 +43,6 @@ private final class Implementation {
     private lazy var descriptorInterpreter: DescriptorInterpreter = {
         DescriptorInterpreter(
             resume: resume,
-            manifest: manifest,
             fontScaler: fontScaler,
             valueNormalizer: valueNormalizer,
             titleRenderer: titleRenderer,
@@ -117,36 +115,36 @@ private final class Implementation {
         case .fontSizes:
             if let sectionNode,
                let dictionary = buildNodeValue(sectionNode) {
-                let normalized = valueNormalizer.normalize(dictionary, for: .fontSizes)
+                let normalized = valueNormalizer.normalize(dictionary, for: TemplateManifest.Section.FieldDescriptor.Behavior.fontSizes)
                 Logger.debug("raw fontsizes: \(dictionary)")
                 if valueNormalizer.isEmpty(normalized) == false {
                     return normalized
                 }
             }
             if let fallback = buildFontSizesSection() {
-                return valueNormalizer.normalize(fallback, for: .fontSizes)
+                return valueNormalizer.normalize(fallback, for: TemplateManifest.Section.FieldDescriptor.Behavior.fontSizes)
             }
             return nil
         case .includeFonts:
             if let sectionNode,
                let value = buildNodeValue(sectionNode) {
-                let normalized = valueNormalizer.normalize(value, for: .includeFonts)
+                let normalized = valueNormalizer.normalize(value, for: TemplateManifest.Section.FieldDescriptor.Behavior.includeFonts)
                 if valueNormalizer.isEmpty(normalized) == false {
                     return normalized
                 }
             }
             let includeFonts = resume.includeFonts ? "true" : "false"
-            return valueNormalizer.normalize(includeFonts, for: .includeFonts)
+            return valueNormalizer.normalize(includeFonts, for: TemplateManifest.Section.FieldDescriptor.Behavior.includeFonts)
         case .editorKeys:
             if let sectionNode,
                let value = buildNodeValue(sectionNode) {
-                let normalized = valueNormalizer.normalize(value, for: .editorKeys)
+                let normalized = valueNormalizer.normalize(value, for: TemplateManifest.Section.FieldDescriptor.Behavior.editorKeys)
                 if valueNormalizer.isEmpty(normalized) == false {
                     return normalized
                 }
             }
             guard resume.importedEditorKeys.isEmpty == false else { return nil }
-            return valueNormalizer.normalize(resume.importedEditorKeys, for: .editorKeys)
+            return valueNormalizer.normalize(resume.importedEditorKeys, for: TemplateManifest.Section.FieldDescriptor.Behavior.editorKeys)
         case .styling:
             // Build the styling section including fontSizes
             var styling: [String: Any] = [:]

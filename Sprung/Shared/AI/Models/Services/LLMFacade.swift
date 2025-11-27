@@ -54,15 +54,6 @@ final class LLMFacade {
     func registerConversationService(_ service: LLMConversationService, for backend: Backend) {
         conversationServices[backend] = service
     }
-    func availableBackends() -> [Backend] {
-        Backend.allCases.filter { backendClients[$0] != nil }
-    }
-    func hasBackend(_ backend: Backend) -> Bool {
-        backendClients[backend] != nil
-    }
-    func supportsConversations(for backend: Backend) -> Bool {
-        conversationServices[backend] != nil
-    }
     private func resolveClient(for backend: Backend) throws -> LLMClient {
         guard let resolved = backendClients[backend] else {
             throw LLMError.clientError("Backend \(backend.displayName) is not configured")

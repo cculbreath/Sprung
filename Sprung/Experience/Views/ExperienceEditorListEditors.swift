@@ -15,9 +15,9 @@ struct HighlightListEditor: View {
                         items.remove(at: index)
                         onChange()
                     }
-                }) {
+                }, content: {
                     ExperienceTextEditor("Highlight", text: item.text, onChange: onChange)
-                }
+                })
             }
             Button("Add Highlight") {
                 items.append(HighlightDraft())
@@ -41,11 +41,11 @@ struct SingleLineHighlightListEditor: View {
                         items.remove(at: index)
                         onChange()
                     }
-                }) {
+                }, content: {
                     ExperienceFieldRow {
                         ExperienceTextField("Highlight", text: item.text, onChange: onChange)
                     }
-                }
+                })
             }
             Button("Add Highlight") {
                 items.append(HighlightDraft())
@@ -69,9 +69,9 @@ struct VolunteerHighlightListEditor: View {
                         items.remove(at: index)
                         onChange()
                     }
-                }) {
+                }, content: {
                     ExperienceTextEditor("Highlight", text: item.text, onChange: onChange)
-                }
+                })
             }
             Button("Add Highlight") {
                 items.append(VolunteerHighlightDraft())
@@ -95,9 +95,9 @@ struct ProjectHighlightListEditor: View {
                         items.remove(at: index)
                         onChange()
                     }
-                }) {
+                }, content: {
                     ExperienceTextEditor("Highlight", text: item.text, onChange: onChange)
-                }
+                })
             }
             Button("Add Highlight") {
                 items.append(ProjectHighlightDraft())
@@ -121,9 +121,9 @@ struct CourseListEditor: View {
                         items.remove(at: index)
                         onChange()
                     }
-                }) {
+                }, content: {
                     ExperienceTextField("Course", text: item.name, onChange: onChange)
-                }
+                })
             }
             Button("Add Course") {
                 items.append(CourseDraft())
@@ -245,10 +245,10 @@ struct KeywordChip: View {
                 .foregroundStyle(.primary)
                 .lineLimit(1)
             if isHovered, let onRemove {
-                Button(action: onRemove) {
+                Button(action: onRemove, label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 14, weight: .semibold))
-                }
+                })
                 .buttonStyle(.plain)
                 .foregroundStyle(Color.secondary)
                 .accessibilityLabel("Remove \(keyword)")
@@ -279,14 +279,14 @@ struct SuggestionList: View {
         ScrollView {
             VStack(spacing: 0) {
                 ForEach(suggestions, id: \.self) { suggestion in
-                    Button(action: { onSelect(suggestion) }) {
+                    Button(action: { onSelect(suggestion) }, label: {
                         HStack {
                             Text(suggestion)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.vertical, 6)
                                 .padding(.horizontal, 10)
                         }
-                    }
+                    })
                     .buttonStyle(.plain)
                     .foregroundStyle(.primary)
                     if suggestion != suggestions.last {
@@ -323,9 +323,9 @@ struct RoleListEditor: View {
                         items.remove(at: index)
                         onChange()
                     }
-                }) {
+                }, content: {
                     ExperienceTextField("Role", text: item.role, onChange: onChange)
-                }
+                })
             }
             Button("Add Role") {
                 items.append(RoleDraft())
