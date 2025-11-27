@@ -88,15 +88,3 @@ struct TimelineCard: Identifiable, Equatable {
         return payload
     }
 }
-enum TimelineCardError: Error, LocalizedError {
-    case cardNotFound(String)
-    case invalidOrder([String])
-    var errorDescription: String? {
-        switch self {
-        case .cardNotFound(let identifier):
-            return "Timeline card with id \(identifier) was not found."
-        case .invalidOrder:
-            return "The provided card order could not be applied because one or more ids were missing."
-        }
-    }
-}

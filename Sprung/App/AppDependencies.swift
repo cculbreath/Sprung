@@ -197,7 +197,9 @@ final class AppDependencies {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.handleAPIKeysChanged()
+            Task { @MainActor in
+                self?.handleAPIKeysChanged()
+            }
         }
     }
     private func handleAPIKeysChanged() {

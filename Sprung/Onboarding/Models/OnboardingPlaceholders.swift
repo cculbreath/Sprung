@@ -98,14 +98,6 @@ extension OnboardingWizardStep {
         }
     }
 }
-struct OnboardingQuestion: Identifiable, Codable {
-    let id: UUID
-    let text: String
-    init(id: UUID = UUID(), text: String) {
-        self.id = id
-        self.text = text
-    }
-}
 struct OnboardingUploadMetadata: Codable {
     var title: String
     var instructions: String

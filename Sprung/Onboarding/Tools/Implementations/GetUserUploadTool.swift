@@ -207,46 +207,5 @@ private struct UploadRequestPayload {
         }
     }
 }
-private struct UploadUserResponse {
-    enum Status {
-        case skipped
-        case uploaded([URL])
-        case failed(String)
-    }
-    let status: Status
-    let targetKey: String?
-    init(json: JSON) throws {
-        guard let status = json["status"].string else {
-            throw ToolError.invalidParameters("Missing status in upload response.")
-        }
-        switch status {
-        case "skipped":
-            self.status = .skipped
-        case "uploaded":
-            let filesJSON = json["files"].array ?? []
-            let urls: [URL] = try filesJSON.map { item in
-                guard let urlString = item["url"].string,
-                      let url = URL(string: urlString) else {
-                    throw ToolError.invalidParameters("Invalid file URL supplied by UI.")
-                }
-                return url
-            }
-            guard !urls.isEmpty else {
-                throw ToolError.invalidParameters("Uploaded status requires at least one file.")
-            }
-            self.status = .uploaded(urls)
-        case "failed":
-            let message = json["error"].string ?? "Upload failed"
-            self.status = .failed(message)
-        default:
-            throw ToolError.invalidParameters("Unknown upload status: \(status)")
-        }
-        if let target = json["targetKey"].string, !target.isEmpty {
-            targetKey = target
-        } else {
-            targetKey = nil
-        }
-    }
-}
 // MARK: - Storage & Extraction
 // Upload storage helper moved to shared utility file.

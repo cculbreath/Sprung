@@ -2,15 +2,8 @@ import Foundation
 import Observation
 import SwiftData
 @MainActor
-protocol ExperienceDefaultsProviding: AnyObject {
-    func currentDefaults() -> ExperienceDefaults
-    func save(_ defaults: ExperienceDefaults)
-    func loadDraft() -> ExperienceDefaultsDraft
-    func save(draft: ExperienceDefaultsDraft)
-}
-@MainActor
 @Observable
-final class ExperienceDefaultsStore: SwiftDataStore, ExperienceDefaultsProviding {
+final class ExperienceDefaultsStore: SwiftDataStore {
     let modelContext: ModelContext
     private var cachedDefaults: ExperienceDefaults?
     init(context: ModelContext) {
