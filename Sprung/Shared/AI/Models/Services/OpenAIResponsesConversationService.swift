@@ -232,8 +232,7 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
                         case .reasoningSummaryTextDelta(let delta):
                             accumulatedReasoning += delta.delta
                         case .outputItemAdded(let added):
-                            if case let .functionCall(functionCall) = added.item {
-                                let initialArguments = functionCall.arguments.trimmingCharacters(in: .whitespacesAndNewlines)
+                            if case .functionCall = added.item {
                                 continuation.yield(
                                     LLMStreamChunkDTO(
                                         content: nil,
@@ -242,7 +241,7 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
                                     )
                                 )
                             }
-                        case .functionCallArgumentsDelta(let delta):
+                        case .functionCallArgumentsDelta:
                             continuation.yield(
                                 LLMStreamChunkDTO(
                                     content: nil,
@@ -250,8 +249,7 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
                                     isFinished: false
                                 )
                             )
-                        case .functionCallArgumentsDone(let done):
-                            let trimmed = done.arguments.trimmingCharacters(in: .whitespacesAndNewlines)
+                        case .functionCallArgumentsDone:
                             continuation.yield(
                                 LLMStreamChunkDTO(
                                     content: nil,
@@ -259,8 +257,7 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
                                     isFinished: false
                                 )
                             )
-                        case .customToolCallInputDelta(let delta):
-                            let payload = delta.delta.trimmingCharacters(in: .whitespacesAndNewlines)
+                        case .customToolCallInputDelta:
                             continuation.yield(
                                 LLMStreamChunkDTO(
                                     content: nil,
@@ -268,8 +265,7 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
                                     isFinished: false
                                 )
                             )
-                        case .customToolCallInputDone(let done):
-                            let payload = done.input.trimmingCharacters(in: .whitespacesAndNewlines)
+                        case .customToolCallInputDone:
                             continuation.yield(
                                 LLMStreamChunkDTO(
                                     content: nil,
@@ -277,7 +273,7 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
                                     isFinished: false
                                 )
                             )
-                        case .mcpCallInProgress(let progress):
+                        case .mcpCallInProgress:
                             continuation.yield(
                                 LLMStreamChunkDTO(
                                     content: nil,
@@ -285,7 +281,7 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
                                     isFinished: false
                                 )
                             )
-                        case .mcpCallCompleted(let completed):
+                        case .mcpCallCompleted:
                             continuation.yield(
                                 LLMStreamChunkDTO(
                                     content: nil,
@@ -293,7 +289,7 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
                                     isFinished: false
                                 )
                             )
-                        case .mcpCallFailed(let failed):
+                        case .mcpCallFailed:
                             continuation.yield(
                                 LLMStreamChunkDTO(
                                     content: nil,

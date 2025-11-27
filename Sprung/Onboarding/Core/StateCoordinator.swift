@@ -200,7 +200,7 @@ actor StateCoordinator: OnboardingEventEmitter {
             await emitSnapshot(reason: "checkpoint")
         case .applicantProfileStored:
             Logger.info("👤 Applicant profile stored via event", category: .ai)
-        case .skeletonTimelineStored(let timeline):
+        case .skeletonTimelineStored:
             Logger.info("📅 Skeleton timeline stored via event", category: .ai)
         case .enabledSectionsUpdated:
             Logger.info("📑 Enabled sections updated via event", category: .ai)

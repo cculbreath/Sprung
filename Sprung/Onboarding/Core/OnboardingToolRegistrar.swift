@@ -30,7 +30,7 @@ final class OnboardingToolRegistrar {
         Task {
             await documentExtractionService.setInvalidModelHandler { [weak self] modelId in
                 Task { @MainActor in
-                    guard let self = self else { return }
+                    guard self != nil else { return }
                     // Notify coordinator (or UI state directly if we had access)
                     // For now, we'll use the callback
                     onModelAvailabilityIssue("Your selected model (\(modelId)) is not available. Choose another model in Settings.")

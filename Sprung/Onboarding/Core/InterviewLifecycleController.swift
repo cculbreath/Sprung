@@ -111,7 +111,7 @@ final class InterviewLifecycleController {
     }
     func updateOpenAIService(_ service: OpenAIService?) {
         self.openAIService = service
-        if let orchestrator = orchestrator, let service = service {
+        if orchestrator != nil, service != nil {
             // If we have an active orchestrator, we might need to update its service reference
             // However, InterviewOrchestrator holds a let reference.
             // For now, we'll just log. In a full implementation, we might need to restart the orchestrator

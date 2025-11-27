@@ -1,32 +1,5 @@
 import AppKit
 import SwiftUI
-struct HighlightListEditor: View {
-    let title: String
-    @Binding var items: [HighlightDraft]
-    var onChange: () -> Void
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.headline)
-            ForEach($items) { item in
-                let entryID = item.wrappedValue.id
-                ExperienceCard(onDelete: {
-                    if let index = items.firstIndex(where: { $0.id == entryID }) {
-                        items.remove(at: index)
-                        onChange()
-                    }
-                }, content: {
-                    ExperienceTextEditor("Highlight", text: item.text, onChange: onChange)
-                })
-            }
-            Button("Add Highlight") {
-                items.append(HighlightDraft())
-                onChange()
-            }
-            .buttonStyle(.bordered)
-        }
-    }
-}
 struct SingleLineHighlightListEditor: View {
     @Binding var items: [HighlightDraft]
     var onChange: () -> Void
