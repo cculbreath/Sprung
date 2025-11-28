@@ -141,6 +141,15 @@ final class UIResponseCoordinator {
             notes: "Profile confirmed via intake card",
             details: ["method": "intake_card"]
         ))
+        // Mark the main applicant_profile objective as complete
+        await eventBus.publish(.objectiveStatusUpdateRequested(
+            id: "applicant_profile",
+            status: "completed",
+            source: "ui_profile_confirmed",
+            notes: "Applicant profile validated and saved",
+            details: ["method": "intake_card"]
+        ))
+        Logger.info("✅ applicant_profile objective marked complete", category: .ai)
         // Build user message with the validated profile information
         var userMessage = JSON()
         userMessage["role"].string = "user"
@@ -190,6 +199,36 @@ final class UIResponseCoordinator {
         toolRouter.completeApplicantProfileDraft(draft, source: source)
         // Show the profile summary card in the tool pane
         toolRouter.profileHandler.showProfileSummary(profile: profileJSON)
+        // Mark objectives complete
+        await eventBus.publish(.objectiveStatusUpdateRequested(
+            id: "contact_source_selected",
+            status: "completed",
+            source: "ui_profile_draft",
+            notes: "Profile submitted via \(source == .contacts ? "contacts" : "manual")",
+            details: ["source": source == .contacts ? "contacts" : "manual"]
+        ))
+        await eventBus.publish(.objectiveStatusUpdateRequested(
+            id: "contact_data_collected",
+            status: "completed",
+            source: "ui_profile_draft",
+            notes: "Profile data collected",
+            details: nil
+        ))
+        await eventBus.publish(.objectiveStatusUpdateRequested(
+            id: "contact_data_validated",
+            status: "completed",
+            source: "ui_profile_draft",
+            notes: "Profile validated via intake UI",
+            details: nil
+        ))
+        await eventBus.publish(.objectiveStatusUpdateRequested(
+            id: "applicant_profile",
+            status: "completed",
+            source: "ui_profile_draft",
+            notes: "Applicant profile validated and saved",
+            details: nil
+        ))
+        Logger.info("✅ applicant_profile objective marked complete via draft submission", category: .ai)
         // Build user message with the full profile JSON wrapped with validation status
         var userMessage = JSON()
         userMessage["role"].string = "user"
@@ -226,6 +265,15 @@ final class UIResponseCoordinator {
     // MARK: - Section Toggle Handling
     func confirmSectionToggle(enabled: [String]) async {
         guard toolRouter.resolveSectionToggle(enabled: enabled) != nil else { return }
+        // Mark enabled_sections objective as complete
+        await eventBus.publish(.objectiveStatusUpdateRequested(
+            id: "enabled_sections",
+            status: "completed",
+            source: "ui_section_toggle_confirmed",
+            notes: "Section toggle confirmed by user",
+            details: ["sections": enabled.joined(separator: ", ")]
+        ))
+        Logger.info("✅ enabled_sections objective marked complete", category: .ai)
         var userMessage = JSON()
         userMessage["role"].string = "user"
         userMessage["content"].string = "Section toggle confirmed. Enabled sections: \(enabled.joined(separator: ", "))"

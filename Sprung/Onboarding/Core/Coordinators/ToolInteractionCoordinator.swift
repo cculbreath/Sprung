@@ -105,6 +105,19 @@ final class ToolInteractionCoordinator {
             Task {
                 await eventBus.publish(.validationPromptCleared)
             }
+            // Mark skeleton_timeline objective as complete when user confirms validation
+            if let validation = pendingValidation,
+               validation.dataType == "skeleton_timeline",
+               ["confirmed", "confirmed_with_changes", "approved", "modified"].contains(status.lowercased()) {
+                await eventBus.publish(.objectiveStatusUpdateRequested(
+                    id: "skeleton_timeline",
+                    status: "completed",
+                    source: "ui_timeline_validated",
+                    notes: "Timeline validated by user",
+                    details: nil
+                ))
+                Logger.info("✅ skeleton_timeline objective marked complete after validation", category: .ai)
+            }
         }
         return result
     }
