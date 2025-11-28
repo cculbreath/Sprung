@@ -300,6 +300,9 @@ actor StateCoordinator: OnboardingEventEmitter {
                 // Single tool call or no batch context - send immediately (preserves blocking behavior)
                 enqueueStreamRequest(.toolResponse(payload: payload))
             }
+        case .llmStreamCompleted:
+            // Handle stream completion via event to ensure proper ordering with tool call events
+            handleStreamCompleted()
         default:
             break
         }
@@ -436,18 +439,57 @@ actor StateCoordinator: OnboardingEventEmitter {
         }
     }
     /// Process the stream queue serially
+    /// Priority: tool responses must be sent before developer messages when tool calls are pending
     private func processStreamQueue() async {
         while !streamQueue.isEmpty {
             guard !isStreaming else {
                 Logger.debug("⏸️ Queue processing paused (stream in progress)", category: .ai)
                 return
             }
+            // Find the next request to process
+            // Priority: tool responses > user messages > developer messages
+            // Developer messages must wait if tool responses are expected
+            let nextIndex: Int
+            if expectedToolResponseCount > 0 || hasPendingToolResponse() {
+                // Tool responses are expected - prioritize them over developer messages
+                if let toolIndex = streamQueue.firstIndex(where: { request in
+                    if case .toolResponse = request { return true }
+                    if case .batchedToolResponses = request { return true }
+                    return false
+                }) {
+                    nextIndex = toolIndex
+                } else {
+                    // No tool response in queue yet - wait for it before processing developer messages
+                    // But allow user messages to go through
+                    if let userIndex = streamQueue.firstIndex(where: { request in
+                        if case .userMessage = request { return true }
+                        return false
+                    }) {
+                        nextIndex = userIndex
+                    } else {
+                        // Only developer messages in queue - wait for tool responses
+                        Logger.debug("⏸️ Queue has developer message but waiting for tool responses", category: .ai)
+                        return
+                    }
+                }
+            } else {
+                // No pending tool calls - process in FIFO order
+                nextIndex = 0
+            }
             isStreaming = true
-            let request = streamQueue.removeFirst()
+            let request = streamQueue.remove(at: nextIndex)
             Logger.debug("▶️ Processing stream request from queue (\(streamQueue.count) remaining)", category: .ai)
             // Emit event for LLMMessenger to react to
             await emitStreamRequest(request)
             // Note: isStreaming will be set to false when .streamCompleted event is received
+        }
+    }
+    /// Check if there are pending tool responses in the queue
+    private func hasPendingToolResponse() -> Bool {
+        return streamQueue.contains { request in
+            if case .toolResponse = request { return true }
+            if case .batchedToolResponses = request { return true }
+            return false
         }
     }
     /// Emit the appropriate stream request event for LLMMessenger to handle
@@ -463,10 +505,17 @@ actor StateCoordinator: OnboardingEventEmitter {
             await emit(.llmExecuteDeveloperMessage(payload: payload))
         }
     }
-    /// Mark stream as completed and process next in queue
-    func markStreamCompleted() {
+    /// Mark stream as completed - emits event to ensure proper ordering with pending tool calls
+    /// This method should be called by LLMMessenger when a stream finishes
+    func markStreamCompleted() async {
+        // Emit event instead of directly processing - this ensures the stream completion
+        // is processed in order with other events like llmToolCallBatchStarted
+        await emit(.llmStreamCompleted)
+    }
+    /// Internal handler for stream completion (called via event)
+    private func handleStreamCompleted() {
         guard isStreaming else {
-            Logger.warning("markStreamCompleted called but isStreaming=false", category: .ai)
+            Logger.warning("handleStreamCompleted called but isStreaming=false", category: .ai)
             return
         }
         isStreaming = false
