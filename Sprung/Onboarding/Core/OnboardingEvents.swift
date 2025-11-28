@@ -102,9 +102,13 @@ enum OnboardingEvent {
     // Stream request events (for enqueueing via StateCoordinator)
     case llmEnqueueUserMessage(payload: JSON, isSystemGenerated: Bool)
     case llmEnqueueToolResponse(payload: JSON)
+    // Parallel tool call batching - signals how many tool responses to collect before sending
+    case llmToolCallBatchStarted(expectedCount: Int, callIds: [String])
+    case llmExecuteBatchedToolResponses(payloads: [JSON])
     // Stream execution events (for serial processing via StateCoordinator)
     case llmExecuteUserMessage(payload: JSON, isSystemGenerated: Bool)
     case llmExecuteToolResponse(payload: JSON)
+    case llmExecuteDeveloperMessage(payload: JSON)
     // Sidebar reasoning (ChatGPT-style, not attached to messages)
     case llmReasoningSummaryDelta(delta: String)  // Incremental reasoning text for sidebar
     case llmReasoningSummaryComplete(text: String)  // Final reasoning text for sidebar
@@ -283,7 +287,8 @@ actor EventCoordinator {
         case .chatboxUserMessageAdded, .llmUserMessageSent, .llmDeveloperMessageSent, .llmSentToolResponseMessage,
              .llmSendUserMessage, .llmSendDeveloperMessage, .llmToolResponseMessage, .llmStatus,
              .llmEnqueueUserMessage, .llmEnqueueToolResponse,
-             .llmExecuteUserMessage, .llmExecuteToolResponse,
+             .llmToolCallBatchStarted, .llmExecuteBatchedToolResponses,
+             .llmExecuteUserMessage, .llmExecuteToolResponse, .llmExecuteDeveloperMessage,
              .llmReasoningSummaryDelta, .llmReasoningSummaryComplete, .llmReasoningItemsForToolCalls, .llmCancelRequested,
              .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized:
             return .llm
@@ -484,10 +489,16 @@ actor EventCoordinator {
             description = "LLM enqueue user message (system: \(isSystemGenerated))"
         case .llmEnqueueToolResponse:
             description = "LLM enqueue tool response"
+        case .llmToolCallBatchStarted(let expectedCount, _):
+            description = "LLM tool call batch started (expecting \(expectedCount) responses)"
+        case .llmExecuteBatchedToolResponses(let payloads):
+            description = "LLM execute batched tool responses (\(payloads.count) responses)"
         case .llmExecuteUserMessage(_, let isSystemGenerated):
             description = "LLM execute user message (system: \(isSystemGenerated))"
         case .llmExecuteToolResponse:
             description = "LLM execute tool response"
+        case .llmExecuteDeveloperMessage:
+            description = "LLM execute developer message"
         case .llmStatus(let status):
             description = "LLM status: \(status.rawValue)"
         case .llmReasoningSummaryDelta(let delta):

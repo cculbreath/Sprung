@@ -538,6 +538,21 @@ final class OnboardingInterviewCoordinator {
     func deleteTimelineCard(id: String) async -> JSON {
         await timelineManagementService.deleteTimelineCard(id: id)
     }
+    /// Delete a timeline card initiated from the UI (immediately syncs to coordinator state)
+    /// This ensures the deletion persists even if the LLM updates other cards before user saves
+    func deleteTimelineCardFromUI(id: String) async {
+        // Remove from the coordinator's skeleton timeline cache
+        if var timeline = ui.skeletonTimeline {
+            var experiences = timeline["experiences"].arrayValue
+            experiences.removeAll { $0["id"].stringValue == id }
+            timeline["experiences"] = JSON(experiences)
+            ui.skeletonTimeline = timeline
+            // Don't increment token here - we don't want to trigger a reload that would fight with the UI
+            Logger.info("🗑️ UI deletion synced: removed card \(id) from coordinator cache", category: .ai)
+        }
+        // Also emit the event so StateCoordinator updates its state
+        await eventBus.publish(.timelineCardDeleted(id: id))
+    }
     func reorderTimelineCards(orderedIds: [String]) async -> JSON {
         await timelineManagementService.reorderTimelineCards(orderedIds: orderedIds)
     }

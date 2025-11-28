@@ -30,6 +30,8 @@ actor NetworkRouter: OnboardingEventEmitter {
     private var messageIds: [String: UUID] = [:]
     private var lastMessageUUID: UUID?
     private var receivedOutputItemDone = false
+    // Track tool call IDs for parallel tool call batching
+    private var pendingToolCallIds: [String] = []
     // MARK: - Initialization
     init(eventBus: EventCoordinator) {
         self.eventBus = eventBus
@@ -71,6 +73,14 @@ actor NetworkRouter: OnboardingEventEmitter {
                 // No streaming occurred AND no outputItemDone events received
                 // Extract complete message from final response (fallback for non-streaming responses)
                 await processCompletedResponse(completed.response)
+            }
+            // If there were tool calls, emit batch start event so StateCoordinator knows how many to collect
+            if !pendingToolCallIds.isEmpty {
+                let count = pendingToolCallIds.count
+                let callIds = pendingToolCallIds
+                pendingToolCallIds = []  // Reset for next response
+                await emit(.llmToolCallBatchStarted(expectedCount: count, callIds: callIds))
+                Logger.info("🔧 Tool call batch started: expecting \(count) response(s)", category: .ai)
             }
             // Reset state for next response
             receivedOutputItemDone = false
@@ -164,6 +174,8 @@ actor NetworkRouter: OnboardingEventEmitter {
                     name: toolCall.name,
                     arguments: toolCall.arguments
                 ))
+                // Track this call ID for parallel tool call batching
+                pendingToolCallIds.append(toolCall.callId)
                 // Emit tool call event directly (don't call processToolCall which expects buffers)
                 let functionName = toolCall.name
                 let arguments = toolCall.arguments
@@ -228,6 +240,8 @@ actor NetworkRouter: OnboardingEventEmitter {
             arguments: argsJSON,
             callId: toolCall.callId
         )
+        // Track this call ID for parallel tool call batching
+        pendingToolCallIds.append(toolCall.callId)
         // Store tool call info in the current message buffer
         // Assumes tool calls arrive for message_0 (standard assistant message index)
         let itemId = "message_0"

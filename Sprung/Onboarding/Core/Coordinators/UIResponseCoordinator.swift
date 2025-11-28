@@ -118,6 +118,29 @@ final class UIResponseCoordinator {
         let status = resolution["status"].stringValue
         // Store profile in StateCoordinator/ArtifactRepository (persists the data)
         await state.storeApplicantProfile(profileData)
+        // Mark objective chain complete to trigger photo follow-up workflow
+        // The objectives must be completed in dependency order
+        await eventBus.publish(.objectiveStatusUpdateRequested(
+            id: "contact_source_selected",
+            status: "completed",
+            source: "ui_profile_confirmed",
+            notes: "Profile confirmed via intake card",
+            details: ["method": "intake_card"]
+        ))
+        await eventBus.publish(.objectiveStatusUpdateRequested(
+            id: "contact_data_collected",
+            status: "completed",
+            source: "ui_profile_confirmed",
+            notes: "Profile confirmed via intake card",
+            details: ["method": "intake_card"]
+        ))
+        await eventBus.publish(.objectiveStatusUpdateRequested(
+            id: "contact_data_validated",
+            status: "completed",
+            source: "ui_profile_confirmed",
+            notes: "Profile confirmed via intake card",
+            details: ["method": "intake_card"]
+        ))
         // Build user message with the validated profile information
         var userMessage = JSON()
         userMessage["role"].string = "user"
@@ -230,11 +253,17 @@ final class UIResponseCoordinator {
 
     // MARK: - Chat & Control
     func sendChatMessage(_ text: String) async {
-        var userMessage = JSON()
-        userMessage["role"].string = "user"
-        userMessage["content"].string = text
-
-        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: false))
+        // Add the message to chat transcript IMMEDIATELY so user sees it in the UI
+        let messageId = await state.appendUserMessage(text, isSystemGenerated: false)
+        // Emit event so coordinator can sync its messages array to UI
+        await eventBus.publish(.chatboxUserMessageAdded(messageId: messageId.uuidString))
+        // Wrap user chatbox messages in <chatbox> tags for LLM context
+        var payload = JSON()
+        payload["text"].string = "<chatbox>\(text)</chatbox>"
+        // Emit processing state change for UI feedback
+        await eventBus.publish(.processingStateChanged(true, statusMessage: "Processing your message..."))
+        // Emit event for LLMMessenger to handle
+        await eventBus.publish(.llmSendUserMessage(payload: payload))
     }
 
     func requestCancelLLM() async {
