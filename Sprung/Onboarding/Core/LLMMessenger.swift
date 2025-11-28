@@ -63,14 +63,18 @@ actor LLMMessenger: OnboardingEventEmitter {
         switch event {
         case .llmSendUserMessage(let payload, let isSystemGenerated):
             await sendUserMessage(payload, isSystemGenerated: isSystemGenerated)
-        case .llmSendDeveloperMessage(let payload):
-            await executeDeveloperMessage(payload)
+        // llmSendDeveloperMessage is now routed through StateCoordinator's queue
+        // and comes back as llmExecuteDeveloperMessage
         case .llmToolResponseMessage(let payload):
             await sendToolResponse(payload)
         case .llmExecuteUserMessage(let payload, let isSystemGenerated):
             await executeUserMessage(payload, isSystemGenerated: isSystemGenerated)
         case .llmExecuteToolResponse(let payload):
             await executeToolResponse(payload)
+        case .llmExecuteBatchedToolResponses(let payloads):
+            await executeBatchedToolResponses(payloads)
+        case .llmExecuteDeveloperMessage(let payload):
+            await executeDeveloperMessage(payload)
         case .llmCancelRequested:
             await cancelCurrentStream()
         default:
@@ -314,6 +318,72 @@ actor LLMMessenger: OnboardingEventEmitter {
             await stateCoordinator.markStreamCompleted()
         }
     }
+    /// Execute batched tool responses (for parallel tool calls)
+    /// OpenAI API requires all tool outputs from parallel calls to be sent together in one request
+    private func executeBatchedToolResponses(_ payloads: [JSON]) async {
+        await emit(.llmStatus(status: .busy))
+        do {
+            Logger.info("📤 Sending batched tool responses (\(payloads.count) responses)", category: .ai)
+            let request = await buildBatchedToolResponseRequest(payloads: payloads)
+            Logger.debug("📦 Batched tool response request: previousResponseId=\(request.previousResponseId ?? "nil")", category: .ai)
+            let messageId = UUID().uuidString
+            // Emit message sent event for each response in the batch
+            for payload in payloads {
+                await emit(.llmSentToolResponseMessage(messageId: messageId, payload: payload))
+            }
+            // Process stream via NetworkRouter with retry logic
+            currentStreamTask = Task {
+                var retryCount = 0
+                let maxRetries = 3
+                var lastError: Error?
+                while retryCount <= maxRetries {
+                    do {
+                        let stream = try await service.responseCreateStream(request)
+                        for try await streamEvent in stream {
+                            await networkRouter.handleResponseEvent(streamEvent)
+                            if case .responseCompleted(let completed) = streamEvent {
+                                await stateCoordinator.updateConversationState(
+                                    responseId: completed.response.id
+                                )
+                                await contextAssembler.storePreviousResponseId(completed.response.id)
+                            }
+                        }
+                        await emit(.llmStatus(status: .idle))
+                        return // Success - exit retry loop
+                    } catch {
+                        lastError = error
+                        let isRetriableError = isRetriable(error)
+                        if isRetriableError && retryCount < maxRetries {
+                            retryCount += 1
+                            let delay = Double(retryCount) * 2.0
+                            Logger.warning("⚠️ Transient error (attempt \(retryCount)/\(maxRetries)), retrying in \(delay)s: \(error)", category: .ai)
+                            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                        } else {
+                            Logger.error("❌ Batched tool response stream failed: \(error)", category: .ai)
+                            if let apiError = error as? APIError {
+                                Logger.error("❌ API Error details: \(apiError)", category: .ai)
+                            }
+                            throw error
+                        }
+                    }
+                }
+                if let error = lastError {
+                    Logger.error("❌ Batched tool response failed after \(maxRetries) retries: \(error)", category: .ai)
+                    throw error
+                }
+            }
+            try await currentStreamTask?.value
+            currentStreamTask = nil
+            await stateCoordinator.markStreamCompleted()
+        } catch is CancellationError {
+            Logger.info("Batched tool response stream cancelled", category: .ai)
+            await stateCoordinator.markStreamCompleted()
+        } catch {
+            await emit(.errorOccurred("Failed to send batched tool responses: \(error.localizedDescription)"))
+            await emit(.llmStatus(status: .error))
+            await stateCoordinator.markStreamCompleted()
+        }
+    }
     /// Determine if parallel tool calls should be enabled based on current state
     private func shouldEnableParallelToolCalls() async -> Bool {
         let validation = await stateCoordinator.pendingValidationPrompt
@@ -446,6 +516,29 @@ actor LLMMessenger: OnboardingEventEmitter {
             parameters.reasoning = Reasoning(effort: effort)
         }
         Logger.info("📝 Built tool response request: parallelToolCalls=\(parameters.parallelToolCalls?.description ?? "nil")", category: .ai)
+        return parameters
+    }
+    /// Build request for batched tool responses (parallel tool calls)
+    private func buildBatchedToolResponseRequest(payloads: [JSON]) async -> ModelResponseParameter {
+        let inputItems = await contextAssembler.buildForBatchedToolResponses(payloads: payloads)
+        let tools = await getToolSchemas()
+        let modelId = await stateCoordinator.getCurrentModelId()
+        let previousResponseId = await contextAssembler.getPreviousResponseId()
+        var parameters = ModelResponseParameter(
+            input: .array(inputItems),
+            model: .custom(modelId),
+            conversation: nil,
+            instructions: nil,
+            previousResponseId: previousResponseId,
+            store: true,
+            temperature: 1.0,
+            text: TextConfiguration(format: .text)
+        )
+        parameters.stream = true
+        parameters.toolChoice = .auto
+        parameters.tools = tools
+        parameters.parallelToolCalls = await shouldEnableParallelToolCalls()
+        Logger.info("📝 Built batched tool response request: \(inputItems.count) tool outputs, parallelToolCalls=\(parameters.parallelToolCalls?.description ?? "nil")", category: .ai)
         return parameters
     }
     /// Get tool schemas from ToolRegistry, filtered by allowed tools from StateCoordinator

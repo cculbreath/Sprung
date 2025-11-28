@@ -11,6 +11,7 @@ struct TimelineCardEditorView: View {
     var onValidationSubmit: ((String) -> Void)?  // Callback for validation mode: "confirmed" or "confirmed_with_changes"
     var onSubmitChangesOnly: (() -> Void)?  // Callback for "Submit Changes Only" - saves and lets LLM reassess
     @State private var drafts: [WorkExperienceDraft] = []
+    @State private var previousDraftIds: Set<UUID> = []  // Track draft IDs to detect deletions
     @State private var baselineCards: [TimelineCard] = []
     @State private var meta: JSON?
     @State private var hasChanges = false
@@ -88,6 +89,7 @@ struct TimelineCardEditorView: View {
                 // Load the new timeline
                 baselineCards = state.cards
                 drafts = TimelineCardAdapter.workDrafts(from: state.cards)
+                previousDraftIds = Set(drafts.map { $0.id })  // Update tracking set
                 meta = state.meta
                 // If LLM created/modified cards, they need user confirmation
                 hasChanges = needsConfirmation
@@ -99,11 +101,26 @@ struct TimelineCardEditorView: View {
                 Logger.info("🔄 TimelineCardEditorView: Loaded \(newCards.count) cards, hasChanges=\(needsConfirmation)", category: .ai)
             }
         }
-        .onChange(of: drafts) { _, _ in
+        .onChange(of: drafts) { oldDrafts, newDrafts in
             // Skip recalculation if we're actively loading from coordinator
             // to prevent overwriting hasChanges that was just set in token onChange
             guard !isLoadingFromCoordinator else { return }
-            hasChanges = TimelineCardAdapter.cards(from: drafts) != baselineCards
+            // Detect deletions and immediately sync them to coordinator
+            // This prevents deleted cards from reappearing when LLM updates other cards
+            let currentIds = Set(newDrafts.map { $0.id })
+            let deletedIds = previousDraftIds.subtracting(currentIds)
+            if !deletedIds.isEmpty {
+                Task {
+                    for deletedId in deletedIds {
+                        let cardId = deletedId.uuidString
+                        Logger.info("🗑️ UI deletion detected: immediately syncing card \(cardId) deletion to coordinator", category: .ai)
+                        await coordinator.deleteTimelineCardFromUI(id: cardId)
+                    }
+                }
+            }
+            // Update tracking set
+            previousDraftIds = currentIds
+            hasChanges = TimelineCardAdapter.cards(from: newDrafts) != baselineCards
         }
     }
     private var header: some View {
@@ -181,6 +198,7 @@ struct TimelineCardEditorView: View {
         isLoadingFromCoordinator = true
         baselineCards = state.cards
         drafts = TimelineCardAdapter.workDrafts(from: state.cards)
+        previousDraftIds = Set(drafts.map { $0.id })  // Initialize tracking set
         meta = state.meta
         hasChanges = false
         errorMessage = nil

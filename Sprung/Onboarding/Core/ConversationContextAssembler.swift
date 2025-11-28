@@ -79,6 +79,25 @@ actor ConversationContextAssembler {
         Logger.debug("📦 Assembled tool response: 1 item (status: \(status ?? "nil"))", category: .ai)
         return [toolOutput]
     }
+    /// Build input items for batched tool responses (parallel tool calls)
+    /// OpenAI API requires all tool outputs from parallel calls to be sent together
+    func buildForBatchedToolResponses(payloads: [JSON]) async -> [InputItem] {
+        var items: [InputItem] = []
+        for payload in payloads {
+            let callId = payload["callId"].stringValue
+            let output = payload["output"]
+            let outputString = output.rawString() ?? "{}"
+            let status = output["status"].string
+            let toolOutput = InputItem.functionToolCallOutput(FunctionToolCallOutput(
+                callId: callId,
+                output: outputString,
+                status: status
+            ))
+            items.append(toolOutput)
+        }
+        Logger.debug("📦 Assembled batched tool responses: \(items.count) items", category: .ai)
+        return items
+    }
     // MARK: - Private Helpers
     /// Build state cues developer message
     /// Note: Tool management is now handled via API's tools parameter, not injected here

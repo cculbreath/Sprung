@@ -106,6 +106,16 @@ STEP 6: Begin skeleton_timeline workflow.
    - If user clicks "Confirm" (no edits) or "Confirm with Changes" (with edits):
      * Timeline is finalized
      * Mark skeleton_timeline objective complete
+     * Proceed immediately to STEP 7
+STEP 7: Configure enabled résumé sections.
+   After skeleton_timeline is validated, call `configure_enabled_sections` with a proposed_sections object.
+   - Analyze the user's timeline and any uploaded documents to determine which sections they likely want
+   - Set sections to true if user has provided relevant data or mentioned them
+   - Set sections to false if no data exists for that section
+   - Example: { "work": true, "education": true, "skills": true, "publications": false, "projects": true }
+   - The tool presents a Section Toggle UI where user can confirm/modify your proposal
+   - After user confirms their section selections, the enabled_sections objective is complete
+   - You may then proceed to dossier_seed questions or call next_phase when ready
 RULES:
 - Process ONE STEP per message cycle
 - NEVER combine the photo question with skeleton_timeline questions

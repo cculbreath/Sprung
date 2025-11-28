@@ -38,10 +38,16 @@ actor StateCoordinator: OnboardingEventEmitter {
     enum StreamRequestType {
         case userMessage(payload: JSON, isSystemGenerated: Bool)
         case toolResponse(payload: JSON)
+        case batchedToolResponses(payloads: [JSON])
+        case developerMessage(payload: JSON)
     }
     private var isStreaming = false
     private var streamQueue: [StreamRequestType] = []
     private(set) var hasStreamedFirstResponse = false
+    // MARK: - Parallel Tool Call Batching
+    private var expectedToolResponseCount: Int = 0
+    private var expectedToolCallIds: Set<String> = []
+    private var collectedToolResponses: [JSON] = []
     // MARK: - LLM State (Single Source of Truth)
     private var allowedToolNames: Set<String> = []
     private var lastResponseId: String?
@@ -263,8 +269,37 @@ actor StateCoordinator: OnboardingEventEmitter {
             await chatStore.completeReasoningSummary(finalText: text)
         case .llmEnqueueUserMessage(let payload, let isSystemGenerated):
             enqueueStreamRequest(.userMessage(payload: payload, isSystemGenerated: isSystemGenerated))
+        case .llmSendDeveloperMessage(let payload):
+            // Route developer messages through the queue to ensure they wait for pending tool responses
+            enqueueStreamRequest(.developerMessage(payload: payload))
+        case .llmToolCallBatchStarted(let expectedCount, let callIds):
+            // Start collecting tool responses for batching
+            expectedToolResponseCount = expectedCount
+            expectedToolCallIds = Set(callIds)
+            collectedToolResponses = []
+            Logger.info("📦 Tool call batch started: expecting \(expectedCount) responses", category: .ai)
         case .llmEnqueueToolResponse(let payload):
-            enqueueStreamRequest(.toolResponse(payload: payload))
+            // Check if we're in batching mode
+            if expectedToolResponseCount > 1 {
+                // Collecting for batch - add to collection
+                collectedToolResponses.append(payload)
+                Logger.debug("📦 Collected tool response \(collectedToolResponses.count)/\(expectedToolResponseCount)", category: .ai)
+                // Check if we have all responses
+                if collectedToolResponses.count >= expectedToolResponseCount {
+                    // All responses collected - emit batch for execution
+                    let batch = collectedToolResponses
+                    // Reset batching state
+                    expectedToolResponseCount = 0
+                    expectedToolCallIds = []
+                    collectedToolResponses = []
+                    // Enqueue batch as a single request
+                    enqueueBatchedToolResponses(batch)
+                    Logger.info("📦 All \(batch.count) tool responses collected - sending batch", category: .ai)
+                }
+            } else {
+                // Single tool call or no batch context - send immediately (preserves blocking behavior)
+                enqueueStreamRequest(.toolResponse(payload: payload))
+            }
         default:
             break
         }
@@ -390,6 +425,16 @@ actor StateCoordinator: OnboardingEventEmitter {
             }
         }
     }
+    /// Enqueue batched tool responses as a single request
+    private func enqueueBatchedToolResponses(_ payloads: [JSON]) {
+        streamQueue.append(.batchedToolResponses(payloads: payloads))
+        Logger.debug("📥 Batched tool responses enqueued (queue size: \(streamQueue.count))", category: .ai)
+        if !isStreaming {
+            Task {
+                await processStreamQueue()
+            }
+        }
+    }
     /// Process the stream queue serially
     private func processStreamQueue() async {
         while !streamQueue.isEmpty {
@@ -412,6 +457,10 @@ actor StateCoordinator: OnboardingEventEmitter {
             await emit(.llmExecuteUserMessage(payload: payload, isSystemGenerated: isSystemGenerated))
         case .toolResponse(let payload):
             await emit(.llmExecuteToolResponse(payload: payload))
+        case .batchedToolResponses(let payloads):
+            await emit(.llmExecuteBatchedToolResponses(payloads: payloads))
+        case .developerMessage(let payload):
+            await emit(.llmExecuteDeveloperMessage(payload: payload))
         }
     }
     /// Mark stream as completed and process next in queue
