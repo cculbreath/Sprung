@@ -46,7 +46,7 @@ struct DisplayTimelineForReviewTool: InterviewTool {
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
-    var name: String { "display_timeline_entries_for_review" }
+    var name: String { OnboardingToolName.displayTimelineEntriesForReview.rawValue }
     var description: String { "Activate timeline EDITOR UI before creating cards. User can edit/save changes. NOT final approval - use submit_for_validation afterward." }
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {

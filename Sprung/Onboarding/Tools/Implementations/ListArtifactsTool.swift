@@ -30,7 +30,7 @@ struct ListArtifactsTool: InterviewTool {
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
-    var name: String { "list_artifacts" }
+    var name: String { OnboardingToolName.listArtifacts.rawValue }
     var description: String { "List all stored artifacts with metadata. Returns {count, artifacts: [{id, filename, ...}]}. Use to check what uploads exist." }
     var parameters: JSONSchema { Self.schema }
     func isAvailable() async -> Bool {

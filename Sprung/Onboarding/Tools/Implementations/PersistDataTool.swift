@@ -55,7 +55,7 @@ struct PersistDataTool: InterviewTool {
     }()
     private let dataStore: InterviewDataStore
     private let eventBus: EventCoordinator
-    var name: String { "persist_data" }
+    var name: String { OnboardingToolName.persistData.rawValue }
     var description: String { "Persist validated data to disk (applicant_profile, skeleton_timeline, enabled_sections, candidate_dossier_entry, etc). Returns {persisted: {id, type, status}}." }
     var parameters: JSONSchema { Self.schema }
     init(dataStore: InterviewDataStore, eventBus: EventCoordinator) {

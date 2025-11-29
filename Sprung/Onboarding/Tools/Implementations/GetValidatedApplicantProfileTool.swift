@@ -6,7 +6,7 @@ struct GetValidatedApplicantProfileTool: InterviewTool {
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
-    var name: String { "validated_applicant_profile_data" }
+    var name: String { OnboardingToolName.validatedApplicantProfileData.rawValue }
     var description: String { "Retrieve validated and persisted ApplicantProfile. Returns {found: true/false, data: {name, email, phone, ...}, message}." }
     var parameters: JSONSchema {
         JSONSchema(

@@ -6,7 +6,7 @@ struct ValidateApplicantProfileTool: InterviewTool {
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
-    var name: String { "validate_applicant_profile" }
+    var name: String { OnboardingToolName.validateApplicantProfile.rawValue }
     var description: String { "Present validation UI for profile data extracted from DOCUMENTS or URLS ONLY. Do NOT use for contact card or manual form submissions - those are pre-validated." }
     var parameters: JSONSchema {
         JSONSchema(

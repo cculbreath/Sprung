@@ -22,7 +22,7 @@ struct AgentReadyTool: InterviewTool {
         )
     }()
     init() {}
-    var name: String { "agent_ready" }
+    var name: String { OnboardingToolName.agentReady.rawValue }
     var description: String {
         "Signal that you are ready to begin after receiving phase instructions. Returns {status: completed, content: I am ready to begin {{instructions}}}."
     }

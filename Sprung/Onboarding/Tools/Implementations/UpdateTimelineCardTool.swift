@@ -59,7 +59,7 @@ struct UpdateTimelineCardTool: InterviewTool {
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
-    var name: String { "update_timeline_card" }
+    var name: String { OnboardingToolName.updateTimelineCard.rawValue }
     var description: String { "Update existing timeline card with partial changes (PATCH). Returns {success, id}. Only include changed fields." }
     var parameters: JSONSchema { Self.schema }
 

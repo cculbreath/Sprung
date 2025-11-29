@@ -36,7 +36,7 @@ struct RequestRawArtifactFileTool: InterviewTool {
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
-    var name: String { "request_raw_file" }
+    var name: String { OnboardingToolName.requestRawFile.rawValue }
     var description: String { "Get original file URL for artifact. Returns {status, file_url, filename}. Rarely needed - use get_artifact for text content." }
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {
