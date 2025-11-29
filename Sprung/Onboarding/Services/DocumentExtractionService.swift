@@ -46,6 +46,7 @@ actor DocumentExtractionService {
         case unsupportedType(String)
         case unreadableData
         case noTextExtracted
+        case pdfTooLarge(pageCount: Int)
         case llmFailed(String)
         var userFacingMessage: String {
             switch self {
@@ -55,11 +56,16 @@ actor DocumentExtractionService {
                 return "The document could not be read. Please try another file."
             case .noTextExtracted:
                 return "The document did not contain extractable text."
+            case .pdfTooLarge(let pageCount):
+                return "This PDF has \(pageCount) pages. Image-based extraction is limited to 10 pages or fewer. Please split the document or provide a text-based PDF."
             case .llmFailed(let description):
                 return "Extraction failed: \(description)"
             }
         }
     }
+
+    /// Maximum pages for image-based PDF extraction
+    private let maxPagesForImageExtraction = 10
     // MARK: - Private Properties
     private let requestExecutor: LLMRequestExecutor
     private let maxCharactersForPrompt = 18_000
@@ -103,6 +109,24 @@ actor DocumentExtractionService {
         }
         let sha256 = sha256Hex(for: fileData)
         let (rawText, initialIssues) = extractPlainText(from: fileURL)
+
+        // If text extraction failed and this is a PDF, try image-based extraction
+        if (rawText == nil || rawText?.isEmpty == true) && fileURL.pathExtension.lowercased() == "pdf" {
+            Logger.info("📄 Text extraction failed for PDF, attempting image-based extraction", category: .ai)
+            return try await extractPDFViaImages(
+                fileURL: fileURL,
+                fileData: fileData,
+                filename: filename,
+                sizeInBytes: sizeInBytes,
+                contentType: contentType,
+                sha256: sha256,
+                purpose: request.purpose,
+                timeout: request.timeout,
+                autoPersist: request.autoPersist,
+                progress: progress
+            )
+        }
+
         guard let rawText, !rawText.isEmpty else {
             await notifyProgress(.fileAnalysis, .failed, detail: "No extractable text")
             throw ExtractionError.noTextExtracted
@@ -329,5 +353,198 @@ Requirements:
     private func sha256Hex(for data: Data) -> String {
         let hashed = SHA256.hash(data: data)
         return hashed.map { String(format: "%02x", $0) }.joined()
+    }
+
+    // MARK: - Image-Based PDF Extraction
+
+    /// Extract content from a PDF by converting pages to images and using vision-capable LLM
+    private func extractPDFViaImages(
+        fileURL: URL,
+        fileData: Data,
+        filename: String,
+        sizeInBytes: Int,
+        contentType: String,
+        sha256: String,
+        purpose: String,
+        timeout: TimeInterval?,
+        autoPersist: Bool,
+        progress: ExtractionProgressHandler?
+    ) async throws -> ExtractionResult {
+        func notifyProgress(_ stage: ExtractionProgressStage, _ state: ExtractionProgressStageState, detail: String? = nil) async {
+            guard let progress else { return }
+            await progress(ExtractionProgressUpdate(stage: stage, state: state, detail: detail))
+        }
+
+        // Check page count
+        guard let pageCount = ImageConversionService.shared.getPDFPageCount(pdfData: fileData) else {
+            await notifyProgress(.fileAnalysis, .failed, detail: "Unable to read PDF")
+            throw ExtractionError.unreadableData
+        }
+
+        Logger.info("📄 PDF has \(pageCount) pages, max for image extraction is \(maxPagesForImageExtraction)", category: .ai)
+
+        // If too many pages, throw user-facing error
+        if pageCount > maxPagesForImageExtraction {
+            await notifyProgress(.fileAnalysis, .failed, detail: "PDF has too many pages (\(pageCount))")
+            throw ExtractionError.pdfTooLarge(pageCount: pageCount)
+        }
+
+        await notifyProgress(.fileAnalysis, .active, detail: "Converting \(pageCount) PDF page(s) to images...")
+
+        // Convert pages to images
+        guard let base64Images = ImageConversionService.shared.convertPDFPagesToBase64Images(pdfData: fileData, maxPages: maxPagesForImageExtraction),
+              !base64Images.isEmpty else {
+            await notifyProgress(.fileAnalysis, .failed, detail: "Failed to convert PDF pages to images")
+            throw ExtractionError.noTextExtracted
+        }
+
+        await notifyProgress(.fileAnalysis, .completed, detail: "Converted \(base64Images.count) page(s)")
+
+        // Use vision-capable model to extract content
+        let aiStageDetail = "Analyzing \(base64Images.count) page image(s) with AI..."
+        await notifyProgress(.aiExtraction, .active, detail: aiStageDetail)
+
+        let llmStart = Date()
+        let (extractedText, issues) = try await extractTextFromImages(base64Images, purpose: purpose)
+
+        let llmDurationMs = Int(Date().timeIntervalSince(llmStart) * 1000)
+        Logger.info(
+            "📄 Image-based extraction LLM phase completed",
+            category: .diagnostics,
+            metadata: [
+                "filename": filename,
+                "page_count": "\(base64Images.count)",
+                "duration_ms": "\(llmDurationMs)"
+            ]
+        )
+
+        let aiState: ExtractionProgressStageState = issues.contains(where: { $0.hasPrefix("llm_failure") }) ? .failed : .completed
+        await notifyProgress(.aiExtraction, aiState)
+
+        var allIssues = ["image_based_extraction"]
+        allIssues.append(contentsOf: issues)
+
+        let confidence = estimateConfidence(for: extractedText, issues: allIssues)
+        let metadata: [String: Any] = [
+            "character_count": extractedText.count,
+            "source_format": contentType,
+            "purpose": purpose,
+            "source_file_url": fileURL.absoluteString,
+            "source_filename": filename,
+            "extraction_method": "image_vision",
+            "page_count": pageCount
+        ]
+
+        let artifact = ExtractedArtifact(
+            id: UUID().uuidString,
+            filename: filename,
+            contentType: contentType,
+            sizeInBytes: sizeInBytes,
+            sha256: sha256,
+            extractedContent: extractedText,
+            metadata: metadata
+        )
+
+        let status: ExtractionResult.Status
+        if issues.contains(where: { $0.hasPrefix("llm_failure") }) {
+            status = .partial
+        } else {
+            status = .ok
+        }
+
+        if autoPersist {
+            allIssues.append("auto_persist_not_supported")
+        }
+
+        let quality = Quality(confidence: confidence, issues: allIssues)
+
+        return ExtractionResult(
+            status: status,
+            artifact: artifact,
+            quality: quality,
+            derivedApplicantProfile: nil,
+            derivedSkeletonTimeline: nil,
+            persisted: false
+        )
+    }
+
+    /// Extract text from base64-encoded images using a vision-capable LLM
+    private func extractTextFromImages(_ base64Images: [String], purpose: String) async throws -> (String, [String]) {
+        typealias MessageContent = ChatCompletionParameters.Message.ContentType.MessageContent
+
+        var issues: [String] = []
+        let modelId = currentModelId()
+
+        var prompt = """
+You are a document extraction assistant. Analyze the provided page images and extract ALL text content into high-quality Markdown.
+
+Requirements:
+- Extract all visible text from each page image
+- Reconstruct headings, bullet lists, numbered lists, and tables when possible
+- Process every page in order with no omissions
+- Keep original ordering of sections
+- Describe any diagrams, charts, or figures you see
+- Do not invent content; only extract what you can see
+- Use Markdown tables for tabular data
+- For contact details, list them as bullet points
+"""
+        if purpose == "resume_timeline" {
+            prompt += "\n- Highlight employment sections clearly. Use headings per job."
+        }
+        prompt += "\n\nExtract the complete content from all page images and return only the formatted Markdown."
+
+        // Build message content with images
+        var contentParts: [MessageContent] = []
+        contentParts.append(.text(prompt))
+
+        for (index, base64Image) in base64Images.enumerated() {
+            let dataURLString = "data:image/png;base64,\(base64Image)"
+            guard let imageURL = URL(string: dataURLString) else {
+                Logger.warning("⚠️ Failed to create URL for page \(index + 1)", category: .ai)
+                continue
+            }
+            contentParts.append(.imageUrl(MessageContent.ImageDetail(url: imageURL, detail: "high")))
+            if base64Images.count > 1 {
+                contentParts.append(.text("(Page \(index + 1) of \(base64Images.count))"))
+            }
+        }
+
+        // Create user message with content array
+        let userMessage = ChatCompletionParameters.Message(
+            role: .user,
+            content: .contentArray(contentParts)
+        )
+
+        let parameters = ChatCompletionParameters(
+            messages: [
+                .text(role: .system, content: "You are a meticulous document extraction assistant that produces Markdown outputs from images."),
+                userMessage
+            ],
+            model: .custom(modelId),
+            temperature: 0.1
+        )
+
+        let response: LLMResponse
+        do {
+            response = try await requestExecutor.execute(parameters: parameters)
+        } catch let llmError as LLMError {
+            if case .invalidModelId(let modelId) = llmError {
+                onInvalidModelId?(modelId)
+                throw ExtractionError.llmFailed("\(modelId) is not a valid model ID.")
+            }
+            issues.append("llm_failure_\(llmError.localizedDescription)")
+            return ("", issues)
+        } catch {
+            issues.append("llm_failure_\(error.localizedDescription)")
+            return ("", issues)
+        }
+
+        let dto = LLMVendorMapper.responseDTO(from: response)
+        guard let text = dto.choices.first?.message?.text, !text.isEmpty else {
+            issues.append("llm_failure_empty_response")
+            return ("", issues)
+        }
+
+        return (text, issues)
     }
 }

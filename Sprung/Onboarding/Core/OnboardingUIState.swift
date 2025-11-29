@@ -17,6 +17,8 @@ final class OnboardingUIState {
     var failedMessageText: String?
     /// Error message to display when a message send fails
     var failedMessageError: String?
+    /// General error message to display to the user (e.g., document processing errors)
+    var displayError: String?
     // MARK: - Timeline State
     var skeletonTimeline: JSON?
     /// UI-only counter for SwiftUI change detection when timeline updates occur

@@ -64,7 +64,14 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
                 await emit(.artifactRecordProduced(record: artifactRecord))
             } catch {
                 Logger.error("❌ Document processing failed: \(error.localizedDescription)", category: .ai)
-                // Could emit a .documentProcessingFailed event here if needed
+                // Emit error to UI with user-friendly message
+                let userMessage: String
+                if let extractionError = error as? DocumentExtractionService.ExtractionError {
+                    userMessage = extractionError.userFacingMessage
+                } else {
+                    userMessage = "Failed to process document: \(error.localizedDescription)"
+                }
+                await emit(.errorOccurred(userMessage))
             }
         }
     }

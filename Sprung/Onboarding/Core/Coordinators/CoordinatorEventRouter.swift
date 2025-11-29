@@ -64,6 +64,8 @@ final class CoordinatorEventRouter {
             break
         case .errorOccurred(let error):
             Logger.error("Interview error: \(error)", category: .ai)
+            // Display error to user via UI state
+            ui.displayError = error
         case .llmUserMessageFailed(let messageId, let originalText, let error):
             // Handle failed message: remove from transcript and prepare for input restoration
             ui.handleMessageFailure(messageId: messageId, originalText: originalText, error: error)
