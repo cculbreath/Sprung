@@ -3,50 +3,42 @@ import Observation
 import SwiftyJSON
 import SwiftOpenAI
 import UniformTypeIdentifiers
+
 @MainActor
 @Observable
 final class OnboardingInterviewCoordinator {
-    // MARK: - Core Dependencies
-    let state: StateCoordinator
-    let eventBus: EventCoordinator
-    private let chatboxHandler: ChatboxHandler
-    private let toolExecutionCoordinator: ToolExecutionCoordinator
-    let toolRouter: ToolHandler
-    let wizardTracker: WizardProgressTracker
-    let phaseRegistry: PhaseScriptRegistry
-    let toolRegistry: ToolRegistry
-    private let toolExecutor: ToolExecutor
-    private var openAIService: OpenAIService?
-    private let documentExtractionService: DocumentExtractionService
-    private var knowledgeCardAgent: KnowledgeCardAgent?
-    // MARK: - Core Controllers (Decomposed Components)
-    private let lifecycleController: InterviewLifecycleController
-    private let checkpointManager: CheckpointManager
-    private let phaseTransitionController: PhaseTransitionController
-    // MARK: - Services (Phase 3 Decomposition)
-    private let extractionManagementService: ExtractionManagementService
-    private let timelineManagementService: TimelineManagementService
-    private let dataPersistenceService: DataPersistenceService
-    private let ingestionCoordinator: IngestionCoordinator
-    // MARK: - Data Store Dependencies
-    private let applicantProfileStore: ApplicantProfileStore
-    private let dataStore: InterviewDataStore
-    let checkpoints: Checkpoints
-    private let draftKnowledgeStore: DraftKnowledgeStore
-    // MARK: - Document Processing
-    private let uploadStorage: OnboardingUploadStorage
-    private let documentProcessingService: DocumentProcessingService
-    private let documentArtifactHandler: DocumentArtifactHandler
-    private let documentArtifactMessenger: DocumentArtifactMessenger
-    private let profilePersistenceHandler: ProfilePersistenceHandler
-    private let uiResponseCoordinator: UIResponseCoordinator
-    private var toolRegistrar: OnboardingToolRegistrar!
-    private var coordinatorEventRouter: CoordinatorEventRouter!
-    private var toolInteractionCoordinator: ToolInteractionCoordinator!
-    // MARK: - UI State
-    let ui: OnboardingUIState
+    // MARK: - Dependency Container
+    private let container: OnboardingDependencyContainer
 
-    // MARK: - Tool Registration
+    // MARK: - Public Dependencies (for View access)
+    var state: StateCoordinator { container.state }
+    var eventBus: EventCoordinator { container.eventBus }
+    var toolRouter: ToolHandler { container.toolRouter }
+    var wizardTracker: WizardProgressTracker { container.wizardTracker }
+    var phaseRegistry: PhaseScriptRegistry { container.phaseRegistry }
+    var toolRegistry: ToolRegistry { container.toolRegistry }
+    var checkpoints: Checkpoints { container.checkpoints }
+    var ui: OnboardingUIState { container.ui }
+
+    // MARK: - Private Accessors (for internal use)
+    private var lifecycleController: InterviewLifecycleController { container.lifecycleController }
+    private var checkpointManager: CheckpointManager { container.checkpointManager }
+    private var phaseTransitionController: PhaseTransitionController { container.phaseTransitionController }
+    private var extractionManagementService: ExtractionManagementService { container.extractionManagementService }
+    private var timelineManagementService: TimelineManagementService { container.timelineManagementService }
+    private var dataPersistenceService: DataPersistenceService { container.dataPersistenceService }
+    private var ingestionCoordinator: IngestionCoordinator { container.ingestionCoordinator }
+    private var documentArtifactHandler: DocumentArtifactHandler { container.documentArtifactHandler }
+    private var documentArtifactMessenger: DocumentArtifactMessenger { container.documentArtifactMessenger }
+    private var profilePersistenceHandler: ProfilePersistenceHandler { container.profilePersistenceHandler }
+    private var uiResponseCoordinator: UIResponseCoordinator { container.uiResponseCoordinator }
+    private var toolInteractionCoordinator: ToolInteractionCoordinator { container.toolInteractionCoordinator! }
+    private var coordinatorEventRouter: CoordinatorEventRouter { container.coordinatorEventRouter! }
+    private var toolRegistrar: OnboardingToolRegistrar { container.toolRegistrar! }
+    private var applicantProfileStore: ApplicantProfileStore { container.getApplicantProfileStore() }
+    private var dataStore: InterviewDataStore { container.getDataStore() }
+    private var documentExtractionService: DocumentExtractionService { container.documentExtractionService }
+
     // MARK: - Computed Properties (Read from StateCoordinator)
     var currentPhase: InterviewPhase {
         get async { await state.phase }
@@ -59,6 +51,7 @@ final class OnboardingInterviewCoordinator {
     var artifacts: OnboardingArtifacts {
         get async { await state.artifacts }
     }
+
     // MARK: - UI State Properties (from ToolRouter)
     var pendingUploadRequests: [OnboardingUploadRequest] {
         toolRouter.pendingUploadRequests
@@ -86,9 +79,11 @@ final class OnboardingInterviewCoordinator {
             await state.pendingPhaseAdvanceRequest
         }
     }
+
     func eventStream(for topic: EventTopic) async -> AsyncStream<OnboardingEvent> {
         await eventBus.stream(topic: topic)
     }
+
     // MARK: - Initialization
     init(
         openAIService: OpenAIService?,
@@ -98,188 +93,19 @@ final class OnboardingInterviewCoordinator {
         checkpoints: Checkpoints,
         preferences: OnboardingPreferences
     ) {
-        let eventBus = EventCoordinator()
-        self.eventBus = eventBus
-        // 1. Initialize ToolRegistry early
-        let toolRegistry = ToolRegistry()
-        self.toolRegistry = toolRegistry
-        let registry = PhaseScriptRegistry()
-        self.phaseRegistry = registry
-        let phasePolicy = PhasePolicy(
-            requiredObjectives: Dictionary(uniqueKeysWithValues: InterviewPhase.allCases.map {
-                ($0, registry.script(for: $0)?.requiredObjectives ?? [])
-            }),
-            allowedTools: Dictionary(uniqueKeysWithValues: InterviewPhase.allCases.map {
-                ($0, Set(registry.script(for: $0)?.allowedTools ?? []))
-            })
-        )
-        self.ui = OnboardingUIState(preferences: preferences)
-
-        let objectiveStore = ObjectiveStore(eventBus: eventBus, phasePolicy: phasePolicy, initialPhase: .phase1CoreFacts)
-        let artifactRepository = ArtifactRepository(eventBus: eventBus)
-        let chatTranscriptStore = ChatTranscriptStore(eventBus: eventBus)
-        let sessionUIState = SessionUIState(eventBus: eventBus, phasePolicy: phasePolicy, initialPhase: .phase1CoreFacts)
-        let draftStore = DraftKnowledgeStore(eventBus: eventBus)
-        // 2. Initialize StateCoordinator
-        self.state = StateCoordinator(
-            eventBus: eventBus,
-            phasePolicy: phasePolicy,
-            objectives: objectiveStore,
-            artifacts: artifactRepository,
-            chat: chatTranscriptStore,
-            uiState: sessionUIState,
-            draftStore: draftStore
-        )
-        self.openAIService = openAIService
-        self.knowledgeCardAgent = openAIService.map { KnowledgeCardAgent(client: $0) }
-        self.applicantProfileStore = applicantProfileStore
-        self.dataStore = dataStore
-        self.checkpoints = checkpoints
-        self.draftKnowledgeStore = draftStore
-        self.uploadStorage = OnboardingUploadStorage()
-        // 3. Initialize Document Services
-        self.documentProcessingService = DocumentProcessingService(
-            documentExtractionService: documentExtractionService,
-            uploadStorage: self.uploadStorage,
-            dataStore: dataStore
-        )
-        self.documentExtractionService = documentExtractionService
-        self.documentArtifactHandler = DocumentArtifactHandler(
-            eventBus: eventBus,
-            documentProcessingService: self.documentProcessingService
-        )
-        self.documentArtifactMessenger = DocumentArtifactMessenger(eventBus: eventBus)
-        self.chatboxHandler = ChatboxHandler(
-            eventBus: eventBus,
-            state: state
-        )
-        // 4. Initialize Tool Execution
-        self.toolExecutor = ToolExecutor(registry: toolRegistry)
-        self.toolExecutionCoordinator = ToolExecutionCoordinator(
-            eventBus: eventBus,
-            toolExecutor: toolExecutor,
-            stateCoordinator: state
-        )
-        // 5. Initialize Tool Router Components
-        let promptHandler = PromptInteractionHandler()
-        let uploadFileService = UploadFileService()
-        let uploadHandler = UploadInteractionHandler(
-            uploadFileService: uploadFileService,
-            uploadStorage: self.uploadStorage,
-            applicantProfileStore: applicantProfileStore,
-            dataStore: dataStore,
-            eventBus: eventBus,
-            extractionProgressHandler: nil
-        )
-        let contactsImportService = ContactsImportService()
-        let profileHandler = ProfileInteractionHandler(
-            contactsImportService: contactsImportService,
-            eventBus: eventBus
-        )
-        let sectionHandler = SectionToggleHandler()
-        self.toolRouter = ToolHandler(
-            promptHandler: promptHandler,
-            uploadHandler: uploadHandler,
-            profileHandler: profileHandler,
-            sectionHandler: sectionHandler,
-            eventBus: eventBus
-        )
-        self.wizardTracker = WizardProgressTracker()
-        // 6. Initialize Controllers & Managers
-        self.lifecycleController = InterviewLifecycleController(
-            state: state,
-            eventBus: eventBus,
-            phaseRegistry: registry,
-            chatboxHandler: chatboxHandler,
-            toolExecutionCoordinator: toolExecutionCoordinator,
-            toolRouter: toolRouter,
+        // Create dependency container with all service wiring
+        self.container = OnboardingDependencyContainer(
             openAIService: openAIService,
-            toolRegistry: toolRegistry,
-            dataStore: dataStore
-        )
-        self.checkpointManager = CheckpointManager(
-            state: state,
-            eventBus: eventBus,
+            documentExtractionService: documentExtractionService,
+            applicantProfileStore: applicantProfileStore,
+            dataStore: dataStore,
             checkpoints: checkpoints,
-            applicantProfileStore: applicantProfileStore
-        )
-        self.phaseTransitionController = PhaseTransitionController(
-            state: state,
-            eventBus: eventBus,
-            phaseRegistry: registry
-        )
-        self.extractionManagementService = ExtractionManagementService(
-            eventBus: eventBus,
-            state: state,
-            toolRouter: toolRouter,
-            wizardTracker: wizardTracker
-        )
-        self.timelineManagementService = TimelineManagementService(
-            eventBus: eventBus,
-            phaseTransitionController: phaseTransitionController
-        )
-        self.dataPersistenceService = DataPersistenceService(
-            eventBus: eventBus,
-            state: state,
-            dataStore: dataStore,
-            applicantProfileStore: applicantProfileStore,
-            toolRouter: toolRouter,
-            wizardTracker: wizardTracker
-        )
-        self.ingestionCoordinator = IngestionCoordinator(
-            eventBus: eventBus,
-            state: state,
-            documentProcessingService: documentProcessingService,
-            agentProvider: { [openAIService] in
-                openAIService.map { KnowledgeCardAgent(client: $0) }
-            }
-        )
-        // 7. Initialize Handlers requiring other dependencies
-        self.profilePersistenceHandler = ProfilePersistenceHandler(
-            applicantProfileStore: applicantProfileStore,
-            toolRouter: toolRouter,
-            checkpointManager: checkpointManager,
-            eventBus: eventBus
-        )
-        self.uiResponseCoordinator = UIResponseCoordinator(
-            eventBus: eventBus,
-            toolRouter: toolRouter,
-            state: state
-        )
-        // 8. Post-Init Configuration (Self is now available for closures)
-        phaseTransitionController.setLifecycleController(lifecycleController)
-        toolRouter.uploadHandler.updateExtractionProgressHandler { [weak self] update in
-            Task { @MainActor in
-                guard let self else { return }
-                self.extractionManagementService.updateExtractionProgress(with: update)
-            }
-        }
-        // 9. Initialize Components requiring 'self'
-        self.toolRegistrar = OnboardingToolRegistrar(
-            coordinator: self,
-            toolRegistry: toolRegistry,
-            dataStore: dataStore,
-            eventBus: eventBus
-        )
-        self.coordinatorEventRouter = CoordinatorEventRouter(
-            ui: ui,
-            state: state,
-            checkpointManager: checkpointManager,
-            phaseTransitionController: phaseTransitionController,
-            toolRouter: toolRouter,
-            applicantProfileStore: applicantProfileStore,
-            eventBus: eventBus,
-            coordinator: self
+            preferences: preferences
         )
 
-        self.toolInteractionCoordinator = ToolInteractionCoordinator(
-            eventBus: eventBus,
-            toolRouter: toolRouter,
-            dataStore: dataStore
-        )
-        toolRegistrar.registerTools(
-            documentExtractionService: documentExtractionService,
-            knowledgeCardAgent: knowledgeCardAgent,
+        // Complete late initialization (components requiring self reference)
+        container.completeInitialization(
+            coordinator: self,
             onModelAvailabilityIssue: { [weak self] message in
                 self?.ui.modelAvailabilityMessage = message
             }
@@ -287,36 +113,32 @@ final class OnboardingInterviewCoordinator {
 
         Logger.info("🎯 OnboardingInterviewCoordinator initialized with event-driven architecture", category: .ai)
         Task { await subscribeToEvents() }
-
         Task { await profilePersistenceHandler.start() }
-
         Task { await ingestionCoordinator.start() }
     }
+
     // MARK: - Service Updates
     func updateOpenAIService(_ service: OpenAIService?) {
-        self.openAIService = service
-        self.knowledgeCardAgent = service.map { KnowledgeCardAgent(client: $0) }
-        lifecycleController.updateOpenAIService(service)
+        container.updateOpenAIService(service)
+
         // Re-register tools with new agent if available
-        toolRegistrar.registerTools(
-            documentExtractionService: documentExtractionService,
-            knowledgeCardAgent: knowledgeCardAgent,
-            onModelAvailabilityIssue: { [weak self] message in
-                self?.ui.modelAvailabilityMessage = message
-            }
-        )
+        container.reregisterTools { [weak self] message in
+            self?.ui.modelAvailabilityMessage = message
+        }
+
         // Update ingestion coordinator
         Task {
-            await ingestionCoordinator.updateAgentProvider { [service] in
-                service.map { KnowledgeCardAgent(client: $0) }
-            }
+            await container.updateIngestionAgentProvider()
         }
+
         Logger.info("🔄 OpenAIService updated in Coordinator", category: .ai)
     }
+
     // MARK: - Event Subscription
     private func subscribeToEvents() async {
         coordinatorEventRouter.subscribeToEvents(lifecycle: lifecycleController)
     }
+
     // MARK: - State Updates
     private func subscribeToStateUpdates() {
         let handlers = StateUpdateHandlers(
@@ -338,6 +160,7 @@ final class OnboardingInterviewCoordinator {
         )
         lifecycleController.subscribeToStateUpdates(handlers)
     }
+
     private func handleProcessingEvent(_ event: OnboardingEvent) async {
         switch event {
         case .processingStateChanged(let isProcessing, let statusMessage):
@@ -364,6 +187,7 @@ final class OnboardingInterviewCoordinator {
             break
         }
     }
+
     private func handleArtifactEvent(_ event: OnboardingEvent) async {
         switch event {
         case .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted,
@@ -374,6 +198,7 @@ final class OnboardingInterviewCoordinator {
             break
         }
     }
+
     private func handleLLMEvent(_ event: OnboardingEvent) async {
         switch event {
         case .llmStatus:
@@ -401,6 +226,7 @@ final class OnboardingInterviewCoordinator {
             break
         }
     }
+
     private func handleStateSyncEvent(_ event: OnboardingEvent) async {
         switch event {
         case .stateSnapshot, .stateAllowedToolsUpdated:
@@ -411,11 +237,12 @@ final class OnboardingInterviewCoordinator {
             break
         }
     }
+
     private func syncWizardProgressFromState() async {
         let step = await state.currentWizardStep
         let completed = await state.completedWizardSteps
         ui.updateWizardProgress(step: step, completed: completed)
-        
+
         // Sync WizardTracker for View binding
         if let trackerStep = OnboardingWizardStep(rawValue: step.rawValue) {
             let trackerCompleted = Set(completed.compactMap { OnboardingWizardStep(rawValue: $0.rawValue) })
@@ -424,11 +251,13 @@ final class OnboardingInterviewCoordinator {
             }
         }
     }
+
     private func initialStateSync() async {
         await syncWizardProgressFromState()
         ui.messages = await state.messages
         Logger.info("📥 Initial state sync: loaded \(ui.messages.count) messages", category: .ai)
     }
+
     // MARK: - Interview Lifecycle
     func startInterview(resumeExisting: Bool = false) async -> Bool {
         Logger.info("🚀 Starting interview (resume: \(resumeExisting))", category: .ai)
@@ -475,11 +304,13 @@ final class OnboardingInterviewCoordinator {
         }
         return true
     }
+
     func endInterview() async {
         await lifecycleController.endInterview()
         ui.isActive = await state.isActive
         Logger.info("🎛️ Coordinator isActive synced: \(ui.isActive)", category: .ai)
     }
+
     func restoreFromSpecificCheckpoint(_ checkpoint: OnboardingCheckpoint) async {
         await loadPersistedArtifacts()
         let didRestore = await checkpointManager.restoreFromSpecificCheckpoint(checkpoint)
@@ -489,10 +320,12 @@ final class OnboardingInterviewCoordinator {
             Logger.warning("⚠️ Failed to restore from specific checkpoint", category: .ai)
         }
     }
+
     // MARK: - Evidence Handling
     func handleEvidenceUpload(url: URL, requirementId: String) async {
         await ingestionCoordinator.handleEvidenceUpload(url: url, requirementId: requirementId)
     }
+
     // MARK: - Phase Management
     func advancePhase() async -> InterviewPhase? {
         let newPhase = await phaseTransitionController.advancePhase()
@@ -501,9 +334,11 @@ final class OnboardingInterviewCoordinator {
         synchronizeWizardTracker(currentStep: currentStep, completedSteps: completedSteps)
         return newPhase
     }
+
     func getCompletedObjectiveIds() async -> Set<String> {
         await phaseTransitionController.getCompletedObjectiveIds()
     }
+
     // MARK: - Objective Management
     func updateObjectiveStatus(
         objectiveId: String,
@@ -525,19 +360,24 @@ final class OnboardingInterviewCoordinator {
         result["new_status"].stringValue = status.lowercased()
         return result
     }
+
     // MARK: - Timeline Management (Delegated to TimelineManagementService)
     func applyUserTimelineUpdate(cards: [TimelineCard], meta: JSON?, diff: TimelineDiff) async {
         await uiResponseCoordinator.applyUserTimelineUpdate(cards: cards, meta: meta, diff: diff)
     }
+
     func createTimelineCard(fields: JSON) async -> JSON {
         await timelineManagementService.createTimelineCard(fields: fields)
     }
+
     func updateTimelineCard(id: String, fields: JSON) async -> JSON {
         await timelineManagementService.updateTimelineCard(id: id, fields: fields)
     }
+
     func deleteTimelineCard(id: String) async -> JSON {
         await timelineManagementService.deleteTimelineCard(id: id)
     }
+
     /// Delete a timeline card initiated from the UI (immediately syncs to coordinator state)
     /// This ensures the deletion persists even if the LLM updates other cards before user saves
     func deleteTimelineCardFromUI(id: String) async {
@@ -553,28 +393,36 @@ final class OnboardingInterviewCoordinator {
         // Also emit the event so StateCoordinator updates its state
         await eventBus.publish(.timelineCardDeleted(id: id))
     }
+
     func reorderTimelineCards(orderedIds: [String]) async -> JSON {
         await timelineManagementService.reorderTimelineCards(orderedIds: orderedIds)
     }
+
     func requestPhaseTransition(from: String, to: String, reason: String?) async {
         await timelineManagementService.requestPhaseTransition(from: from, to: to, reason: reason)
     }
+
     func missingObjectives() async -> [String] {
         await timelineManagementService.missingObjectives()
     }
+
     // MARK: - Artifact Queries (Read-Only State Access)
     func listArtifactSummaries() async -> [JSON] {
         await state.listArtifactSummaries()
     }
+
     func listArtifactRecords() async -> [JSON] {
         await state.artifacts.artifactRecords
     }
+
     func getArtifactRecord(id: String) async -> JSON? {
         await state.getArtifactRecord(id: id)
     }
+
     func requestArtifactMetadataUpdate(artifactId: String, updates: JSON) async {
         await eventBus.publish(.artifactMetadataUpdateRequested(artifactId: artifactId, updates: updates))
     }
+
     func getArtifact(id: String) async -> JSON? {
         let artifacts = await state.artifacts
         if let card = artifacts.experienceCards.first(where: { $0["id"].string == id }) {
@@ -585,27 +433,28 @@ final class OnboardingInterviewCoordinator {
         }
         return nil
     }
+
     func cancelUploadRequest(id: UUID) async {
         await eventBus.publish(.uploadRequestCancelled(id: id))
     }
+
     func nextPhase() async -> InterviewPhase? {
         await phaseTransitionController.nextPhase()
     }
-    // MARK: - Artifact Management
-    // MARK: - Message Management (Delegated to StateCoordinator via ChatboxHandler)
-    // Message management methods have been removed as they are handled directly by StateCoordinator
-    // and ChatboxHandler.
-    // MARK: - Waiting State
+
     // MARK: - Extraction Management (Delegated to ExtractionManagementService)
     func setExtractionStatus(_ extraction: OnboardingPendingExtraction?) {
         extractionManagementService.setExtractionStatus(extraction)
     }
+
     func updateExtractionProgress(with update: ExtractionProgressUpdate) {
         extractionManagementService.updateExtractionProgress(with: update)
     }
+
     func setStreamingStatus(_ status: String?) async {
         await extractionManagementService.setStreamingStatus(status)
     }
+
     private func synchronizeWizardTracker(
         currentStep: StateCoordinator.WizardStep,
         completedSteps: Set<StateCoordinator.WizardStep>
@@ -615,25 +464,32 @@ final class OnboardingInterviewCoordinator {
             completedSteps: completedSteps
         )
     }
+
     // MARK: - Tool Management (Delegated to ToolInteractionCoordinator)
     func presentUploadRequest(_ request: OnboardingUploadRequest) {
         toolInteractionCoordinator.presentUploadRequest(request)
     }
+
     func completeUpload(id: UUID, fileURLs: [URL]) async -> JSON? {
         await toolInteractionCoordinator.completeUpload(id: id, fileURLs: fileURLs)
     }
+
     func skipUpload(id: UUID) async -> JSON? {
         await toolInteractionCoordinator.skipUpload(id: id)
     }
+
     func presentChoicePrompt(_ prompt: OnboardingChoicePrompt) {
         toolInteractionCoordinator.presentChoicePrompt(prompt)
     }
+
     func submitChoice(optionId: String) -> JSON? {
         toolInteractionCoordinator.submitChoice(optionId: optionId)
     }
+
     func presentValidationPrompt(_ prompt: OnboardingValidationPrompt) {
         toolInteractionCoordinator.presentValidationPrompt(prompt)
     }
+
     func submitValidationResponse(
         status: String,
         updatedData: JSON?,
@@ -647,50 +503,64 @@ final class OnboardingInterviewCoordinator {
             notes: notes
         )
     }
+
     // MARK: - Applicant Profile Intake Facade Methods (Delegated to ToolInteractionCoordinator)
     func beginProfileUpload() {
         let request = toolInteractionCoordinator.beginProfileUpload()
         presentUploadRequest(request)
     }
+
     func beginProfileURLEntry() {
         toolInteractionCoordinator.beginProfileURLEntry()
     }
+
     func beginProfileContactsFetch() {
         toolInteractionCoordinator.beginProfileContactsFetch()
     }
+
     func beginProfileManualEntry() {
         toolInteractionCoordinator.beginProfileManualEntry()
     }
+
     func resetProfileIntakeToOptions() {
         toolInteractionCoordinator.resetProfileIntakeToOptions()
     }
+
     func submitProfileDraft(draft: ApplicantProfileDraft, source: OnboardingApplicantProfileIntakeState.Source) async {
         await uiResponseCoordinator.submitProfileDraft(draft: draft, source: source)
     }
+
     func submitProfileURL(_ urlString: String) async {
         await uiResponseCoordinator.submitProfileURL(urlString)
     }
+
     // MARK: - Phase Advance
     func approvePhaseAdvance() async {
         guard let request = await state.pendingPhaseAdvanceRequest else { return }
         await eventBus.publish(.phaseAdvanceApproved(request: request))
     }
+
     func denyPhaseAdvance(feedback: String?) async {
         await eventBus.publish(.phaseAdvanceDenied(feedback: feedback))
     }
+
     // MARK: - UI Response Handling (Send User Messages)
     func submitChoiceSelection(_ selectionIds: [String]) async {
         await uiResponseCoordinator.submitChoiceSelection(selectionIds)
     }
+
     func completeUploadAndResume(id: UUID, fileURLs: [URL]) async {
         await uiResponseCoordinator.completeUploadAndResume(id: id, fileURLs: fileURLs, coordinator: self)
     }
+
     func completeUploadAndResume(id: UUID, link: URL) async {
         await uiResponseCoordinator.completeUploadAndResume(id: id, link: link, coordinator: self)
     }
+
     func skipUploadAndResume(id: UUID) async {
         await uiResponseCoordinator.skipUploadAndResume(id: id, coordinator: self)
     }
+
     func submitValidationAndResume(
         status: String,
         updatedData: JSON?,
@@ -705,67 +575,83 @@ final class OnboardingInterviewCoordinator {
             coordinator: self
         )
     }
+
     func confirmApplicantProfile(draft: ApplicantProfileDraft) async {
         await uiResponseCoordinator.confirmApplicantProfile(draft: draft)
     }
+
     func rejectApplicantProfile(reason: String) async {
         await uiResponseCoordinator.rejectApplicantProfile(reason: reason)
     }
+
     func confirmSectionToggle(enabled: [String]) async {
         await uiResponseCoordinator.confirmSectionToggle(enabled: enabled)
     }
+
     func rejectSectionToggle(reason: String) async {
         await uiResponseCoordinator.rejectSectionToggle(reason: reason)
     }
+
     func clearValidationPromptAndNotifyLLM(message: String) async {
         await uiResponseCoordinator.clearValidationPromptAndNotifyLLM(message: message)
     }
+
     func sendChatMessage(_ text: String) async {
         await uiResponseCoordinator.sendChatMessage(text)
     }
+
     func requestCancelLLM() async {
         await uiResponseCoordinator.requestCancelLLM()
     }
 
-    // MARK: - Checkpoint Management (Delegated to CheckpointManager)
     // MARK: - Data Store Management (Delegated to DataPersistenceService)
     func loadPersistedArtifacts() async {
         await dataPersistenceService.loadPersistedArtifacts()
     }
+
     func clearArtifacts() {
         Task {
             await dataPersistenceService.clearArtifacts()
         }
     }
+
     func resetStore() async {
         await dataPersistenceService.resetStore()
     }
+
     // MARK: - Utility
     func notifyInvalidModel(id: String) {
         Logger.warning("⚠️ Invalid model id reported: \(id)", category: .ai)
         ui.modelAvailabilityMessage = "Your selected model (\(id)) is not available. Choose another model in Settings."
         uiResponseCoordinator.notifyInvalidModel(id: id)
     }
+
     func clearModelAvailabilityMessage() {
         ui.modelAvailabilityMessage = nil
     }
+
     func transcriptExportString() -> String {
         ChatTranscriptFormatter.format(messages: ui.messages)
     }
+
     func buildSystemPrompt(for phase: InterviewPhase) -> String {
         phaseTransitionController.buildSystemPrompt(for: phase)
     }
+
     #if DEBUG
     // MARK: - Debug Event Diagnostics
     func getRecentEvents(count: Int = 10) async -> [OnboardingEvent] {
         await eventBus.getRecentEvents(count: count)
     }
+
     func getEventMetrics() async -> EventCoordinator.EventMetrics {
         await eventBus.getMetrics()
     }
+
     func clearEventHistory() async {
         await eventBus.clearHistory()
     }
+
     func resetAllOnboardingData() async {
         Logger.info("🗑️ Resetting all onboarding data", category: .ai)
         await MainActor.run {
