@@ -256,6 +256,17 @@ final class OnboardingInterviewCoordinator {
             completedSteps: completedSteps
         )
     }
+    // MARK: - Knowledge Card Plan
+    func updateKnowledgeCardPlan(
+        items: [KnowledgeCardPlanItem],
+        currentFocus: String?,
+        message: String?
+    ) async {
+        ui.knowledgeCardPlan = items
+        ui.knowledgeCardPlanFocus = currentFocus
+        ui.knowledgeCardPlanMessage = message
+    }
+
     // MARK: - Tool Management (Delegated to ToolInteractionCoordinator)
     func presentUploadRequest(_ request: OnboardingUploadRequest) {
         toolInteractionCoordinator.presentUploadRequest(request)

@@ -36,6 +36,10 @@ final class OnboardingUIState {
     var pendingPhaseAdvanceRequest: OnboardingPhaseAdvanceRequest?
     var evidenceRequirements: [EvidenceRequirement] = []
     var drafts: [KnowledgeCardDraft] = []
+    // MARK: - Knowledge Card Plan State
+    var knowledgeCardPlan: [KnowledgeCardPlanItem] = []
+    var knowledgeCardPlanFocus: String?
+    var knowledgeCardPlanMessage: String?
     // MARK: - Preferences
     var preferences: OnboardingPreferences
     init(preferences: OnboardingPreferences) {
