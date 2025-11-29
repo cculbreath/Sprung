@@ -17,6 +17,7 @@ actor StateCoordinator: OnboardingEventEmitter {
     private let chatStore: ChatTranscriptStore
     private let uiState: SessionUIState
     private let draftKnowledgeStore: DraftKnowledgeStore
+    private let streamQueueManager: StreamQueueManager
     // MARK: - Phase Policy
     private let phasePolicy: PhasePolicy
     // Runtime tool exclusions (e.g., one-time bootstrap tools)
@@ -34,20 +35,8 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
     private(set) var currentWizardStep: WizardStep = .introduction
     private(set) var completedWizardSteps: Set<WizardStep> = []
-    // MARK: - Stream Queue Management (Ensures Serial LLM Streaming)
-    enum StreamRequestType {
-        case userMessage(payload: JSON, isSystemGenerated: Bool)
-        case toolResponse(payload: JSON)
-        case batchedToolResponses(payloads: [JSON])
-        case developerMessage(payload: JSON)
-    }
-    private var isStreaming = false
-    private var streamQueue: [StreamRequestType] = []
-    private(set) var hasStreamedFirstResponse = false
-    // MARK: - Parallel Tool Call Batching
-    private var expectedToolResponseCount: Int = 0
-    private var expectedToolCallIds: Set<String> = []
-    private var collectedToolResponses: [JSON] = []
+    // MARK: - Stream Queue (Delegated to StreamQueueManager)
+    // StreamQueueManager handles serial LLM streaming and parallel tool call batching
     // MARK: - LLM State (Single Source of Truth)
     private var allowedToolNames: Set<String> = []
     private var lastResponseId: String?
@@ -74,6 +63,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         self.chatStore = chat
         self.uiState = uiState
         self.draftKnowledgeStore = draftStore
+        self.streamQueueManager = StreamQueueManager(eventBus: eventBus)
         Logger.info("🎯 StateCoordinator initialized (orchestrator mode with injected services)", category: .ai)
     }
     // MARK: - Phase Management
@@ -268,41 +258,17 @@ actor StateCoordinator: OnboardingEventEmitter {
         case .llmReasoningSummaryComplete(let text):
             await chatStore.completeReasoningSummary(finalText: text)
         case .llmEnqueueUserMessage(let payload, let isSystemGenerated):
-            enqueueStreamRequest(.userMessage(payload: payload, isSystemGenerated: isSystemGenerated))
+            await streamQueueManager.enqueue(.userMessage(payload: payload, isSystemGenerated: isSystemGenerated))
         case .llmSendDeveloperMessage(let payload):
             // Route developer messages through the queue to ensure they wait for pending tool responses
-            enqueueStreamRequest(.developerMessage(payload: payload))
+            await streamQueueManager.enqueue(.developerMessage(payload: payload))
         case .llmToolCallBatchStarted(let expectedCount, let callIds):
-            // Start collecting tool responses for batching
-            expectedToolResponseCount = expectedCount
-            expectedToolCallIds = Set(callIds)
-            collectedToolResponses = []
-            Logger.info("📦 Tool call batch started: expecting \(expectedCount) responses", category: .ai)
+            await streamQueueManager.startToolCallBatch(expectedCount: expectedCount, callIds: callIds)
         case .llmEnqueueToolResponse(let payload):
-            // Check if we're in batching mode
-            if expectedToolResponseCount > 1 {
-                // Collecting for batch - add to collection
-                collectedToolResponses.append(payload)
-                Logger.debug("📦 Collected tool response \(collectedToolResponses.count)/\(expectedToolResponseCount)", category: .ai)
-                // Check if we have all responses
-                if collectedToolResponses.count >= expectedToolResponseCount {
-                    // All responses collected - emit batch for execution
-                    let batch = collectedToolResponses
-                    // Reset batching state
-                    expectedToolResponseCount = 0
-                    expectedToolCallIds = []
-                    collectedToolResponses = []
-                    // Enqueue batch as a single request
-                    enqueueBatchedToolResponses(batch)
-                    Logger.info("📦 All \(batch.count) tool responses collected - sending batch", category: .ai)
-                }
-            } else {
-                // Single tool call or no batch context - send immediately (preserves blocking behavior)
-                enqueueStreamRequest(.toolResponse(payload: payload))
-            }
+            await streamQueueManager.enqueueToolResponse(payload)
         case .llmStreamCompleted:
             // Handle stream completion via event to ensure proper ordering with tool call events
-            handleStreamCompleted()
+            await streamQueueManager.handleStreamCompleted()
         default:
             break
         }
@@ -417,120 +383,17 @@ actor StateCoordinator: OnboardingEventEmitter {
             break
         }
     }
-    // MARK: - Stream Queue Management
-    /// Enqueue a stream request to be processed serially
-    func enqueueStreamRequest(_ requestType: StreamRequestType) {
-        streamQueue.append(requestType)
-        Logger.debug("📥 Stream request enqueued (queue size: \(streamQueue.count))", category: .ai)
-        if !isStreaming {
-            Task {
-                await processStreamQueue()
-            }
-        }
-    }
-    /// Enqueue batched tool responses as a single request
-    private func enqueueBatchedToolResponses(_ payloads: [JSON]) {
-        streamQueue.append(.batchedToolResponses(payloads: payloads))
-        Logger.debug("📥 Batched tool responses enqueued (queue size: \(streamQueue.count))", category: .ai)
-        if !isStreaming {
-            Task {
-                await processStreamQueue()
-            }
-        }
-    }
-    /// Process the stream queue serially
-    /// Priority: tool responses must be sent before developer messages when tool calls are pending
-    private func processStreamQueue() async {
-        while !streamQueue.isEmpty {
-            guard !isStreaming else {
-                Logger.debug("⏸️ Queue processing paused (stream in progress)", category: .ai)
-                return
-            }
-            // Find the next request to process
-            // Priority: tool responses > user messages > developer messages
-            // Developer messages must wait if tool responses are expected
-            let nextIndex: Int
-            if expectedToolResponseCount > 0 || hasPendingToolResponse() {
-                // Tool responses are expected - prioritize them over developer messages
-                if let toolIndex = streamQueue.firstIndex(where: { request in
-                    if case .toolResponse = request { return true }
-                    if case .batchedToolResponses = request { return true }
-                    return false
-                }) {
-                    nextIndex = toolIndex
-                } else {
-                    // No tool response in queue yet - wait for it before processing developer messages
-                    // But allow user messages to go through
-                    if let userIndex = streamQueue.firstIndex(where: { request in
-                        if case .userMessage = request { return true }
-                        return false
-                    }) {
-                        nextIndex = userIndex
-                    } else {
-                        // Only developer messages in queue - wait for tool responses
-                        Logger.debug("⏸️ Queue has developer message but waiting for tool responses", category: .ai)
-                        return
-                    }
-                }
-            } else {
-                // No pending tool calls - process in FIFO order
-                nextIndex = 0
-            }
-            isStreaming = true
-            let request = streamQueue.remove(at: nextIndex)
-            Logger.debug("▶️ Processing stream request from queue (\(streamQueue.count) remaining)", category: .ai)
-            // Emit event for LLMMessenger to react to
-            await emitStreamRequest(request)
-            // Note: isStreaming will be set to false when .streamCompleted event is received
-        }
-    }
-    /// Check if there are pending tool responses in the queue
-    private func hasPendingToolResponse() -> Bool {
-        return streamQueue.contains { request in
-            if case .toolResponse = request { return true }
-            if case .batchedToolResponses = request { return true }
-            return false
-        }
-    }
-    /// Emit the appropriate stream request event for LLMMessenger to handle
-    private func emitStreamRequest(_ requestType: StreamRequestType) async {
-        switch requestType {
-        case .userMessage(let payload, let isSystemGenerated):
-            await emit(.llmExecuteUserMessage(payload: payload, isSystemGenerated: isSystemGenerated))
-        case .toolResponse(let payload):
-            await emit(.llmExecuteToolResponse(payload: payload))
-        case .batchedToolResponses(let payloads):
-            await emit(.llmExecuteBatchedToolResponses(payloads: payloads))
-        case .developerMessage(let payload):
-            await emit(.llmExecuteDeveloperMessage(payload: payload))
-        }
-    }
+    // MARK: - Stream Queue Management (Delegated to StreamQueueManager)
+
     /// Mark stream as completed - emits event to ensure proper ordering with pending tool calls
     /// This method should be called by LLMMessenger when a stream finishes
     func markStreamCompleted() async {
-        // Emit event instead of directly processing - this ensures the stream completion
-        // is processed in order with other events like llmToolCallBatchStarted
-        await emit(.llmStreamCompleted)
+        await streamQueueManager.markStreamCompleted()
     }
-    /// Internal handler for stream completion (called via event)
-    private func handleStreamCompleted() {
-        guard isStreaming else {
-            Logger.warning("handleStreamCompleted called but isStreaming=false", category: .ai)
-            return
-        }
-        isStreaming = false
-        hasStreamedFirstResponse = true
-        Logger.debug("✅ Stream completed (queue size: \(streamQueue.count))", category: .ai)
-        // Process next item in queue if any
-        if !streamQueue.isEmpty {
-            Task {
-                await processStreamQueue()
-            }
-        }
-    }
+
     /// Check if this is the first response (for toolChoice logic)
-    func getHasStreamedFirstResponse() -> Bool {
-        return hasStreamedFirstResponse
+    func getHasStreamedFirstResponse() async -> Bool {
+        await streamQueueManager.getHasStreamedFirstResponse()
     }
     // MARK: - LLM State Accessors
     /// Get allowed tool names
@@ -576,6 +439,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         // Get conversation state
         let previousResponseId = await chatStore.getPreviousResponseId()
         let currentMessages = await chatStore.getAllMessages()
+        let hasStreamedFirst = await streamQueueManager.getHasStreamedFirstResponse()
         return StateSnapshot(
             phase: phase,
             objectives: objectivesDict,
@@ -584,7 +448,7 @@ actor StateCoordinator: OnboardingEventEmitter {
             previousResponseId: previousResponseId,
             currentModelId: currentModelId,
             messages: currentMessages,
-            hasStreamedFirstResponse: hasStreamedFirstResponse,
+            hasStreamedFirstResponse: hasStreamedFirst,
             currentToolPaneCard: currentToolPaneCard,
             evidenceRequirements: evidenceRequirements
         )
@@ -606,11 +470,8 @@ actor StateCoordinator: OnboardingEventEmitter {
         currentModelId = snapshot.currentModelId
         await chatStore.restoreMessages(snapshot.messages)
         Logger.info("💬 Restored \(snapshot.messages.count) chat messages", category: .ai)
-        // Restore streaming state
-        hasStreamedFirstResponse = snapshot.hasStreamedFirstResponse
-        if hasStreamedFirstResponse {
-            Logger.info("✅ Restored hasStreamedFirstResponse=true (conversation in progress)", category: .ai)
-        }
+        // Restore streaming state via StreamQueueManager
+        await streamQueueManager.restoreState(hasStreamedFirstResponse: snapshot.hasStreamedFirstResponse)
         // Restore ToolPane card state
         currentToolPaneCard = snapshot.currentToolPaneCard
         if currentToolPaneCard != .none {
@@ -673,6 +534,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         await artifactRepository.reset()
         await chatStore.reset()
         await uiState.reset()
+        await streamQueueManager.reset()
         currentToolPaneCard = .none
         Logger.info("🔄 StateCoordinator reset (all services reset)", category: .ai)
     }
