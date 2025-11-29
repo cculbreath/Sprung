@@ -57,27 +57,40 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         }
         // Process uploaded documents
         for file in files {
-            Logger.info("📄 Document detected: \(file.filename)", category: .ai)
+            let filename = file.filename
+            Logger.info("📄 Document detected: \(filename)", category: .ai)
+            // Show spinner with initial status
+            await emit(.processingStateChanged(true, statusMessage: "Processing \(filename)..."))
             do {
-                // Call service to perform business logic
+                // Call service to perform business logic with status callback
                 let artifactRecord = try await documentProcessingService.processDocument(
                     fileURL: file.storageURL,
                     documentType: requestKind,
                     callId: callId,
-                    metadata: metadata
+                    metadata: metadata,
+                    statusCallback: { [weak self] status in
+                        Task {
+                            await self?.emit(.processingStateChanged(true, statusMessage: status))
+                        }
+                    }
                 )
+                // Hide spinner
+                await emit(.processingStateChanged(false))
                 // Emit artifact record produced event
                 await emit(.artifactRecordProduced(record: artifactRecord))
             } catch {
                 Logger.error("❌ Document processing failed: \(error.localizedDescription)", category: .ai)
-                // Emit error to UI with user-friendly message
+                // Show error briefly in status, then hide spinner
                 let userMessage: String
                 if let extractionError = error as? DocumentExtractionService.ExtractionError {
                     userMessage = extractionError.userFacingMessage
                 } else {
-                    userMessage = "Failed to process document: \(error.localizedDescription)"
+                    userMessage = "Failed to process document"
                 }
-                await emit(.errorOccurred(userMessage))
+                await emit(.processingStateChanged(true, statusMessage: userMessage))
+                // Brief delay so user can see the error message
+                try? await Task.sleep(for: .seconds(3))
+                await emit(.processingStateChanged(false))
             }
         }
     }

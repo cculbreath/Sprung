@@ -113,6 +113,7 @@ actor DocumentExtractionService {
         // If text extraction failed and this is a PDF, try image-based extraction
         if (rawText == nil || rawText?.isEmpty == true) && fileURL.pathExtension.lowercased() == "pdf" {
             Logger.info("📄 Text extraction failed for PDF, attempting image-based extraction", category: .ai)
+            await notifyProgress(.fileAnalysis, .active, detail: "No extractable text, processing pages as images...")
             return try await extractPDFViaImages(
                 fileURL: fileURL,
                 fileData: fileData,
