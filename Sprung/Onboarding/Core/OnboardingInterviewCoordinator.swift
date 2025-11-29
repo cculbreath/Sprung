@@ -22,6 +22,7 @@ final class OnboardingInterviewCoordinator {
 
     // MARK: - Private Accessors (for internal use)
     private var sessionCoordinator: InterviewSessionCoordinator { container.sessionCoordinator }
+    private var artifactQueryCoordinator: ArtifactQueryCoordinator { container.artifactQueryCoordinator }
     private var lifecycleController: InterviewLifecycleController { container.lifecycleController }
     private var checkpointManager: CheckpointManager { container.checkpointManager }
     private var phaseTransitionController: PhaseTransitionController { container.phaseTransitionController }
@@ -362,36 +363,29 @@ final class OnboardingInterviewCoordinator {
         await timelineManagementService.missingObjectives()
     }
 
-    // MARK: - Artifact Queries (Read-Only State Access)
+    // MARK: - Artifact Queries (Delegated to ArtifactQueryCoordinator)
     func listArtifactSummaries() async -> [JSON] {
-        await state.listArtifactSummaries()
+        await artifactQueryCoordinator.listArtifactSummaries()
     }
 
     func listArtifactRecords() async -> [JSON] {
-        await state.artifacts.artifactRecords
+        await artifactQueryCoordinator.listArtifactRecords()
     }
 
     func getArtifactRecord(id: String) async -> JSON? {
-        await state.getArtifactRecord(id: id)
+        await artifactQueryCoordinator.getArtifactRecord(id: id)
     }
 
     func requestArtifactMetadataUpdate(artifactId: String, updates: JSON) async {
-        await eventBus.publish(.artifactMetadataUpdateRequested(artifactId: artifactId, updates: updates))
+        await artifactQueryCoordinator.requestMetadataUpdate(artifactId: artifactId, updates: updates)
     }
 
     func getArtifact(id: String) async -> JSON? {
-        let artifacts = await state.artifacts
-        if let card = artifacts.experienceCards.first(where: { $0["id"].string == id }) {
-            return card
-        }
-        if let sample = artifacts.writingSamples.first(where: { $0["id"].string == id }) {
-            return sample
-        }
-        return nil
+        await artifactQueryCoordinator.getArtifact(id: id)
     }
 
     func cancelUploadRequest(id: UUID) async {
-        await eventBus.publish(.uploadRequestCancelled(id: id))
+        await artifactQueryCoordinator.cancelUploadRequest(id: id)
     }
 
     func nextPhase() async -> InterviewPhase? {
