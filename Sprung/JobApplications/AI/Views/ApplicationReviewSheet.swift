@@ -39,7 +39,6 @@ struct ApplicationReviewSheet: View {
             Text("AI Application Review")
                 .font(.title)
                 .padding(.bottom, 16)
-
             // Scrollable content
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
@@ -103,7 +102,6 @@ struct ApplicationReviewSheet: View {
             if selectedType == .custom {
                 customOptionsView
             }
-
                     // AI Model Selection
                     DropdownModelPicker(
                         selectedModel: $selectedModel,
@@ -114,11 +112,9 @@ struct ApplicationReviewSheet: View {
                         responseContent
                             .frame(minHeight: 200)
                     }
-
                 }
                 .padding(.bottom, 16)
             }
-
             // Fixed buttons at bottom
             HStack {
                 if isProcessing {
@@ -242,7 +238,6 @@ struct ApplicationReviewSheet: View {
             }
         }()
         Logger.info("🚀 Submitting application review using \(selectedType.rawValue) (custom: \(selectedType == .custom))")
-
         Task { @MainActor in
             guard let service = reviewService else {
                 self.isProcessing = false

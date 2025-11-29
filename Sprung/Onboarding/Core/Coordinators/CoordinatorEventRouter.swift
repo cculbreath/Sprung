@@ -11,11 +11,9 @@ final class CoordinatorEventRouter {
     private let toolRouter: ToolHandler
     private let applicantProfileStore: ApplicantProfileStore
     private let eventBus: EventCoordinator
-
     // Weak reference to the parent coordinator to delegate specific actions back if needed
     // In a pure event architecture, this should be minimized, but useful for transition
     private weak var coordinator: OnboardingInterviewCoordinator?
-
     init(
         ui: OnboardingUIState,
         state: StateCoordinator,
@@ -35,13 +33,11 @@ final class CoordinatorEventRouter {
         self.eventBus = eventBus
         self.coordinator = coordinator
     }
-
     func subscribeToEvents(lifecycle: InterviewLifecycleController) {
         lifecycle.subscribeToEvents { [weak self] event in
             await self?.handleEvent(event)
         }
     }
-
     private func handleEvent(_ event: OnboardingEvent) async {
         switch event {
         case .objectiveStatusChanged(let id, _, let newStatus, _, _, _, _):
@@ -56,7 +52,6 @@ final class CoordinatorEventRouter {
             checkpointManager.scheduleCheckpoint()
         case .artifactRecordPersisted:
             checkpointManager.scheduleCheckpoint()
-
         case .processingStateChanged:
             break
         case .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized:
@@ -69,7 +64,6 @@ final class CoordinatorEventRouter {
             break
         case .errorOccurred(let error):
             Logger.error("Interview error: \(error)", category: .ai)
-
         // MARK: - Evidence & Draft Events (Phase 2)
         case .evidenceRequirementAdded(let req):
             ui.evidenceRequirements.append(req)
@@ -87,7 +81,6 @@ final class CoordinatorEventRouter {
             }
         case .draftKnowledgeCardRemoved(let id):
             ui.drafts.removeAll { $0.id == id }
-
         case .applicantProfileStored:
             // Handled by ProfilePersistenceHandler
             break
@@ -108,7 +101,6 @@ final class CoordinatorEventRouter {
             if let phase = InterviewPhase(rawValue: phaseName) {
                 ui.phase = phase
             }
-
         // All other events are handled elsewhere or don't need handling here
         default:
             break

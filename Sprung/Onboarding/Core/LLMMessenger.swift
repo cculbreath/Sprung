@@ -23,7 +23,6 @@ actor LLMMessenger: OnboardingEventEmitter {
     private var isActive = false
     // Stream cancellation tracking
     private var currentStreamTask: Task<Void, Error>?
-
     init(
         service: OpenAIService,
         baseDeveloperMessage: String,
@@ -58,7 +57,6 @@ actor LLMMessenger: OnboardingEventEmitter {
         try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
         Logger.info("📡 LLMMessenger subscribed to events", category: .ai)
     }
-
     private func handleLLMEvent(_ event: OnboardingEvent) async {
         switch event {
         case .llmSendUserMessage(let payload, let isSystemGenerated):
@@ -138,7 +136,6 @@ actor LLMMessenger: OnboardingEventEmitter {
                         }
                     }
                 }
-
                 if let error = lastError {
                     Logger.error("❌ User message failed after \(maxRetries) retries: \(error)", category: .ai)
                     throw error
@@ -256,7 +253,6 @@ actor LLMMessenger: OnboardingEventEmitter {
             let messageId = UUID().uuidString
             // Emit message sent event
             await emit(.llmSentToolResponseMessage(messageId: messageId, payload: payload))
-
             // Process stream via NetworkRouter with retry logic
             currentStreamTask = Task {
                 var retryCount = 0
@@ -391,7 +387,6 @@ actor LLMMessenger: OnboardingEventEmitter {
     }
     private func buildUserMessageRequest(text: String, isSystemGenerated: Bool) async -> ModelResponseParameter {
         let previousResponseId = await contextAssembler.getPreviousResponseId()
-
         let inputItems: [InputItem] = [
             .message(InputMessage(
                 role: "user",
@@ -547,7 +542,6 @@ actor LLMMessenger: OnboardingEventEmitter {
         let filterNames = allowedNames.isEmpty ? nil : allowedNames
         return await toolRegistry.toolSchemas(filteredBy: filterNames)
     }
-
     func activate() {
         isActive = true
         Logger.info("✅ LLMMessenger activated", category: .ai)

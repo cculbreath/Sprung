@@ -1,7 +1,6 @@
 // Sprung/App/Views/UnifiedToolbar.swift
 import SwiftUI
 import AppKit
-
 /// Unified toolbar with all buttons visible, using disabled state instead of hiding
 @ToolbarContentBuilder
 func buildUnifiedToolbar(
@@ -39,7 +38,6 @@ struct UnifiedToolbar: CustomizableToolbarContent {
             inspectorButtonGroup
         }
     }
-
     private var navigationButtonsGroup: some CustomizableToolbarContent {
         Group {
             ToolbarItem(id: "newJobApp", placement: .navigation, showsByDefault: true) {
@@ -100,7 +98,6 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 }, label: {
                     Label("Analyze", systemImage: "mail.and.text.magnifyingglass")
                         .font(.system(size: 14, weight: .light))
-
                 })
                 .buttonStyle( .automatic )
                 .help("Review Application")
@@ -166,7 +163,6 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 .help(selectedTab == .resume ? "Show Resume Inspector" :
                       selectedTab == .coverLetter ? "Show Cover Letter Inspector" : "Inspector")
             }
-
             // Hidden by default but customizable toolbar items
             ToolbarItem(id: "settings", placement: .primaryAction, showsByDefault: false) {
                 Button("Settings", systemImage: "gear") {
@@ -174,7 +170,6 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 }
                 .help("Open Settings")
             }
-
             // Legacy toolbar identifiers retained for existing customizations
             ToolbarItem(id: "ttsReadAloud", placement: .primaryAction, showsByDefault: false) {
                 Button("Read Aloud", systemImage: "speaker.wave.2") {

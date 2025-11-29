@@ -16,10 +16,8 @@ typealias LLMResponse = ChatCompletionObject
 typealias JSONSchema = SwiftOpenAI.JSONSchema
 typealias JSONSchemaResponseFormat = SwiftOpenAI.JSONSchemaResponseFormat
 typealias ChatCompletionParameters = SwiftOpenAI.ChatCompletionParameters
-
 // MARK: - Convenience Extensions for LLMMessage
 extension ChatCompletionParameters.Message {
-
     /// Create a text-only message
     static func text(role: Role, content: String) -> ChatCompletionParameters.Message {
         return ChatCompletionParameters.Message(
@@ -27,7 +25,6 @@ extension ChatCompletionParameters.Message {
             content: .text(content)
         )
     }
-
     /// Get text content from message (helper for existing code compatibility)
     var textContent: String {
         switch content {

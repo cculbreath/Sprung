@@ -7,14 +7,12 @@
 import Foundation
 struct PhaseOneScript: PhaseScript {
     let phase: InterviewPhase = .phase1CoreFacts
-
     let requiredObjectives: [String] = OnboardingObjectiveId.rawValues([
         .applicantProfile,   // formerly P1.1
         .skeletonTimeline,   // formerly P1.2
         .enabledSections     // formerly P1.3
         // dossierSeed (formerly P1.4) is optional, not required for phase advancement
     ])
-
     let allowedTools: [String] = OnboardingToolName.rawValues([
         .agentReady,
         .getUserOption,
@@ -153,7 +151,6 @@ struct PhaseOneScript: PhaseScript {
                             Wait for user
                             Parse and Process
                 ◻ applicant_profile.contact_information.validated_data
-
             ◻ applicant_profile.profile_photo (optional)
                 ◻ applicant_profile.profile_photo.retrieve_profile
                 ◻ applicant_profile.profile_photo.evaluate_need
@@ -175,7 +172,6 @@ struct PhaseOneScript: PhaseScript {
             confirmed/validated status
             (◻ dossier_seed — Naturally incorporate CandidateDossier questions, if possible)
             • The coordinator automatically tracks objective status based on your tool calls and user interactions
-
         ### Sub-phases
         #### applicant_profile sequence
             A. Contact Information (applicant_profile.contact_intake.*)
@@ -196,7 +192,6 @@ struct PhaseOneScript: PhaseScript {
                 • FORM (contacts import/manual entry): System validates. You receive pre-validated data via user message.
                   DO NOT call `validate_applicant_profile` for form submissions.
                 3. Wait for developer message(s) indicating applicant_profile completion before proceeding to skeleton_timeline.
-
             B. Optional Profile Photo (applicant_profile.profile_photo.*)
                 NOTE: This step is handled as part of the agent_ready workflow (Step 6).
                 The LLM will automatically:
@@ -206,7 +201,6 @@ struct PhaseOneScript: PhaseScript {
                 4. If yes: Call `get_user_upload` with appropriate parameters
                 5. If no or photo exists: Proceed to skeleton_timeline
                 The agent_ready instructions ensure this happens in the correct sequence.
-
         #### skeleton_timeline sequence
             • You may ingest skeleton timeline data through chatbox messages with user, document upload or user manual entry \
             in TimelineEntries.

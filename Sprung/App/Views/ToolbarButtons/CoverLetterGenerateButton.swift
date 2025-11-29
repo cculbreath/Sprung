@@ -4,10 +4,8 @@ struct CoverLetterGenerateButton: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(CoverLetterService.self) private var coverLetterService: CoverLetterService
-
     @State private var showCoverLetterModelSheet = false
     @State private var selectedCoverLetterModel = ""
-
     var body: some View {
         Button(action: {
             showCoverLetterModelSheet = true
@@ -36,7 +34,6 @@ struct CoverLetterGenerateButton: View {
                         selectedCoverLetterModel = modelId
                         showCoverLetterModelSheet = false
                         coverLetterStore.isGeneratingCoverLetter = true
-
                         Task {
                             await generateCoverLetter(
                                 modelId: modelId,
@@ -53,7 +50,6 @@ struct CoverLetterGenerateButton: View {
             showCoverLetterModelSheet = true
         }
     }
-
     @MainActor
     private func generateCoverLetter(modelId: String, selectedRefs: [CoverRef], includeResumeRefs: Bool) async {
         guard let jobApp = jobAppStore.selectedApp,
@@ -61,7 +57,6 @@ struct CoverLetterGenerateButton: View {
             coverLetterStore.isGeneratingCoverLetter = false
             return
         }
-
         do {
             try await coverLetterService.generateNewCoverLetter(
                 jobApp: jobApp,
@@ -71,9 +66,7 @@ struct CoverLetterGenerateButton: View {
                 selectedRefs: selectedRefs,
                 includeResumeRefs: includeResumeRefs
             )
-
             coverLetterStore.isGeneratingCoverLetter = false
-
         } catch {
             Logger.error("Error generating cover letter: \(error.localizedDescription)")
             coverLetterStore.isGeneratingCoverLetter = false

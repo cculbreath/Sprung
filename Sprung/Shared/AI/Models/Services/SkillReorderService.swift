@@ -9,21 +9,17 @@ import Foundation
 /// Replaces ReorderSkillsProvider with cleaner LLM integration
 @MainActor
 class SkillReorderService {
-
     // MARK: - Dependencies
     private let llm: LLMFacade
-
     // MARK: - Configuration
     private let systemPrompt = """
     You are an expert resume optimizer specializing in skills prioritization. Your task is to analyze a list of skills and expertise items and reorder them based on their relevance to a specific job description. Place the most relevant and impressive skills at the top of the list.
     IMPORTANT: Your response must be a valid JSON object conforming to the JSON schema provided. The id field for each skill must contain the exact UUID string from the input. Do not modify the UUID format in any way.
     IMPORTANT: Output ONLY the JSON object with the "reordered_skills_and_expertise" array. Do not include any additional commentary, explanation, or text outside the JSON.
     """
-
     init(llmFacade: LLMFacade) {
         self.llm = llmFacade
     }
-
     // MARK: - Public Interface
     /// Fetch skill reordering recommendations using LLMFacade
     /// - Parameters:
@@ -36,39 +32,31 @@ class SkillReorderService {
         jobDescription: String,
         modelId: String
     ) async throws -> [ReorderedSkillNode] {
-
         // Validate inputs
         guard !jobDescription.isEmpty else {
             throw SkillReorderError.noJobDescription
         }
-
         // Extract skills JSON from resume tree
         guard let skillsJsonString = extractSkillsForReordering(resume: resume) else {
             throw SkillReorderError.skillExtractionFailed
         }
-
         // Build the reordering prompt
         let prompt = buildPrompt(skillsJsonString: skillsJsonString, jobDescription: jobDescription)
-
         // Debug logging if enabled
         if UserDefaults.standard.bool(forKey: "saveDebugPrompts") {
             saveDebugPrompt(content: prompt, fileName: "skillReorderPrompt.txt")
         }
-
         Logger.debug("🎯 Requesting skill reordering with model: \(modelId)")
-
         // Execute structured request
         let response: ReorderSkillsResponse = try await llm.executeStructured(
             prompt: "\(systemPrompt)\n\n\(prompt)",
             modelId: modelId,
             as: ReorderSkillsResponse.self
         )
-
         // Validate response
         guard response.validate() else {
             throw SkillReorderError.invalidResponse("Failed validation")
         }
-
         // Convert to ReorderedSkillNode format expected by existing code
         let reorderedNodes = response.reorderedSkillsAndExpertise.map { simpleSkill in
             // Look up the original skill to get tree path and title node info
@@ -81,11 +69,9 @@ class SkillReorderService {
                 isTitleNode: isTitleNode
             )
         }
-
         Logger.debug("✅ Skill reordering successful: \(reorderedNodes.count) skills reordered")
         return reorderedNodes
     }
-
     // MARK: - Skills Extraction
     /// Extract skills from resume for reordering
     private func extractSkillsForReordering(resume: Resume) -> String? {
@@ -110,7 +96,6 @@ class SkillReorderService {
         // Extract the tree structure as JSON using TreeNode extension
         return finalSkillsSectionNode.toJSONString()
     }
-
     // MARK: - Private Helpers
     /// Build the skill reordering prompt
     private func buildPrompt(skillsJsonString: String, jobDescription: String) -> String {
@@ -145,28 +130,23 @@ class SkillReorderService {
           ]
         }
         """
-
         return prompt
     }
-
     /// Find the original skill data for the given ID
     private func findOriginalSkill(with id: String, in resume: Resume) -> Bool? {
         // Look up the skill in the resume's tree structure to get the original tree path and title info
         guard let node = resume.nodes.first(where: { $0.id == id }) else {
             return nil
         }
-
         // Determine if this is a title node by checking if it has children
         return node.children?.isEmpty == false
     }
-
     /// Save debug prompt to file if debug mode is enabled
     private func saveDebugPrompt(content: String, fileName: String) {
         let fileManager = FileManager.default
         let homeDirectoryURL = fileManager.homeDirectoryForCurrentUser
         let downloadsURL = homeDirectoryURL.appendingPathComponent("Downloads")
         let fileURL = downloadsURL.appendingPathComponent(fileName)
-
         do {
             try content.write(to: fileURL, atomically: true, encoding: .utf8)
             Logger.debug("💾 Saved debug file: \(fileName)")
@@ -181,7 +161,6 @@ enum SkillReorderError: LocalizedError {
     case noJobDescription
     case skillExtractionFailed
     case invalidResponse(String)
-
     var errorDescription: String? {
         switch self {
         case .noJobDescription:

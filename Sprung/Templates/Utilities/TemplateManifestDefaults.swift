@@ -529,7 +529,6 @@ private extension TemplateManifest.Section {
         }
         return updated.updatingDefault(dictionary)
     }
-
     func dictionaryDefaultValue() -> [String: Any] {
         jsonValueToDictionary(defaultValue?.value)
     }
@@ -549,5 +548,4 @@ private extension TemplateManifest.Section {
         }
         return value as? [String: Any] ?? [:]
     }
-
 }

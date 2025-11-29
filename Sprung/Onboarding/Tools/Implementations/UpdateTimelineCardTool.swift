@@ -62,7 +62,6 @@ struct UpdateTimelineCardTool: InterviewTool {
     var name: String { OnboardingToolName.updateTimelineCard.rawValue }
     var description: String { "Update existing timeline card with partial changes (PATCH). Returns {success, id}. Only include changed fields." }
     var parameters: JSONSchema { Self.schema }
-
     func execute(_ params: JSON) async throws -> ToolResult {
         guard let id = params["id"].string, !id.isEmpty else {
             throw ToolError.invalidParameters("id must be provided")

@@ -4,7 +4,6 @@
 //
 //  Created by Christopher Culbreath on 10/22/25.
 //
-
 import Cocoa
 final class BorderlessOverlayWindow: NSWindow {
     override var canBecomeKey: Bool { true }

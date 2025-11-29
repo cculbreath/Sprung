@@ -3,13 +3,11 @@ import SwiftUI
 struct BestJobButton: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(LLMFacade.self) private var llmFacade
-
     @State private var showBestJobModelSheet = false
     @State private var selectedBestJobModel = ""
     @State private var isProcessingBestJob = false
     @State private var showBestJobAlert = false
     @State private var bestJobResult: String?
-
     var body: some View {
         Button(action: {
             showBestJobModelSheet = true
@@ -33,7 +31,6 @@ struct BestJobButton: View {
                     selectedBestJobModel = modelId
                     showBestJobModelSheet = false
                     isProcessingBestJob = true
-
                     Task {
                         await startBestJobRecommendation(
                             modelId: modelId,
@@ -58,7 +55,6 @@ struct BestJobButton: View {
             showBestJobModelSheet = true
         }
     }
-
     @MainActor
     private func startBestJobRecommendation(
         modelId: String,
@@ -67,7 +63,6 @@ struct BestJobButton: View {
     ) async {
         do {
             let service = JobRecommendationService(llmFacade: llmFacade)
-
             let (jobId, reason) = try await service.fetchRecommendation(
                 jobApps: jobAppStore.jobApps,
                 modelId: modelId,
@@ -83,10 +78,8 @@ struct BestJobButton: View {
                 showBestJobAlert = true
             }
             isProcessingBestJob = false
-
         } catch {
             Logger.error("JobRecommendation Error: \(error)")
-
             if let llmError = error as? LLMError {
                 switch llmError {
                 case .unauthorized(let modelId):
@@ -99,7 +92,6 @@ struct BestJobButton: View {
             } else {
                 bestJobResult = "Error: \(error.localizedDescription)"
             }
-
             showBestJobAlert = true
             isProcessingBestJob = false
         }

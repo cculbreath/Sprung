@@ -5,19 +5,15 @@ import SwiftyJSON
 actor DraftKnowledgeStore: OnboardingEventEmitter {
     // MARK: - Event System
     let eventBus: EventCoordinator
-
     // MARK: - State
     private var drafts: [KnowledgeCardDraft] = []
-
     // MARK: - Synchronous Caches (for SwiftUI)
     nonisolated(unsafe) private(set) var draftsSync: [KnowledgeCardDraft] = []
-
     // MARK: - Initialization
     init(eventBus: EventCoordinator) {
         self.eventBus = eventBus
         Logger.info("📝 DraftKnowledgeStore initialized", category: .ai)
     }
-
     // MARK: - Draft Management
     /// Add a new draft (called by StateCoordinator in response to .draftKnowledgeCardProduced event)
     /// NOTE: Does NOT re-emit the event to avoid infinite loops
@@ -26,7 +22,6 @@ actor DraftKnowledgeStore: OnboardingEventEmitter {
         draftsSync = drafts
         Logger.info("📝 Draft added: \(draft.title) (total: \(drafts.count))", category: .ai)
     }
-
     /// Update an existing draft (called by StateCoordinator in response to .draftKnowledgeCardUpdated event)
     /// NOTE: Does NOT re-emit the event to avoid infinite loops
     func updateDraft(_ draft: KnowledgeCardDraft) async {
@@ -34,12 +29,10 @@ actor DraftKnowledgeStore: OnboardingEventEmitter {
             Logger.warning("⚠️ Draft not found for update: \(draft.id)", category: .ai)
             return
         }
-
         drafts[index] = draft
         draftsSync = drafts
         Logger.info("📝 Draft updated: \(draft.title)", category: .ai)
     }
-
     /// Remove a draft (called by StateCoordinator in response to .draftKnowledgeCardRemoved event)
     /// NOTE: Does NOT re-emit the event to avoid infinite loops
     func removeDraft(id: UUID) async {
@@ -47,17 +40,14 @@ actor DraftKnowledgeStore: OnboardingEventEmitter {
         draftsSync = drafts
         Logger.info("📝 Draft removed: \(id)", category: .ai)
     }
-
     /// Get all drafts
     func getDrafts() -> [KnowledgeCardDraft] {
         return drafts
     }
-
     /// Get a specific draft
     func getDraft(id: UUID) -> KnowledgeCardDraft? {
         return drafts.first { $0.id == id }
     }
-
     /// Clear all drafts
     func clearAll() async {
         drafts.removeAll()

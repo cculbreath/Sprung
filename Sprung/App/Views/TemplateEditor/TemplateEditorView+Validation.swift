@@ -7,7 +7,6 @@
 import Foundation
 import SwiftUI
 extension TemplateEditorView {
-
     // MARK: - Custom Field Validation
     func refreshCustomFieldWarnings() {
         guard selectedTemplate.isEmpty == false else {
@@ -97,7 +96,6 @@ extension TemplateEditorView {
         }
         accumulator.insert(currentPath.joined(separator: "."))
     }
-
     // MARK: - Save/Refresh Orchestration
     @discardableResult
     func saveAllChanges() -> Bool {
@@ -144,7 +142,6 @@ extension TemplateEditorView {
        refreshTemplatePreview()
         refreshCustomFieldWarnings()
     }
-
     // MARK: - Change Handlers
     func handleTemplateSelectionChange(previousSlug: String) {
         guard selectedTemplate != previousSlug else { return }

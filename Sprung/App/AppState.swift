@@ -19,10 +19,8 @@ class AppState {
         observeAPIKeyChanges()
     }
     var isReadOnlyMode = false
-
     // OpenRouter service
     let openRouterService: OpenRouterService
-
     let modelValidationService: ModelValidationService
     // Debug/diagnostics settings
     var debugSettingsStore: DebugSettingsStore?

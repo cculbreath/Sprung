@@ -9,7 +9,6 @@ import SwiftData
 @Observable
 @MainActor
 class MultiModelCoverLetterService {
-
     // MARK: - Published Properties
     var isProcessing = false
     var voteTally: [UUID: Int] = [:]
@@ -24,13 +23,11 @@ class MultiModelCoverLetterService {
     var failedModels: [String: String] = [:]
     var isCompleted = false
     var pendingModels: Set<String> = []
-
     // MARK: - Private Properties
     private var currentTask: Task<Void, Never>?
     private let modelNameFormatter = CoverLetterModelNameFormatter()
     private let votingProcessor = CoverLetterVotingProcessor()
     private let summaryGenerator = CoverLetterCommitteeSummaryGenerator()
-
     // MARK: - Dependencies
     private weak var appState: AppState?
     private weak var jobAppStore: JobAppStore?
@@ -40,10 +37,8 @@ class MultiModelCoverLetterService {
     private var modelContext: ModelContext?
     private var exportCoordinator: ResumeExportCoordinator?
     private var applicantProfileStore: ApplicantProfileStore?
-
     // MARK: - Initialization
     init() {}
-
     func configure(
         appState: AppState,
         jobAppStore: JobAppStore,
@@ -63,7 +58,6 @@ class MultiModelCoverLetterService {
         self.applicantProfileStore = applicantProfileStore
         summaryGenerator.configure(llmFacade: llmFacade)
     }
-
     // MARK: - Public Methods
     func startMultiModelSelection(
         coverLetter: CoverLetter,
@@ -71,12 +65,10 @@ class MultiModelCoverLetterService {
         selectedVotingScheme: VotingScheme
     ) {
         Logger.info("🎯 Starting multi-model selection with \(selectedModels.count) models")
-
         // Clear all previous votes, points, and committee analysis for all cover letters in the current job app
         if let jobApp = jobAppStore?.selectedApp {
             clearAllCoverLetterVotes(in: jobApp)
         }
-
         currentTask = Task {
             await performMultiModelSelection(
                 coverLetter: coverLetter,
@@ -85,7 +77,6 @@ class MultiModelCoverLetterService {
             )
         }
     }
-
     func cancelSelection() {
         Logger.info("🚫 User requested cancellation of multi-model selection")
         currentTask?.cancel()
@@ -93,12 +84,10 @@ class MultiModelCoverLetterService {
         isProcessing = false
         errorMessage = "Operation cancelled by user"
     }
-
     func cleanup() {
         currentTask?.cancel()
         currentTask = nil
     }
-
     func getWinningLetter(for votingScheme: VotingScheme) -> CoverLetter? {
         guard let jobApp = jobAppStore?.selectedApp else { return nil }
         return votingProcessor.getWinningLetter(
@@ -108,7 +97,6 @@ class MultiModelCoverLetterService {
             votingScheme: votingScheme
         )
     }
-
     func hasZeroVoteLetters(for votingScheme: VotingScheme) -> Bool {
         guard let jobApp = jobAppStore?.selectedApp else { return false }
         return votingProcessor.hasZeroVoteLetters(
@@ -118,65 +106,52 @@ class MultiModelCoverLetterService {
             votingScheme: votingScheme
         )
     }
-
     func deleteZeroVoteLetters(for votingScheme: VotingScheme) {
         guard let jobApp = jobAppStore?.selectedApp,
               let coverLetterStore = coverLetterStore else { return }
-
         let lettersToDelete = votingProcessor.getZeroVoteLetters(
             from: jobApp.coverLetters,
             voteTally: voteTally,
             scoreTally: scoreTally,
             votingScheme: votingScheme
         )
-
         for letter in lettersToDelete {
             coverLetterStore.deleteLetter(letter)
             voteTally.removeValue(forKey: letter.id)
             scoreTally.removeValue(forKey: letter.id)
         }
-
         if lettersToDelete.contains(where: { $0.id == jobApp.selectedCover?.id }) {
             jobApp.selectedCover = getWinningLetter(for: votingScheme)
         }
     }
-
     func getLetterName(for uuid: String) -> String? {
         guard let jobApp = jobAppStore?.selectedApp,
               let uuid = UUID(uuidString: uuid) else { return nil }
         return jobApp.coverLetters.first(where: { $0.id == uuid })?.sequencedName
     }
-
     func formatModelNames(_ modelIds: [String]) -> String {
         return modelNameFormatter.formatModelNames(modelIds)
     }
-
     // MARK: - Private Methods
     private func clearAllCoverLetterVotes(in jobApp: JobApp) {
         Logger.info("🧹 Clearing all previous votes, points, and committee analysis for job app")
-
         for letter in jobApp.coverLetters {
             // Clear vote and score counts
             letter.voteCount = 0
             letter.scoreCount = 0
             letter.hasBeenAssessed = false
-
             // Clear committee feedback
             letter.committeeFeedback = nil
-
             Logger.debug("🧹 Cleared votes and analysis for letter: \(letter.sequencedName)")
         }
-
         // Clear local tallies
         voteTally.removeAll()
         scoreTally.removeAll()
         modelReasonings.removeAll()
         reasoningSummary = nil
         failedModels.removeAll()
-
         Logger.info("✅ All cover letter votes and analysis cleared")
     }
-
     private func performMultiModelSelection(
         coverLetter: CoverLetter,
         selectedModels: Set<String>,
@@ -184,31 +159,25 @@ class MultiModelCoverLetterService {
     ) async {
         Logger.info("🚀 Starting multi-model selection with \(selectedModels.count) models using \(selectedVotingScheme.rawValue)")
         initializeSelectionState(modelCount: selectedModels.count, models: selectedModels)
-
         guard let validationResult = await validateSelectionPrerequisites(coverLetter: coverLetter) else { return }
         let (jobApp, query, coverLetters) = validationResult
-
         let modelPrompts = prepareModelPrompts(
             selectedModels: selectedModels,
             query: query,
             coverLetters: coverLetters,
             votingScheme: selectedVotingScheme
         )
-
         guard let llm = llmFacade else {
             await setError("LLM service is not configured")
             return
         }
-
         let executionSucceeded = await executeModelTasks(
             llm: llm,
             selectedModels: selectedModels,
             modelPrompts: modelPrompts,
             selectedVotingScheme: selectedVotingScheme
         )
-
         guard executionSucceeded else { return }
-
         await finalizeResults(
             coverLetters: coverLetters,
             jobApp: jobApp,
@@ -216,7 +185,6 @@ class MultiModelCoverLetterService {
             selectedVotingScheme: selectedVotingScheme
         )
     }
-
     private func initializeSelectionState(modelCount: Int, models: Set<String>) {
         isProcessing = true
         errorMessage = nil
@@ -229,7 +197,6 @@ class MultiModelCoverLetterService {
         progress = 0
         pendingModels = models
     }
-
     private func validateSelectionPrerequisites(
         coverLetter: CoverLetter
     ) async -> (JobApp, CoverLetterQuery, [CoverLetter])? {
@@ -260,7 +227,6 @@ class MultiModelCoverLetterService {
         )
         return (jobApp, query, jobApp.coverLetters)
     }
-
     private func prepareModelPrompts(
         selectedModels: Set<String>,
         query: CoverLetterQuery,
@@ -284,14 +250,12 @@ class MultiModelCoverLetterService {
             return (modelId, prompt)
         })
     }
-
     private func setError(_ message: String) async {
         await MainActor.run {
             errorMessage = message
             isProcessing = false
         }
     }
-
     private func executeModelTasks(
         llm: LLMFacade,
         selectedModels: Set<String>,
@@ -336,7 +300,6 @@ class MultiModelCoverLetterService {
             return false
         }
     }
-
     private func processModelResult(
         modelId: String,
         result: Result<BestCoverLetterResponse, Error>,
@@ -358,7 +321,6 @@ class MultiModelCoverLetterService {
             updateErrorMessageForProgress(totalModels: totalModels)
         }
     }
-
     private func processSuccessfulResponse(modelId: String, response: BestCoverLetterResponse, votingScheme: VotingScheme) {
         modelReasonings.append((model: modelId, response: response))
         if votingScheme == .firstPastThePost {
@@ -379,7 +341,6 @@ class MultiModelCoverLetterService {
             }
         }
     }
-
     private func updateErrorMessageForProgress(totalModels: Int) {
         let successCount = modelReasonings.count
         let failureCount = failedModels.count
@@ -397,7 +358,6 @@ class MultiModelCoverLetterService {
             errorMessage = nil
         }
     }
-
     private func finalizeResults(
         coverLetters: [CoverLetter],
         jobApp: JobApp,
@@ -448,7 +408,6 @@ class MultiModelCoverLetterService {
             }
         }
     }
-
     private func generateReasoningSummary(
         coverLetters: [CoverLetter],
         jobApp: JobApp,
@@ -464,11 +423,9 @@ class MultiModelCoverLetterService {
                 selectedVotingScheme: selectedVotingScheme,
                 preferredModelId: modelReasonings.first?.model
             )
-
             self.reasoningSummary = summary
             self.isGeneratingSummary = false
             Logger.info("✅ Analysis summary generation completed")
-
             // Save changes to ensure committeeFeedback is persisted
             if let modelContext = modelContext {
                 do {
@@ -478,10 +435,8 @@ class MultiModelCoverLetterService {
                     Logger.error("❌ Failed to save committee feedback: \(error.localizedDescription)")
                 }
             }
-
         } catch {
             Logger.error("❌ Analysis summary generation failed: \(error.localizedDescription)")
-
             // Update error message to include analysis failure
             let analysisError = "Analysis generation failed: \(error.localizedDescription)"
             if let existingError = errorMessage {
@@ -489,7 +444,6 @@ class MultiModelCoverLetterService {
             } else {
                 errorMessage = analysisError
             }
-
             // Provide a fallback summary
             let fallbackSummary = summaryGenerator.createFallbackSummary(
                 coverLetter: coverLetters.first!,
@@ -499,7 +453,6 @@ class MultiModelCoverLetterService {
                 scoreTally: scoreTally,
                 selectedVotingScheme: selectedVotingScheme
             )
-
             self.reasoningSummary = fallbackSummary
             self.isGeneratingSummary = false
         }

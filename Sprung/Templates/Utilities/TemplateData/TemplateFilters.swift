@@ -174,7 +174,6 @@ enum TemplateFilters {
         }
         return true
     }
-
     private static let hasContentFilter = VariadicFilter { boxes -> Any? in
         guard !boxes.isEmpty else { return nil }
         for box in boxes where hasDisplayableContent(box) {

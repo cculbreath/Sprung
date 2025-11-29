@@ -14,11 +14,9 @@ struct ModelSelectionSheet: View {
     let operationKey: String? // Optional key for per-operation model persistence
     @Binding var isPresented: Bool
     let onModelSelected: (String) -> Void
-
     // MARK: - State
     @State private var selectedModel: String = ""
     @AppStorage("lastSelectedModel") private var lastSelectedModelGlobal: String = ""
-
     // MARK: - Body
     var body: some View {
         NavigationStack {
@@ -26,19 +24,16 @@ struct ModelSelectionSheet: View {
                 Text(title)
                     .font(.headline)
                     .padding(.top)
-
                 DropdownModelPicker(
                     selectedModel: $selectedModel,
                     requiredCapability: requiredCapability,
                     title: "AI Model"
                 )
-
                 HStack(spacing: 12) {
                     Button("Cancel") {
                         isPresented = false
                     }
                     .buttonStyle(.bordered)
-
                     Button("Continue") {
                         // Save the selected model for future use
                         saveSelectedModel(selectedModel)
@@ -48,7 +43,6 @@ struct ModelSelectionSheet: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(selectedModel.isEmpty)
                 }
-
                 Spacer()
             }
             .padding()
@@ -58,7 +52,6 @@ struct ModelSelectionSheet: View {
             }
         }
     }
-
     // MARK: - Private Methods
     /// Load the last selected model based on operation key or global preference
     private func loadLastSelectedModel() {
@@ -70,18 +63,15 @@ struct ModelSelectionSheet: View {
                 return
             }
         }
-
         // Fall back to global last selected model
         if !lastSelectedModelGlobal.isEmpty {
             selectedModel = lastSelectedModelGlobal
         }
     }
-
     /// Save the selected model for future use
     private func saveSelectedModel(_ model: String) {
         // Save globally
         lastSelectedModelGlobal = model
-
         // Save per-operation if key is provided
         if let operationKey = operationKey {
             let perOperationKey = "lastSelectedModel_\(operationKey)"

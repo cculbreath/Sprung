@@ -279,7 +279,6 @@ struct OnboardingInterviewChatPanel: View {
         return "Sprung Transcript \(stamp).txt"
     }
 }
-
 private struct ModelAvailabilityBanner: View {
     let text: String
     let onOpenSettings: () -> Void

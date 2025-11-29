@@ -8,7 +8,6 @@ import Foundation
 import SwiftUI
 import OrderedCollections
 extension TemplateEditorView {
-
     // MARK: - Manifest Operations
     func loadManifest() {
         manifestValidationMessage = nil
@@ -71,7 +70,6 @@ extension TemplateEditorView {
             manifestValidationMessage = "Validation failed: \(error.localizedDescription)"
         }
     }
-
     static func emptyManifest(slug: String = "") -> String {
         let overrides = TemplateManifestOverrides(
             sectionOrder: TemplateManifestDefaults.defaultSectionOrder,
@@ -118,7 +116,6 @@ extension TemplateEditorView {
             }
         }
     }
-
     // MARK: - Seed Operations
     func loadSeed() {
         seedValidationMessage = nil
@@ -299,7 +296,6 @@ extension TemplateEditorView {
             seedValidationMessage = "Seed validation failed: \(error.localizedDescription)"
         }
     }
-
     // MARK: - Profile Field Mapping
     private func profileField(for path: [String]) -> ProfileField? {
         var remaining = ArraySlice(path)
@@ -476,7 +472,6 @@ extension TemplateEditorView {
         seedValidationMessage = "Seed saved. Profile updated."
         refreshTemplatePreview(force: true)
     }
-
     // MARK: - JSON Utilities
     func prettyJSONString(from data: Data) -> String? {
         guard let jsonObject = try? JSONSerialization.jsonObject(with: data) else {
@@ -491,7 +486,6 @@ extension TemplateEditorView {
         }
         return String(data: data, encoding: .utf8)
     }
-
     // MARK: - Supporting Types
     struct ProfileUpdateChange {
         let label: String

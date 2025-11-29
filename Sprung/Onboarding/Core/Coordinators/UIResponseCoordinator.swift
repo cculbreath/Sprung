@@ -7,7 +7,6 @@ final class UIResponseCoordinator {
     private let eventBus: EventCoordinator
     private let toolRouter: ToolHandler
     private let state: StateCoordinator
-
     init(
         eventBus: EventCoordinator,
         toolRouter: ToolHandler,
@@ -17,7 +16,6 @@ final class UIResponseCoordinator {
         self.toolRouter = toolRouter
         self.state = state
     }
-
     // MARK: - Choice Selection
     func submitChoiceSelection(_ selectionIds: [String]) async {
         guard toolRouter.resolveChoice(selectionIds: selectionIds) != nil else { return }
@@ -27,7 +25,6 @@ final class UIResponseCoordinator {
         await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
         Logger.info("✅ Choice selection submitted and user message sent to LLM", category: .ai)
     }
-
     // MARK: - Upload Handling
     func completeUploadAndResume(id: UUID, fileURLs: [URL], coordinator: OnboardingInterviewCoordinator) async {
         guard await coordinator.completeUpload(id: id, fileURLs: fileURLs) != nil else { return }
@@ -50,7 +47,6 @@ final class UIResponseCoordinator {
         await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
         Logger.info("✅ Upload completed and user message sent to LLM", category: .ai)
     }
-
     func completeUploadAndResume(id: UUID, link: URL, coordinator: OnboardingInterviewCoordinator) async {
         guard await coordinator.toolRouter.completeUpload(id: id, link: link) != nil else { return }
         var userMessage = JSON()
@@ -59,7 +55,6 @@ final class UIResponseCoordinator {
         await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
         Logger.info("✅ Upload from URL completed and user message sent to LLM", category: .ai)
     }
-
     func skipUploadAndResume(id: UUID, coordinator: OnboardingInterviewCoordinator) async {
         guard await coordinator.skipUpload(id: id) != nil else { return }
         var userMessage = JSON()
@@ -68,7 +63,6 @@ final class UIResponseCoordinator {
         await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
         Logger.info("✅ Upload skipped and user message sent to LLM", category: .ai)
     }
-
     // MARK: - Validation Handling
     func submitValidationAndResume(
         status: String,
@@ -97,7 +91,6 @@ final class UIResponseCoordinator {
         await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
         Logger.info("✅ Validation response submitted and user message sent to LLM", category: .ai)
     }
-
     func clearValidationPromptAndNotifyLLM(message: String) async {
         // Clear the validation prompt
         toolRouter.clearValidationPrompt()
@@ -109,7 +102,6 @@ final class UIResponseCoordinator {
         await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
         Logger.info("✅ Validation prompt cleared and user message sent to LLM", category: .ai)
     }
-
     // MARK: - Applicant Profile Handling
     func confirmApplicantProfile(draft: ApplicantProfileDraft) async {
         guard let resolution = toolRouter.resolveApplicantProfile(with: draft) else { return }
@@ -179,7 +171,6 @@ final class UIResponseCoordinator {
         await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
         Logger.info("✅ Applicant profile confirmed (\(status)) and data sent to LLM", category: .ai)
     }
-
     func rejectApplicantProfile(reason: String) async {
         guard toolRouter.rejectApplicantProfile(reason: reason) != nil else { return }
         var userMessage = JSON()
@@ -188,7 +179,6 @@ final class UIResponseCoordinator {
         await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
         Logger.info("✅ Applicant profile rejected and user message sent to LLM", category: .ai)
     }
-
     func submitProfileDraft(draft: ApplicantProfileDraft, source: OnboardingApplicantProfileIntakeState.Source) async {
         // Close the profile intake UI via event
         await eventBus.publish(.applicantProfileIntakeCleared)
@@ -250,7 +240,6 @@ final class UIResponseCoordinator {
         await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
         Logger.info("✅ Profile submitted with detailed data sent to LLM (source: \(source == .contacts ? "contacts" : "manual"))", category: .ai)
     }
-
     func submitProfileURL(_ urlString: String) async {
         // Process URL submission (creates artifact if needed)
         guard toolRouter.submitApplicantProfileURL(urlString) != nil else { return }
@@ -261,7 +250,6 @@ final class UIResponseCoordinator {
         await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
         Logger.info("✅ Profile URL submitted and user message sent to LLM", category: .ai)
     }
-
     // MARK: - Section Toggle Handling
     func confirmSectionToggle(enabled: [String]) async {
         guard toolRouter.resolveSectionToggle(enabled: enabled) != nil else { return }
@@ -280,7 +268,6 @@ final class UIResponseCoordinator {
         await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
         Logger.info("✅ Section toggle confirmed and user message sent to LLM", category: .ai)
     }
-
     func rejectSectionToggle(reason: String) async {
         guard toolRouter.rejectSectionToggle(reason: reason) != nil else { return }
         var userMessage = JSON()
@@ -289,7 +276,6 @@ final class UIResponseCoordinator {
         await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
         Logger.info("✅ Section toggle rejected and user message sent to LLM", category: .ai)
     }
-
     // MARK: - Model Availability
     func notifyInvalidModel(id: String) {
         // This method is called by OnboardingInterviewCoordinator when an invalid model is reported
@@ -298,7 +284,6 @@ final class UIResponseCoordinator {
         // But if we wanted to send a message to the LLM or log it specifically here, we could.
         Logger.warning("⚠️ UIResponseCoordinator notified of invalid model: \(id)", category: .ai)
     }
-
     // MARK: - Chat & Control
     func sendChatMessage(_ text: String) async {
         // Add the message to chat transcript IMMEDIATELY so user sees it in the UI
@@ -313,11 +298,9 @@ final class UIResponseCoordinator {
         // Emit event for LLMMessenger to handle
         await eventBus.publish(.llmSendUserMessage(payload: payload))
     }
-
     func requestCancelLLM() async {
         await eventBus.publish(.llmCancelRequested)
     }
-
     // MARK: - Timeline Handling
     func applyUserTimelineUpdate(cards: [TimelineCard], meta: JSON?, diff: TimelineDiff) async {
         // Reconstruct the full JSON
@@ -326,17 +309,13 @@ final class UIResponseCoordinator {
         if let meta = meta {
             timelineJSON["meta"] = meta
         }
-
         // Publish replacement event which will update state and persistence
         await eventBus.publish(.skeletonTimelineReplaced(timeline: timelineJSON, diff: diff, meta: meta))
-
         // Notify LLM of the changes
         var userMessage = JSON()
         userMessage["role"].string = "user"
         userMessage["content"].string = "I have updated the timeline. Changes:\n\(diff.summary)"
-
         await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
-
         Logger.info("✅ User timeline update applied and notified LLM", category: .ai)
     }
 }

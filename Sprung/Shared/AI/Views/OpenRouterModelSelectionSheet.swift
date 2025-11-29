@@ -12,20 +12,16 @@ struct OpenRouterModelSelectionSheet: View {
     @State private var filterVision = false
     @State private var filterReasoning = false
     @State private var filterTextOnly = false
-
     private var availableProviders: [String] {
         let providers = Set(openRouterService.availableModels.map { $0.providerName })
         return Array(providers).sorted()
     }
-
     private var filteredModels: [OpenRouterModel] {
         var models = openRouterService.availableModels
-
         // Filter by provider if selected
         if let provider = selectedProvider {
             models = models.filter { $0.providerName == provider }
         }
-
         // Filter by capabilities
         if filterStructuredOutput {
             models = models.filter { $0.supportsStructuredOutput }
@@ -39,7 +35,6 @@ struct OpenRouterModelSelectionSheet: View {
         if filterTextOnly {
             models = models.filter { $0.isTextToText && !$0.supportsImages }
         }
-
         // Filter by search text
         if !searchText.isEmpty {
             models = models.filter { model in
@@ -48,17 +43,14 @@ struct OpenRouterModelSelectionSheet: View {
                 model.providerName.localizedCaseInsensitiveContains(searchText)
             }
         }
-
         // Filter by selection status if requested
         if showOnlySelected {
             models = models.filter { model in
                 enabledLLMStore.enabledModelIds.contains(model.id)
             }
         }
-
         return models
     }
-
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -80,7 +72,6 @@ struct OpenRouterModelSelectionSheet: View {
                             .cornerRadius(6)
                             .transition(.opacity)
                         }
-
                         Button {
                             withAnimation {
                                 isSearchCollapsed.toggle()
@@ -93,17 +84,13 @@ struct OpenRouterModelSelectionSheet: View {
                                 .foregroundColor(.secondary)
                         }
                         .buttonStyle(.borderless)
-
                         Spacer()
-
                         // Provider filter
                         Menu {
                             Button("All Providers") {
                                 selectedProvider = nil
                             }
-
                             Divider()
-
                             ForEach(availableProviders, id: \.self) { provider in
                                 Button(provider) {
                                     selectedProvider = provider
@@ -120,7 +107,6 @@ struct OpenRouterModelSelectionSheet: View {
                             .cornerRadius(6)
                         }
                     }
-
                     // Capability filters
                     HStack {
                         Toggle(isOn: $filterStructuredOutput) {
@@ -130,7 +116,6 @@ struct OpenRouterModelSelectionSheet: View {
                             }
                         }
                         .toggleStyle(.checkbox)
-
                         Toggle(isOn: $filterVision) {
                             HStack(spacing: 4) {
                                 Image(systemName: "eye")
@@ -138,7 +123,6 @@ struct OpenRouterModelSelectionSheet: View {
                             }
                         }
                         .toggleStyle(.checkbox)
-
                         Toggle(isOn: $filterReasoning) {
                             HStack(spacing: 4) {
                                 Image(systemName: "brain")
@@ -146,7 +130,6 @@ struct OpenRouterModelSelectionSheet: View {
                             }
                         }
                         .toggleStyle(.checkbox)
-
                         Toggle(isOn: $filterTextOnly) {
                             HStack(spacing: 4) {
                                 Image(systemName: "text.alignleft")
@@ -154,22 +137,17 @@ struct OpenRouterModelSelectionSheet: View {
                             }
                         }
                         .toggleStyle(.checkbox)
-
                         Spacer()
-
                         // Show only selected toggle
                         Toggle("Selected Only", isOn: $showOnlySelected)
                             .toggleStyle(.switch)
                     }
-
                     // Selection summary and refresh
                     HStack {
                         Text("\(filteredModels.count) models")
                             .font(.caption)
                             .foregroundColor(.secondary)
-
                         Spacer()
-
                         // Refresh button as circle arrow
                         Button {
                             Task {
@@ -182,11 +160,9 @@ struct OpenRouterModelSelectionSheet: View {
                         }
                         .buttonStyle(.borderless)
                         .disabled(openRouterService.isLoading)
-
                         Text("\(enabledLLMStore.enabledModelIds.count) selected")
                             .font(.caption)
                             .foregroundColor(.secondary)
-
                         Button("Select All") {
                             for model in filteredModels {
                                 enabledLLMStore.updateModelCapabilities(from: model)
@@ -194,7 +170,6 @@ struct OpenRouterModelSelectionSheet: View {
                         }
                         .buttonStyle(.borderless)
                         .font(.caption)
-
                         Button("Select None") {
                             for model in filteredModels {
                                 enabledLLMStore.disableModel(id: model.id)
@@ -206,20 +181,16 @@ struct OpenRouterModelSelectionSheet: View {
                 }
                 .padding()
                 .background(Color(.windowBackgroundColor))
-
                 Divider()
-
                 // Models list
                 if filteredModels.isEmpty {
                     VStack(spacing: 16) {
                         Image(systemName: "magnifyingglass")
                             .font(.largeTitle)
                             .foregroundColor(.secondary)
-
                         Text("No models found")
                             .font(.headline)
                             .foregroundColor(.secondary)
-
                         Text("Try adjusting your search or filter criteria")
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -252,7 +223,6 @@ struct OpenRouterModelSelectionSheet: View {
                         dismiss()
                     }
                 }
-
                 ToolbarItem(placement: .primaryAction) {
                     Button("Done") {
                         dismiss()
@@ -276,7 +246,6 @@ struct OpenRouterModelRow: View {
     let isSelected: Bool
     let pricingThresholds: [Double]
     let onToggle: (Bool) -> Void
-
     var body: some View {
         HStack(spacing: 12) {
             // Selection checkbox
@@ -288,16 +257,13 @@ struct OpenRouterModelRow: View {
                     .font(.title2)
             }
             .buttonStyle(.plain)
-
             // Model info
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text(model.displayName)
                         .font(.headline)
                         .lineLimit(2)
-
                     Spacer()
-
                     // Cost level with warning
                     HStack(spacing: 4) {
                         if model.isHighCostModel {
@@ -305,23 +271,19 @@ struct OpenRouterModelRow: View {
                                 .foregroundColor(.orange)
                                 .font(.caption)
                         }
-
                         Text(model.costLevelDescription(using: pricingThresholds))
                             .font(.caption)
                             .fontWeight(.medium)
                             .foregroundColor(model.costLevel(using: pricingThresholds) >= 4 ? .orange : .secondary)
-
                         Text(model.costDescription)
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
                 }
-
                 Text(model.id)
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .lineLimit(1)
-
                 if let description = model.description, !description.isEmpty {
                     Text(description)
                         .font(.caption)
@@ -329,31 +291,25 @@ struct OpenRouterModelRow: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 2)
                 }
-
                 // Capabilities with lit/dim indicators
                 HStack(spacing: 12) {
                     CapabilityIndicator(
                         icon: "list.bullet.rectangle",
                         isSupported: model.supportsStructuredOutput
                     )
-
                     CapabilityIndicator(
                         icon: "eye",
                         isSupported: model.supportsImages
                     )
-
                     CapabilityIndicator(
                         icon: "brain",
                         isSupported: model.supportsReasoning
                     )
-
                     CapabilityIndicator(
                         icon: "text.alignleft",
                         isSupported: model.isTextToText
                     )
-
                     Spacer()
-
                     Text(model.providerName)
                         .font(.caption)
                         .padding(.horizontal, 6)
@@ -363,7 +319,6 @@ struct OpenRouterModelRow: View {
                 }
                 .padding(.top, 4)
             }
-
             Spacer()
         }
         .padding(.vertical, 8)
@@ -376,7 +331,6 @@ struct OpenRouterModelRow: View {
 struct CapabilityIndicator: View {
     let icon: String
     let isSupported: Bool
-
     var body: some View {
         Image(systemName: icon)
             .font(.caption)

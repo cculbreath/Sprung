@@ -369,7 +369,6 @@ struct TemplateManifest: Codable {
     let keysInEditor: [String]?
     let sectionVisibilityDefaults: [String: Bool]?
     let sectionVisibilityLabels: [String: String]?
-
     init(
         slug: String,
         schemaVersion: Int = 1,
@@ -532,7 +531,6 @@ struct TemplateManifest: Codable {
 }
 // MARK: - Encoding helpers
 extension TemplateManifest {
-
     func sectionVisibilityKeys() -> [String] {
         guard let defaultKeys = sectionVisibilityDefaults?.keys else { return [] }
         return Array(defaultKeys).sorted()

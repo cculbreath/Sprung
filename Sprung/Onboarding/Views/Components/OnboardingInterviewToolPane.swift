@@ -337,7 +337,6 @@ struct OnboardingInterviewToolPane: View {
 private struct ExtractionProgressOverlay: View {
     let items: [ExtractionProgressItem]
     let statusText: String?
-
     var body: some View {
         VStack(spacing: 28) {
             AnimatedThinkingText(statusMessage: statusText)

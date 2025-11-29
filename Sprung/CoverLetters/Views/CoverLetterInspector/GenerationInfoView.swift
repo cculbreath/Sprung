@@ -8,14 +8,12 @@ import SwiftUI
 struct GenerationInfoView: View {
     let coverLetter: CoverLetter
     let openRouterService: OpenRouterService
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Generation Info")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(.secondary)
                 .textCase(.uppercase)
-
             VStack(alignment: .leading, spacing: 0) {
                 if let model = coverLetter.generationModel {
                     MetadataRow(
@@ -23,25 +21,21 @@ struct GenerationInfoView: View {
                         value: openRouterService.friendlyModelName(for: model)
                     )
                 }
-
                 MetadataRow(
                     label: "Created",
                     value: coverLetter.createdDate.formatted(date: .abbreviated, time: .shortened)
                 )
-
                 if coverLetter.moddedDate != coverLetter.createdDate {
                     MetadataRow(
                         label: "Modified",
                         value: coverLetter.moddedDate.formatted(date: .abbreviated, time: .shortened)
                     )
                 }
-
                 HStack(spacing: 0) {
                     Text("Status")
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                         .frame(width: 80, alignment: .leading)
-
                     HStack(spacing: 6) {
                         Circle()
                             .fill(coverLetter.generated ? Color.green : Color.orange)
@@ -51,11 +45,9 @@ struct GenerationInfoView: View {
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(coverLetter.generated ? .green : .orange)
                     }
-
                     Spacer()
                 }
                 .frame(height: 24)
-
                 if coverLetter.isChosenSubmissionDraft {
                     HStack(spacing: 6) {
                         Image(systemName: "star.fill")

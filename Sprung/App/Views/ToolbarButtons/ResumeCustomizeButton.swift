@@ -4,13 +4,10 @@ struct ResumeCustomizeButton: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(ResumeReviseViewModel.self) private var resumeReviseViewModel: ResumeReviseViewModel
     @Environment(ReasoningStreamManager.self) private var reasoningStreamManager: ReasoningStreamManager
-
     @Binding var selectedTab: TabList
-
     @State private var isGeneratingResume = false
     @State private var showCustomizeModelSheet = false
     @State private var selectedCustomizeModel = ""
-
     var body: some View {
         Button(action: {
             selectedTab = .resume
@@ -51,7 +48,6 @@ struct ResumeCustomizeButton: View {
             showCustomizeModelSheet = true
         }
     }
-
     @MainActor
     private func startCustomizeWorkflow(modelId: String) async {
         guard let jobApp = jobAppStore.selectedApp,
@@ -59,19 +55,15 @@ struct ResumeCustomizeButton: View {
             isGeneratingResume = false
             return
         }
-
         do {
             Logger.debug("🛡️ [ResumeCustomizeButton] Starting fresh workflow with model: \(modelId)")
             reasoningStreamManager.hideAndClear()
-
             try await resumeReviseViewModel.startFreshRevisionWorkflow(
                 resume: resume,
                 modelId: modelId,
                 workflow: .customize
             )
-
             isGeneratingResume = false
-
         } catch {
             Logger.error("Error in customize workflow: \(error.localizedDescription)")
             isGeneratingResume = false

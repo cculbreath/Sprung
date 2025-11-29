@@ -10,7 +10,6 @@ import SwiftUI
 struct CheckboxModelPicker: View {
     /// The set of selected model IDs
     @Binding var selectedModels: Set<String>
-
     /// Access to environment services
     @Environment(AppState.self) private var appState
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
@@ -23,7 +22,6 @@ struct CheckboxModelPicker: View {
     var showInGroupBox: Bool = true
     /// Whether to show Select All/None buttons
     var showSelectionButtons: Bool = true
-
     var body: some View {
         if showInGroupBox {
             GroupBox(title) {
@@ -37,7 +35,6 @@ struct CheckboxModelPicker: View {
             }
         }
     }
-
     private var content: some View {
         VStack(alignment: .leading, spacing: 8) {
             if showSelectionButtons && !availableModels.isEmpty {
@@ -49,7 +46,6 @@ struct CheckboxModelPicker: View {
                     }
                     .buttonStyle(.borderless)
                     .font(.caption)
-
                     Button("Select None") {
                         for model in availableModels {
                             selectedModels.remove(model.id)
@@ -57,15 +53,12 @@ struct CheckboxModelPicker: View {
                     }
                     .buttonStyle(.borderless)
                     .font(.caption)
-
                     Spacer()
-
                     if appState.hasValidOpenRouterKey {
                         refreshButton
                     }
                 }
             }
-
             modelList
         }
         .onAppear {
@@ -77,7 +70,6 @@ struct CheckboxModelPicker: View {
             }
         }
     }
-
     private var modelList: some View {
         VStack(alignment: .leading, spacing: 4) {
             if !appState.hasValidOpenRouterKey {
@@ -110,7 +102,6 @@ struct CheckboxModelPicker: View {
                 // Group models by provider
                 let groupedModels = Dictionary(grouping: availableModels) { $0.providerName }
                 let sortedProviders = groupedModels.keys.sorted()
-
                 ForEach(sortedProviders, id: \.self) { provider in
                     if let models = groupedModels[provider] {
                         VStack(alignment: .leading, spacing: 4) {
@@ -118,9 +109,7 @@ struct CheckboxModelPicker: View {
                                 Text(provider)
                                     .font(.caption)
                                     .foregroundColor(.secondary)
-
                                 Spacer()
-
                                 // Provider-level selection buttons
                                 HStack(spacing: 8) {
                                     Button("All") {
@@ -130,7 +119,6 @@ struct CheckboxModelPicker: View {
                                     .buttonStyle(.borderless)
                                     .font(.caption2)
                                     .foregroundColor(.blue)
-
                                     Button("None") {
                                         let providerModels = Set(models.map { $0.id })
                                         selectedModels.subtract(providerModels)
@@ -141,7 +129,6 @@ struct CheckboxModelPicker: View {
                                 }
                             }
                             .padding(.top, sortedProviders.first == provider ? 0 : 4)
-
                             ForEach(models.sorted { $0.displayName < $1.displayName }) { model in
                                 Button(action: {
                                     if selectedModels.contains(model.id) {
@@ -154,11 +141,9 @@ struct CheckboxModelPicker: View {
                                         Image(systemName: selectedModels.contains(model.id) ? "checkmark.circle.fill" : "checkmark.circle")
                                             .foregroundColor(selectedModels.contains(model.id) ? .green : .secondary)
                                             .font(.system(size: 16))
-
                                         Text(formatModelName(model))
                                             .font(.system(.body))
                                             .foregroundColor(.primary)
-
                                         Spacer()
                                     }
                                 }
@@ -170,13 +155,10 @@ struct CheckboxModelPicker: View {
             }
         }
     }
-
     private var availableModels: [OpenRouterModel] {
         var models = openRouterService.availableModels
-
         // First filter: User's selected models from Settings (global filter)
         models = models.filter { enabledLLMStore.enabledModelIds.contains($0.id) }
-
         // Second filter: Capability requirements for the operation
         if let capability = requiredCapability {
             models = models.filter { model in
@@ -192,22 +174,17 @@ struct CheckboxModelPicker: View {
                 }
             }
         }
-
         return models
     }
-
     /// Formats a model name for display
     private func formatModelName(_ model: OpenRouterModel) -> String {
         let displayName = model.displayName
-
         // Show the display name with a shortened version if too long
         if displayName.count > 40 {
             return String(displayName.prefix(37)) + "..."
         }
-
         return displayName
     }
-
     /// Refresh button
     private var refreshButton: some View {
         Button(action: {

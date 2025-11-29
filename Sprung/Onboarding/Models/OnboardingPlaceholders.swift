@@ -137,7 +137,6 @@ struct OnboardingUploadedItem: Identifiable, Codable {
     let url: URL
     let uploadedAt: Date
 }
-
 struct OnboardingApplicantProfileIntakeState: Equatable {
     enum Mode: Equatable {
         case options

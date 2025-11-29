@@ -9,18 +9,14 @@ import SwiftData
 /// A unified view for generating cover letters that combines model selection with source management
 struct GenerateCoverLetterView: View {
     @Environment(\.dismiss) private var dismiss
-
     let jobApp: JobApp
     let onGenerate: (String, [CoverRef], Bool) -> Void
-
     // Live SwiftData query to automatically refresh on model changes
     @Query(sort: \CoverRef.name) private var allCoverRefs: [CoverRef]
-
     @AppStorage("preferredCoverLetterModel") private var selectedModel: String = ""
     @State private var includeResumeRefs: Bool = true
     @State private var selectedBackgroundFacts: Set<String> = []
     @State private var selectedWritingSamples: Set<String> = []
-
     var body: some View {
         VStack(spacing: 0) {
             // Header - Fixed
@@ -28,19 +24,16 @@ struct GenerateCoverLetterView: View {
                 Text("Generate Cover Letter")
                     .font(.title2)
                     .bold()
-
                 Text(jobApp.companyName)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
             .padding(.horizontal)
             .padding(.top)
-
             // Model Selection - Fixed
             VStack(alignment: .leading, spacing: 8) {
                 Text("AI Model")
                     .font(.headline)
-
                 DropdownModelPicker(
                     selectedModel: $selectedModel,
                     requiredCapability: nil
@@ -48,10 +41,8 @@ struct GenerateCoverLetterView: View {
             }
             .padding(.horizontal)
             .padding(.top)
-
             Divider()
                 .padding(.horizontal)
-
             // Scrollable content area
             ScrollView(.vertical, showsIndicators: true) {
                 VStack(spacing: 20) {
@@ -62,23 +53,19 @@ struct GenerateCoverLetterView: View {
                         selectedWritingSamples: $selectedWritingSamples,
                         showGroupBox: false
                     )
-
                     // Extra padding at bottom for better scrolling
                     Color.clear.frame(height: 20)
                 }
                 .padding(.horizontal)
                 .padding(.top)
             }
-
             // Action Buttons - Fixed at bottom
             HStack {
                 Button("Cancel") {
                     dismiss()
                 }
                 .keyboardShortcut(.cancelAction)
-
                 Spacer()
-
                 Button("Generate") {
                     if !selectedModel.isEmpty {
                         let selectedRefs = allCoverRefs.filter { ref in
@@ -101,18 +88,14 @@ struct GenerateCoverLetterView: View {
             loadDefaultSelections()
         }
     }
-
     private func loadDefaultSelections() {
         // Use the selected model from the dropdown - it will default to the preferred model
-
         // Pre-select enabled by default refs
         let backgroundFacts = allCoverRefs.filter { $0.type == .backgroundFact }
         let writingSamples = allCoverRefs.filter { $0.type == .writingSample }
-
         for ref in backgroundFacts where ref.enabledByDefault {
             selectedBackgroundFacts.insert(ref.id.description)
         }
-
         for ref in writingSamples where ref.enabledByDefault {
             selectedWritingSamples.insert(ref.id.description)
         }
@@ -124,9 +107,7 @@ struct CheckableRefRow: View {
     let isSelected: Bool
     let onToggle: (Bool) -> Void
     let onDelete: () -> Void
-
     @State private var isHovering = false
-
     var body: some View {
         HStack(spacing: 8) {
             Button(action: {
@@ -136,13 +117,11 @@ struct CheckableRefRow: View {
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                         .foregroundColor(isSelected ? .accentColor : .secondary)
                         .font(.system(size: 18))
-
                     VStack(alignment: .leading, spacing: 2) {
                         Text(ref.name)
                             .font(.body)
                             .foregroundColor(.primary)
                             .lineLimit(1)
-
                         if !ref.content.isEmpty {
                             Text(ref.content)
                                 .font(.caption)
@@ -150,12 +129,10 @@ struct CheckableRefRow: View {
                                 .lineLimit(2)
                         }
                     }
-
                     Spacer()
                 }
             })
             .buttonStyle(.plain)
-
             if isHovering {
                 Button(action: onDelete, label: {
                     Image(systemName: "trash")

@@ -10,7 +10,6 @@ import SwiftUI
 struct DropdownModelPicker: View {
     /// The currently selected model ID
     @Binding var selectedModel: String
-
     /// Access to environment services
     @Environment(AppState.self) private var appState
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
@@ -23,7 +22,6 @@ struct DropdownModelPicker: View {
     var showInGroupBox: Bool = true
     /// Optional special option to show at the top (label, value)
     var includeSpecialOption: (String, String)?
-
     var body: some View {
         if showInGroupBox {
             GroupBox(label: Text(title).fontWeight(.medium)) {
@@ -38,7 +36,6 @@ struct DropdownModelPicker: View {
             }
         }
     }
-
     private var modelPickerContent: some View {
         HStack {
             Picker("", selection: $selectedModel) {
@@ -47,7 +44,6 @@ struct DropdownModelPicker: View {
             .pickerStyle(.menu)
             .labelsHidden()
             .id(enabledLLMStore.enabledModelIds) // Force refresh when enabled models change
-
             if appState.hasValidOpenRouterKey {
                 refreshButton
             }
@@ -72,13 +68,10 @@ struct DropdownModelPicker: View {
             Logger.debug("🔄 [DropdownModelPicker] Available models refreshed from OpenRouter")
         }
     }
-
     private var availableModels: [OpenRouterModel] {
         var models = openRouterService.availableModels
-
         // First filter: User's selected models from Settings (global filter)
         models = models.filter { enabledLLMStore.enabledModelIds.contains($0.id) }
-
         // Second filter: Capability requirements for the operation
         if let capability = requiredCapability {
             models = models.filter { model in
@@ -94,22 +87,18 @@ struct DropdownModelPicker: View {
                 }
             }
         }
-
         return models
     }
-
     @ViewBuilder
     private var pickerContent: some View {
         // Add special option first if provided
         if let specialOption = includeSpecialOption {
             Text(specialOption.0)
                 .tag(specialOption.1)
-
             if appState.hasValidOpenRouterKey && !availableModels.isEmpty {
                 Divider()
             }
         }
-
         if !appState.hasValidOpenRouterKey {
             Text("Configure OpenRouter API key in Settings")
                 .foregroundColor(.secondary)
@@ -137,7 +126,6 @@ struct DropdownModelPicker: View {
             // Group models by provider
             let groupedModels = Dictionary(grouping: availableModels) { $0.providerName }
             let sortedProviders = groupedModels.keys.sorted()
-
             ForEach(sortedProviders, id: \.self) { provider in
                 if let models = groupedModels[provider] {
                     Section(header: Text(provider)) {
@@ -150,19 +138,15 @@ struct DropdownModelPicker: View {
             }
         }
     }
-
     /// Formats a model name for display
     private func formatModelName(_ model: OpenRouterModel) -> String {
         let displayName = model.displayName
-
         // Show the display name with a shortened version if too long
         if displayName.count > 40 {
             return String(displayName.prefix(37)) + "..."
         }
-
         return displayName
     }
-
     /// Refresh button for the picker
     private var refreshButton: some View {
         Button(action: {

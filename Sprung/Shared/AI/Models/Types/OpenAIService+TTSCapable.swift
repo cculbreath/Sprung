@@ -9,11 +9,9 @@ import SwiftOpenAI
 /// dependency ships a direct implementation.
 final class OpenAIServiceTTSWrapper: TTSCapable {
     private let service: OpenAIService
-
     init(service: OpenAIService) {
         self.service = service
     }
-
     func sendTTSRequest(
         text: String,
         voice: String,
@@ -28,7 +26,6 @@ final class OpenAIServiceTTSWrapper: TTSCapable {
                     responseFormat: .mp3,
                     speed: 1.0
                 )
-
                 let audioObject = try await service.createSpeech(parameters: parameters)
                 onComplete(.success(audioObject.output))
             } catch {
@@ -36,7 +33,6 @@ final class OpenAIServiceTTSWrapper: TTSCapable {
             }
         }
     }
-
     func sendTTSStreamingRequest(
         text: String,
         voice: String,
@@ -52,13 +48,10 @@ final class OpenAIServiceTTSWrapper: TTSCapable {
                     responseFormat: .mp3,
                     speed: 1.0
                 )
-
                 let audioStream = try await service.createStreamingSpeech(parameters: parameters)
-
                 for try await chunk in audioStream {
                     onChunk(.success(chunk.chunk))
                 }
-
                 onComplete(nil)
             } catch {
                 onComplete(error)

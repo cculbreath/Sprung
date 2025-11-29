@@ -8,14 +8,12 @@ import Foundation
 import SwiftData
 import SwiftUI
 import AppKit
-
 @main
 struct SprungApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     private let modelContainer: ModelContainer
     private let appDependencies: AppDependencies
     private let appEnvironment: AppEnvironment
-
     init() {
         // Preflight backup before opening/migrating the store
         SwiftDataBackupManager.performPreflightBackupIfNeeded()
@@ -95,30 +93,24 @@ struct SprungApp: App {
                     appDelegate.showApplicantProfileWindow()
                 }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
-
                 Button("Template Editor...") {
                     appDelegate.showTemplateEditorWindow()
                 }
                 .keyboardShortcut("t", modifiers: [.command, .shift])
             }
-
             CommandGroup(after: .importExport) {
             }
-
             // View Menu - Show Inspectors and Sources
             CommandGroup(after: .sidebar) {
                 Button("Show Sources") {
                     NotificationCenter.default.post(name: .showSources, object: nil)
                 }
                 .keyboardShortcut("s", modifiers: [.command, .option])
-
                 Divider()
-
                 Button("Show Resume Inspector") {
                     NotificationCenter.default.post(name: .showResumeInspector, object: nil)
                 }
                 .keyboardShortcut("1", modifiers: [.command, .option])
-
                 Button("Show Cover Letter Inspector") {
                     NotificationCenter.default.post(name: .showCoverLetterInspector, object: nil)
                 }
@@ -131,28 +123,22 @@ struct SprungApp: App {
                 NotificationCenter.default.post(name: .customizeResume, object: nil)
             }
             .keyboardShortcut("r", modifiers: [.command])
-
             Button("Clarify & Customize") {
                 NotificationCenter.default.post(name: .clarifyCustomize, object: nil)
             }
             .keyboardShortcut("r", modifiers: [.command, .option])
-
             Button("Optimize Resume") {
                 NotificationCenter.default.post(name: .optimizeResume, object: nil)
             }
             .keyboardShortcut("o", modifiers: [.command])
-
             Divider()
-
             Button("Export Resume as PDF") {
                 NotificationCenter.default.post(name: .exportResumePDF, object: nil)
             }
             .keyboardShortcut("e", modifiers: [.command, .shift])
-
             Button("Export Resume as Text") {
                 NotificationCenter.default.post(name: .exportResumeText, object: nil)
             }
-
             Button("Export Resume as JSON") {
                 NotificationCenter.default.post(name: .exportResumeJSON, object: nil)
             }
@@ -164,52 +150,41 @@ struct SprungApp: App {
                 NotificationCenter.default.post(name: .generateCoverLetter, object: nil)
             }
             .keyboardShortcut("l", modifiers: [.command])
-
             Button("Batch Cover Letters") {
                 NotificationCenter.default.post(name: .batchCoverLetter, object: nil)
             }
             .keyboardShortcut("b", modifiers: [.command])
-
             Button("Best Cover Letter") {
                 NotificationCenter.default.post(name: .bestCoverLetter, object: nil)
             }
             .keyboardShortcut("l", modifiers: [.command, .option])
-
             Button("Multi-Model Committee") {
                 NotificationCenter.default.post(name: .committee, object: nil)
             }
             .keyboardShortcut("m", modifiers: [.command, .option])
-
             Divider()
-
             Menu("Text-to-Speech") {
                 Button("Start Speaking") {
                     NotificationCenter.default.post(name: .startSpeaking, object: nil)
                 }
                 .keyboardShortcut("s", modifiers: [.command, .control])
-
                 Button("Stop Speaking") {
                     NotificationCenter.default.post(name: .stopSpeaking, object: nil)
                 }
                 .keyboardShortcut(".", modifiers: [.command, .control])
-
                 Button("Restart Speaking") {
                     NotificationCenter.default.post(name: .restartSpeaking, object: nil)
                 }
                 .keyboardShortcut("r", modifiers: [.command, .control])
             }
-
             Divider()
-
             Button("Export Cover Letter as PDF") {
                 NotificationCenter.default.post(name: .exportCoverLetterPDF, object: nil)
             }
             .keyboardShortcut("e", modifiers: [.command, .option])
-
             Button("Export Cover Letter as Text") {
                 NotificationCenter.default.post(name: .exportCoverLetterText, object: nil)
             }
-
             Button("Export All Cover Letter Options") {
                 NotificationCenter.default.post(name: .exportAllCoverLetters, object: nil)
             }
@@ -235,21 +210,16 @@ struct SprungApp: App {
                 NotificationCenter.default.post(name: .newJobApp, object: nil)
             }
             .keyboardShortcut("n", modifiers: [.command, .shift])
-
             Button("Best Job Match") {
                 NotificationCenter.default.post(name: .bestJob, object: nil)
             }
             .keyboardShortcut("j", modifiers: [.command, .shift])
-
             Divider()
-
             Button("Analyze Application") {
                 NotificationCenter.default.post(name: .analyzeApplication, object: nil)
             }
             .keyboardShortcut("a", modifiers: [.command, .shift])
-
             Divider()
-
             Button("Export Complete Application") {
                 NotificationCenter.default.post(name: .exportApplicationPacket, object: nil)
             }

@@ -1,7 +1,6 @@
 import SwiftUI
 // MARK: - View Extensions
 extension View {
-
     @MainActor
     func intelligenceOverlay<S: InsettableShape>(
         in shape: S

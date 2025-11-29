@@ -6,7 +6,6 @@
 //
 import Foundation
 class CoverLetterModelNameFormatter {
-
     func formatModelNames(_ modelIds: [String]) -> String {
         let displayNames = modelIds.map { modelId in
             // Clean up model names for better display
@@ -18,7 +17,6 @@ class CoverLetterModelNameFormatter {
                 .replacingOccurrences(of: "x-ai/", with: "")
                 .replacingOccurrences(of: "deepseek/", with: "")
         }
-
         if displayNames.count == 1 {
             return displayNames[0]
         } else if displayNames.count == 2 {

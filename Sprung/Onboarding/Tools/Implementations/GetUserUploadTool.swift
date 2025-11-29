@@ -98,7 +98,6 @@ struct GetUserUploadTool: InterviewTool {
         return .immediate(response)
     }
 }
-
 // MARK: - Payload Parsing
 private struct UploadRequestPayload {
     let kind: OnboardingUploadKind
