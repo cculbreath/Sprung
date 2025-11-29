@@ -30,7 +30,8 @@ actor DocumentProcessingService {
         fileURL: URL,
         documentType: String,
         callId: String?,
-        metadata: JSON
+        metadata: JSON,
+        statusCallback: (@Sendable (String) -> Void)? = nil
     ) async throws -> JSON {
         let filename = fileURL.lastPathComponent
         Logger.info("📄 Processing document: \(filename)", category: .ai)
@@ -41,6 +42,7 @@ actor DocumentProcessingService {
         // Step 2: Extract text using configured model
         let modelId = UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId") ?? "google/gemini-2.0-flash-001"
         Logger.info("🔍 Extracting text with model: \(modelId)", category: .ai)
+        statusCallback?("Extracting text from \(filename)...")
         let extractionRequest = DocumentExtractionService.ExtractionRequest(
             fileURL: processedUpload.storageURL,
             purpose: documentType,
@@ -48,9 +50,17 @@ actor DocumentProcessingService {
             autoPersist: false,
             timeout: nil
         )
+        // Create progress handler that maps to status callback
+        let progressHandler: ExtractionProgressHandler? = statusCallback.map { callback in
+            { @Sendable update in
+                if let detail = update.detail {
+                    callback(detail)
+                }
+            }
+        }
         let extractionResult = try await documentExtractionService.extract(
             using: extractionRequest,
-            progress: nil
+            progress: progressHandler
         )
         guard let artifact = extractionResult.artifact else {
             throw NSError(
