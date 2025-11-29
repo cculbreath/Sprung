@@ -21,6 +21,7 @@ final class OnboardingInterviewCoordinator {
     var ui: OnboardingUIState { container.ui }
 
     // MARK: - Private Accessors (for internal use)
+    private var sessionCoordinator: InterviewSessionCoordinator { container.sessionCoordinator }
     private var lifecycleController: InterviewLifecycleController { container.lifecycleController }
     private var checkpointManager: CheckpointManager { container.checkpointManager }
     private var phaseTransitionController: PhaseTransitionController { container.phaseTransitionController }
@@ -110,6 +111,11 @@ final class OnboardingInterviewCoordinator {
                 self?.ui.modelAvailabilityMessage = message
             }
         )
+
+        // Configure session coordinator with state update subscriber
+        container.sessionCoordinator.setStateUpdateSubscriber { [weak self] in
+            self?.subscribeToStateUpdates()
+        }
 
         Logger.info("🎯 OnboardingInterviewCoordinator initialized with event-driven architecture", category: .ai)
         Task { await subscribeToEvents() }
@@ -258,67 +264,17 @@ final class OnboardingInterviewCoordinator {
         Logger.info("📥 Initial state sync: loaded \(ui.messages.count) messages", category: .ai)
     }
 
-    // MARK: - Interview Lifecycle
+    // MARK: - Interview Lifecycle (Delegated to InterviewSessionCoordinator)
     func startInterview(resumeExisting: Bool = false) async -> Bool {
-        Logger.info("🚀 Starting interview (resume: \(resumeExisting))", category: .ai)
-        var isActuallyResuming = false
-        if resumeExisting {
-            await loadPersistedArtifacts()
-            let didRestore = await checkpointManager.restoreFromCheckpointIfAvailable()
-            if didRestore {
-                isActuallyResuming = true
-                let hasPreviousResponseId = await state.getPreviousResponseId() != nil
-                if hasPreviousResponseId {
-                    Logger.info("✅ Found previousResponseId - will resume conversation context", category: .ai)
-                } else {
-                    Logger.info("⚠️ No previousResponseId - will start fresh conversation", category: .ai)
-                    isActuallyResuming = false
-                }
-            } else {
-                await state.reset()
-                checkpointManager.clearCheckpoints()
-                clearArtifacts()
-                await resetStore()
-            }
-        } else {
-            await state.reset()
-            checkpointManager.clearCheckpoints()
-            clearArtifacts()
-            await resetStore()
-        }
-        if !isActuallyResuming {
-            await state.setPhase(.phase1CoreFacts)
-        }
-        await phaseTransitionController.registerObjectivesForCurrentPhase()
-        subscribeToStateUpdates()
-        await documentArtifactHandler.start()
-        await documentArtifactMessenger.start()
-        let success = await lifecycleController.startInterview(isResuming: isActuallyResuming)
-        if success {
-            ui.isActive = await state.isActive
-            Logger.info("🎛️ Coordinator isActive synced: \(ui.isActive)", category: .ai)
-        }
-        if let orchestrator = lifecycleController.orchestrator {
-            let cfg = ModelProvider.forTask(.orchestrator)
-            await orchestrator.setModelId(ui.preferences.preferredModelId ?? cfg.id)
-        }
-        return true
+        await sessionCoordinator.startInterview(resumeExisting: resumeExisting)
     }
 
     func endInterview() async {
-        await lifecycleController.endInterview()
-        ui.isActive = await state.isActive
-        Logger.info("🎛️ Coordinator isActive synced: \(ui.isActive)", category: .ai)
+        await sessionCoordinator.endInterview()
     }
 
     func restoreFromSpecificCheckpoint(_ checkpoint: OnboardingCheckpoint) async {
-        await loadPersistedArtifacts()
-        let didRestore = await checkpointManager.restoreFromSpecificCheckpoint(checkpoint)
-        if didRestore {
-            Logger.info("✅ Restored from specific checkpoint", category: .ai)
-        } else {
-            Logger.warning("⚠️ Failed to restore from specific checkpoint", category: .ai)
-        }
+        await sessionCoordinator.restoreFromCheckpoint(checkpoint)
     }
 
     // MARK: - Evidence Handling
@@ -604,19 +560,17 @@ final class OnboardingInterviewCoordinator {
         await uiResponseCoordinator.requestCancelLLM()
     }
 
-    // MARK: - Data Store Management (Delegated to DataPersistenceService)
+    // MARK: - Data Store Management (Delegated to InterviewSessionCoordinator)
     func loadPersistedArtifacts() async {
-        await dataPersistenceService.loadPersistedArtifacts()
+        await sessionCoordinator.loadPersistedArtifacts()
     }
 
     func clearArtifacts() {
-        Task {
-            await dataPersistenceService.clearArtifacts()
-        }
+        sessionCoordinator.clearArtifacts()
     }
 
     func resetStore() async {
-        await dataPersistenceService.resetStore()
+        await sessionCoordinator.resetStore()
     }
 
     // MARK: - Utility
