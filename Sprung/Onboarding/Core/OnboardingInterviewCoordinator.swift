@@ -21,26 +21,34 @@ final class OnboardingInterviewCoordinator {
     var ui: OnboardingUIState { container.ui }
 
     // MARK: - Private Accessors (for internal use)
+    // Session & Lifecycle
     private var sessionCoordinator: InterviewSessionCoordinator { container.sessionCoordinator }
-    private var artifactQueryCoordinator: ArtifactQueryCoordinator { container.artifactQueryCoordinator }
-    private var uiStateUpdateHandler: UIStateUpdateHandler { container.uiStateUpdateHandler }
     private var lifecycleController: InterviewLifecycleController { container.lifecycleController }
-    private var checkpointManager: CheckpointManager { container.checkpointManager }
+
+    // Query Coordinators
+    private var artifactQueryCoordinator: ArtifactQueryCoordinator { container.artifactQueryCoordinator }
+
+    // UI State
+    private var uiStateUpdateHandler: UIStateUpdateHandler { container.uiStateUpdateHandler }
+    private var uiResponseCoordinator: UIResponseCoordinator { container.uiResponseCoordinator }
+    private var coordinatorEventRouter: CoordinatorEventRouter { container.coordinatorEventRouter! }
+
+    // Phase & Objective Management
     private var phaseTransitionController: PhaseTransitionController { container.phaseTransitionController }
+
+    // Services
     private var extractionManagementService: ExtractionManagementService { container.extractionManagementService }
     private var timelineManagementService: TimelineManagementService { container.timelineManagementService }
-    private var dataPersistenceService: DataPersistenceService { container.dataPersistenceService }
     private var ingestionCoordinator: IngestionCoordinator { container.ingestionCoordinator }
-    private var documentArtifactHandler: DocumentArtifactHandler { container.documentArtifactHandler }
-    private var documentArtifactMessenger: DocumentArtifactMessenger { container.documentArtifactMessenger }
     private var profilePersistenceHandler: ProfilePersistenceHandler { container.profilePersistenceHandler }
-    private var uiResponseCoordinator: UIResponseCoordinator { container.uiResponseCoordinator }
+
+    // Tool Interaction
     private var toolInteractionCoordinator: ToolInteractionCoordinator { container.toolInteractionCoordinator! }
-    private var coordinatorEventRouter: CoordinatorEventRouter { container.coordinatorEventRouter! }
-    private var toolRegistrar: OnboardingToolRegistrar { container.toolRegistrar! }
+
+    // Debug/Reset only
+    #if DEBUG
     private var applicantProfileStore: ApplicantProfileStore { container.getApplicantProfileStore() }
-    private var dataStore: InterviewDataStore { container.getDataStore() }
-    private var documentExtractionService: DocumentExtractionService { container.documentExtractionService }
+    #endif
 
     // MARK: - Computed Properties (Read from StateCoordinator)
     var currentPhase: InterviewPhase {
