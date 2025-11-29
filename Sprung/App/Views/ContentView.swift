@@ -164,12 +164,10 @@ struct ContentView: View {
         }
         // Environment objects (like DragInfo) are inherited from ContentViewLaunch
     }
-
     // MARK: - Helper Methods
     private func openTemplateEditor() {
         presentTemplateEditorWindow()
     }
-
     func updateMyLetter() {
         if let selectedApp = jobAppStore.selectedApp {
             // Determine or create the cover letter

@@ -208,7 +208,6 @@ extension Statuses {
         resumes = []
     }
     func replaceUUIDsWithLetterNames(in text: String) -> String {
-
         var result = text
         for letter in self.coverLetters {
             let uuidString = letter.id.uuidString

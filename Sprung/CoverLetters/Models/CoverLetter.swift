@@ -37,7 +37,6 @@ struct LetterAnalysis: Codable {
 class CoverLetter: Identifiable, Hashable {
     var jobApp: JobApp?
     @Attribute(.unique) var id: UUID = UUID() // Explicit id field
-
     var createdDate: Date = Date()
     var moddedDate: Date = Date()
     // Editable name of the cover letter, shown in pickers and exports.
@@ -51,19 +50,14 @@ class CoverLetter: Identifiable, Hashable {
     var encodedEnabledRefs: Data? // Store as Data
     var currentMode: CoverAiMode? = CoverAiMode.none
     var editorPrompt: CoverLetterPrompts.EditorPrompts = CoverLetterPrompts.EditorPrompts.zinsser
-
     /// Indicates this is the chosen submission draft (star indicator)
     var isChosenSubmissionDraft: Bool = false
-
     /// Multi-model assessment data (stored as encoded data to avoid schema changes)
     var encodedAssessmentData: Data? // Stores AssessmentData as JSON
-
     /// Committee feedback summary (stored as encoded data)
     var encodedCommitteeFeedback: Data? // Stores CommitteeFeedbackSummary as JSON
-
     /// Generation metadata: sources used at time of generation (stored as encoded data)
     var encodedGenerationSources: Data? // Stores [CoverRef] as JSON
-
     /// Generation metadata: resume background state at time of generation
     var generationUsedResumeRefs: Bool = false
     var modDate: String {
@@ -81,7 +75,6 @@ class CoverLetter: Identifiable, Hashable {
             encodedEnabledRefs = try? JSONEncoder().encode(newValue)
         }
     }
-
     /// Multi-model assessment data computed properties
     var assessmentData: AssessmentData {
         get {
@@ -103,7 +96,6 @@ class CoverLetter: Identifiable, Hashable {
             }
         }
     }
-
     var voteCount: Int {
         get { assessmentData.voteCount }
         set {
@@ -112,7 +104,6 @@ class CoverLetter: Identifiable, Hashable {
             assessmentData = data
         }
     }
-
     var scoreCount: Int {
         get { assessmentData.scoreCount }
         set {
@@ -121,7 +112,6 @@ class CoverLetter: Identifiable, Hashable {
             assessmentData = data
         }
     }
-
     var hasBeenAssessed: Bool {
         get { assessmentData.hasBeenAssessed }
         set {
@@ -130,7 +120,6 @@ class CoverLetter: Identifiable, Hashable {
             assessmentData = data
         }
     }
-
     /// Committee feedback summary computed properties
     var committeeFeedback: CommitteeFeedbackSummary? {
         get {
@@ -152,7 +141,6 @@ class CoverLetter: Identifiable, Hashable {
             }
         }
     }
-
     /// Generation sources computed properties (read-only snapshot of sources at generation time)
     var generationSources: [CoverRef] {
         get {
@@ -279,16 +267,13 @@ class CoverLetter: Identifiable, Hashable {
             name = newContent
         }
     }
-
     /// Marks this cover letter as the chosen submission draft, clearing the flag from all others
     func markAsChosenSubmissionDraft() {
         guard let jobApp = jobApp else { return }
-
         // Clear the flag from all other cover letters for this job
         for letter in jobApp.coverLetters where letter.id != self.id {
             letter.isChosenSubmissionDraft = false
         }
-
         // Set this one as chosen
         self.isChosenSubmissionDraft = true
     }
@@ -298,7 +283,6 @@ class MessageParams: Identifiable, Codable {
     var id: String = UUID().uuidString
     var content: String
     var role: MessageRole
-
     // Manual Codable implementation
     enum CodingKeys: String, CodingKey {
         case id

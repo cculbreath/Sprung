@@ -7,12 +7,10 @@
 import Foundation
 struct PhaseTwoScript: PhaseScript {
     let phase: InterviewPhase = .phase2DeepDive
-
     let requiredObjectives: [String] = OnboardingObjectiveId.rawValues([
         .evidenceAuditCompleted,
         .cardsGenerated
     ])
-
     let allowedTools: [String] = OnboardingToolName.rawValues([
         .getUserOption,
         .requestEvidence,

@@ -174,7 +174,6 @@ struct RichTextView: View {
             }
             attributedString.append(part)
         }
-
         return Text(attributedString)
             .foregroundColor(.primary)
     }

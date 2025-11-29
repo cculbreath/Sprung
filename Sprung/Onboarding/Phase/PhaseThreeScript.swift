@@ -7,12 +7,10 @@
 import Foundation
 struct PhaseThreeScript: PhaseScript {
     let phase: InterviewPhase = .phase3WritingCorpus
-
     let requiredObjectives: [String] = OnboardingObjectiveId.rawValues([
         .oneWritingSample,
         .dossierComplete
     ])
-
     let allowedTools: [String] = OnboardingToolName.rawValues([
         .getUserOption,
         .getUserUpload,

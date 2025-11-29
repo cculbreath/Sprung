@@ -77,11 +77,9 @@ struct TemplateEditorView: View {
     @StateObject private var pdfController = PDFPreviewController()
     @State var templatePendingDeletion: String?
     @State var showRevertConfirmation: Bool = false
-
     private var textFilterReference: [TextFilterInfo] {
         TemplateTextFilters.reference
     }
-
     var selectedResume: Resume? {
         navigationState.selectedResume
     }
@@ -140,7 +138,6 @@ struct TemplateEditorView: View {
             NSApp.sendAction(#selector(AppDelegate.showExperienceEditorWindow), to: nil, from: nil)
         }
     }
-
     private var resumeTemplateIdentifier: String? {
         guard let resume = selectedResume else { return nil }
         if let slug = resume.template?.slug, !slug.isEmpty {
@@ -151,7 +148,6 @@ struct TemplateEditorView: View {
         }
         return nil
     }
-
     private var hasAnyUnsavedChanges: Bool {
         htmlHasChanges || textHasChanges || manifestHasChanges || seedHasChanges
     }

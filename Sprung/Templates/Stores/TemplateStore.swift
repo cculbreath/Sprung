@@ -102,7 +102,6 @@ final class TemplateStore {
         template.updatedAt = Date()
         try context.save()
     }
-
     func deleteTemplate(slug: String) {
         guard let template = template(slug: slug) else { return }
         let wasDefault = template.isDefault

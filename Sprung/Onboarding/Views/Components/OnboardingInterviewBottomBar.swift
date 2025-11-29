@@ -21,14 +21,12 @@ struct OnboardingInterviewBottomBar: View {
                 }
                 .buttonBorderShape(.capsule)
                 .buttonStyle(.glass)
-
             }
             Button("Cancel") {
                 onCancel()
             }
             .buttonStyle(.glass)
             .buttonBorderShape(.capsule)
-
             Button(continueTitle) {
                 onContinue()
             }

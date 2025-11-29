@@ -1,6 +1,5 @@
 import Foundation
 import SwiftyJSON
-
 /// Handles UI state updates in response to events.
 /// Consolidates event handlers that update @Observable UI state.
 @MainActor
@@ -10,7 +9,6 @@ final class UIStateUpdateHandler {
     private let state: StateCoordinator
     private let wizardTracker: WizardProgressTracker
     private let checkpointManager: CheckpointManager
-
     // MARK: - Initialization
     init(
         ui: OnboardingUIState,
@@ -23,9 +21,7 @@ final class UIStateUpdateHandler {
         self.wizardTracker = wizardTracker
         self.checkpointManager = checkpointManager
     }
-
     // MARK: - State Update Handlers
-
     /// Build handlers for lifecycle controller subscription.
     func buildStateUpdateHandlers() -> StateUpdateHandlers {
         StateUpdateHandlers(
@@ -46,9 +42,7 @@ final class UIStateUpdateHandler {
             }
         )
     }
-
     // MARK: - Processing Events
-
     func handleProcessingEvent(_ event: OnboardingEvent) async {
         switch event {
         case .processingStateChanged(let isProcessing, let statusMessage):
@@ -75,9 +69,7 @@ final class UIStateUpdateHandler {
             break
         }
     }
-
     // MARK: - Artifact Events
-
     func handleArtifactEvent(_ event: OnboardingEvent) async {
         switch event {
         case .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted,
@@ -88,9 +80,7 @@ final class UIStateUpdateHandler {
             break
         }
     }
-
     // MARK: - LLM Events
-
     func handleLLMEvent(_ event: OnboardingEvent) async {
         switch event {
         case .llmStatus:
@@ -118,9 +108,7 @@ final class UIStateUpdateHandler {
             break
         }
     }
-
     // MARK: - State Sync Events
-
     func handleStateSyncEvent(_ event: OnboardingEvent) async {
         switch event {
         case .stateSnapshot, .stateAllowedToolsUpdated:
@@ -131,14 +119,11 @@ final class UIStateUpdateHandler {
             break
         }
     }
-
     // MARK: - Wizard Progress Synchronization
-
     func syncWizardProgressFromState() async {
         let step = await state.currentWizardStep
         let completed = await state.completedWizardSteps
         ui.updateWizardProgress(step: step, completed: completed)
-
         // Sync WizardTracker for View binding
         if let trackerStep = OnboardingWizardStep(rawValue: step.rawValue) {
             let trackerCompleted = Set(completed.compactMap { OnboardingWizardStep(rawValue: $0.rawValue) })
@@ -147,9 +132,7 @@ final class UIStateUpdateHandler {
             }
         }
     }
-
     // MARK: - Initial State Sync
-
     func initialStateSync() async {
         await syncWizardProgressFromState()
         ui.messages = await state.messages

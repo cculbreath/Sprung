@@ -38,7 +38,6 @@ actor StateCoordinator: OnboardingEventEmitter {
     private(set) var completedWizardSteps: Set<WizardStep> = []
     // MARK: - Stream Queue (Delegated to StreamQueueManager)
     // StreamQueueManager handles serial LLM streaming and parallel tool call batching
-
     // MARK: - LLM State (Delegated to LLMStateManager)
     // LLMStateManager handles tool names, response IDs, model config, and tool pane cards
     // MARK: - State Accessors
@@ -97,15 +96,12 @@ actor StateCoordinator: OnboardingEventEmitter {
         let hasProfile = await objectiveStore.getObjectiveStatus("applicant_profile") == .completed
         let hasTimeline = await objectiveStore.getObjectiveStatus("skeleton_timeline") == .completed
         let hasSections = await objectiveStore.getObjectiveStatus("enabled_sections") == .completed
-
         // Phase 2 objectives (updated for evidence-based flow)
         let hasEvidenceAudit = await objectiveStore.getObjectiveStatus("evidence_audit_completed") == .completed
         let hasCardsGenerated = await objectiveStore.getObjectiveStatus("cards_generated") == .completed
-
         // Phase 3 objectives
         let hasWriting = await objectiveStore.getObjectiveStatus("one_writing_sample") == .completed
         let hasDossier = await objectiveStore.getObjectiveStatus("dossier_complete") == .completed
-
         // Start from introduction
         if currentWizardStep == .introduction {
             let allObjectives = await objectiveStore.getAllObjectives()
@@ -383,39 +379,32 @@ actor StateCoordinator: OnboardingEventEmitter {
         }
     }
     // MARK: - Stream Queue Management (Delegated to StreamQueueManager)
-
     /// Mark stream as completed - emits event to ensure proper ordering with pending tool calls
     /// This method should be called by LLMMessenger when a stream finishes
     func markStreamCompleted() async {
         await streamQueueManager.markStreamCompleted()
     }
-
     /// Check if this is the first response (for toolChoice logic)
     func getHasStreamedFirstResponse() async -> Bool {
         await streamQueueManager.getHasStreamedFirstResponse()
     }
     // MARK: - LLM State Accessors (Delegated to LLMStateManager)
-
     /// Get allowed tool names
     func getAllowedToolNames() async -> Set<String> {
         await llmStateManager.getAllowedToolNames()
     }
-
     /// Update conversation state (called by LLMMessenger when response completes)
     func updateConversationState(responseId: String) async {
         await llmStateManager.updateConversationState(responseId: responseId)
     }
-
     /// Get last response ID
     func getLastResponseId() async -> String? {
         await llmStateManager.getLastResponseId()
     }
-
     /// Set model ID
     func setModelId(_ modelId: String) async {
         await llmStateManager.setModelId(modelId)
     }
-
     /// Get current model ID
     func getCurrentModelId() async -> String {
         await llmStateManager.getCurrentModelId()
@@ -541,7 +530,6 @@ actor StateCoordinator: OnboardingEventEmitter {
         await llmStateManager.reset()
         Logger.info("🔄 StateCoordinator reset (all services reset)", category: .ai)
     }
-
     // MARK: - ToolPane Card Tracking (Delegated to LLMStateManager)
     func setToolPaneCard(_ card: OnboardingToolPaneCard) async {
         await llmStateManager.setToolPaneCard(card)

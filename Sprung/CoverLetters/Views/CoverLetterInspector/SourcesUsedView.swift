@@ -7,14 +7,12 @@
 import SwiftUI
 struct SourcesUsedView: View {
     let coverLetter: CoverLetter
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Sources Used")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(.secondary)
                 .textCase(.uppercase)
-
             VStack(alignment: .leading, spacing: 12) {
                 // Resume background toggle status
                 let usedResumeRefs = coverLetter.generated ? coverLetter.generationUsedResumeRefs : coverLetter.includeResumeRefs
@@ -27,7 +25,6 @@ struct SourcesUsedView: View {
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.primary)
                 }
-
                 // Background facts
                 let sourcesToShow = coverLetter.generated ? coverLetter.generationSources : coverLetter.enabledRefs
                 let backgroundFacts = sourcesToShow.filter { $0.type == .backgroundFact }
@@ -41,7 +38,6 @@ struct SourcesUsedView: View {
                                 .font(.system(size: 10))
                                 .foregroundColor(.secondary)
                         }
-
                         VStack(alignment: .leading, spacing: 4) {
                             ForEach(backgroundFacts, id: \.id) { ref in
                                 HStack(alignment: .top, spacing: 8) {
@@ -50,12 +46,10 @@ struct SourcesUsedView: View {
                                         .frame(width: 4, height: 4)
                                         .padding(.top, 5)
                                         .glassEffect(.regular.tint(.blue), in: .circle)
-
                                     Text(ref.name)
                                         .font(.system(size: 10))
                                         .foregroundColor(.secondary)
                                         .fixedSize(horizontal: false, vertical: true)
-
                                     Spacer(minLength: 0)
                                 }
                             }
@@ -63,7 +57,6 @@ struct SourcesUsedView: View {
                         .padding(.leading, 8)
                     }
                 }
-
                 // Writing samples
                 let writingSamples = sourcesToShow.filter { $0.type == .writingSample }
                 if !writingSamples.isEmpty {
@@ -76,7 +69,6 @@ struct SourcesUsedView: View {
                                 .font(.system(size: 10))
                                 .foregroundColor(.secondary)
                         }
-
                         VStack(alignment: .leading, spacing: 4) {
                             ForEach(writingSamples, id: \.id) { ref in
                                 HStack(alignment: .top, spacing: 8) {
@@ -85,12 +77,10 @@ struct SourcesUsedView: View {
                                         .frame(width: 4, height: 4)
                                         .padding(.top, 5)
                                         .glassEffect(.regular.tint(.purple), in: .circle)
-
                                     Text(ref.name)
                                         .font(.system(size: 10))
                                         .foregroundColor(.secondary)
                                         .fixedSize(horizontal: false, vertical: true)
-
                                     Spacer(minLength: 0)
                                 }
                             }
@@ -98,7 +88,6 @@ struct SourcesUsedView: View {
                         .padding(.leading, 8)
                     }
                 }
-
                 if backgroundFacts.isEmpty && writingSamples.isEmpty && !usedResumeRefs {
                     Text("No additional sources used")
                         .font(.system(size: 10))

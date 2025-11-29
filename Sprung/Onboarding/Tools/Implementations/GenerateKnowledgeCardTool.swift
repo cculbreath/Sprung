@@ -59,19 +59,15 @@ struct GenerateKnowledgeCardTool: InterviewTool {
                 // In background mode, we return a draft event via the agent's internal mechanism (or just return the draft here marked as background)
                 // Ideally, the caller (IngestionCoordinator) handles the async nature.
                 // But if this tool is called by LLM, we want to return "Processing started".
-
                 // For now, we'll return the draft but with a status indicating it's a background draft
                 // The caller (LLM) will see "Draft created" but won't need to validate immediately if it's part of a batch.
-
                 var response = JSON()
                 response["status"] = JSON("processing_started")
                 response["draft_id"] = JSON(draft.id.uuidString)
                 response["message"] = JSON("Knowledge card generation started in background.")
-
                 // We should emit the event here so the system knows about the draft
                 // But this tool doesn't have access to the event bus directly, only via the return value or if we inject it.
                 // The KnowledgeCardAgent is just a generator.
-
                 // Let's return the draft content but wrap it so the system can handle it.
                 return .immediate(response)
             } else {

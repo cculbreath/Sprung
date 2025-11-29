@@ -4,12 +4,10 @@ import SwiftData
 @Model
 class Resume: Identifiable, Hashable {
     @Attribute(.unique) var id: UUID = UUID()
-
     var needToTree: Bool = true
     var needToFont: Bool = true
     @Relationship(deleteRule: .cascade)
     var rootNode: TreeNode? // The top-level node
-
     @Relationship(deleteRule: .cascade, inverse: \FontSizeNode.resume)
     var fontSizeNodes: [FontSizeNode] = []
     var includeFonts: Bool = false
@@ -106,7 +104,6 @@ class Resume: Identifiable, Hashable {
             return [[:]]
         }
     }
-
     /// Returns true if there are any nodes marked for AI replacement (aiToReplace status)
     var hasUpdatableNodes: Bool {
         guard let rootNode = rootNode else { return false }

@@ -88,6 +88,5 @@ struct TimelineCard: Identifiable, Equatable {
         return payload
     }
 }
-
 // MARK: - Codable Conformance
 extension TimelineCard: Codable {}

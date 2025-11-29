@@ -40,7 +40,6 @@ class BatchCoverLetterGenerator {
             temperature: nil
         )
     }
-
     /// Generates cover letters in batch for multiple models and revisions
     /// - Parameters:
     ///   - baseCoverLetter: The base cover letter to use as template
@@ -60,34 +59,26 @@ class BatchCoverLetterGenerator {
     ) async throws {
         // Clean up any existing ungenerated drafts before starting
         cleanupUngeneratedDrafts()
-
         // Additional safety: Ensure we're starting with a clean state
         Logger.info("🚀 Starting batch generation with \(models.count) models and \(revisions.count) revisions")
-
         // Calculate total operations
         let baseGenerations = models.count
         let revisionOperations = models.count * revisions.count
         let totalOperations = baseGenerations + revisionOperations
-
         // Use actor for thread-safe progress tracking
         actor ProgressTracker {
             private var _completedOperations = 0
-
             func increment() -> Int {
                 _completedOperations += 1
                 return _completedOperations
             }
-
             func get() -> Int {
                 return _completedOperations
             }
         }
-
         let progressTracker = ProgressTracker()
-
         // Store generated base letters for revision
         var generatedBaseLetters: [CoverLetter] = []
-
         // Phase 1: Generate base cover letters in parallel
         await withTaskGroup(of: GenerationResult.self) { group in
             for model in models {
@@ -95,7 +86,6 @@ class BatchCoverLetterGenerator {
                     guard let self = self else {
                         return GenerationResult(success: false, error: "Self was deallocated")
                     }
-
                     do {
                         let coverLetter = try await self.generateSingleCoverLetter(
                             baseCoverLetter: baseCoverLetter,
@@ -104,7 +94,6 @@ class BatchCoverLetterGenerator {
                             model: model,
                             revision: nil
                         )
-
                         return GenerationResult(success: true, model: model, generatedLetter: coverLetter)
                     } catch {
                         Logger.error("🚨 Failed to generate base cover letter for model \(model): \(error)")
@@ -112,12 +101,10 @@ class BatchCoverLetterGenerator {
                     }
                 }
             }
-
             // Collect base generation results
             for await result in group {
                 let completed = await progressTracker.increment()
                 await onProgress(completed, totalOperations)
-
                 if result.success, let letter = result.generatedLetter {
                     generatedBaseLetters.append(letter)
                 } else {
@@ -125,7 +112,6 @@ class BatchCoverLetterGenerator {
                 }
             }
         }
-
         // Phase 2: Generate revisions in parallel (only if we have base letters and revisions are requested)
         if !revisions.isEmpty && !generatedBaseLetters.isEmpty {
             await withTaskGroup(of: GenerationResult.self) { group in
@@ -135,7 +121,6 @@ class BatchCoverLetterGenerator {
                             guard let self = self else {
                                 return GenerationResult(success: false, error: "Self was deallocated")
                             }
-
                             do {
                                 // Handle "same as generating model" option
                                 let modelToUseForRevisions: String
@@ -144,12 +129,10 @@ class BatchCoverLetterGenerator {
                                 } else {
                                     modelToUseForRevisions = revisionModel
                                 }
-
                                 // Validate we have a model
                                 guard !modelToUseForRevisions.isEmpty else {
                                     throw NSError(domain: "BatchGeneration", code: 2, userInfo: [NSLocalizedDescriptionKey: "No model specified for revision"])
                                 }
-
                                 _ = try await self.generateSingleCoverLetter(
                                     baseCoverLetter: baseLetter,
                                     jobApp: jobApp,
@@ -157,7 +140,6 @@ class BatchCoverLetterGenerator {
                                     model: modelToUseForRevisions,
                                     revision: revision
                                 )
-
                                 return GenerationResult(success: true, model: modelToUseForRevisions)
                             } catch {
                                 Logger.error("🚨 Failed to generate revision \(revision.rawValue) for base letter \(baseLetter.name): \(error)")
@@ -166,23 +148,19 @@ class BatchCoverLetterGenerator {
                         }
                     }
                 }
-
                 // Collect revision results
                 for await result in group {
                     let completed = await progressTracker.increment()
                     await onProgress(completed, totalOperations)
-
                     if !result.success {
                         Logger.error("🚨 Revision generation failed: \(result.error ?? "Unknown error")")
                     }
                 }
             }
         }
-
         // Final cleanup: Remove any empty letters that might have been created during failed generations
         emergencyCleanup(for: jobApp)
     }
-
     /// Generates revisions for existing cover letters
     /// - Parameters:
     ///   - existingLetters: Array of existing cover letters to revise
@@ -199,19 +177,15 @@ class BatchCoverLetterGenerator {
     ) async throws {
         // Calculate total operations
         let totalOperations = existingLetters.count * revisions.count
-
         // Use actor for thread-safe progress tracking
         actor ProgressTracker {
             private var _completedOperations = 0
-
             func increment() -> Int {
                 _completedOperations += 1
                 return _completedOperations
             }
         }
-
         let progressTracker = ProgressTracker()
-
         // Create task group for parallel execution
         await withTaskGroup(of: GenerationResult.self) { group in
             // For each existing letter
@@ -222,7 +196,6 @@ class BatchCoverLetterGenerator {
                         guard let self = self else {
                             return GenerationResult(success: false, error: "Self was deallocated")
                         }
-
                         do {
                             // Handle "same as generating model" option
                             let modelToUse: String
@@ -231,12 +204,10 @@ class BatchCoverLetterGenerator {
                             } else {
                                 modelToUse = revisionModel
                             }
-
                             // Get the jobApp from the existing letter
                             guard let jobApp = letter.jobApp else {
                                 throw NSError(domain: "BatchGeneration", code: 4, userInfo: [NSLocalizedDescriptionKey: "Existing letter must have an associated job application"])
                             }
-
                             _ = try await self.generateSingleCoverLetter(
                                 baseCoverLetter: letter,
                                 jobApp: jobApp,
@@ -244,7 +215,6 @@ class BatchCoverLetterGenerator {
                                 model: modelToUse,
                                 revision: revision
                             )
-
                             return GenerationResult(success: true, model: modelToUse)
                         } catch {
                             return GenerationResult(success: false, model: revisionModel, error: error.localizedDescription)
@@ -252,19 +222,16 @@ class BatchCoverLetterGenerator {
                     }
                 }
             }
-
             // Collect results and update progress
             for await result in group {
                 let completed = await progressTracker.increment()
                 await onProgress(completed, totalOperations)
-
                 if !result.success {
                     Logger.error("🚨 Revision generation failed for model \(result.model ?? "unknown"): \(result.error ?? "Unknown error")")
                 }
             }
         }
     }
-
     /// Generates a single cover letter with specified model
     @MainActor
     private func generateSingleCoverLetter(
@@ -276,9 +243,7 @@ class BatchCoverLetterGenerator {
     ) async throws -> CoverLetter {
         // Debug: Verify jobApp parameter is provided
         Logger.debug("🔍 generateSingleCoverLetter called with jobApp: \(jobApp.id.uuidString)")
-
         let applicantProfile = applicantProfileStore.currentProfile()
-
         // Prepare name for the letter (will be used after successful generation)
         let modelName = AIModels.friendlyModelName(for: model) ?? model
         let letterName: String
@@ -293,7 +258,6 @@ class BatchCoverLetterGenerator {
             }
             letterName = baseName
         }
-
         // Set up mode
         let mode: CoverAiMode = revision != nil ? .rewrite : .generate
         // Generate content using direct LLM calls (no temporary CoverLetter objects)
@@ -310,12 +274,10 @@ class BatchCoverLetterGenerator {
                 applicantProfile: applicantProfile,
                 saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
             )
-
             let userMessage = await query.revisionPrompt(
                 feedback: "",
                 editorPrompt: revision
             )
-
             // Check if we have an existing conversation for revisions
             if let conversationId = coverLetterService.conversations[baseCoverLetter.id] {
                 responseText = try await continueConversation(
@@ -343,13 +305,11 @@ class BatchCoverLetterGenerator {
                 applicantProfile: applicantProfile,
                 saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
             )
-
             let systemPrompt = query.systemPrompt(for: model)
             let userMessage = await query.generationPrompt(includeResumeRefs: baseCoverLetter.includeResumeRefs)
             // Check if this is an o1 model that doesn't support system messages
             let isO1Model = coverLetterService.isReasoningModel(model)
             usesReasoningModelForNewLetter = isO1Model
-
             if isO1Model {
                 let combinedMessage = systemPrompt + "\n\n" + userMessage
                 responseText = try await executeText(combinedMessage, modelId: model)
@@ -365,12 +325,10 @@ class BatchCoverLetterGenerator {
         }
         // Extract cover letter content from response
         let content = coverLetterService.extractCoverLetterContent(from: responseText)
-
         // Validate that the content is not empty
         guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw NSError(domain: "BatchGeneration", code: 1, userInfo: [NSLocalizedDescriptionKey: "Empty response from AI model"])
         }
-
         // Now create the actual letter object that will be persisted
         let newLetter = CoverLetter(
             enabledRefs: baseCoverLetter.enabledRefs,
@@ -383,7 +341,6 @@ class BatchCoverLetterGenerator {
         newLetter.generationModel = model
         newLetter.currentMode = mode
         newLetter.editorPrompt = revision ?? CoverLetterPrompts.EditorPrompts.zinsser
-
         // Store generation metadata - for revisions, preserve original generation sources
         if revision != nil {
             newLetter.generationSources = baseCoverLetter.generationSources.isEmpty ? baseCoverLetter.enabledRefs : baseCoverLetter.generationSources
@@ -392,43 +349,34 @@ class BatchCoverLetterGenerator {
             newLetter.generationSources = baseCoverLetter.enabledRefs
             newLetter.generationUsedResumeRefs = baseCoverLetter.includeResumeRefs
         }
-
         // Set the final name - always use "Option X" format for consistency
         let nextOptionLetter = newLetter.getNextOptionLetter()
         newLetter.name = "Option \(nextOptionLetter): \(letterName)"
-
         // Only persist the letter if generation was successful and content is not empty
         guard !newLetter.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             Logger.error("🚨 Not persisting cover letter with empty content for model: \(model)")
             throw NSError(domain: "BatchGeneration", code: 5, userInfo: [NSLocalizedDescriptionKey: "Generated content was empty, letter not persisted"])
         }
-
         // Persist the letter after it's fully populated
         // Note: jobApp is guaranteed to exist due to guard statement above
         coverLetterStore.addLetter(letter: newLetter, to: jobApp)
         if let conversationIdForNewLetter, !usesReasoningModelForNewLetter {
             coverLetterService.conversations[newLetter.id] = conversationIdForNewLetter
         }
-
         Logger.debug("📝 Created cover letter: \(newLetter.name) for model: \(model)")
-
         return newLetter
     }
-
     // REMOVED: generateRevisions method is no longer needed as revision generation
     // is now handled inline with proper progress tracking
-
     /// Cleans up any ungenerated draft letters in the store
     func cleanupUngeneratedDrafts() {
         coverLetterStore.deleteUngeneratedDrafts()
     }
-
     /// Emergency cleanup - deletes any cover letters with empty content that might have been created during failed generations
     func emergencyCleanup(for jobApp: JobApp) {
         let emptyLetters = jobApp.coverLetters.filter { letter in
             letter.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !letter.generated
         }
-
         for letter in emptyLetters {
             Logger.warning("🧹 Emergency cleanup: Removing empty cover letter: \(letter.sequencedName)")
             coverLetterStore.deleteLetter(letter)
@@ -441,7 +389,6 @@ private struct GenerationResult {
     let model: String?
     let error: String?
     let generatedLetter: CoverLetter?
-
     init(success: Bool, model: String? = nil, error: String? = nil, generatedLetter: CoverLetter? = nil) {
         self.success = success
         self.model = model

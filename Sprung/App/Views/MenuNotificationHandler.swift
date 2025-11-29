@@ -19,9 +19,7 @@ class MenuNotificationHandler {
     private var selectedTab: Binding<TabList>?
     private var showSlidingList: Binding<Bool>?
     private var observersConfigured = false
-
     init() {}
-
     /// Setup the handler with required dependencies
     func configure(
         jobAppStore: JobAppStore,
@@ -44,7 +42,6 @@ class MenuNotificationHandler {
         Logger.debug("✅ MenuNotificationHandler registering NotificationCenter observers", category: .ui)
         setupNotificationObservers()
     }
-
     private func setupNotificationObservers() {
         // Job Application Commands
         NotificationCenter.default.addObserver(
@@ -54,7 +51,6 @@ class MenuNotificationHandler {
         ) { [weak self] _ in
             self?.sheets?.wrappedValue.showNewJobApp = true
         }
-
         NotificationCenter.default.addObserver(
             forName: .bestJob,
             object: nil,
@@ -64,7 +60,6 @@ class MenuNotificationHandler {
                 self?.handleBestJob()
             }
         }
-
         NotificationCenter.default.addObserver(
             forName: .showSources,
             object: nil,
@@ -75,7 +70,6 @@ class MenuNotificationHandler {
                 showSlidingList.wrappedValue.toggle()
             }
         }
-
         // Resume Commands
         NotificationCenter.default.addObserver(
             forName: .customizeResume,
@@ -87,7 +81,6 @@ class MenuNotificationHandler {
                 self?.handleCustomizeResume()
             }
         }
-
         NotificationCenter.default.addObserver(
             forName: .clarifyCustomize,
             object: nil,
@@ -98,7 +91,6 @@ class MenuNotificationHandler {
                 self?.handleClarifyCustomize()
             }
         }
-
         NotificationCenter.default.addObserver(
             forName: .optimizeResume,
             object: nil,
@@ -106,7 +98,6 @@ class MenuNotificationHandler {
         ) { [weak self] _ in
             self?.sheets?.wrappedValue.showResumeReview = true
         }
-
         NotificationCenter.default.addObserver(
             forName: .showResumeInspector,
             object: nil,
@@ -115,7 +106,6 @@ class MenuNotificationHandler {
             self?.selectedTab?.wrappedValue = .resume
             self?.sheets?.wrappedValue.showResumeInspector.toggle()
         }
-
         // Cover Letter Commands
         NotificationCenter.default.addObserver(
             forName: .generateCoverLetter,
@@ -126,7 +116,6 @@ class MenuNotificationHandler {
                 self?.handleGenerateCoverLetter()
             }
         }
-
         NotificationCenter.default.addObserver(
             forName: .reviseCoverLetter,
             object: nil,
@@ -136,7 +125,6 @@ class MenuNotificationHandler {
                 self?.handleReviseCoverLetter()
             }
         }
-
         NotificationCenter.default.addObserver(
             forName: .batchCoverLetter,
             object: nil,
@@ -144,7 +132,6 @@ class MenuNotificationHandler {
         ) { [weak self] _ in
             self?.sheets?.wrappedValue.showBatchCoverLetter = true
         }
-
         NotificationCenter.default.addObserver(
             forName: .bestCoverLetter,
             object: nil,
@@ -154,7 +141,6 @@ class MenuNotificationHandler {
                 self?.handleBestCoverLetter()
             }
         }
-
         NotificationCenter.default.addObserver(
             forName: .committee,
             object: nil,
@@ -162,7 +148,6 @@ class MenuNotificationHandler {
         ) { [weak self] _ in
             self?.sheets?.wrappedValue.showMultiModelChooseBest = true
         }
-
         NotificationCenter.default.addObserver(
             forName: .showCoverLetterInspector,
             object: nil,
@@ -171,7 +156,6 @@ class MenuNotificationHandler {
             self?.selectedTab?.wrappedValue = .coverLetter
             self?.sheets?.wrappedValue.showCoverLetterInspector.toggle()
         }
-
         // Analysis Commands
         NotificationCenter.default.addObserver(
             forName: .analyzeApplication,
@@ -180,7 +164,6 @@ class MenuNotificationHandler {
         ) { [weak self] _ in
             self?.sheets?.wrappedValue.showApplicationReview = true
         }
-
         // Text-to-Speech Commands
         NotificationCenter.default.addObserver(
             forName: .startSpeaking,
@@ -191,7 +174,6 @@ class MenuNotificationHandler {
                 self?.handleStartSpeaking()
             }
         }
-
         NotificationCenter.default.addObserver(
             forName: .stopSpeaking,
             object: nil,
@@ -201,7 +183,6 @@ class MenuNotificationHandler {
                 self?.handleStopSpeaking()
             }
         }
-
         NotificationCenter.default.addObserver(
             forName: .restartSpeaking,
             object: nil,
@@ -211,7 +192,6 @@ class MenuNotificationHandler {
                 self?.handleRestartSpeaking()
             }
         }
-
         // Window Commands (toolbar buttons that delegate to existing menu commands)
         NotificationCenter.default.addObserver(
             forName: .showSettings,
@@ -225,7 +205,6 @@ class MenuNotificationHandler {
                 }
             }
         }
-
         NotificationCenter.default.addObserver(
             forName: .showApplicantProfile,
             object: nil,
@@ -236,7 +215,6 @@ class MenuNotificationHandler {
                 appDelegate.showApplicantProfileWindow()
             }
         }
-
         NotificationCenter.default.addObserver(
             forName: .showTemplateEditor,
             object: nil,
@@ -270,16 +248,13 @@ class MenuNotificationHandler {
             }
         }
     }
-
     // MARK: - Menu Action Handlers
     // These handlers directly trigger the same UI state changes that the toolbar buttons do
-
     @MainActor
     private func handleBestJob() {
         // Trigger the same action as the BestJobButton in the toolbar
         NotificationCenter.default.post(name: .triggerBestJobButton, object: nil)
     }
-
     @MainActor
     private func handleCustomizeResume() {
         // Switch to resume tab first (same as toolbar button does)
@@ -287,7 +262,6 @@ class MenuNotificationHandler {
         // Trigger the same action as ResumeCustomizeButton
         NotificationCenter.default.post(name: .triggerCustomizeButton, object: nil)
     }
-
     @MainActor
     private func handleClarifyCustomize() {
         // Switch to resume tab first
@@ -295,7 +269,6 @@ class MenuNotificationHandler {
         // Trigger the same action as ClarifyingQuestionsButton
         NotificationCenter.default.post(name: .triggerClarifyingQuestionsButton, object: nil)
     }
-
     @MainActor
     private func handleGenerateCoverLetter() {
         // Switch to cover letter tab first
@@ -303,7 +276,6 @@ class MenuNotificationHandler {
         // Trigger the same action as CoverLetterGenerateButton
         NotificationCenter.default.post(name: .triggerGenerateCoverLetterButton, object: nil)
     }
-
     @MainActor
     private func handleReviseCoverLetter() {
         // Switch to cover letter tab first
@@ -311,13 +283,11 @@ class MenuNotificationHandler {
         // Trigger the same action as CoverLetterReviseButton
         NotificationCenter.default.post(name: .triggerReviseCoverLetterButton, object: nil)
     }
-
     @MainActor
     private func handleBestCoverLetter() {
         // Trigger the same action as the "committee" button in UnifiedToolbar
         // This shows the multi-model choose best cover letter sheet
         guard let jobAppStore = jobAppStore else { return }
-
         // Check if we have enough cover letters (same logic as toolbar button)
         let generatedLetters = jobAppStore.selectedApp?.coverLetters.filter { $0.generated } ?? []
         if generatedLetters.count < 2 {
@@ -330,31 +300,26 @@ class MenuNotificationHandler {
             alert.runModal()
             return
         }
-
         // Directly trigger the committee/multi-model selection (same as toolbar button)
         sheets?.wrappedValue.showMultiModelChooseBest = true
     }
-
     @MainActor
     private func handleStartSpeaking() {
         // Switch to cover letter tab and trigger TTS start
         selectedTab?.wrappedValue = .coverLetter
         NotificationCenter.default.post(name: .triggerTTSStart, object: nil)
     }
-
     @MainActor
     private func handleStopSpeaking() {
         // Trigger TTS stop
         NotificationCenter.default.post(name: .triggerTTSStop, object: nil)
     }
-
     @MainActor
     private func handleRestartSpeaking() {
         // Switch to cover letter tab and trigger TTS restart
         selectedTab?.wrappedValue = .coverLetter
         NotificationCenter.default.post(name: .triggerTTSRestart, object: nil)
     }
-
     deinit {
         NotificationCenter.default.removeObserver(self)
     }

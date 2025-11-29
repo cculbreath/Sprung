@@ -9,7 +9,6 @@ extension AppState {
     var hasValidOpenRouterKey: Bool {
         !openRouterApiKey.isEmpty
     }
-
     var hasValidOpenAiKey: Bool {
         !openAiApiKey.isEmpty
     }

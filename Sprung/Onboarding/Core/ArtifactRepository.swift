@@ -8,7 +8,6 @@ actor ArtifactRepository: OnboardingEventEmitter {
     // MARK: - Artifact Storage
     // MARK: - Artifact Storage
     private var artifacts = OnboardingArtifacts()
-
     // MARK: - Synchronous Caches (for SwiftUI)
     nonisolated(unsafe) private(set) var artifactRecordsSync: [JSON] = []
     nonisolated(unsafe) private(set) var applicantProfileSync: JSON?

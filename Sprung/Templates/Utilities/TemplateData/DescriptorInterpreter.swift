@@ -1,7 +1,6 @@
 import Foundation
 struct DescriptorInterpreter {
     let resume: Resume
-
     let fontScaler: FontSizeScaler
     let valueNormalizer: SectionValueNormalizer
     let titleRenderer: TitleTemplateRenderer

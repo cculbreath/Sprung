@@ -1,7 +1,6 @@
 import Foundation
 import OrderedCollections
 struct SectionValueNormalizer {
-
     let manifest: TemplateManifest?
     let fontScaler: FontSizeScaler
     func normalize(

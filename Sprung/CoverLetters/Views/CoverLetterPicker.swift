@@ -23,27 +23,22 @@ struct CoverLetterPicker: View {
             if includeNoneOption {
                 Text(noneLabel).tag(nil as CoverLetter?)
             }
-
             // Sort letters: assessed by vote/score count (descending), then unassessed by date
             let sortedLetters = sortCoverLetters(coverLetters)
-
             // Group letters into assessed and unassessed
             let assessedLetters = sortedLetters.filter { $0.hasBeenAssessed }
             let unassessedLetters = sortedLetters.filter { !$0.hasBeenAssessed }
-
             // Show assessed letters first, sorted by vote/score count
             ForEach(assessedLetters, id: \.id) { letter in
                 Text(formattedLetterName(letter))
                     .tag(Optional(letter))
             }
-
             // Show separator and unassessed letters if both groups exist
             if !assessedLetters.isEmpty && !unassessedLetters.isEmpty {
                 Divider()
                 Text("Unassessed").tag(nil as CoverLetter?)
                     .disabled(true)
             }
-
             ForEach(unassessedLetters, id: \.id) { letter in
                 Text(formattedLetterName(letter))
                     .tag(Optional(letter))
@@ -51,14 +46,12 @@ struct CoverLetterPicker: View {
         }
         .id(coverLetters.map(\.id)) // Force refresh when letters array changes
     }
-
     private func sortCoverLetters(_ letters: [CoverLetter]) -> [CoverLetter] {
         return letters.sorted { letter1, letter2 in
             // First, separate assessed from unassessed
             if letter1.hasBeenAssessed != letter2.hasBeenAssessed {
                 return letter1.hasBeenAssessed && !letter2.hasBeenAssessed
             }
-
             // If both are assessed, sort by vote/score count (descending)
             if letter1.hasBeenAssessed && letter2.hasBeenAssessed {
                 let score1 = max(letter1.voteCount, letter1.scoreCount)
@@ -67,28 +60,22 @@ struct CoverLetterPicker: View {
                     return score1 > score2
                 }
             }
-
             // Otherwise, sort by modification date (most recent first)
             return letter1.moddedDate > letter2.moddedDate
         }
     }
-
     private func formattedLetterName(_ letter: CoverLetter) -> String {
         let baseName = letter.generated ? letter.sequencedName : "Ungenerated draft"
-
         var name = baseName
-
         if letter.hasBeenAssessed {
             let count = max(letter.voteCount, letter.scoreCount)
             let suffix = letter.voteCount > 0 ? " (\(count) votes)" : " (\(count) pts)"
             name += suffix
         }
-
         // Add star suffix for chosen letters
         if letter.isChosenSubmissionDraft {
             name += " ⭐"
         }
-
         return name
     }
 }

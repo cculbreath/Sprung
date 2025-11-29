@@ -7,13 +7,11 @@
 import Foundation
 import AppKit
 import UniformTypeIdentifiers
-
 @MainActor
 class ResumeExportService: ObservableObject {
     private let nativeGenerator: NativePDFGenerator
     private let textGenerator: TextResumeGenerator
     private let templateStore: TemplateStore
-
     init(templateStore: TemplateStore, applicantProfileStore: ApplicantProfileStore) {
         self.templateStore = templateStore
         self.nativeGenerator = NativePDFGenerator(
@@ -22,11 +20,9 @@ class ResumeExportService: ObservableObject {
         )
         self.textGenerator = TextResumeGenerator(templateStore: templateStore)
     }
-
     func export(for resume: Resume) async throws {
         try await exportNatively(for: resume)
     }
-
     private func exportNatively(for resume: Resume) async throws {
         var template = try await ensureTemplate(for: resume)
         var slug = template.slug
@@ -44,7 +40,6 @@ class ResumeExportService: ObservableObject {
         let textContent = try textGenerator.generateTextResume(for: resume, template: slug)
         resume.textResume = textContent
     }
-
     @MainActor
     private func ensureTemplate(for resume: Resume) async throws -> Template {
         if let template = resume.template,
@@ -57,7 +52,6 @@ class ResumeExportService: ObservableObject {
         }
         throw ResumeExportError.noTemplatesConfigured
     }
-
     @MainActor
     private func promptForCustomTemplate(for resume: Resume) async throws -> Template {
         let selection = try ExportTemplateSelection.requestTemplateHTMLAndOptionalCSS()
@@ -114,7 +108,6 @@ enum ResumeExportError: Error, LocalizedError {
     case userCancelled
     case templateSelectionFailed
     case noTemplatesConfigured
-
     var errorDescription: String? {
         switch self {
         case .userCancelled:

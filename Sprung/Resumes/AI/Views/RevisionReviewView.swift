@@ -16,7 +16,6 @@ struct RevisionReviewView: View {
     @State private var showExitConfirmation = false
     @State private var eventMonitor: Any?
     @Environment(AppEnvironment.self) private var appEnvironment: AppEnvironment
-
     private var maxContentHeight: CGFloat {
         let defaultHeight: CGFloat = 720
         if let screenHeight = NSScreen.main?.visibleFrame.height {
@@ -24,7 +23,6 @@ struct RevisionReviewView: View {
         }
         return defaultHeight
     }
-
     // Computed property to check if reasoning modal should be used instead of loading sheet
     private var isUsingReasoningModal: Bool {
         guard let modelId = viewModel.currentModelId else { return false }
@@ -186,7 +184,6 @@ struct RevisionReviewView: View {
     private func closeReview() {
         Logger.debug("🔍 [RevisionReviewView] closeReview() called")
         Logger.debug("🔍 [RevisionReviewView] Current showResumeRevisionSheet: \(viewModel.showResumeRevisionSheet)")
-
         if let resume = resume {
             // Apply all feedback (both approved from previous rounds and current)
             let allFeedbackNodes = viewModel.approvedFeedbackNodes + viewModel.feedbackNodes
@@ -195,12 +192,10 @@ struct RevisionReviewView: View {
                 exportCoordinator: appEnvironment.resumeExportCoordinator
             )
         }
-
         // Clear all state
         viewModel.resumeRevisions = []
         viewModel.feedbackNodes = []
         viewModel.approvedFeedbackNodes = []
-
         Logger.debug("🔍 [RevisionReviewView] Setting showResumeRevisionSheet = false")
         viewModel.showResumeRevisionSheet = false
         Logger.debug("🔍 [RevisionReviewView] After setting - showResumeRevisionSheet = \(viewModel.showResumeRevisionSheet)")
@@ -394,7 +389,6 @@ struct ComparisonPanel: View {
     let accentColor: Color
     let showEditButton: Bool
     let onEdit: (() -> Void)?
-
     @State private var isHovering = false
     init(title: String, content: String, accentColor: Color, showEditButton: Bool = false, onEdit: (() -> Void)? = nil) {
         self.title = title
@@ -455,7 +449,6 @@ struct UnchangedValuePanel: View {
     let content: String
     let showEditButton: Bool
     let onEdit: (() -> Void)?
-
     @State private var isHovering = false
     init(title: String, content: String, showEditButton: Bool = false, onEdit: (() -> Void)? = nil) {
         self.title = title
@@ -553,7 +546,6 @@ struct EditableComparisonPanel: View {
                     .foregroundStyle(.secondary)
                 Spacer()
             }
-
             // Text editor with enhanced border
             TextEditor(text: $content)
                 .font(.system(.body, design: .rounded))
@@ -565,7 +557,6 @@ struct EditableComparisonPanel: View {
                         .stroke(accentColor, lineWidth: 2.5)
                 )
                 .cornerRadius(8)
-
             // Save/Cancel buttons directly below the editor
             HStack(spacing: 12) {
                 Button("Save Changes") {
@@ -574,13 +565,11 @@ struct EditableComparisonPanel: View {
                 .buttonStyle(.borderedProminent)
                 .tint(.green)
                 .controlSize(.regular)
-
                 Button("Cancel") {
                     onCancel()
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.regular)
-
                 Spacer()
             }
         }
@@ -651,7 +640,6 @@ struct RevisionActionButtons: View {
                 ))
                 .animation(.spring(response: 0.4, dampingFraction: 0.8), value: viewModel.isCommenting || viewModel.isMoreCommenting)
             }
-
             if currentRevNode?.valueChanged == true {
                 Text("Accept proposed revision?")
                     .font(.system(.title3, design: .rounded, weight: .semibold))

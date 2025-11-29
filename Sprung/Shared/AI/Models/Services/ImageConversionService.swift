@@ -12,9 +12,7 @@ import SwiftUI
 class ImageConversionService {
     /// Shared instance of the service
     static let shared = ImageConversionService()
-
     private init() {}
-
     /// Converts a PDF to a base64 encoded image
     /// - Parameter pdfData: PDF data to convert
     /// - Returns: Base64 encoded image string or nil if conversion failed

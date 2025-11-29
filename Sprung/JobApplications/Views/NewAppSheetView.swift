@@ -86,21 +86,17 @@ struct NewAppSheetView: View {
                         Text("Add New Job Application")
                             .font(.title2)
                             .fontWeight(.semibold)
-
                         Text("Import job details from LinkedIn, Indeed, or Apple")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                     }
-
                     // LinkedIn session status
                     LinkedInSessionStatusView(sessionManager: linkedInSessionManager)
-
                     // URL input section
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Job URL")
                             .font(.subheadline)
                             .fontWeight(.medium)
-
                         TextField(
                             "https://www.linkedin.com/jobs/view/4261198037",
                             text: $urlText
@@ -118,9 +114,7 @@ struct NewAppSheetView: View {
                             isPresented = false
                         }
                         .buttonStyle(.bordered)
-
                         Spacer()
-
                         Button("Import Job") {
                             Task {
                                 await handleNewApp()
@@ -226,25 +220,21 @@ struct NewAppSheetView: View {
             showError = true
         }
     }
-
     private func handleLinkedInJob(url: URL) async {
         // Prevent duplicate processing
         guard !isProcessingJob else {
             Logger.debug("🔄 [NewAppSheetView] Already processing LinkedIn job, ignoring duplicate call")
             return
         }
-
         await MainActor.run {
             isProcessingJob = true
             isLoading = true
         }
-
         defer {
             Task { @MainActor in
                 isProcessingJob = false
             }
         }
-
         // Check if user is logged in to LinkedIn
         if !linkedInSessionManager.isLoggedIn {
             await MainActor.run {
@@ -253,7 +243,6 @@ struct NewAppSheetView: View {
             }
             return
         }
-
         // Try direct LinkedIn extraction first
         if await JobApp.extractLinkedInJobDetails(
             from: url.absoluteString,
@@ -266,7 +255,6 @@ struct NewAppSheetView: View {
             }
             return
         }
-
         // Fallback to ScrapingDog if a key is configured
         guard let scrapingDogApiKey = APIKeyManager.get(.scrapingDog),
               !scrapingDogApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
@@ -291,7 +279,6 @@ struct NewAppSheetView: View {
             config.timeoutIntervalForRequest = 60.0
             config.timeoutIntervalForResource = 60.0
             let session = URLSession(configuration: config)
-
             let (data, response) = try await session.data(from: url)
             if let httpResponse = response as? HTTPURLResponse,
                httpResponse.statusCode != 200 {

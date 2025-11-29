@@ -185,7 +185,6 @@ final class ResumeDetailVM {
         resume.sectionVisibilityOverrides = overrides
         refreshPDF()
     }
-
     // MARK: - Bulk Operations ---------------------------------------------
     /// Set all child nodes to AI status (.aiToReplace)
     func setAllChildrenToAI(for parent: TreeNode) {
@@ -194,7 +193,6 @@ final class ResumeDetailVM {
         }
         refreshPDF()
     }
-
     /// Set all child nodes to saved status (.saved)
     func setAllChildrenToNone(for parent: TreeNode) {
         for child in parent.orderedChildren {

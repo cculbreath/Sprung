@@ -11,21 +11,16 @@ struct TTSButton: View {
     @AppStorage("ttsEnabled") private var ttsEnabled: Bool = false
     @AppStorage("ttsVoice") private var ttsVoice: String = "nova"
     @AppStorage("ttsInstructions") private var ttsInstructions: String = ""
-
     @State private var ttsViewModel: TTSViewModel?
     @State private var ttsProvider: OpenAITTSProvider?
-
     private var isDisabled: Bool {
         !ttsEnabled || coverLetterStore.cL?.generated != true || coverLetterStore.cL?.content.isEmpty == true
     }
-
     private var buttonColor: Color {
         if isDisabled {
             return .secondary
         }
-
         guard let viewModel = ttsViewModel else { return .primary }
-
         if viewModel.isBuffering {
             return .orange
         } else if viewModel.isSpeaking {
@@ -36,12 +31,10 @@ struct TTSButton: View {
             return .primary
         }
     }
-
     private var buttonIcon: String {
         guard let viewModel = ttsViewModel, !isDisabled else {
             return "speaker.slash"
         }
-
         if viewModel.isBuffering {
             return "speaker.badge.exclamationmark"
         } else if viewModel.isSpeaking {
@@ -52,7 +45,6 @@ struct TTSButton: View {
             return "speaker.wave.2"
         }
     }
-
     private var helpText: String {
         if !ttsEnabled {
             return "TTS is disabled in settings"
@@ -72,7 +64,6 @@ struct TTSButton: View {
             return "Read cover letter aloud"
         }
     }
-
     var body: some View {
         Button(action: handleClick) {
             Label("TTS", systemImage: buttonIcon)
@@ -108,13 +99,10 @@ struct TTSButton: View {
             restartTTS()
         }
     }
-
     private func handleClick() {
         let event = NSApp.currentEvent
         let isOptionClick = event?.modifierFlags.contains(.option) == true
-
         guard let viewModel = ttsViewModel else { return }
-
         if isOptionClick {
             // Option-click: restart TTS
             restartTTS()
@@ -129,40 +117,31 @@ struct TTSButton: View {
             }
         }
     }
-
     private func setupTTS() {
         guard ttsEnabled, appState.hasValidOpenAiKey, let key = APIKeyManager.get(.openAI), !key.isEmpty else {
             ttsProvider = nil
             ttsViewModel = nil
             return
         }
-
         // Create TTS provider and view model
         let provider = OpenAITTSProvider(apiKey: key)
         let viewModel = TTSViewModel(ttsProvider: provider)
-
         ttsProvider = provider
         ttsViewModel = viewModel
     }
-
     private func startTTS() {
         guard let viewModel = ttsViewModel,
               let coverLetter = coverLetterStore.cL,
               coverLetter.generated,
               !coverLetter.content.isEmpty else { return }
-
         let voice = OpenAITTSProvider.Voice(rawValue: ttsVoice) ?? .nova
         let instructions = ttsInstructions.isEmpty ? nil : ttsInstructions
-
         viewModel.speakContent(coverLetter.content, voice: voice, instructions: instructions)
     }
-
     private func restartTTS() {
         guard let viewModel = ttsViewModel else { return }
-
         // Stop current playback
         viewModel.stop()
-
         // Start fresh
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             startTTS()

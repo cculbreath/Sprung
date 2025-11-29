@@ -7,12 +7,10 @@ struct ClarifyingQuestionsSheet: View {
     let questions: [ClarifyingQuestion]
     @Binding var isPresented: Bool
     let onSubmit: ([QuestionAnswer]) -> Void
-
     @State private var answers: [String: String] = [:]
     @State private var declinedQuestions: Set<String> = []
     @FocusState private var focusedQuestionId: String?
     @Environment(\.dismiss) private var dismiss
-
     var body: some View {
         VStack(spacing: 0) {
             // Main content
@@ -23,18 +21,15 @@ struct ClarifyingQuestionsSheet: View {
                     .font(.system(size: 48))
                     .foregroundStyle(.blue)
                     .symbolRenderingMode(.hierarchical)
-
                 Text("Clarifying Questions")
                     .font(.title2)
                     .fontWeight(.semibold)
-
                 Text("The AI has some questions to help create better resume modifications")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
             .padding(.top)
-
             // Questions
             ScrollView {
                 VStack(spacing: 20) {
@@ -77,16 +72,13 @@ struct ClarifyingQuestionsSheet: View {
                 }
                 .padding()
             }
-
             // Buttons
             HStack(spacing: 16) {
                 Button("Cancel") {
                     dismiss()
                 }
                 .keyboardShortcut(.escape)
-
                 Spacer()
-
                 Button("Submit Answers") {
                     submitAnswers()
                 }
@@ -106,7 +98,6 @@ struct ClarifyingQuestionsSheet: View {
             for (index, question) in questions.enumerated() {
                 Logger.debug("🔍 Sheet Question \(index + 1): id=\(question.id), question=\(question.question.prefix(50))...")
             }
-
             // Focus the first question when the sheet appears
             if let firstQuestion = questions.first {
                 focusedQuestionId = firstQuestion.id
@@ -116,14 +107,12 @@ struct ClarifyingQuestionsSheet: View {
             }
         }
     }
-
     private var isValidToSubmit: Bool {
         // Valid if all questions are either declined or answered
         questions.allSatisfy { question in
             declinedQuestions.contains(question.id) || !(answers[question.id] ?? "").isEmpty
         }
     }
-
     private func submitAnswers() {
         let questionAnswers = questions.map { question in
             QuestionAnswer(
@@ -131,7 +120,6 @@ struct ClarifyingQuestionsSheet: View {
                 answer: declinedQuestions.contains(question.id) ? nil : answers[question.id]
             )
         }
-
         onSubmit(questionAnswers)
         dismiss()
     }
@@ -142,7 +130,6 @@ struct QuestionView: View {
     @Binding var isDeclined: Bool
     let onTabPressed: () -> Void
     let onShiftTabPressed: () -> Void
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Question header
@@ -151,7 +138,6 @@ struct QuestionView: View {
                     Text(question.question)
                         .font(.headline)
                         .fixedSize(horizontal: false, vertical: true)
-
                     if let context = question.context {
                         Text(context)
                             .font(.caption)
@@ -159,14 +145,11 @@ struct QuestionView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-
                 Spacer()
-
                 Toggle("Decline", isOn: $isDeclined)
                     .toggleStyle(.checkbox)
                     .help("Check to skip this question")
             }
-
             // Answer field
             if !isDeclined {
                 TabNavigableTextEditor(
@@ -203,7 +186,6 @@ struct TabNavigableTextEditor: NSViewRepresentable {
     @Binding var text: String
     let onTabPressed: () -> Void
     let onShiftTabPressed: () -> Void
-
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSTextView.scrollableTextView()
         if let textView = scrollView.documentView as? NSTextView {
@@ -217,30 +199,24 @@ struct TabNavigableTextEditor: NSViewRepresentable {
         }
         return scrollView
     }
-
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         guard let textView = nsView.documentView as? NSTextView else { return }
         if textView.string != text {
             textView.string = text
         }
     }
-
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
-
     class Coordinator: NSObject, NSTextViewDelegate {
         var parent: TabNavigableTextEditor
-
         init(_ parent: TabNavigableTextEditor) {
             self.parent = parent
         }
-
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             parent.text = textView.string
         }
-
         func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
             if commandSelector == #selector(NSStandardKeyBindingResponding.insertTab(_:)) {
                 parent.onTabPressed()

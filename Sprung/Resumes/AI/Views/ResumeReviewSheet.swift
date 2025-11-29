@@ -16,10 +16,8 @@ struct ResumeReviewSheet: View {
     @State private var customOptions = CustomReviewOptions()
     // Model selection state with persistence
     @AppStorage("resumeReviewSelectedModel") private var selectedModel: String = ""
-
     // State for entity merge option
     @State private var allowEntityMerge: Bool = false
-
     // Computed property for the content view (remains the same)
     private var contentView: some View {
         Group {
@@ -68,18 +66,15 @@ struct ResumeReviewSheet: View {
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
-
                         // Always show change message if it exists
                         if !viewModel.fixOverflowChangeMessage.isEmpty {
                             if !viewModel.fixOverflowStatusMessage.isEmpty {
                                 Divider()
                                     .padding(.vertical, 4)
                             }
-
                             Text("Changes Made:")
                                 .font(.headline)
                                 .padding(.bottom, 4)
-
                             Text(viewModel.fixOverflowChangeMessage)
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -137,7 +132,6 @@ struct ResumeReviewSheet: View {
                         if selectedReviewType == .custom {
                             CustomReviewOptionsView(customOptions: $customOptions)
                         }
-
                         // Fix Overflow options
                         if selectedReviewType == .fixOverflow {
                             VStack(alignment: .leading, spacing: 8) {
@@ -146,7 +140,6 @@ struct ResumeReviewSheet: View {
                             }
                             .padding(.vertical, 8)
                         }
-
                         // AI Model Selection
                         // Use vision capability filter for Fix Overflow since it requires image analysis
                         DropdownModelPicker(
@@ -195,7 +188,6 @@ struct ResumeReviewSheet: View {
                 .padding(.top, 8) // Add some space above the button bar
                 .background(Color(NSColor.windowBackgroundColor).opacity(0.8)) // Optional: background for button bar
             }
-
             // Note: Reasoning stream view is now displayed globally in the main app UI
         }
         .frame(width: 650, height: 600, alignment: .topLeading) // Increased sheet size for better content fit

@@ -6,7 +6,6 @@ extension ExperienceDefaultsDraft {
             setEnabled(isEnabled, for: key)
         }
     }
-
     func enabledSectionKeys() -> [ExperienceSectionKey] {
         ExperienceSectionKey.allCases.filter { isEnabled(for: $0) }
     }

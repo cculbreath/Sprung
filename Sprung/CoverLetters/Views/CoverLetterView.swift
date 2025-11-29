@@ -9,7 +9,6 @@ import SwiftUI
 struct CoverLetterView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
-
     @Binding var showCoverLetterInspector: Bool
     @State private var isEditing = false
     var body: some View {
@@ -41,7 +40,6 @@ struct CoverLetterView: View {
         }
     }
 }
-
 struct CoverLetterContentView: View {
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
@@ -51,7 +49,6 @@ struct CoverLetterContentView: View {
         @Bindable var coverLetterStore = coverLetterStore
         @Bindable var jobAppStore = jobAppStore
         @Bindable var bindStore = jobAppStore
-
         if let app = jobAppStore.selectedApp {
             @Bindable var bindApp = app
             let selectableLetters = bindApp.coverLetters.filter { $0.generated || !$0.content.isEmpty }
@@ -204,18 +201,14 @@ struct CoverLetterContentView: View {
 private struct CoverLetterActionsBar: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
-
     let coverLetters: [CoverLetter]
     @Binding var selection: CoverLetter?
-
     private var hasRequiredLettersForCommittee: Bool {
         (jobAppStore.selectedApp?.coverLetters.filter { $0.generated }.count ?? 0) >= 2
     }
-
     var body: some View {
         HStack(spacing: 12) {
             CoverLetterReviseButton()
-
             Button(action: {
                 NotificationCenter.default.post(name: .batchCoverLetter, object: nil)
             }, label: {
@@ -225,7 +218,6 @@ private struct CoverLetterActionsBar: View {
             .buttonStyle(.automatic)
             .help("Batch Cover Letter Operations")
             .disabled(jobAppStore.selectedApp?.selectedRes == nil)
-
             Button(action: {
                 NotificationCenter.default.post(name: .committee, object: nil)
             }, label: {
@@ -235,11 +227,8 @@ private struct CoverLetterActionsBar: View {
             .buttonStyle(.automatic)
             .help("Multi-model Choose Best Cover Letter")
             .disabled(!hasRequiredLettersForCommittee)
-
             TTSButton()
-
             Spacer(minLength: 0)
-
             if !coverLetters.isEmpty {
                 CoverLetterPicker(
                     coverLetters: coverLetters,
@@ -270,7 +259,6 @@ struct GenerateCoverLetterButtonView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @State private var isHovered = false
-
     var body: some View {
         Button(action: {
             NotificationCenter.default.post(name: .triggerGenerateCoverLetterButton, object: nil)
@@ -324,7 +312,6 @@ struct GenerateCoverLetterButtonView: View {
                                 Text("Generate Cover Letter")
                                     .font(.system(size: 16, weight: .semibold))
                                     .foregroundColor(.primary)
-
                                 Text("Create a tailored letter")
                                     .font(.system(size: 12))
                                     .foregroundColor(.secondary)
@@ -353,7 +340,6 @@ struct BatchCoverLetterButtonView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @State private var isHovered = false
-
     var body: some View {
         Button(action: {
             NotificationCenter.default.post(name: .batchCoverLetter, object: nil)
@@ -400,12 +386,10 @@ struct BatchCoverLetterButtonView: View {
                                         )
                                     )
                             }
-
                             VStack(spacing: 4) {
                                 Text("Batch Generation")
                                     .font(.system(size: 16, weight: .semibold))
                                     .foregroundColor(.primary)
-
                                 Text("Generate multiple at once")
                                     .font(.system(size: 12))
                                     .foregroundColor(.secondary)

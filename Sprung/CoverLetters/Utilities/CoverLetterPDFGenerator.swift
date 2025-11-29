@@ -142,7 +142,6 @@ enum CoverLetterPDFGenerator {
         return keywords.contains(where: { lowercased.contains($0) })
     }
     // MARK: - PDF Layout Configuration
-
     private struct PDFLayoutConfig {
         let pageRect: CGRect
         let topMargin: CGFloat
@@ -155,7 +154,6 @@ enum CoverLetterPDFGenerator {
         let minFontSize: CGFloat
         let fontStep: CGFloat
         let baseLineSpacing: CGFloat
-
         static let standard = PDFLayoutConfig(
             pageRect: CGRect(x: 0, y: 0, width: 8.5 * 72, height: 11 * 72),
             topMargin: 0.75 * 72,
@@ -170,15 +168,12 @@ enum CoverLetterPDFGenerator {
             baseLineSpacing: 11.5 - 9.8
         )
     }
-
     private struct ChosenLayout {
         let fontSize: CGFloat
         let leftMargin: CGFloat
         let rightMargin: CGFloat
     }
-
     // MARK: - Font Registration
-
     private static func registerFuturaFont() {
         let specificFuturaPath = "/Library/Fonts/Futura Light.otf"
         if FileManager.default.fileExists(atPath: specificFuturaPath) {
@@ -196,9 +191,7 @@ enum CoverLetterPDFGenerator {
             }
         }
     }
-
     // MARK: - Layout Calculation
-
     private static func calculatePageCount(
         text: String,
         fontSize: CGFloat,
@@ -236,7 +229,6 @@ enum CoverLetterPDFGenerator {
         }
         return count
     }
-
     private static func determineOptimalLayout(for text: String, config: PDFLayoutConfig) -> ChosenLayout {
         // Try reducing margins first
         var testLeft = config.defaultLeftMargin
@@ -266,9 +258,7 @@ enum CoverLetterPDFGenerator {
                             leftMargin: config.defaultLeftMargin,
                             rightMargin: config.defaultRightMargin)
     }
-
     // MARK: - Attributed String Building
-
     private static func buildAttributedString(
         text: String,
         fontSize: CGFloat,
@@ -289,7 +279,6 @@ enum CoverLetterPDFGenerator {
         applyContactLineSpacing(to: attributedString, paragraphStyle: paragraphStyle, baseLineSpacing: baseLineSpacing)
         return attributedString
     }
-
     private static func applyLinkStyling(to attributedString: NSMutableAttributedString, font: NSFont) {
         let urlAttributes: [NSAttributedString.Key: Any] = [
             .font: font,
@@ -321,7 +310,6 @@ enum CoverLetterPDFGenerator {
             }
         }
     }
-
     private static func applyContactLineSpacing(
         to attributedString: NSMutableAttributedString,
         paragraphStyle: NSMutableParagraphStyle,
@@ -353,16 +341,13 @@ enum CoverLetterPDFGenerator {
             attributedString.addAttribute(.paragraphStyle, value: emailPS, range: emailRange)
         }
     }
-
     // MARK: - Signature Positioning
-
     private struct SignatureLineIndices {
         var regardsLineIndex: Int?
         var nameLineIndex: Int?
         var contactInfoLineIndex: Int?
         var emailLineIndex: Int?
     }
-
     private static func findSignatureLineIndices(
         in frameLines: [CTLine],
         attributedString: NSMutableAttributedString,
@@ -399,7 +384,6 @@ enum CoverLetterPDFGenerator {
         }
         return indices
     }
-
     private static func calculateSignatureY(
         indices: SignatureLineIndices,
         origins: [CGPoint],
@@ -445,7 +429,6 @@ enum CoverLetterPDFGenerator {
         }
         return signatureY
     }
-
     private static func drawSignature(
         _ signatureImage: NSImage,
         in context: CGContext,
@@ -471,9 +454,7 @@ enum CoverLetterPDFGenerator {
             context.restoreGState()
         }
     }
-
     // MARK: - PDF Generation
-
     /// Paginated vector PDF generation using CoreText framesetter
     private static func createPaginatedPDFFromString(
         _ text: String,

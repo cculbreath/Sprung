@@ -177,7 +177,6 @@ struct ApplicantProfileEditor: View {
                 Text("Social Links")
                     .font(.headline)
             }
-
         }
     }
     private func addProfile() {

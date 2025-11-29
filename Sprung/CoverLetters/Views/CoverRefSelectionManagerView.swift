@@ -10,27 +10,20 @@ import SwiftData
 /// Used in both Generate Cover Letter and Batch Generate Cover Letter sheets
 struct CoverRefSelectionManagerView: View {
     @Environment(CoverRefStore.self) var coverRefStore: CoverRefStore
-
     // Live SwiftData query to automatically refresh on model changes
     @Query(sort: \CoverRef.name) private var allCoverRefs: [CoverRef]
-
     @Binding var includeResumeRefs: Bool
     @Binding var selectedBackgroundFacts: Set<String>
     @Binding var selectedWritingSamples: Set<String>
-
     @State private var showAddSheet = false
     @State private var newRefType: CoverRefType = .backgroundFact
-
     var showGroupBox: Bool = true
-
     private var backgroundFacts: [CoverRef] {
         allCoverRefs.filter { $0.type == .backgroundFact }
     }
-
     private var writingSamples: [CoverRef] {
         allCoverRefs.filter { $0.type == .writingSample }
     }
-
     var body: some View {
         if showGroupBox {
             GroupBox("Source Management") {
@@ -40,23 +33,19 @@ struct CoverRefSelectionManagerView: View {
             content
         }
     }
-
     @ViewBuilder
     private var content: some View {
         VStack(alignment: .leading, spacing: 16) {
             // Include Resume Background toggle
             Toggle("Include Resume Background", isOn: $includeResumeRefs)
                 .toggleStyle(.checkbox)
-
             // Background Facts Section
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text("Background Facts")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
-
                     Spacer()
-
                     Button(action: {
                         newRefType = .backgroundFact
                         showAddSheet = true
@@ -66,7 +55,6 @@ struct CoverRefSelectionManagerView: View {
                     })
                     .buttonStyle(.plain)
                 }
-
                 if backgroundFacts.isEmpty {
                     Text("No background facts added yet")
                         .font(.caption)
@@ -92,16 +80,13 @@ struct CoverRefSelectionManagerView: View {
                     }
                 }
             }
-
             // Writing Samples Section
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text("Writing Samples")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
-
                     Spacer()
-
                     Button(action: {
                         newRefType = .writingSample
                         showAddSheet = true
@@ -111,7 +96,6 @@ struct CoverRefSelectionManagerView: View {
                     })
                     .buttonStyle(.plain)
                 }
-
                 if writingSamples.isEmpty {
                     Text("No writing samples added yet")
                         .font(.caption)
@@ -147,16 +131,13 @@ struct CoverRefSelectionManagerView: View {
             )
         }
     }
-
     private func deleteRef(_ ref: CoverRef) {
         // Remove from selections
         selectedBackgroundFacts.remove(ref.id.description)
         selectedWritingSamples.remove(ref.id.description)
-
         // Delete from store
         coverRefStore.deleteCoverRef(ref)
     }
-
     private func addNewRef(name: String, content: String, type: CoverRefType) {
         let newRef = CoverRef(
             name: name,
@@ -165,7 +146,6 @@ struct CoverRefSelectionManagerView: View {
             type: type
         )
         coverRefStore.addCoverRef(newRef)
-
         // Auto-select the new ref
         if type == .backgroundFact {
             selectedBackgroundFacts.insert(newRef.id.description)
@@ -173,17 +153,14 @@ struct CoverRefSelectionManagerView: View {
             selectedWritingSamples.insert(newRef.id.description)
         }
     }
-
 }
 // MARK: - Add Cover Ref Sheet
 struct AddCoverRefSheet: View {
     let refType: CoverRefType
     let onAdd: (String, String) -> Void
-
     @State private var name = ""
     @State private var content = ""
     @Environment(\.dismiss) private var dismiss
-
     var body: some View {
         NavigationView {
             VStack(spacing: 20) {
@@ -193,7 +170,6 @@ struct AddCoverRefSheet: View {
                     TextField("Enter name", text: $name)
                         .textFieldStyle(.roundedBorder)
                 }
-
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Content")
                         .font(.headline)
@@ -204,7 +180,6 @@ struct AddCoverRefSheet: View {
                         .cornerRadius(8)
                         .frame(minHeight: 200)
                 }
-
                 Spacer()
             }
             .padding()
@@ -215,7 +190,6 @@ struct AddCoverRefSheet: View {
                         dismiss()
                     }
                 }
-
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Add") {
                         onAdd(name, content)

@@ -30,9 +30,7 @@ struct BatchCoverLetterView: View {
     @State private var includeResumeRefs: Bool = true
     @State private var selectedBackgroundFacts: Set<String> = []
     @State private var selectedWritingSamples: Set<String> = []
-
     let availableRevisions: [CoverLetterPrompts.EditorPrompts] = [.improve, .zinsser, .mimic]
-
     var body: some View {
         VStack(spacing: 0) {
             // Scrollable content area
@@ -45,7 +43,6 @@ struct BatchCoverLetterView: View {
                 .padding()
                 .padding(.bottom, 8) // Extra space before action section
             }
-
             // Fixed action section at bottom
             Divider()
             actionSection
@@ -56,10 +53,8 @@ struct BatchCoverLetterView: View {
         .onAppear {
             // Load persisted model selection
             selectedModels = appState.settings.batchCoverLetterModels
-
             // Load default reference selections
             loadDefaultSelections()
-
             // Fetch OpenRouter models if we don't have any and have a valid API key
             if appState.hasValidOpenRouterKey && openRouterService.availableModels.isEmpty {
                 Task {
@@ -78,13 +73,11 @@ struct BatchCoverLetterView: View {
             }
         }
     }
-
     private var headerSection: some View {
         Text("Batch Cover Letter Operations")
             .font(.title2)
             .fontWeight(.semibold)
     }
-
     private var modeSelector: some View {
         Picker("Mode", selection: $mode) {
             Text("Generate New").tag(BatchMode.generate)
@@ -93,7 +86,6 @@ struct BatchCoverLetterView: View {
         .pickerStyle(SegmentedPickerStyle())
         .padding(.horizontal)
     }
-
     private var contentSection: some View {
         Group {
             if mode == .generate {
@@ -103,7 +95,6 @@ struct BatchCoverLetterView: View {
             }
         }
     }
-
     private var generateModeContent: some View {
         VStack(spacing: 16) {
             modelSelectionBox
@@ -111,14 +102,12 @@ struct BatchCoverLetterView: View {
             revisionsBox
         }
     }
-
     private var modelSelectionBox: some View {
         CheckboxModelPicker(
             selectedModels: $selectedModels,
             title: "Select Models"
         )
     }
-
     private var revisionsBox: some View {
         VStack(spacing: 16) {
             // Revision Selection
@@ -145,7 +134,6 @@ struct BatchCoverLetterView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-
             // Model picker for revisions
             if !selectedRevisions.isEmpty {
                 GroupBox("Revision Model") {
@@ -159,7 +147,6 @@ struct BatchCoverLetterView: View {
             }
         }
     }
-
     private var sourceManagementSection: some View {
         CoverRefSelectionManagerView(
             includeResumeRefs: $includeResumeRefs,
@@ -168,7 +155,6 @@ struct BatchCoverLetterView: View {
             showGroupBox: true
         )
     }
-
     private var existingModeContent: some View {
         VStack(spacing: 16) {
             // Existing letter selection
@@ -217,7 +203,6 @@ struct BatchCoverLetterView: View {
                     }
                     .frame(maxHeight: 200)
                 }
-
             // Revision Selection
             GroupBox("Select Revisions") {
                 VStack(alignment: .leading, spacing: 8) {
@@ -239,7 +224,6 @@ struct BatchCoverLetterView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-
             // Model picker for revisions using OpenRouter
             DropdownModelPicker(
                 selectedModel: $revisionModel,
@@ -247,7 +231,6 @@ struct BatchCoverLetterView: View {
             )
         }
     }
-
     private var actionSection: some View {
         VStack(spacing: 16) {
             // Summary
@@ -281,7 +264,6 @@ struct BatchCoverLetterView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-
             // Progress
             if isGenerating {
                 VStack(spacing: 8) {
@@ -292,23 +274,19 @@ struct BatchCoverLetterView: View {
                         .foregroundColor(.secondary)
                 }
             }
-
             // Error Message
             if let errorMessage = errorMessage {
                 Text(errorMessage)
                     .foregroundColor(.red)
                     .font(.caption)
             }
-
             // Buttons
             HStack {
                 Button("Cancel") {
                     dismiss()
                 }
                 .keyboardShortcut(.escape)
-
                 Spacer()
-
                 Button(mode == .generate ? "Start Generation" : "Start Revisions") {
                     startBatchGeneration()
                 }
@@ -317,7 +295,6 @@ struct BatchCoverLetterView: View {
             }
         }
     }
-
     private func calculateTotalLetters() -> Int {
         if mode == .generate {
             let baseLetters = selectedModels.count
@@ -328,7 +305,6 @@ struct BatchCoverLetterView: View {
             return selectedLetters.count * selectedRevisions.count
         }
     }
-
     private func getRevisionModelDisplayText() -> String {
         if revisionModel == "SAME_AS_GENERATING" {
             return "Same as generating model"
@@ -338,18 +314,14 @@ struct BatchCoverLetterView: View {
             return openRouterService.friendlyModelName(for: revisionModel)
         }
     }
-
     private func startBatchGeneration() {
         guard let app = jobAppStore.selectedApp else { return }
-
         isGenerating = true
         errorMessage = nil
-
         // Calculate total operations
         totalOperations = calculateTotalLetters()
         completedOperations = 0
         progress = 0
-
         Task {
             let generator = BatchCoverLetterGenerator(
                 coverLetterStore: coverLetterStore,
@@ -358,7 +330,6 @@ struct BatchCoverLetterView: View {
                 exportCoordinator: appEnvironment.resumeExportCoordinator,
                 applicantProfileStore: applicantProfileStore
             )
-
             do {
                 if mode == .generate {
                     // Generate mode - need resume
@@ -369,7 +340,6 @@ struct BatchCoverLetterView: View {
                         }
                         return
                     }
-
                     // Create a base cover letter with the selected sources
                     let baseCoverLetter = CoverLetter(
                         enabledRefs: getSelectedCoverRefs(),
@@ -377,10 +347,8 @@ struct BatchCoverLetterView: View {
                     )
                     baseCoverLetter.includeResumeRefs = includeResumeRefs
                     baseCoverLetter.content = "" // Will be generated
-
                     // Debug: Verify jobApp relationship is set
                     Logger.debug("🔍 Created baseCoverLetter with jobApp: \(baseCoverLetter.jobApp?.id.uuidString ?? "nil")")
-
                     // Generate cover letters with progress tracking
                     try await generator.generateBatch(
                         baseCoverLetter: baseCoverLetter,
@@ -408,7 +376,6 @@ struct BatchCoverLetterView: View {
                         }
                         return
                     }
-
                     // Generate revisions for existing letters
                     try await generator.generateRevisionsForExistingLetters(
                         existingLetters: Array(selectedLetters),
@@ -424,7 +391,6 @@ struct BatchCoverLetterView: View {
                         }
                     )
                 }
-
                 await MainActor.run {
                     dismiss()
                 }
@@ -436,46 +402,37 @@ struct BatchCoverLetterView: View {
             }
         }
     }
-
     private func loadDefaultSelections() {
         // Pre-select enabled by default refs
         let backgroundFacts = allCoverRefs.filter { $0.type == .backgroundFact }
         let writingSamples = allCoverRefs.filter { $0.type == .writingSample }
-
         for ref in backgroundFacts where ref.enabledByDefault {
             selectedBackgroundFacts.insert(ref.id.description)
         }
-
         for ref in writingSamples where ref.enabledByDefault {
             selectedWritingSamples.insert(ref.id.description)
         }
     }
-
     private func canStartGeneration() -> Bool {
         guard let app = jobAppStore.selectedApp else { return false }
-
         if mode == .generate {
             return !selectedModels.isEmpty && app.selectedRes != nil
         } else {
             return !selectedLetters.isEmpty && !selectedRevisions.isEmpty && !revisionModel.isEmpty && app.selectedRes != nil
         }
     }
-
     private func getSelectedCoverRefs() -> [CoverRef] {
         var refs: [CoverRef] = []
-
         // Add selected background facts
         let backgroundFacts = allCoverRefs.filter { $0.type == .backgroundFact }
         for ref in backgroundFacts where selectedBackgroundFacts.contains(ref.id.description) {
             refs.append(ref)
         }
-
         // Add selected writing samples
         let writingSamples = allCoverRefs.filter { $0.type == .writingSample }
         for ref in writingSamples where selectedWritingSamples.contains(ref.id.description) {
             refs.append(ref)
         }
-
         return refs
     }
 }
