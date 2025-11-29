@@ -22,6 +22,7 @@ final class OnboardingDependencyContainer {
     let checkpointManager: CheckpointManager
     let phaseTransitionController: PhaseTransitionController
     let sessionCoordinator: InterviewSessionCoordinator
+    let artifactQueryCoordinator: ArtifactQueryCoordinator
 
     // MARK: - Services
     let extractionManagementService: ExtractionManagementService
@@ -269,6 +270,13 @@ final class OnboardingDependencyContainer {
             ui: ui
         )
         self.sessionCoordinator = sessionCoordinator
+
+        // 15. Initialize Artifact Query Coordinator
+        let artifactQueryCoordinator = ArtifactQueryCoordinator(
+            state: state,
+            eventBus: eventBus
+        )
+        self.artifactQueryCoordinator = artifactQueryCoordinator
 
         let ingestionCoordinator = IngestionCoordinator(
             eventBus: eventBus,
