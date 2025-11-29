@@ -18,6 +18,7 @@ actor StateCoordinator: OnboardingEventEmitter {
     private let uiState: SessionUIState
     private let draftKnowledgeStore: DraftKnowledgeStore
     private let streamQueueManager: StreamQueueManager
+    private let llmStateManager: LLMStateManager
     // MARK: - Phase Policy
     private let phasePolicy: PhasePolicy
     // Runtime tool exclusions (e.g., one-time bootstrap tools)
@@ -37,11 +38,9 @@ actor StateCoordinator: OnboardingEventEmitter {
     private(set) var completedWizardSteps: Set<WizardStep> = []
     // MARK: - Stream Queue (Delegated to StreamQueueManager)
     // StreamQueueManager handles serial LLM streaming and parallel tool call batching
-    // MARK: - LLM State (Single Source of Truth)
-    private var allowedToolNames: Set<String> = []
-    private var lastResponseId: String?
-    private var currentModelId: String = "gpt-5.1"
-    private var currentToolPaneCard: OnboardingToolPaneCard = .none
+
+    // MARK: - LLM State (Delegated to LLMStateManager)
+    // LLMStateManager handles tool names, response IDs, model config, and tool pane cards
     // MARK: - State Accessors
     var pendingValidationPrompt: OnboardingValidationPrompt? {
         get async { await uiState.pendingValidationPrompt }
@@ -64,6 +63,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         self.uiState = uiState
         self.draftKnowledgeStore = draftStore
         self.streamQueueManager = StreamQueueManager(eventBus: eventBus)
+        self.llmStateManager = LLMStateManager()
         Logger.info("🎯 StateCoordinator initialized (orchestrator mode with injected services)", category: .ai)
     }
     // MARK: - Phase Management
@@ -201,8 +201,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         case .enabledSectionsUpdated:
             Logger.info("📑 Enabled sections updated via event", category: .ai)
         case .stateAllowedToolsUpdated(let tools):
-            allowedToolNames = tools
-            Logger.info("🔧 Allowed tools updated in StateCoordinator: \(tools.count) tools", category: .ai)
+            await llmStateManager.setAllowedToolNames(tools)
         case .evidenceRequirementAdded(let req):
             evidenceRequirements.append(req)
             Logger.info("📋 Evidence requirement added: \(req.description)", category: .ai)
@@ -355,30 +354,30 @@ actor StateCoordinator: OnboardingEventEmitter {
         switch event {
         case .choicePromptRequested(let prompt):
             await uiState.setPendingChoice(prompt)
-            currentToolPaneCard = .choicePrompt
+            await llmStateManager.setToolPaneCard(.choicePrompt)
         case .choicePromptCleared:
             await uiState.setPendingChoice(nil)
-            currentToolPaneCard = .none
+            await llmStateManager.setToolPaneCard(.none)
         case .uploadRequestPresented(let request):
             await uiState.setPendingUpload(request)
-            currentToolPaneCard = .uploadRequest
+            await llmStateManager.setToolPaneCard(.uploadRequest)
         case .uploadRequestCancelled:
             await uiState.setPendingUpload(nil)
-            currentToolPaneCard = .none
+            await llmStateManager.setToolPaneCard(.none)
         case .validationPromptRequested(let prompt):
             await uiState.setPendingValidation(prompt)
-            currentToolPaneCard = prompt.mode == .editor ? .editTimelineCards : .confirmTimelineCards
+            await llmStateManager.setToolPaneCard(prompt.mode == .editor ? .editTimelineCards : .confirmTimelineCards)
         case .validationPromptCleared:
             await uiState.setPendingValidation(nil)
-            currentToolPaneCard = .none
+            await llmStateManager.setToolPaneCard(.none)
         case .applicantProfileIntakeRequested:
-            currentToolPaneCard = .applicantProfileRequest
+            await llmStateManager.setToolPaneCard(.applicantProfileRequest)
         case .applicantProfileIntakeCleared:
-            currentToolPaneCard = .none
+            await llmStateManager.setToolPaneCard(.none)
         case .sectionToggleRequested:
-            currentToolPaneCard = .sectionToggle
+            await llmStateManager.setToolPaneCard(.sectionToggle)
         case .sectionToggleCleared:
-            currentToolPaneCard = .none
+            await llmStateManager.setToolPaneCard(.none)
         default:
             break
         }
@@ -395,28 +394,31 @@ actor StateCoordinator: OnboardingEventEmitter {
     func getHasStreamedFirstResponse() async -> Bool {
         await streamQueueManager.getHasStreamedFirstResponse()
     }
-    // MARK: - LLM State Accessors
+    // MARK: - LLM State Accessors (Delegated to LLMStateManager)
+
     /// Get allowed tool names
-    func getAllowedToolNames() -> Set<String> {
-        return allowedToolNames
+    func getAllowedToolNames() async -> Set<String> {
+        await llmStateManager.getAllowedToolNames()
     }
+
     /// Update conversation state (called by LLMMessenger when response completes)
-    func updateConversationState(responseId: String) {
-        self.lastResponseId = responseId
-        Logger.debug("💬 Conversation state updated: \(responseId.prefix(8))", category: .ai)
+    func updateConversationState(responseId: String) async {
+        await llmStateManager.updateConversationState(responseId: responseId)
     }
+
     /// Get last response ID
-    func getLastResponseId() -> String? {
-        return lastResponseId
+    func getLastResponseId() async -> String? {
+        await llmStateManager.getLastResponseId()
     }
+
     /// Set model ID
-    func setModelId(_ modelId: String) {
-        currentModelId = modelId
-        Logger.info("🔧 Model ID set to: \(modelId)", category: .ai)
+    func setModelId(_ modelId: String) async {
+        await llmStateManager.setModelId(modelId)
     }
+
     /// Get current model ID
-    func getCurrentModelId() -> String {
-        return currentModelId
+    func getCurrentModelId() async -> String {
+        await llmStateManager.getCurrentModelId()
     }
     // MARK: - Snapshot Management
     struct StateSnapshot: Codable {
@@ -440,16 +442,17 @@ actor StateCoordinator: OnboardingEventEmitter {
         let previousResponseId = await chatStore.getPreviousResponseId()
         let currentMessages = await chatStore.getAllMessages()
         let hasStreamedFirst = await streamQueueManager.getHasStreamedFirstResponse()
+        let llmSnapshot = await llmStateManager.createSnapshot()
         return StateSnapshot(
             phase: phase,
             objectives: objectivesDict,
             wizardStep: currentWizardStep.rawValue,
             completedWizardSteps: Set(completedWizardSteps.map { $0.rawValue }),
             previousResponseId: previousResponseId,
-            currentModelId: currentModelId,
+            currentModelId: llmSnapshot.currentModelId,
             messages: currentMessages,
             hasStreamedFirstResponse: hasStreamedFirst,
-            currentToolPaneCard: currentToolPaneCard,
+            currentToolPaneCard: llmSnapshot.currentToolPaneCard,
             evidenceRequirements: evidenceRequirements
         )
     }
@@ -463,20 +466,20 @@ actor StateCoordinator: OnboardingEventEmitter {
         // Restore conversation state
         if let previousResponseId = snapshot.previousResponseId {
             await chatStore.setPreviousResponseId(previousResponseId)
-            lastResponseId = previousResponseId
+            await llmStateManager.setLastResponseId(previousResponseId)
             Logger.info("📝 Restored previousResponseId: \(previousResponseId)", category: .ai)
         }
-        // Restore model ID
-        currentModelId = snapshot.currentModelId
+        // Restore LLM state via LLMStateManager
+        let llmSnapshot = LLMStateManager.Snapshot(
+            lastResponseId: snapshot.previousResponseId,
+            currentModelId: snapshot.currentModelId,
+            currentToolPaneCard: snapshot.currentToolPaneCard
+        )
+        await llmStateManager.restoreFromSnapshot(llmSnapshot)
         await chatStore.restoreMessages(snapshot.messages)
         Logger.info("💬 Restored \(snapshot.messages.count) chat messages", category: .ai)
         // Restore streaming state via StreamQueueManager
         await streamQueueManager.restoreState(hasStreamedFirstResponse: snapshot.hasStreamedFirstResponse)
-        // Restore ToolPane card state
-        currentToolPaneCard = snapshot.currentToolPaneCard
-        if currentToolPaneCard != .none {
-            Logger.info("🎴 Restored ToolPane card: \(currentToolPaneCard.rawValue)", category: .ai)
-        }
         // Restore evidence requirements
         evidenceRequirements = snapshot.evidenceRequirements
         Logger.info("📥 State restored from snapshot with conversation history", category: .ai)
@@ -535,15 +538,16 @@ actor StateCoordinator: OnboardingEventEmitter {
         await chatStore.reset()
         await uiState.reset()
         await streamQueueManager.reset()
-        currentToolPaneCard = .none
+        await llmStateManager.reset()
         Logger.info("🔄 StateCoordinator reset (all services reset)", category: .ai)
     }
-    // MARK: - ToolPane Card Tracking
-    func setToolPaneCard(_ card: OnboardingToolPaneCard) {
-        currentToolPaneCard = card
+
+    // MARK: - ToolPane Card Tracking (Delegated to LLMStateManager)
+    func setToolPaneCard(_ card: OnboardingToolPaneCard) async {
+        await llmStateManager.setToolPaneCard(card)
     }
-    func getCurrentToolPaneCard() -> OnboardingToolPaneCard {
-        currentToolPaneCard
+    func getCurrentToolPaneCard() async -> OnboardingToolPaneCard {
+        await llmStateManager.getCurrentToolPaneCard()
     }
     // MARK: - Delegation Methods (Convenience APIs)
     // Objective delegation
