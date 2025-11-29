@@ -121,10 +121,6 @@ final class OnboardingInterviewCoordinator {
         container.reregisterTools { [weak self] message in
             self?.ui.modelAvailabilityMessage = message
         }
-        // Update ingestion coordinator
-        Task {
-            await container.updateIngestionAgentProvider()
-        }
         Logger.info("🔄 OpenAIService updated in Coordinator", category: .ai)
     }
     // MARK: - Event Subscription
