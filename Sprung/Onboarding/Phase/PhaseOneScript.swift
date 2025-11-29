@@ -7,109 +7,111 @@
 import Foundation
 struct PhaseOneScript: PhaseScript {
     let phase: InterviewPhase = .phase1CoreFacts
-    let requiredObjectives: [String] = [
-        "applicant_profile",  // formerly P1.1
-        "skeleton_timeline",  // formerly P1.2
-        "enabled_sections"    // formerly P1.3
-        // dossier_seed (formerly P1.4) is optional, not required for phase advancement
-    ]
-    let allowedTools: [String] = [
-        "agent_ready",
-        "get_user_option",
-        "get_applicant_profile",
-        "get_user_upload",
-        "cancel_user_upload",
-        "create_timeline_card",
-        "update_timeline_card",
-        "reorder_timeline_cards",
-        "delete_timeline_card",
-        "display_timeline_entries_for_review",
-        "submit_for_validation",
-        "validate_applicant_profile",
-        "validated_applicant_profile_data",
-        "configure_enabled_sections",
-        "list_artifacts",
-        "get_artifact",
-        "request_raw_file",
-        "next_phase"
-    ]
+
+    let requiredObjectives: [String] = OnboardingObjectiveId.rawValues([
+        .applicantProfile,   // formerly P1.1
+        .skeletonTimeline,   // formerly P1.2
+        .enabledSections     // formerly P1.3
+        // dossierSeed (formerly P1.4) is optional, not required for phase advancement
+    ])
+
+    let allowedTools: [String] = OnboardingToolName.rawValues([
+        .agentReady,
+        .getUserOption,
+        .getApplicantProfile,
+        .getUserUpload,
+        .cancelUserUpload,
+        .createTimelineCard,
+        .updateTimelineCard,
+        .reorderTimelineCards,
+        .deleteTimelineCard,
+        .displayTimelineEntriesForReview,
+        .submitForValidation,
+        .validateApplicantProfile,
+        .validatedApplicantProfileData,
+        .configureEnabledSections,
+        .listArtifacts,
+        .getArtifact,
+        .requestRawFile,
+        .nextPhase
+    ])
     var objectiveWorkflows: [String: ObjectiveWorkflow] {
         [
-            "contact_source_selected": ObjectiveWorkflow(
-                id: "contact_source_selected",
+            OnboardingObjectiveId.contactSourceSelected.rawValue: ObjectiveWorkflow(
+                id: OnboardingObjectiveId.contactSourceSelected.rawValue,
                 onComplete: { context in
                     let source = context.details["source"] ?? context.details["status"] ?? "unknown"
                     let title = """
                         Contact source selected: \(source). \
                         Continue guiding the user through the applicant profile intake card that remains on screen.
                         """
-                    let details = ["source": source, "next_objective": "contact_data_collected"]
+                    let details = ["source": source, "next_objective": OnboardingObjectiveId.contactDataCollected.rawValue]
                     return [.developerMessage(title: title, details: details, payload: nil)]
                 }
             ),
-            "contact_data_collected": ObjectiveWorkflow(
-                id: "contact_data_collected",
-                dependsOn: ["contact_source_selected"],
+            OnboardingObjectiveId.contactDataCollected.rawValue: ObjectiveWorkflow(
+                id: OnboardingObjectiveId.contactDataCollected.rawValue,
+                dependsOn: [OnboardingObjectiveId.contactSourceSelected.rawValue],
                 autoStartWhenReady: true,
                 onComplete: { context in
                     let mode = context.details["source"] ?? context.details["status"] ?? "unspecified"
                     let title = "Applicant contact data collected via \(mode). Await validation status before re-requesting any details."
-                    let details = ["source": mode, "next_objective": "contact_data_validated"]
+                    let details = ["source": mode, "next_objective": OnboardingObjectiveId.contactDataValidated.rawValue]
                     return [.developerMessage(title: title, details: details, payload: nil)]
                 }
             ),
-            "contact_data_validated": ObjectiveWorkflow(
-                id: "contact_data_validated",
-                dependsOn: ["contact_data_collected"],
+            OnboardingObjectiveId.contactDataValidated.rawValue: ObjectiveWorkflow(
+                id: OnboardingObjectiveId.contactDataValidated.rawValue,
+                dependsOn: [OnboardingObjectiveId.contactDataCollected.rawValue],
                 onComplete: { context in
                     let details = context.details.isEmpty ? ["source": "workflow"] : context.details
                     return [.triggerPhotoFollowUp(extraDetails: details)]
                 }
             ),
-            "contact_photo_collected": ObjectiveWorkflow(
-                id: "contact_photo_collected",
-                dependsOn: ["contact_data_validated"],
+            OnboardingObjectiveId.contactPhotoCollected.rawValue: ObjectiveWorkflow(
+                id: OnboardingObjectiveId.contactPhotoCollected.rawValue,
+                dependsOn: [OnboardingObjectiveId.contactDataValidated.rawValue],
                 autoStartWhenReady: true,
                 onComplete: { context in
                     let title = """
                         Profile photo stored successfully. \
                         Resume the Phase 1 sequence without re-requesting another upload.
                         """
-                    let details = ["status": context.status.rawValue, "objective": "contact_photo_collected"]
+                    let details = ["status": context.status.rawValue, "objective": OnboardingObjectiveId.contactPhotoCollected.rawValue]
                     return [.developerMessage(title: title, details: details, payload: nil)]
                 }
             ),
-            "applicant_profile": ObjectiveWorkflow(
-                id: "applicant_profile",
-                dependsOn: ["contact_data_validated"],
+            OnboardingObjectiveId.applicantProfile.rawValue: ObjectiveWorkflow(
+                id: OnboardingObjectiveId.applicantProfile.rawValue,
+                dependsOn: [OnboardingObjectiveId.contactDataValidated.rawValue],
                 onComplete: { context in
                     let title = """
                         Applicant profile persisted. \
                         Move on to building the skeleton timeline next.
                         """
-                    let details = ["next_objective": "skeleton_timeline", "status": context.status.rawValue]
+                    let details = ["next_objective": OnboardingObjectiveId.skeletonTimeline.rawValue, "status": context.status.rawValue]
                     return [.developerMessage(title: title, details: details, payload: nil)]
                 }
             ),
-            "skeleton_timeline": ObjectiveWorkflow(
-                id: "skeleton_timeline",
-                dependsOn: ["applicant_profile"],
+            OnboardingObjectiveId.skeletonTimeline.rawValue: ObjectiveWorkflow(
+                id: OnboardingObjectiveId.skeletonTimeline.rawValue,
+                dependsOn: [OnboardingObjectiveId.applicantProfile.rawValue],
                 onComplete: { context in
                     let title = """
                         Skeleton timeline captured. \
                         Prepare the user to choose enabled résumé sections.
                         """
-                    let details = ["next_objective": "enabled_sections", "status": context.status.rawValue]
+                    let details = ["next_objective": OnboardingObjectiveId.enabledSections.rawValue, "status": context.status.rawValue]
                     return [.developerMessage(title: title, details: details, payload: nil)]
                 }
             ),
-            "enabled_sections": ObjectiveWorkflow(
-                id: "enabled_sections",
-                dependsOn: ["skeleton_timeline"],
+            OnboardingObjectiveId.enabledSections.rawValue: ObjectiveWorkflow(
+                id: OnboardingObjectiveId.enabledSections.rawValue,
+                dependsOn: [OnboardingObjectiveId.skeletonTimeline.rawValue],
                 onComplete: { context in
                     var outputs: [ObjectiveWorkflowOutput] = []
                     let readyTitle = "Enabled sections confirmed. When all ledger entries are clear, prompt the user to advance to Phase 2."
-                    let readyDetails = ["status": context.status.rawValue, "ready_for": "next_phase"]
+                    let readyDetails = ["status": context.status.rawValue, "ready_for": OnboardingToolName.nextPhase.rawValue]
                     outputs.append(.developerMessage(title: readyTitle, details: readyDetails, payload: nil))
                     let dossierTitle = """
                         Enabled sections set. Seed the candidate dossier with 2–3 quick prompts about goals, motivations, and strengths. \
@@ -117,7 +119,7 @@ struct PhaseOneScript: PhaseScript {
                         Mark dossier_seed complete after at least two entries.
                         """
                     let dossierDetails = [
-                        "next_objective": "dossier_seed",
+                        "next_objective": OnboardingObjectiveId.dossierSeed.rawValue,
                         "required": "false",
                         "min_entries": "2"
                     ]

@@ -7,35 +7,37 @@
 import Foundation
 struct PhaseThreeScript: PhaseScript {
     let phase: InterviewPhase = .phase3WritingCorpus
-    let requiredObjectives: [String] = [
-        "one_writing_sample",
-        "dossier_complete"
-    ]
-    let allowedTools: [String] = [
-        "get_user_option",
-        "get_user_upload",
-        "cancel_user_upload",
-        "submit_for_validation",
-        "persist_data",
-        "set_objective_status",
-        "list_artifacts",
-        "get_artifact",
-        "request_raw_file",
-        "next_phase"
-    ]
+
+    let requiredObjectives: [String] = OnboardingObjectiveId.rawValues([
+        .oneWritingSample,
+        .dossierComplete
+    ])
+
+    let allowedTools: [String] = OnboardingToolName.rawValues([
+        .getUserOption,
+        .getUserUpload,
+        .cancelUserUpload,
+        .submitForValidation,
+        .persistData,
+        .setObjectiveStatus,
+        .listArtifacts,
+        .getArtifact,
+        .requestRawFile,
+        .nextPhase
+    ])
     var objectiveWorkflows: [String: ObjectiveWorkflow] {
         [
-            "one_writing_sample": ObjectiveWorkflow(
-                id: "one_writing_sample",
+            OnboardingObjectiveId.oneWritingSample.rawValue: ObjectiveWorkflow(
+                id: OnboardingObjectiveId.oneWritingSample.rawValue,
                 onComplete: { context in
                     let title = "Writing sample captured. Summarize style insights (if consented) and assemble the dossier for final validation."
-                    let details = ["next_objective": "dossier_complete", "status": context.status.rawValue]
+                    let details = ["next_objective": OnboardingObjectiveId.dossierComplete.rawValue, "status": context.status.rawValue]
                     return [.developerMessage(title: title, details: details, payload: nil)]
                 }
             ),
-            "dossier_complete": ObjectiveWorkflow(
-                id: "dossier_complete",
-                dependsOn: ["one_writing_sample"],
+            OnboardingObjectiveId.dossierComplete.rawValue: ObjectiveWorkflow(
+                id: OnboardingObjectiveId.dossierComplete.rawValue,
+                dependsOn: [OnboardingObjectiveId.oneWritingSample.rawValue],
                 onComplete: { context in
                     let title = "Candidate dossier finalized. Congratulate the user, summarize next steps, and call next_phase to finish the interview."
                     let details = ["status": context.status.rawValue, "ready_for": "completion"]

@@ -7,37 +7,39 @@
 import Foundation
 struct PhaseTwoScript: PhaseScript {
     let phase: InterviewPhase = .phase2DeepDive
-    let requiredObjectives: [String] = [
-        "evidence_audit_completed",
-        "cards_generated"
-    ]
-    let allowedTools: [String] = [
-        "get_user_option",
-        "request_evidence", // NEW
-        "generate_knowledge_card",
-        "get_user_upload",
-        "cancel_user_upload",
-        "submit_for_validation",
-        "persist_data",
-        "set_objective_status",
-        "list_artifacts",
-        "get_artifact",
-        "request_raw_file",
-        "next_phase"
-    ]
+
+    let requiredObjectives: [String] = OnboardingObjectiveId.rawValues([
+        .evidenceAuditCompleted,
+        .cardsGenerated
+    ])
+
+    let allowedTools: [String] = OnboardingToolName.rawValues([
+        .getUserOption,
+        .requestEvidence,
+        .generateKnowledgeCard,
+        .getUserUpload,
+        .cancelUserUpload,
+        .submitForValidation,
+        .persistData,
+        .setObjectiveStatus,
+        .listArtifacts,
+        .getArtifact,
+        .requestRawFile,
+        .nextPhase
+    ])
     var objectiveWorkflows: [String: ObjectiveWorkflow] {
         [
-            "evidence_audit_completed": ObjectiveWorkflow(
-                id: "evidence_audit_completed",
+            OnboardingObjectiveId.evidenceAuditCompleted.rawValue: ObjectiveWorkflow(
+                id: OnboardingObjectiveId.evidenceAuditCompleted.rawValue,
                 onComplete: { context in
                     let title = "Evidence audit complete. Requests have been generated."
-                    let details = ["next_objective": "cards_generated", "status": context.status.rawValue]
+                    let details = ["next_objective": OnboardingObjectiveId.cardsGenerated.rawValue, "status": context.status.rawValue]
                     return [.developerMessage(title: title, details: details, payload: nil)]
                 }
             ),
-            "cards_generated": ObjectiveWorkflow(
-                id: "cards_generated",
-                dependsOn: ["evidence_audit_completed"],
+            OnboardingObjectiveId.cardsGenerated.rawValue: ObjectiveWorkflow(
+                id: OnboardingObjectiveId.cardsGenerated.rawValue,
+                dependsOn: [OnboardingObjectiveId.evidenceAuditCompleted.rawValue],
                 onComplete: { context in
                     let title = "Knowledge cards generated and validated. Ready for Phase 3."
                     let details = ["ready_for": "phase3", "status": context.status.rawValue]
