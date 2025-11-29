@@ -59,6 +59,7 @@ extension TemplateEditorView {
     }
     private static let customFieldReferenceRegex: NSRegularExpression = {
         let pattern = #"custom(?:\.[A-Za-z0-9_\-]+)+"#
+        // swiftlint:disable:next force_try
         return try! NSRegularExpression(pattern: pattern, options: [])
     }()
     static func extractCustomFieldReferences(from template: String) -> Set<String> {

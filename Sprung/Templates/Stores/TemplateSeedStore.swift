@@ -10,7 +10,7 @@ final class TemplateSeedStore {
     }
     func seed(for template: Template) -> TemplateSeed? {
         if !template.seeds.isEmpty {
-            return template.seeds.sorted(by: { $0.updatedAt > $1.updatedAt }).first
+            return template.seeds.max(by: { $0.updatedAt < $1.updatedAt })
         }
         return seed(forSlug: template.slug)
     }

@@ -5,8 +5,10 @@
 //  Created by Christopher Culbreath on 5/20/25.
 //
 import Foundation
-/// This file defines types that are used in the AI protocol interfaces
-/// These types abstract away the implementation details of specific AI libraries
+
+// This file defines types that are used in the AI protocol interfaces
+// These types abstract away the implementation details of specific AI libraries
+
 // MARK: - Clarifying Questions Types
 /// Structure for the LLM's clarifying questions request
 struct ClarifyingQuestionsRequest: Codable {

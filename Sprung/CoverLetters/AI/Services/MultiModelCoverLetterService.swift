@@ -183,51 +183,72 @@ class MultiModelCoverLetterService {
         selectedVotingScheme: VotingScheme
     ) async {
         Logger.info("🚀 Starting multi-model selection with \(selectedModels.count) models using \(selectedVotingScheme.rawValue)")
+        initializeSelectionState(modelCount: selectedModels.count, models: selectedModels)
 
-        await MainActor.run {
-            isProcessing = true
-            errorMessage = nil
-            voteTally = [:]
-            scoreTally = [:]
-            modelReasonings = []
-            failedModels = [:]
-            totalOperations = selectedModels.count
-            completedOperations = 0
-            progress = 0
-            pendingModels = selectedModels
+        guard let validationResult = await validateSelectionPrerequisites(coverLetter: coverLetter) else { return }
+        let (jobApp, query, coverLetters) = validationResult
+
+        let modelPrompts = prepareModelPrompts(
+            selectedModels: selectedModels,
+            query: query,
+            coverLetters: coverLetters,
+            votingScheme: selectedVotingScheme
+        )
+
+        guard let llm = llmFacade else {
+            await setError("LLM service is not configured")
+            return
         }
 
+        let executionSucceeded = await executeModelTasks(
+            llm: llm,
+            selectedModels: selectedModels,
+            modelPrompts: modelPrompts,
+            selectedVotingScheme: selectedVotingScheme
+        )
+
+        guard executionSucceeded else { return }
+
+        await finalizeResults(
+            coverLetters: coverLetters,
+            jobApp: jobApp,
+            selectedModels: selectedModels,
+            selectedVotingScheme: selectedVotingScheme
+        )
+    }
+
+    private func initializeSelectionState(modelCount: Int, models: Set<String>) {
+        isProcessing = true
+        errorMessage = nil
+        voteTally = [:]
+        scoreTally = [:]
+        modelReasonings = []
+        failedModels = [:]
+        totalOperations = modelCount
+        completedOperations = 0
+        progress = 0
+        pendingModels = models
+    }
+
+    private func validateSelectionPrerequisites(
+        coverLetter: CoverLetter
+    ) async -> (JobApp, CoverLetterQuery, [CoverLetter])? {
         guard let jobApp = jobAppStore?.selectedApp else {
-            await MainActor.run {
-                errorMessage = "No job application selected"
-                isProcessing = false
-            }
-            return
+            await setError("No job application selected")
+            return nil
         }
-
         _ = coverLetter.writingSamplesString
-
         guard let resume = jobApp.selectedRes else {
-            await MainActor.run {
-                errorMessage = "No resume selected for this job application"
-                isProcessing = false
-            }
-            return
+            await setError("No resume selected for this job application")
+            return nil
         }
-
         guard let exportCoordinator else {
-            await MainActor.run {
-                errorMessage = "Export coordinator unavailable"
-                isProcessing = false
-            }
-            return
+            await setError("Export coordinator unavailable")
+            return nil
         }
         guard let applicantProfileStore else {
-            await MainActor.run {
-                errorMessage = "Applicant profile store unavailable"
-                isProcessing = false
-            }
-            return
+            await setError("Applicant profile store unavailable")
+            return nil
         }
         let query = CoverLetterQuery(
             coverLetter: coverLetter,
@@ -237,50 +258,55 @@ class MultiModelCoverLetterService {
             applicantProfile: applicantProfileStore.currentProfile(),
             saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
         )
+        return (jobApp, query, jobApp.coverLetters)
+    }
 
-        // Capture model capabilities and cover letters data before entering async context
+    private func prepareModelPrompts(
+        selectedModels: Set<String>,
+        query: CoverLetterQuery,
+        coverLetters: [CoverLetter],
+        votingScheme: VotingScheme
+    ) -> [String: String] {
         let modelCapabilities = Dictionary(uniqueKeysWithValues: selectedModels.map { modelId in
             let model = enabledLLMStore?.enabledModels.first(where: { $0.modelId == modelId })
             let supportsSchema = model?.supportsJSONSchema ?? false
             let shouldAvoidSchema = model?.shouldAvoidJSONSchema ?? false
             return (modelId, (supportsSchema: supportsSchema, shouldAvoidSchema: shouldAvoidSchema))
         })
-
-        // Capture cover letters to avoid SwiftData concurrency issues
-        let coverLetters = jobApp.coverLetters
-
-        // Pre-generate all prompts to avoid capturing non-Sendable types in async closures
-        let modelPrompts = Dictionary(uniqueKeysWithValues: selectedModels.map { modelId in
+        return Dictionary(uniqueKeysWithValues: selectedModels.map { modelId in
             let capabilities = modelCapabilities[modelId]!
             let includeJSONInstructions = !capabilities.supportsSchema || capabilities.shouldAvoidSchema
             let prompt = query.bestCoverLetterPrompt(
                 coverLetters: coverLetters,
-                votingScheme: selectedVotingScheme,
+                votingScheme: votingScheme,
                 includeJSONInstructions: includeJSONInstructions
             )
             return (modelId, prompt)
         })
-        guard let llm = llmFacade else {
-            await MainActor.run {
-                errorMessage = "LLM service is not configured"
-                isProcessing = false
-            }
-            return
+    }
+
+    private func setError(_ message: String) async {
+        await MainActor.run {
+            errorMessage = message
+            isProcessing = false
         }
-        // Execute models in parallel with real-time result processing
+    }
+
+    private func executeModelTasks(
+        llm: LLMFacade,
+        selectedModels: Set<String>,
+        modelPrompts: [String: String],
+        selectedVotingScheme: VotingScheme
+    ) async -> Bool {
         do {
             try await withThrowingTaskGroup(of: (String, Result<BestCoverLetterResponse, Error>).self) { group in
-                // Check for cancellation before starting
                 try Task.checkCancellation()
-                // Start all model tasks
                 Logger.info("🚀 Starting all \(selectedModels.count) model tasks in parallel")
                 for modelId in selectedModels {
                     let prompt = modelPrompts[modelId]!
                     group.addTask {
                         do {
-                            // Check for cancellation before starting this model
                             try Task.checkCancellation()
-
                             let response = try await llm.executeFlexibleJSON(
                                 prompt: prompt,
                                 modelId: modelId,
@@ -294,92 +320,93 @@ class MultiModelCoverLetterService {
                         }
                     }
                 }
-
-                // Process results as they come in
                 for try await (modelId, result) in group {
-                    // Check for cancellation before processing each result
                     try Task.checkCancellation()
-
-                    await MainActor.run {
-                        completedOperations += 1
-                        progress = Double(completedOperations) / Double(totalOperations)
-                        pendingModels.remove(modelId)
-                        Logger.debug("📊 Progress update: \(completedOperations)/\(totalOperations) (\(Int(progress * 100))%)")
-
-                        switch result {
-                        case .success(let response):
-                            modelReasonings.append((model: modelId, response: response))
-
-                            if selectedVotingScheme == .firstPastThePost {
-                                if let bestUuid = response.bestLetterUuid,
-                                   let uuid = UUID(uuidString: bestUuid) {
-                                    voteTally[uuid, default: 0] += 1
-                                    Logger.debug("🗳️ \(modelId) voted for \(getLetterName(for: bestUuid) ?? bestUuid)")
-                                }
-                            } else {
-                                if let scoreAllocations = response.scoreAllocations {
-                                    let totalAllocated = scoreAllocations.reduce(0) { $0 + $1.score }
-                                    if totalAllocated != 20 {
-                                        Logger.debug("⚠️ Model \(modelId) allocated \(totalAllocated) points instead of 20!")
-                                    }
-
-                                    for allocation in scoreAllocations {
-                                        if let uuid = UUID(uuidString: allocation.letterUuid) {
-                                            scoreTally[uuid, default: 0] += allocation.score
-                                            Logger.debug("📊 Model \(modelId) allocated \(allocation.score) points to \(getLetterName(for: allocation.letterUuid) ?? allocation.letterUuid)")
-                                        }
-                                    }
-                                }
-                            }
-
-                        case .failure(let error):
-                            failedModels[modelId] = error.localizedDescription
-                            Logger.debug("❌ Model \(modelId) failed: \(error.localizedDescription)")
-                        }
-
-                        // Update error message based on current results
-                        let successCount = modelReasonings.count
-                        let failureCount = failedModels.count
-                        let totalCompleted = successCount + failureCount
-
-                        // Log major progress milestones
-                        if successCount == 1 && failureCount == 0 {
-                            Logger.info("🎉 First model completed successfully")
-                        }
-
-                        if failureCount > 0 && successCount > 0 {
-                            errorMessage = "\(failureCount) of \(totalCompleted) models failed"
-                        } else if successCount == 0 && totalCompleted == selectedModels.count {
-                            Logger.info("❌ All selected models failed to respond")
-                            errorMessage = "All selected models failed to respond"
-                            isProcessing = false
-                            return
-                        } else if failureCount == 0 && totalCompleted > 0 {
-                            errorMessage = nil
-                        }
-                    }
+                    await processModelResult(modelId: modelId, result: result, votingScheme: selectedVotingScheme, totalModels: selectedModels.count)
                 }
             }
+            return true
         } catch is CancellationError {
             Logger.info("🚫 Multi-model selection was cancelled")
-            await MainActor.run {
-                errorMessage = "Operation cancelled by user"
-                isProcessing = false
-            }
-            return
+            await setError("Operation cancelled by user")
+            return false
         } catch {
             Logger.error("💥 Multi-model task group failed: \(error.localizedDescription)")
-            await MainActor.run {
-                errorMessage = "Multi-model selection failed: \(error.localizedDescription)"
-                isProcessing = false
-            }
-            return
+            await setError("Multi-model selection failed: \(error.localizedDescription)")
+            return false
         }
+    }
 
+    private func processModelResult(
+        modelId: String,
+        result: Result<BestCoverLetterResponse, Error>,
+        votingScheme: VotingScheme,
+        totalModels: Int
+    ) async {
+        await MainActor.run {
+            completedOperations += 1
+            progress = Double(completedOperations) / Double(totalOperations)
+            pendingModels.remove(modelId)
+            Logger.debug("📊 Progress update: \(completedOperations)/\(totalOperations) (\(Int(progress * 100))%)")
+            switch result {
+            case .success(let response):
+                processSuccessfulResponse(modelId: modelId, response: response, votingScheme: votingScheme)
+            case .failure(let error):
+                failedModels[modelId] = error.localizedDescription
+                Logger.debug("❌ Model \(modelId) failed: \(error.localizedDescription)")
+            }
+            updateErrorMessageForProgress(totalModels: totalModels)
+        }
+    }
+
+    private func processSuccessfulResponse(modelId: String, response: BestCoverLetterResponse, votingScheme: VotingScheme) {
+        modelReasonings.append((model: modelId, response: response))
+        if votingScheme == .firstPastThePost {
+            if let bestUuid = response.bestLetterUuid, let uuid = UUID(uuidString: bestUuid) {
+                voteTally[uuid, default: 0] += 1
+                Logger.debug("🗳️ \(modelId) voted for \(getLetterName(for: bestUuid) ?? bestUuid)")
+            }
+        } else if let scoreAllocations = response.scoreAllocations {
+            let totalAllocated = scoreAllocations.reduce(0) { $0 + $1.score }
+            if totalAllocated != 20 {
+                Logger.debug("⚠️ Model \(modelId) allocated \(totalAllocated) points instead of 20!")
+            }
+            for allocation in scoreAllocations {
+                if let uuid = UUID(uuidString: allocation.letterUuid) {
+                    scoreTally[uuid, default: 0] += allocation.score
+                    Logger.debug("📊 Model \(modelId) allocated \(allocation.score) points to \(getLetterName(for: allocation.letterUuid) ?? allocation.letterUuid)")
+                }
+            }
+        }
+    }
+
+    private func updateErrorMessageForProgress(totalModels: Int) {
+        let successCount = modelReasonings.count
+        let failureCount = failedModels.count
+        let totalCompleted = successCount + failureCount
+        if successCount == 1 && failureCount == 0 {
+            Logger.info("🎉 First model completed successfully")
+        }
+        if failureCount > 0 && successCount > 0 {
+            errorMessage = "\(failureCount) of \(totalCompleted) models failed"
+        } else if successCount == 0 && totalCompleted == totalModels {
+            Logger.info("❌ All selected models failed to respond")
+            errorMessage = "All selected models failed to respond"
+            isProcessing = false
+        } else if failureCount == 0 && totalCompleted > 0 {
+            errorMessage = nil
+        }
+    }
+
+    private func finalizeResults(
+        coverLetters: [CoverLetter],
+        jobApp: JobApp,
+        selectedModels: Set<String>,
+        selectedVotingScheme: VotingScheme
+    ) async {
         await MainActor.run {
             isProcessing = false
             Logger.info("✅ Multi-model selection completed. Processing results...")
-
             for letter in coverLetters {
                 if selectedVotingScheme == .firstPastThePost {
                     letter.voteCount = voteTally[letter.id] ?? 0
@@ -390,7 +417,6 @@ class MultiModelCoverLetterService {
                 }
                 letter.hasBeenAssessed = true
             }
-
             if selectedVotingScheme == .scoreVoting {
                 Logger.info("📊 Final Score Tally:")
                 for (letterId, score) in scoreTally {
@@ -401,27 +427,19 @@ class MultiModelCoverLetterService {
                 let totalPoints = scoreTally.values.reduce(0, +)
                 Logger.info("  Total points allocated: \(totalPoints) (should be \(selectedModels.count * 20))")
             }
-
             if !modelReasonings.isEmpty {
                 isGeneratingSummary = true
                 Logger.info("📝 Starting analysis summary generation with \(modelReasonings.count) model responses")
             }
         }
-
         if !modelReasonings.isEmpty {
             isGeneratingSummary = true
-
             Task { @MainActor in
-                await generateReasoningSummary(
-                    coverLetters: coverLetters,
-                    jobApp: jobApp,
-                    selectedVotingScheme: selectedVotingScheme
-                )
+                await generateReasoningSummary(coverLetters: coverLetters, jobApp: jobApp, selectedVotingScheme: selectedVotingScheme)
             }
         } else {
             Logger.info("⚠️ No model reasonings to summarize")
         }
-
         await MainActor.run {
             isCompleted = true
             Logger.info("🏁 MultiModel process completed. Summary state: \(reasoningSummary == nil ? "nil" : "has value")")

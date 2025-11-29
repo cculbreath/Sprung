@@ -159,10 +159,8 @@ extension OpenRouterModel {
         if avgCost == 0 { return 0 } // Free
 
         // Use provided thresholds for dynamic calculation
-        for (index, threshold) in thresholds.enumerated().dropFirst() {
-            if avgCost <= threshold {
-                return index
-            }
+        for (index, threshold) in thresholds.enumerated().dropFirst() where avgCost <= threshold {
+            return index
         }
 
         return thresholds.count // Highest tier

@@ -101,7 +101,7 @@ struct TimelineCardEditorView: View {
                 Logger.info("🔄 TimelineCardEditorView: Loaded \(newCards.count) cards, hasChanges=\(needsConfirmation)", category: .ai)
             }
         }
-        .onChange(of: drafts) { oldDrafts, newDrafts in
+        .onChange(of: drafts) { _, newDrafts in
             // Skip recalculation if we're actively loading from coordinator
             // to prevent overwriting hasChanges that was just set in token onChange
             guard !isLoadingFromCoordinator else { return }

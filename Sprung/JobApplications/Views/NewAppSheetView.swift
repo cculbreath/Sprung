@@ -140,7 +140,7 @@ struct NewAppSheetView: View {
                     Task {
                         isLoading = true
                         if let urlString = challengeURL.absoluteString as String?,
-                           let _ = await JobApp.importFromIndeed(urlString: urlString, jobAppStore: jobAppStore) {
+                           await JobApp.importFromIndeed(urlString: urlString, jobAppStore: jobAppStore) != nil {
                             isLoading = false
                             isPresented = false
                         } else {

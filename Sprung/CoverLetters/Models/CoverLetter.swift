@@ -285,10 +285,8 @@ class CoverLetter: Identifiable, Hashable {
         guard let jobApp = jobApp else { return }
 
         // Clear the flag from all other cover letters for this job
-        for letter in jobApp.coverLetters {
-            if letter.id != self.id {
-                letter.isChosenSubmissionDraft = false
-            }
+        for letter in jobApp.coverLetters where letter.id != self.id {
+            letter.isChosenSubmissionDraft = false
         }
 
         // Set this one as chosen

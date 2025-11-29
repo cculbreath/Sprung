@@ -35,6 +35,5 @@ final class ResRefStore: SwiftDataStore {
         modelContext.delete(resRef)
         saveContext()
     }
-    /// Persists changes to the database
     // `saveContext()` now from `SwiftDataStore`.
 }

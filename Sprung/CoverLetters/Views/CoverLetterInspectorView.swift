@@ -217,8 +217,7 @@ struct CoverLetterInspectorView: View {
 
         if let mostRecentGenerated = jobApp.coverLetters
             .filter({ $0.generated })
-            .sorted(by: { $0.moddedDate > $1.moddedDate })
-            .first {
+            .max(by: { $0.moddedDate < $1.moddedDate }) {
             jobApp.selectedCover = mostRecentGenerated
             coverLetterStore.cL = mostRecentGenerated
         } else {

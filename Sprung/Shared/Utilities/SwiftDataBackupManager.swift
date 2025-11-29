@@ -68,7 +68,7 @@ struct SwiftDataBackupManager {
         }
         let backupRoot = appSupport.appendingPathComponent(backupFolderName, isDirectory: true)
         let folders = (try? FileManager.default.contentsOfDirectory(at: backupRoot, includingPropertiesForKeys: [.contentModificationDateKey], options: [.skipsHiddenFiles])) ?? []
-        guard let latest = folders.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }).last else {
+        guard let latest = folders.max(by: { $0.lastPathComponent < $1.lastPathComponent }) else {
             throw SwiftDataBackupError.noBackupFound
         }
         let backups = try FileManager.default.contentsOfDirectory(at: latest, includingPropertiesForKeys: nil)
