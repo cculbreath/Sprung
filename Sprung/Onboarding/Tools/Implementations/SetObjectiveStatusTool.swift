@@ -69,7 +69,7 @@ struct SetObjectiveStatusTool: InterviewTool {
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
-    var name: String { "set_objective_status" }
+    var name: String { OnboardingToolName.setObjectiveStatus.rawValue }
     var description: String { "Update objective status (atomic operation - call alone, no assistant message). Returns {objective_id, status, updated}. Silent background operation." }
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {

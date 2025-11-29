@@ -53,7 +53,7 @@ struct CreateTimelineCardTool: InterviewTool {
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
-    var name: String { "create_timeline_card" }
+    var name: String { OnboardingToolName.createTimelineCard.rawValue }
     var description: String { "Create skeleton timeline card with basic facts (title, org, dates, location). Returns {success, id}. Phase 1 only - no descriptions." }
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {

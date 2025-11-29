@@ -31,7 +31,7 @@ struct RequestEvidenceTool: InterviewTool {
         self.coordinator = coordinator
     }
 
-    var name: String { "request_evidence" }
+    var name: String { OnboardingToolName.requestEvidence.rawValue }
     var description: String { "Request specific evidence from the user to verify a timeline entry." }
     var parameters: JSONSchema { Self.schema }
 

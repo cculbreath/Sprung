@@ -67,7 +67,7 @@ struct ConfigureEnabledSectionsTool: InterviewTool {
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter
     }()
-    var name: String { "configure_enabled_sections" }
+    var name: String { OnboardingToolName.configureEnabledSections.rawValue }
     var description: String {
         "Present section toggle UI. Pass object: {\"work\": true, \"education\": true, \"skills\": false, ...}. Returns immediately - selections arrive as user message."
     }

@@ -73,7 +73,7 @@ struct SubmitForValidationTool: InterviewTool {
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
-    var name: String { "submit_for_validation" }
+    var name: String { OnboardingToolName.submitForValidation.rawValue }
     var description: String {
         """
         Present FINAL APPROVAL card with Confirm/Reject buttons. \

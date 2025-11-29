@@ -32,7 +32,7 @@ struct CancelUserUploadTool: InterviewTool {
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
-    var name: String { "cancel_user_upload" }
+    var name: String { OnboardingToolName.cancelUserUpload.rawValue }
     var description: String { "Dismiss active upload card. Returns {status: cancelled}. Use when user wants to skip upload and provide data via chat instead." }
     var parameters: JSONSchema { Self.schema }
     func isAvailable() async -> Bool {

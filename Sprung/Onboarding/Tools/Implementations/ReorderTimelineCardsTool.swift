@@ -33,7 +33,7 @@ struct ReorderTimelineCardsTool: InterviewTool {
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
-    var name: String { "reorder_timeline_cards" }
+    var name: String { OnboardingToolName.reorderTimelineCards.rawValue }
     var description: String { "Reorder timeline cards. CRITICAL: Must include ALL card IDs - omitted cards are removed. Returns {success, count}." }
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {

@@ -25,7 +25,7 @@ struct GetApplicantProfileTool: InterviewTool {
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
-    var name: String { "get_applicant_profile" }
+    var name: String { OnboardingToolName.getApplicantProfile.rawValue }
     var description: String { "Present profile intake UI card (upload/URL/manual/contacts). Returns immediately - intake completion arrives as user message." }
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {

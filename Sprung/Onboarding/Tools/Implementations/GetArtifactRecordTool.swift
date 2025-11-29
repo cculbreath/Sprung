@@ -38,7 +38,7 @@ struct GetArtifactRecordTool: InterviewTool {
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
-    var name: String { "get_artifact" }
+    var name: String { OnboardingToolName.getArtifact.rawValue }
     var description: String { "Retrieve full artifact with extracted text content. Returns {artifact: {extracted_text, ...}}. Use to process uploaded files." }
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {

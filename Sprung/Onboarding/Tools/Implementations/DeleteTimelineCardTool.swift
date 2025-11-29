@@ -22,7 +22,7 @@ struct DeleteTimelineCardTool: InterviewTool {
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
-    var name: String { "delete_timeline_card" }
+    var name: String { OnboardingToolName.deleteTimelineCard.rawValue }
     var description: String { "Remove timeline card by ID. Returns {success, id}. Use when user wants to remove an entry." }
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {

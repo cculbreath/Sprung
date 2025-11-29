@@ -52,7 +52,7 @@ struct NextPhaseTool: InterviewTool {
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
-    var name: String { "next_phase" }
+    var name: String { OnboardingToolName.nextPhase.rawValue }
     var description: String { "Request phase transition. If objectives complete, transitions immediately. If not, presents user approval dialog. Returns {status, new_phase}." }
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {

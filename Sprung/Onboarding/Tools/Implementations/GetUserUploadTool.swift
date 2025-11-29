@@ -75,7 +75,7 @@ struct GetUserUploadTool: InterviewTool {
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
-    var name: String { "get_user_upload" }
+    var name: String { OnboardingToolName.getUserUpload.rawValue }
     var description: String {
         "Present upload card for files/URLs. Returns immediately - uploads arrive as artifacts. Use for resume, LinkedIn, transcripts, photos."
     }

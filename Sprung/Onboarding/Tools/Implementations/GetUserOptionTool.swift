@@ -61,7 +61,7 @@ struct GetUserOptionTool: InterviewTool {
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter
     }()
-    var name: String { "get_user_option" }
+    var name: String { OnboardingToolName.getUserOption.rawValue }
     var description: String { "Present multiple-choice selection card. Returns immediately - selection arrives as user message. Use for structured decisions (2-6 options)." }
     var parameters: JSONSchema { Self.schema }
     init(coordinator: OnboardingInterviewCoordinator) {
