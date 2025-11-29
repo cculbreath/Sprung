@@ -92,21 +92,22 @@ enum OnboardingEvent {
     case stateAllowedToolsUpdated(tools: Set<String>)
     // MARK: - LLM Topics (§6 spec)
     case chatboxUserMessageAdded(messageId: String)  // Emitted when chatbox adds message to transcript immediately
+    case llmUserMessageFailed(messageId: String, originalText: String, error: String)  // Emitted when user message fails (timeout, network error)
     case llmUserMessageSent(messageId: String, payload: JSON, isSystemGenerated: Bool = false)
     case llmDeveloperMessageSent(messageId: String, payload: JSON)
     case llmSentToolResponseMessage(messageId: String, payload: JSON)
-    case llmSendUserMessage(payload: JSON, isSystemGenerated: Bool = false)
+    case llmSendUserMessage(payload: JSON, isSystemGenerated: Bool = false, chatboxMessageId: String? = nil, originalText: String? = nil)
     case llmSendDeveloperMessage(payload: JSON)
     case llmToolResponseMessage(payload: JSON)
     case llmStatus(status: LLMStatus)
     // Stream request events (for enqueueing via StateCoordinator)
-    case llmEnqueueUserMessage(payload: JSON, isSystemGenerated: Bool)
+    case llmEnqueueUserMessage(payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String? = nil, originalText: String? = nil)
     case llmEnqueueToolResponse(payload: JSON)
     // Parallel tool call batching - signals how many tool responses to collect before sending
     case llmToolCallBatchStarted(expectedCount: Int, callIds: [String])
     case llmExecuteBatchedToolResponses(payloads: [JSON])
     // Stream execution events (for serial processing via StateCoordinator)
-    case llmExecuteUserMessage(payload: JSON, isSystemGenerated: Bool)
+    case llmExecuteUserMessage(payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String? = nil, originalText: String? = nil)
     case llmExecuteToolResponse(payload: JSON)
     case llmExecuteDeveloperMessage(payload: JSON)
     case llmStreamCompleted  // Signal that a stream finished and queue can process next item
@@ -285,7 +286,7 @@ actor EventCoordinator {
     private func extractTopic(from event: OnboardingEvent) -> EventTopic {
         switch event {
         // LLM events
-        case .chatboxUserMessageAdded, .llmUserMessageSent, .llmDeveloperMessageSent, .llmSentToolResponseMessage,
+        case .chatboxUserMessageAdded, .llmUserMessageFailed, .llmUserMessageSent, .llmDeveloperMessageSent, .llmSentToolResponseMessage,
              .llmSendUserMessage, .llmSendDeveloperMessage, .llmToolResponseMessage, .llmStatus,
              .llmEnqueueUserMessage, .llmEnqueueToolResponse,
              .llmToolCallBatchStarted, .llmExecuteBatchedToolResponses,
@@ -474,6 +475,8 @@ actor EventCoordinator {
             description = "Allowed tools updated (\(tools.count) tools)"
         case .chatboxUserMessageAdded:
             description = "Chatbox user message added"
+        case .llmUserMessageFailed(let messageId, _, let error):
+            description = "LLM user message failed: \(messageId.prefix(8))... - \(error.prefix(50))"
         case .llmUserMessageSent:
             description = "LLM user message sent"
         case .llmDeveloperMessageSent:
@@ -486,16 +489,18 @@ actor EventCoordinator {
             description = "LLM send developer message requested"
         case .llmToolResponseMessage:
             description = "LLM tool response requested"
-        case .llmEnqueueUserMessage(_, let isSystemGenerated):
-            description = "LLM enqueue user message (system: \(isSystemGenerated))"
+        case .llmEnqueueUserMessage(_, let isSystemGenerated, let chatboxMessageId, _):
+            let chatboxInfo = chatboxMessageId.map { " chatbox:\($0.prefix(8))..." } ?? ""
+            description = "LLM enqueue user message (system: \(isSystemGenerated)\(chatboxInfo))"
         case .llmEnqueueToolResponse:
             description = "LLM enqueue tool response"
         case .llmToolCallBatchStarted(let expectedCount, _):
             description = "LLM tool call batch started (expecting \(expectedCount) responses)"
         case .llmExecuteBatchedToolResponses(let payloads):
             description = "LLM execute batched tool responses (\(payloads.count) responses)"
-        case .llmExecuteUserMessage(_, let isSystemGenerated):
-            description = "LLM execute user message (system: \(isSystemGenerated))"
+        case .llmExecuteUserMessage(_, let isSystemGenerated, let chatboxMessageId, _):
+            let chatboxInfo = chatboxMessageId.map { " chatbox:\($0.prefix(8))..." } ?? ""
+            description = "LLM execute user message (system: \(isSystemGenerated)\(chatboxInfo))"
         case .llmExecuteToolResponse:
             description = "LLM execute tool response"
         case .llmExecuteDeveloperMessage:

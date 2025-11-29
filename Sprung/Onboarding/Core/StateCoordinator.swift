@@ -252,8 +252,13 @@ actor StateCoordinator: OnboardingEventEmitter {
             await chatStore.updateReasoningSummary(delta: delta)
         case .llmReasoningSummaryComplete(let text):
             await chatStore.completeReasoningSummary(finalText: text)
-        case .llmEnqueueUserMessage(let payload, let isSystemGenerated):
-            await streamQueueManager.enqueue(.userMessage(payload: payload, isSystemGenerated: isSystemGenerated))
+        case .llmEnqueueUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText):
+            await streamQueueManager.enqueue(.userMessage(
+                payload: payload,
+                isSystemGenerated: isSystemGenerated,
+                chatboxMessageId: chatboxMessageId,
+                originalText: originalText
+            ))
         case .llmSendDeveloperMessage(let payload):
             // Route developer messages through the queue to ensure they wait for pending tool responses
             await streamQueueManager.enqueue(.developerMessage(payload: payload))
@@ -601,6 +606,11 @@ actor StateCoordinator: OnboardingEventEmitter {
     func appendUserMessage(_ text: String, isSystemGenerated: Bool = false) async -> UUID {
         let id = await chatStore.appendUserMessage(text, isSystemGenerated: isSystemGenerated)
         return id
+    }
+
+    /// Remove a message by ID (used when message send fails)
+    func removeMessage(id: UUID) async -> OnboardingMessage? {
+        await chatStore.removeMessage(id: id)
     }
     func appendAssistantMessage(_ text: String) async -> UUID {
         await chatStore.appendAssistantMessage(text)

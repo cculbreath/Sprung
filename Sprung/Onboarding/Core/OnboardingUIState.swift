@@ -13,6 +13,10 @@ final class OnboardingUIState {
     // MARK: - Chat State
     var messages: [OnboardingMessage] = []
     var modelAvailabilityMessage: String?
+    /// Stores the original text from a failed message send, to be restored to the input box
+    var failedMessageText: String?
+    /// Error message to display when a message send fails
+    var failedMessageError: String?
     // MARK: - Timeline State
     var skeletonTimeline: JSON?
     /// UI-only counter for SwiftUI change detection when timeline updates occur
@@ -53,5 +57,23 @@ final class OnboardingUIState {
     func updateWizardProgress(step: StateCoordinator.WizardStep, completed: Set<StateCoordinator.WizardStep>) {
         self.wizardStep = step
         self.completedWizardSteps = completed
+    }
+
+    /// Handle a failed message send by removing it from transcript and storing for input restoration
+    func handleMessageFailure(messageId: String, originalText: String, error: String) {
+        // Remove the failed message from the transcript
+        if let uuid = UUID(uuidString: messageId) {
+            messages.removeAll { $0.id == uuid }
+        }
+        // Store the original text and error for UI to restore
+        failedMessageText = originalText
+        failedMessageError = error
+        Logger.info("💬 Message failure handled: removed from transcript, text ready for restoration", category: .ai)
+    }
+
+    /// Clear the failed message state after the UI has restored the text
+    func clearFailedMessage() {
+        failedMessageText = nil
+        failedMessageError = nil
     }
 }

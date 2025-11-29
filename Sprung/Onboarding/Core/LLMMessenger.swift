@@ -59,14 +59,14 @@ actor LLMMessenger: OnboardingEventEmitter {
     }
     private func handleLLMEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .llmSendUserMessage(let payload, let isSystemGenerated):
-            await sendUserMessage(payload, isSystemGenerated: isSystemGenerated)
+        case .llmSendUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText):
+            await sendUserMessage(payload, isSystemGenerated: isSystemGenerated, chatboxMessageId: chatboxMessageId, originalText: originalText)
         // llmSendDeveloperMessage is now routed through StateCoordinator's queue
         // and comes back as llmExecuteDeveloperMessage
         case .llmToolResponseMessage(let payload):
             await sendToolResponse(payload)
-        case .llmExecuteUserMessage(let payload, let isSystemGenerated):
-            await executeUserMessage(payload, isSystemGenerated: isSystemGenerated)
+        case .llmExecuteUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText):
+            await executeUserMessage(payload, isSystemGenerated: isSystemGenerated, chatboxMessageId: chatboxMessageId, originalText: originalText)
         case .llmExecuteToolResponse(let payload):
             await executeToolResponse(payload)
         case .llmExecuteBatchedToolResponses(let payloads):
@@ -83,14 +83,19 @@ actor LLMMessenger: OnboardingEventEmitter {
         Logger.debug("LLMMessenger received user input event", category: .ai)
     }
     /// Send user message to LLM (enqueues via event publication)
-    private func sendUserMessage(_ payload: JSON, isSystemGenerated: Bool = false) async {
+    private func sendUserMessage(_ payload: JSON, isSystemGenerated: Bool = false, chatboxMessageId: String? = nil, originalText: String? = nil) async {
         guard isActive else {
             Logger.warning("LLMMessenger not active, ignoring message", category: .ai)
             return
         }
-        await emit(.llmEnqueueUserMessage(payload: payload, isSystemGenerated: isSystemGenerated))
+        await emit(.llmEnqueueUserMessage(
+            payload: payload,
+            isSystemGenerated: isSystemGenerated,
+            chatboxMessageId: chatboxMessageId,
+            originalText: originalText
+        ))
     }
-    private func executeUserMessage(_ payload: JSON, isSystemGenerated: Bool) async {
+    private func executeUserMessage(_ payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String? = nil, originalText: String? = nil) async {
         await emit(.llmStatus(status: .busy))
         let text = payload["content"].string ?? payload["text"].stringValue
         do {
@@ -151,7 +156,17 @@ actor LLMMessenger: OnboardingEventEmitter {
             Logger.error("❌ Failed to send message: \(error)", category: .ai)
             await emit(.errorOccurred("Failed to send message: \(error.localizedDescription)"))
             await emit(.llmStatus(status: .error))
-            await surfaceErrorToUI(error: error)
+            // For chatbox messages, emit failure event so UI can restore the message to input box
+            if let chatboxMessageId = chatboxMessageId, let originalText = originalText {
+                await emit(.llmUserMessageFailed(
+                    messageId: chatboxMessageId,
+                    originalText: originalText,
+                    error: error.localizedDescription
+                ))
+            } else {
+                // Fallback: show error in chat for system-generated messages
+                await surfaceErrorToUI(error: error)
+            }
             await stateCoordinator.markStreamCompleted()
         }
     }

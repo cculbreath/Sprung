@@ -24,6 +24,7 @@ struct OnboardingInterviewChatPanel: View {
     @State private var lastMessageCount: Int = 0
     @State private var composerHeight: CGFloat = ChatComposerTextView.minimumHeight
     @State private var isStreamingMessage = false
+    @State private var showMessageFailedAlert = false
     var body: some View {
         let horizontalPadding: CGFloat = 32
         let topPadding: CGFloat = 28
@@ -124,6 +125,20 @@ struct OnboardingInterviewChatPanel: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text(exportErrorMessage ?? "")
+        }
+        .alert("Message Failed to Send", isPresented: $showMessageFailedAlert) {
+            Button("OK", role: .cancel) {
+                coordinator.ui.clearFailedMessage()
+            }
+        } message: {
+            Text(coordinator.ui.failedMessageError ?? "The message could not be sent. Please try again.")
+        }
+        .onChange(of: coordinator.ui.failedMessageText) { _, newValue in
+            // When a message fails, restore the text to the input box and show alert
+            if let text = newValue {
+                state.userInput = text
+                showMessageFailedAlert = true
+            }
         }
     }
     private func messageScrollView(proxy: ScrollViewProxy) -> some View {

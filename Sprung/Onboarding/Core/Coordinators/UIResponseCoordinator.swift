@@ -295,8 +295,13 @@ final class UIResponseCoordinator {
         payload["text"].string = "<chatbox>\(text)</chatbox>"
         // Emit processing state change for UI feedback
         await eventBus.publish(.processingStateChanged(true, statusMessage: "Processing your message..."))
-        // Emit event for LLMMessenger to handle
-        await eventBus.publish(.llmSendUserMessage(payload: payload))
+        // Emit event for LLMMessenger to handle, including messageId and original text for error recovery
+        await eventBus.publish(.llmSendUserMessage(
+            payload: payload,
+            isSystemGenerated: false,
+            chatboxMessageId: messageId.uuidString,
+            originalText: text
+        ))
     }
     func requestCancelLLM() async {
         await eventBus.publish(.llmCancelRequested)
