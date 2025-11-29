@@ -306,6 +306,57 @@ final class UIResponseCoordinator {
     func requestCancelLLM() async {
         await eventBus.publish(.llmCancelRequested)
     }
+
+    // MARK: - Direct File Upload (Persistent Drop Zone)
+    /// Handles file uploads from the persistent drop zone (no pending request required)
+    func uploadFilesDirectly(_ fileURLs: [URL]) async {
+        guard !fileURLs.isEmpty else { return }
+
+        let uploadStorage = OnboardingUploadStorage()
+        var processed: [OnboardingProcessedUpload] = []
+
+        do {
+            processed = try fileURLs.map { try uploadStorage.processFile(at: $0) }
+
+            // Build upload metadata for generic artifact upload
+            var metadata = JSON()
+            metadata["title"].string = "User uploaded document"
+            metadata["instructions"].string = "Document uploaded via drag-and-drop"
+
+            // Convert to ProcessedUploadInfo for the event
+            let uploadInfos = processed.map { item in
+                ProcessedUploadInfo(
+                    storageURL: item.storageURL,
+                    contentType: item.contentType,
+                    filename: item.storageURL.lastPathComponent
+                )
+            }
+
+            // Emit uploadCompleted event - DocumentArtifactHandler will process
+            await eventBus.publish(.uploadCompleted(
+                files: uploadInfos,
+                requestKind: "artifact",
+                callId: nil,
+                metadata: metadata
+            ))
+
+            // Notify LLM that files were uploaded
+            let fileNames = fileURLs.map { $0.lastPathComponent }.joined(separator: ", ")
+            var userMessage = JSON()
+            userMessage["role"].string = "user"
+            userMessage["content"].string = "I've uploaded the following document(s): \(fileNames)"
+            await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+
+            Logger.info("✅ Direct upload completed: \(fileURLs.count) file(s)", category: .ai)
+        } catch {
+            Logger.error("❌ Direct upload failed: \(error.localizedDescription)", category: .ai)
+            // Clean up any processed files on error
+            for item in processed {
+                uploadStorage.removeFile(at: item.storageURL)
+            }
+        }
+    }
+
     // MARK: - Timeline Handling
     func applyUserTimelineUpdate(cards: [TimelineCard], meta: JSON?, diff: TimelineDiff) async {
         // Reconstruct the full JSON

@@ -336,6 +336,11 @@ final class OnboardingInterviewCoordinator {
     func skipUploadAndResume(id: UUID) async {
         await uiResponseCoordinator.skipUploadAndResume(id: id, coordinator: self)
     }
+
+    /// Uploads files directly (from persistent drop zone, no pending request needed)
+    func uploadFilesDirectly(_ fileURLs: [URL]) async {
+        await uiResponseCoordinator.uploadFilesDirectly(fileURLs)
+    }
     func submitValidationAndResume(
         status: String,
         updatedData: JSON?,
