@@ -506,4 +506,3 @@ private struct ApplicantProfileSummaryCard: View {
         return components.isEmpty ? nil : components.joined(separator: ", ")
     }
 }
-

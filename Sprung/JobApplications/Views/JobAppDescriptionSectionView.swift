@@ -210,13 +210,11 @@ struct RichTextView: View {
             let nsString = preprocessedText as NSString
             let range = NSRange(location: 0, length: nsString.length)
             let matches = regex.matches(in: preprocessedText, options: [], range: range)
-            for match in matches.reversed() {
-                if match.numberOfRanges > 1 {
-                    let contentRange = match.range(at: 1)
-                    let content = nsString.substring(with: contentRange)
-                    let replacement = "**\(content)**"
-                    preprocessedText = (preprocessedText as NSString).replacingCharacters(in: match.range, with: replacement)
-                }
+            for match in matches.reversed() where match.numberOfRanges > 1 {
+                let contentRange = match.range(at: 1)
+                let content = nsString.substring(with: contentRange)
+                let replacement = "**\(content)**"
+                preprocessedText = (preprocessedText as NSString).replacingCharacters(in: match.range, with: replacement)
             }
         }
         // Second, handle sections that have newlines after the closing asterisks
@@ -284,13 +282,11 @@ struct RichTextView: View {
             let nsText = text as NSString
             let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: nsText.length))
             // Process matches from end to beginning to avoid index issues
-            for match in matches.reversed() {
-                if match.numberOfRanges > 1 {
-                    let contentRange = match.range(at: 1)
-                    let content = nsText.substring(with: contentRange)
-                    let range = match.range
-                    result = (result as NSString).replacingCharacters(in: range, with: content)
-                }
+            for match in matches.reversed() where match.numberOfRanges > 1 {
+                let contentRange = match.range(at: 1)
+                let content = nsText.substring(with: contentRange)
+                let range = match.range
+                result = (result as NSString).replacingCharacters(in: range, with: content)
             }
         } catch {
             Logger.debug("🧹 Failed to normalize markdown markers: \(error.localizedDescription)")

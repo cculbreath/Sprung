@@ -141,13 +141,45 @@ enum CoverLetterPDFGenerator {
         let lowercased = text.lowercased()
         return keywords.contains(where: { lowercased.contains($0) })
     }
-    /// Paginated vector PDF generation using CoreText framesetter
-    private static func createPaginatedPDFFromString(
-        _ text: String,
-        applicantName: String,
-        signatureImage: NSImage? = nil
-    ) -> Data {
-        // Register and log Futura Light font file usage
+    // MARK: - PDF Layout Configuration
+
+    private struct PDFLayoutConfig {
+        let pageRect: CGRect
+        let topMargin: CGFloat
+        let bottomMargin: CGFloat
+        let defaultLeftMargin: CGFloat
+        let defaultRightMargin: CGFloat
+        let minMargin: CGFloat
+        let marginStep: CGFloat
+        let initialFontSize: CGFloat
+        let minFontSize: CGFloat
+        let fontStep: CGFloat
+        let baseLineSpacing: CGFloat
+
+        static let standard = PDFLayoutConfig(
+            pageRect: CGRect(x: 0, y: 0, width: 8.5 * 72, height: 11 * 72),
+            topMargin: 0.75 * 72,
+            bottomMargin: 0.5 * 72,
+            defaultLeftMargin: 1.3 * 72,
+            defaultRightMargin: 2.5 * 72,
+            minMargin: 0.75 * 72,
+            marginStep: 0.1 * 72,
+            initialFontSize: 9.8,
+            minFontSize: 8.5,
+            fontStep: 0.1,
+            baseLineSpacing: 11.5 - 9.8
+        )
+    }
+
+    private struct ChosenLayout {
+        let fontSize: CGFloat
+        let leftMargin: CGFloat
+        let rightMargin: CGFloat
+    }
+
+    // MARK: - Font Registration
+
+    private static func registerFuturaFont() {
         let specificFuturaPath = "/Library/Fonts/Futura Light.otf"
         if FileManager.default.fileExists(atPath: specificFuturaPath) {
             var error: Unmanaged<CFError>?
@@ -157,120 +189,115 @@ enum CoverLetterPDFGenerator {
                 "/Library/Fonts/futuralight.ttf",
                 "/System/Library/Fonts/Supplemental/Futura.ttc"
             ]
-            for path in futuraPaths {
-                if FileManager.default.fileExists(atPath: path) {
-                    var error: Unmanaged<CFError>?
-                    CTFontManagerRegisterFontsForURL(URL(fileURLWithPath: path) as CFURL, .process, &error)
-                    break
-                }
-            }
-        }
-        // Auto-fit settings
-        let pageRect = CGRect(x: 0, y: 0, width: 8.5 * 72, height: 11 * 72)
-        let defaultLeftMargin: CGFloat = 1.3 * 72
-        let defaultRightMargin: CGFloat = 2.5 * 72
-        let topMargin: CGFloat = 0.75 * 72
-        let bottomMargin: CGFloat = 0.5 * 72
-        let minMargin: CGFloat = 0.75 * 72
-        let marginStep: CGFloat = 0.1 * 72
-        let initialFontSize: CGFloat = 9.8
-        let minFontSize: CGFloat = 8.5
-        let fontStep: CGFloat = 0.1
-        let baseLineSpacing: CGFloat = 11.5 - initialFontSize
-        // Helper to count pages for given layout
-        func pageCount(fontSize: CGFloat, leftMargin: CGFloat, rightMargin: CGFloat) -> Int {
-            let paragraphStyleTest = NSMutableParagraphStyle()
-            paragraphStyleTest.lineSpacing = baseLineSpacing
-            paragraphStyleTest.paragraphSpacing = 7.0
-            paragraphStyleTest.alignment = .natural
-            let testFont = NSFont(name: "Futura Light", size: fontSize) ?? NSFont.systemFont(ofSize: fontSize)
-            let testAttributes: [NSAttributedString.Key: Any] = [
-                .font: testFont,
-                .paragraphStyle: paragraphStyleTest
-            ]
-            let testString = NSMutableAttributedString(string: text, attributes: testAttributes)
-            let framesetter = CTFramesetterCreateWithAttributedString(testString as CFAttributedString)
-            var count = 0
-            var currentLoc = 0
-            let frameRect = CGRect(x: leftMargin,
-                                   y: bottomMargin,
-                                   width: pageRect.width - leftMargin - rightMargin,
-                                   height: pageRect.height - topMargin - bottomMargin)
-            let framePath = CGPath(rect: frameRect, transform: nil)
-            while currentLoc < testString.length {
-                let frame = CTFramesetterCreateFrame(framesetter,
-                                                     CFRange(location: currentLoc, length: 0),
-                                                     framePath,
-                                                     nil)
-                let visible = CTFrameGetVisibleStringRange(frame)
-                guard visible.length > 0 else { break }
-                currentLoc += visible.length
-                count += 1
-                if count > 1 { break }
-            }
-            return count
-        }
-        // Determine best margins and font size
-        var chosenFontSize = initialFontSize
-        var chosenLeft = defaultLeftMargin
-        var chosenRight = defaultRightMargin
-        var fitsOne = false
-        // Try reducing margins
-        var testLeft = defaultLeftMargin
-        var testRight = defaultRightMargin
-        while testLeft > minMargin || testRight > minMargin {
-            testLeft = max(testLeft - marginStep, minMargin)
-            testRight = max(testRight - marginStep, minMargin)
-            if pageCount(fontSize: initialFontSize, leftMargin: testLeft, rightMargin: testRight) <= 1 {
-                chosenLeft = testLeft
-                chosenRight = testRight
-                fitsOne = true
+            for path in futuraPaths where FileManager.default.fileExists(atPath: path) {
+                var error: Unmanaged<CFError>?
+                CTFontManagerRegisterFontsForURL(URL(fileURLWithPath: path) as CFURL, .process, &error)
                 break
             }
         }
-        // Try reducing font size if needed
-        if !fitsOne {
-            testLeft = minMargin
-            testRight = minMargin
-            var testFontSize = initialFontSize
-            while testFontSize > minFontSize {
-                testFontSize = max(testFontSize - fontStep, minFontSize)
-                if pageCount(fontSize: testFontSize, leftMargin: testLeft, rightMargin: testRight) <= 1 {
-                    chosenFontSize = testFontSize
-                    chosenLeft = testLeft
-                    chosenRight = testRight
-                    fitsOne = true
-                    break
-                }
-                if testFontSize == minFontSize { break }
+    }
+
+    // MARK: - Layout Calculation
+
+    private static func calculatePageCount(
+        text: String,
+        fontSize: CGFloat,
+        leftMargin: CGFloat,
+        rightMargin: CGFloat,
+        config: PDFLayoutConfig
+    ) -> Int {
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineSpacing = config.baseLineSpacing
+        paragraphStyle.paragraphSpacing = 7.0
+        paragraphStyle.alignment = .natural
+        let testFont = NSFont(name: "Futura Light", size: fontSize) ?? NSFont.systemFont(ofSize: fontSize)
+        let testAttributes: [NSAttributedString.Key: Any] = [
+            .font: testFont,
+            .paragraphStyle: paragraphStyle
+        ]
+        let testString = NSMutableAttributedString(string: text, attributes: testAttributes)
+        let framesetter = CTFramesetterCreateWithAttributedString(testString as CFAttributedString)
+        var count = 0
+        var currentLoc = 0
+        let frameRect = CGRect(
+            x: leftMargin,
+            y: config.bottomMargin,
+            width: config.pageRect.width - leftMargin - rightMargin,
+            height: config.pageRect.height - config.topMargin - config.bottomMargin
+        )
+        let framePath = CGPath(rect: frameRect, transform: nil)
+        while currentLoc < testString.length {
+            let frame = CTFramesetterCreateFrame(framesetter, CFRange(location: currentLoc, length: 0), framePath, nil)
+            let visible = CTFrameGetVisibleStringRange(frame)
+            guard visible.length > 0 else { break }
+            currentLoc += visible.length
+            count += 1
+            if count > 1 { break }
+        }
+        return count
+    }
+
+    private static func determineOptimalLayout(for text: String, config: PDFLayoutConfig) -> ChosenLayout {
+        // Try reducing margins first
+        var testLeft = config.defaultLeftMargin
+        var testRight = config.defaultRightMargin
+        while testLeft > config.minMargin || testRight > config.minMargin {
+            testLeft = max(testLeft - config.marginStep, config.minMargin)
+            testRight = max(testRight - config.marginStep, config.minMargin)
+            if calculatePageCount(text: text, fontSize: config.initialFontSize,
+                                  leftMargin: testLeft, rightMargin: testRight, config: config) <= 1 {
+                return ChosenLayout(fontSize: config.initialFontSize, leftMargin: testLeft, rightMargin: testRight)
             }
         }
-        // Restore defaults if still too long
-        if !fitsOne {
-            chosenFontSize = initialFontSize
-            chosenLeft = defaultLeftMargin
-            chosenRight = defaultRightMargin
+        // Try reducing font size
+        testLeft = config.minMargin
+        testRight = config.minMargin
+        var testFontSize = config.initialFontSize
+        while testFontSize > config.minFontSize {
+            testFontSize = max(testFontSize - config.fontStep, config.minFontSize)
+            if calculatePageCount(text: text, fontSize: testFontSize,
+                                  leftMargin: testLeft, rightMargin: testRight, config: config) <= 1 {
+                return ChosenLayout(fontSize: testFontSize, leftMargin: testLeft, rightMargin: testRight)
+            }
+            if testFontSize == config.minFontSize { break }
         }
-        // Build final attributed string
+        // Return defaults if nothing fits on one page
+        return ChosenLayout(fontSize: config.initialFontSize,
+                            leftMargin: config.defaultLeftMargin,
+                            rightMargin: config.defaultRightMargin)
+    }
+
+    // MARK: - Attributed String Building
+
+    private static func buildAttributedString(
+        text: String,
+        fontSize: CGFloat,
+        baseLineSpacing: CGFloat
+    ) -> NSMutableAttributedString {
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineSpacing = baseLineSpacing
         paragraphStyle.paragraphSpacing = 7.0
         paragraphStyle.alignment = .natural
-        let finalFont = NSFont(name: "Futura Light", size: chosenFontSize) ?? NSFont.systemFont(ofSize: chosenFontSize)
+        let font = NSFont(name: "Futura Light", size: fontSize) ?? NSFont.systemFont(ofSize: fontSize)
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: finalFont,
+            .font: font,
             .foregroundColor: NSColor.black,
             .paragraphStyle: paragraphStyle
         ]
+        let attributedString = NSMutableAttributedString(string: text, attributes: attributes)
+        applyLinkStyling(to: attributedString, font: font)
+        applyContactLineSpacing(to: attributedString, paragraphStyle: paragraphStyle, baseLineSpacing: baseLineSpacing)
+        return attributedString
+    }
+
+    private static func applyLinkStyling(to attributedString: NSMutableAttributedString, font: NSFont) {
         let urlAttributes: [NSAttributedString.Key: Any] = [
-            .font: finalFont,
+            .font: font,
             .foregroundColor: NSColor.black,
             .underlineStyle: NSUnderlineStyle.single.rawValue,
             .underlineColor: NSColor.black
         ]
-        let attributedString = NSMutableAttributedString(string: text, attributes: attributes)
         let fullRange = NSRange(location: 0, length: attributedString.length)
-        // Email & URL regex
         let emailPattern = #"[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,64}"#
         let urlPattern = #"(https?://)?(www\.)?[A-Za-z0-9.-]+\.(com|org|net|edu|io|dev)"#
         if let emailRegex = try? NSRegularExpression(pattern: emailPattern),
@@ -293,13 +320,16 @@ enum CoverLetterPDFGenerator {
                 }
             }
         }
-        // Adjust signature block spacing: reduce paragraphSpacing for contact lines
-        let signatureSpacing: CGFloat = 0.0 // Remove paragraph spacing completely between contact lines
-        let contactLineSpacing: CGFloat = baseLineSpacing - 4.0 // Much tighter line spacing for contact info
-        // Get the indices of the contact info lines to apply custom styling
+    }
+
+    private static func applyContactLineSpacing(
+        to attributedString: NSMutableAttributedString,
+        paragraphStyle: NSMutableParagraphStyle,
+        baseLineSpacing: CGFloat
+    ) {
+        let fullRange = NSRange(location: 0, length: attributedString.length)
         var addressLineRange: NSRange?
         var emailLineRange: NSRange?
-        // First identify the contact lines
         let textNSString = attributedString.string as NSString
         textNSString.enumerateSubstrings(in: fullRange, options: .byParagraphs) { substring, substringRange, _, _ in
             guard let substring = substring else { return }
@@ -312,209 +342,185 @@ enum CoverLetterPDFGenerator {
                 }
             }
         }
-        // Apply ultra-tight spacing between address and email lines
         if let addressRange = addressLineRange {
-            let addressPS = (paragraphStyle.copy() as? NSMutableParagraphStyle) ?? {
-                let s = NSMutableParagraphStyle()
-                s.setParagraphStyle(paragraphStyle)
-                return s
-            }()
-            addressPS.paragraphSpacing = signatureSpacing // Remove paragraph spacing after address line
+            let addressPS = (paragraphStyle.copy() as? NSMutableParagraphStyle) ?? NSMutableParagraphStyle()
+            addressPS.paragraphSpacing = 0.0
             attributedString.addAttribute(.paragraphStyle, value: addressPS, range: addressRange)
         }
-        // Apply tight line spacing to the email/website line
         if let emailRange = emailLineRange {
-            let emailPS = (paragraphStyle.copy() as? NSMutableParagraphStyle) ?? {
-                let s = NSMutableParagraphStyle()
-                s.setParagraphStyle(paragraphStyle)
-                return s
-            }()
-            emailPS.lineSpacing = contactLineSpacing // Much tighter line spacing
+            let emailPS = (paragraphStyle.copy() as? NSMutableParagraphStyle) ?? NSMutableParagraphStyle()
+            emailPS.lineSpacing = baseLineSpacing - 4.0
             attributedString.addAttribute(.paragraphStyle, value: emailPS, range: emailRange)
         }
+    }
+
+    // MARK: - Signature Positioning
+
+    private struct SignatureLineIndices {
+        var regardsLineIndex: Int?
+        var nameLineIndex: Int?
+        var contactInfoLineIndex: Int?
+        var emailLineIndex: Int?
+    }
+
+    private static func findSignatureLineIndices(
+        in frameLines: [CTLine],
+        attributedString: NSMutableAttributedString,
+        applicantName: String
+    ) -> SignatureLineIndices {
+        let regardsMarkers = [
+            "Best Regards,", "Best regards,", "Best Regards", "Best regards",
+            "Sincerely,", "Sincerely", "Sincerely yours,", "Sincerely Yours",
+            "Thank you,", "Thank you", "Regards,", "Regards",
+            "Warm Regards,", "Warm regards,", "Warm Regards", "Warm regards",
+            "Yours truly,", "Yours Truly,", "Yours truly", "Yours Truly",
+            "Respectfully,", "Respectfully"
+        ]
+        var indices = SignatureLineIndices()
+        for (idx, line) in frameLines.enumerated() {
+            let lineRange = CTLineGetStringRange(line)
+            guard lineRange.length > 0 else { continue }
+            let nsString = attributedString.string as NSString
+            let lineContent = nsString.substring(with: NSRange(location: lineRange.location, length: lineRange.length))
+            let trimmedContent = lineContent.trimmingCharacters(in: .whitespacesAndNewlines)
+            for marker in regardsMarkers where trimmedContent.contains(marker) {
+                indices.regardsLineIndex = idx
+                break
+            }
+            if trimmedContent.contains(applicantName) {
+                indices.nameLineIndex = idx
+            }
+            if containsLikelyPhoneNumber(trimmedContent) || containsAddressKeyword(trimmedContent) {
+                indices.contactInfoLineIndex = idx
+            }
+            if containsEmailAddress(trimmedContent) {
+                indices.emailLineIndex = idx
+            }
+        }
+        return indices
+    }
+
+    private static func calculateSignatureY(
+        indices: SignatureLineIndices,
+        origins: [CGPoint],
+        textRect: CGRect,
+        signatureHeight: CGFloat
+    ) -> CGFloat {
+        var signatureY: CGFloat = textRect.origin.y + 100
+        // Initial calculation based on regards/name positioning
+        if let nameIdx = indices.nameLineIndex, nameIdx < origins.count {
+            if let regardsIdx = indices.regardsLineIndex, regardsIdx < origins.count {
+                if nameIdx > regardsIdx + 1 {
+                    signatureY = (origins[regardsIdx].y + origins[nameIdx].y) / 2
+                } else {
+                    signatureY = origins[nameIdx].y + 20
+                }
+            } else {
+                signatureY = origins[nameIdx].y + 20
+            }
+        } else if let regardsIdx = indices.regardsLineIndex, regardsIdx < origins.count {
+            signatureY = origins[regardsIdx].y - 35
+        }
+        // Refine positioning based on line relationships
+        if let regardsIdx = indices.regardsLineIndex, let nameIdx = indices.nameLineIndex,
+           regardsIdx < origins.count, nameIdx < origins.count {
+            let regardsY = origins[regardsIdx].y
+            signatureY = regardsY + (nameIdx == regardsIdx + 1 ? 5 : 2)
+        } else if let regardsIdx = indices.regardsLineIndex, regardsIdx < origins.count {
+            signatureY = origins[regardsIdx].y + 5
+        } else if let nameIdx = indices.nameLineIndex, nameIdx < origins.count {
+            signatureY = origins[nameIdx].y + 45
+        }
+        // Adjust for contact info overlap
+        let hasContactLines = indices.contactInfoLineIndex != nil || indices.emailLineIndex != nil
+        if hasContactLines, let contactIdx = indices.contactInfoLineIndex, contactIdx < origins.count {
+            let contactY = origins[contactIdx].y
+            if abs(signatureY - contactY) < signatureHeight {
+                if let nameIdx = indices.nameLineIndex, nameIdx < origins.count {
+                    signatureY = origins[nameIdx].y + 26
+                } else if let regardsIdx = indices.regardsLineIndex, regardsIdx < origins.count {
+                    signatureY = origins[regardsIdx].y - 26
+                }
+            }
+        }
+        return signatureY
+    }
+
+    private static func drawSignature(
+        _ signatureImage: NSImage,
+        in context: CGContext,
+        frame: CTFrame,
+        attributedString: NSMutableAttributedString,
+        applicantName: String,
+        textRect: CGRect
+    ) {
+        let frameLines = CTFrameGetLines(frame) as? [CTLine] ?? []
+        var origins = Array(repeating: CGPoint.zero, count: frameLines.count)
+        CTFrameGetLineOrigins(frame, CFRange(location: 0, length: 0), &origins)
+        let indices = findSignatureLineIndices(in: frameLines, attributedString: attributedString, applicantName: applicantName)
+        let signatureHeight: CGFloat = 28.0
+        let imageAspectRatio = signatureImage.size.width / signatureImage.size.height
+        let signatureWidth = signatureHeight * imageAspectRatio
+        let signatureX = textRect.origin.x + 2
+        let signatureY = calculateSignatureY(indices: indices, origins: origins, textRect: textRect, signatureHeight: signatureHeight)
+        let signatureRect = CGRect(x: signatureX, y: signatureY, width: signatureWidth, height: signatureHeight)
+        if let cgImage = signatureImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+            context.saveGState()
+            context.setAlpha(0.95)
+            context.draw(cgImage, in: signatureRect)
+            context.restoreGState()
+        }
+    }
+
+    // MARK: - PDF Generation
+
+    /// Paginated vector PDF generation using CoreText framesetter
+    private static func createPaginatedPDFFromString(
+        _ text: String,
+        applicantName: String,
+        signatureImage: NSImage? = nil
+    ) -> Data {
+        registerFuturaFont()
+        let config = PDFLayoutConfig.standard
+        let layout = determineOptimalLayout(for: text, config: config)
+        let attributedString = buildAttributedString(text: text, fontSize: layout.fontSize, baseLineSpacing: config.baseLineSpacing)
         // Setup PDF context
         let data = NSMutableData()
         let pdfMetaData = [
             kCGPDFContextCreator: "Sprung" as CFString,
             kCGPDFContextTitle: "Cover Letter" as CFString
         ] as CFDictionary
-        var mediaBoxCopy = pageRect
+        var mediaBox = config.pageRect
         guard let pdfContext = CGContext(consumer: CGDataConsumer(data: data as CFMutableData)!,
-                                         mediaBox: &mediaBoxCopy,
-                                         pdfMetaData)
-        else {
+                                         mediaBox: &mediaBox, pdfMetaData) else {
             return Data()
         }
-        // Text container for drawing
-        let textRect = CGRect(x: chosenLeft,
-                              y: bottomMargin,
-                              width: pageRect.width - chosenLeft - chosenRight,
-                              height: pageRect.height - topMargin - bottomMargin)
+        let textRect = CGRect(
+            x: layout.leftMargin,
+            y: config.bottomMargin,
+            width: config.pageRect.width - layout.leftMargin - layout.rightMargin,
+            height: config.pageRect.height - config.topMargin - config.bottomMargin
+        )
         // Paginate using CoreText
         let framesetter = CTFramesetterCreateWithAttributedString(attributedString as CFAttributedString)
         var currentLocation = 0
         let totalLength = attributedString.length
         while currentLocation < totalLength {
-            pdfContext.beginPage(mediaBox: &mediaBoxCopy)
+            pdfContext.beginPage(mediaBox: &mediaBox)
             pdfContext.setFillColor(NSColor.white.cgColor)
-            pdfContext.fill(mediaBoxCopy)
+            pdfContext.fill(mediaBox)
             pdfContext.saveGState()
             let framePath = CGPath(rect: textRect, transform: nil)
-            let frame = CTFramesetterCreateFrame(framesetter,
-                                                 CFRange(location: currentLocation, length: 0),
-                                                 framePath,
-                                                 nil)
+            let frame = CTFramesetterCreateFrame(framesetter, CFRange(location: currentLocation, length: 0), framePath, nil)
             CTFrameDraw(frame, pdfContext)
-            // Determine if this is the last page
             let visibleRange = CTFrameGetVisibleStringRange(frame)
             let isLastPage = (currentLocation + visibleRange.length >= totalLength)
-            // Draw signature image if available and this is the last page
             if isLastPage, let signatureImage = signatureImage {
-                // Look for signature markers in the source text (with and without commas)
-                let regardsMarkers = [
-                    "Best Regards,", "Best regards,", "Best Regards", "Best regards",
-                    "Sincerely,", "Sincerely", "Sincerely yours,", "Sincerely Yours",
-                    "Thank you,", "Thank you",
-                    "Regards,", "Regards",
-                    "Warm Regards,", "Warm regards,", "Warm Regards", "Warm regards",
-                    "Yours truly,", "Yours Truly,", "Yours truly", "Yours Truly",
-                    "Respectfully,", "Respectfully"
-                ]
-                let nameMarker = applicantName
-                // Get all lines from the frame for proper positioning
-                let frameLines = CTFrameGetLines(frame) as? [CTLine] ?? []
-                var origins = Array(repeating: CGPoint.zero, count: frameLines.count)
-                CTFrameGetLineOrigins(frame, CFRange(location: 0, length: 0), &origins)
-                // Find the lines containing signature elements
-                var regardsLineIndex: Int?
-                var nameLineIndex: Int?
-                var contactInfoLineIndex: Int? // For phone/address line
-                var emailLineIndex: Int? // For email line
-                for (idx, line) in frameLines.enumerated() {
-                    let lineRange = CTLineGetStringRange(line)
-                    if lineRange.length > 0 {
-                        let lineStart = lineRange.location
-                        let nsString = attributedString.string as NSString
-                        let lineContent = nsString.substring(with: NSRange(location: lineStart, length: lineRange.length))
-                        let trimmedContent = lineContent.trimmingCharacters(in: .whitespacesAndNewlines)
-                        // Look for closing markers
-                        for marker in regardsMarkers {
-                            if trimmedContent.contains(marker) {
-                                regardsLineIndex = idx
-                                // Check for empty line after regards
-                                if idx + 1 < frameLines.count {
-                                    let nextLineRange = CTLineGetStringRange(frameLines[idx + 1])
-                                    if nextLineRange.length > 0 {
-                                        let nextContent = nsString.substring(with: NSRange(location: nextLineRange.location, length: nextLineRange.length))
-                                        // Check for empty lines, but no need to track them
-                                        _ = nextContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                                    }
-                                }
-                                break
-                            }
-                        }
-                        // Look for name
-                        if trimmedContent.contains(nameMarker) {
-                            nameLineIndex = idx
-                        }
-                        // Detect contact info lines (phone/address) using robust patterns
-                        if containsLikelyPhoneNumber(trimmedContent) || containsAddressKeyword(trimmedContent) {
-                            contactInfoLineIndex = idx
-                        }
-                        // Detect email line with robust patterns
-                        if containsEmailAddress(trimmedContent) {
-                            emailLineIndex = idx
-                        }
-                    }
-                }
-                // Default positioning (fallback)
-                // Position will be calculated dynamically later
-                // Dynamically position based on what we found
-                var adjustedSignatureY: CGFloat = textRect.origin.y + 100 // Default fallback position
-                if let nameIdx = nameLineIndex, nameIdx < origins.count {
-                    if let regardsIdx = regardsLineIndex, regardsIdx < origins.count {
-                        // Position between "Best Regards" and name - ideal case
-                        if nameIdx > regardsIdx + 1 {
-                            let regardsY = origins[regardsIdx].y
-                            let nameY = origins[nameIdx].y
-                            adjustedSignatureY = (regardsY + nameY) / 2
-                        } else {
-                            // Regards and name are adjacent - position closely above name
-                            adjustedSignatureY = origins[nameIdx].y + 20
-                        }
-                    } else {
-                        // Only name found - position above name
-                        adjustedSignatureY = origins[nameIdx].y + 20
-                    }
-                } else if let regardsIdx = regardsLineIndex, regardsIdx < origins.count {
-                    // Only "Best Regards" found - position after it
-                    adjustedSignatureY = origins[regardsIdx].y - 35
-                }
-                // Use a single fixed height for the signature, regardless of other parameters
-                // This provides consistent sizing across all documents
-                let signatureHeight: CGFloat = 28.0 // Fixed signature height for consistency
-                let imageAspectRatio = signatureImage.size.width / signatureImage.size.height
-                let signatureWidth = signatureHeight * imageAspectRatio
-                // Determine the right position based on the content
-                let signatureX = textRect.origin.x + 2 // Default indent from margin
-                // Determine where there's space to place the signature
-                let hasContactLines = contactInfoLineIndex != nil || emailLineIndex != nil
-                // Refine positioning if we have both regards and name lines
-                if let regardsIdx = regardsLineIndex, let nameIdx = nameLineIndex,
-                   regardsIdx < origins.count, nameIdx < origins.count {
-                    let regardsY = origins[regardsIdx].y
-                    if nameIdx == regardsIdx + 1 {
-                        adjustedSignatureY = regardsY + 5
-                    } else if nameIdx == regardsIdx + 2 {
-                        adjustedSignatureY = regardsY + 2
-                    } else {
-                        adjustedSignatureY = regardsY + 2
-                    }
-                } else if let regardsIdx = regardsLineIndex, regardsIdx < origins.count {
-                    adjustedSignatureY = origins[regardsIdx].y + 5
-                } else if let nameIdx = nameLineIndex, nameIdx < origins.count {
-                    adjustedSignatureY = origins[nameIdx].y + 45
-                } else {
-                    adjustedSignatureY = textRect.origin.y + 100
-                }
-                // Now check for overlaps with contact info
-                if hasContactLines {
-                    // Make sure we're not overlapping contact lines
-                    if let contactIdx = contactInfoLineIndex, contactIdx < origins.count {
-                        let contactY = origins[contactIdx].y
-                        // If signature would overlap with contact info, adjust position
-                        if abs(adjustedSignatureY - contactY) < signatureHeight {
-                            // Move signature up significantly to avoid contact info
-                            if let nameIdx = nameLineIndex, nameIdx < origins.count {
-                                adjustedSignatureY = origins[nameIdx].y + 26 // Well above name line
-                            } else if let regardsIdx = regardsLineIndex, regardsIdx < origins.count {
-                                adjustedSignatureY = origins[regardsIdx].y - 26 // Well below regards
-                            }
-                        }
-                    }
-                }
-                // Create the final signature rectangle
-                // Create signature rectangle with fixed height and proportional width
-                let signatureRect = CGRect(
-                    x: signatureX,
-                    y: adjustedSignatureY, // Position directly at calculated Y without offset
-                    width: signatureWidth, // Use natural width based on aspect ratio
-                    height: signatureHeight // Fixed height for consistency
-                )
-                // Draw the signature
-                if let cgImage = signatureImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                    // Apply slight scaling based on available space
-                    pdfContext.saveGState()
-                    // Draw with slight transparency to ensure it doesn't overwhelm the document
-                    pdfContext.setAlpha(0.95)
-                    pdfContext.draw(cgImage, in: signatureRect)
-                    pdfContext.restoreGState()
-                    // Detailed debug info about signature placement
-                }
+                drawSignature(signatureImage, in: pdfContext, frame: frame,
+                              attributedString: attributedString, applicantName: applicantName, textRect: textRect)
             }
             pdfContext.restoreGState()
             pdfContext.endPage()
-            // Update current location using the visible range calculated earlier
             currentLocation += visibleRange.length
         }
         pdfContext.closePDF()

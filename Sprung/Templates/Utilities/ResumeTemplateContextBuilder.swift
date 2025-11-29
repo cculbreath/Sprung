@@ -741,7 +741,7 @@ private struct SeedContextNormalizer {
             }
         }
         if entry["title"] == nil,
-           children.first(where: { $0.key == "title" }) == nil,
+           !children.contains(where: { $0.key == "title" }),
            let fallbackKey {
             entry["title"] = fallbackKey
         }

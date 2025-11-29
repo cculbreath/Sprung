@@ -80,7 +80,7 @@ enum CoverLetterPrompts {
             \(coverLetter.writingSamplesString)
             """
             if coverLetter.includeResumeRefs {
-                prompt = prompt + """
+                prompt += """
                 ** Extended Summary of Experience and Technical Skills **
                 \(applicant.name) has also included these background documents to provide a more detailed summary of his experience and technical skills for additional context for the cover letter draft:
                 \(resRefString)

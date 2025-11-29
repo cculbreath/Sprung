@@ -215,12 +215,12 @@ class TTSViewModel {
             voice: voice,
             instructions: instructions,
             onStart: { [weak self] in // This is onReady from the provider
-                guard let _ = self else { return }
+                guard self != nil else { return }
                 Logger.debug("[TTSViewModel] ttsProvider.streamAndPlayText onStart callback received")
                 // State changes are handled by the provider's onReady callback.
             },
             onComplete: { [weak self] error in // This is onFinish/onError from the provider
-                guard let _ = self else { return }
+                guard self != nil else { return }
                 if let error = error {
                     Logger.error("[TTSViewModel] ttsProvider.streamAndPlayText onComplete received error: \(error.localizedDescription)")
                 } else {

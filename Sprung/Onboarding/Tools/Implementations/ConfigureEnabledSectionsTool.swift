@@ -105,10 +105,8 @@ private struct SectionTogglePayload {
         }
         // Extract keys where value is true (enabled sections)
         var enabled: [String] = []
-        for (key, value) in proposedObj {
-            if value.bool == true {
-                enabled.append(key)
-            }
+        for (key, value) in proposedObj where value.bool == true {
+            enabled.append(key)
         }
         // Validate section keys against enum (source of truth)
         let validSections = Set(ExperienceSectionKey.allCases.map(\.rawValue))

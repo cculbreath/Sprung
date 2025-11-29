@@ -269,10 +269,8 @@ class JobRecommendationService {
     /// Check if job apps have resume background content
     private func hasResumeBackgroundContent(from jobApps: [JobApp]) -> Bool {
         for jobApp in jobApps {
-            for resume in jobApp.resumes {
-                if !resume.enabledSources.isEmpty {
-                    return true
-                }
+            for resume in jobApp.resumes where !resume.enabledSources.isEmpty {
+                return true
             }
         }
         return false
@@ -281,10 +279,8 @@ class JobRecommendationService {
     /// Check if job apps have cover letter background content
     private func hasCoverLetterBackgroundContent(from jobApps: [JobApp]) -> Bool {
         for jobApp in jobApps {
-            for coverLetter in jobApp.coverLetters {
-                if !coverLetter.backgroundItemsString.isEmpty {
-                    return true
-                }
+            for coverLetter in jobApp.coverLetters where !coverLetter.backgroundItemsString.isEmpty {
+                return true
             }
         }
         return false

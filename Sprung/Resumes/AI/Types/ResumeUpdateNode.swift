@@ -102,7 +102,7 @@ struct RevisionsContainer: Codable {
     /// Custom coding keys to handle case variations from different LLM responses
     enum CodingKeys: String, CodingKey {
         case revArray = "revArray"
-        case RevArray = "RevArray"  // Handle uppercase variant
+        case revArrayUppercase = "RevArray"  // Handle uppercase variant from LLMs
     }
 
     /// Custom decoder to handle both revArray and RevArray keys
@@ -112,7 +112,7 @@ struct RevisionsContainer: Codable {
         // Try lowercase first, then uppercase
         if let array = try? container.decode([ProposedRevisionNode].self, forKey: .revArray) {
             self.revArray = array
-        } else if let array = try? container.decode([ProposedRevisionNode].self, forKey: .RevArray) {
+        } else if let array = try? container.decode([ProposedRevisionNode].self, forKey: .revArrayUppercase) {
             self.revArray = array
         } else {
             throw DecodingError.keyNotFound(CodingKeys.revArray,

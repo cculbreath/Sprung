@@ -187,7 +187,7 @@ struct MultiModelProgressSheet: View {
                     }
                     .padding(.vertical, 2)
 
-                    if modelId != service.failedModels.keys.sorted().last {
+                    if modelId != service.failedModels.keys.max() {
                         Divider()
                     }
                 }
