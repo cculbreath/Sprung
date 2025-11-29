@@ -14,6 +14,7 @@ struct PhaseTwoScript: PhaseScript {
     let allowedTools: [String] = OnboardingToolName.rawValues([
         .getUserOption,
         .getTimelineEntries,
+        .scanGitRepo,
         .requestEvidence,
         .generateKnowledgeCard,
         .getUserUpload,
@@ -91,15 +92,24 @@ struct PhaseTwoScript: PhaseScript {
         For positions lacking documentation, use `request_evidence` to ask for specific items:
         - Performance reviews
         - Project documentation
-        - Code repositories (provide local path or GitHub URL)
+        - Code repositories (see STEP 5 for repo analysis)
         - Presentations or slide decks
         - Published work
+
+        **STEP 5: Analyze Code Repositories**
+        If the user mentions a code project or provides a repo path, use `scan_git_repo`:
+        1. First call: `scan_git_repo(repo_path: "/path/to/repo")` - returns contributors list
+        2. If multiple contributors, ask user which author to filter by
+        3. Second call: `scan_git_repo(repo_path: "/path/to/repo", author_filter: "Name <email>")` - returns skills analysis
+        4. Use the analysis to generate a knowledge card with coding achievements
 
         ### Tools You MUST Use
 
         | Tool | When to Use |
         |------|-------------|
+        | `get_timeline_entries` | At start - retrieve all positions from Phase 1 |
         | `generate_knowledge_card` | For EACH timeline entry - this is your primary action |
+        | `scan_git_repo` | When user provides a code repository path |
         | `request_evidence` | When you need specific documentation for a role |
         | `submit_for_validation` | To present a draft card for user approval |
         | `persist_data` | After user approves a card |

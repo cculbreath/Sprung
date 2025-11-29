@@ -61,6 +61,7 @@ final class OnboardingToolRegistrar {
         toolRegistry.register(AgentReadyTool())
         toolRegistry.register(RequestEvidenceTool(coordinator: coordinator))
         toolRegistry.register(GetTimelineEntriesTool(coordinator: coordinator))
+        toolRegistry.register(ScanGitRepoTool(coordinator: coordinator))
         if let agent = knowledgeCardAgent {
             toolRegistry.register(GenerateKnowledgeCardTool(agentProvider: { agent }))
         }
