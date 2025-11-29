@@ -49,6 +49,12 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         guard case .uploadCompleted(let files, let requestKind, let callId, let metadata) = event else {
             return
         }
+        // Skip targeted uploads (e.g., profile photos with target_key="basics.image")
+        // These are handled directly by UploadInteractionHandler and don't need text extraction
+        if metadata["target_key"].string != nil {
+            Logger.debug("📄 Skipping targeted upload (target_key present) - not a document for extraction", category: .ai)
+            return
+        }
         // Process uploaded documents
         for file in files {
             Logger.info("📄 Document detected: \(file.filename)", category: .ai)
