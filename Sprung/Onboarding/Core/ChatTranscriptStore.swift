@@ -62,6 +62,17 @@ actor ChatTranscriptStore: OnboardingEventEmitter {
     func getMessageCount() -> Int {
         messages.count
     }
+
+    /// Remove a message by ID (used when message send fails)
+    func removeMessage(id: UUID) -> OnboardingMessage? {
+        guard let index = messages.firstIndex(where: { $0.id == id }) else {
+            return nil
+        }
+        let removed = messages.remove(at: index)
+        messagesSync = messages
+        Logger.info("🗑️ Removed message \(id) from transcript", category: .ai)
+        return removed
+    }
     // MARK: - Responses API Threading
     /// Set previous response ID for Responses API threading
     func setPreviousResponseId(_ responseId: String?) {

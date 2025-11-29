@@ -64,6 +64,9 @@ final class CoordinatorEventRouter {
             break
         case .errorOccurred(let error):
             Logger.error("Interview error: \(error)", category: .ai)
+        case .llmUserMessageFailed(let messageId, let originalText, let error):
+            // Handle failed message: remove from transcript and prepare for input restoration
+            ui.handleMessageFailure(messageId: messageId, originalText: originalText, error: error)
         // MARK: - Evidence & Draft Events (Phase 2)
         case .evidenceRequirementAdded(let req):
             ui.evidenceRequirements.append(req)
