@@ -203,11 +203,45 @@ struct OnboardingInterviewToolPane: View {
     private func summaryContent() -> some View {
         if coordinator.ui.phase == .phase2DeepDive {
             VStack(spacing: 16) {
+                // Persistent upload drop zone - always visible in Phase 2
+                PersistentUploadDropZone(
+                    onDropFiles: { urls in
+                        Task {
+                            await coordinator.uploadFilesDirectly(urls)
+                        }
+                    },
+                    onSelectFiles: {
+                        openDirectUploadPanel()
+                    }
+                )
+
                 EvidenceRequestView(coordinator: coordinator)
                 DraftKnowledgeListView(coordinator: coordinator)
             }
         } else {
             Spacer()
+        }
+    }
+
+    private func openDirectUploadPanel() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [
+            UTType.pdf,
+            UTType(filenameExtension: "docx"),
+            UTType.plainText,
+            UTType(filenameExtension: "pptx"),
+            UTType.png,
+            UTType.jpeg,
+            UTType(filenameExtension: "md"),
+            UTType.json
+        ].compactMap { $0 }
+        panel.begin { result in
+            guard result == .OK, !panel.urls.isEmpty else { return }
+            Task {
+                await coordinator.uploadFilesDirectly(panel.urls)
+            }
         }
     }
     @ViewBuilder
