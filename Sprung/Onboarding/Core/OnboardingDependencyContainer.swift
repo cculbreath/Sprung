@@ -21,6 +21,7 @@ final class OnboardingDependencyContainer {
     let lifecycleController: InterviewLifecycleController
     let checkpointManager: CheckpointManager
     let phaseTransitionController: PhaseTransitionController
+    let sessionCoordinator: InterviewSessionCoordinator
 
     // MARK: - Services
     let extractionManagementService: ExtractionManagementService
@@ -255,6 +256,19 @@ final class OnboardingDependencyContainer {
             wizardTracker: wizardTracker
         )
         self.dataPersistenceService = dataPersistenceService
+
+        // 14. Initialize Session Coordinator (consolidates lifecycle operations)
+        let sessionCoordinator = InterviewSessionCoordinator(
+            lifecycleController: lifecycleController,
+            checkpointManager: checkpointManager,
+            phaseTransitionController: phaseTransitionController,
+            state: state,
+            dataPersistenceService: dataPersistenceService,
+            documentArtifactHandler: documentArtifactHandler,
+            documentArtifactMessenger: documentArtifactMessenger,
+            ui: ui
+        )
+        self.sessionCoordinator = sessionCoordinator
 
         let ingestionCoordinator = IngestionCoordinator(
             eventBus: eventBus,
