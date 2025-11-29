@@ -248,10 +248,7 @@ final class OnboardingDependencyContainer {
         let ingestionCoordinator = IngestionCoordinator(
             eventBus: eventBus,
             state: state,
-            documentProcessingService: documentProcessingService,
-            agentProvider: { [openAIService] in
-                openAIService.map { KnowledgeCardAgent(client: $0) }
-            }
+            documentProcessingService: documentProcessingService
         )
         self.ingestionCoordinator = ingestionCoordinator
         // 14. Initialize Handlers requiring other dependencies
@@ -326,11 +323,6 @@ final class OnboardingDependencyContainer {
             knowledgeCardAgent: knowledgeCardAgent,
             onModelAvailabilityIssue: onModelAvailabilityIssue
         )
-    }
-    func updateIngestionAgentProvider() async {
-        await ingestionCoordinator.updateAgentProvider { [openAIService] in
-            openAIService.map { KnowledgeCardAgent(client: $0) }
-        }
     }
     // MARK: - Accessors for External Dependencies
     func getApplicantProfileStore() -> ApplicantProfileStore {
