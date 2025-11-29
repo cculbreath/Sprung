@@ -181,6 +181,16 @@ struct OnboardingInterviewView: View {
             }, message: { message in
                 Text(message)
             })
+            .alert("Error", isPresented: Binding(
+                get: { coordinator.ui.displayError != nil },
+                set: { if !$0 { coordinator.ui.displayError = nil } }
+            )) {
+                Button("OK", role: .cancel) {
+                    coordinator.ui.displayError = nil
+                }
+            } message: {
+                Text(coordinator.ui.displayError ?? "An error occurred")
+            }
         return withSheets
             #if DEBUG
             .overlay(alignment: .bottomTrailing) {
