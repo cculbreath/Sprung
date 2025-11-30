@@ -7,6 +7,8 @@ actor LLMStateManager {
     private var allowedToolNames: Set<String> = []
     /// Last response ID from LLM (for conversation continuity)
     private var lastResponseId: String?
+    /// Last "clean" response ID (no pending tool calls) - safe to restore from
+    private var lastCleanResponseId: String?
     /// Current model ID being used
     private var currentModelId: String = "gpt-5.1"
     /// Current tool pane card being displayed
@@ -26,14 +28,29 @@ actor LLMStateManager {
     func getLastResponseId() -> String? {
         lastResponseId
     }
+    /// Get the last clean response ID (safe to restore from - no pending tool calls)
+    func getLastCleanResponseId() -> String? {
+        lastCleanResponseId
+    }
     /// Update conversation state with new response ID
-    func updateConversationState(responseId: String) {
+    /// - Parameters:
+    ///   - responseId: The response ID from the completed response
+    ///   - hadToolCalls: Whether this response included tool calls (if true, don't update clean ID)
+    func updateConversationState(responseId: String, hadToolCalls: Bool = false) {
         lastResponseId = responseId
-        Logger.debug("💬 Conversation state updated: \(responseId.prefix(8))", category: .ai)
+        if !hadToolCalls {
+            lastCleanResponseId = responseId
+            Logger.debug("💬 Clean response ID updated: \(responseId.prefix(8))", category: .ai)
+        }
+        Logger.debug("💬 Conversation state updated: \(responseId.prefix(8)), hadToolCalls: \(hadToolCalls)", category: .ai)
     }
     /// Set the last response ID (for restore)
     func setLastResponseId(_ responseId: String?) {
         lastResponseId = responseId
+    }
+    /// Set the last clean response ID (for restore)
+    func setLastCleanResponseId(_ responseId: String?) {
+        lastCleanResponseId = responseId
     }
     // MARK: - Model Configuration
     /// Get the current model ID
@@ -56,29 +73,32 @@ actor LLMStateManager {
     }
     // MARK: - Snapshot Support
     struct Snapshot: Codable {
-        let lastResponseId: String?
+        let lastCleanResponseId: String?  // Only store clean response ID (safe to restore from)
         let currentModelId: String
         let currentToolPaneCard: OnboardingToolPaneCard
     }
     /// Create a snapshot of LLM state for persistence
     func createSnapshot() -> Snapshot {
         Snapshot(
-            lastResponseId: lastResponseId,
+            lastCleanResponseId: lastCleanResponseId,  // Store clean ID, not potentially mid-tool-loop ID
             currentModelId: currentModelId,
             currentToolPaneCard: currentToolPaneCard
         )
     }
     /// Restore LLM state from a snapshot
-    /// Note: We intentionally do NOT restore lastResponseId because the OpenAI Responses API
-    /// requires linear conversation continuity. If the checkpoint was saved mid-tool-loop,
-    /// restoring the response ID would cause "No tool output found" errors.
-    /// Instead, we start a fresh API conversation and include conversation history in the context.
+    /// Uses lastCleanResponseId which points to a response with no pending tool calls,
+    /// allowing the conversation to continue from server-side context.
     func restoreFromSnapshot(_ snapshot: Snapshot) {
-        // Intentionally clear lastResponseId to force fresh API conversation
-        lastResponseId = nil
+        // Restore from clean response ID (safe to continue from)
+        lastResponseId = snapshot.lastCleanResponseId
+        lastCleanResponseId = snapshot.lastCleanResponseId
         currentModelId = snapshot.currentModelId
         currentToolPaneCard = snapshot.currentToolPaneCard
-        Logger.info("📝 Checkpoint restore: cleared lastResponseId (starting fresh API conversation)", category: .ai)
+        if let responseId = lastResponseId {
+            Logger.info("📝 Checkpoint restore: using clean response ID \(responseId.prefix(8))...", category: .ai)
+        } else {
+            Logger.info("📝 Checkpoint restore: no clean response ID, will start fresh", category: .ai)
+        }
         if currentToolPaneCard != .none {
             Logger.info("🎴 Restored ToolPane card: \(currentToolPaneCard.rawValue)", category: .ai)
         }
@@ -88,6 +108,7 @@ actor LLMStateManager {
     func reset() {
         allowedToolNames = []
         lastResponseId = nil
+        lastCleanResponseId = nil
         currentModelId = "gpt-5.1"
         currentToolPaneCard = .none
     }

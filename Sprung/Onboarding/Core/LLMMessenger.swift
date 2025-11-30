@@ -115,9 +115,15 @@ actor LLMMessenger: OnboardingEventEmitter {
                             await networkRouter.handleResponseEvent(streamEvent)
                             // Track conversation state
                             if case .responseCompleted(let completed) = streamEvent {
+                                // Check if response had tool calls (affects checkpoint safety)
+                                let hadToolCalls = completed.response.output.contains { item in
+                                    if case .functionCall = item { return true }
+                                    return false
+                                }
                                 // Update StateCoordinator (single source of truth)
                                 await stateCoordinator.updateConversationState(
-                                    responseId: completed.response.id
+                                    responseId: completed.response.id,
+                                    hadToolCalls: hadToolCalls
                                 )
                                 // Store in conversation context for next request
                                 await contextAssembler.storePreviousResponseId(completed.response.id)
@@ -197,9 +203,15 @@ actor LLMMessenger: OnboardingEventEmitter {
                             await networkRouter.handleResponseEvent(streamEvent)
                             // Track conversation state
                             if case .responseCompleted(let completed) = streamEvent {
+                                // Check if response had tool calls (affects checkpoint safety)
+                                let hadToolCalls = completed.response.output.contains { item in
+                                    if case .functionCall = item { return true }
+                                    return false
+                                }
                                 // Update StateCoordinator (single source of truth)
                                 await stateCoordinator.updateConversationState(
-                                    responseId: completed.response.id
+                                    responseId: completed.response.id,
+                                    hadToolCalls: hadToolCalls
                                 )
                                 // Store in conversation context for next request
                                 await contextAssembler.storePreviousResponseId(completed.response.id)
