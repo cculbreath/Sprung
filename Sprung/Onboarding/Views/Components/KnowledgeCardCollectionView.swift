@@ -23,7 +23,7 @@ struct KnowledgeCardCollectionView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 8) {
             headerSection
 
             if planItems.isEmpty {
@@ -32,7 +32,7 @@ struct KnowledgeCardCollectionView: View {
                 planListSection
             }
         }
-        .padding()
+        .padding(12)
         .background(Color(nsColor: .controlBackgroundColor))
         .cornerRadius(12)
         .overlay(
@@ -57,41 +57,33 @@ struct KnowledgeCardCollectionView: View {
     }
 
     private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Knowledge Card Collection")
-                .font(.headline)
-                .foregroundStyle(.primary)
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text("Knowledge Cards")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Spacer()
+                progressSummary
+            }
 
             if let message = message {
                 Text(message)
-                    .font(.subheadline)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(2)
             }
-
-            progressSummary
         }
     }
 
     private var progressSummary: some View {
         let completed = planItems.filter { $0.status == .completed }.count
         let total = planItems.count
-        let inProgress = planItems.first { $0.status == .inProgress }
 
-        return VStack(alignment: .leading, spacing: 4) {
+        return Group {
             if total > 0 {
-                HStack(spacing: 4) {
-                    Text("\(completed)/\(total) completed")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    if let current = inProgress {
-                        Text("•")
-                            .foregroundStyle(.secondary)
-                        Text("Working on: \(current.title)")
-                            .font(.caption)
-                            .foregroundStyle(Color.accentColor)
-                    }
-                }
+                Text("\(completed)/\(total)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -107,7 +99,7 @@ struct KnowledgeCardCollectionView: View {
 
     private var planListSection: some View {
         ScrollView {
-            VStack(spacing: 8) {
+            VStack(spacing: 4) {
                 ForEach(planItems) { item in
                     KnowledgeCardPlanRow(
                         item: item,
@@ -118,7 +110,7 @@ struct KnowledgeCardCollectionView: View {
                     )
                 }
             }
-            .padding(.bottom, 8)
+            .padding(.bottom, 4)
         }
     }
 }
@@ -131,44 +123,37 @@ private struct KnowledgeCardPlanRow: View {
     let onDone: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .center, spacing: 8) {
             statusIcon
-                .frame(width: 24)
+                .frame(width: 20)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 HStack {
                     Text(item.title)
-                        .font(.subheadline.weight(.medium))
+                        .font(.caption.weight(.medium))
                         .foregroundStyle(item.status == .completed ? .secondary : .primary)
+                        .lineLimit(1)
 
                     Spacer()
 
                     typeTag
                 }
 
-                if let description = item.description {
-                    Text(description)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-
                 if item.status == .inProgress && isFocused {
                     if hasPendingArtifacts {
                         pendingArtifactView
-                            .padding(.top, 4)
                     } else {
                         doneButton
-                            .padding(.top, 4)
                     }
                 }
             }
         }
-        .padding(12)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
         .background(backgroundColor)
-        .cornerRadius(8)
+        .cornerRadius(6)
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: 6)
                 .stroke(borderColor, lineWidth: isFocused ? 2 : 1)
         )
     }
@@ -195,20 +180,20 @@ private struct KnowledgeCardPlanRow: View {
         switch item.status {
         case .completed:
             Image(systemName: "checkmark.circle.fill")
-                .font(.title3)
+                .font(.caption)
                 .foregroundStyle(.green)
         case .inProgress:
             Image(systemName: "circle.dotted")
-                .font(.title3)
+                .font(.caption)
                 .foregroundStyle(Color.accentColor)
                 .symbolEffect(.pulse, options: .repeating)
         case .pending:
             Image(systemName: "circle")
-                .font(.title3)
+                .font(.caption)
                 .foregroundStyle(.secondary)
         case .skipped:
             Image(systemName: "minus.circle.fill")
-                .font(.title3)
+                .font(.caption)
                 .foregroundStyle(.secondary)
         }
     }
