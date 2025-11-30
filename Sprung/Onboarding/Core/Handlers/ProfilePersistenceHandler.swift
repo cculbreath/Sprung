@@ -6,18 +6,15 @@ import SwiftyJSON
 final class ProfilePersistenceHandler {
     private let applicantProfileStore: ApplicantProfileStore
     private let toolRouter: ToolHandler
-    private let checkpointManager: CheckpointManager
     private let eventBus: EventCoordinator
     private var subscriptionTask: Task<Void, Never>?
     init(
         applicantProfileStore: ApplicantProfileStore,
         toolRouter: ToolHandler,
-        checkpointManager: CheckpointManager,
         eventBus: EventCoordinator
     ) {
         self.applicantProfileStore = applicantProfileStore
         self.toolRouter = toolRouter
-        self.checkpointManager = checkpointManager
         self.eventBus = eventBus
     }
     /// Start listening to applicant profile events
@@ -39,7 +36,6 @@ final class ProfilePersistenceHandler {
         switch event {
         case .applicantProfileStored(let json):
             await persistProfileToSwiftData(json)
-            await checkpointManager.saveCheckpoint()
         default:
             break
         }

@@ -41,7 +41,6 @@ final class CoordinatorEventRouter {
     private func handleEvent(_ event: OnboardingEvent) async {
         switch event {
         case .objectiveStatusChanged(let id, _, let newStatus, _, _, _, _):
-            checkpointManager.scheduleCheckpoint()
             if id == "applicant_profile" && newStatus == "completed" {
                 toolRouter.profileHandler.dismissProfileSummary()
             }
@@ -49,9 +48,8 @@ final class CoordinatorEventRouter {
              .timelineCardDeleted, .timelineCardsReordered, .skeletonTimelineReplaced:
             let timeline = await state.artifacts.skeletonTimeline
             ui.updateTimeline(timeline)
-            checkpointManager.scheduleCheckpoint()
         case .artifactRecordPersisted:
-            checkpointManager.scheduleCheckpoint()
+            break
         case .processingStateChanged:
             break
         case .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized:
@@ -89,9 +87,9 @@ final class CoordinatorEventRouter {
             // Handled by ProfilePersistenceHandler
             break
         case .skeletonTimelineStored, .enabledSectionsUpdated:
-            await checkpointManager.saveCheckpoint()
+            break
         case .checkpointRequested:
-            await checkpointManager.saveCheckpoint()
+            break
         case .toolCallRequested:
             break
         case .toolCallCompleted:
@@ -100,7 +98,8 @@ final class CoordinatorEventRouter {
             let status = await state.getObjectiveStatus(id)?.rawValue
             response(status)
         case .phaseTransitionApplied(let phaseName, _):
-            checkpointManager.scheduleCheckpoint()
+            // Save checkpoint at phase transitions - UI state is deterministic here
+            await checkpointManager.saveCheckpoint()
             await phaseTransitionController.handlePhaseTransition(phaseName)
             if let phase = InterviewPhase(rawValue: phaseName) {
                 ui.phase = phase
