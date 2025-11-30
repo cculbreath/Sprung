@@ -78,6 +78,11 @@ enum OnboardingEvent {
     case evidenceRequirementAdded(EvidenceRequirement)
     case evidenceRequirementUpdated(EvidenceRequirement)
     case evidenceRequirementRemoved(String)
+
+    // MARK: - Git Repository Analysis
+    case gitRepoAnalysisStarted(repoPath: String, planItemId: String?)
+    case gitRepoAnalysisCompleted(repoPath: String, artifactId: String, planItemId: String?)
+    case gitRepoAnalysisFailed(repoPath: String, error: String, planItemId: String?)
     // MARK: - Timeline Operations
     case timelineCardCreated(card: JSON)
     case timelineCardUpdated(id: String, fields: JSON)
@@ -320,6 +325,10 @@ actor EventCoordinator {
         // Evidence Requirements (treated as state/objectives)
         case .evidenceRequirementAdded, .evidenceRequirementUpdated, .evidenceRequirementRemoved:
             return .state
+
+        // Git Repository Analysis (treated as processing)
+        case .gitRepoAnalysisStarted, .gitRepoAnalysisCompleted, .gitRepoAnalysisFailed:
+            return .processing
         // Toolpane events
         case .choicePromptRequested, .choicePromptCleared, .uploadRequestPresented,
              .uploadRequestCancelled, .validationPromptRequested, .validationPromptCleared,
@@ -453,6 +462,13 @@ actor EventCoordinator {
             description = "Evidence requirement updated: \(req.description) (\(req.status))"
         case .evidenceRequirementRemoved(let id):
             description = "Evidence requirement removed: \(id)"
+        case .gitRepoAnalysisStarted(let repoPath, let planItemId):
+            let itemInfo = planItemId.map { " for item: \($0)" } ?? ""
+            description = "Git repo analysis started: \(repoPath)\(itemInfo)"
+        case .gitRepoAnalysisCompleted(let repoPath, let artifactId, _):
+            description = "Git repo analysis completed: \(repoPath) → artifact \(artifactId)"
+        case .gitRepoAnalysisFailed(let repoPath, let error, _):
+            description = "Git repo analysis failed: \(repoPath) - \(error)"
         case .timelineCardCreated:
             description = "Timeline card created"
         case .timelineCardUpdated(let id, _):

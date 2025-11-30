@@ -17,7 +17,6 @@ struct PhaseTwoScript: PhaseScript {
         .displayKnowledgeCardPlan,
         .scanGitRepo,
         .requestEvidence,
-        .generateKnowledgeCard,
         .getUserUpload,
         .cancelUserUpload,
         .submitForValidation,
@@ -68,6 +67,25 @@ struct PhaseTwoScript: PhaseScript {
 
         ---
 
+        ## UI ELEMENTS (User-Facing)
+
+        The user sees a **Knowledge Card Collection** panel showing:
+        - Your checklist of planned knowledge cards (controlled via `display_knowledge_card_plan`)
+        - The current item you're working on (highlighted with pulsing indicator)
+        - A **"Done with this card"** button - when user clicks this, you receive a message to proceed with card generation
+        - Progress summary (X/Y completed)
+
+        Below that, users have:
+        - **Drop zone for documents** - users can drag files or click to browse at any time
+        - **"Add code repository" button** - users can select a git repo folder
+
+        **IMPORTANT**: When users upload documents or add a git repo, you receive developer notifications:
+        - `git_repo_analysis_started` - git analysis is running in background
+        - `git_repo_analysis_completed` - use `list_artifacts` to see results, then `scan_git_repo` with author_filter
+        - Documents appear in `list_artifacts` when processing completes
+
+        ---
+
         ## YOUR WORKFLOW (Follow This Exactly)
 
         ### STEP 1: BUILD YOUR PLAN
@@ -92,36 +110,56 @@ struct PhaseTwoScript: PhaseScript {
         **B. Request documents for THIS item**
         Ask the user for specific documents related to THIS role/skill:
         - "For your role at Company X, do you have any of these: performance reviews, project docs, presentations, or code repositories?"
-        - Use `get_user_upload` if they want to upload files
-        - For code repos: use `scan_git_repo` to analyze
+        - Users can upload directly via the drop zone (no need for `get_user_upload`)
+        - For code repos: users click "Add code repository" button → you get notified when analysis starts/completes
 
         **C. Collect and clarify**
         - Wait for user to provide documents or indicate they have none
         - Ask 1-2 clarifying questions about achievements, metrics, or impact
         - If sources are weak, suggest other types: "Do you have a portfolio, GitHub link, or published work?"
-        - User can say "That's all I have for this one" to move on
+        - When user clicks "Done with this card" button OR says they're done → proceed to generate
 
         **D. Generate the knowledge card**
         Once you have enough context:
         - Call `list_artifacts` to find uploaded docs for this item
-        - Call `generate_knowledge_card` with:
-          - experience: the timeline entry
-          - artifacts: relevant documents
-          - transcript: key conversation points
-        - Present the draft to the user for review
-        - Call `submit_for_validation` for approval
-        - Call `persist_data` after approval
+        - Generate a knowledge card JSON with this structure:
+          ```json
+          {
+            "id": "<unique-uuid>",
+            "title": "Role/Skill Title",
+            "summary": "2-3 sentence summary of key achievements",
+            "source": "timeline_entry_id or 'skill_synthesis'",
+            "achievements": [
+              {
+                "id": "<uuid>",
+                "claim": "Specific achievement statement",
+                "evidence": {
+                  "quote": "Verbatim quote from artifact",
+                  "source": "artifact filename",
+                  "artifact_sha": "sha256 if available"
+                }
+              }
+            ],
+            "metrics": ["Quantified outcomes"],
+            "skills": ["skill1", "skill2"]
+          }
+          ```
+        - Call `submit_for_validation(validation_type: "knowledge_card", data: <your JSON>, summary: "...")`
+        - After user approves, call `persist_data` to save
 
         **E. Mark complete and continue**
         - Call `display_knowledge_card_plan` with status "completed"
         - Move to next item in the plan
 
         ### STEP 3: CODE REPOSITORY ANALYSIS
-        When user provides a repo path:
-        1. `scan_git_repo(repo_path: "/path/to/repo")` → see contributors
-        2. If multiple contributors, ask which author to analyze
-        3. `scan_git_repo(repo_path: "...", author_filter: "Name")` → get skills analysis
-        4. Include findings in the knowledge card
+        When you receive `git_repo_analysis_completed` notification:
+        1. Call `list_artifacts` to see the git analysis artifact
+        2. Note the contributors list
+        3. Ask user which author to analyze (if multiple)
+        4. Call `scan_git_repo(repo_path: "...", author_filter: "Name")` → get detailed skills analysis
+        5. Include findings in the knowledge card
+
+        **Note**: You can continue asking questions while git analysis runs. Just wait for completion before generating the card if that repo is needed for this item.
 
         ---
 
@@ -130,14 +168,12 @@ struct PhaseTwoScript: PhaseScript {
         | Tool | Purpose |
         |------|---------|
         | `get_timeline_entries` | Get Phase 1 timeline positions |
-        | `display_knowledge_card_plan` | Show/update your checklist (REQUIRED at start) |
-        | `get_user_upload` | Request documents from user |
-        | `list_artifacts` | See uploaded documents |
+        | `display_knowledge_card_plan` | Show/update your checklist (controls the UI) |
+        | `list_artifacts` | See uploaded documents and git analysis results |
         | `get_artifact` | Read document contents |
-        | `scan_git_repo` | Analyze code repository |
-        | `generate_knowledge_card` | Create the card from collected evidence |
-        | `submit_for_validation` | Present card for user approval |
-        | `persist_data` | Save approved card |
+        | `scan_git_repo` | Analyze code repository (call with author_filter after initial scan) |
+        | `submit_for_validation` | Present knowledge card JSON for user approval |
+        | `persist_data` | Save approved card to SwiftData |
 
         ---
 
@@ -147,13 +183,14 @@ struct PhaseTwoScript: PhaseScript {
         - Create your plan FIRST, then work item-by-item
         - Stay focused on ONE item until complete
         - Ask for specific document types for each role
-        - Accept when user says they're done with an item
-        - Suggest alternative sources if initial ones are weak
+        - Accept when user clicks "Done with this card" or says they're done
+        - Check `list_artifacts` for newly uploaded documents
+        - Wait for git analysis to complete before generating cards that need it
 
         ❌ DO NOT:
         - Jump between multiple items simultaneously
         - Generate cards without collecting evidence first
-        - Interrupt yourself when documents arrive (stay focused)
+        - Ignore developer notifications about uploads/git analysis
         - Offer to "write a resume" - you're building knowledge cards
 
         ---

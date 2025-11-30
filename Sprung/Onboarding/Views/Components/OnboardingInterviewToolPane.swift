@@ -203,6 +203,16 @@ struct OnboardingInterviewToolPane: View {
     private func summaryContent() -> some View {
         if coordinator.ui.phase == .phase2DeepDive {
             VStack(spacing: 16) {
+                // Knowledge card collection UI with todo list
+                KnowledgeCardCollectionView(
+                    coordinator: coordinator,
+                    onDoneWithCard: { itemId in
+                        Task {
+                            await coordinator.sendChatMessage("I'm done providing documents for this card. Please proceed with generating it.")
+                        }
+                    }
+                )
+
                 // Persistent upload drop zone - always visible in Phase 2
                 PersistentUploadDropZone(
                     onDropFiles: { urls in
@@ -212,10 +222,14 @@ struct OnboardingInterviewToolPane: View {
                     },
                     onSelectFiles: {
                         openDirectUploadPanel()
+                    },
+                    onSelectGitRepo: { repoURL in
+                        Task {
+                            await coordinator.startGitRepoAnalysis(repoURL)
+                        }
                     }
                 )
 
-                EvidenceRequestView(coordinator: coordinator)
                 DraftKnowledgeListView(coordinator: coordinator)
             }
         } else {

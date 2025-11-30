@@ -31,6 +31,18 @@ class ImageConversionService {
     ///   - maxPages: Maximum number of pages to convert (default 10)
     /// - Returns: Array of base64 encoded image strings, or nil if conversion failed
     func convertPDFPagesToBase64Images(pdfData: Data, maxPages: Int = 10) -> [String]? {
+        guard let imageDataArray = convertPDFPagesToImageData(pdfData: pdfData, maxPages: maxPages) else {
+            return nil
+        }
+        return imageDataArray.map { $0.base64EncodedString() }
+    }
+
+    /// Converts multiple PDF pages to PNG image data
+    /// - Parameters:
+    ///   - pdfData: PDF data to convert
+    ///   - maxPages: Maximum number of pages to convert (default 10)
+    /// - Returns: Array of PNG image Data objects, or nil if conversion failed
+    func convertPDFPagesToImageData(pdfData: Data, maxPages: Int = 10) -> [Data]? {
         guard let pdfDocument = PDFDocument(data: pdfData) else {
             return nil
         }
@@ -38,13 +50,13 @@ class ImageConversionService {
         let pageCount = min(pdfDocument.pageCount, maxPages)
         guard pageCount > 0 else { return nil }
 
-        var images: [String] = []
+        var images: [Data] = []
         for index in 0..<pageCount {
             guard let pdfPage = pdfDocument.page(at: index),
-                  let base64Image = convertPageToBase64Image(pdfPage) else {
+                  let imageData = convertPageToImageData(pdfPage) else {
                 continue
             }
-            images.append(base64Image)
+            images.append(imageData)
         }
 
         return images.isEmpty ? nil : images
@@ -62,6 +74,14 @@ class ImageConversionService {
 
     /// Converts a single PDF page to base64 encoded PNG
     private func convertPageToBase64Image(_ pdfPage: PDFPage) -> String? {
+        guard let pngData = convertPageToImageData(pdfPage) else {
+            return nil
+        }
+        return pngData.base64EncodedString()
+    }
+
+    /// Converts a single PDF page to PNG image data
+    private func convertPageToImageData(_ pdfPage: PDFPage) -> Data? {
         let pageRect = pdfPage.bounds(for: .mediaBox)
         let renderer = NSImage(size: pageRect.size)
         renderer.lockFocus()
@@ -81,6 +101,6 @@ class ImageConversionService {
         else {
             return nil
         }
-        return pngData.base64EncodedString()
+        return pngData
     }
 }

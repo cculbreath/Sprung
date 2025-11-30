@@ -83,6 +83,7 @@ final class OnboardingInterviewCoordinator {
     // MARK: - Initialization
     init(
         openAIService: OpenAIService?,
+        llmFacade: LLMFacade?,
         documentExtractionService: DocumentExtractionService,
         applicantProfileStore: ApplicantProfileStore,
         dataStore: InterviewDataStore,
@@ -92,6 +93,7 @@ final class OnboardingInterviewCoordinator {
         // Create dependency container with all service wiring
         self.container = OnboardingDependencyContainer(
             openAIService: openAIService,
+            llmFacade: llmFacade,
             documentExtractionService: documentExtractionService,
             applicantProfileStore: applicantProfileStore,
             dataStore: dataStore,
@@ -265,6 +267,42 @@ final class OnboardingInterviewCoordinator {
         ui.knowledgeCardPlan = items
         ui.knowledgeCardPlanFocus = currentFocus
         ui.knowledgeCardPlanMessage = message
+    }
+
+    // MARK: - Artifact Ingestion (Git Repos, Documents)
+    // Uses ArtifactIngestionCoordinator for unified ingestion pipeline
+
+    /// Start git repository analysis using the async ingestion pipeline
+    func startGitRepoAnalysis(_ repoURL: URL) async {
+        let currentPlanItemId = ui.knowledgeCardPlanFocus
+        Logger.info("🔬 Starting git repo analysis via ingestion pipeline: \(repoURL.path)", category: .ai)
+        await container.artifactIngestionCoordinator.ingestGitRepository(
+            repoURL: repoURL,
+            planItemId: currentPlanItemId
+        )
+    }
+
+    /// Ingest document files using the async ingestion pipeline
+    func ingestDocuments(_ fileURLs: [URL]) async {
+        let currentPlanItemId = ui.knowledgeCardPlanFocus
+        for url in fileURLs {
+            await container.artifactIngestionCoordinator.ingestDocument(
+                fileURL: url,
+                planItemId: currentPlanItemId
+            )
+        }
+    }
+
+    /// Check if there are pending artifacts for the current knowledge card item
+    func hasPendingArtifactsForCurrentItem() async -> Bool {
+        guard let planItemId = ui.knowledgeCardPlanFocus else { return false }
+        return await container.artifactIngestionCoordinator.hasPendingArtifacts(forPlanItem: planItemId)
+    }
+
+    /// Get status message for pending artifacts
+    func getPendingArtifactStatus() async -> String? {
+        guard let planItemId = ui.knowledgeCardPlanFocus else { return nil }
+        return await container.artifactIngestionCoordinator.getPendingStatusMessage(forPlanItem: planItemId)
     }
 
     // MARK: - Tool Management (Delegated to ToolInteractionCoordinator)
