@@ -226,7 +226,15 @@ struct OnboardingInterviewToolPane: View {
                         coordinator: coordinator,
                         onDoneWithCard: { itemId in
                             Task {
-                                await coordinator.sendChatMessage("I'm done providing documents for this card. Please proceed with generating it.")
+                                await coordinator.sendDeveloperMessage(
+                                    title: """
+                                        User clicked "Done with this card" for item "\(itemId)". \
+                                        Generate the knowledge card NOW by calling submit_for_validation(validation_type: "knowledge_card", data: <JSON>, summary: "..."). \
+                                        Do NOT output card content in chat - use the tool.
+                                        """,
+                                    details: ["item_id": itemId, "action": "generate_card"],
+                                    toolChoice: "submit_for_validation"
+                                )
                             }
                         }
                     )

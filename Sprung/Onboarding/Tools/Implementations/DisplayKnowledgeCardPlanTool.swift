@@ -121,13 +121,40 @@ struct DisplayKnowledgeCardPlanTool: InterviewTool {
             response["current_focus"].string = currentFocus
         }
 
-        response["next_action"].string = """
-            Plan displayed to user. Now work through items one by one:
-            1. Set item to "in_progress" by calling this tool again
-            2. Request documents and ask questions for that item
-            3. Generate the knowledge card
-            4. Set item to "completed" and move to next
-            """
+        // Determine next action based on plan state
+        let hasInProgress = planItems.contains { $0.status == .inProgress }
+        let pendingItems = planItems.filter { $0.status == .pending }
+        let completedCount = planItems.filter { $0.status == .completed }.count
+        let allComplete = pendingItems.isEmpty && !hasInProgress && completedCount == planItems.count
+
+        if allComplete {
+            // All items are completed - no chaining needed
+            response["next_action"].string = """
+                All knowledge cards are complete! \
+                Ready to proceed to Phase 3 or review/refine existing cards.
+                """
+        } else if hasInProgress {
+            // There's already an item in progress - don't change focus
+            response["next_action"].string = """
+                An item is already in progress. Continue collecting info for that item, \
+                then generate the knowledge card when ready.
+                """
+        } else if let firstItem = pendingItems.first {
+            // No item in progress but pending items exist - chain to select the first one
+            response["next_required_tool"].string = OnboardingToolName.setCurrentKnowledgeCard.rawValue
+            response["suggested_item_id"].string = firstItem.id
+            response["suggested_item_title"].string = firstItem.title
+            response["next_action"].string = """
+                Plan displayed. You MUST now call set_current_knowledge_card with item_id="\(firstItem.id)" \
+                to select "\(firstItem.title)" as the first item to work on. This enables the "Done" button.
+                """
+        } else {
+            // Edge case: no pending, no in_progress, but not all complete (some skipped?)
+            response["next_action"].string = """
+                Plan displayed. Review the items and decide whether to work on any skipped items \
+                or proceed to Phase 3.
+                """
+        }
 
         return .immediate(response)
     }

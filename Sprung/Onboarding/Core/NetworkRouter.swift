@@ -43,7 +43,13 @@ actor NetworkRouter: OnboardingEventEmitter {
         switch event {
         case .responseFailed(let failed):
             let message = failed.response.error?.message ?? "Response failed"
+            // Clear any pending state to prevent stuck states
+            pendingToolCallIds = []
+            receivedOutputItemDone = false
+            streamingBuffers.removeAll()
             await emit(.errorOccurred("Stream error: \(message)"))
+            // Emit stream completed so the queue can continue processing
+            await emit(.llmStreamCompleted)
         case .outputTextDelta(let delta):
             // Handle streaming text deltas for real-time message display
             await processContentDelta(0, delta.delta)

@@ -223,6 +223,16 @@ actor StateCoordinator: OnboardingEventEmitter {
             await uiState.setPendingExtraction(extraction)
         case .streamingStatusUpdated(let status, _):
             await uiState.setStreamingStatus(status)
+        case .errorOccurred(let error):
+            // On stream errors, revert to last clean response ID to prevent stuck API state
+            if error.hasPrefix("Stream error:") {
+                if let cleanId = await llmStateManager.getLastCleanResponseId() {
+                    await llmStateManager.setLastResponseId(cleanId)
+                    Logger.warning("🔄 Stream error recovery: reverted to last clean response ID (\(cleanId.prefix(8)))", category: .ai)
+                } else {
+                    Logger.warning("🔄 Stream error recovery: no clean response ID available, conversation may be stuck", category: .ai)
+                }
+            }
         default:
             break
         }

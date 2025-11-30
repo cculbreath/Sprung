@@ -24,6 +24,7 @@ struct PhaseOneScript: PhaseScript {
         .reorderTimelineCards,
         .deleteTimelineCard,
         .displayTimelineEntriesForReview,
+        .getTimelineEntries,
         .submitForValidation,
         .validateApplicantProfile,
         .validatedApplicantProfileData,
@@ -108,21 +109,35 @@ struct PhaseOneScript: PhaseScript {
                 dependsOn: [OnboardingObjectiveId.skeletonTimeline.rawValue],
                 onComplete: { context in
                     var outputs: [ObjectiveWorkflowOutput] = []
-                    let readyTitle = "Enabled sections confirmed. When all ledger entries are clear, prompt the user to advance to Phase 2."
-                    let readyDetails = ["status": context.status.rawValue, "ready_for": OnboardingToolName.nextPhase.rawValue]
-                    outputs.append(.developerMessage(title: readyTitle, details: readyDetails, payload: nil))
                     let dossierTitle = """
-                        Enabled sections set. Seed the candidate dossier with 2–3 quick prompts about goals, motivations, and strengths. \
+                        Enabled sections confirmed. Now ask 2–3 quick questions about the user's goals, motivations, and target roles. \
                         For each answer, call persist_data(dataType: 'candidate_dossier_entry', payload: {question, answer, asked_at}). \
-                        Mark dossier_seed complete after at least two entries.
+                        After collecting at least 2 answers, mark dossier_seed complete, then IMMEDIATELY call next_phase to advance.
                         """
                     let dossierDetails = [
                         "next_objective": OnboardingObjectiveId.dossierSeed.rawValue,
                         "required": "false",
-                        "min_entries": "2"
+                        "min_entries": "2",
+                        "auto_advance": "true"
                     ]
                     outputs.append(.developerMessage(title: dossierTitle, details: dossierDetails, payload: nil))
                     return outputs
+                }
+            ),
+            OnboardingObjectiveId.dossierSeed.rawValue: ObjectiveWorkflow(
+                id: OnboardingObjectiveId.dossierSeed.rawValue,
+                dependsOn: [OnboardingObjectiveId.enabledSections.rawValue],
+                onComplete: { context in
+                    let title = """
+                        Dossier seed complete. All Phase 1 objectives are satisfied. \
+                        Call next_phase NOW to transition to Phase 2.
+                        """
+                    let details = [
+                        "status": context.status.rawValue,
+                        "action": "call_next_phase",
+                        "immediate": "true"
+                    ]
+                    return [.developerMessage(title: title, details: details, payload: nil)]
                 }
             )
         ]
@@ -141,9 +156,9 @@ struct PhaseOneScript: PhaseScript {
         applicant_profile — Complete ApplicantProfile with name, email, phone, location, personal URL, and social profiles
         skeleton_timeline — Build a high-level timeline of positions/roles with dates and organizations
         enabled_sections — Let user choose which resume sections to include (skills, publications, projects, etc.)
-        dossier_seed (not required to advance) — After enabled_sections completes, ask 2–3 open questions about the
-            user's goals, motivations, and strengths in natural conversation. The coordinator will automatically track
-            and persist these insights. This objective enriches future phases but is not mandatory for advancing to Phase 2.
+        dossier_seed — After enabled_sections completes, ask 2–3 quick questions about the user's goals, target roles,
+            and motivations. Persist each answer with persist_data. After collecting answers, mark dossier_seed complete
+            and IMMEDIATELY call next_phase to auto-transition to Phase 2. Do NOT wait for user to request the transition.
         ### Objective Tree
         applicant_profile
             ◻ applicant_profile.contact_information
@@ -234,6 +249,19 @@ struct PhaseOneScript: PhaseScript {
                         • Simply acknowledge "I've updated the timeline with your changes" and continue the workflow
                         • Do **not** use `get_user_option` or other ad-hoc prompts as a substitute for the card tools; \
                         keep questions and answers in chat, and keep facts in cards.
+                    **CHATBOX-INITIATED EDITS (USER REQUESTS CHANGES VIA CHAT):**
+                        • When the user describes changes in the chatbox (e.g., "merge X and Y into one entry", \
+                        "combine these roles", "make this a single consulting entry"):
+                            1. Call `get_timeline_entries()` to retrieve current cards with their IDs
+                            2. Identify which cards need to be merged, split, or modified based on user's request
+                            3. Use `delete_timeline_card(id)` to remove cards that should be merged/replaced
+                            4. Use `create_timeline_card()` to create new combined entries with the user's specified details
+                            5. Or use `update_timeline_card(id, fields)` to modify existing cards
+                            6. Confirm the changes to the user: "I've merged X and Y into a single consulting entry"
+                        • DO NOT ask the user to make edits manually when they've explicitly asked YOU to make the changes
+                        • The timeline editor is for DIRECT user edits; chat requests should be handled PROGRAMMATICALLY by you
+                        • If the user says "let's make X and Y a single entry", that is an instruction for YOU to act, not \
+                        a suggestion for them to edit manually
                     • Use timeline cards to capture and refine facts. When the set is stable, call
                         or `submit_for_validation(dataType: "skeleton_timeline")` once to open the review modal.
                         Do **not** rely on chat acknowledgments for final confirmation.
@@ -285,9 +313,8 @@ struct PhaseOneScript: PhaseScript {
             • "What kind of position are you aiming for next?"
             • "What's a recent project or achievement you're particularly proud of?"
             The coordinator will automatically track and persist these insights as you engage in conversation with the user.
-        When all objectives are satisfied (applicant_profile, skeleton_timeline, enabled_sections, and ideally \
-        dossier_seed), call `next_phase` to advance to Phase 2, where you will flesh out the story with deeper \
-        interviews and writing.
+        **AUTO-TRANSITION TO PHASE 2**: After dossier_seed questions are answered (or skipped), IMMEDIATELY call \
+        `next_phase` to advance to Phase 2. Do NOT wait for the user to request transition—this happens automatically.
         ### Key Constraints:
         • Work atomically: finish ApplicantProfile completely before moving to skeleton timeline
         • Don't extract skills, publications, or projects yet—defer to Phase 2
