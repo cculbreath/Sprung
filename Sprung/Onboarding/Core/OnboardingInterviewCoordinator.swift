@@ -15,7 +15,6 @@ final class OnboardingInterviewCoordinator {
     var wizardTracker: WizardProgressTracker { container.wizardTracker }
     var phaseRegistry: PhaseScriptRegistry { container.phaseRegistry }
     var toolRegistry: ToolRegistry { container.toolRegistry }
-    var checkpoints: Checkpoints { container.checkpoints }
     var ui: OnboardingUIState { container.ui }
     // MARK: - Private Accessors (for internal use)
     // Session & Lifecycle
@@ -87,7 +86,6 @@ final class OnboardingInterviewCoordinator {
         documentExtractionService: DocumentExtractionService,
         applicantProfileStore: ApplicantProfileStore,
         dataStore: InterviewDataStore,
-        checkpoints: Checkpoints,
         preferences: OnboardingPreferences
     ) {
         // Create dependency container with all service wiring
@@ -97,7 +95,6 @@ final class OnboardingInterviewCoordinator {
             documentExtractionService: documentExtractionService,
             applicantProfileStore: applicantProfileStore,
             dataStore: dataStore,
-            checkpoints: checkpoints,
             preferences: preferences
         )
         // Complete late initialization (components requiring self reference)
@@ -140,9 +137,6 @@ final class OnboardingInterviewCoordinator {
     }
     func endInterview() async {
         await sessionCoordinator.endInterview()
-    }
-    func restoreFromSpecificCheckpoint(_ checkpoint: OnboardingCheckpoint) async {
-        await sessionCoordinator.restoreFromCheckpoint(checkpoint)
     }
     // MARK: - Evidence Handling
     func handleEvidenceUpload(url: URL, requirementId: String) async {
@@ -417,6 +411,19 @@ final class OnboardingInterviewCoordinator {
     }
     func sendChatMessage(_ text: String) async {
         await uiResponseCoordinator.sendChatMessage(text)
+    }
+    func sendDeveloperMessage(title: String, details: [String: String] = [:], toolChoice: String? = nil) async {
+        var payload = JSON()
+        payload["title"].string = title
+        var detailsJSON = JSON()
+        for (key, value) in details {
+            detailsJSON[key].string = value
+        }
+        payload["details"] = detailsJSON
+        if let toolChoice = toolChoice {
+            payload["toolChoice"].string = toolChoice
+        }
+        await eventBus.publish(.llmSendDeveloperMessage(payload: payload))
     }
     func requestCancelLLM() async {
         await uiResponseCoordinator.requestCancelLLM()

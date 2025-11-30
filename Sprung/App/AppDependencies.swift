@@ -130,7 +130,6 @@ final class AppDependencies {
         )
         self.resumeReviseViewModel = resumeReviseViewModel
         let interviewDataStore = InterviewDataStore()
-        let checkpoints = Checkpoints()
         let preferences = OnboardingPreferences()
         let onboardingCoordinator = OnboardingInterviewCoordinator(
             openAIService: onboardingOpenAIService,
@@ -138,7 +137,6 @@ final class AppDependencies {
             documentExtractionService: documentExtractionService,
             applicantProfileStore: applicantProfileStore,
             dataStore: interviewDataStore,
-            checkpoints: checkpoints,
             preferences: preferences
         )
         self.onboardingCoordinator = onboardingCoordinator
