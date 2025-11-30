@@ -111,7 +111,7 @@ struct DisplayKnowledgeCardPlanTool: InterviewTool {
 
         // Build response
         var response = JSON()
-        response["status"].string = "displayed"
+        response["status"].string = "completed"
         response["item_count"].int = planItems.count
         response["pending_count"].int = planItems.filter { $0.status == .pending }.count
         response["in_progress_count"].int = planItems.filter { $0.status == .inProgress }.count
