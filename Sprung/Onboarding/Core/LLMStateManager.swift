@@ -69,13 +69,16 @@ actor LLMStateManager {
         )
     }
     /// Restore LLM state from a snapshot
+    /// Note: We intentionally do NOT restore lastResponseId because the OpenAI Responses API
+    /// requires linear conversation continuity. If the checkpoint was saved mid-tool-loop,
+    /// restoring the response ID would cause "No tool output found" errors.
+    /// Instead, we start a fresh API conversation and include conversation history in the context.
     func restoreFromSnapshot(_ snapshot: Snapshot) {
-        lastResponseId = snapshot.lastResponseId
+        // Intentionally clear lastResponseId to force fresh API conversation
+        lastResponseId = nil
         currentModelId = snapshot.currentModelId
         currentToolPaneCard = snapshot.currentToolPaneCard
-        if let responseId = lastResponseId {
-            Logger.info("📝 Restored lastResponseId: \(responseId)", category: .ai)
-        }
+        Logger.info("📝 Checkpoint restore: cleared lastResponseId (starting fresh API conversation)", category: .ai)
         if currentToolPaneCard != .none {
             Logger.info("🎴 Restored ToolPane card: \(currentToolPaneCard.rawValue)", category: .ai)
         }
