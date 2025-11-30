@@ -399,8 +399,11 @@ actor StateCoordinator: OnboardingEventEmitter {
         await llmStateManager.getAllowedToolNames()
     }
     /// Update conversation state (called by LLMMessenger when response completes)
-    func updateConversationState(responseId: String) async {
-        await llmStateManager.updateConversationState(responseId: responseId)
+    /// - Parameters:
+    ///   - responseId: The response ID from the completed response
+    ///   - hadToolCalls: Whether this response included tool calls (affects checkpoint safety)
+    func updateConversationState(responseId: String, hadToolCalls: Bool = false) async {
+        await llmStateManager.updateConversationState(responseId: responseId, hadToolCalls: hadToolCalls)
     }
     /// Get last response ID
     func getLastResponseId() async -> String? {
@@ -420,8 +423,8 @@ actor StateCoordinator: OnboardingEventEmitter {
         let objectives: [String: ObjectiveStore.ObjectiveEntry]
         let wizardStep: String
         let completedWizardSteps: Set<String>
-        // Conversation state for resume
-        let previousResponseId: String?
+        // Conversation state for resume (clean response ID = no pending tool calls)
+        let lastCleanResponseId: String?
         let currentModelId: String
         let messages: [OnboardingMessage]
         let hasStreamedFirstResponse: Bool
@@ -433,7 +436,6 @@ actor StateCoordinator: OnboardingEventEmitter {
         let allObjectives = await objectiveStore.getAllObjectives()
         let objectivesDict = Dictionary(uniqueKeysWithValues: allObjectives.map { ($0.id, $0) })
         // Get conversation state
-        let previousResponseId = await chatStore.getPreviousResponseId()
         let currentMessages = await chatStore.getAllMessages()
         let hasStreamedFirst = await streamQueueManager.getHasStreamedFirstResponse()
         let llmSnapshot = await llmStateManager.createSnapshot()
@@ -442,7 +444,7 @@ actor StateCoordinator: OnboardingEventEmitter {
             objectives: objectivesDict,
             wizardStep: currentWizardStep.rawValue,
             completedWizardSteps: Set(completedWizardSteps.map { $0.rawValue }),
-            previousResponseId: previousResponseId,
+            lastCleanResponseId: llmSnapshot.lastCleanResponseId,  // Use clean ID for safe restore
             currentModelId: llmSnapshot.currentModelId,
             messages: currentMessages,
             hasStreamedFirstResponse: hasStreamedFirst,
@@ -457,15 +459,14 @@ actor StateCoordinator: OnboardingEventEmitter {
             currentWizardStep = step
         }
         completedWizardSteps = Set(snapshot.completedWizardSteps.compactMap { WizardStep(rawValue: $0) })
-        // Restore conversation state
-        if let previousResponseId = snapshot.previousResponseId {
-            await chatStore.setPreviousResponseId(previousResponseId)
-            await llmStateManager.setLastResponseId(previousResponseId)
-            Logger.info("📝 Restored previousResponseId: \(previousResponseId)", category: .ai)
+        // Restore conversation state using clean response ID
+        if let cleanResponseId = snapshot.lastCleanResponseId {
+            await chatStore.setPreviousResponseId(cleanResponseId)
+            Logger.info("📝 Restoring from clean response ID: \(cleanResponseId.prefix(8))...", category: .ai)
         }
         // Restore LLM state via LLMStateManager
         let llmSnapshot = LLMStateManager.Snapshot(
-            lastResponseId: snapshot.previousResponseId,
+            lastCleanResponseId: snapshot.lastCleanResponseId,
             currentModelId: snapshot.currentModelId,
             currentToolPaneCard: snapshot.currentToolPaneCard
         )
