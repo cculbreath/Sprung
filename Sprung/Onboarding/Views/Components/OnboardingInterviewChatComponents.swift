@@ -32,7 +32,7 @@ struct MessageBubble: View {
         let alignment: Alignment = message.role == .user ? .trailing : .leading
         let multilineAlignment: TextAlignment = message.role == .user ? .trailing : .leading
         return VStack(alignment: .leading, spacing: 8) {
-            Text(displayText)
+            Text(markdownAttributedString)
                 .multilineTextAlignment(multilineAlignment)
             // Reasoning summaries now display in dedicated sidebar (ChatGPT-style)
         }
@@ -42,6 +42,18 @@ struct MessageBubble: View {
         )
         .padding(12)
         .foregroundStyle(.primary)
+    }
+
+    /// Parses the display text as markdown, falling back to plain text on failure
+    private var markdownAttributedString: AttributedString {
+        do {
+            var options = AttributedString.MarkdownParsingOptions()
+            options.interpretedSyntax = .inlineOnlyPreservingWhitespace
+            return try AttributedString(markdown: displayText, options: options)
+        } catch {
+            // Fall back to plain text if markdown parsing fails
+            return AttributedString(displayText)
+        }
     }
     private var displayText: String {
         switch message.role {
