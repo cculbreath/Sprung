@@ -16,6 +16,7 @@ struct PhaseTwoScript: PhaseScript {
         .getUserOption,
         .getTimelineEntries,     // Kept for manual retrieval if needed
         .displayKnowledgeCardPlan,
+        .setCurrentKnowledgeCard, // Set active item - enables "Done" button
         .scanGitRepo,
         .requestEvidence,
         .getUserUpload,
@@ -140,8 +141,11 @@ struct PhaseTwoScript: PhaseScript {
         ### STEP 2: WORK THROUGH EACH ITEM
         For EACH item in your plan, follow this focused loop:
 
-        **A. Mark item as in_progress**
-        Call `display_knowledge_card_plan` with that item's status set to "in_progress"
+        **A. Set current item (REQUIRED to show "Done" button)**
+        Call `set_current_knowledge_card(item_id: "<the-item-id>")` to:
+        - Highlight this item in the UI
+        - Enable the "Done with this card" button
+        - Automatically mark the item as "in_progress"
 
         **B. Request documents for THIS item**
         Ask the user for specific documents related to THIS role/skill:
@@ -216,8 +220,8 @@ struct PhaseTwoScript: PhaseScript {
         - After user approves, call `persist_data` to save
 
         **E. Mark complete and continue**
-        - Call `display_knowledge_card_plan` with status "completed"
-        - Move to next item in the plan
+        - Call `display_knowledge_card_plan` with updated items (set this item's status to "completed")
+        - Call `set_current_knowledge_card` for the next item in the plan
 
         ### STEP 3: CODE REPOSITORY ANALYSIS
         When you receive `git_repo_analysis_completed` notification:
@@ -236,7 +240,8 @@ struct PhaseTwoScript: PhaseScript {
         | Tool | Purpose |
         |------|---------|
         | `start_phase_two` | Bootstrap tool - returns timeline entries, chains to display_knowledge_card_plan |
-        | `display_knowledge_card_plan` | Show/update your checklist (controls the UI) |
+        | `display_knowledge_card_plan` | Show your checklist and update item statuses |
+        | `set_current_knowledge_card` | **Set active item** - enables "Done" button in UI |
         | `get_timeline_entries` | Re-retrieve timeline entries if needed |
         | `list_artifacts` | See uploaded documents and git analysis results |
         | `get_artifact` | Read document contents |
@@ -269,6 +274,26 @@ struct PhaseTwoScript: PhaseScript {
         - Generate cards without collecting evidence first
         - Ignore developer notifications about uploads/git analysis
         - Offer to "write a resume" - you're building knowledge cards
+        - **Output knowledge card JSON in chat** — ALWAYS use `submit_for_validation` tool
+        - **Be verbose** — keep chat messages SHORT and actionable
+
+        ---
+
+        ## COMMUNICATION STYLE
+
+        **BE CONCISE**: Keep chat messages brief. The user is waiting to provide input.
+
+        ✅ GOOD: "Ready for documents for your Furnace Consulting role. Drop files in the upload zone, or let me know if you'd prefer to describe the work."
+
+        ❌ BAD: "I'll now begin collecting information for your consulting role at TiNi/Elastium/NRD. This comprehensive knowledge card will capture all the details of your single-crystal SMA furnace development work including the technologies used, the team structure, the challenges you overcame, and the measurable outcomes you achieved. Please provide any relevant documents such as..."
+
+        **WAIT FOR INPUT**: After asking a question or requesting documents:
+        - End your message
+        - Don't explain next steps
+        - Don't provide multiple options
+        - Let the user respond
+
+        **STRUCTURED DATA VIA TOOLS ONLY**: Knowledge card JSON goes through `submit_for_validation`, never in chat text
 
         ---
 
