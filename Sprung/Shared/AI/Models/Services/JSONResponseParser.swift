@@ -5,8 +5,11 @@
 //  Created by Christopher Culbreath on 6/10/25.
 //
 import Foundation
-/// Data transformer for converting LLM responses to structured objects
-struct JSONResponseParser {
+/// Data transformer for converting LLM responses to structured objects.
+///
+/// - Important: This is an internal implementation type. Use `LLMFacade` as the
+///   public entry point for LLM operations.
+struct _JSONResponseParser {
     /// Parse structured response with fallback strategies
     static func parseStructured<T: Codable>(_ response: LLMResponseDTO, as type: T.Type) throws -> T {
         guard let content = response.choices.first?.message?.text else {

@@ -12,6 +12,24 @@ struct LLMStreamingHandle {
     let stream: AsyncThrowingStream<LLMStreamChunkDTO, Error>
     let cancel: @Sendable () -> Void
 }
+/// `LLMFacade` is the **only public entry point** for LLM operations in Sprung.
+///
+/// ## Usage
+/// Create via `LLMFacadeFactory.create(...)` and register additional backends
+/// via `registerClient(_:for:)`.
+///
+/// ## Internal Types
+/// Types prefixed with `_` (e.g., `_LLMRequestExecutor`, `_LLMService`) are
+/// implementation details and should not be used directly outside the LLM layer.
+/// They may change without notice.
+///
+/// ## Public API
+/// - `executeText(...)` - Simple text prompts
+/// - `executeTextWithImages(...)` - Vision capabilities
+/// - `executeStructured(...)` - Structured JSON responses
+/// - `startConversation(...)` / `continueConversation(...)` - Multi-turn conversations
+/// - `startConversationStreaming(...)` / `continueConversationStreaming(...)` - Streaming
+/// - `registerClient(_:for:)` - Register custom backend implementations
 @Observable
 @MainActor
 final class LLMFacade {
@@ -26,7 +44,7 @@ final class LLMFacade {
         }
     }
     private let client: LLMClient
-    private let llmService: LLMService // temporary bridge for conversation flows
+    private let llmService: _LLMService // temporary bridge for conversation flows
     private let openRouterService: OpenRouterService
     private let enabledLLMStore: EnabledLLMStore?
     private let modelValidationService: ModelValidationService
@@ -35,7 +53,7 @@ final class LLMFacade {
     private var conversationServices: [Backend: LLMConversationService] = [:]
     init(
         client: LLMClient,
-        llmService: LLMService,
+        llmService: _LLMService,
         openRouterService: OpenRouterService,
         enabledLLMStore: EnabledLLMStore?,
         modelValidationService: ModelValidationService

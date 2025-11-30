@@ -4,10 +4,13 @@
 //
 //  Wraps LLM streaming execution with DTO mapping and optional accumulation.
 //
+//  - Important: This is an internal implementation type. Use `LLMFacade` as the
+//    public entry point for LLM operations.
+//
 import Foundation
-final class StreamingExecutor {
-    private let requestExecutor: LLMRequestExecutor
-    init(requestExecutor: LLMRequestExecutor) {
+final class _StreamingExecutor {
+    private let requestExecutor: _LLMRequestExecutor
+    init(requestExecutor: _LLMRequestExecutor) {
         self.requestExecutor = requestExecutor
     }
     func applyReasoning(_ reasoning: OpenRouterReasoning?, to parameters: inout ChatCompletionParameters) {
@@ -47,7 +50,7 @@ final class StreamingExecutor {
                             cancelled = true
                             break
                         }
-                        let dto = LLMVendorMapper.streamChunkDTO(from: chunk)
+                        let dto = _LLMVendorMapper.streamChunkDTO(from: chunk)
                         if accumulateContent, let content = dto.content {
                             accumulated? += content
                         }

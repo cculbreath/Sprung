@@ -17,7 +17,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var modelContainer: ModelContainer?
     var enabledLLMStore: EnabledLLMStore?
     var applicantProfileStore: ApplicantProfileStore?
-    var llmService: LLMService?
+    var llmService: _LLMService?
     var onboardingCoordinator: OnboardingInterviewCoordinator?
     var experienceDefaultsStore: ExperienceDefaultsStore?
     var careerKeywordStore: CareerKeywordStore?

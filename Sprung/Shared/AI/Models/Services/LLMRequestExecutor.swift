@@ -6,8 +6,12 @@
 //
 import Foundation
 import SwiftOpenAI
-/// Network layer for executing LLM requests with retry logic
-actor LLMRequestExecutor {
+/// Network layer for executing LLM requests with retry logic.
+///
+/// - Important: This is an internal implementation type. Use `LLMFacade` as the
+///   public entry point for LLM operations. Do not instantiate directly outside
+///   of `LLMFacadeFactory`.
+actor _LLMRequestExecutor {
     // OpenRouter client
     private var openRouterClient: OpenAIService?
     // Request management

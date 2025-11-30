@@ -41,23 +41,28 @@ enum LLMError: LocalizedError {
     }
 }
 // MARK: - LLM Service
+/// Unified service that coordinates LLM operations.
+///
+/// - Important: This is an internal implementation type. Use `LLMFacade` as the
+///   public entry point for LLM operations. Do not instantiate directly outside
+///   of `LLMFacadeFactory`.
 @Observable
-final class LLMService {
+final class _LLMService {
     // Dependencies
     private var appState: AppState?
     private var enabledLLMStore: EnabledLLMStore?
     private var openRouterService: OpenRouterService?
     // Components
-    private let requestExecutor: LLMRequestExecutor
-    private let streamingExecutor: StreamingExecutor
-    private let flexibleJSONExecutor: FlexibleJSONExecutor
+    private let requestExecutor: _LLMRequestExecutor
+    private let streamingExecutor: _StreamingExecutor
+    private let flexibleJSONExecutor: _FlexibleJSONExecutor
     private var conversationCoordinator: ConversationCoordinator
     // Configuration
     private let defaultTemperature: Double = 1.0
-    init(requestExecutor: LLMRequestExecutor = LLMRequestExecutor()) {
+    init(requestExecutor: _LLMRequestExecutor = _LLMRequestExecutor()) {
         self.requestExecutor = requestExecutor
-        self.streamingExecutor = StreamingExecutor(requestExecutor: requestExecutor)
-        self.flexibleJSONExecutor = FlexibleJSONExecutor(requestExecutor: requestExecutor)
+        self.streamingExecutor = _StreamingExecutor(requestExecutor: requestExecutor)
+        self.flexibleJSONExecutor = _FlexibleJSONExecutor(requestExecutor: requestExecutor)
         self.conversationCoordinator = ConversationCoordinator()
     }
     // MARK: - Initialization
@@ -138,7 +143,7 @@ final class LLMService {
             Task {
                 do {
                     try await self.ensureInitialized()
-                    var parameters = LLMRequestBuilder.buildStructuredRequest(
+                    var parameters = _LLMRequestBuilder.buildStructuredRequest(
                         prompt: prompt,
                         modelId: modelId,
                         responseType: responseType,
@@ -179,7 +184,7 @@ final class LLMService {
         }
         messages.append(makeUserMessage(userMessage, images: []))
         await persistConversation(conversationId: conversationId, messages: messages)
-        var parameters = LLMRequestBuilder.buildConversationRequest(
+        var parameters = _LLMRequestBuilder.buildConversationRequest(
             messages: messages,
             modelId: modelId,
             temperature: temperature ?? defaultTemperature
@@ -193,7 +198,7 @@ final class LLMService {
             parameters.responseFormat = .jsonSchema(responseFormatSchema)
             Logger.debug("📝 Streaming conversation using structured output with JSON Schema enforcement")
         }
-        streamingExecutor.applyReasoning(reasoning, to: &parameters)
+        self.streamingExecutor.applyReasoning(reasoning, to: &parameters)
         parameters.stream = true
         let seededMessages = messages
         let stream = streamingExecutor.stream(
@@ -234,7 +239,7 @@ final class LLMService {
                     messages.append(self.makeUserMessage(userMessage, images: images))
                     await self.persistConversation(conversationId: conversationId, messages: messages)
                     let seededMessages = messages
-                    var parameters = LLMRequestBuilder.buildConversationRequest(
+                    var parameters = _LLMRequestBuilder.buildConversationRequest(
                         messages: messages,
                         modelId: modelId,
                         temperature: temperature ?? self.defaultTemperature
@@ -292,13 +297,13 @@ final class LLMService {
             messages.append(.text(systemPrompt, role: .system))
         }
         messages.append(makeUserMessage(userMessage, images: []))
-        let parameters = LLMRequestBuilder.buildConversationRequest(
+        let parameters = _LLMRequestBuilder.buildConversationRequest(
             messages: messages,
             modelId: modelId,
             temperature: temperature ?? defaultTemperature
         )
         let response = try await requestExecutor.execute(parameters: parameters)
-        let dto = LLMVendorMapper.responseDTO(from: response)
+        let dto = _LLMVendorMapper.responseDTO(from: response)
         let responseText = try parseResponseText(from: dto)
         messages.append(assistantMessage(from: responseText))
         let conversationId = UUID()
@@ -316,13 +321,13 @@ final class LLMService {
         try await ensureInitialized()
         var messages = await loadMessages(conversationId: conversationId)
         messages.append(self.makeUserMessage(userMessage, images: images))
-        let parameters = LLMRequestBuilder.buildConversationRequest(
+        let parameters = _LLMRequestBuilder.buildConversationRequest(
             messages: messages,
             modelId: modelId,
             temperature: temperature ?? defaultTemperature
         )
         let response = try await requestExecutor.execute(parameters: parameters)
-        let dto = LLMVendorMapper.responseDTO(from: response)
+        let dto = _LLMVendorMapper.responseDTO(from: response)
         let responseText = try parseResponseText(from: dto)
         messages.append(self.assistantMessage(from: responseText))
         await persistConversation(conversationId: conversationId, messages: messages)
@@ -341,7 +346,7 @@ final class LLMService {
         try await ensureInitialized()
         var messages = await loadMessages(conversationId: conversationId)
         messages.append(self.makeUserMessage(userMessage, images: images))
-        let parameters = LLMRequestBuilder.buildStructuredConversationRequest(
+        let parameters = _LLMRequestBuilder.buildStructuredConversationRequest(
             messages: messages,
             modelId: modelId,
             responseType: responseType,
@@ -349,8 +354,8 @@ final class LLMService {
             jsonSchema: jsonSchema
         )
         let response = try await requestExecutor.execute(parameters: parameters)
-        let dto = LLMVendorMapper.responseDTO(from: response)
-        let result = try JSONResponseParser.parseStructured(dto, as: responseType)
+        let dto = _LLMVendorMapper.responseDTO(from: response)
+        let result = try _JSONResponseParser.parseStructured(dto, as: responseType)
         let responseText: String
         if let data = try? JSONEncoder().encode(result) {
             responseText = String(data: data, encoding: .utf8) ?? "Structured response"
