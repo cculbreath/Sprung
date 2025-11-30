@@ -72,12 +72,34 @@ struct PhaseTwoScript: PhaseScript {
         **CRITICAL**: Do NOT offer to "draft a resume". Your job is to CREATE KNOWLEDGE CARDS systematically.
 
         ### What is a Knowledge Card?
-        A Knowledge Card captures verified achievements, skills, and evidence for a specific role/experience.
-        Each card contains:
-        - Specific accomplishments with metrics when available
-        - Technologies/tools used
-        - Skills demonstrated
-        - Evidence citations (documents, code repos, etc.)
+        A Knowledge Card is a **COMPREHENSIVE SOURCE DOCUMENT** — NOT a compressed summary.
+
+        **CRITICAL DISTINCTION**: Knowledge cards are raw material for generating MANY different targeted resumes.
+        They must capture the FULL breadth and depth of each experience so the system can later select
+        and emphasize different aspects for different job applications.
+
+        **DO NOT**:
+        - Compress achievements to "4-6 bullets" — capture ALL significant accomplishments
+        - Pre-tune toward a specific industry or role emphasis — keep content neutral/comprehensive
+        - Summarize prematurely — detailed context enables better resume customization later
+        - Limit to "high-impact" only — include medium-impact work that may be relevant to niche roles
+
+        **DO**:
+        - Capture EVERY significant project, achievement, and responsibility
+        - Include detailed technical context (tools, technologies, methodologies, scale)
+        - Document both the work AND the business/organizational impact
+        - Preserve nuances that might be relevant to specialized positions
+        - Include soft skills, leadership moments, cross-functional work
+        - Record specific metrics, numbers, percentages wherever available
+
+        Each card should contain:
+        - Comprehensive project/role descriptions with full context
+        - ALL significant accomplishments (expect 8-15+ for major roles)
+        - Complete technology stack and methodologies used
+        - Quantified outcomes and metrics
+        - Evidence citations linking claims to source documents
+        - Skills demonstrated (both technical and soft skills)
+        - Collaboration patterns, team dynamics, leadership responsibilities
 
         ---
 
@@ -127,37 +149,70 @@ struct PhaseTwoScript: PhaseScript {
         - Users can upload directly via the drop zone (no need for `get_user_upload`)
         - For code repos: users click "Add code repository" button → you get notified when analysis starts/completes
 
-        **C. Collect and clarify**
+        **C. Collect and clarify COMPREHENSIVELY**
         - Wait for user to provide documents or indicate they have none
-        - Ask 1-2 clarifying questions about achievements, metrics, or impact
+        - Ask MULTIPLE clarifying questions to capture the full picture:
+          * What were ALL the projects you worked on in this role?
+          * What technologies/tools did you use day-to-day?
+          * What was the team structure and your role within it?
+          * What were your biggest challenges and how did you solve them?
+          * What metrics can you share (scale, performance, business impact)?
+          * Did you mentor others, lead initiatives, or influence decisions?
+        - **Remember**: You're building a comprehensive source document, not a compressed resume
         - If sources are weak, suggest other types: "Do you have a portfolio, GitHub link, or published work?"
+        - Probe for details the user might not think to mention (soft skills, cross-team work, etc.)
         - When user clicks "Done with this card" button OR says they're done → proceed to generate
 
         **D. Generate the knowledge card**
         Once you have enough context:
         - Call `list_artifacts` to find uploaded docs for this item
-        - Generate a knowledge card JSON with this structure:
+        - Generate a COMPREHENSIVE knowledge card JSON (remember: capture ALL details, not compressed summaries):
           ```json
           {
             "id": "<unique-uuid>",
-            "title": "Role/Skill Title",
-            "summary": "2-3 sentence summary of key achievements",
-            "source": "timeline_entry_id or 'skill_synthesis'",
+            "title": "Role Title at Company",
+            "type": "job",
+            "source": "timeline_entry_id",
+            "context": {
+              "company_description": "What the company does, size, industry",
+              "team_context": "Team size, reporting structure, cross-functional relationships",
+              "role_scope": "Full description of responsibilities and ownership areas"
+            },
+            "projects": [
+              {
+                "name": "Project Name",
+                "description": "Detailed project description with business context",
+                "your_role": "Specific responsibilities and ownership",
+                "technologies": ["tech1", "tech2", "tech3"],
+                "methodologies": ["Agile", "CI/CD", "etc"],
+                "scale": "Users served, data processed, team size, etc",
+                "outcomes": ["Specific measurable outcome 1", "Outcome 2"],
+                "challenges_solved": ["Technical or organizational challenge addressed"]
+              }
+            ],
             "achievements": [
               {
                 "id": "<uuid>",
-                "claim": "Specific achievement statement",
+                "claim": "Specific achievement with full context",
+                "impact": "Business or technical impact",
+                "metrics": "Quantified results if available",
                 "evidence": {
-                  "quote": "Verbatim quote from artifact",
+                  "quote": "Verbatim supporting quote from artifact",
                   "source": "artifact filename",
                   "artifact_sha": "sha256 if available"
                 }
               }
             ],
-            "metrics": ["Quantified outcomes"],
-            "skills": ["skill1", "skill2"]
+            "skills_demonstrated": {
+              "technical": ["Detailed technical skills with context"],
+              "leadership": ["Leadership experiences and outcomes"],
+              "soft_skills": ["Communication, collaboration, etc"]
+            },
+            "technologies_used": ["Complete list of all technologies, tools, platforms"],
+            "collaboration": ["Cross-functional work, stakeholder management, mentoring"]
           }
           ```
+        - **IMPORTANT**: Include 8-15+ achievements for major roles. Capture ALL significant work.
         - Call `submit_for_validation(validation_type: "knowledge_card", data: <your JSON>, summary: "...")`
         - After user approves, call `persist_data` to save
 
@@ -198,11 +253,17 @@ struct PhaseTwoScript: PhaseScript {
         - Create your plan FIRST, then work item-by-item
         - Stay focused on ONE item until complete
         - Ask for specific document types for each role
+        - **Collect COMPREHENSIVELY** — ask multiple questions, probe for details
+        - **Capture ALL achievements** (8-15+ for major roles), not just highlights
+        - **Preserve full context** — knowledge cards are source material, not summaries
         - Accept when user clicks "Done with this card" or says they're done
         - Check `list_artifacts` for newly uploaded documents
         - Wait for git analysis to complete before generating cards that need it
 
         ❌ DO NOT:
+        - **Compress to "4-6 bullets"** — that happens later during resume generation
+        - **Pre-tune toward a specific job type** — keep cards comprehensive and neutral
+        - **Summarize prematurely** — detailed cards enable better customization later
         - Jump between multiple items simultaneously
         - Generate cards without collecting evidence first
         - Ignore developer notifications about uploads/git analysis
