@@ -202,35 +202,37 @@ struct OnboardingInterviewToolPane: View {
     @ViewBuilder
     private func summaryContent() -> some View {
         if coordinator.ui.phase == .phase2DeepDive {
-            VStack(spacing: 16) {
-                // Knowledge card collection UI with todo list
-                KnowledgeCardCollectionView(
-                    coordinator: coordinator,
-                    onDoneWithCard: { itemId in
-                        Task {
-                            await coordinator.sendChatMessage("I'm done providing documents for this card. Please proceed with generating it.")
+            ScrollView {
+                VStack(spacing: 16) {
+                    // Knowledge card collection UI with todo list
+                    KnowledgeCardCollectionView(
+                        coordinator: coordinator,
+                        onDoneWithCard: { itemId in
+                            Task {
+                                await coordinator.sendChatMessage("I'm done providing documents for this card. Please proceed with generating it.")
+                            }
                         }
-                    }
-                )
+                    )
 
-                // Persistent upload drop zone - always visible in Phase 2
-                PersistentUploadDropZone(
-                    onDropFiles: { urls in
-                        Task {
-                            await coordinator.uploadFilesDirectly(urls)
+                    // Persistent upload drop zone - always visible in Phase 2
+                    PersistentUploadDropZone(
+                        onDropFiles: { urls in
+                            Task {
+                                await coordinator.uploadFilesDirectly(urls)
+                            }
+                        },
+                        onSelectFiles: {
+                            openDirectUploadPanel()
+                        },
+                        onSelectGitRepo: { repoURL in
+                            Task {
+                                await coordinator.startGitRepoAnalysis(repoURL)
+                            }
                         }
-                    },
-                    onSelectFiles: {
-                        openDirectUploadPanel()
-                    },
-                    onSelectGitRepo: { repoURL in
-                        Task {
-                            await coordinator.startGitRepoAnalysis(repoURL)
-                        }
-                    }
-                )
+                    )
 
-                DraftKnowledgeListView(coordinator: coordinator)
+                    DraftKnowledgeListView(coordinator: coordinator)
+                }
             }
         } else {
             Spacer()
