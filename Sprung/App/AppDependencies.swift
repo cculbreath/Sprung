@@ -96,8 +96,6 @@ final class AppDependencies {
         )
         appState.debugSettingsStore = debugSettingsStore
         let requestExecutor = LLMRequestExecutor()
-        let documentExtractionService = DocumentExtractionService(requestExecutor: requestExecutor)
-        self.documentExtractionService = documentExtractionService
         let llmService = LLMService(requestExecutor: requestExecutor)
         self.llmService = llmService
         // Bridge SwiftOpenAI responses into the unified LLM facade until AppLLM fully owns conversation flows.
@@ -109,6 +107,9 @@ final class AppDependencies {
             enabledLLMStore: enabledLLMStore,
             modelValidationService: appState.modelValidationService
         )
+        // Create DocumentExtractionService with LLMFacade (unified LLM interface)
+        let documentExtractionService = DocumentExtractionService(llmFacade: llmFacade)
+        self.documentExtractionService = documentExtractionService
         var onboardingOpenAIService: OpenAIService?
         if let openAIKey = APIKeyManager.get(.openAI)?.trimmingCharacters(in: .whitespacesAndNewlines),
            !openAIKey.isEmpty {
@@ -150,6 +151,7 @@ final class AppDependencies {
         let preferences = OnboardingPreferences()
         let onboardingCoordinator = OnboardingInterviewCoordinator(
             openAIService: onboardingOpenAIService,
+            llmFacade: llmFacade,
             documentExtractionService: documentExtractionService,
             applicantProfileStore: applicantProfileStore,
             dataStore: interviewDataStore,

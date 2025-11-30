@@ -6,6 +6,7 @@ struct SettingsView: View {
     @AppStorage("reasoningEffort") private var reasoningEffort: String = "medium"
     @AppStorage("onboardingInterviewDefaultModelId") private var onboardingModelId: String = "openai/gpt-5.1"
     @AppStorage("onboardingPDFExtractionModelId") private var pdfExtractionModelId: String = "google/gemini-2.0-flash-001"
+    @AppStorage("onboardingGitIngestModelId") private var gitIngestModelId: String = "openai/gpt-4o-mini"
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var onboardingWebSearchAllowed: Bool = true
     @AppStorage("onboardingInterviewAllowWritingAnalysisDefault") private var onboardingWritingAllowed: Bool = false
     @Environment(OnboardingInterviewCoordinator.self) private var onboardingCoordinator
@@ -62,6 +63,7 @@ struct SettingsView: View {
             Section(content: {
                 onboardingInterviewModelPicker
                 pdfExtractionModelPicker
+                gitIngestModelPicker
                 Toggle("Allow web search during interviews by default", isOn: Binding(
                     get: { onboardingWebSearchAllowed },
                     set: { newValue in
@@ -154,10 +156,12 @@ struct SettingsView: View {
         .task {
             sanitizeOnboardingModelIfNeeded()
             sanitizePDFExtractionModelIfNeeded()
+            sanitizeGitIngestModelIfNeeded()
         }
         .onChange(of: enabledLLMStore.enabledModels.map(\.modelId)) { _, _ in
             sanitizeOnboardingModelIfNeeded()
             sanitizePDFExtractionModelIfNeeded()
+            sanitizeGitIngestModelIfNeeded()
         }
     }
     private func performReset() async {
@@ -253,6 +257,34 @@ private extension SettingsView {
             }
         }
     }
+
+    var gitIngestModelPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if allOpenRouterModels.isEmpty {
+                Label("Enable OpenRouter models in Options… before adjusting the Git ingest model.", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .font(.callout)
+            } else {
+                Picker("Git Ingest Model", selection: Binding(
+                    get: { gitIngestModelId },
+                    set: { newValue in
+                        gitIngestModelId = newValue
+                        _ = sanitizeGitIngestModelIfNeeded()
+                    }
+                )) {
+                    ForEach(allOpenRouterModels, id: \.modelId) { model in
+                        Text(model.displayName.isEmpty ? model.modelId : model.displayName)
+                            .tag(model.modelId)
+                    }
+                }
+                .pickerStyle(.menu)
+                Text("Model used to analyze git repositories for coding skills and achievements. Runs asynchronously during Phase 2.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
+            }
+        }
+    }
     var onboardingInterviewModels: [EnabledLLM] {
         // For now, only GPT-5.1 is supported for onboarding interviews
         enabledLLMStore.enabledModels
@@ -299,6 +331,21 @@ private extension SettingsView {
         )
         if adjusted {
             pdfExtractionModelId = sanitized
+        }
+        return sanitized
+    }
+
+    @discardableResult
+    func sanitizeGitIngestModelIfNeeded() -> String {
+        let ids = allOpenRouterModels.map(\.modelId)
+        let fallback = "openai/gpt-4o-mini"
+        let (sanitized, adjusted) = ModelPreferenceValidator.sanitize(
+            requested: gitIngestModelId,
+            available: ids,
+            fallback: fallback
+        )
+        if adjusted {
+            gitIngestModelId = sanitized
         }
         return sanitized
     }

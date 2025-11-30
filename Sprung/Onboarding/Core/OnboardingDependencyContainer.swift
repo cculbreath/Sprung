@@ -26,6 +26,11 @@ final class OnboardingDependencyContainer {
     let timelineManagementService: TimelineManagementService
     let dataPersistenceService: DataPersistenceService
     let ingestionCoordinator: IngestionCoordinator
+
+    // MARK: - Artifact Ingestion Infrastructure
+    let documentIngestionKernel: DocumentIngestionKernel
+    let gitIngestionKernel: GitIngestionKernel
+    let artifactIngestionCoordinator: ArtifactIngestionCoordinator
     // MARK: - Document Processing
     let uploadStorage: OnboardingUploadStorage
     let documentProcessingService: DocumentProcessingService
@@ -48,7 +53,7 @@ final class OnboardingDependencyContainer {
     let documentExtractionService: DocumentExtractionService
     // MARK: - Mutable State
     private(set) var openAIService: OpenAIService?
-    private(set) var knowledgeCardAgent: KnowledgeCardAgent?
+    private(set) var llmFacade: LLMFacade?
     // MARK: - UI State
     let ui: OnboardingUIState
     let wizardTracker: WizardProgressTracker
@@ -59,6 +64,7 @@ final class OnboardingDependencyContainer {
     // MARK: - Initialization
     init(
         openAIService: OpenAIService?,
+        llmFacade: LLMFacade?,
         documentExtractionService: DocumentExtractionService,
         applicantProfileStore: ApplicantProfileStore,
         dataStore: InterviewDataStore,
@@ -67,6 +73,7 @@ final class OnboardingDependencyContainer {
     ) {
         // Store external dependencies
         self.openAIService = openAIService
+        self.llmFacade = llmFacade
         self.documentExtractionService = documentExtractionService
         self.applicantProfileStore = applicantProfileStore
         self.dataStore = dataStore
@@ -113,9 +120,7 @@ final class OnboardingDependencyContainer {
             draftStore: draftKnowledgeStore
         )
         self.state = state
-        // 7. Initialize Knowledge Card Agent
-        self.knowledgeCardAgent = openAIService.map { KnowledgeCardAgent(client: $0) }
-        // 8. Initialize Upload Storage and Document Services
+        // 7. Initialize Upload Storage and Document Services
         let uploadStorage = OnboardingUploadStorage()
         self.uploadStorage = uploadStorage
         let documentProcessingService = DocumentProcessingService(
@@ -251,6 +256,32 @@ final class OnboardingDependencyContainer {
             documentProcessingService: documentProcessingService
         )
         self.ingestionCoordinator = ingestionCoordinator
+
+        // 17. Initialize Artifact Ingestion Infrastructure
+        let documentIngestionKernel = DocumentIngestionKernel(
+            documentProcessingService: documentProcessingService,
+            eventBus: eventBus
+        )
+        self.documentIngestionKernel = documentIngestionKernel
+
+        let gitIngestionKernel = GitIngestionKernel(eventBus: eventBus)
+        self.gitIngestionKernel = gitIngestionKernel
+
+        let artifactIngestionCoordinator = ArtifactIngestionCoordinator(
+            eventBus: eventBus,
+            documentKernel: documentIngestionKernel,
+            gitKernel: gitIngestionKernel
+        )
+        self.artifactIngestionCoordinator = artifactIngestionCoordinator
+
+        // Set cross-references (kernels need coordinator for completion callbacks)
+        Task {
+            await documentIngestionKernel.setIngestionCoordinator(artifactIngestionCoordinator)
+            await gitIngestionKernel.setIngestionCoordinator(artifactIngestionCoordinator)
+            if let facade = llmFacade {
+                await gitIngestionKernel.updateLLMFacade(facade)
+            }
+        }
         // 14. Initialize Handlers requiring other dependencies
         let profilePersistenceHandler = ProfilePersistenceHandler(
             applicantProfileStore: applicantProfileStore,
@@ -306,7 +337,6 @@ final class OnboardingDependencyContainer {
         // Register tools
         toolRegistrar.registerTools(
             documentExtractionService: documentExtractionService,
-            knowledgeCardAgent: knowledgeCardAgent,
             onModelAvailabilityIssue: onModelAvailabilityIssue
         )
         Logger.info("🏗️ OnboardingDependencyContainer late initialization completed", category: .ai)
@@ -314,13 +344,18 @@ final class OnboardingDependencyContainer {
     // MARK: - Service Updates
     func updateOpenAIService(_ service: OpenAIService?) {
         self.openAIService = service
-        self.knowledgeCardAgent = service.map { KnowledgeCardAgent(client: $0) }
         lifecycleController.updateOpenAIService(service)
+    }
+
+    func updateLLMFacade(_ facade: LLMFacade?) {
+        self.llmFacade = facade
+        Task {
+            await gitIngestionKernel.updateLLMFacade(facade)
+        }
     }
     func reregisterTools(onModelAvailabilityIssue: @escaping (String) -> Void) {
         toolRegistrar.registerTools(
             documentExtractionService: documentExtractionService,
-            knowledgeCardAgent: knowledgeCardAgent,
             onModelAvailabilityIssue: onModelAvailabilityIssue
         )
     }

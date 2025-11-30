@@ -2,13 +2,14 @@ import Foundation
 import PDFKit
 import UniformTypeIdentifiers
 import CryptoKit
-import SwiftOpenAI
 import SwiftyJSON
+
 /// Lightweight service that orchestrates vendor-agnostic document extraction.
 /// It converts local PDF/DOCX files into enriched markdown using the configured
 /// PDF extraction model (default: Gemini 2.0 Flash via OpenRouter).
 actor DocumentExtractionService {
     var onInvalidModelId: ((String) -> Void)?
+
     struct ExtractionRequest {
         let fileURL: URL
         let purpose: String
@@ -16,6 +17,7 @@ actor DocumentExtractionService {
         let autoPersist: Bool
         let timeout: TimeInterval?
     }
+
     struct ExtractedArtifact {
         let id: String
         let filename: String
@@ -25,10 +27,12 @@ actor DocumentExtractionService {
         let extractedContent: String
         let metadata: [String: Any]
     }
+
     struct Quality {
         let confidence: Double
         let issues: [String]
     }
+
     struct ExtractionResult {
         enum Status: String {
             case ok
@@ -42,12 +46,15 @@ actor DocumentExtractionService {
         let derivedSkeletonTimeline: JSON?
         let persisted: Bool
     }
+
     enum ExtractionError: Error {
         case unsupportedType(String)
         case unreadableData
         case noTextExtracted
         case pdfTooLarge(pageCount: Int)
         case llmFailed(String)
+        case llmNotConfigured
+
         var userFacingMessage: String {
             switch self {
             case .unsupportedType:
@@ -60,34 +67,50 @@ actor DocumentExtractionService {
                 return "This PDF has \(pageCount) pages. Image-based extraction is limited to 10 pages or fewer. Please split the document or provide a text-based PDF."
             case .llmFailed(let description):
                 return "Extraction failed: \(description)"
+            case .llmNotConfigured:
+                return "PDF extraction model is not configured. Add an OpenRouter API key in Settings."
             }
         }
     }
 
     /// Maximum pages for image-based PDF extraction
     private let maxPagesForImageExtraction = 10
+
     // MARK: - Private Properties
-    private let requestExecutor: LLMRequestExecutor
+    private var llmFacade: LLMFacade?
     private let maxCharactersForPrompt = 18_000
     private let defaultModelId = "google/gemini-2.0-flash-001"
     private var availableModelIds: [String] = []
-    init(requestExecutor: LLMRequestExecutor) {
-        self.requestExecutor = requestExecutor
+
+    init(llmFacade: LLMFacade?) {
+        self.llmFacade = llmFacade
     }
+
+    func updateLLMFacade(_ facade: LLMFacade?) {
+        self.llmFacade = facade
+    }
+
     func updateAvailableModels(_ ids: [String]) {
         availableModelIds = ids
     }
+
     func setInvalidModelHandler(_ handler: @escaping (String) -> Void) {
         onInvalidModelId = handler
     }
+
     // MARK: - Public API
+
     func extract(using request: ExtractionRequest, progress: ExtractionProgressHandler? = nil) async throws -> ExtractionResult {
-        try await ensureExecutorConfigured()
+        guard llmFacade != nil else {
+            throw ExtractionError.llmNotConfigured
+        }
+
         let fileURL = request.fileURL
         let filename = fileURL.lastPathComponent
         let sizeInBytes = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? NSNumber)?.intValue ?? 0
         let contentType = contentTypeForFile(at: fileURL) ?? "application/octet-stream"
         let extractionStart = Date()
+
         Logger.info(
             "📄 Extraction started",
             category: .diagnostics,
@@ -97,16 +120,20 @@ actor DocumentExtractionService {
                 "purpose": request.purpose
             ]
         )
+
         func notifyProgress(_ stage: ExtractionProgressStage, _ state: ExtractionProgressStageState, detail: String? = nil) async {
             guard let progress else { return }
             await progress(ExtractionProgressUpdate(stage: stage, state: state, detail: detail))
         }
+
         let fileAnalysisDetail = filename.isEmpty ? "Analyzing document" : "Analyzing \(filename)"
         await notifyProgress(.fileAnalysis, .active, detail: fileAnalysisDetail)
+
         guard let fileData = try? Data(contentsOf: fileURL) else {
             await notifyProgress(.fileAnalysis, .failed, detail: "Unreadable file data")
             throw ExtractionError.unreadableData
         }
+
         let sha256 = sha256Hex(for: fileData)
         let (rawText, initialIssues) = extractPlainText(from: fileURL)
 
@@ -132,13 +159,17 @@ actor DocumentExtractionService {
             await notifyProgress(.fileAnalysis, .failed, detail: "No extractable text")
             throw ExtractionError.noTextExtracted
         }
+
         await notifyProgress(.fileAnalysis, .completed)
+
         let llmStart = Date()
         let aiStageDetail = request.purpose == "resume_timeline"
             ? "Extracting resume details with Gemini AI..."
             : "Processing document with Gemini AI..."
         await notifyProgress(.aiExtraction, .active, detail: aiStageDetail)
+
         let (markdown, markdownIssues) = try await enrichText(rawText, purpose: request.purpose, timeout: request.timeout)
+
         let llmDurationMs = Int(Date().timeIntervalSince(llmStart) * 1000)
         Logger.info(
             "📄 Extraction LLM phase completed",
@@ -148,6 +179,7 @@ actor DocumentExtractionService {
                 "duration_ms": "\(llmDurationMs)"
             ]
         )
+
         let enrichedContent = markdown ?? rawText
         let aiDetail: String? = {
             if let failure = markdownIssues.first(where: { $0.hasPrefix("llm_failure") }) {
@@ -158,11 +190,15 @@ actor DocumentExtractionService {
             }
             return nil
         }()
+
         let aiState: ExtractionProgressStageState = markdownIssues.contains(where: { $0.hasPrefix("llm_failure") }) ? .failed : .completed
         await notifyProgress(.aiExtraction, aiState, detail: aiDetail)
+
         var issues = initialIssues
         issues.append(contentsOf: markdownIssues)
+
         let confidence = estimateConfidence(for: enrichedContent, issues: issues)
+
         var metadata: [String: Any] = [
             "character_count": enrichedContent.count,
             "source_format": contentType,
@@ -173,6 +209,7 @@ actor DocumentExtractionService {
         if initialIssues.contains("truncated_input") {
             metadata["truncated_input"] = true
         }
+
         let artifact = ExtractedArtifact(
             id: UUID().uuidString,
             filename: filename,
@@ -182,6 +219,7 @@ actor DocumentExtractionService {
             extractedContent: enrichedContent,
             metadata: metadata
         )
+
         let status: ExtractionResult.Status
         if issues.contains(where: { $0.hasPrefix("llm_failure") }) {
             status = .partial
@@ -190,10 +228,13 @@ actor DocumentExtractionService {
         } else {
             status = .ok
         }
+
         if request.autoPersist {
             issues.append("auto_persist_not_supported")
         }
+
         let quality = Quality(confidence: confidence, issues: issues)
+
         let result = ExtractionResult(
             status: status,
             artifact: artifact,
@@ -202,6 +243,7 @@ actor DocumentExtractionService {
             derivedSkeletonTimeline: nil,
             persisted: false
         )
+
         let totalMs = Int(Date().timeIntervalSince(extractionStart) * 1000)
         Logger.info(
             "📄 Extraction finished",
@@ -212,17 +254,12 @@ actor DocumentExtractionService {
                 "issues": issues.isEmpty ? "none" : issues.joined(separator: ",")
             ]
         )
+
         return result
     }
+
     // MARK: - Helpers
-    private func ensureExecutorConfigured() async throws {
-        if !(await requestExecutor.isConfigured()) {
-            await requestExecutor.configureClient()
-        }
-        guard await requestExecutor.isConfigured() else {
-            throw ExtractionError.llmFailed("PDF extraction model is not configured. Add an OpenRouter API key in Settings.")
-        }
-    }
+
     private func currentModelId() -> String {
         let stored = UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId") ?? defaultModelId
         let (sanitized, adjusted) = ModelPreferenceValidator.sanitize(
@@ -235,6 +272,7 @@ actor DocumentExtractionService {
         }
         return sanitized
     }
+
     private func contentTypeForFile(at url: URL) -> String? {
         if #available(macOS 12.0, *) {
             return UTType(filenameExtension: url.pathExtension)?.preferredMIMEType
@@ -242,9 +280,11 @@ actor DocumentExtractionService {
             return nil
         }
     }
+
     private func extractPlainText(from url: URL) -> (String?, [String]) {
         var issues: [String] = []
         let ext = url.pathExtension.lowercased()
+
         if ext == "pdf" {
             guard let document = PDFDocument(url: url) else {
                 return (nil, ["text_extraction_warning"])
@@ -262,6 +302,7 @@ actor DocumentExtractionService {
             }
             return (text, issues)
         }
+
         if ext == "docx" {
             let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
                 .documentType: NSAttributedString.DocumentType.officeOpenXML
@@ -280,23 +321,33 @@ actor DocumentExtractionService {
                 return (nil, issues)
             }
         }
+
         if let text = try? String(contentsOf: url, encoding: .utf8) {
             return (text, issues)
         }
+
         return (nil, ["text_extraction_warning"])
     }
+
     private func enrichText(_ rawText: String, purpose: String, timeout: TimeInterval?) async throws -> (String?, [String]) {
         let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             return (nil, ["llm_failure_empty_input"])
         }
+
+        guard let facade = llmFacade else {
+            return (nil, ["llm_failure_not_configured"])
+        }
+
         let modelId = currentModelId()
         var input = trimmed
         var issues: [String] = []
+
         if trimmed.count > maxCharactersForPrompt {
             input = String(trimmed.prefix(maxCharactersForPrompt))
             issues.append("truncated_input")
         }
+
         var prompt = """
 You are a document extraction assistant. Convert the provided plain text into high-quality Markdown that preserves the document's logical structure.
 Requirements:
@@ -312,35 +363,27 @@ Requirements:
             prompt += "- Highlight employment sections clearly. Use headings per job.\n"
         }
         prompt += "\nPlain text input begins:\n```\n\(input)\n```\n\nReturn only the formatted Markdown content."
-        let parameters = ChatCompletionParameters(
-            messages: [
-                .text(role: .system, content: "You are a meticulous document extraction assistant that produces Markdown outputs."),
-                .text(role: .user, content: prompt)
-            ],
-            model: .custom(modelId),
-            temperature: 0.1
-        )
-        let response: LLMResponse
+
         do {
-            response = try await requestExecutor.execute(parameters: parameters)
-        } catch let llmError as LLMError {
-            if case .invalidModelId(let modelId) = llmError {
+            let text = try await callFacadeText(facade: facade, prompt: prompt, modelId: modelId)
+            if text.isEmpty {
+                issues.append("llm_failure_empty_response")
+                return (nil, issues)
+            }
+            return (text, issues)
+        } catch let error as LLMError {
+            if case .clientError(let message) = error, message.contains("not found") || message.contains("not valid") {
                 onInvalidModelId?(modelId)
                 throw ExtractionError.llmFailed("\(modelId) is not a valid model ID.")
             }
-            issues.append("llm_failure_\(llmError.localizedDescription)")
+            issues.append("llm_failure_\(error.localizedDescription)")
             return (nil, issues)
         } catch {
             issues.append("llm_failure_\(error.localizedDescription)")
             return (nil, issues)
         }
-        let dto = LLMVendorMapper.responseDTO(from: response)
-        guard let text = dto.choices.first?.message?.text, !text.isEmpty else {
-            issues.append("llm_failure_empty_response")
-            return (nil, issues)
-        }
-        return (text, issues)
     }
+
     private func estimateConfidence(for text: String, issues: [String]) -> Double {
         var confidence = min(0.95, Double(text.count) / 10_000.0 + 0.4)
         if issues.contains(where: { $0.hasPrefix("llm_failure") }) {
@@ -351,6 +394,7 @@ Requirements:
         }
         return max(0.1, min(confidence, 0.95))
     }
+
     private func sha256Hex(for data: Data) -> String {
         let hashed = SHA256.hash(data: data)
         return hashed.map { String(format: "%02x", $0) }.joined()
@@ -392,21 +436,21 @@ Requirements:
 
         await notifyProgress(.fileAnalysis, .active, detail: "Converting \(pageCount) PDF page(s) to images...")
 
-        // Convert pages to images
-        guard let base64Images = ImageConversionService.shared.convertPDFPagesToBase64Images(pdfData: fileData, maxPages: maxPagesForImageExtraction),
-              !base64Images.isEmpty else {
+        // Convert pages to images - get raw Data instead of base64
+        guard let imageDataArray = ImageConversionService.shared.convertPDFPagesToImageData(pdfData: fileData, maxPages: maxPagesForImageExtraction),
+              !imageDataArray.isEmpty else {
             await notifyProgress(.fileAnalysis, .failed, detail: "Failed to convert PDF pages to images")
             throw ExtractionError.noTextExtracted
         }
 
-        await notifyProgress(.fileAnalysis, .completed, detail: "Converted \(base64Images.count) page(s)")
+        await notifyProgress(.fileAnalysis, .completed, detail: "Converted \(imageDataArray.count) page(s)")
 
         // Use vision-capable model to extract content
-        let aiStageDetail = "Analyzing \(base64Images.count) page image(s) with AI..."
+        let aiStageDetail = "Analyzing \(imageDataArray.count) page image(s) with AI..."
         await notifyProgress(.aiExtraction, .active, detail: aiStageDetail)
 
         let llmStart = Date()
-        let (extractedText, issues) = try await extractTextFromImages(base64Images, purpose: purpose)
+        let (extractedText, issues) = try await extractTextFromImages(imageDataArray, purpose: purpose)
 
         let llmDurationMs = Int(Date().timeIntervalSince(llmStart) * 1000)
         Logger.info(
@@ -414,7 +458,7 @@ Requirements:
             category: .diagnostics,
             metadata: [
                 "filename": filename,
-                "page_count": "\(base64Images.count)",
+                "page_count": "\(imageDataArray.count)",
                 "duration_ms": "\(llmDurationMs)"
             ]
         )
@@ -469,11 +513,14 @@ Requirements:
         )
     }
 
-    /// Extract text from base64-encoded images using a vision-capable LLM
-    private func extractTextFromImages(_ base64Images: [String], purpose: String) async throws -> (String, [String]) {
-        typealias MessageContent = ChatCompletionParameters.Message.ContentType.MessageContent
-
+    /// Extract text from image data using a vision-capable LLM via LLMFacade
+    private func extractTextFromImages(_ imageDataArray: [Data], purpose: String) async throws -> (String, [String]) {
         var issues: [String] = []
+
+        guard let facade = llmFacade else {
+            return ("", ["llm_failure_not_configured"])
+        }
+
         let modelId = currentModelId()
 
         var prompt = """
@@ -494,58 +541,60 @@ Requirements:
         }
         prompt += "\n\nExtract the complete content from all page images and return only the formatted Markdown."
 
-        // Build message content with images
-        var contentParts: [MessageContent] = []
-        contentParts.append(.text(prompt))
-
-        for (index, base64Image) in base64Images.enumerated() {
-            let dataURLString = "data:image/png;base64,\(base64Image)"
-            guard let imageURL = URL(string: dataURLString) else {
-                Logger.warning("⚠️ Failed to create URL for page \(index + 1)", category: .ai)
-                continue
-            }
-            contentParts.append(.imageUrl(MessageContent.ImageDetail(url: imageURL, detail: "high")))
-            if base64Images.count > 1 {
-                contentParts.append(.text("(Page \(index + 1) of \(base64Images.count))"))
-            }
-        }
-
-        // Create user message with content array
-        let userMessage = ChatCompletionParameters.Message(
-            role: .user,
-            content: .contentArray(contentParts)
-        )
-
-        let parameters = ChatCompletionParameters(
-            messages: [
-                .text(role: .system, content: "You are a meticulous document extraction assistant that produces Markdown outputs from images."),
-                userMessage
-            ],
-            model: .custom(modelId),
-            temperature: 0.1
-        )
-
-        let response: LLMResponse
         do {
-            response = try await requestExecutor.execute(parameters: parameters)
-        } catch let llmError as LLMError {
-            if case .invalidModelId(let modelId) = llmError {
+            let text = try await callFacadeTextWithImages(
+                facade: facade,
+                prompt: prompt,
+                modelId: modelId,
+                images: imageDataArray
+            )
+
+            if text.isEmpty {
+                issues.append("llm_failure_empty_response")
+                return ("", issues)
+            }
+
+            return (text, issues)
+        } catch let error as LLMError {
+            if case .clientError(let message) = error, message.contains("not found") || message.contains("not valid") {
                 onInvalidModelId?(modelId)
                 throw ExtractionError.llmFailed("\(modelId) is not a valid model ID.")
             }
-            issues.append("llm_failure_\(llmError.localizedDescription)")
+            issues.append("llm_failure_\(error.localizedDescription)")
             return ("", issues)
         } catch {
             issues.append("llm_failure_\(error.localizedDescription)")
             return ("", issues)
         }
+    }
 
-        let dto = LLMVendorMapper.responseDTO(from: response)
-        guard let text = dto.choices.first?.message?.text, !text.isEmpty else {
-            issues.append("llm_failure_empty_response")
-            return ("", issues)
-        }
+    // MARK: - MainActor Bridge Methods
 
-        return (text, issues)
+    @MainActor
+    private func callFacadeText(
+        facade: LLMFacade,
+        prompt: String,
+        modelId: String
+    ) async throws -> String {
+        try await facade.executeText(
+            prompt: prompt,
+            modelId: modelId,
+            temperature: 0.1
+        )
+    }
+
+    @MainActor
+    private func callFacadeTextWithImages(
+        facade: LLMFacade,
+        prompt: String,
+        modelId: String,
+        images: [Data]
+    ) async throws -> String {
+        try await facade.executeTextWithImages(
+            prompt: prompt,
+            modelId: modelId,
+            images: images,
+            temperature: 0.1
+        )
     }
 }

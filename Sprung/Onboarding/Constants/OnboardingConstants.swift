@@ -34,7 +34,6 @@ enum OnboardingToolName: String, CaseIterable {
     case displayKnowledgeCardPlan = "display_knowledge_card_plan"
     case scanGitRepo = "scan_git_repo"
     case requestEvidence = "request_evidence"
-    case generateKnowledgeCard = "generate_knowledge_card"
     case persistData = "persist_data"
     case setObjectiveStatus = "set_objective_status"
 }
