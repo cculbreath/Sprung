@@ -57,6 +57,7 @@ final class OnboardingToolRegistrar {
         toolRegistry.register(RequestEvidenceTool(coordinator: coordinator))
         toolRegistry.register(GetTimelineEntriesTool(coordinator: coordinator))
         toolRegistry.register(DisplayKnowledgeCardPlanTool(coordinator: coordinator))
+        toolRegistry.register(SetCurrentKnowledgeCardTool(coordinator: coordinator))
         toolRegistry.register(ScanGitRepoTool(coordinator: coordinator))
         Logger.info("✅ Registered \(toolRegistry.allTools().count) tools", category: .ai)
     }
