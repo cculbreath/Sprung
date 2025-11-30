@@ -6,7 +6,6 @@ import SwiftyJSON
 final class CoordinatorEventRouter {
     private let ui: OnboardingUIState
     private let state: StateCoordinator
-    private let checkpointManager: CheckpointManager
     private let phaseTransitionController: PhaseTransitionController
     private let toolRouter: ToolHandler
     private let applicantProfileStore: ApplicantProfileStore
@@ -17,7 +16,6 @@ final class CoordinatorEventRouter {
     init(
         ui: OnboardingUIState,
         state: StateCoordinator,
-        checkpointManager: CheckpointManager,
         phaseTransitionController: PhaseTransitionController,
         toolRouter: ToolHandler,
         applicantProfileStore: ApplicantProfileStore,
@@ -26,7 +24,6 @@ final class CoordinatorEventRouter {
     ) {
         self.ui = ui
         self.state = state
-        self.checkpointManager = checkpointManager
         self.phaseTransitionController = phaseTransitionController
         self.toolRouter = toolRouter
         self.applicantProfileStore = applicantProfileStore
@@ -88,8 +85,6 @@ final class CoordinatorEventRouter {
             break
         case .skeletonTimelineStored, .enabledSectionsUpdated:
             break
-        case .checkpointRequested:
-            break
         case .toolCallRequested:
             break
         case .toolCallCompleted:
@@ -98,8 +93,6 @@ final class CoordinatorEventRouter {
             let status = await state.getObjectiveStatus(id)?.rawValue
             response(status)
         case .phaseTransitionApplied(let phaseName, _):
-            // Save checkpoint at phase transitions - UI state is deterministic here
-            await checkpointManager.saveCheckpoint()
             await phaseTransitionController.handlePhaseTransition(phaseName)
             if let phase = InterviewPhase(rawValue: phaseName) {
                 ui.phase = phase

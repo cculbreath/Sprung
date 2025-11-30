@@ -188,8 +188,6 @@ actor StateCoordinator: OnboardingEventEmitter {
     // MARK: - Event Handlers (Delegate to Services)
     private func handleStateEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .checkpointRequested:
-            await emitSnapshot(reason: "checkpoint")
         case .applicantProfileStored:
             Logger.info("👤 Applicant profile stored via event", category: .ai)
         case .skeletonTimelineStored:

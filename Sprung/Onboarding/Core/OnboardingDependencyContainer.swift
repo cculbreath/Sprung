@@ -39,7 +39,6 @@ private struct ToolRouterComponents {
 /// Groups controller components for initialization
 private struct Controllers {
     let lifecycleController: InterviewLifecycleController
-    let checkpointManager: CheckpointManager
     let phaseTransitionController: PhaseTransitionController
 }
 
@@ -69,8 +68,6 @@ private struct ControllerCreationParams {
     let openAIService: OpenAIService?
     let toolRegistry: ToolRegistry
     let dataStore: InterviewDataStore
-    let checkpoints: Checkpoints
-    let applicantProfileStore: ApplicantProfileStore
 }
 
 /// Owns all service instances for the onboarding module.
@@ -88,7 +85,6 @@ final class OnboardingDependencyContainer {
     let toolExecutionCoordinator: ToolExecutionCoordinator
     // MARK: - Controllers
     let lifecycleController: InterviewLifecycleController
-    let checkpointManager: CheckpointManager
     let phaseTransitionController: PhaseTransitionController
     let sessionCoordinator: InterviewSessionCoordinator
     let artifactQueryCoordinator: ArtifactQueryCoordinator
@@ -121,7 +117,6 @@ final class OnboardingDependencyContainer {
     // MARK: - External Dependencies (Passed In)
     private let applicantProfileStore: ApplicantProfileStore
     private let dataStore: InterviewDataStore
-    let checkpoints: Checkpoints
     let documentExtractionService: DocumentExtractionService
     // MARK: - Mutable State
     private(set) var openAIService: OpenAIService?
@@ -140,7 +135,6 @@ final class OnboardingDependencyContainer {
         documentExtractionService: DocumentExtractionService,
         applicantProfileStore: ApplicantProfileStore,
         dataStore: InterviewDataStore,
-        checkpoints: Checkpoints,
         preferences: OnboardingPreferences
     ) {
         // Store external dependencies
@@ -149,7 +143,6 @@ final class OnboardingDependencyContainer {
         self.documentExtractionService = documentExtractionService
         self.applicantProfileStore = applicantProfileStore
         self.dataStore = dataStore
-        self.checkpoints = checkpoints
 
         // 1. Initialize core infrastructure
         let core = Self.createCoreInfrastructure()
@@ -201,11 +194,10 @@ final class OnboardingDependencyContainer {
             state: state, eventBus: core.eventBus, phaseRegistry: core.phaseRegistry,
             chatboxHandler: tools.chatboxHandler, toolExecutionCoordinator: tools.toolExecutionCoordinator,
             toolRouter: tools.toolRouter, openAIService: openAIService, toolRegistry: core.toolRegistry,
-            dataStore: dataStore, checkpoints: checkpoints, applicantProfileStore: applicantProfileStore
+            dataStore: dataStore
         )
         let controllers = Self.createControllers(params: controllerParams)
         self.lifecycleController = controllers.lifecycleController
-        self.checkpointManager = controllers.checkpointManager
         self.phaseTransitionController = controllers.phaseTransitionController
 
         // 8. Initialize services
@@ -222,7 +214,7 @@ final class OnboardingDependencyContainer {
 
         // 9. Initialize session and query coordinators
         self.sessionCoordinator = InterviewSessionCoordinator(
-            lifecycleController: controllers.lifecycleController, checkpointManager: controllers.checkpointManager,
+            lifecycleController: controllers.lifecycleController,
             phaseTransitionController: controllers.phaseTransitionController, state: state,
             dataPersistenceService: services.dataPersistenceService,
             documentArtifactHandler: docs.documentArtifactHandler,
@@ -329,10 +321,6 @@ final class OnboardingDependencyContainer {
                 toolRouter: params.toolRouter, openAIService: params.openAIService,
                 toolRegistry: params.toolRegistry, dataStore: params.dataStore
             ),
-            checkpointManager: CheckpointManager(
-                state: params.state, eventBus: params.eventBus, checkpoints: params.checkpoints,
-                applicantProfileStore: params.applicantProfileStore
-            ),
             phaseTransitionController: PhaseTransitionController(
                 state: params.state, eventBus: params.eventBus, phaseRegistry: params.phaseRegistry
             )
@@ -399,7 +387,6 @@ final class OnboardingDependencyContainer {
         self.coordinatorEventRouter = CoordinatorEventRouter(
             ui: ui,
             state: state,
-            checkpointManager: checkpointManager,
             phaseTransitionController: phaseTransitionController,
             toolRouter: toolRouter,
             applicantProfileStore: applicantProfileStore,

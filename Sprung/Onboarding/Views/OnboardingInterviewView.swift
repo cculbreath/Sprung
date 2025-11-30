@@ -8,8 +8,6 @@ struct OnboardingInterviewView: View {
     @State private var viewModel = OnboardingInterviewViewModel(
         fallbackModelId: "openai/gpt-5.1"
     )
-    @State private var showResumeOptions = false
-    @State private var pendingStartModelId: String?
     #if DEBUG
     @State private var showEventDump = false
     #endif
@@ -73,38 +71,8 @@ struct OnboardingInterviewView: View {
             .padding(.leading, shadowR)
             .padding(.trailing, shadowR)
             .padding(.bottom, shadowR + abs(shadowY))
-        let withResumeOverlay = styledContent
-            .overlay {
-                if showResumeOptions {
-                    ZStack {
-                        Color.black.opacity(0.001)
-                            .ignoresSafeArea()
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                pendingStartModelId = nil
-                                showResumeOptions = false
-                            }
-                        ResumeInterviewPromptView(
-                            onResume: {
-                                respondToResumeChoice(resume: true)
-                            },
-                            onStartOver: {
-                                respondToResumeChoice(resume: false)
-                            },
-                            onCancel: {
-                                pendingStartModelId = nil
-                                showResumeOptions = false
-                            }
-                        )
-                        .transition(.opacity.combined(with: .scale))
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .zIndex(5)
-                }
-            }
-            .animation(.easeInOut(duration: 0.2), value: showResumeOptions)
         // --- Lifecycle bindings and tasks ---
-        let withLifecycle = withResumeOverlay
+        let withLifecycle = styledContent
             .task {
                 let modelIds = openAIModels.map(\.modelId)
                 uiState.configureIfNeeded(
@@ -209,57 +177,6 @@ struct OnboardingInterviewView: View {
         .padding(24)
     }
     #endif
-}
-private struct ResumeInterviewPromptView: View {
-    let onResume: () -> Void
-    let onStartOver: () -> Void
-    let onCancel: () -> Void
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(spacing: 16) {
-                Image("custom.onboardinginterview")
-                    .resizable()
-                    .renderingMode(.template)
-                    .foregroundStyle(.secondary)
-                    .scaledToFit()
-                    .frame(width: 42, height: 42)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Resume previous interview?")
-                        .font(.headline)
-                    Text("We found an in-progress onboarding interview. Would you like to continue where you left off or start fresh?")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            HStack(spacing: 14) {
-                Button("Start over", role: .destructive) {
-                    onStartOver()
-                }
-                .buttonStyle(.bordered)
-                .tint(.red)
-                .controlSize(.large)
-                Spacer()
-                HStack(spacing: 12) {
-                    Button("Cancel") {
-                        onCancel()
-                    }
-                    .buttonStyle(.bordered)
-                    Button("Resume") {
-                        onResume()
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-            }
-        }
-        .padding(.vertical, 24)
-        .padding(.horizontal, 28)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color(nsColor: .windowBackgroundColor))
-                .shadow(color: .black.opacity(0.18), radius: 24, y: 12)
-        )
-                .frame(width: 420)
-    }
 }
 // MARK: - Layout
 private extension OnboardingInterviewView {
@@ -385,37 +302,10 @@ private extension OnboardingInterviewView {
         return "Using \(display) with web search \(webText)."
     }
     func beginInterview() {
-        let modelId = viewModel.currentModelId
         Task { @MainActor in
             guard interviewCoordinator.ui.isActive == false else { return }
-            // Check if there's an existing checkpoint to resume
-            if interviewCoordinator.checkpoints.hasCheckpoint() {
-                Logger.info("✅ Found existing checkpoint - showing resume dialog", category: .ai)
-                // Show resume dialog
-                pendingStartModelId = modelId
-                showResumeOptions = true
-            } else {
-                Logger.info("📝 No checkpoint found - starting fresh interview", category: .ai)
-                // No checkpoint, start fresh
-                await launchInterview(resume: false)
-            }
-        }
-    }
-    @MainActor
-    func launchInterview(resume: Bool) async {
-        _ = await interviewCoordinator.startInterview(resumeExisting: resume)
-        // Note: modelId and backend are now configured via OpenAIService in AppDependencies
-        // Writing analysis consent is part of OnboardingPreferences
-        pendingStartModelId = nil
-        showResumeOptions = false
-    }
-    func respondToResumeChoice(resume: Bool) {
-        guard pendingStartModelId != nil else { return }
-        Logger.info("📝 User chose to \(resume ? "resume" : "start fresh") interview", category: .ai)
-        pendingStartModelId = nil
-        showResumeOptions = false
-        Task { @MainActor in
-            await launchInterview(resume: resume)
+            Logger.info("📝 Starting fresh interview", category: .ai)
+            _ = await interviewCoordinator.startInterview()
         }
     }
     var openAIModels: [EnabledLLM] {

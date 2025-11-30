@@ -149,12 +149,6 @@ final class DataResetService {
             try fileManager.removeItem(at: onboardingDataURL)
             Logger.debug("✅ Onboarding data directory reset", category: .appLifecycle)
         }
-        // Reset Onboarding checkpoint file
-        let checkpointURL = appSupportURL.appendingPathComponent("Onboarding/Interview.checkpoints.json")
-        if fileManager.fileExists(atPath: checkpointURL.path) {
-            try fileManager.removeItem(at: checkpointURL)
-            Logger.debug("✅ Onboarding checkpoint file reset", category: .appLifecycle)
-        }
         // Reset career keywords file
         let careerKeywordsURL = appSupportURL.appendingPathComponent("Sprung/career_keywords.json")
         if fileManager.fileExists(atPath: careerKeywordsURL.path) {

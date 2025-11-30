@@ -31,7 +31,6 @@ enum OnboardingEvent {
     case applicantProfileStored(JSON)
     case skeletonTimelineStored(JSON)
     case enabledSectionsUpdated(Set<String>)
-    case checkpointRequested
     // MARK: - Tool Execution
     case toolCallRequested(ToolCall, statusMessage: String? = nil)
     case toolCallCompleted(id: UUID, result: JSON, statusMessage: String? = nil)
@@ -301,8 +300,7 @@ actor EventCoordinator {
             return .llm
         // State events
         case .stateSnapshot, .stateAllowedToolsUpdated,
-             .applicantProfileStored, .skeletonTimelineStored, .enabledSectionsUpdated,
-             .checkpointRequested:
+             .applicantProfileStored, .skeletonTimelineStored, .enabledSectionsUpdated:
             return .state
         // Phase events
         case .phaseTransitionRequested, .phaseTransitionApplied, .phaseAdvanceRequested, .phaseAdvanceDismissed,
@@ -390,8 +388,6 @@ actor EventCoordinator {
             description = "Timeline stored"
         case .enabledSectionsUpdated:
             description = "Sections updated"
-        case .checkpointRequested:
-            description = "Checkpoint requested"
         case .toolCallRequested(_, let statusMessage):
             let statusInfo = statusMessage.map { " - \($0)" } ?? ""
             description = "Tool call requested\(statusInfo)"
