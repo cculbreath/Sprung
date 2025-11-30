@@ -339,6 +339,27 @@ final class OnboardingDependencyContainer {
             documentExtractionService: documentExtractionService,
             onModelAvailabilityIssue: onModelAvailabilityIssue
         )
+        // Set up checkpoint manager UI state provider and restorer
+        checkpointManager.uiStateProvider = { [weak coordinator] in
+            guard let ui = coordinator?.ui else {
+                return CheckpointManager.UIStateForCheckpoint(
+                    knowledgeCardPlan: [],
+                    knowledgeCardPlanFocus: nil,
+                    knowledgeCardPlanMessage: nil
+                )
+            }
+            return CheckpointManager.UIStateForCheckpoint(
+                knowledgeCardPlan: ui.knowledgeCardPlan,
+                knowledgeCardPlanFocus: ui.knowledgeCardPlanFocus,
+                knowledgeCardPlanMessage: ui.knowledgeCardPlanMessage
+            )
+        }
+        checkpointManager.uiStateRestorer = { [weak coordinator] uiState in
+            guard let ui = coordinator?.ui else { return }
+            ui.knowledgeCardPlan = uiState.knowledgeCardPlan
+            ui.knowledgeCardPlanFocus = uiState.knowledgeCardPlanFocus
+            ui.knowledgeCardPlanMessage = uiState.knowledgeCardPlanMessage
+        }
         Logger.info("🏗️ OnboardingDependencyContainer late initialization completed", category: .ai)
     }
     // MARK: - Service Updates

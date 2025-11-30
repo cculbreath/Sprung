@@ -134,13 +134,13 @@ struct DisplayKnowledgeCardPlanTool: InterviewTool {
 }
 
 /// Model for a knowledge card plan item
-struct KnowledgeCardPlanItem: Identifiable, Equatable {
-    enum ItemType: String {
+struct KnowledgeCardPlanItem: Identifiable, Equatable, Codable {
+    enum ItemType: String, Codable {
         case job
         case skill
     }
 
-    enum Status: String {
+    enum Status: String, Codable {
         case pending
         case inProgress = "in_progress"
         case completed
