@@ -9,6 +9,17 @@ final class CheckpointManager {
     private let eventBus: EventCoordinator
     private let checkpoints: Checkpoints
     private let applicantProfileStore: ApplicantProfileStore
+    // MARK: - UI State Provider
+    /// Closure to get current UI state for checkpointing (set by coordinator after init)
+    var uiStateProvider: (() -> UIStateForCheckpoint)?
+    /// Closure to restore UI state from checkpoint (set by coordinator after init)
+    var uiStateRestorer: ((UIStateForCheckpoint) -> Void)?
+    /// UI state data structure for checkpointing
+    struct UIStateForCheckpoint {
+        let knowledgeCardPlan: [KnowledgeCardPlanItem]
+        let knowledgeCardPlanFocus: String?
+        let knowledgeCardPlanMessage: String?
+    }
     // MARK: - Debounce State
     private var checkpointDebounce: Task<Void, Never>?
     // MARK: - Initialization
@@ -42,12 +53,17 @@ final class CheckpointManager {
     func saveCheckpoint() async {
         let snapshot = await state.createSnapshot()
         let artifacts = await state.artifacts
+        // Get UI state if provider is available
+        let uiState = uiStateProvider?()
         // Save to persistent storage - snapshot is used as-is
         checkpoints.save(
             snapshot: snapshot,
             profileJSON: artifacts.applicantProfile,
             timelineJSON: artifacts.skeletonTimeline,
-            enabledSections: artifacts.enabledSections
+            enabledSections: artifacts.enabledSections,
+            knowledgeCardPlan: uiState?.knowledgeCardPlan,
+            knowledgeCardPlanFocus: uiState?.knowledgeCardPlanFocus,
+            knowledgeCardPlanMessage: uiState?.knowledgeCardPlanMessage
         )
         Logger.debug("💾 Checkpoint saved", category: .ai)
     }
@@ -65,6 +81,16 @@ final class CheckpointManager {
         if !checkpoint.enabledSections.isEmpty {
             await state.storeEnabledSections(checkpoint.enabledSections)
         }
+        // Restore UI state if restorer is available
+        if let knowledgeCardPlan = checkpoint.knowledgeCardPlan {
+            let uiState = UIStateForCheckpoint(
+                knowledgeCardPlan: knowledgeCardPlan,
+                knowledgeCardPlanFocus: checkpoint.knowledgeCardPlanFocus,
+                knowledgeCardPlanMessage: checkpoint.knowledgeCardPlanMessage
+            )
+            uiStateRestorer?(uiState)
+            Logger.info("📋 Restored \(knowledgeCardPlan.count) knowledge card plan items", category: .ai)
+        }
         Logger.info("✅ Restored from checkpoint", category: .ai)
         return true
     }
@@ -81,6 +107,16 @@ final class CheckpointManager {
         }
         if !data.enabledSections.isEmpty {
             await state.storeEnabledSections(data.enabledSections)
+        }
+        // Restore UI state if restorer is available
+        if let knowledgeCardPlan = data.knowledgeCardPlan {
+            let uiState = UIStateForCheckpoint(
+                knowledgeCardPlan: knowledgeCardPlan,
+                knowledgeCardPlanFocus: data.knowledgeCardPlanFocus,
+                knowledgeCardPlanMessage: data.knowledgeCardPlanMessage
+            )
+            uiStateRestorer?(uiState)
+            Logger.info("📋 Restored \(knowledgeCardPlan.count) knowledge card plan items", category: .ai)
         }
         Logger.info("✅ Restored from specific checkpoint (\(checkpoint.timestamp))", category: .ai)
         return true
