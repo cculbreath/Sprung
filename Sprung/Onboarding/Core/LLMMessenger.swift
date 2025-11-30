@@ -403,12 +403,32 @@ actor LLMMessenger: OnboardingEventEmitter {
     }
     private func buildUserMessageRequest(text: String, isSystemGenerated: Bool) async -> ModelResponseParameter {
         let previousResponseId = await contextAssembler.getPreviousResponseId()
-        let inputItems: [InputItem] = [
-            .message(InputMessage(
-                role: "user",
-                content: .text(text)
-            ))
-        ]
+        var inputItems: [InputItem] = []
+
+        // If no previous response ID, we need to include full context
+        // This happens on fresh start or after checkpoint restore
+        if previousResponseId == nil {
+            // Include base developer message (system prompt)
+            inputItems.append(.message(InputMessage(
+                role: "developer",
+                content: .text(baseDeveloperMessage)
+            )))
+
+            // Include conversation history if this is a restore (not first message)
+            let hasHistory = await contextAssembler.hasConversationHistory()
+            if hasHistory {
+                let history = await contextAssembler.buildConversationHistory()
+                inputItems.append(contentsOf: history)
+                Logger.info("📋 Checkpoint restore: including \(history.count) messages from transcript", category: .ai)
+            } else {
+                Logger.info("📋 Fresh start: including base developer message", category: .ai)
+            }
+        }
+
+        inputItems.append(.message(InputMessage(
+            role: "user",
+            content: .text(text)
+        )))
         let tools = await getToolSchemas()
         let toolChoice = await determineToolChoice(for: text, isSystemGenerated: isSystemGenerated)
         let modelId = await stateCoordinator.getCurrentModelId()

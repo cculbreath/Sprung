@@ -120,7 +120,8 @@ actor ConversationContextAssembler {
         return "State update:\n" + cues.joined(separator: "\n")
     }
     /// Build full conversation history (all messages from the interview)
-    private func buildConversationHistory() async -> [InputItem] {
+    /// Used when restoring from checkpoint or starting fresh without previous_response_id
+    func buildConversationHistory() async -> [InputItem] {
         let messages = await state.messages
         return messages.compactMap { message -> InputItem? in
             let role: String
@@ -138,6 +139,12 @@ actor ConversationContextAssembler {
                 content: .text(message.text)
             ))
         }
+    }
+
+    /// Check if we have conversation history (for determining if this is a fresh start after restore)
+    func hasConversationHistory() async -> Bool {
+        let messages = await state.messages
+        return !messages.isEmpty
     }
     /// Build scratchpad summary for request metadata.
     func buildScratchpadSummary() async -> String {
