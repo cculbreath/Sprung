@@ -87,6 +87,10 @@ struct NextPhaseTool: InterviewTool {
             response["previous_phase"].string = currentPhase.rawValue
             response["new_phase"].string = nextPhase.rawValue
             response["message"].string = "Phase transition completed"
+            // Chain to the bootstrap tool for the new phase
+            if nextPhase == .phase2DeepDive {
+                response["next_required_tool"].string = OnboardingToolName.startPhaseTwo.rawValue
+            }
             return .immediate(response)
         }
         // If objectives are missing, present a dialog and wait for user approval

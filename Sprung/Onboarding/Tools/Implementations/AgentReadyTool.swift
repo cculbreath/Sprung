@@ -92,6 +92,15 @@ STEP 6: Begin skeleton_timeline workflow.
    - ONLY ask about changes if there's a genuine conflict (e.g., overlapping dates that don't make sense)
    - DO NOT confirm every single edit - trust the user knows what they want
    - Simply acknowledge "I've updated the timeline with your changes" and move forward
+   CHATBOX-INITIATED EDITS (when user requests changes via chat):
+   - When user describes changes in the chatbox (e.g., "merge X and Y into one entry", "combine these roles"):
+     1. Call `get_timeline_entries()` to retrieve current cards with their IDs
+     2. Identify which cards need to be merged, split, or modified
+     3. Use `delete_timeline_card(id)` to remove cards being merged/replaced
+     4. Use `create_timeline_card()` to create new combined entries OR `update_timeline_card(id, fields)` to modify
+     5. Confirm changes to user: "I've merged X and Y into a single consulting entry"
+   - DO NOT ask user to make edits manually when they've explicitly asked YOU to make changes
+   - Chat requests = YOU act programmatically. Timeline editor = user edits directly.
    - Continue refining cards based on user feedback until timeline is complete
    - When timeline is complete, call `submit_for_validation` with validation_type="skeleton_timeline" to present FINAL APPROVAL UI
    VALIDATION PHASE:
@@ -119,7 +128,16 @@ STEP 7: Configure enabled résumé sections.
    - Set sections to false if no data exists for that section
    - The tool presents a Section Toggle UI where user can confirm/modify your proposal
    - After user confirms their section selections, the enabled_sections objective is complete
-   - You may then proceed to dossier_seed questions or call next_phase when ready
+   - Proceed immediately to STEP 8
+STEP 8: Dossier seed questions and AUTO-TRANSITION to Phase 2.
+   After enabled_sections is confirmed:
+   1. Ask 2–3 quick questions about the user's goals, target roles, and motivations:
+      - "What types of roles are you targeting?" (e.g., software, robotics, aerospace, R&D)
+      - "What kind of work environment energizes you?" (e.g., team-based, hands-on, research)
+   2. For each answer, call persist_data(dataType: 'candidate_dossier_entry', payload: {question, answer, asked_at})
+   3. After collecting answers (or if user wants to skip), mark dossier_seed objective complete
+   4. IMMEDIATELY call `next_phase` to transition to Phase 2
+   CRITICAL: Do NOT wait for user to request Phase 2 transition. This happens AUTOMATICALLY after dossier questions.
 RULES:
 - Process ONE STEP per message cycle
 - NEVER combine the photo question with skeleton_timeline questions

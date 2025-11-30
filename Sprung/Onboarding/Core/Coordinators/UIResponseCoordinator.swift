@@ -95,12 +95,38 @@ final class UIResponseCoordinator {
         // Clear the validation prompt
         toolRouter.clearValidationPrompt()
         await eventBus.publish(.validationPromptCleared)
-        // Send user message to LLM
+        // Get current timeline state to include in the message
+        let timelineInfo = await buildTimelineCardSummary()
+        // Send user message to LLM with current card state
         var userMessage = JSON()
         userMessage["role"].string = "user"
-        userMessage["content"].string = message
+        var content = message
+        if !timelineInfo.isEmpty {
+            content += "\n\nCurrent timeline cards (with IDs for programmatic editing):\n\(timelineInfo)"
+        }
+        userMessage["content"].string = content
         await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
-        Logger.info("✅ Validation prompt cleared and user message sent to LLM", category: .ai)
+        Logger.info("✅ Validation prompt cleared and user message sent to LLM (including \(timelineInfo.isEmpty ? "no" : "current") card state)", category: .ai)
+    }
+
+    /// Build a summary of current timeline cards with their IDs for the LLM
+    private func buildTimelineCardSummary() async -> String {
+        let artifacts = await state.artifacts
+        guard let timeline = artifacts.skeletonTimeline,
+              let entries = timeline["experiences"].array,
+              !entries.isEmpty else {
+            return ""
+        }
+        var lines: [String] = []
+        for entry in entries {
+            let id = entry["id"].stringValue
+            let title = entry["title"].stringValue
+            let org = entry["organization"].stringValue
+            let start = entry["start"].stringValue
+            let end = entry["end"].stringValue.isEmpty ? "present" : entry["end"].stringValue
+            lines.append("- [\(id)] \(title) @ \(org) (\(start) - \(end))")
+        }
+        return lines.joined(separator: "\n")
     }
     // MARK: - Applicant Profile Handling
     func confirmApplicantProfile(draft: ApplicantProfileDraft) async {
@@ -365,11 +391,32 @@ final class UIResponseCoordinator {
         }
         // Publish replacement event which will update state and persistence
         await eventBus.publish(.skeletonTimelineReplaced(timeline: timelineJSON, diff: diff, meta: meta))
-        // Notify LLM of the changes
+        // Build card summary with IDs for LLM
+        let cardSummary = buildTimelineCardSummarySync(cards: cards)
+        // Notify LLM of the changes with current card state
         var userMessage = JSON()
         userMessage["role"].string = "user"
-        userMessage["content"].string = "I have updated the timeline. Changes:\n\(diff.summary)"
+        var content = "I have updated the timeline. Changes:\n\(diff.summary)"
+        if !cardSummary.isEmpty {
+            content += "\n\nCurrent timeline cards (with IDs for programmatic editing):\n\(cardSummary)"
+        }
+        userMessage["content"].string = content
         await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
-        Logger.info("✅ User timeline update applied and notified LLM", category: .ai)
+        Logger.info("✅ User timeline update applied and notified LLM (including card IDs)", category: .ai)
+    }
+
+    /// Build a summary of timeline cards with their IDs (synchronous version for use with TimelineCard array)
+    private func buildTimelineCardSummarySync(cards: [TimelineCard]) -> String {
+        guard !cards.isEmpty else { return "" }
+        var lines: [String] = []
+        for card in cards {
+            let id = card.id
+            let title = card.title
+            let org = card.organization
+            let start = card.start
+            let end = card.end.isEmpty ? "present" : card.end
+            lines.append("- [\(id)] \(title) @ \(org) (\(start) - \(end))")
+        }
+        return lines.joined(separator: "\n")
     }
 }

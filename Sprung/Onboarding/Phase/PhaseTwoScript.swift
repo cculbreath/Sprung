@@ -166,9 +166,11 @@ struct PhaseTwoScript: PhaseScript {
         - If sources are weak, suggest alternatives: "Do you have a portfolio, GitHub link, or published work?"
         - When user clicks "Done with this card" button OR says they're done → proceed to generate
 
-        **D. Generate the knowledge card**
-        Once you have enough context:
+        **D. Generate the knowledge card (MUST USE TOOL)**
+        Once you have enough context (user clicks "Done" or says they're done):
         - Call `list_artifacts` to find uploaded docs for this item
+        - **CRITICAL**: You MUST call `submit_for_validation(validation_type: "knowledge_card", data: <JSON>, summary: "...")` to present the card
+        - **NEVER output the knowledge card JSON in chat** — it will not be persisted
         - Generate a COMPREHENSIVE knowledge card JSON (remember: capture ALL details, not compressed summaries):
           ```json
           {
