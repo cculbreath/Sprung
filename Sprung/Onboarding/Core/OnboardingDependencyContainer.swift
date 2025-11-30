@@ -1,6 +1,78 @@
 import Foundation
 import SwiftyJSON
 import SwiftOpenAI
+
+// MARK: - Initialization Result Types
+/// Groups core infrastructure components for initialization
+private struct CoreInfrastructure {
+    let eventBus: EventCoordinator
+    let toolRegistry: ToolRegistry
+    let phaseRegistry: PhaseScriptRegistry
+    let phasePolicy: PhasePolicy
+}
+
+/// Groups state store components for initialization
+private struct StateStores {
+    let objectiveStore: ObjectiveStore
+    let artifactRepository: ArtifactRepository
+    let chatTranscriptStore: ChatTranscriptStore
+    let sessionUIState: SessionUIState
+    let draftKnowledgeStore: DraftKnowledgeStore
+}
+
+/// Groups document processing components for initialization
+private struct DocumentComponents {
+    let uploadStorage: OnboardingUploadStorage
+    let documentProcessingService: DocumentProcessingService
+    let documentArtifactHandler: DocumentArtifactHandler
+    let documentArtifactMessenger: DocumentArtifactMessenger
+}
+
+/// Groups tool routing components for initialization
+private struct ToolRouterComponents {
+    let toolRouter: ToolHandler
+    let toolExecutor: ToolExecutor
+    let toolExecutionCoordinator: ToolExecutionCoordinator
+    let chatboxHandler: ChatboxHandler
+}
+
+/// Groups controller components for initialization
+private struct Controllers {
+    let lifecycleController: InterviewLifecycleController
+    let checkpointManager: CheckpointManager
+    let phaseTransitionController: PhaseTransitionController
+}
+
+/// Groups service components for initialization
+private struct Services {
+    let extractionManagementService: ExtractionManagementService
+    let timelineManagementService: TimelineManagementService
+    let dataPersistenceService: DataPersistenceService
+    let ingestionCoordinator: IngestionCoordinator
+}
+
+/// Groups artifact ingestion components for initialization
+private struct ArtifactIngestionComponents {
+    let documentIngestionKernel: DocumentIngestionKernel
+    let gitIngestionKernel: GitIngestionKernel
+    let artifactIngestionCoordinator: ArtifactIngestionCoordinator
+}
+
+/// Groups parameters for controller creation
+private struct ControllerCreationParams {
+    let state: StateCoordinator
+    let eventBus: EventCoordinator
+    let phaseRegistry: PhaseScriptRegistry
+    let chatboxHandler: ChatboxHandler
+    let toolExecutionCoordinator: ToolExecutionCoordinator
+    let toolRouter: ToolHandler
+    let openAIService: OpenAIService?
+    let toolRegistry: ToolRegistry
+    let dataStore: InterviewDataStore
+    let checkpoints: Checkpoints
+    let applicantProfileStore: ApplicantProfileStore
+}
+
 /// Owns all service instances for the onboarding module.
 /// Extracted from OnboardingInterviewCoordinator to centralize dependency wiring.
 @MainActor
@@ -78,15 +150,116 @@ final class OnboardingDependencyContainer {
         self.applicantProfileStore = applicantProfileStore
         self.dataStore = dataStore
         self.checkpoints = checkpoints
-        // 1. Initialize Event Bus (foundation for all communication)
+
+        // 1. Initialize core infrastructure
+        let core = Self.createCoreInfrastructure()
+        self.eventBus = core.eventBus
+        self.toolRegistry = core.toolRegistry
+        self.phaseRegistry = core.phaseRegistry
+
+        // 2. Initialize UI state
+        self.ui = OnboardingUIState(preferences: preferences)
+        self.wizardTracker = WizardProgressTracker()
+
+        // 3. Initialize state stores
+        let stores = Self.createStateStores(eventBus: core.eventBus, phasePolicy: core.phasePolicy)
+        self.objectiveStore = stores.objectiveStore
+        self.artifactRepository = stores.artifactRepository
+        self.chatTranscriptStore = stores.chatTranscriptStore
+        self.sessionUIState = stores.sessionUIState
+        self.draftKnowledgeStore = stores.draftKnowledgeStore
+
+        // 4. Initialize state coordinator
+        self.state = StateCoordinator(
+            eventBus: core.eventBus, phasePolicy: core.phasePolicy,
+            objectives: stores.objectiveStore, artifacts: stores.artifactRepository,
+            chat: stores.chatTranscriptStore, uiState: stores.sessionUIState,
+            draftStore: stores.draftKnowledgeStore
+        )
+
+        // 5. Initialize document services
+        let docs = Self.createDocumentComponents(
+            eventBus: core.eventBus, documentExtractionService: documentExtractionService, dataStore: dataStore
+        )
+        self.uploadStorage = docs.uploadStorage
+        self.documentProcessingService = docs.documentProcessingService
+        self.documentArtifactHandler = docs.documentArtifactHandler
+        self.documentArtifactMessenger = docs.documentArtifactMessenger
+
+        // 6. Initialize tool router components
+        let tools = Self.createToolRouterComponents(
+            eventBus: core.eventBus, toolRegistry: core.toolRegistry, state: state,
+            uploadStorage: docs.uploadStorage, applicantProfileStore: applicantProfileStore, dataStore: dataStore
+        )
+        self.toolRouter = tools.toolRouter
+        self.toolExecutor = tools.toolExecutor
+        self.toolExecutionCoordinator = tools.toolExecutionCoordinator
+        self.chatboxHandler = tools.chatboxHandler
+
+        // 7. Initialize controllers
+        let controllerParams = ControllerCreationParams(
+            state: state, eventBus: core.eventBus, phaseRegistry: core.phaseRegistry,
+            chatboxHandler: tools.chatboxHandler, toolExecutionCoordinator: tools.toolExecutionCoordinator,
+            toolRouter: tools.toolRouter, openAIService: openAIService, toolRegistry: core.toolRegistry,
+            dataStore: dataStore, checkpoints: checkpoints, applicantProfileStore: applicantProfileStore
+        )
+        let controllers = Self.createControllers(params: controllerParams)
+        self.lifecycleController = controllers.lifecycleController
+        self.checkpointManager = controllers.checkpointManager
+        self.phaseTransitionController = controllers.phaseTransitionController
+
+        // 8. Initialize services
+        let services = Self.createServices(
+            eventBus: core.eventBus, state: state, toolRouter: tools.toolRouter,
+            wizardTracker: wizardTracker, phaseTransitionController: controllers.phaseTransitionController,
+            dataStore: dataStore, applicantProfileStore: applicantProfileStore,
+            documentProcessingService: docs.documentProcessingService
+        )
+        self.extractionManagementService = services.extractionManagementService
+        self.timelineManagementService = services.timelineManagementService
+        self.dataPersistenceService = services.dataPersistenceService
+        self.ingestionCoordinator = services.ingestionCoordinator
+
+        // 9. Initialize session and query coordinators
+        self.sessionCoordinator = InterviewSessionCoordinator(
+            lifecycleController: controllers.lifecycleController, checkpointManager: controllers.checkpointManager,
+            phaseTransitionController: controllers.phaseTransitionController, state: state,
+            dataPersistenceService: services.dataPersistenceService,
+            documentArtifactHandler: docs.documentArtifactHandler,
+            documentArtifactMessenger: docs.documentArtifactMessenger, ui: ui
+        )
+        self.artifactQueryCoordinator = ArtifactQueryCoordinator(state: state, eventBus: core.eventBus)
+        self.uiStateUpdateHandler = UIStateUpdateHandler(ui: ui, state: state, wizardTracker: wizardTracker)
+
+        // 10. Initialize artifact ingestion infrastructure
+        let ingestion = Self.createArtifactIngestionComponents(
+            eventBus: core.eventBus, documentProcessingService: docs.documentProcessingService, llmFacade: llmFacade
+        )
+        self.documentIngestionKernel = ingestion.documentIngestionKernel
+        self.gitIngestionKernel = ingestion.gitIngestionKernel
+        self.artifactIngestionCoordinator = ingestion.artifactIngestionCoordinator
+
+        // 11. Initialize remaining handlers
+        self.profilePersistenceHandler = ProfilePersistenceHandler(
+            applicantProfileStore: applicantProfileStore, toolRouter: tools.toolRouter, eventBus: core.eventBus
+        )
+        self.uiResponseCoordinator = UIResponseCoordinator(
+            eventBus: core.eventBus, toolRouter: tools.toolRouter, state: state
+        )
+
+        // 12. Post-init configuration
+        controllers.phaseTransitionController.setLifecycleController(controllers.lifecycleController)
+        tools.toolRouter.uploadHandler.updateExtractionProgressHandler { [services] update in
+            Task { @MainActor in services.extractionManagementService.updateExtractionProgress(with: update) }
+        }
+        Logger.info("🏗️ OnboardingDependencyContainer initialized", category: .ai)
+    }
+
+    // MARK: - Private Factory Methods
+    private static func createCoreInfrastructure() -> CoreInfrastructure {
         let eventBus = EventCoordinator()
-        self.eventBus = eventBus
-        // 2. Initialize Registries
         let toolRegistry = ToolRegistry()
-        self.toolRegistry = toolRegistry
         let phaseRegistry = PhaseScriptRegistry()
-        self.phaseRegistry = phaseRegistry
-        // 3. Build Phase Policy
         let phasePolicy = PhasePolicy(
             requiredObjectives: Dictionary(uniqueKeysWithValues: InterviewPhase.allCases.map {
                 ($0, phaseRegistry.script(for: $0)?.requiredObjectives ?? [])
@@ -95,213 +268,119 @@ final class OnboardingDependencyContainer {
                 ($0, Set(phaseRegistry.script(for: $0)?.allowedTools ?? []))
             })
         )
-        // 4. Initialize UI State
-        self.ui = OnboardingUIState(preferences: preferences)
-        self.wizardTracker = WizardProgressTracker()
-        // 5. Initialize State Stores
-        let objectiveStore = ObjectiveStore(eventBus: eventBus, phasePolicy: phasePolicy, initialPhase: .phase1CoreFacts)
-        self.objectiveStore = objectiveStore
-        let artifactRepository = ArtifactRepository(eventBus: eventBus)
-        self.artifactRepository = artifactRepository
-        let chatTranscriptStore = ChatTranscriptStore(eventBus: eventBus)
-        self.chatTranscriptStore = chatTranscriptStore
-        let sessionUIState = SessionUIState(eventBus: eventBus, phasePolicy: phasePolicy, initialPhase: .phase1CoreFacts)
-        self.sessionUIState = sessionUIState
-        let draftKnowledgeStore = DraftKnowledgeStore(eventBus: eventBus)
-        self.draftKnowledgeStore = draftKnowledgeStore
-        // 6. Initialize State Coordinator
-        let state = StateCoordinator(
-            eventBus: eventBus,
-            phasePolicy: phasePolicy,
-            objectives: objectiveStore,
-            artifacts: artifactRepository,
-            chat: chatTranscriptStore,
-            uiState: sessionUIState,
-            draftStore: draftKnowledgeStore
+        return CoreInfrastructure(eventBus: eventBus, toolRegistry: toolRegistry,
+                                  phaseRegistry: phaseRegistry, phasePolicy: phasePolicy)
+    }
+
+    private static func createStateStores(eventBus: EventCoordinator, phasePolicy: PhasePolicy) -> StateStores {
+        StateStores(
+            objectiveStore: ObjectiveStore(eventBus: eventBus, phasePolicy: phasePolicy, initialPhase: .phase1CoreFacts),
+            artifactRepository: ArtifactRepository(eventBus: eventBus),
+            chatTranscriptStore: ChatTranscriptStore(eventBus: eventBus),
+            sessionUIState: SessionUIState(eventBus: eventBus, phasePolicy: phasePolicy, initialPhase: .phase1CoreFacts),
+            draftKnowledgeStore: DraftKnowledgeStore(eventBus: eventBus)
         )
-        self.state = state
-        // 7. Initialize Upload Storage and Document Services
+    }
+
+    private static func createDocumentComponents(
+        eventBus: EventCoordinator, documentExtractionService: DocumentExtractionService, dataStore: InterviewDataStore
+    ) -> DocumentComponents {
         let uploadStorage = OnboardingUploadStorage()
-        self.uploadStorage = uploadStorage
         let documentProcessingService = DocumentProcessingService(
-            documentExtractionService: documentExtractionService,
-            uploadStorage: uploadStorage,
-            dataStore: dataStore
+            documentExtractionService: documentExtractionService, uploadStorage: uploadStorage, dataStore: dataStore
         )
-        self.documentProcessingService = documentProcessingService
-        let documentArtifactHandler = DocumentArtifactHandler(
-            eventBus: eventBus,
-            documentProcessingService: documentProcessingService
+        return DocumentComponents(
+            uploadStorage: uploadStorage, documentProcessingService: documentProcessingService,
+            documentArtifactHandler: DocumentArtifactHandler(eventBus: eventBus,
+                                                             documentProcessingService: documentProcessingService),
+            documentArtifactMessenger: DocumentArtifactMessenger(eventBus: eventBus)
         )
-        self.documentArtifactHandler = documentArtifactHandler
-        let documentArtifactMessenger = DocumentArtifactMessenger(eventBus: eventBus)
-        self.documentArtifactMessenger = documentArtifactMessenger
-        // 9. Initialize Chatbox Handler
-        let chatboxHandler = ChatboxHandler(
-            eventBus: eventBus,
-            state: state
-        )
-        self.chatboxHandler = chatboxHandler
-        // 10. Initialize Tool Execution
+    }
+
+    private static func createToolRouterComponents(
+        eventBus: EventCoordinator, toolRegistry: ToolRegistry, state: StateCoordinator,
+        uploadStorage: OnboardingUploadStorage, applicantProfileStore: ApplicantProfileStore,
+        dataStore: InterviewDataStore
+    ) -> ToolRouterComponents {
+        let chatboxHandler = ChatboxHandler(eventBus: eventBus, state: state)
         let toolExecutor = ToolExecutor(registry: toolRegistry)
-        self.toolExecutor = toolExecutor
         let toolExecutionCoordinator = ToolExecutionCoordinator(
-            eventBus: eventBus,
-            toolExecutor: toolExecutor,
-            stateCoordinator: state
+            eventBus: eventBus, toolExecutor: toolExecutor, stateCoordinator: state
         )
-        self.toolExecutionCoordinator = toolExecutionCoordinator
-        // 11. Initialize Tool Router Components
-        let promptHandler = PromptInteractionHandler()
-        let uploadFileService = UploadFileService()
         let uploadHandler = UploadInteractionHandler(
-            uploadFileService: uploadFileService,
-            uploadStorage: uploadStorage,
-            applicantProfileStore: applicantProfileStore,
-            dataStore: dataStore,
-            eventBus: eventBus,
-            extractionProgressHandler: nil
+            uploadFileService: UploadFileService(), uploadStorage: uploadStorage,
+            applicantProfileStore: applicantProfileStore, dataStore: dataStore,
+            eventBus: eventBus, extractionProgressHandler: nil
         )
-        let contactsImportService = ContactsImportService()
-        let profileHandler = ProfileInteractionHandler(
-            contactsImportService: contactsImportService,
-            eventBus: eventBus
-        )
-        let sectionHandler = SectionToggleHandler()
         let toolRouter = ToolHandler(
-            promptHandler: promptHandler,
-            uploadHandler: uploadHandler,
-            profileHandler: profileHandler,
-            sectionHandler: sectionHandler,
-            eventBus: eventBus
+            promptHandler: PromptInteractionHandler(), uploadHandler: uploadHandler,
+            profileHandler: ProfileInteractionHandler(contactsImportService: ContactsImportService(), eventBus: eventBus),
+            sectionHandler: SectionToggleHandler(), eventBus: eventBus
         )
-        self.toolRouter = toolRouter
-        // 12. Initialize Controllers
-        let lifecycleController = InterviewLifecycleController(
-            state: state,
-            eventBus: eventBus,
-            phaseRegistry: phaseRegistry,
-            chatboxHandler: chatboxHandler,
-            toolExecutionCoordinator: toolExecutionCoordinator,
-            toolRouter: toolRouter,
-            openAIService: openAIService,
-            toolRegistry: toolRegistry,
-            dataStore: dataStore
-        )
-        self.lifecycleController = lifecycleController
-        let checkpointManager = CheckpointManager(
-            state: state,
-            eventBus: eventBus,
-            checkpoints: checkpoints,
-            applicantProfileStore: applicantProfileStore
-        )
-        self.checkpointManager = checkpointManager
-        let phaseTransitionController = PhaseTransitionController(
-            state: state,
-            eventBus: eventBus,
-            phaseRegistry: phaseRegistry
-        )
-        self.phaseTransitionController = phaseTransitionController
-        // 13. Initialize Services
-        let extractionManagementService = ExtractionManagementService(
-            eventBus: eventBus,
-            state: state,
-            toolRouter: toolRouter,
-            wizardTracker: wizardTracker
-        )
-        self.extractionManagementService = extractionManagementService
-        let timelineManagementService = TimelineManagementService(
-            eventBus: eventBus,
-            phaseTransitionController: phaseTransitionController
-        )
-        self.timelineManagementService = timelineManagementService
-        let dataPersistenceService = DataPersistenceService(
-            eventBus: eventBus,
-            state: state,
-            dataStore: dataStore,
-            applicantProfileStore: applicantProfileStore,
-            toolRouter: toolRouter,
-            wizardTracker: wizardTracker
-        )
-        self.dataPersistenceService = dataPersistenceService
-        // 14. Initialize Session Coordinator (consolidates lifecycle operations)
-        let sessionCoordinator = InterviewSessionCoordinator(
-            lifecycleController: lifecycleController,
-            checkpointManager: checkpointManager,
-            phaseTransitionController: phaseTransitionController,
-            state: state,
-            dataPersistenceService: dataPersistenceService,
-            documentArtifactHandler: documentArtifactHandler,
-            documentArtifactMessenger: documentArtifactMessenger,
-            ui: ui
-        )
-        self.sessionCoordinator = sessionCoordinator
-        // 15. Initialize Artifact Query Coordinator
-        let artifactQueryCoordinator = ArtifactQueryCoordinator(
-            state: state,
-            eventBus: eventBus
-        )
-        self.artifactQueryCoordinator = artifactQueryCoordinator
-        // 16. Initialize UI State Update Handler
-        let uiStateUpdateHandler = UIStateUpdateHandler(
-            ui: ui,
-            state: state,
-            wizardTracker: wizardTracker
-        )
-        self.uiStateUpdateHandler = uiStateUpdateHandler
-        let ingestionCoordinator = IngestionCoordinator(
-            eventBus: eventBus,
-            state: state,
-            documentProcessingService: documentProcessingService
-        )
-        self.ingestionCoordinator = ingestionCoordinator
+        return ToolRouterComponents(toolRouter: toolRouter, toolExecutor: toolExecutor,
+                                    toolExecutionCoordinator: toolExecutionCoordinator, chatboxHandler: chatboxHandler)
+    }
 
-        // 17. Initialize Artifact Ingestion Infrastructure
-        let documentIngestionKernel = DocumentIngestionKernel(
-            documentProcessingService: documentProcessingService,
-            eventBus: eventBus
+    private static func createControllers(params: ControllerCreationParams) -> Controllers {
+        Controllers(
+            lifecycleController: InterviewLifecycleController(
+                state: params.state, eventBus: params.eventBus, phaseRegistry: params.phaseRegistry,
+                chatboxHandler: params.chatboxHandler, toolExecutionCoordinator: params.toolExecutionCoordinator,
+                toolRouter: params.toolRouter, openAIService: params.openAIService,
+                toolRegistry: params.toolRegistry, dataStore: params.dataStore
+            ),
+            checkpointManager: CheckpointManager(
+                state: params.state, eventBus: params.eventBus, checkpoints: params.checkpoints,
+                applicantProfileStore: params.applicantProfileStore
+            ),
+            phaseTransitionController: PhaseTransitionController(
+                state: params.state, eventBus: params.eventBus, phaseRegistry: params.phaseRegistry
+            )
         )
-        self.documentIngestionKernel = documentIngestionKernel
+    }
 
-        let gitIngestionKernel = GitIngestionKernel(eventBus: eventBus)
-        self.gitIngestionKernel = gitIngestionKernel
-
-        let artifactIngestionCoordinator = ArtifactIngestionCoordinator(
-            eventBus: eventBus,
-            documentKernel: documentIngestionKernel,
-            gitKernel: gitIngestionKernel
+    private static func createServices(
+        eventBus: EventCoordinator, state: StateCoordinator, toolRouter: ToolHandler,
+        wizardTracker: WizardProgressTracker, phaseTransitionController: PhaseTransitionController,
+        dataStore: InterviewDataStore, applicantProfileStore: ApplicantProfileStore,
+        documentProcessingService: DocumentProcessingService
+    ) -> Services {
+        Services(
+            extractionManagementService: ExtractionManagementService(
+                eventBus: eventBus, state: state, toolRouter: toolRouter, wizardTracker: wizardTracker
+            ),
+            timelineManagementService: TimelineManagementService(
+                eventBus: eventBus, phaseTransitionController: phaseTransitionController
+            ),
+            dataPersistenceService: DataPersistenceService(
+                eventBus: eventBus, state: state, dataStore: dataStore,
+                applicantProfileStore: applicantProfileStore, toolRouter: toolRouter, wizardTracker: wizardTracker
+            ),
+            ingestionCoordinator: IngestionCoordinator(
+                eventBus: eventBus, state: state, documentProcessingService: documentProcessingService
+            )
         )
-        self.artifactIngestionCoordinator = artifactIngestionCoordinator
+    }
 
-        // Set cross-references (kernels need coordinator for completion callbacks)
+    private static func createArtifactIngestionComponents(
+        eventBus: EventCoordinator, documentProcessingService: DocumentProcessingService, llmFacade: LLMFacade?
+    ) -> ArtifactIngestionComponents {
+        let documentKernel = DocumentIngestionKernel(
+            documentProcessingService: documentProcessingService, eventBus: eventBus
+        )
+        let gitKernel = GitIngestionKernel(eventBus: eventBus)
+        let coordinator = ArtifactIngestionCoordinator(
+            eventBus: eventBus, documentKernel: documentKernel, gitKernel: gitKernel
+        )
         Task {
-            await documentIngestionKernel.setIngestionCoordinator(artifactIngestionCoordinator)
-            await gitIngestionKernel.setIngestionCoordinator(artifactIngestionCoordinator)
-            if let facade = llmFacade {
-                await gitIngestionKernel.updateLLMFacade(facade)
-            }
+            await documentKernel.setIngestionCoordinator(coordinator)
+            await gitKernel.setIngestionCoordinator(coordinator)
+            if let facade = llmFacade { await gitKernel.updateLLMFacade(facade) }
         }
-        // 14. Initialize Handlers requiring other dependencies
-        let profilePersistenceHandler = ProfilePersistenceHandler(
-            applicantProfileStore: applicantProfileStore,
-            toolRouter: toolRouter,
-            eventBus: eventBus
+        return ArtifactIngestionComponents(
+            documentIngestionKernel: documentKernel, gitIngestionKernel: gitKernel,
+            artifactIngestionCoordinator: coordinator
         )
-        self.profilePersistenceHandler = profilePersistenceHandler
-        let uiResponseCoordinator = UIResponseCoordinator(
-            eventBus: eventBus,
-            toolRouter: toolRouter,
-            state: state
-        )
-        self.uiResponseCoordinator = uiResponseCoordinator
-        // 15. Post-Init Configuration
-        phaseTransitionController.setLifecycleController(lifecycleController)
-        toolRouter.uploadHandler.updateExtractionProgressHandler { [extractionManagementService] update in
-            Task { @MainActor in
-                extractionManagementService.updateExtractionProgress(with: update)
-            }
-        }
-        Logger.info("🏗️ OnboardingDependencyContainer initialized", category: .ai)
     }
     // MARK: - Late Initialization (Requires Coordinator Reference)
     /// Complete initialization of components that require a reference to the coordinator.
