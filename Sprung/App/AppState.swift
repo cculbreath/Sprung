@@ -56,7 +56,7 @@ class AppState {
             }
         }
     }
-    func reconfigureOpenRouterService(using llmService: LLMService) {
+    func reconfigureOpenRouterService(using llmService: _LLMService) {
         updateOpenRouterConfiguration(configureClient: true)
         refreshOpenAiKeyState()
         // Also reconfigure LLMService to use the updated API key

@@ -4,10 +4,13 @@
 //
 //  Encapsulates flexible JSON execution heuristics and schema tracking.
 //
+//  - Important: This is an internal implementation type. Use `LLMFacade` as the
+//    public entry point for LLM operations.
+//
 import Foundation
-final class FlexibleJSONExecutor {
-    private let requestExecutor: LLMRequestExecutor
-    init(requestExecutor: LLMRequestExecutor) {
+final class _FlexibleJSONExecutor {
+    private let requestExecutor: _LLMRequestExecutor
+    init(requestExecutor: _LLMRequestExecutor) {
         self.requestExecutor = requestExecutor
     }
     func execute<T: Codable>(
@@ -21,7 +24,7 @@ final class FlexibleJSONExecutor {
         recordSchemaSuccess: @escaping () async -> Void,
         recordSchemaFailure: @escaping (_ reason: String) async -> Void
     ) async throws -> T {
-        let parameters = LLMRequestBuilder.buildFlexibleJSONRequest(
+        let parameters = _LLMRequestBuilder.buildFlexibleJSONRequest(
             prompt: prompt,
             modelId: modelId,
             responseType: responseType,
@@ -32,8 +35,8 @@ final class FlexibleJSONExecutor {
         )
         do {
             let response = try await requestExecutor.execute(parameters: parameters)
-            let dto = LLMVendorMapper.responseDTO(from: response)
-            let result = try JSONResponseParser.parseFlexible(from: dto, as: responseType)
+            let dto = _LLMVendorMapper.responseDTO(from: response)
+            let result = try _JSONResponseParser.parseFlexible(from: dto, as: responseType)
             if supportsStructuredOutput && !shouldAvoidJSONSchema && jsonSchema != nil {
                 await recordSchemaSuccess()
                 Logger.info("✅ JSON schema validation successful for model: \(modelId)")

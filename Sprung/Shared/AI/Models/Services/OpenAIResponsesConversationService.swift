@@ -9,7 +9,12 @@
 //
 import Foundation
 import SwiftOpenAI
-actor OpenAIResponsesConversationService: LLMStreamingConversationService {
+/// Bridges conversational flows to the OpenAI Responses API.
+///
+/// - Important: This is an internal implementation type. Use `LLMFacade` as the
+///   public entry point for LLM operations. Do not instantiate directly outside
+///   of `LLMFacadeFactory`.
+actor _OpenAIResponsesConversationService: LLMStreamingConversationService {
     private struct ConversationState {
         let remoteConversationId: String?
         var lastResponseId: String

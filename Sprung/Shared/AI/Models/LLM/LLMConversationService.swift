@@ -39,8 +39,8 @@ protocol LLMStreamingConversationService: LLMConversationService {
     ) async throws -> AsyncThrowingStream<LLMStreamChunkDTO, Error>
 }
 final class OpenRouterConversationService: LLMConversationService {
-    private let service: LLMService
-    init(service: LLMService) {
+    private let service: _LLMService
+    init(service: _LLMService) {
         self.service = service
     }
     func startConversation(

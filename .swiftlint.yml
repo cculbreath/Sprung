@@ -89,6 +89,22 @@ identifier_name:
     - df
     - ok
 
+type_name:
+  # Allow underscore-prefixed names for internal LLM implementation types
+  # These types are deliberately named with _ prefix to signal they should
+  # not be used directly - use LLMFacade instead
+  excluded:
+    - _LLMRequestExecutor
+    - _LLMService
+    - _LLMRequestBuilder
+    - _StreamingExecutor
+    - _FlexibleJSONExecutor
+    - _JSONResponseParser
+    - _LLMVendorMapper
+    - _SwiftOpenAIClient
+    - _OpenAIResponsesClient
+    - _OpenAIResponsesConversationService
+
 # Warnings to treat as errors (when ready for stricter enforcement)
 # strict: true
 

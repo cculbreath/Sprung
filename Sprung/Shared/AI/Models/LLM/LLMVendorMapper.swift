@@ -7,7 +7,11 @@
 //
 import Foundation
 import SwiftOpenAI
-enum LLMVendorMapper {
+/// Centralized helpers for translating between vendor SDK types and domain DTOs.
+///
+/// - Important: This is an internal implementation type. Use `LLMFacade` as the
+///   public entry point for LLM operations.
+enum _LLMVendorMapper {
     // MARK: - Message Conversion
     static func vendorMessages(from dtoMessages: [LLMMessageDTO]) -> [LLMMessage] {
         dtoMessages.map { vendorMessage(from: $0) }

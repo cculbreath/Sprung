@@ -8,7 +8,7 @@ import SwiftUI
 struct APIKeysSettingsView: View {
     @Environment(AppState.self) private var appState
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
-    @Environment(LLMService.self) private var llmService
+    @Environment(_LLMService.self) private var llmService
     @Environment(OpenRouterService.self) private var openRouterService: OpenRouterService
     @State private var scrapingDogApiKey: String = APIKeyManager.get(.scrapingDog) ?? ""
     @State private var openRouterApiKey: String = APIKeyManager.get(.openRouter) ?? ""

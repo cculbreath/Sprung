@@ -26,8 +26,11 @@ struct OpenRouterReasoning: Codable {
         self.maxTokens = maxTokens
     }
 }
-/// Factory for assembling ChatCompletionParameters objects
-struct LLMRequestBuilder {
+/// Factory for assembling ChatCompletionParameters objects.
+///
+/// - Important: This is an internal implementation type. Use `LLMFacade` as the
+///   public entry point for LLM operations.
+struct _LLMRequestBuilder {
     /// Build parameters for a simple text request
     static func buildTextRequest(
         prompt: String,
@@ -54,7 +57,7 @@ struct LLMRequestBuilder {
         ]
         // Add images
         for imageData in images {
-            guard let imageDetail = LLMVendorMapper.makeImageDetail(from: imageData) else {
+            guard let imageDetail = _LLMVendorMapper.makeImageDetail(from: imageData) else {
                 Logger.warning("⚠️ Skipping image attachment: failed to create data URL", category: .networking)
                 continue
             }
@@ -117,7 +120,7 @@ struct LLMRequestBuilder {
         ]
         // Add images
         for imageData in images {
-            guard let imageDetail = LLMVendorMapper.makeImageDetail(from: imageData) else {
+            guard let imageDetail = _LLMVendorMapper.makeImageDetail(from: imageData) else {
                 Logger.warning("⚠️ Skipping image attachment: failed to create data URL", category: .networking)
                 continue
             }
@@ -188,7 +191,7 @@ struct LLMRequestBuilder {
         modelId: String,
         temperature: Double
     ) -> ChatCompletionParameters {
-        let vendorMessages = LLMVendorMapper.vendorMessages(from: messages)
+        let vendorMessages = _LLMVendorMapper.vendorMessages(from: messages)
         return ChatCompletionParameters(
             messages: vendorMessages,
             model: .custom(modelId),
@@ -203,7 +206,7 @@ struct LLMRequestBuilder {
         temperature: Double,
         jsonSchema: JSONSchema? = nil
     ) -> ChatCompletionParameters {
-        let vendorMessages = LLMVendorMapper.vendorMessages(from: messages)
+        let vendorMessages = _LLMVendorMapper.vendorMessages(from: messages)
         if let schema = jsonSchema {
             let responseFormatSchema = JSONSchemaResponseFormat(
                 name: String(describing: responseType).lowercased(),

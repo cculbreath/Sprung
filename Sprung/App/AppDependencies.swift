@@ -29,7 +29,7 @@ final class AppDependencies {
     let applicantProfileStore: ApplicantProfileStore
     let documentExtractionService: DocumentExtractionService
     let onboardingCoordinator: OnboardingInterviewCoordinator
-    let llmService: LLMService
+    let llmService: _LLMService
     let reasoningStreamManager: ReasoningStreamManager
     let resumeReviseViewModel: ResumeReviseViewModel
     // MARK: - UI State
@@ -95,43 +95,26 @@ final class AppDependencies {
             modelValidationService: modelValidationService
         )
         appState.debugSettingsStore = debugSettingsStore
-        let requestExecutor = LLMRequestExecutor()
-        let llmService = LLMService(requestExecutor: requestExecutor)
-        self.llmService = llmService
-        // Bridge SwiftOpenAI responses into the unified LLM facade until AppLLM fully owns conversation flows.
-        let client = SwiftOpenAIClient(executor: requestExecutor)
-        let llmFacade = LLMFacade(
-            client: client,
-            llmService: llmService,
+
+        // Create LLMFacade using factory - centralizes construction of internal types
+        let (llmFacade, llmService) = LLMFacadeFactory.create(
             openRouterService: openRouterService,
             enabledLLMStore: enabledLLMStore,
             modelValidationService: appState.modelValidationService
         )
+        self.llmService = llmService
         // Create DocumentExtractionService with LLMFacade (unified LLM interface)
         let documentExtractionService = DocumentExtractionService(llmFacade: llmFacade)
         self.documentExtractionService = documentExtractionService
+        // Register OpenAI backend if API key is configured
         var onboardingOpenAIService: OpenAIService?
         if let openAIKey = APIKeyManager.get(.openAI)?.trimmingCharacters(in: .whitespacesAndNewlines),
            !openAIKey.isEmpty {
-            let debugEnabled = Logger.isVerboseEnabled
-            let responsesConfiguration = URLSessionConfiguration.default
-            // Give slow or lossy networks more time to connect and stream response events from OpenAI.
-            responsesConfiguration.timeoutIntervalForRequest = 180
-            responsesConfiguration.timeoutIntervalForResource = 600
-            responsesConfiguration.waitsForConnectivity = true
-            let responsesSession = URLSession(configuration: responsesConfiguration)
-            let responsesHTTPClient = URLSessionHTTPClientAdapter(urlSession: responsesSession)
-            let openAIService = OpenAIServiceFactory.service(
+            onboardingOpenAIService = LLMFacadeFactory.registerOpenAI(
+                facade: llmFacade,
                 apiKey: openAIKey,
-                httpClient: responsesHTTPClient,
-                debugEnabled: debugEnabled
+                debugEnabled: Logger.isVerboseEnabled
             )
-            let openAIClient = OpenAIResponsesClient(service: openAIService)
-            llmFacade.registerClient(openAIClient, for: .openAI)
-            let conversationService = OpenAIResponsesConversationService(service: openAIService)
-            llmFacade.registerConversationService(conversationService, for: .openAI)
-            onboardingOpenAIService = openAIService
-            Logger.info("✅ OpenAI backend registered for onboarding conversations", category: .appLifecycle)
         }
         let coverLetterService = CoverLetterService(
             llmFacade: llmFacade,
@@ -182,13 +165,14 @@ final class AppDependencies {
             modelValidationService: modelValidationService
         )
         migrationCoordinator.performStartupMigrations()
-        llmService.initialize(
+        // Initialize LLMService after other dependencies are set up
+        LLMFacadeFactory.initialize(
+            llmService: llmService,
             appState: appState,
             modelContext: modelContext,
             enabledLLMStore: enabledLLMStore,
             openRouterService: openRouterService
         )
-        llmService.reconfigureClient()
         appEnvironment.requiresTemplateSetup = templateStore.templates().isEmpty
         setupNotificationObservers()
         Logger.debug("✅ AppDependencies: ready", category: .appLifecycle)
