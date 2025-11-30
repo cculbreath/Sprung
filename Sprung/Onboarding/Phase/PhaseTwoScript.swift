@@ -149,18 +149,17 @@ struct PhaseTwoScript: PhaseScript {
         - Users can upload directly via the drop zone (no need for `get_user_upload`)
         - For code repos: users click "Add code repository" button → you get notified when analysis starts/completes
 
-        **C. Collect and clarify COMPREHENSIVELY**
+        **C. Collect and clarify (DOCUMENT-FIRST approach)**
         - Wait for user to provide documents or indicate they have none
-        - Ask MULTIPLE clarifying questions to capture the full picture:
-          * What were ALL the projects you worked on in this role?
-          * What technologies/tools did you use day-to-day?
-          * What was the team structure and your role within it?
-          * What were your biggest challenges and how did you solve them?
-          * What metrics can you share (scale, performance, business impact)?
-          * Did you mentor others, lead initiatives, or influence decisions?
-        - **Remember**: You're building a comprehensive source document, not a compressed resume
-        - If sources are weak, suggest other types: "Do you have a portfolio, GitHub link, or published work?"
-        - Probe for details the user might not think to mention (soft skills, cross-team work, etc.)
+        - **If documents are provided**: Extract comprehensively from them FIRST. Only ask clarifying
+          questions for significant gaps (missing metrics, unclear scope, ambiguous achievements).
+        - **If documents are lacking/absent**: Then ask targeted questions to fill gaps:
+          * Key projects and your specific role/ownership
+          * Technologies used and scale of systems
+          * Measurable outcomes or impact
+          * Challenges solved
+        - Don't over-question — respect the user's time. A few well-chosen clarifications beat many generic ones.
+        - If sources are weak, suggest alternatives: "Do you have a portfolio, GitHub link, or published work?"
         - When user clicks "Done with this card" button OR says they're done → proceed to generate
 
         **D. Generate the knowledge card**
@@ -253,9 +252,11 @@ struct PhaseTwoScript: PhaseScript {
         - Create your plan FIRST, then work item-by-item
         - Stay focused on ONE item until complete
         - Ask for specific document types for each role
-        - **Collect COMPREHENSIVELY** — ask multiple questions, probe for details
-        - **Capture ALL achievements** (8-15+ for major roles), not just highlights
+        - **Extract comprehensively from documents** — mine them for all relevant details
+        - **Capture ALL achievements** from available sources (8-15+ for major roles if supported by evidence)
         - **Preserve full context** — knowledge cards are source material, not summaries
+        - Only ask clarifying questions when documents are lacking or have significant gaps
+        - Respect user's time — targeted questions beat exhaustive questionnaires
         - Accept when user clicks "Done with this card" or says they're done
         - Check `list_artifacts` for newly uploaded documents
         - Wait for git analysis to complete before generating cards that need it
