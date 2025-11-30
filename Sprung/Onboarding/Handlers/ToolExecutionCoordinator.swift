@@ -109,18 +109,24 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             // Determine reasoning effort for specific tools
             // GPT-5.1 supports: none, low, medium, high (not "minimal")
             let reasoningEffort: String? = {
-                if toolName == "agent_ready" || toolName == "get_applicant_profile" {
+                if toolName == "agent_ready" || toolName == "get_applicant_profile" || toolName == "start_phase_two" {
                     return "low"
                 }
                 return nil
             }()
+
+            // Check for toolChoice chaining (next_required_tool forces the LLM to call a specific tool)
+            let nextRequiredTool = output["next_required_tool"].string
+
             // Tool completed - send response to LLM
-            await emitToolResponse(callId: callId, output: output, reasoningEffort: reasoningEffort)
-            // Special handling for agent_ready tool - remove from allowed tools after use
-            if toolName == "agent_ready", output["disable_after_use"].bool == true {
-                // Remove agent_ready from allowed tools (one-time bootstrap tool)
-                await stateCoordinator.excludeTool("agent_ready")
-                Logger.info("🚀 Agent ready acknowledged and excluded from future tool calls", category: .ai)
+            await emitToolResponse(callId: callId, output: output, reasoningEffort: reasoningEffort, nextRequiredTool: nextRequiredTool)
+
+            // Special handling for bootstrap tools - remove from allowed tools after use
+            if output["disable_after_use"].bool == true {
+                if let name = toolName {
+                    await stateCoordinator.excludeTool(name)
+                    Logger.info("🚀 Bootstrap tool '\(name)' excluded from future tool calls", category: .ai)
+                }
             }
         case .error(let error):
             // Tool execution error
@@ -132,12 +138,21 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
     }
     // MARK: - Event Emission
     /// Emit tool response to LLM
-    private func emitToolResponse(callId: String, output: JSON, reasoningEffort: String? = nil) async {
+    /// - Parameters:
+    ///   - callId: The tool call ID
+    ///   - output: The tool output JSON
+    ///   - reasoningEffort: Optional reasoning effort level
+    ///   - nextRequiredTool: Optional tool name to force as toolChoice (for chaining)
+    private func emitToolResponse(callId: String, output: JSON, reasoningEffort: String? = nil, nextRequiredTool: String? = nil) async {
         var payload = JSON()
         payload["callId"].string = callId
         payload["output"] = output
         if let effort = reasoningEffort {
             payload["reasoningEffort"].string = effort
+        }
+        if let nextTool = nextRequiredTool {
+            payload["toolChoice"].string = nextTool
+            Logger.info("🔗 Tool chaining: next required tool = \(nextTool)", category: .ai)
         }
         await emit(.llmToolResponseMessage(payload: payload))
         Logger.info("📤 Tool response sent to LLM (call: \(callId.prefix(8)))", category: .ai)

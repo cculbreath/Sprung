@@ -53,6 +53,7 @@ final class OnboardingToolRegistrar {
         toolRegistry.register(GetValidatedApplicantProfileTool(coordinator: coordinator))
         toolRegistry.register(ConfigureEnabledSectionsTool(coordinator: coordinator))
         toolRegistry.register(AgentReadyTool())
+        toolRegistry.register(StartPhaseTwoTool(coordinator: coordinator))
         toolRegistry.register(RequestEvidenceTool(coordinator: coordinator))
         toolRegistry.register(GetTimelineEntriesTool(coordinator: coordinator))
         toolRegistry.register(DisplayKnowledgeCardPlanTool(coordinator: coordinator))

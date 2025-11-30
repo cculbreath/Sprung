@@ -261,9 +261,10 @@ actor LLMMessenger: OnboardingEventEmitter {
             let callId = payload["callId"].stringValue
             let output = payload["output"]
             let reasoningEffort = payload["reasoningEffort"].string
+            let toolChoice = payload["toolChoice"].string  // For tool chaining
             Logger.debug("📤 Tool response payload: callId=\(callId), output=\(output.rawString() ?? "nil")", category: .ai)
             Logger.info("📤 Sending tool response for callId=\(String(callId.prefix(12)))...", category: .ai)
-            let request = await buildToolResponseRequest(output: output, callId: callId, reasoningEffort: reasoningEffort)
+            let request = await buildToolResponseRequest(output: output, callId: callId, reasoningEffort: reasoningEffort, forcedToolChoice: toolChoice)
             Logger.debug("📦 Tool response request: previousResponseId=\(request.previousResponseId ?? "nil")", category: .ai)
             let messageId = UUID().uuidString
             // Emit message sent event
@@ -487,11 +488,29 @@ actor LLMMessenger: OnboardingEventEmitter {
         if let effort = reasoningEffort {
             parameters.reasoning = Reasoning(effort: effort)
         }
+        let toolChoiceDesc: String
+        switch toolChoice {
+        case .auto:
+            toolChoiceDesc = "auto"
+        case .none:
+            toolChoiceDesc = "none"
+        case .required:
+            toolChoiceDesc = "required"
+        case .functionTool(let ft):
+            toolChoiceDesc = "function(\(ft.name))"
+        case .allowedTools(let at):
+            toolChoiceDesc = "allowedTools(\(at.tools.map { $0.name }.joined(separator: ", ")))"
+        case .hostedTool(let ht):
+            toolChoiceDesc = "hostedTool(\(ht))"
+        case .customTool(let ct):
+            toolChoiceDesc = "customTool(\(ct.name))"
+        }
         Logger.info(
             """
             📝 Built developer message request: \
             previousResponseId=\(previousResponseId?.description ?? "nil"), \
             inputItems=\(inputItems.count), \
+            toolChoice=\(toolChoiceDesc), \
             parallelToolCalls=\(parameters.parallelToolCalls?.description ?? "nil"), \
             reasoningEffort=\(reasoningEffort ?? "default")
             """,
@@ -499,7 +518,7 @@ actor LLMMessenger: OnboardingEventEmitter {
         )
         return parameters
     }
-    private func buildToolResponseRequest(output: JSON, callId: String, reasoningEffort: String? = nil) async -> ModelResponseParameter {
+    private func buildToolResponseRequest(output: JSON, callId: String, reasoningEffort: String? = nil, forcedToolChoice: String? = nil) async -> ModelResponseParameter {
         let inputItems = await contextAssembler.buildForToolResponse(
             output: output,
             callId: callId
@@ -518,14 +537,22 @@ actor LLMMessenger: OnboardingEventEmitter {
             text: TextConfiguration(format: .text)
         )
         parameters.stream = true
-        parameters.toolChoice = .auto
+
+        // Use forced tool choice if provided (for tool chaining), otherwise auto
+        if let forcedTool = forcedToolChoice {
+            parameters.toolChoice = .functionTool(FunctionTool(name: forcedTool))
+            Logger.info("🔗 Forcing toolChoice to: \(forcedTool)", category: .ai)
+        } else {
+            parameters.toolChoice = .auto
+        }
+
         parameters.tools = tools
         parameters.parallelToolCalls = await shouldEnableParallelToolCalls()
         // Set reasoning effort if provided
         if let effort = reasoningEffort {
             parameters.reasoning = Reasoning(effort: effort)
         }
-        Logger.info("📝 Built tool response request: parallelToolCalls=\(parameters.parallelToolCalls?.description ?? "nil")", category: .ai)
+        Logger.info("📝 Built tool response request: parallelToolCalls=\(parameters.parallelToolCalls?.description ?? "nil"), toolChoice=\(forcedToolChoice ?? "auto")", category: .ai)
         return parameters
     }
     /// Build request for batched tool responses (parallel tool calls)

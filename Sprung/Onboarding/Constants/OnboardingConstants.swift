@@ -30,6 +30,7 @@ enum OnboardingToolName: String, CaseIterable {
     case requestRawFile = "request_raw_file"
     case nextPhase = "next_phase"
     // Phase 2 Tools
+    case startPhaseTwo = "start_phase_two"
     case getTimelineEntries = "get_timeline_entries"
     case displayKnowledgeCardPlan = "display_knowledge_card_plan"
     case scanGitRepo = "scan_git_repo"
