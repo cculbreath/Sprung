@@ -3,7 +3,7 @@
 //  Sprung
 //
 //  Provides lightweight persistence for interview session checkpoints.
-//  Works with the centralized StateCoordinator system.
+//  Checkpoints are saved at phase transitions where UI state is deterministic.
 //
 import Foundation
 import SwiftyJSON
@@ -14,10 +14,6 @@ struct OnboardingCheckpoint: Codable {
     let profileJSON: String?
     let timelineJSON: String?
     let enabledSections: Set<String>
-    // Phase 2 UI state
-    let knowledgeCardPlan: [KnowledgeCardPlanItem]?
-    let knowledgeCardPlanFocus: String?
-    let knowledgeCardPlanMessage: String?
 }
 /// Manages checkpoint persistence for the onboarding interview
 @MainActor
@@ -48,20 +44,14 @@ final class Checkpoints {
         snapshot: StateCoordinator.StateSnapshot,
         profileJSON: JSON?,
         timelineJSON: JSON?,
-        enabledSections: Set<String>,
-        knowledgeCardPlan: [KnowledgeCardPlanItem]?,
-        knowledgeCardPlanFocus: String?,
-        knowledgeCardPlanMessage: String?
+        enabledSections: Set<String>
     ) {
         let checkpoint = OnboardingCheckpoint(
             timestamp: Date(),
             snapshot: snapshot,
             profileJSON: profileJSON?.rawString(options: .sortedKeys),
             timelineJSON: timelineJSON?.rawString(options: .sortedKeys),
-            enabledSections: enabledSections,
-            knowledgeCardPlan: knowledgeCardPlan,
-            knowledgeCardPlanFocus: knowledgeCardPlanFocus,
-            knowledgeCardPlanMessage: knowledgeCardPlanMessage
+            enabledSections: enabledSections
         )
         history.append(checkpoint)
         // Trim history to max count
@@ -75,10 +65,7 @@ final class Checkpoints {
         snapshot: StateCoordinator.StateSnapshot,
         profileJSON: JSON?,
         timelineJSON: JSON?,
-        enabledSections: Set<String>,
-        knowledgeCardPlan: [KnowledgeCardPlanItem]?,
-        knowledgeCardPlanFocus: String?,
-        knowledgeCardPlanMessage: String?
+        enabledSections: Set<String>
     )? {
         guard let latest = history.max(by: { $0.timestamp < $1.timestamp }) else {
             return nil
@@ -89,10 +76,7 @@ final class Checkpoints {
             snapshot: latest.snapshot,
             profileJSON: profileJSON,
             timelineJSON: timelineJSON,
-            enabledSections: latest.enabledSections,
-            knowledgeCardPlan: latest.knowledgeCardPlan,
-            knowledgeCardPlanFocus: latest.knowledgeCardPlanFocus,
-            knowledgeCardPlanMessage: latest.knowledgeCardPlanMessage
+            enabledSections: latest.enabledSections
         )
     }
     /// Checks if any checkpoints exist
@@ -109,10 +93,7 @@ final class Checkpoints {
         snapshot: StateCoordinator.StateSnapshot,
         profileJSON: JSON?,
         timelineJSON: JSON?,
-        enabledSections: Set<String>,
-        knowledgeCardPlan: [KnowledgeCardPlanItem]?,
-        knowledgeCardPlanFocus: String?,
-        knowledgeCardPlanMessage: String?
+        enabledSections: Set<String>
     ) {
         let profileJSON = checkpoint.profileJSON.flatMap { JSON(parseJSON: $0) }
         let timelineJSON = checkpoint.timelineJSON.flatMap { JSON(parseJSON: $0) }
@@ -120,10 +101,7 @@ final class Checkpoints {
             snapshot: checkpoint.snapshot,
             profileJSON: profileJSON,
             timelineJSON: timelineJSON,
-            enabledSections: checkpoint.enabledSections,
-            knowledgeCardPlan: checkpoint.knowledgeCardPlan,
-            knowledgeCardPlanFocus: checkpoint.knowledgeCardPlanFocus,
-            knowledgeCardPlanMessage: checkpoint.knowledgeCardPlanMessage
+            enabledSections: checkpoint.enabledSections
         )
     }
     /// Clears all checkpoints

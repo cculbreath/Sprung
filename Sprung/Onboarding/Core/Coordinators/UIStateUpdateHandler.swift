@@ -8,18 +8,15 @@ final class UIStateUpdateHandler {
     private let ui: OnboardingUIState
     private let state: StateCoordinator
     private let wizardTracker: WizardProgressTracker
-    private let checkpointManager: CheckpointManager
     // MARK: - Initialization
     init(
         ui: OnboardingUIState,
         state: StateCoordinator,
-        wizardTracker: WizardProgressTracker,
-        checkpointManager: CheckpointManager
+        wizardTracker: WizardProgressTracker
     ) {
         self.ui = ui
         self.state = state
         self.wizardTracker = wizardTracker
-        self.checkpointManager = checkpointManager
     }
     // MARK: - State Update Handlers
     /// Build handlers for lifecycle controller subscription.
@@ -87,7 +84,6 @@ final class UIStateUpdateHandler {
             break
         case .chatboxUserMessageAdded:
             ui.messages = await state.messages
-            checkpointManager.scheduleCheckpoint()
         case .streamingMessageBegan(_, _, _, let statusMessage):
             ui.messages = await state.messages
             if let statusMessage = statusMessage {
@@ -101,7 +97,6 @@ final class UIStateUpdateHandler {
         case .streamingMessageFinalized(_, _, _, let statusMessage):
             ui.messages = await state.messages
             ui.currentStatusMessage = statusMessage ?? nil
-            checkpointManager.scheduleCheckpoint()
         case .llmUserMessageSent:
             ui.messages = await state.messages
         default:

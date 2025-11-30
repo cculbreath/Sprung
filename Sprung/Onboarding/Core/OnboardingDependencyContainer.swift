@@ -246,8 +246,7 @@ final class OnboardingDependencyContainer {
         let uiStateUpdateHandler = UIStateUpdateHandler(
             ui: ui,
             state: state,
-            wizardTracker: wizardTracker,
-            checkpointManager: checkpointManager
+            wizardTracker: wizardTracker
         )
         self.uiStateUpdateHandler = uiStateUpdateHandler
         let ingestionCoordinator = IngestionCoordinator(
@@ -286,7 +285,6 @@ final class OnboardingDependencyContainer {
         let profilePersistenceHandler = ProfilePersistenceHandler(
             applicantProfileStore: applicantProfileStore,
             toolRouter: toolRouter,
-            checkpointManager: checkpointManager,
             eventBus: eventBus
         )
         self.profilePersistenceHandler = profilePersistenceHandler
@@ -339,27 +337,6 @@ final class OnboardingDependencyContainer {
             documentExtractionService: documentExtractionService,
             onModelAvailabilityIssue: onModelAvailabilityIssue
         )
-        // Set up checkpoint manager UI state provider and restorer
-        checkpointManager.uiStateProvider = { [weak coordinator] in
-            guard let ui = coordinator?.ui else {
-                return CheckpointManager.UIStateForCheckpoint(
-                    knowledgeCardPlan: [],
-                    knowledgeCardPlanFocus: nil,
-                    knowledgeCardPlanMessage: nil
-                )
-            }
-            return CheckpointManager.UIStateForCheckpoint(
-                knowledgeCardPlan: ui.knowledgeCardPlan,
-                knowledgeCardPlanFocus: ui.knowledgeCardPlanFocus,
-                knowledgeCardPlanMessage: ui.knowledgeCardPlanMessage
-            )
-        }
-        checkpointManager.uiStateRestorer = { [weak coordinator] uiState in
-            guard let ui = coordinator?.ui else { return }
-            ui.knowledgeCardPlan = uiState.knowledgeCardPlan
-            ui.knowledgeCardPlanFocus = uiState.knowledgeCardPlanFocus
-            ui.knowledgeCardPlanMessage = uiState.knowledgeCardPlanMessage
-        }
         Logger.info("🏗️ OnboardingDependencyContainer late initialization completed", category: .ai)
     }
     // MARK: - Service Updates
