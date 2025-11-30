@@ -333,6 +333,7 @@ final class UIResponseCoordinator {
             }
 
             // Emit uploadCompleted event - DocumentArtifactHandler will process
+            // DocumentArtifactMessenger will batch artifacts and send a consolidated message to LLM
             await eventBus.publish(.uploadCompleted(
                 files: uploadInfos,
                 requestKind: "artifact",
@@ -340,14 +341,11 @@ final class UIResponseCoordinator {
                 metadata: metadata
             ))
 
-            // Notify LLM that files were uploaded
-            let fileNames = fileURLs.map { $0.lastPathComponent }.joined(separator: ", ")
-            var userMessage = JSON()
-            userMessage["role"].string = "user"
-            userMessage["content"].string = "I've uploaded the following document(s): \(fileNames)"
-            await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+            // Note: We no longer send an immediate "I've uploaded..." message here
+            // DocumentArtifactMessenger handles batching and sends a consolidated message
+            // with all extracted content once processing completes
 
-            Logger.info("✅ Direct upload completed: \(fileURLs.count) file(s)", category: .ai)
+            Logger.info("✅ Direct upload started: \(fileURLs.count) file(s)", category: .ai)
         } catch {
             Logger.error("❌ Direct upload failed: \(error.localizedDescription)", category: .ai)
             // Clean up any processed files on error

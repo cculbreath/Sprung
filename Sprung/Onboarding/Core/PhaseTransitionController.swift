@@ -34,14 +34,28 @@ final class PhaseTransitionController {
             Logger.warning("No script found for phase: \(phaseName)", category: .ai)
             return
         }
-        // Send introductory prompt as a developer message with tool_choice mandating agent_ready
+        // Send introductory prompt as a developer message
         // This sets up the phase-specific rules and instructions
-        // The LLM must call agent_ready to acknowledge, which triggers "I am ready to begin"
         let introPrompt = script.introductoryPrompt
         var introPayload = JSON()
         introPayload["text"].string = introPrompt
-        introPayload["toolChoice"].string = "agent_ready"
         introPayload["reasoningEffort"].string = "low"  // GPT-5.1 supports: none, low, medium, high
+
+        // Phase-specific tool choice:
+        // - Phase 1: Use agent_ready bootstrap tool to guide initial setup
+        // - Phase 2: Use start_phase_two bootstrap tool (returns timeline + forces display_knowledge_card_plan)
+        // - Phase 3+: Let the introductory prompt guide the LLM
+        switch phase {
+        case .phase1CoreFacts:
+            introPayload["toolChoice"].string = "agent_ready"
+        case .phase2DeepDive:
+            // start_phase_two returns timeline entries and chains to display_knowledge_card_plan
+            introPayload["toolChoice"].string = "start_phase_two"
+        default:
+            // No forced tool choice - let the prompt guide behavior
+            break
+        }
+
         await eventBus.publish(.llmSendDeveloperMessage(
             payload: introPayload
         ))

@@ -12,8 +12,9 @@ struct PhaseTwoScript: PhaseScript {
         .cardsGenerated
     ])
     let allowedTools: [String] = OnboardingToolName.rawValues([
+        .startPhaseTwo,          // Bootstrap tool - returns timeline + instructions, forces display_knowledge_card_plan
         .getUserOption,
-        .getTimelineEntries,
+        .getTimelineEntries,     // Kept for manual retrieval if needed
         .displayKnowledgeCardPlan,
         .scanGitRepo,
         .requestEvidence,
@@ -50,6 +51,19 @@ struct PhaseTwoScript: PhaseScript {
     }
     var introductoryPrompt: String {
         """
+        # ⚠️ PHASE TRANSITION COMPLETE — YOU ARE NOW IN PHASE 2
+
+        **Phase 1 is FINISHED.** Do NOT call any Phase 1 tools (agent_ready, get_applicant_profile, create_timeline_card, etc.).
+        Those tools are no longer available. The skeleton timeline and applicant profile are already complete.
+
+        **YOUR FIRST ACTION**: Call `start_phase_two` immediately.
+        This bootstrap tool will:
+        1. Return the complete timeline from Phase 1
+        2. Provide explicit instructions for generating your knowledge card plan
+        3. Automatically require you to call `display_knowledge_card_plan` next
+
+        ---
+
         ## PHASE 2: KNOWLEDGE CARD GENERATOR
 
         **YOUR PRIMARY GOAL**: Generate Knowledge Cards for each position and skill area in the user's timeline.
@@ -89,11 +103,11 @@ struct PhaseTwoScript: PhaseScript {
         ## YOUR WORKFLOW (Follow This Exactly)
 
         ### STEP 1: BUILD YOUR PLAN
-        First, analyze the timeline and create a checklist of knowledge cards to generate:
-        1. Call `get_timeline_entries` to retrieve all positions
-        2. For each significant position, plan a "job" type card
-        3. Identify cross-cutting skill areas (e.g., "Leadership", "Technical Architecture", "Coding") and plan "skill" type cards
-        4. Call `display_knowledge_card_plan` with your complete plan
+        The `start_phase_two` bootstrap already provided the timeline entries.
+        Now analyze them and create a checklist of knowledge cards to generate:
+        1. For each significant position, plan a "job" type card
+        2. Identify cross-cutting skill areas (e.g., "Leadership", "Technical Architecture", "Coding") and plan "skill" type cards
+        3. Call `display_knowledge_card_plan` with your complete plan (you are required to call this)
 
         Example plan items:
         - Job: "Senior Engineer at Company X" (2020-2023)
@@ -167,8 +181,9 @@ struct PhaseTwoScript: PhaseScript {
 
         | Tool | Purpose |
         |------|---------|
-        | `get_timeline_entries` | Get Phase 1 timeline positions |
+        | `start_phase_two` | Bootstrap tool - returns timeline entries, chains to display_knowledge_card_plan |
         | `display_knowledge_card_plan` | Show/update your checklist (controls the UI) |
+        | `get_timeline_entries` | Re-retrieve timeline entries if needed |
         | `list_artifacts` | See uploaded documents and git analysis results |
         | `get_artifact` | Read document contents |
         | `scan_git_repo` | Analyze code repository (call with author_filter after initial scan) |
@@ -204,10 +219,10 @@ struct PhaseTwoScript: PhaseScript {
         ---
 
         ## BEGIN NOW
-        1. Call `get_timeline_entries`
-        2. Analyze and build your plan
-        3. Call `display_knowledge_card_plan` to show the user
-        4. Start with the first item
+        1. Call `start_phase_two` (returns timeline entries + chains to next tool)
+        2. Analyze the timeline and build your plan
+        3. You will be required to call `display_knowledge_card_plan` next
+        4. Start working through items systematically
         """
     }
 }
