@@ -85,8 +85,8 @@ class GitAnalysisAgent {
     private(set) var turnCount: Int = 0
 
     // Limits
-    private let maxTurns = 30
-    private let timeoutSeconds: TimeInterval = 300  // 5 minutes
+    private let maxTurns = 50
+    private let timeoutSeconds: TimeInterval = 600  // 10 minutes
 
     // Conversation state
     private var messages: [ChatCompletionParameters.Message] = []
@@ -182,16 +182,29 @@ class GitAnalysisAgent {
                 // Execute each tool call
                 for toolCall in toolCalls {
                     let toolName = toolCall.function.name ?? "unknown"
+                    let toolDetail = extractToolDetail(name: toolName, arguments: toolCall.function.arguments)
+                    let progressMessage = toolDetail.isEmpty ? "Executing: \(toolName)" : "Executing: \(toolName) - \(toolDetail)"
                     await emitEvent(.gitAgentToolExecuting(toolName: toolName, turn: turnCount))
-                    updateProgress("Executing: \(toolName)")
+                    updateProgress(progressMessage)
 
                     // Check for completion tool
                     if toolName == CompleteAnalysisTool.name {
-                        let result = try parseCompleteAnalysis(arguments: toolCall.function.arguments)
-                        status = .completed
-                        await emitEvent(.gitAgentProgressUpdated(message: "Analysis complete!", turn: turnCount))
-                        updateProgress("Analysis complete!")
-                        return result
+                        do {
+                            let result = try parseCompleteAnalysis(arguments: toolCall.function.arguments)
+                            status = .completed
+                            await emitEvent(.gitAgentProgressUpdated(message: "Analysis complete!", turn: turnCount))
+                            updateProgress("Analysis complete!")
+                            return result
+                        } catch {
+                            // Send detailed error back to LLM so it can retry with corrected JSON
+                            let errorMessage = buildParsingErrorMessage(arguments: toolCall.function.arguments, error: error)
+                            Logger.warning("⚠️ GitAgent: complete_analysis parsing failed, asking LLM to retry: \(error.localizedDescription)", category: .ai)
+                            messages.append(buildToolResultMessage(
+                                toolCallId: toolCall.id ?? UUID().uuidString,
+                                result: errorMessage
+                            ))
+                            continue
+                        }
                     }
 
                     // Execute the tool
@@ -349,45 +362,111 @@ class GitAnalysisAgent {
     }
 
     private static func buildJSONSchema(from dict: [String: Any]) -> JSONSchema {
-        var properties: [String: JSONSchema]? = nil
+        return buildJSONSchemaRecursive(from: dict)
+    }
 
+    private static func buildJSONSchemaRecursive(from dict: [String: Any]) -> JSONSchema {
+        let typeStr = dict["type"] as? String ?? "object"
+        let desc = dict["description"] as? String
+        let enumValues = dict["enum"] as? [String]
+
+        let schemaType: JSONSchemaType
+        switch typeStr {
+        case "string": schemaType = .string
+        case "integer": schemaType = .integer
+        case "number": schemaType = .number
+        case "boolean": schemaType = .boolean
+        case "array": schemaType = .array
+        case "object": schemaType = .object
+        default: schemaType = .string
+        }
+
+        // Handle properties for objects
+        var properties: [String: JSONSchema]? = nil
         if let propsDict = dict["properties"] as? [String: [String: Any]] {
             var propSchemas: [String: JSONSchema] = [:]
             for (key, propSpec) in propsDict {
-                let typeStr = propSpec["type"] as? String ?? "string"
-                let desc = propSpec["description"] as? String
-
-                let schemaType: JSONSchemaType
-                switch typeStr {
-                case "string": schemaType = .string
-                case "integer": schemaType = .integer
-                case "number": schemaType = .number
-                case "boolean": schemaType = .boolean
-                case "array": schemaType = .array
-                case "object": schemaType = .object
-                default: schemaType = .string
-                }
-
-                propSchemas[key] = JSONSchema(
-                    type: schemaType,
-                    description: desc
-                )
+                propSchemas[key] = buildJSONSchemaRecursive(from: propSpec)
             }
             properties = propSchemas
+        }
+
+        // Handle items for arrays
+        var items: JSONSchema? = nil
+        if schemaType == .array, let itemsDict = dict["items"] as? [String: Any] {
+            items = buildJSONSchemaRecursive(from: itemsDict)
         }
 
         let required = dict["required"] as? [String]
         let additionalProps = dict["additionalProperties"] as? Bool ?? false
 
+        // JSONSchema init order: type, description, properties, items, required, additionalProperties, enum
         return JSONSchema(
-            type: .object,
+            type: schemaType,
+            description: desc,
             properties: properties,
+            items: items,
             required: required,
-            additionalProperties: additionalProps
+            additionalProperties: additionalProps,
+            enum: enumValues
         )
     }
 
     // MARK: - Result Parsing
+
+    private func buildParsingErrorMessage(arguments: String, error: Error) -> String {
+        // Extract specific decoding error details if available
+        var specificError = error.localizedDescription
+        if let decodingError = error as? DecodingError {
+            switch decodingError {
+            case .keyNotFound(let key, let context):
+                specificError = "Missing required field '\(key.stringValue)' at path: \(context.codingPath.map(\.stringValue).joined(separator: "."))"
+            case .typeMismatch(let type, let context):
+                specificError = "Type mismatch for '\(context.codingPath.map(\.stringValue).joined(separator: "."))': expected \(type)"
+            case .valueNotFound(let type, let context):
+                specificError = "Missing value for '\(context.codingPath.map(\.stringValue).joined(separator: "."))': expected \(type)"
+            case .dataCorrupted(let context):
+                specificError = "Data corrupted at '\(context.codingPath.map(\.stringValue).joined(separator: "."))': \(context.debugDescription)"
+            @unknown default:
+                break
+            }
+        }
+
+        return """
+        ERROR: Failed to parse complete_analysis arguments.
+
+        \(specificError)
+
+        Your JSON must match this EXACT structure:
+        {
+          "summary": "string (required) - 2-3 sentence overview",
+          "languages": [  // required array
+            {
+              "name": "string (required)",
+              "proficiency": "string (required) - one of: beginner, intermediate, advanced, expert",
+              "evidence": "string (required) - specific files demonstrating this"
+            }
+          ],
+          "technologies": ["string"],  // required array of strings
+          "skills": [  // required array
+            {
+              "skill": "string (required)",
+              "evidence": "string (required)"
+            }
+          ],
+          "development_patterns": {  // optional object
+            "code_quality": "string (optional)",
+            "testing_practices": "string (optional)",
+            "documentation_quality": "string (optional)",
+            "architecture_style": "string (optional)"
+          },
+          "highlights": ["string"],  // required array of strings
+          "evidence_files": ["string"]  // required array of file paths examined
+        }
+
+        Please retry with corrected JSON.
+        """
+    }
 
     private func parseCompleteAnalysis(arguments: String) throws -> GitAnalysisResult {
         guard let data = arguments.data(using: .utf8) else {
@@ -416,6 +495,47 @@ class GitAnalysisAgent {
         currentAction = message
         progress.append("[\(Date().formatted(date: .omitted, time: .standard))] \(message)")
         Logger.info("🤖 GitAgent: \(message)", category: .ai)
+    }
+
+    /// Extract a human-readable detail from tool arguments for logging
+    private func extractToolDetail(name: String, arguments: String) -> String {
+        guard let data = arguments.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return ""
+        }
+
+        switch name {
+        case ReadFileTool.name:
+            if let path = json["path"] as? String {
+                // Show just the filename or last path component
+                let url = URL(fileURLWithPath: path)
+                return url.lastPathComponent
+            }
+        case ListDirectoryTool.name:
+            if let path = json["path"] as? String {
+                let url = URL(fileURLWithPath: path)
+                let depth = json["depth"] as? Int ?? 1
+                return "\(url.lastPathComponent)/ (depth: \(depth))"
+            }
+        case GlobSearchTool.name:
+            if let pattern = json["pattern"] as? String {
+                return "pattern: \(pattern)"
+            }
+        case GrepSearchTool.name:
+            if let pattern = json["pattern"] as? String {
+                let glob = json["glob"] as? String
+                if let glob = glob {
+                    return "'\(pattern)' in \(glob)"
+                }
+                return "'\(pattern)'"
+            }
+        case CompleteAnalysisTool.name:
+            return "submitting analysis"
+        default:
+            break
+        }
+
+        return ""
     }
 
     // MARK: - Event Emission
