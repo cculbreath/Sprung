@@ -263,6 +263,34 @@ final class OnboardingInterviewCoordinator {
         ui.knowledgeCardPlanMessage = message
     }
 
+    /// Get the currently focused plan item ID
+    func getCurrentPlanItemFocus() -> String? {
+        ui.knowledgeCardPlanFocus
+    }
+
+    /// Update a plan item's status (e.g., mark as completed after card persist)
+    func updatePlanItemStatus(itemId: String, status: KnowledgeCardPlanItem.Status) {
+        guard let index = ui.knowledgeCardPlan.firstIndex(where: { $0.id == itemId }) else {
+            Logger.warning("⚠️ Could not find plan item \(itemId) to update status", category: .ai)
+            return
+        }
+        let item = ui.knowledgeCardPlan[index]
+        ui.knowledgeCardPlan[index] = KnowledgeCardPlanItem(
+            id: item.id,
+            title: item.title,
+            type: item.type,
+            description: item.description,
+            status: status,
+            timelineEntryId: item.timelineEntryId
+        )
+        Logger.info("✅ Plan item \(itemId) status updated to \(status.rawValue)", category: .ai)
+    }
+
+    /// Check if there's a pending knowledge card awaiting validation
+    func hasPendingKnowledgeCard() -> Bool {
+        coordinatorEventRouter.hasPendingKnowledgeCard()
+    }
+
     // MARK: - Artifact Ingestion (Git Repos, Documents)
     // Uses ArtifactIngestionCoordinator for unified ingestion pipeline
 

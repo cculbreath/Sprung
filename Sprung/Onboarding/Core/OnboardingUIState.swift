@@ -40,6 +40,7 @@ final class OnboardingUIState {
     var knowledgeCardPlan: [KnowledgeCardPlanItem] = []
     var knowledgeCardPlanFocus: String?
     var knowledgeCardPlanMessage: String?
+
     // MARK: - Preferences
     var preferences: OnboardingPreferences
     init(preferences: OnboardingPreferences) {

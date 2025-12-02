@@ -36,6 +36,7 @@ struct DraftKnowledgeListView: View {
 }
 struct DraftKnowledgeCardRow: View {
     let draft: KnowledgeCardDraft
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -50,24 +51,28 @@ struct DraftKnowledgeCardRow: View {
                     .foregroundStyle(.orange)
                     .cornerRadius(4)
             }
-            Text(draft.summary)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-            HStack {
-                ForEach(draft.skills.prefix(3), id: \.self) { skill in
-                    Text(skill)
-                        .font(.caption2)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 2)
-                        .background(Color.secondary.opacity(0.1))
-                        .cornerRadius(4)
-                }
-                if draft.skills.count > 3 {
-                    Text("+\(draft.skills.count - 3)")
+            // Show content preview (first ~100 chars)
+            if !draft.content.isEmpty {
+                Text(contentPreview)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            // Metadata row
+            HStack(spacing: 12) {
+                if let cardType = draft.cardType {
+                    Label(cardType.capitalized, systemImage: typeIcon(for: cardType))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
+                if let org = draft.organization, !org.isEmpty {
+                    Label(org, systemImage: "building.2")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Label("\(draft.wordCount) words", systemImage: "doc.text")
+                    .font(.caption2)
+                    .foregroundStyle(draft.wordCount >= 500 ? .green : .orange)
             }
         }
         .padding(12)
@@ -77,5 +82,23 @@ struct DraftKnowledgeCardRow: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
         )
+    }
+
+    private var contentPreview: String {
+        let trimmed = draft.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.count <= 100 {
+            return trimmed
+        }
+        return String(trimmed.prefix(100)) + "..."
+    }
+
+    private func typeIcon(for type: String) -> String {
+        switch type.lowercased() {
+        case "job": return "briefcase"
+        case "skill": return "star"
+        case "education": return "graduationcap"
+        case "project": return "folder"
+        default: return "doc"
+        }
     }
 }

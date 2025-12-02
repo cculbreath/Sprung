@@ -108,8 +108,16 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
     }
 
     private func handleArtifactProduced(_ record: JSON) async {
-        // Only process PDF documents
         let contentType = record["content_type"].stringValue
+        let sourceType = record["source"].stringValue
+
+        // Handle git repository artifacts directly (no batching)
+        if sourceType == "git_repository" || record["type"].stringValue == "git_analysis" {
+            await sendGitArtifact(record)
+            return
+        }
+
+        // Only process PDF documents for batching
         guard contentType.lowercased().contains("pdf") else {
             return
         }
@@ -225,5 +233,67 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
 
         await emit(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
         Logger.info("📤 Single document artifact sent to LLM: \(artifactId)", category: .ai)
+    }
+
+    /// Send git repository analysis artifact to LLM
+    private func sendGitArtifact(_ record: JSON) async {
+        let artifactId = record["id"].stringValue
+        let filename = record["filename"].stringValue
+        let analysis = record["analysis"]
+
+        // Build a comprehensive message with the git analysis
+        var messageText = "Git repository analysis completed for: \(filename)\n\n"
+
+        // Include summary
+        if let summary = analysis["summary"].string, !summary.isEmpty {
+            messageText += "**Summary:**\n\(summary)\n\n"
+        }
+
+        // Include languages
+        if let languages = analysis["languages"].array, !languages.isEmpty {
+            messageText += "**Languages:**\n"
+            for lang in languages {
+                let name = lang["name"].stringValue
+                let proficiency = lang["proficiency"].stringValue
+                messageText += "- \(name) (\(proficiency))\n"
+            }
+            messageText += "\n"
+        }
+
+        // Include technologies
+        if let techs = analysis["technologies"].array, !techs.isEmpty {
+            messageText += "**Technologies:** \(techs.compactMap { $0.string }.joined(separator: ", "))\n\n"
+        }
+
+        // Include skills with evidence
+        if let skills = analysis["skills"].array, !skills.isEmpty {
+            messageText += "**Skills with Evidence:**\n"
+            for skill in skills.prefix(10) {
+                let skillName = skill["skill"].stringValue
+                let evidence = skill["evidence"].stringValue
+                messageText += "- **\(skillName)**: \(evidence)\n"
+            }
+            messageText += "\n"
+        }
+
+        // Include highlights
+        if let highlights = analysis["highlights"].array, !highlights.isEmpty {
+            messageText += "**Notable Achievements:**\n"
+            for highlight in highlights {
+                messageText += "- \(highlight.stringValue)\n"
+            }
+            messageText += "\n"
+        }
+
+        messageText += "Use `list_artifacts` to see the full analysis details, or generate knowledge cards based on these findings."
+
+        var payload = JSON()
+        payload["text"].string = messageText
+        payload["artifact_id"].string = artifactId
+        payload["artifact_type"].string = "git_analysis"
+        payload["artifact_record"] = record
+
+        await emit(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
+        Logger.info("📤 Git analysis artifact sent to LLM: \(artifactId)", category: .ai)
     }
 }

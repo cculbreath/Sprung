@@ -63,8 +63,11 @@ struct PhaseOneScript: PhaseScript {
                 id: OnboardingObjectiveId.contactDataValidated.rawValue,
                 dependsOn: [OnboardingObjectiveId.contactDataCollected.rawValue],
                 onComplete: { context in
-                    let details = context.details.isEmpty ? ["source": "workflow"] : context.details
-                    return [.triggerPhotoFollowUp(extraDetails: details)]
+                    // Note: Photo request is handled by agent_ready STEP 5, not here
+                    // This avoids duplicate photo prompts
+                    let title = "Contact data validated. Continue with agent_ready workflow (photo check, then skeleton timeline)."
+                    let details = ["status": context.status.rawValue, "next_step": "agent_ready_step_5"]
+                    return [.developerMessage(title: title, details: details, payload: nil)]
                 }
             ),
             OnboardingObjectiveId.contactPhotoCollected.rawValue: ObjectiveWorkflow(
