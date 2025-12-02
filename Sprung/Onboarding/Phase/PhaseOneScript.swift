@@ -87,11 +87,11 @@ struct PhaseOneScript: PhaseScript {
                 id: OnboardingObjectiveId.applicantProfile.rawValue,
                 dependsOn: [OnboardingObjectiveId.contactDataValidated.rawValue],
                 onComplete: { context in
-                    let title = """
-                        Applicant profile persisted. \
-                        Move on to building the skeleton timeline next.
-                        """
-                    let details = ["next_objective": OnboardingObjectiveId.skeletonTimeline.rawValue, "status": context.status.rawValue]
+                    // Note: This fires after contactDataValidated, but the agent_ready workflow
+                    // may still be handling photo check (STEP 5). Keep message neutral to avoid
+                    // interrupting the photo question flow.
+                    let title = "Applicant profile data persisted."
+                    let details = ["status": context.status.rawValue]
                     return [.developerMessage(title: title, details: details, payload: nil)]
                 }
             ),
