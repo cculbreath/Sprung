@@ -246,6 +246,13 @@ actor NetworkRouter: OnboardingEventEmitter {
             arguments: argsJSON,
             callId: toolCall.callId
         )
+
+        // If this is the first tool call in a potential batch, signal collection should start
+        // This ensures tool responses are held until we know the final batch count
+        if pendingToolCallIds.isEmpty {
+            await emit(.llmToolCallCollectionStarted)
+        }
+
         // Track this call ID for parallel tool call batching
         pendingToolCallIds.append(toolCall.callId)
         // Store tool call info in the current message buffer
