@@ -391,6 +391,7 @@ final class OnboardingDependencyContainer {
             toolRouter: toolRouter,
             applicantProfileStore: applicantProfileStore,
             eventBus: eventBus,
+            dataStore: dataStore,
             coordinator: coordinator
         )
         self.toolInteractionCoordinator = ToolInteractionCoordinator(

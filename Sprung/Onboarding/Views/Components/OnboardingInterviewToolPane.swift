@@ -226,15 +226,8 @@ struct OnboardingInterviewToolPane: View {
                         coordinator: coordinator,
                         onDoneWithCard: { itemId in
                             Task {
-                                await coordinator.sendDeveloperMessage(
-                                    title: """
-                                        User clicked "Done with this card" for item "\(itemId)". \
-                                        Generate the knowledge card NOW by calling submit_for_validation(validation_type: "knowledge_card", data: <JSON>, summary: "..."). \
-                                        Do NOT output card content in chat - use the tool.
-                                        """,
-                                    details: ["item_id": itemId, "action": "generate_card"],
-                                    toolChoice: "submit_for_validation"
-                                )
+                                // Emit event for handler to process
+                                await coordinator.eventBus.publish(.knowledgeCardDoneButtonClicked(itemId: itemId))
                             }
                         }
                     )
@@ -451,18 +444,12 @@ private struct KnowledgeCardValidationHost: View {
                     )
                 }
             },
-            onReject: { rejectedIds, reason in
+            onReject: { reason in
                 Task {
-                    var changePayload: JSON?
-                    if !rejectedIds.isEmpty {
-                        var details = JSON()
-                        details["rejected_claims"] = JSON(rejectedIds.map { $0.uuidString })
-                        changePayload = details
-                    }
                     await coordinator.submitValidationAndResume(
                         status: "rejected",
                         updatedData: nil,
-                        changes: changePayload,
+                        changes: nil,
                         notes: reason.isEmpty ? nil : reason
                     )
                 }

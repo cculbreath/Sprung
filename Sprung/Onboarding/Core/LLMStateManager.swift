@@ -1,4 +1,5 @@
 import Foundation
+import SwiftyJSON
 /// Manages LLM-specific state: allowed tools, response tracking, and model configuration.
 /// Extracted from StateCoordinator to consolidate LLM state management.
 actor LLMStateManager {
@@ -13,6 +14,13 @@ actor LLMStateManager {
     private var currentModelId: String = "gpt-5.1"
     /// Current tool pane card being displayed
     private var currentToolPaneCard: OnboardingToolPaneCard = .none
+    /// Pending tool response payloads that haven't been acknowledged yet
+    /// Used for retry on stream errors
+    private var pendingToolResponsePayloads: [JSON] = []
+    /// Number of times we've retried pending tool responses (to prevent infinite loops)
+    private var pendingToolResponseRetryCount: Int = 0
+    /// Maximum retries for pending tool responses before giving up
+    private let maxPendingToolResponseRetries: Int = 3
     // MARK: - Tool Names
     /// Get the current set of allowed tool names
     func getAllowedToolNames() -> Set<String> {
@@ -71,6 +79,46 @@ actor LLMStateManager {
     func setToolPaneCard(_ card: OnboardingToolPaneCard) {
         currentToolPaneCard = card
     }
+    // MARK: - Pending Tool Response Tracking
+    /// Store pending tool response payload(s) before sending
+    /// These will be retried if a stream error occurs
+    func setPendingToolResponses(_ payloads: [JSON]) {
+        pendingToolResponsePayloads = payloads
+        pendingToolResponseRetryCount = 0  // Reset retry count for new payloads
+        let callIds = payloads.map { $0["callId"].stringValue.prefix(8) }.joined(separator: ", ")
+        Logger.debug("📦 Pending tool responses set: \(payloads.count) payload(s) [\(callIds)]", category: .ai)
+    }
+    /// Get pending tool response payloads for retry, incrementing retry count
+    /// Returns nil if max retries exceeded
+    func getPendingToolResponsesForRetry() -> [JSON]? {
+        guard !pendingToolResponsePayloads.isEmpty else { return nil }
+        pendingToolResponseRetryCount += 1
+        if pendingToolResponseRetryCount > maxPendingToolResponseRetries {
+            Logger.error("❌ Max retries (\(maxPendingToolResponseRetries)) exceeded for pending tool responses", category: .ai)
+            // Clear to prevent further retries
+            pendingToolResponsePayloads = []
+            pendingToolResponseRetryCount = 0
+            return nil  // Signal that we should give up and revert
+        }
+        Logger.info("🔄 Retry attempt \(pendingToolResponseRetryCount)/\(maxPendingToolResponseRetries) for pending tool responses", category: .ai)
+        return pendingToolResponsePayloads
+    }
+    /// Get pending tool response payloads (without incrementing retry count)
+    func getPendingToolResponses() -> [JSON] {
+        pendingToolResponsePayloads
+    }
+    /// Check if there are pending tool responses
+    func hasPendingToolResponses() -> Bool {
+        !pendingToolResponsePayloads.isEmpty
+    }
+    /// Clear pending tool responses (call after successful acknowledgment)
+    func clearPendingToolResponses() {
+        if !pendingToolResponsePayloads.isEmpty {
+            Logger.debug("✅ Pending tool responses cleared (acknowledged)", category: .ai)
+            pendingToolResponsePayloads = []
+            pendingToolResponseRetryCount = 0
+        }
+    }
     // MARK: - Snapshot Support
     struct Snapshot: Codable {
         let lastCleanResponseId: String?  // Only store clean response ID (safe to restore from)
@@ -111,5 +159,7 @@ actor LLMStateManager {
         lastCleanResponseId = nil
         currentModelId = "gpt-5.1"
         currentToolPaneCard = .none
+        pendingToolResponsePayloads = []
+        pendingToolResponseRetryCount = 0
     }
 }

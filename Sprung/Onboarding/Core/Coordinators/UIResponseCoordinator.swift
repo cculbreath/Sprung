@@ -72,8 +72,22 @@ final class UIResponseCoordinator {
         coordinator: OnboardingInterviewCoordinator
     ) async {
         guard await coordinator.submitValidationResponse(status: status, updatedData: updatedData, changes: changes, notes: notes) != nil else { return }
+
+        // Check for pending knowledge card that needs auto-persist
+        let isConfirmed = ["confirmed", "confirmed_with_changes", "approved", "modified"].contains(status.lowercased())
+
+        if isConfirmed && coordinator.hasPendingKnowledgeCard() {
+            // Emit event for auto-persist - handler will respond with knowledgeCardAutoPersisted
+            await eventBus.publish(.knowledgeCardAutoPersistRequested)
+            // Note: The LLM message will be sent by the event handler after persist completes
+            Logger.info("📤 Emitted knowledgeCardAutoPersistRequested event", category: .ai)
+            return
+        }
+
+        // Regular validation response (non-knowledge-card)
         var userMessage = JSON()
         userMessage["role"].string = "user"
+
         // Map status values from UI buttons to LLM messages
         let statusDescription: String
         switch status.lowercased() {
@@ -84,10 +98,12 @@ final class UIResponseCoordinator {
         default:
             statusDescription = status.lowercased()
         }
+
         userMessage["content"].string = "Validation response: \(statusDescription)"
         if let notes = notes, !notes.isEmpty {
             userMessage["content"].string = userMessage["content"].stringValue + ". Notes: \(notes)"
         }
+
         await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
         Logger.info("✅ Validation response submitted and user message sent to LLM", category: .ai)
     }

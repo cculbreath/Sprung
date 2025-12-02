@@ -69,6 +69,14 @@ enum OnboardingEvent {
     // MARK: - Knowledge Card Operations
     case knowledgeCardPersisted(card: JSON) // emitted when a knowledge card is approved and persisted
     case knowledgeCardsReplaced(cards: [JSON]) // emitted when persisted knowledge cards replace in-memory state
+
+    // MARK: - Knowledge Card Workflow (event-driven coordination)
+    case knowledgeCardDoneButtonClicked(itemId: String?) // UI emits when user clicks "Done with this card"
+    case knowledgeCardSubmissionPending(card: JSON) // Tool emits when card submitted for approval
+    case knowledgeCardAutoPersistRequested // Request to auto-persist pending card after user confirms
+    case knowledgeCardAutoPersisted(title: String) // Emitted after successful auto-persist
+    case toolGatingRequested(toolName: String, exclude: Bool) // Request to gate/ungate a tool
+    case planItemStatusChangeRequested(itemId: String, status: String) // Request to change plan item status
     // MARK: - Draft Knowledge Cards
     case draftKnowledgeCardProduced(KnowledgeCardDraft)
     case draftKnowledgeCardUpdated(KnowledgeCardDraft)
@@ -323,6 +331,9 @@ actor EventCoordinator {
              .artifactRecordProduced, .artifactRecordPersisted, .artifactRecordsReplaced,
              .artifactMetadataUpdateRequested, .artifactMetadataUpdated,
              .knowledgeCardPersisted, .knowledgeCardsReplaced,
+             .knowledgeCardDoneButtonClicked, .knowledgeCardSubmissionPending,
+             .knowledgeCardAutoPersistRequested, .knowledgeCardAutoPersisted,
+             .toolGatingRequested, .planItemStatusChangeRequested,
              .draftKnowledgeCardProduced, .draftKnowledgeCardUpdated, .draftKnowledgeCardRemoved:
             return .artifact
         // Evidence Requirements (treated as state/objectives)
@@ -362,6 +373,7 @@ actor EventCoordinator {
         eventHistory.removeAll()
     }
     // MARK: - Private
+    // swiftlint:disable:next function_body_length
     private func logEvent(_ event: OnboardingEvent) {
         let description: String
         switch event {
@@ -452,6 +464,18 @@ actor EventCoordinator {
             description = "Knowledge card persisted: \(card["title"].stringValue)"
         case .knowledgeCardsReplaced(let cards):
             description = "Knowledge cards replaced (\(cards.count))"
+        case .knowledgeCardDoneButtonClicked(let itemId):
+            description = "Knowledge card done button clicked: \(itemId ?? "no item")"
+        case .knowledgeCardSubmissionPending(let card):
+            description = "Knowledge card submission pending: \(card["title"].stringValue)"
+        case .knowledgeCardAutoPersistRequested:
+            description = "Knowledge card auto-persist requested"
+        case .knowledgeCardAutoPersisted(let title):
+            description = "Knowledge card auto-persisted: \(title)"
+        case .toolGatingRequested(let toolName, let exclude):
+            description = "Tool gating requested: \(toolName) (exclude: \(exclude))"
+        case .planItemStatusChangeRequested(let itemId, let status):
+            description = "Plan item status change requested: \(itemId) → \(status)"
         case .draftKnowledgeCardProduced(let draft):
             description = "Draft knowledge card produced: \(draft.title)"
         case .draftKnowledgeCardUpdated(let draft):

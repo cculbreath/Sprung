@@ -224,9 +224,21 @@ actor StateCoordinator: OnboardingEventEmitter {
         case .streamingStatusUpdated(let status, _):
             await uiState.setStreamingStatus(status)
         case .errorOccurred(let error):
-            // On stream errors, revert to last clean response ID to prevent stuck API state
+            // On stream errors, handle pending tool responses or revert to clean state
             if error.hasPrefix("Stream error:") {
-                if let cleanId = await llmStateManager.getLastCleanResponseId() {
+                // Check if there are pending tool responses that need retry (with retry counting)
+                if let pendingPayloads = await llmStateManager.getPendingToolResponsesForRetry() {
+                    // Retry pending tool responses instead of reverting
+                    Logger.warning("🔄 Stream error recovery: retrying \(pendingPayloads.count) pending tool response(s)", category: .ai)
+                    // Use exponential backoff delay before retry
+                    try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 second delay
+                    if pendingPayloads.count == 1 {
+                        await eventBus.publish(.llmExecuteToolResponse(payload: pendingPayloads[0]))
+                    } else {
+                        await eventBus.publish(.llmExecuteBatchedToolResponses(payloads: pendingPayloads))
+                    }
+                } else if let cleanId = await llmStateManager.getLastCleanResponseId() {
+                    // No pending tool responses (or max retries exceeded) - revert to clean state
                     await llmStateManager.setLastResponseId(cleanId)
                     Logger.warning("🔄 Stream error recovery: reverted to last clean response ID (\(cleanId.prefix(8)))", category: .ai)
                 } else {
@@ -355,6 +367,13 @@ actor StateCoordinator: OnboardingEventEmitter {
             await draftKnowledgeStore.updateDraft(draft)
         case .draftKnowledgeCardRemoved(let id):
             await draftKnowledgeStore.removeDraft(id: id)
+        case .toolGatingRequested(let toolName, let exclude):
+            // Handle tool gating via events
+            if exclude {
+                await excludeTool(toolName)
+            } else {
+                await includeTool(toolName)
+            }
         default:
             break
         }
@@ -424,6 +443,28 @@ actor StateCoordinator: OnboardingEventEmitter {
     /// Get current model ID
     func getCurrentModelId() async -> String {
         await llmStateManager.getCurrentModelId()
+    }
+    // MARK: - Pending Tool Response Tracking
+    /// Store pending tool response payload(s) before sending (for retry on stream error)
+    func setPendingToolResponses(_ payloads: [JSON]) async {
+        await llmStateManager.setPendingToolResponses(payloads)
+    }
+    /// Get pending tool response payloads for retry
+    func getPendingToolResponses() async -> [JSON] {
+        await llmStateManager.getPendingToolResponses()
+    }
+    /// Check if there are pending tool responses
+    func hasPendingToolResponses() async -> Bool {
+        await llmStateManager.hasPendingToolResponses()
+    }
+    /// Clear pending tool responses (call after successful acknowledgment)
+    func clearPendingToolResponses() async {
+        await llmStateManager.clearPendingToolResponses()
+    }
+    /// Get pending tool responses for retry, with retry counting
+    /// Returns nil if max retries exceeded (caller should revert to clean state)
+    func getPendingToolResponsesForRetry() async -> [JSON]? {
+        await llmStateManager.getPendingToolResponsesForRetry()
     }
     // MARK: - Snapshot Management
     struct StateSnapshot: Codable {
@@ -657,13 +698,19 @@ actor StateCoordinator: OnboardingEventEmitter {
         return phaseTools.subtracting(excludedTools)
     }
     /// Remove a tool from the allowed tools list (e.g., after one-time use)
-    func excludeTool(_ toolName: String) {
+    func excludeTool(_ toolName: String) async {
         excludedTools.insert(toolName)
         Logger.info("🚫 Tool excluded from future calls: \(toolName)", category: .ai)
         // Republish allowed tools to update subscribers
-        Task {
-            await publishAllowedToolsNow()
-        }
+        await publishAllowedToolsNow()
+    }
+
+    /// Re-include a previously excluded tool (e.g., when user action enables it)
+    func includeTool(_ toolName: String) async {
+        excludedTools.remove(toolName)
+        Logger.info("✅ Tool re-included in allowed calls: \(toolName)", category: .ai)
+        // Republish allowed tools to update subscribers
+        await publishAllowedToolsNow()
     }
     var isProcessing: Bool {
         get async {

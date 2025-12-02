@@ -64,6 +64,12 @@ actor StreamQueueManager {
         } else {
             // Single tool call or no batch context - send immediately (preserves blocking behavior)
             enqueue(.toolResponse(payload: payload))
+            // Reset batch state for single tool calls
+            if expectedToolResponseCount == 1 {
+                expectedToolResponseCount = 0
+                expectedToolCallIds = []
+                Logger.debug("📦 Single tool response processed - batch state reset", category: .ai)
+            }
         }
     }
     /// Mark stream as completed
@@ -80,6 +86,16 @@ actor StreamQueueManager {
         }
         isStreaming = false
         hasStreamedFirstResponse = true
+
+        // Reset tool call batch state - LLM has moved on, we shouldn't block waiting
+        // for tool responses that may never come or that the LLM no longer expects
+        if expectedToolResponseCount > 0 {
+            Logger.debug("🔄 Stream completed - resetting expectedToolResponseCount from \(expectedToolResponseCount) to 0", category: .ai)
+            expectedToolResponseCount = 0
+            expectedToolCallIds = []
+            collectedToolResponses = []
+        }
+
         Logger.debug("✅ Stream completed (queue size: \(streamQueue.count))", category: .ai)
         // Process next item in queue if any
         if !streamQueue.isEmpty {
@@ -149,7 +165,7 @@ actor StreamQueueManager {
                         nextIndex = userIndex
                     } else {
                         // Only developer messages in queue - wait for tool responses
-                        Logger.debug("⏸️ Queue has developer message but waiting for tool responses", category: .ai)
+                        Logger.warning("⏸️ Queue has developer message but waiting for tool responses (expectedCount: \(expectedToolResponseCount), callIds: \(expectedToolCallIds))", category: .ai)
                         return
                     }
                 }

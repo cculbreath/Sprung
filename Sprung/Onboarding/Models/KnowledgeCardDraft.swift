@@ -1,83 +1,125 @@
 import Foundation
 import SwiftyJSON
-struct KnowledgeCardDraft: Identifiable, Equatable {
-    struct Achievement: Identifiable, Equatable {
-        var id: UUID
-        var claim: String
-        var evidence: EvidenceItem
-        init(
-            id: UUID = UUID(),
-            claim: String,
-            evidence: EvidenceItem
-        ) {
-            self.id = id
-            self.claim = claim
-            self.evidence = evidence
-        }
-        init(json: JSON) {
-            id = UUID(uuidString: json["id"].stringValue) ?? UUID()
-            claim = json["claim"].stringValue
-            evidence = EvidenceItem(json: json["evidence"])
-        }
-        func toJSON() -> JSON {
-            var json = JSON()
-            json["id"].string = id.uuidString
-            json["claim"].string = claim
-            json["evidence"] = evidence.toJSON()
-            return json
-        }
+
+/// A source reference linking a knowledge card to evidence
+struct KnowledgeCardSource: Identifiable, Equatable {
+    var id: UUID
+    var type: String  // "artifact" or "chat"
+    var artifactId: String?
+    var chatExcerpt: String?
+    var chatContext: String?
+
+    init(
+        id: UUID = UUID(),
+        type: String,
+        artifactId: String? = nil,
+        chatExcerpt: String? = nil,
+        chatContext: String? = nil
+    ) {
+        self.id = id
+        self.type = type
+        self.artifactId = artifactId
+        self.chatExcerpt = chatExcerpt
+        self.chatContext = chatContext
     }
+
+    init(json: JSON) {
+        id = UUID(uuidString: json["id"].stringValue) ?? UUID()
+        type = json["type"].stringValue
+        artifactId = json["artifact_id"].string
+        chatExcerpt = json["chat_excerpt"].string
+        chatContext = json["chat_context"].string
+    }
+
+    func toJSON() -> JSON {
+        var json = JSON()
+        json["id"].string = id.uuidString
+        json["type"].string = type
+        if let artifactId {
+            json["artifact_id"].string = artifactId
+        }
+        if let chatExcerpt {
+            json["chat_excerpt"].string = chatExcerpt
+        }
+        if let chatContext {
+            json["chat_context"].string = chatContext
+        }
+        return json
+    }
+}
+
+/// Knowledge card containing a comprehensive prose summary
+struct KnowledgeCardDraft: Identifiable, Equatable {
     var id: UUID
     var title: String
-    var summary: String
-    var source: String?
-    var achievements: [Achievement]
-    var metrics: [String]
-    var skills: [String]
+    var cardType: String?        // "job", "skill", "education", "project"
+    var content: String          // Prose summary (500-2000+ words)
+    var sources: [KnowledgeCardSource]
+    var timePeriod: String?
+    var organization: String?
+    var location: String?
+
     init(
         id: UUID = UUID(),
         title: String = "",
-        summary: String = "",
-        source: String? = nil,
-        achievements: [Achievement] = [],
-        metrics: [String] = [],
-        skills: [String] = []
+        cardType: String? = nil,
+        content: String = "",
+        sources: [KnowledgeCardSource] = [],
+        timePeriod: String? = nil,
+        organization: String? = nil,
+        location: String? = nil
     ) {
         self.id = id
         self.title = title
-        self.summary = summary
-        self.source = source
-        self.achievements = achievements
-        self.metrics = metrics
-        self.skills = skills
+        self.cardType = cardType
+        self.content = content
+        self.sources = sources
+        self.timePeriod = timePeriod
+        self.organization = organization
+        self.location = location
     }
+
     init(json: JSON) {
         id = UUID(uuidString: json["id"].stringValue) ?? UUID()
         title = json["title"].stringValue
-        summary = json["summary"].stringValue
-        source = json["source"].string
-        achievements = json["achievements"].arrayValue.map { Achievement(json: $0) }
-        metrics = json["metrics"].arrayValue.compactMap { $0.string }
-        skills = json["skills"].arrayValue.compactMap { $0.string }
+        cardType = json["type"].string
+        content = json["content"].stringValue
+        timePeriod = json["time_period"].string
+        organization = json["organization"].string
+        location = json["location"].string
+
+        // Parse sources array
+        if let sourcesArray = json["sources"].array {
+            sources = sourcesArray.map { KnowledgeCardSource(json: $0) }
+        } else {
+            sources = []
+        }
     }
+
     func toJSON() -> JSON {
         var json = JSON()
         json["id"].string = id.uuidString
         json["title"].string = title
-        json["summary"].string = summary
-        if let source {
-            json["source"].string = source
+        if let cardType {
+            json["type"].string = cardType
         }
-        json["achievements"] = JSON(achievements.map { $0.toJSON() })
-        json["metrics"] = JSON(metrics)
-        json["skills"] = JSON(skills)
+        json["content"].string = content
+        json["sources"] = JSON(sources.map { $0.toJSON() })
+        if let timePeriod {
+            json["time_period"].string = timePeriod
+        }
+        if let organization {
+            json["organization"].string = organization
+        }
+        if let location {
+            json["location"].string = location
+        }
         return json
     }
-    func removing(claims identifiers: Set<UUID>) -> KnowledgeCardDraft {
-        guard !identifiers.isEmpty else { return self }
-        var copy = self
-        copy.achievements.removeAll { identifiers.contains($0.id) }
-        return copy
+
+    /// Word count of the prose content
+    var wordCount: Int {
+        content.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
     }
 }
 struct EvidenceItem: Equatable {

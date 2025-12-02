@@ -269,6 +269,8 @@ actor LLMMessenger: OnboardingEventEmitter {
     }
     private func executeToolResponse(_ payload: JSON) async {
         await emit(.llmStatus(status: .busy))
+        // Track pending tool response for retry on stream error
+        await stateCoordinator.setPendingToolResponses([payload])
         do {
             let callId = payload["callId"].stringValue
             let output = payload["output"]
@@ -292,6 +294,8 @@ actor LLMMessenger: OnboardingEventEmitter {
                         for try await streamEvent in stream {
                             await networkRouter.handleResponseEvent(streamEvent)
                             if case .responseCompleted(let completed) = streamEvent {
+                                // Tool response acknowledged - clear pending state
+                                await stateCoordinator.clearPendingToolResponses()
                                 // Update StateCoordinator (single source of truth)
                                 await stateCoordinator.updateConversationState(
                                     responseId: completed.response.id
@@ -346,6 +350,8 @@ actor LLMMessenger: OnboardingEventEmitter {
     /// OpenAI API requires all tool outputs from parallel calls to be sent together in one request
     private func executeBatchedToolResponses(_ payloads: [JSON]) async {
         await emit(.llmStatus(status: .busy))
+        // Track pending tool responses for retry on stream error
+        await stateCoordinator.setPendingToolResponses(payloads)
         do {
             Logger.info("📤 Sending batched tool responses (\(payloads.count) responses)", category: .ai)
             let request = await buildBatchedToolResponseRequest(payloads: payloads)
@@ -366,6 +372,8 @@ actor LLMMessenger: OnboardingEventEmitter {
                         for try await streamEvent in stream {
                             await networkRouter.handleResponseEvent(streamEvent)
                             if case .responseCompleted(let completed) = streamEvent {
+                                // Tool responses acknowledged - clear pending state
+                                await stateCoordinator.clearPendingToolResponses()
                                 await stateCoordinator.updateConversationState(
                                     responseId: completed.response.id
                                 )

@@ -137,7 +137,7 @@ class GitAnalysisAgent {
 
                 turnCount += 1
                 await emitEvent(.gitAgentTurnStarted(turn: turnCount, maxTurns: maxTurns))
-                updateProgress("Turn \(turnCount): Thinking...")
+                await updateProgress("Turn \(turnCount): Thinking...")
 
                 // Call LLM with tools
                 let response = try await facade.executeWithTools(
@@ -185,7 +185,7 @@ class GitAnalysisAgent {
                     let toolDetail = extractToolDetail(name: toolName, arguments: toolCall.function.arguments)
                     let progressMessage = toolDetail.isEmpty ? "Executing: \(toolName)" : "Executing: \(toolName) - \(toolDetail)"
                     await emitEvent(.gitAgentToolExecuting(toolName: toolName, turn: turnCount))
-                    updateProgress(progressMessage)
+                    await updateProgress(progressMessage)
 
                     // Check for completion tool
                     if toolName == CompleteAnalysisTool.name {
@@ -193,7 +193,7 @@ class GitAnalysisAgent {
                             let result = try parseCompleteAnalysis(arguments: toolCall.function.arguments)
                             status = .completed
                             await emitEvent(.gitAgentProgressUpdated(message: "Analysis complete!", turn: turnCount))
-                            updateProgress("Analysis complete!")
+                            await updateProgress("Analysis complete!")
                             return result
                         } catch {
                             // Send detailed error back to LLM so it can retry with corrected JSON
@@ -491,10 +491,12 @@ class GitAnalysisAgent {
 
     // MARK: - Progress Updates
 
-    private func updateProgress(_ message: String) {
+    private func updateProgress(_ message: String) async {
         currentAction = message
         progress.append("[\(Date().formatted(date: .omitted, time: .standard))] \(message)")
         Logger.info("🤖 GitAgent: \(message)", category: .ai)
+        // Update spinner status message
+        await emitEvent(.processingStateChanged(true, statusMessage: "Git analysis: \(message)"))
     }
 
     /// Extract a human-readable detail from tool arguments for logging

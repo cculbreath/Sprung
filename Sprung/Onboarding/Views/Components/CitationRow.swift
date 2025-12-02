@@ -21,6 +21,18 @@ struct CitationRow: View {
         self.onToggleExpand = onToggleExpand
         self.onToggleReject = onToggleReject
     }
+
+    /// Parse markdown for rich text display, with fallback to plain text
+    private var markdownText: AttributedString {
+        if let attributed = try? AttributedString(
+            markdown: claim,
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        ) {
+            return attributed
+        }
+        return AttributedString(claim)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
@@ -31,7 +43,8 @@ struct CitationRow: View {
                     EmptyView()
                 }
                 .toggleStyle(.checkbox)
-                Text(claim)
+                // Render markdown in claims (supports **bold**, bullet points, etc.)
+                Text(markdownText)
                     .strikethrough(isRejected, pattern: .solid, color: .secondary)
                     .foregroundStyle(isRejected ? .secondary : .primary)
                 Spacer()

@@ -30,9 +30,11 @@ struct SetCurrentKnowledgeCardTool: InterviewTool {
     )
 
     private unowned let coordinator: OnboardingInterviewCoordinator
+    private let eventBus: EventCoordinator
 
-    init(coordinator: OnboardingInterviewCoordinator) {
+    init(coordinator: OnboardingInterviewCoordinator, eventBus: EventCoordinator) {
         self.coordinator = coordinator
+        self.eventBus = eventBus
     }
 
     var name: String { OnboardingToolName.setCurrentKnowledgeCard.rawValue }
@@ -80,12 +82,16 @@ struct SetCurrentKnowledgeCardTool: InterviewTool {
             message: message ?? existingMessage
         )
 
+        // Gate submit_knowledge_card until user clicks "Done with this card"
+        await eventBus.publish(.toolGatingRequested(toolName: OnboardingToolName.submitKnowledgeCard.rawValue, exclude: true))
+
         // Build response
         var response = JSON()
         response["status"].string = "completed"
         response["current_item_id"].string = itemId
         response["current_item_title"].string = item.title
         response["ui_message"].string = "User now sees '\(item.title)' highlighted with 'Done with this card' button"
+        response["tool_gating"].string = "submit_knowledge_card is GATED until user clicks 'Done with this card'"
         response["next_action"].string = """
             The user can now:
             1. Upload documents via the drop zone
@@ -93,6 +99,7 @@ struct SetCurrentKnowledgeCardTool: InterviewTool {
             3. Click "Done with this card" when ready for you to generate the card
 
             Ask for relevant documents for this item while waiting.
+            IMPORTANT: You CANNOT call submit_knowledge_card until the user clicks "Done with this card".
             """
 
         return .immediate(response)
