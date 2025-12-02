@@ -408,4 +408,27 @@ final class _LLMService {
             Logger.info("🛑 Cancelled all LLM requests")
         }
     }
+
+    // MARK: - Tool Calling Support
+
+    /// Execute a request with tool calling parameters.
+    /// Returns the raw LLMResponse (ChatCompletionObject) for agent workflows.
+    func executeToolRequest(
+        parameters: ChatCompletionParameters
+    ) async throws -> LLMResponse {
+        try await ensureInitialized()
+        let response = try await requestExecutor.execute(parameters: parameters)
+        let finishReason = response.choices?.first?.finishReason
+        let reasonString: String
+        switch finishReason {
+        case .int(let val):
+            reasonString = String(val)
+        case .string(let val):
+            reasonString = val
+        case .none:
+            reasonString = "unknown"
+        }
+        Logger.info("🔧 Tool request completed, finish reason: \(reasonString)")
+        return response
+    }
 }

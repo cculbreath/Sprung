@@ -230,4 +230,23 @@ struct _LLMRequestBuilder {
             )
         }
     }
+
+    /// Build parameters for a request with tool/function calling support
+    static func buildToolRequest(
+        messages: [ChatCompletionParameters.Message],
+        modelId: String,
+        tools: [ChatCompletionParameters.Tool],
+        toolChoice: ToolChoice?,
+        temperature: Double
+    ) -> ChatCompletionParameters {
+        Logger.debug("🔧 Building tool request with \(tools.count) tools for model: \(modelId)")
+        return ChatCompletionParameters(
+            messages: messages,
+            model: .custom(modelId),
+            toolChoice: toolChoice,
+            tools: tools,
+            parallelToolCalls: true,
+            temperature: temperature
+        )
+    }
 }
