@@ -2,51 +2,12 @@
 //  GitIngestionKernel.swift
 //  Sprung
 //
-//  Kernel for git repository analysis using an async LLM agent.
-//  Analyzes commit history, code patterns, and contributions to extract skills.
-//  Uses LLMFacade (OpenRouter) for model flexibility.
+//  Kernel for git repository analysis using a multi-turn LLM agent.
+//  Uses the GitAnalysisAgent to explore codebases and extract skills with evidence.
+//  Leverages LLMFacade (OpenRouter) for model flexibility.
 //
 import Foundation
 import SwiftyJSON
-
-/// Response structure for git analysis LLM call
-struct GitAnalysisResponse: Codable, Sendable {
-    struct LanguageInfo: Codable, Sendable {
-        let name: String
-        let proficiencyIndicator: String?
-        let fileCount: Int?
-
-        enum CodingKeys: String, CodingKey {
-            case name
-            case proficiencyIndicator = "proficiency_indicator"
-            case fileCount = "file_count"
-        }
-    }
-
-    struct DevelopmentPatterns: Codable, Sendable {
-        let commitFrequency: String?
-        let collaborationStyle: String?
-        let branchStrategy: String?
-
-        enum CodingKeys: String, CodingKey {
-            case commitFrequency = "commit_frequency"
-            case collaborationStyle = "collaboration_style"
-            case branchStrategy = "branch_strategy"
-        }
-    }
-
-    let languages: [LanguageInfo]?
-    let technologies: [String]?
-    let skills: [String]?
-    let developmentPatterns: DevelopmentPatterns?
-    let highlights: [String]?
-    let summary: String?
-
-    enum CodingKeys: String, CodingKey {
-        case languages, technologies, skills, highlights, summary
-        case developmentPatterns = "development_patterns"
-    }
-}
 
 /// Git repository ingestion kernel using async LLM agent via OpenRouter
 actor GitIngestionKernel: ArtifactIngestionKernel {
@@ -132,10 +93,10 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
             // Step 1: Gather raw git data
             let gitData = try gatherGitData(repoPath: repoPath)
 
-            await eventBus.publish(.processingStateChanged(true, statusMessage: "Analyzing code patterns..."))
+            await eventBus.publish(.processingStateChanged(true, statusMessage: "Analyzing code patterns with multi-turn agent..."))
 
-            // Step 2: Send to LLM agent for analysis
-            let analysis = try await runAnalysisAgent(gitData: gitData, repoName: repoName)
+            // Step 2: Run multi-turn agent to analyze actual code
+            let analysis = try await runAnalysisAgent(gitData: gitData, repoName: repoName, repoURL: repoURL)
 
             await eventBus.publish(.processingStateChanged(true, statusMessage: "Creating artifact record..."))
 
@@ -280,7 +241,7 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
 
     // MARK: - LLM Analysis Agent
 
-    private func runAnalysisAgent(gitData: JSON, repoName: String) async throws -> JSON {
+    private func runAnalysisAgent(gitData: JSON, repoName: String, repoURL: URL) async throws -> JSON {
         guard let facade = llmFacade else {
             throw GitIngestionError.noLLMFacade
         }
@@ -288,123 +249,93 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
         // Get model from settings (OpenRouter-style ID, e.g., "openai/gpt-4o-mini")
         let modelId = UserDefaults.standard.string(forKey: "onboardingGitIngestModelId") ?? "openai/gpt-4o-mini"
 
-        let prompt = """
-        You are a technical skills analyst. Analyze the following git repository data to identify:
-        1. Programming languages and technologies used (based on file extensions)
-        2. Development patterns (commit frequency, collaboration style)
-        3. Areas of expertise demonstrated by the code
-        4. Notable contributions and their impact
+        // Get optional author filter from git data
+        let authorFilter: String? = gitData["contributors"].array?.first?["name"].string
 
-        Repository: \(repoName)
+        Logger.info("🤖 Starting multi-turn git analysis agent with model: \(modelId)", category: .ai)
 
-        Repository Data:
-        \(gitData.rawString(.utf8, options: [.prettyPrinted]) ?? gitData.description)
+        // Run the multi-turn analysis agent
+        let analysisResult = try await runGitAnalysisAgent(
+            facade: facade,
+            repoPath: repoURL,
+            authorFilter: authorFilter,
+            modelId: modelId,
+            eventBus: eventBus
+        )
 
-        Output a JSON object with these keys:
-        - languages: array of {name, proficiency_indicator, file_count}
-        - technologies: array of inferred technologies/frameworks
-        - skills: array of technical skills demonstrated
-        - development_patterns: object with commit_frequency, collaboration_style, branch_strategy
-        - highlights: array of notable findings for resume/portfolio
-        - summary: 2-3 sentence overview of the developer's work
+        // Convert GitAnalysisResult to JSON
+        var result = JSON()
+        result["summary"].string = analysisResult.summary
 
-        Be specific and evidence-based. Only include skills clearly demonstrated by the data.
-        Return ONLY valid JSON, no markdown formatting or code blocks.
-        """
+        // Convert languages
+        result["languages"] = JSON(analysisResult.languages.map { lang in
+            [
+                "name": lang.name,
+                "proficiency": lang.proficiency,
+                "evidence": lang.evidence
+            ] as [String: Any]
+        })
 
-        Logger.info("🔬 Starting git analysis with model: \(modelId)", category: .ai)
+        // Convert technologies
+        result["technologies"] = JSON(analysisResult.technologies)
 
-        do {
-            // Use LLMFacade for the OpenRouter call (MainActor-isolated)
-            let response: GitAnalysisResponse = try await callFacadeFlexibleJSON(
-                facade: facade,
-                prompt: prompt,
-                modelId: modelId
-            )
+        // Convert skills
+        result["skills"] = JSON(analysisResult.skills.map { skill in
+            [
+                "skill": skill.skill,
+                "evidence": skill.evidence
+            ] as [String: Any]
+        })
 
-            // Convert response to JSON
-            var result = JSON()
-            if let languages = response.languages {
-                result["languages"] = JSON(languages.map { lang in
-                    var obj: [String: Any] = ["name": lang.name]
-                    if let prof = lang.proficiencyIndicator { obj["proficiency_indicator"] = prof }
-                    if let count = lang.fileCount { obj["file_count"] = count }
-                    return obj
-                })
+        // Convert development patterns
+        if let patterns = analysisResult.developmentPatterns {
+            var patternsObj: [String: Any] = [:]
+            if let codeQuality = patterns.codeQuality {
+                patternsObj["code_quality"] = codeQuality
             }
-            if let techs = response.technologies {
-                result["technologies"] = JSON(techs)
+            if let testingPractices = patterns.testingPractices {
+                patternsObj["testing_practices"] = testingPractices
             }
-            if let skills = response.skills {
-                result["skills"] = JSON(skills)
+            if let documentationQuality = patterns.documentationQuality {
+                patternsObj["documentation_quality"] = documentationQuality
             }
-            if let patterns = response.developmentPatterns {
-                var patternsObj: [String: String] = [:]
-                if let freq = patterns.commitFrequency { patternsObj["commit_frequency"] = freq }
-                if let collab = patterns.collaborationStyle { patternsObj["collaboration_style"] = collab }
-                if let branch = patterns.branchStrategy { patternsObj["branch_strategy"] = branch }
-                result["development_patterns"] = JSON(patternsObj)
+            if let architectureStyle = patterns.architectureStyle {
+                patternsObj["architecture_style"] = architectureStyle
             }
-            if let highlights = response.highlights {
-                result["highlights"] = JSON(highlights)
-            }
-            if let summary = response.summary {
-                result["summary"].string = summary
-            }
-
-            Logger.info("✅ Git analysis LLM call completed", category: .ai)
-            return result
-
-        } catch {
-            Logger.error("❌ Git analysis LLM call failed: \(error.localizedDescription)", category: .ai)
-
-            // Try a simpler text-based fallback
-            do {
-                let textResponse = try await callFacadeText(
-                    facade: facade,
-                    prompt: prompt,
-                    modelId: modelId
-                )
-
-                // Attempt to parse as JSON
-                if let data = textResponse.data(using: .utf8) {
-                    return try JSON(data: data)
-                }
-            } catch {
-                Logger.error("❌ Git analysis text fallback also failed: \(error.localizedDescription)", category: .ai)
-            }
-
-            throw GitIngestionError.analysisEmpty
+            result["development_patterns"] = JSON(patternsObj)
         }
+
+        // Convert highlights
+        result["highlights"] = JSON(analysisResult.highlights)
+
+        // Include evidence files for reference
+        result["evidence_files"] = JSON(analysisResult.evidenceFiles)
+
+        // Merge in the original git metadata
+        result["git_metadata"] = gitData
+
+        Logger.info("✅ Multi-turn git analysis agent completed", category: .ai)
+        return result
     }
 
-    // MARK: - MainActor Bridge Methods
+    // MARK: - Multi-Turn Agent Execution
 
     @MainActor
-    private func callFacadeFlexibleJSON(
+    private func runGitAnalysisAgent(
         facade: LLMFacade,
-        prompt: String,
-        modelId: String
-    ) async throws -> GitAnalysisResponse {
-        try await facade.executeFlexibleJSON(
-            prompt: prompt,
+        repoPath: URL,
+        authorFilter: String?,
+        modelId: String,
+        eventBus: EventCoordinator
+    ) async throws -> GitAnalysisResult {
+        let agent = GitAnalysisAgent(
+            repoPath: repoPath,
+            authorFilter: authorFilter,
             modelId: modelId,
-            as: GitAnalysisResponse.self,
-            temperature: 0.3
+            facade: facade,
+            eventBus: eventBus
         )
-    }
-
-    @MainActor
-    private func callFacadeText(
-        facade: LLMFacade,
-        prompt: String,
-        modelId: String
-    ) async throws -> String {
-        try await facade.executeText(
-            prompt: prompt,
-            modelId: modelId,
-            temperature: 0.3
-        )
+        return try await agent.run()
     }
 }
 

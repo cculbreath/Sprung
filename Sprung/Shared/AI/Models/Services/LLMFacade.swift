@@ -7,6 +7,8 @@
 //
 import Foundation
 import Observation
+import SwiftOpenAI
+
 struct LLMStreamingHandle {
     let conversationId: UUID?
     let stream: AsyncThrowingStream<LLMStreamChunkDTO, Error>
@@ -524,5 +526,43 @@ final class LLMFacade {
         }
         activeStreamingTasks.removeAll()
         llmService.cancelAllRequests()
+    }
+
+    // MARK: - Tool Calling (for Agent Workflows)
+
+    /// Execute a single turn of an agent conversation with tool calling support.
+    /// Returns the raw ChatCompletionObject which includes tool calls if the model wants to use tools.
+    ///
+    /// Use this for multi-turn agent workflows where you need to handle tool calls yourself.
+    /// The caller is responsible for:
+    /// 1. Checking if `response.choices.first?.message?.toolCalls` is non-empty
+    /// 2. Executing the tools locally
+    /// 3. Building tool result messages and calling this method again
+    ///
+    /// - Parameters:
+    ///   - messages: The conversation messages (system, user, assistant, tool)
+    ///   - tools: The tools available to the model (use `ChatCompletionParameters.Tool`)
+    ///   - toolChoice: Control which tool is called (auto, required, none, or specific function)
+    ///   - modelId: The model to use (OpenRouter format, e.g., "openai/gpt-4o")
+    ///   - temperature: Sampling temperature
+    /// - Returns: The raw ChatCompletionObject containing the model's response and any tool calls
+    func executeWithTools(
+        messages: [ChatCompletionParameters.Message],
+        tools: [ChatCompletionParameters.Tool],
+        toolChoice: ToolChoice? = .auto,
+        modelId: String,
+        temperature: Double? = nil
+    ) async throws -> ChatCompletionObject {
+        try await validate(modelId: modelId, requires: [])
+
+        let parameters = _LLMRequestBuilder.buildToolRequest(
+            messages: messages,
+            modelId: modelId,
+            tools: tools,
+            toolChoice: toolChoice,
+            temperature: temperature ?? 0.7
+        )
+
+        return try await llmService.executeToolRequest(parameters: parameters)
     }
 }

@@ -82,6 +82,11 @@ enum OnboardingEvent {
     case gitRepoAnalysisStarted(repoPath: String, planItemId: String?)
     case gitRepoAnalysisCompleted(repoPath: String, artifactId: String, planItemId: String?)
     case gitRepoAnalysisFailed(repoPath: String, error: String, planItemId: String?)
+
+    // MARK: - Git Agent Progress (multi-turn agent)
+    case gitAgentTurnStarted(turn: Int, maxTurns: Int)
+    case gitAgentToolExecuting(toolName: String, turn: Int)
+    case gitAgentProgressUpdated(message: String, turn: Int)
     // MARK: - Timeline Operations
     case timelineCardCreated(card: JSON)
     case timelineCardUpdated(id: String, fields: JSON)
@@ -325,7 +330,8 @@ actor EventCoordinator {
             return .state
 
         // Git Repository Analysis (treated as processing)
-        case .gitRepoAnalysisStarted, .gitRepoAnalysisCompleted, .gitRepoAnalysisFailed:
+        case .gitRepoAnalysisStarted, .gitRepoAnalysisCompleted, .gitRepoAnalysisFailed,
+             .gitAgentTurnStarted, .gitAgentToolExecuting, .gitAgentProgressUpdated:
             return .processing
         // Toolpane events
         case .choicePromptRequested, .choicePromptCleared, .uploadRequestPresented,
@@ -465,6 +471,12 @@ actor EventCoordinator {
             description = "Git repo analysis completed: \(repoPath) → artifact \(artifactId)"
         case .gitRepoAnalysisFailed(let repoPath, let error, _):
             description = "Git repo analysis failed: \(repoPath) - \(error)"
+        case .gitAgentTurnStarted(let turn, let maxTurns):
+            description = "Git agent turn \(turn)/\(maxTurns) started"
+        case .gitAgentToolExecuting(let toolName, let turn):
+            description = "Git agent executing \(toolName) (turn \(turn))"
+        case .gitAgentProgressUpdated(let message, let turn):
+            description = "Git agent (turn \(turn)): \(message)"
         case .timelineCardCreated:
             description = "Timeline card created"
         case .timelineCardUpdated(let id, _):
