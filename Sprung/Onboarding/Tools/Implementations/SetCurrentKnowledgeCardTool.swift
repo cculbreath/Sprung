@@ -48,6 +48,10 @@ struct SetCurrentKnowledgeCardTool: InterviewTool {
 
         let message = params["message"].string
 
+        // Get the current focus BEFORE updating (to determine if we need to gate)
+        let previousFocus = await MainActor.run { coordinator.getCurrentPlanItemFocus() }
+        let isNewItem = previousFocus != itemId
+
         // Get current plan items (must access MainActor-isolated properties)
         let (planItems, existingMessage, item) = await MainActor.run {
             var items = coordinator.ui.knowledgeCardPlan
@@ -82,8 +86,11 @@ struct SetCurrentKnowledgeCardTool: InterviewTool {
             message: message ?? existingMessage
         )
 
-        // Gate submit_knowledge_card until user clicks "Done with this card"
-        await eventBus.publish(.toolGatingRequested(toolName: OnboardingToolName.submitKnowledgeCard.rawValue, exclude: true))
+        // Only gate submit_knowledge_card if switching to a DIFFERENT item.
+        // This allows multiple cards from the same evidence batch without requiring "Done" for each.
+        if isNewItem {
+            await eventBus.publish(.toolGatingRequested(toolName: OnboardingToolName.submitKnowledgeCard.rawValue, exclude: true))
+        }
 
         // Build response
         var response = JSON()
@@ -91,16 +98,23 @@ struct SetCurrentKnowledgeCardTool: InterviewTool {
         response["current_item_id"].string = itemId
         response["current_item_title"].string = item.title
         response["ui_message"].string = "User now sees '\(item.title)' highlighted with 'Done with this card' button"
-        response["tool_gating"].string = "submit_knowledge_card is GATED until user clicks 'Done with this card'"
-        response["next_action"].string = """
-            The user can now:
-            1. Upload documents via the drop zone
-            2. Add a git repository
-            3. Click "Done with this card" when ready for you to generate the card
+        if isNewItem {
+            response["tool_gating"].string = "submit_knowledge_card is GATED until user clicks 'Done with this card'"
+            response["next_action"].string = """
+                The user can now:
+                1. Upload documents via the drop zone
+                2. Add a git repository
+                3. Click "Done with this card" when ready for you to generate the card
 
-            Ask for relevant documents for this item while waiting.
-            IMPORTANT: You CANNOT call submit_knowledge_card until the user clicks "Done with this card".
-            """
+                Ask for relevant documents for this item while waiting.
+                IMPORTANT: You CANNOT call submit_knowledge_card until the user clicks "Done with this card".
+                """
+        } else {
+            response["tool_gating"].string = "submit_knowledge_card remains UNGATED (same item)"
+            response["next_action"].string = """
+                Same item re-selected. You may continue submitting cards for this evidence batch.
+                """
+        }
 
         return .immediate(response)
     }

@@ -174,11 +174,18 @@ struct PhaseTwoScript: PhaseScript {
           * User says "done", "that's all", "ready to submit", or similar in chat
         - A document upload alone is NOT permission to submit — always ask "Anything else to add, or ready to finalize this card?"
 
-        **D. Submit the knowledge card**
+        **D. Submit the knowledge card(s)**
         ONLY after user explicitly signals done (clicks "Done" button or says they're done in chat):
         - Call `list_artifacts` to get artifact IDs for sources
         - Write a comprehensive prose summary (500-2000+ words) as the `content` field
         - Call `submit_knowledge_card` with this structure:
+
+        **MULTIPLE CARDS FROM SAME EVIDENCE**: If the uploaded documents support multiple distinct cards
+        (e.g., a job role AND a notable project within that role), you may:
+        1. Update the plan via `display_knowledge_card_plan` to add the additional item(s)
+        2. Submit the first card
+        3. Submit additional card(s) immediately - no need to wait for another "Done" click
+        The user only needs to click "Done" once per evidence batch, not once per card.
           ```json
           {
             "id": "<unique-uuid>",
@@ -233,7 +240,8 @@ struct PhaseTwoScript: PhaseScript {
 
         ✅ DO:
         - Create your plan FIRST, then work item-by-item
-        - Stay focused on ONE item until complete
+        - Stay focused on ONE item until complete (but submit multiple cards if evidence warrants)
+        - Update the plan dynamically if documents reveal additional card-worthy content
         - Ask for specific document types for each role
         - **Extract comprehensively from documents** — mine them for all relevant details
         - **Capture ALL achievements** from available sources (8-15+ for major roles if supported by evidence)

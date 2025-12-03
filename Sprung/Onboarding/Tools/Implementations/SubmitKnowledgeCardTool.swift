@@ -274,8 +274,9 @@ struct SubmitKnowledgeCardTool: InterviewTool {
         )
         await eventBus.publish(.validationPromptRequested(prompt: prompt))
 
-        // Emit event to re-gate submit_knowledge_card - user must click "Done" again for next card
-        await eventBus.publish(.toolGatingRequested(toolName: OnboardingToolName.submitKnowledgeCard.rawValue, exclude: true))
+        // NOTE: We do NOT re-gate submit_knowledge_card here.
+        // This allows the LLM to submit multiple cards from the same evidence batch.
+        // Re-gating happens when set_current_knowledge_card is called for a DIFFERENT item.
 
         // Build response
         // Note: Use "card_status" not "status" - the API intercepts "status" for tool call status
@@ -293,8 +294,11 @@ struct SubmitKnowledgeCardTool: InterviewTool {
             """
         response["next_action"].string = """
             WAIT for user response.
-            - If CONFIRMED: Card auto-persisted, plan item marked complete. Proceed to next item.
+            - If CONFIRMED: Card auto-persisted, plan item marked complete.
             - If REJECTED: User provides feedback. Revise the card and call submit_knowledge_card again.
+
+            If this evidence supports MULTIPLE cards (e.g., a job AND a notable project), you may call \
+            submit_knowledge_card again immediately for the additional card(s) - no need to wait for "Done" again.
             """
 
         return .immediate(response)
