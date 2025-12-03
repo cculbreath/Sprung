@@ -282,8 +282,6 @@ actor StateCoordinator: OnboardingEventEmitter {
         case .llmSendDeveloperMessage(let payload):
             // Route developer messages through the queue to ensure they wait for pending tool responses
             await streamQueueManager.enqueue(.developerMessage(payload: payload))
-        case .llmToolCallCollectionStarted:
-            await streamQueueManager.beginToolCallCollection()
         case .llmToolCallBatchStarted(let expectedCount, let callIds):
             await streamQueueManager.startToolCallBatch(expectedCount: expectedCount, callIds: callIds)
         case .llmEnqueueToolResponse(let payload):

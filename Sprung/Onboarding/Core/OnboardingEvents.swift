@@ -121,7 +121,6 @@ enum OnboardingEvent {
     case llmEnqueueUserMessage(payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String? = nil, originalText: String? = nil)
     case llmEnqueueToolResponse(payload: JSON)
     // Parallel tool call batching - signals how many tool responses to collect before sending
-    case llmToolCallCollectionStarted // First tool call received, begin collecting before we know the count
     case llmToolCallBatchStarted(expectedCount: Int, callIds: [String])
     case llmExecuteBatchedToolResponses(payloads: [JSON])
     // Stream execution events (for serial processing via StateCoordinator)
@@ -307,7 +306,7 @@ actor EventCoordinator {
         case .chatboxUserMessageAdded, .llmUserMessageFailed, .llmUserMessageSent, .llmDeveloperMessageSent, .llmSentToolResponseMessage,
              .llmSendUserMessage, .llmSendDeveloperMessage, .llmToolResponseMessage, .llmStatus,
              .llmEnqueueUserMessage, .llmEnqueueToolResponse,
-             .llmToolCallCollectionStarted, .llmToolCallBatchStarted, .llmExecuteBatchedToolResponses,
+             .llmToolCallBatchStarted, .llmExecuteBatchedToolResponses,
              .llmExecuteUserMessage, .llmExecuteToolResponse, .llmExecuteDeveloperMessage, .llmStreamCompleted,
              .llmReasoningSummaryDelta, .llmReasoningSummaryComplete, .llmReasoningItemsForToolCalls, .llmCancelRequested,
              .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized:
@@ -543,8 +542,6 @@ actor EventCoordinator {
             description = "LLM enqueue user message (system: \(isSystemGenerated)\(chatboxInfo))"
         case .llmEnqueueToolResponse:
             description = "LLM enqueue tool response"
-        case .llmToolCallCollectionStarted:
-            description = "LLM tool call collection started (awaiting batch count)"
         case .llmToolCallBatchStarted(let expectedCount, _):
             description = "LLM tool call batch started (expecting \(expectedCount) responses)"
         case .llmExecuteBatchedToolResponses(let payloads):
