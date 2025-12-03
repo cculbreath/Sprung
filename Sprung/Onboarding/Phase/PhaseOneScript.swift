@@ -63,10 +63,10 @@ struct PhaseOneScript: PhaseScript {
                 id: OnboardingObjectiveId.contactDataValidated.rawValue,
                 dependsOn: [OnboardingObjectiveId.contactDataCollected.rawValue],
                 onComplete: { context in
-                    // Note: Photo request is handled by agent_ready STEP 5, not here
-                    // This avoids duplicate photo prompts
-                    let title = "Contact data validated. Continue with agent_ready workflow (photo check, then skeleton timeline)."
-                    let details = ["status": context.status.rawValue, "next_step": "agent_ready_step_5"]
+                    // Note: Photo request is handled via contact_photo_collected.onBegin
+                    // Keep this message minimal to avoid conflicting instructions
+                    let title = "Contact data validated. Photo objective starting next."
+                    let details = ["status": context.status.rawValue, "next_step": "contact_photo_collected"]
                     return [.developerMessage(title: title, details: details, payload: nil)]
                 }
             ),
@@ -74,6 +74,21 @@ struct PhaseOneScript: PhaseScript {
                 id: OnboardingObjectiveId.contactPhotoCollected.rawValue,
                 dependsOn: [OnboardingObjectiveId.contactDataValidated.rawValue],
                 autoStartWhenReady: true,
+                onBegin: { _ in
+                    // CRITICAL: This message must stop the LLM from advancing until user responds
+                    let title = """
+                        STOP AND WAIT FOR USER RESPONSE. \
+                        Ask the user: "Would you like to add a profile photo?" and then WAIT for their response. \
+                        Do NOT proceed to skeleton timeline until the user explicitly answers yes or no. \
+                        If yes, call get_user_upload. If no, mark contact_photo_collected as skipped and continue.
+                        """
+                    let details = [
+                        "action": "wait_for_user_response",
+                        "objective": OnboardingObjectiveId.contactPhotoCollected.rawValue,
+                        "blocking": "true"
+                    ]
+                    return [.developerMessage(title: title, details: details, payload: nil)]
+                },
                 onComplete: { context in
                     let title = """
                         Profile photo stored successfully. \
@@ -87,11 +102,11 @@ struct PhaseOneScript: PhaseScript {
                 id: OnboardingObjectiveId.applicantProfile.rawValue,
                 dependsOn: [OnboardingObjectiveId.contactDataValidated.rawValue],
                 onComplete: { context in
-                    // Note: This fires after contactDataValidated, but the agent_ready workflow
-                    // may still be handling photo check (STEP 5). Keep message neutral to avoid
-                    // interrupting the photo question flow.
-                    let title = "Applicant profile data persisted."
-                    let details = ["status": context.status.rawValue]
+                    // Note: This fires after contactDataValidated, but the photo flow
+                    // may still be waiting for user response. DO NOT add instructions here
+                    // that would cause the LLM to advance.
+                    let title = "Applicant profile data persisted. (Informational only - do not change current workflow.)"
+                    let details = ["status": context.status.rawValue, "informational": "true"]
                     return [.developerMessage(title: title, details: details, payload: nil)]
                 }
             ),

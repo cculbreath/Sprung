@@ -21,12 +21,13 @@ actor StreamQueueManager {
     private var expectedToolResponseCount: Int = 0
     private var expectedToolCallIds: Set<String> = []
     private var collectedToolResponses: [JSON] = []
-    // When true, we're waiting for responseCompleted to tell us the batch count
-    // Tool responses that arrive in this state are held until we know the count
-    private var awaitingBatchInfo: Bool = false
+    // MARK: - Instance Identity (for debugging)
+    private let instanceId = UUID()
+
     // MARK: - Initialization
     init(eventBus: EventCoordinator) {
         self.eventBus = eventBus
+        Logger.info("📦 StreamQueueManager created: \(instanceId.uuidString.prefix(8))", category: .ai)
     }
     // MARK: - Public API
     /// Enqueue a stream request to be processed serially
@@ -39,62 +40,61 @@ actor StreamQueueManager {
             }
         }
     }
-    /// Signal that tool calls are being received and we should hold responses
-    /// Called when the first tool call is received during streaming
-    func beginToolCallCollection() {
-        guard !awaitingBatchInfo else { return }
-        awaitingBatchInfo = true
-        Logger.debug("📦 Tool call collection started - holding responses until batch count known", category: .ai)
-    }
-
-    /// Start collecting tool responses for a batch
+    /// Start collecting tool responses for a batch (parallel tool calls)
     /// Called when responseCompleted fires and we know the final count
     func startToolCallBatch(expectedCount: Int, callIds: [String]) {
-        awaitingBatchInfo = false
-        expectedToolResponseCount = expectedCount
-        expectedToolCallIds = Set(callIds)
-        Logger.info("📦 Tool call batch started: expecting \(expectedCount) responses, already collected \(collectedToolResponses.count)", category: .ai)
+        Logger.info("📦 [\(instanceId.uuidString.prefix(8))] Tool call batch started: expecting \(expectedCount) responses, already collected \(collectedToolResponses.count)", category: .ai)
 
-        // If we've already collected all responses while waiting, process them now
-        if collectedToolResponses.count >= expectedCount {
-            let batch = collectedToolResponses
-            collectedToolResponses = []
-            expectedToolResponseCount = 0
-            expectedToolCallIds = []
-
-            if expectedCount == 1 {
-                // Single response - send individually
-                if let payload = batch.first {
+        // Process any responses that arrived before we knew the batch count
+        if !collectedToolResponses.isEmpty {
+            if expectedCount == 1 && collectedToolResponses.count >= 1 {
+                // Single tool call - send immediately
+                if let payload = collectedToolResponses.first {
+                    collectedToolResponses.removeFirst()
                     enqueue(.toolResponse(payload: payload))
-                    Logger.info("📦 Single tool response (collected early) - sending immediately", category: .ai)
+                    Logger.info("📦 Single tool response (collected early) - sent", category: .ai)
                 }
-            } else {
-                // Multiple responses - send as batch
-                enqueueBatchedToolResponses(batch)
-                Logger.info("📦 All \(batch.count) tool responses (collected early) - sending batch", category: .ai)
-            }
-        } else if expectedCount == 1 && collectedToolResponses.count == 1 {
-            // Single response already collected
-            if let payload = collectedToolResponses.first {
+                expectedToolResponseCount = 0
+                expectedToolCallIds = []
+                // Process any extras (shouldn't happen but be safe)
+                for extra in collectedToolResponses {
+                    enqueue(.toolResponse(payload: extra))
+                }
+                collectedToolResponses = []
+            } else if collectedToolResponses.count >= expectedCount {
+                // All responses already collected - send as batch
+                let batch = collectedToolResponses
                 collectedToolResponses = []
                 expectedToolResponseCount = 0
                 expectedToolCallIds = []
-                enqueue(.toolResponse(payload: payload))
-                Logger.info("📦 Single tool response (collected early) - sending immediately", category: .ai)
+                enqueueBatchedToolResponses(batch)
+                Logger.info("📦 All \(batch.count) tool responses (collected early) - sent as batch", category: .ai)
+            } else {
+                // Still waiting for more responses
+                expectedToolResponseCount = expectedCount
+                expectedToolCallIds = Set(callIds)
+                Logger.info("📦 Waiting for \(expectedCount - collectedToolResponses.count) more tool responses", category: .ai)
             }
+        } else {
+            expectedToolResponseCount = expectedCount
+            expectedToolCallIds = Set(callIds)
         }
     }
-    /// Enqueue a tool response, batching if needed
+    /// Enqueue a tool response, batching if needed for parallel tool calls
     func enqueueToolResponse(_ payload: JSON) {
-        // If we're waiting to learn the batch count, always collect
-        if awaitingBatchInfo {
+        let callId = payload["callId"].stringValue.prefix(12)
+        Logger.info("📦 [\(instanceId.uuidString.prefix(8))] enqueueToolResponse called: callId=\(callId), expectedCount=\(expectedToolResponseCount), collected=\(collectedToolResponses.count)", category: .ai)
+
+        // If we don't know the batch count yet, hold the response
+        // startToolCallBatch will process collected responses when it's called
+        if expectedToolResponseCount == 0 {
             collectedToolResponses.append(payload)
-            Logger.debug("📦 Holding tool response (awaiting batch info) - collected \(collectedToolResponses.count) so far", category: .ai)
+            Logger.info("📦 Holding tool response (batch count unknown) - collected \(collectedToolResponses.count)", category: .ai)
             return
         }
 
+        // For batching (multiple parallel tool calls), collect responses
         if expectedToolResponseCount > 1 {
-            // Collecting for batch - add to collection
             collectedToolResponses.append(payload)
             Logger.debug("📦 Collected tool response \(collectedToolResponses.count)/\(expectedToolResponseCount)", category: .ai)
             // Check if we have all responses
@@ -110,14 +110,11 @@ actor StreamQueueManager {
                 Logger.info("📦 All \(batch.count) tool responses collected - sending batch", category: .ai)
             }
         } else {
-            // Single tool call or no batch context - send immediately (preserves blocking behavior)
+            // Single tool call - send immediately
             enqueue(.toolResponse(payload: payload))
-            // Reset batch state for single tool calls
-            if expectedToolResponseCount == 1 {
-                expectedToolResponseCount = 0
-                expectedToolCallIds = []
-                Logger.debug("📦 Single tool response processed - batch state reset", category: .ai)
-            }
+            expectedToolResponseCount = 0
+            expectedToolCallIds = []
+            Logger.debug("📦 Single tool response - sent immediately", category: .ai)
         }
     }
     /// Mark stream as completed
@@ -135,17 +132,11 @@ actor StreamQueueManager {
         isStreaming = false
         hasStreamedFirstResponse = true
 
-        // Reset tool call batch state - LLM has moved on, we shouldn't block waiting
-        // for tool responses that may never come or that the LLM no longer expects
-        if expectedToolResponseCount > 0 || awaitingBatchInfo {
-            Logger.debug("🔄 Stream completed - resetting batch state (expectedCount: \(expectedToolResponseCount), awaitingBatchInfo: \(awaitingBatchInfo))", category: .ai)
-            expectedToolResponseCount = 0
-            expectedToolCallIds = []
-            collectedToolResponses = []
-            awaitingBatchInfo = false
-        }
+        // NOTE: We do NOT reset batch state here. The batch state (expectedToolResponseCount,
+        // collectedToolResponses) is managed by startToolCallBatch and enqueueToolResponse.
+        // Resetting here would cause race conditions where tool responses are lost.
 
-        Logger.debug("✅ Stream completed (queue size: \(streamQueue.count))", category: .ai)
+        Logger.debug("✅ Stream completed (queue size: \(streamQueue.count), pending tools: \(expectedToolResponseCount), collected: \(collectedToolResponses.count))", category: .ai)
         // Process next item in queue if any
         if !streamQueue.isEmpty {
             Task {
@@ -165,7 +156,6 @@ actor StreamQueueManager {
         expectedToolResponseCount = 0
         expectedToolCallIds = []
         collectedToolResponses = []
-        awaitingBatchInfo = false
     }
     /// Restore streaming state from snapshot
     func restoreState(hasStreamedFirstResponse: Bool) {
@@ -195,9 +185,9 @@ actor StreamQueueManager {
             }
             // Find the next request to process
             // Priority: tool responses > user messages > developer messages
-            // Developer messages must wait if tool responses are expected
+            // Developer messages must wait if tool responses are expected OR being held
             let nextIndex: Int
-            if expectedToolResponseCount > 0 || hasPendingToolResponse() {
+            if expectedToolResponseCount > 0 || hasPendingToolResponse() || !collectedToolResponses.isEmpty {
                 // Tool responses are expected - prioritize them over developer messages
                 if let toolIndex = streamQueue.firstIndex(where: { request in
                     if case .toolResponse = request { return true }
@@ -215,7 +205,7 @@ actor StreamQueueManager {
                         nextIndex = userIndex
                     } else {
                         // Only developer messages in queue - wait for tool responses
-                        Logger.warning("⏸️ Queue has developer message but waiting for tool responses (expectedCount: \(expectedToolResponseCount), callIds: \(expectedToolCallIds))", category: .ai)
+                        Logger.warning("⏸️ Queue has developer message but waiting for tool responses (expectedCount: \(expectedToolResponseCount), held: \(collectedToolResponses.count), callIds: \(expectedToolCallIds))", category: .ai)
                         return
                     }
                 }
