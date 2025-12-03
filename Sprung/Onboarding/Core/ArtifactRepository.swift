@@ -216,12 +216,12 @@ actor ArtifactRepository: OnboardingEventEmitter {
         artifacts.experienceCards
     }
     /// Add knowledge card
+    /// NOTE: This method is called IN RESPONSE to .knowledgeCardPersisted events.
+    /// Do NOT emit .knowledgeCardPersisted here - that would create an infinite loop!
     func addKnowledgeCard(_ card: JSON) async {
         artifacts.knowledgeCards.append(card)
         knowledgeCardsSync = artifacts.knowledgeCards
         Logger.info("🃏 Knowledge card added (total: \(artifacts.knowledgeCards.count))", category: .ai)
-        // Emit event for persistence
-        await emit(.knowledgeCardPersisted(card: card))
     }
     /// Set knowledge cards (bulk restore)
     func setKnowledgeCards(_ cards: [JSON]) async {
