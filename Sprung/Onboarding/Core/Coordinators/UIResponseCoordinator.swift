@@ -485,8 +485,9 @@ final class UIResponseCoordinator {
 
     // MARK: - Codex Paradigm: Pending Tool Output Management
 
-    /// Complete a pending UI tool call by sending the tool output and flushing queued developer messages.
+    /// Complete a pending UI tool call by sending the tool output.
     /// This implements the Codex CLI paradigm where UI tools defer their response until user action.
+    /// Note: Queued developer messages are automatically flushed when the subsequent user message is enqueued.
     private func completePendingUIToolCall(output: JSON) async {
         guard let pending = await state.getPendingUIToolCall() else {
             Logger.debug("⚠️ No pending UI tool call to complete", category: .ai)
@@ -502,12 +503,8 @@ final class UIResponseCoordinator {
 
         // Clear the pending tool call
         await state.clearPendingUIToolCall()
-
-        // Drain and enqueue any queued developer messages
-        let queuedMessages = await state.drainQueuedDeveloperMessages()
-        for devPayload in queuedMessages {
-            await eventBus.publish(.llmSendDeveloperMessage(payload: devPayload))
-        }
+        // Note: Queued developer messages will be flushed by StateCoordinator
+        // when the subsequent user message (llmEnqueueUserMessage) is processed
     }
 
     /// Build a standard "UI presented, awaiting input" output for pending tools

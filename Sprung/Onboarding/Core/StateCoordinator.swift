@@ -273,6 +273,15 @@ actor StateCoordinator: OnboardingEventEmitter {
         case .llmReasoningSummaryComplete(let text):
             await chatStore.completeReasoningSummary(finalText: text)
         case .llmEnqueueUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText):
+            // Flush any queued developer messages before the user message
+            // This batches status updates and sends them just before user action triggers LLM
+            let queuedDevMessages = await llmStateManager.drainQueuedDeveloperMessages()
+            for devPayload in queuedDevMessages {
+                await streamQueueManager.enqueue(.developerMessage(payload: devPayload))
+            }
+            if !queuedDevMessages.isEmpty {
+                Logger.info("📤 Flushed \(queuedDevMessages.count) queued developer message(s) before user message", category: .ai)
+            }
             await streamQueueManager.enqueue(.userMessage(
                 payload: payload,
                 isSystemGenerated: isSystemGenerated,
@@ -280,15 +289,13 @@ actor StateCoordinator: OnboardingEventEmitter {
                 originalText: originalText
             ))
         case .llmSendDeveloperMessage(let payload):
-            // Codex paradigm: If a UI tool is pending, queue developer messages behind it
-            // The queued messages will be flushed when the user provides input
-            if await llmStateManager.hasPendingUIToolCall() {
-                await llmStateManager.queueDeveloperMessage(payload)
-                Logger.debug("📥 Developer message queued (pending UI tool call)", category: .ai)
-            } else {
-                // No pending UI tool - route through stream queue normally
-                await streamQueueManager.enqueue(.developerMessage(payload: payload))
-            }
+            // Codex paradigm: Always queue developer messages until user action
+            // Developer messages are batched and flushed when:
+            // 1. User sends a chatbox message
+            // 2. An artifact completion arrives (sent as user message)
+            // 3. A pending UI tool call is completed
+            await llmStateManager.queueDeveloperMessage(payload)
+            Logger.debug("📥 Developer message queued (awaiting user action)", category: .ai)
         case .llmToolCallBatchStarted(let expectedCount, let callIds):
             await streamQueueManager.startToolCallBatch(expectedCount: expectedCount, callIds: callIds)
         case .llmEnqueueToolResponse(let payload):
