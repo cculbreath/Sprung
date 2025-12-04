@@ -139,6 +139,7 @@ final class AppDependencies {
             documentExtractionService: documentExtractionService,
             applicantProfileStore: applicantProfileStore,
             resRefStore: resRefStore,
+            coverRefStore: coverRefStore,
             sessionStore: onboardingSessionStore,
             dataStore: interviewDataStore,
             preferences: preferences

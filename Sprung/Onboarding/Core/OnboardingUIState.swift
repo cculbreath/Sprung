@@ -41,6 +41,9 @@ final class OnboardingUIState {
     var knowledgeCardPlanFocus: String?
     var knowledgeCardPlanMessage: String?
 
+    // MARK: - Objective Status (for Phase 3 subphase tracking)
+    var objectiveStatuses: [String: String] = [:]
+
     // MARK: - Preferences
     var preferences: OnboardingPreferences
     init(preferences: OnboardingPreferences) {
