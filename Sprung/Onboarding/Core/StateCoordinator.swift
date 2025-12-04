@@ -763,6 +763,14 @@ actor StateCoordinator: OnboardingEventEmitter {
     func listArtifactSummaries() async -> [JSON] {
         await artifactRepository.listArtifactSummaries()
     }
+
+    /// Direct access to artifact records for UI sync
+    var artifactRecords: [JSON] {
+        get async {
+            await artifactRepository.getArtifacts().artifactRecords
+        }
+    }
+
     // Chat delegation
     var messages: [OnboardingMessage] {
         get async {
