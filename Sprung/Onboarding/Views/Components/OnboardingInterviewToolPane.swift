@@ -138,6 +138,17 @@ struct OnboardingInterviewToolPane: View {
                         profile: profileSummary,
                         imageData: nil  // Image data is in the JSON profile
                     )
+                } else if shouldShowProfileUntilTimelineLoads {
+                    // Keep showing profile summary until timeline is ready
+                    // This prevents a jarring transition from profile card to empty state
+                    if let storedProfile = coordinator.ui.lastApplicantProfileSummary {
+                        ApplicantProfileSummaryCard(
+                            profile: storedProfile,
+                            imageData: nil
+                        )
+                    } else {
+                        supportingContent()
+                    }
                 } else {
                     supportingContent()
                 }
@@ -433,6 +444,16 @@ struct OnboardingInterviewToolPane: View {
             return true
         }
         return false
+    }
+
+    /// Show profile summary until skeleton timeline is loaded to prevent jarring transition
+    private var shouldShowProfileUntilTimelineLoads: Bool {
+        // Only applies during resume intake step when building the timeline
+        guard coordinator.wizardTracker.currentStep == .resumeIntake else { return false }
+        // If timeline has loaded, no need to show placeholder
+        guard coordinator.ui.skeletonTimeline == nil else { return false }
+        // If we have a stored profile summary, show it
+        return coordinator.ui.lastApplicantProfileSummary != nil
     }
 }
 private struct ExtractionProgressOverlay: View {

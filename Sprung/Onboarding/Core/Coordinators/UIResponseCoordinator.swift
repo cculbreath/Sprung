@@ -7,14 +7,17 @@ final class UIResponseCoordinator {
     private let eventBus: EventCoordinator
     private let toolRouter: ToolHandler
     private let state: StateCoordinator
+    private let ui: OnboardingUIState
     init(
         eventBus: EventCoordinator,
         toolRouter: ToolHandler,
-        state: StateCoordinator
+        state: StateCoordinator,
+        ui: OnboardingUIState
     ) {
         self.eventBus = eventBus
         self.toolRouter = toolRouter
         self.state = state
+        self.ui = ui
     }
     // MARK: - Choice Selection
     func submitChoiceSelection(_ selectionIds: [String]) async {
@@ -276,6 +279,8 @@ final class UIResponseCoordinator {
         toolRouter.completeApplicantProfileDraft(draft, source: source)
         // Show the profile summary card in the tool pane
         toolRouter.profileHandler.showProfileSummary(profile: profileJSON)
+        // Store in UI state to persist until timeline loads
+        ui.lastApplicantProfileSummary = profileJSON
         // Mark objectives complete
         await eventBus.publish(.objectiveStatusUpdateRequested(
             id: "contact_source_selected",

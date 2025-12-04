@@ -261,7 +261,7 @@ final class OnboardingDependencyContainer {
             applicantProfileStore: applicantProfileStore, toolRouter: tools.toolRouter, eventBus: core.eventBus
         )
         self.uiResponseCoordinator = UIResponseCoordinator(
-            eventBus: core.eventBus, toolRouter: tools.toolRouter, state: state
+            eventBus: core.eventBus, toolRouter: tools.toolRouter, state: state, ui: ui
         )
 
         // 13. Post-init configuration
