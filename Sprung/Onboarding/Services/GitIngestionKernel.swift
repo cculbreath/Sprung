@@ -337,6 +337,16 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
         )
         return try await agent.run()
     }
+
+    /// Cancel all active git analysis tasks
+    func cancelAllTasks() async {
+        Logger.info("🛑 GitIngestionKernel: Cancelling \(activeTasks.count) active task(s)", category: .ai)
+        for (pendingId, task) in activeTasks {
+            task.cancel()
+            Logger.debug("Cancelled git analysis task: \(pendingId)", category: .ai)
+        }
+        activeTasks.removeAll()
+    }
 }
 
 // MARK: - Errors

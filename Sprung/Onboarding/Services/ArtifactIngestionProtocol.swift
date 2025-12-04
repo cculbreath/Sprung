@@ -59,6 +59,9 @@ protocol ArtifactIngestionKernel {
     func completeIngestion(
         pendingId: String
     ) async throws -> IngestionResult
+
+    /// Cancel all active ingestion tasks
+    func cancelAllTasks() async
 }
 
 /// Events emitted by the ingestion system

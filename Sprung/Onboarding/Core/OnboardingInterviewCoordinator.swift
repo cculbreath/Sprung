@@ -530,8 +530,21 @@ final class OnboardingInterviewCoordinator {
         }
         await eventBus.publish(.llmSendDeveloperMessage(payload: payload))
     }
+    /// Cancel all active LLM streams and ingestion tasks.
+    /// Called when user clicks the Stop button.
     func requestCancelLLM() async {
+        Logger.info("🛑 Cancel requested - stopping all streams and ingestion", category: .ai)
+
+        // Cancel LLM streaming
         await uiResponseCoordinator.requestCancelLLM()
+
+        // Cancel any document/git ingestion in progress
+        await container.artifactIngestionCoordinator.cancelAllIngestion()
+
+        // Ensure processing state is cleared
+        await eventBus.publish(.processingStateChanged(false))
+
+        Logger.info("✅ All streams and ingestion cancelled", category: .ai)
     }
     // MARK: - Data Store Management (Delegated to InterviewSessionCoordinator)
     func loadPersistedArtifacts() async {
