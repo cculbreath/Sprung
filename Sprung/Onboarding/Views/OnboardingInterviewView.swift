@@ -8,6 +8,7 @@ struct OnboardingInterviewView: View {
     @State private var viewModel = OnboardingInterviewViewModel(
         fallbackModelId: "openai/gpt-5.1"
     )
+    @State private var showResumePrompt = false
     #if DEBUG
     @State private var showEventDump = false
     #endif
@@ -149,6 +150,17 @@ struct OnboardingInterviewView: View {
             }, message: { message in
                 Text(message)
             })
+            .alert("Resume Previous Session?", isPresented: $showResumePrompt) {
+                Button("Resume") {
+                    resumeInterview()
+                }
+                Button("Start Over", role: .destructive) {
+                    startOverInterview()
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("You have an unfinished onboarding session. Would you like to resume where you left off, or start over with a fresh session?")
+            }
         return withSheets
             #if DEBUG
             .overlay(alignment: .bottomTrailing) {
@@ -304,8 +316,35 @@ private extension OnboardingInterviewView {
     func beginInterview() {
         Task { @MainActor in
             guard interviewCoordinator.ui.isActive == false else { return }
+
+            // Check for existing session
+            if interviewCoordinator.hasActiveSession() {
+                Logger.info("📝 Found existing session, showing resume prompt", category: .ai)
+                showResumePrompt = true
+                return
+            }
+
             Logger.info("📝 Starting fresh interview", category: .ai)
-            _ = await interviewCoordinator.startInterview()
+            _ = await interviewCoordinator.startInterview(resumeExisting: false)
+        }
+    }
+
+    func resumeInterview() {
+        Task { @MainActor in
+            Logger.info("📝 Resuming existing interview", category: .ai)
+            _ = await interviewCoordinator.startInterview(resumeExisting: true)
+        }
+    }
+
+    func startOverInterview() {
+        Task { @MainActor in
+            Logger.info("📝 Starting over - resetting all data", category: .ai)
+            #if DEBUG
+            await interviewCoordinator.resetAllOnboardingData()
+            #else
+            interviewCoordinator.deleteCurrentSession()
+            #endif
+            _ = await interviewCoordinator.startInterview(resumeExisting: false)
         }
     }
     var openAIModels: [EnabledLLM] {

@@ -702,6 +702,31 @@ actor StateCoordinator: OnboardingEventEmitter {
         }
         await objectiveStore.setObjectiveStatus(objectiveId, status: objectiveStatus, source: "session_restore")
     }
+
+    /// Restore an artifact from persisted session
+    func restoreArtifact(_ artifact: JSON) async {
+        await artifactRepository.addArtifactRecord(artifact)
+    }
+
+    /// Restore multiple artifacts from persisted session
+    func restoreArtifacts(_ artifacts: [JSON]) async {
+        await artifactRepository.setArtifactRecords(artifacts)
+    }
+
+    /// Restore skeleton timeline from persisted session
+    func restoreSkeletonTimeline(_ timeline: JSON) async {
+        await artifactRepository.setSkeletonTimeline(timeline)
+    }
+
+    /// Restore applicant profile from persisted session
+    func restoreApplicantProfile(_ profile: JSON) async {
+        await artifactRepository.setApplicantProfile(profile)
+    }
+
+    /// Restore enabled sections from persisted session
+    func restoreEnabledSections(_ sections: Set<String>) async {
+        await artifactRepository.setEnabledSections(sections)
+    }
     // Artifact delegation
     func getArtifactRecord(id: String) async -> JSON? {
         await artifactRepository.getArtifactRecord(id: id)

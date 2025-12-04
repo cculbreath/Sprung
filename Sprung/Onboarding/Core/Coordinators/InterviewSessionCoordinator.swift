@@ -80,8 +80,12 @@ final class InterviewSessionCoordinator {
 
     /// Resume from an existing persisted session
     private func resumeSession(_ session: OnboardingSession) async -> Bool {
-        // Restore messages to chat transcript
+        // Restore messages to chat transcript store
         await sessionPersistenceHandler.restoreSession(session, to: chatTranscriptStore)
+
+        // Sync UI messages from restored chat transcript
+        ui.messages = await chatTranscriptStore.getAllMessages()
+        Logger.info("📥 Synced \(ui.messages.count) messages to UI", category: .ai)
 
         // Restore UI state
         let phase = InterviewPhase(rawValue: session.phase) ?? .phase1CoreFacts
@@ -97,6 +101,12 @@ final class InterviewSessionCoordinator {
         for (objectiveId, status) in objectiveStatuses {
             await state.restoreObjectiveStatus(objectiveId: objectiveId, status: status)
         }
+
+        // Restore artifacts to state coordinator
+        await restoreArtifacts(from: session)
+
+        // Restore timeline, profile, and sections
+        await restoreTimelineAndProfile(from: session)
 
         // Mark session as resumed
         _ = sessionPersistenceHandler.startSession(resumeExisting: true)
@@ -119,6 +129,35 @@ final class InterviewSessionCoordinator {
 
         Logger.info("✅ Session resumed: \(session.id), phase=\(phase.rawValue)", category: .ai)
         return true
+    }
+
+    /// Restore artifacts from persisted session to state coordinator
+    private func restoreArtifacts(from session: OnboardingSession) async {
+        let artifacts = sessionPersistenceHandler.getRestoredArtifacts(session)
+        await state.restoreArtifacts(artifacts)
+        Logger.info("📥 Restored \(artifacts.count) artifacts to state", category: .ai)
+    }
+
+    /// Restore timeline, profile, and enabled sections from persisted session
+    private func restoreTimelineAndProfile(from session: OnboardingSession) async {
+        // Restore skeleton timeline
+        if let timeline = sessionPersistenceHandler.getRestoredSkeletonTimeline(session) {
+            await state.restoreSkeletonTimeline(timeline)
+            Logger.info("📥 Restored skeleton timeline", category: .ai)
+        }
+
+        // Restore applicant profile
+        if let profile = sessionPersistenceHandler.getRestoredApplicantProfile(session) {
+            await state.restoreApplicantProfile(profile)
+            Logger.info("📥 Restored applicant profile", category: .ai)
+        }
+
+        // Restore enabled sections
+        let sections = sessionPersistenceHandler.getRestoredEnabledSections(session)
+        if !sections.isEmpty {
+            await state.restoreEnabledSections(sections)
+            Logger.info("📥 Restored \(sections.count) enabled sections", category: .ai)
+        }
     }
     /// End the current interview session.
     func endInterview() async {

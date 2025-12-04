@@ -288,4 +288,48 @@ final class OnboardingSessionStore: SwiftDataStore {
     func restoreObjectiveStatuses(_ session: OnboardingSession) -> [String: String] {
         Dictionary(uniqueKeysWithValues: getObjectives(session).map { ($0.objectiveId, $0.status) })
     }
+
+    // MARK: - Timeline and Profile Management
+
+    /// Update skeleton timeline JSON
+    func updateSkeletonTimeline(_ session: OnboardingSession, timelineJSON: String?) {
+        session.skeletonTimelineJSON = timelineJSON
+        session.lastActiveAt = Date()
+        saveContext()
+        Logger.debug("📦 Session skeleton timeline updated", category: .ai)
+    }
+
+    /// Get skeleton timeline JSON
+    func getSkeletonTimeline(_ session: OnboardingSession) -> String? {
+        session.skeletonTimelineJSON
+    }
+
+    /// Update applicant profile JSON
+    func updateApplicantProfile(_ session: OnboardingSession, profileJSON: String?) {
+        session.applicantProfileJSON = profileJSON
+        session.lastActiveAt = Date()
+        saveContext()
+        Logger.debug("📦 Session applicant profile updated", category: .ai)
+    }
+
+    /// Get applicant profile JSON
+    func getApplicantProfile(_ session: OnboardingSession) -> String? {
+        session.applicantProfileJSON
+    }
+
+    /// Update enabled sections
+    func updateEnabledSections(_ session: OnboardingSession, sections: Set<String>) {
+        session.enabledSectionsCSV = sections.sorted().joined(separator: ",")
+        session.lastActiveAt = Date()
+        saveContext()
+        Logger.debug("📦 Session enabled sections updated: \(sections.count) sections", category: .ai)
+    }
+
+    /// Get enabled sections
+    func getEnabledSections(_ session: OnboardingSession) -> Set<String> {
+        guard let csv = session.enabledSectionsCSV, !csv.isEmpty else {
+            return []
+        }
+        return Set(csv.split(separator: ",").map { String($0) })
+    }
 }
