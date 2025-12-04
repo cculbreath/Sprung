@@ -41,20 +41,9 @@ final class PhaseTransitionController {
         introPayload["text"].string = introPrompt
         introPayload["reasoningEffort"].string = "low"  // GPT-5.1 supports: none, low, medium, high
 
-        // Phase-specific tool choice:
-        // - Phase 1: Use agent_ready bootstrap tool to guide initial setup
-        // - Phase 2: Use start_phase_two bootstrap tool (returns timeline + forces display_knowledge_card_plan)
-        // - Phase 3+: Let the introductory prompt guide the LLM
-        switch phase {
-        case .phase1CoreFacts:
-            introPayload["toolChoice"].string = "agent_ready"
-        case .phase2DeepDive:
-            // start_phase_two returns timeline entries and chains to display_knowledge_card_plan
-            introPayload["toolChoice"].string = "start_phase_two"
-        default:
-            // No forced tool choice - let the prompt guide behavior
-            break
-        }
+        // Note: Phase intro prompts are queued and may be delivered after bootstrap tools
+        // have already been called. Don't force toolChoice here - let instructions guide behavior.
+        // The agent_ready/start_phase_two tools are called naturally at phase start.
 
         await eventBus.publish(.llmSendDeveloperMessage(
             payload: introPayload
