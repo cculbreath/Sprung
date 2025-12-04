@@ -1,0 +1,291 @@
+//
+//  OnboardingSessionStore.swift
+//  Sprung
+//
+//  Manages SwiftData persistence for onboarding sessions.
+//  Enables resume functionality by persisting session state, artifacts, and messages.
+//
+import Foundation
+import Observation
+import SwiftData
+import SwiftyJSON
+
+@Observable
+@MainActor
+final class OnboardingSessionStore: SwiftDataStore {
+    unowned let modelContext: ModelContext
+
+    init(context: ModelContext) {
+        modelContext = context
+        Logger.info("📦 OnboardingSessionStore initialized", category: .ai)
+    }
+
+    // MARK: - Session Management
+
+    /// Get the most recent incomplete session (for resume)
+    func getActiveSession() -> OnboardingSession? {
+        var descriptor = FetchDescriptor<OnboardingSession>(
+            predicate: #Predicate { !$0.isComplete },
+            sortBy: [SortDescriptor(\.lastActiveAt, order: .reverse)]
+        )
+        descriptor.fetchLimit = 1
+        return (try? modelContext.fetch(descriptor))?.first
+    }
+
+    /// Get all sessions (for history/debugging)
+    func getAllSessions() -> [OnboardingSession] {
+        let descriptor = FetchDescriptor<OnboardingSession>(
+            sortBy: [SortDescriptor(\.startedAt, order: .reverse)]
+        )
+        return (try? modelContext.fetch(descriptor)) ?? []
+    }
+
+    /// Create a new session
+    func createSession(phase: String = "phase1_core_facts") -> OnboardingSession {
+        let session = OnboardingSession(phase: phase)
+        modelContext.insert(session)
+        saveContext()
+        Logger.info("📦 Created new onboarding session: \(session.id)", category: .ai)
+        return session
+    }
+
+    /// Update session's last active timestamp
+    func touchSession(_ session: OnboardingSession) {
+        session.lastActiveAt = Date()
+        saveContext()
+    }
+
+    /// Update session phase
+    func updatePhase(_ session: OnboardingSession, phase: String) {
+        session.phase = phase
+        session.lastActiveAt = Date()
+        saveContext()
+        Logger.info("📦 Session phase updated to: \(phase)", category: .ai)
+    }
+
+    /// Update previousResponseId for OpenAI thread continuity
+    func updatePreviousResponseId(_ session: OnboardingSession, responseId: String?) {
+        session.previousResponseId = responseId
+        session.lastActiveAt = Date()
+        saveContext()
+        if let id = responseId {
+            Logger.debug("📦 Session previousResponseId updated: \(id.prefix(12))...", category: .ai)
+        }
+    }
+
+    /// Mark session as complete
+    func completeSession(_ session: OnboardingSession) {
+        session.isComplete = true
+        session.lastActiveAt = Date()
+        saveContext()
+        Logger.info("📦 Session marked complete: \(session.id)", category: .ai)
+    }
+
+    /// Delete a session and all related data
+    func deleteSession(_ session: OnboardingSession) {
+        modelContext.delete(session)
+        saveContext()
+        Logger.info("📦 Deleted session: \(session.id)", category: .ai)
+    }
+
+    // MARK: - Objective Management
+
+    /// Update or create objective status
+    func updateObjective(_ session: OnboardingSession, objectiveId: String, status: String) {
+        if let existing = session.objectives.first(where: { $0.objectiveId == objectiveId }) {
+            existing.status = status
+            existing.updatedAt = Date()
+        } else {
+            let record = OnboardingObjectiveRecord(objectiveId: objectiveId, status: status)
+            record.session = session
+            session.objectives.append(record)
+            modelContext.insert(record)
+        }
+        session.lastActiveAt = Date()
+        saveContext()
+    }
+
+    /// Get all objectives for a session
+    func getObjectives(_ session: OnboardingSession) -> [OnboardingObjectiveRecord] {
+        session.objectives
+    }
+
+    // MARK: - Artifact Management
+
+    /// Add an artifact record
+    func addArtifact(
+        _ session: OnboardingSession,
+        sourceType: String,
+        sourceFilename: String,
+        extractedContent: String,
+        sourceHash: String? = nil,
+        metadataJSON: String? = nil,
+        rawFileRelativePath: String? = nil,
+        planItemId: String? = nil
+    ) -> OnboardingArtifactRecord {
+        let record = OnboardingArtifactRecord(
+            sourceType: sourceType,
+            sourceFilename: sourceFilename,
+            sourceHash: sourceHash,
+            extractedContent: extractedContent,
+            metadataJSON: metadataJSON,
+            rawFileRelativePath: rawFileRelativePath,
+            planItemId: planItemId
+        )
+        record.session = session
+        session.artifacts.append(record)
+        modelContext.insert(record)
+        session.lastActiveAt = Date()
+        saveContext()
+        Logger.info("📦 Added artifact: \(sourceFilename) (\(sourceType))", category: .ai)
+        return record
+    }
+
+    /// Check if an artifact already exists (by filename + hash)
+    func findExistingArtifact(_ session: OnboardingSession, filename: String, hash: String?) -> OnboardingArtifactRecord? {
+        session.artifacts.first { artifact in
+            artifact.sourceFilename == filename &&
+            (hash == nil || artifact.sourceHash == hash)
+        }
+    }
+
+    /// Get all artifacts for a session
+    func getArtifacts(_ session: OnboardingSession) -> [OnboardingArtifactRecord] {
+        session.artifacts
+    }
+
+    // MARK: - Message Management
+
+    /// Add a message record
+    func addMessage(
+        _ session: OnboardingSession,
+        id: UUID = UUID(),
+        role: String,
+        text: String,
+        isSystemGenerated: Bool = false,
+        toolCallsJSON: String? = nil
+    ) -> OnboardingMessageRecord {
+        let record = OnboardingMessageRecord(
+            id: id,
+            role: role,
+            text: text,
+            isSystemGenerated: isSystemGenerated,
+            toolCallsJSON: toolCallsJSON
+        )
+        record.session = session
+        session.messages.append(record)
+        modelContext.insert(record)
+        // Don't call saveContext on every message - batch saves handled by caller
+        return record
+    }
+
+    /// Update a message (for streaming finalization)
+    func updateMessage(_ record: OnboardingMessageRecord, text: String, toolCallsJSON: String? = nil) {
+        record.text = text
+        if let json = toolCallsJSON {
+            record.toolCallsJSON = json
+        }
+        // Don't save on every update during streaming
+    }
+
+    /// Get messages for a session (sorted by timestamp)
+    func getMessages(_ session: OnboardingSession) -> [OnboardingMessageRecord] {
+        session.messages.sorted { $0.timestamp < $1.timestamp }
+    }
+
+    /// Batch save messages (call after streaming completes)
+    func saveMessages() {
+        saveContext()
+    }
+
+    // MARK: - Plan Item Management
+
+    /// Set the knowledge card plan items (replaces existing)
+    func setPlanItems(_ session: OnboardingSession, items: [KnowledgeCardPlanItem]) {
+        // Remove existing items
+        for item in session.planItems {
+            modelContext.delete(item)
+        }
+        session.planItems.removeAll()
+
+        // Add new items
+        for item in items {
+            let record = OnboardingPlanItemRecord(
+                itemId: item.id,
+                title: item.title,
+                type: item.type.rawValue,
+                descriptionText: item.description,
+                status: item.status.rawValue,
+                timelineEntryId: item.timelineEntryId
+            )
+            record.session = session
+            session.planItems.append(record)
+            modelContext.insert(record)
+        }
+        session.lastActiveAt = Date()
+        saveContext()
+        Logger.info("📦 Set \(items.count) plan items", category: .ai)
+    }
+
+    /// Update a plan item status
+    func updatePlanItemStatus(_ session: OnboardingSession, itemId: String, status: String) {
+        if let record = session.planItems.first(where: { $0.itemId == itemId }) {
+            record.status = status
+            saveContext()
+        }
+    }
+
+    /// Get plan items for a session
+    func getPlanItems(_ session: OnboardingSession) -> [OnboardingPlanItemRecord] {
+        session.planItems
+    }
+
+    // MARK: - Restore Helpers
+
+    /// Convert stored messages to OnboardingMessage models
+    func restoreMessages(_ session: OnboardingSession) -> [OnboardingMessage] {
+        getMessages(session).map { record in
+            let role: OnboardingMessageRole
+            switch record.role {
+            case "user": role = .user
+            case "assistant": role = .assistant
+            default: role = .system
+            }
+
+            var toolCalls: [OnboardingMessage.ToolCallInfo]?
+            if let json = record.toolCallsJSON,
+               let data = json.data(using: .utf8),
+               let decoded = try? JSONDecoder().decode([OnboardingMessage.ToolCallInfo].self, from: data) {
+                toolCalls = decoded
+            }
+
+            return OnboardingMessage(
+                id: record.id,
+                role: role,
+                text: record.text,
+                timestamp: record.timestamp,
+                isSystemGenerated: record.isSystemGenerated,
+                toolCalls: toolCalls
+            )
+        }
+    }
+
+    /// Convert stored plan items to KnowledgeCardPlanItem models
+    func restorePlanItems(_ session: OnboardingSession) -> [KnowledgeCardPlanItem] {
+        getPlanItems(session).map { record in
+            KnowledgeCardPlanItem(
+                id: record.itemId,
+                title: record.title,
+                type: KnowledgeCardPlanItem.ItemType(rawValue: record.type) ?? .job,
+                description: record.descriptionText,
+                status: KnowledgeCardPlanItem.Status(rawValue: record.status) ?? .pending,
+                timelineEntryId: record.timelineEntryId
+            )
+        }
+    }
+
+    /// Convert stored objectives to dictionary
+    func restoreObjectiveStatuses(_ session: OnboardingSession) -> [String: String] {
+        Dictionary(uniqueKeysWithValues: getObjectives(session).map { ($0.objectiveId, $0.status) })
+    }
+}

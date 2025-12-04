@@ -116,6 +116,8 @@ final class OnboardingDependencyContainer {
     let toolExecutor: ToolExecutor
     // MARK: - External Dependencies (Passed In)
     private let applicantProfileStore: ApplicantProfileStore
+    private let resRefStore: ResRefStore
+    let sessionStore: OnboardingSessionStore
     private let dataStore: InterviewDataStore
     let documentExtractionService: DocumentExtractionService
     // MARK: - Mutable State
@@ -135,6 +137,8 @@ final class OnboardingDependencyContainer {
         llmFacade: LLMFacade?,
         documentExtractionService: DocumentExtractionService,
         applicantProfileStore: ApplicantProfileStore,
+        resRefStore: ResRefStore,
+        sessionStore: OnboardingSessionStore,
         dataStore: InterviewDataStore,
         preferences: OnboardingPreferences
     ) {
@@ -143,6 +147,8 @@ final class OnboardingDependencyContainer {
         self.llmFacade = llmFacade
         self.documentExtractionService = documentExtractionService
         self.applicantProfileStore = applicantProfileStore
+        self.resRefStore = resRefStore
+        self.sessionStore = sessionStore
         self.dataStore = dataStore
 
         // 1. Initialize core infrastructure
@@ -396,6 +402,7 @@ final class OnboardingDependencyContainer {
             phaseTransitionController: phaseTransitionController,
             toolRouter: toolRouter,
             applicantProfileStore: applicantProfileStore,
+            resRefStore: resRefStore,
             eventBus: eventBus,
             dataStore: dataStore,
             coordinator: coordinator
