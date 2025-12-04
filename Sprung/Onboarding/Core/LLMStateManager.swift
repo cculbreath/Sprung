@@ -21,6 +21,16 @@ actor LLMStateManager {
     private var pendingToolResponseRetryCount: Int = 0
     /// Maximum retries for pending tool responses before giving up
     private let maxPendingToolResponseRetries: Int = 3
+
+    // MARK: - Pending UI Tool Call (Codex Paradigm)
+    /// UI tools that present cards and await user action before responding.
+    /// Based on Codex CLI paradigm: tool outputs must be sent before new LLM turns.
+    /// When a UI tool is pending, developer messages are queued behind it.
+    private var pendingUIToolCall: (callId: String, toolName: String)?
+
+    /// Queued developer messages waiting for pending UI tool to complete
+    private var queuedDeveloperMessages: [JSON] = []
+
     // MARK: - Tool Names
     /// Get the current set of allowed tool names
     func getAllowedToolNames() -> Set<String> {
@@ -79,6 +89,56 @@ actor LLMStateManager {
     func setToolPaneCard(_ card: OnboardingToolPaneCard) {
         currentToolPaneCard = card
     }
+
+    // MARK: - Pending UI Tool Call Management (Codex Paradigm)
+
+    /// Set a UI tool as pending (awaiting user action)
+    /// This gates new LLM turns until the user provides input
+    func setPendingUIToolCall(callId: String, toolName: String) {
+        pendingUIToolCall = (callId: callId, toolName: toolName)
+        Logger.info("🎯 UI tool pending: \(toolName) (callId: \(callId.prefix(8)))", category: .ai)
+    }
+
+    /// Check if there's a pending UI tool awaiting user action
+    func hasPendingUIToolCall() -> Bool {
+        pendingUIToolCall != nil
+    }
+
+    /// Get the pending UI tool call info
+    func getPendingUIToolCall() -> (callId: String, toolName: String)? {
+        pendingUIToolCall
+    }
+
+    /// Clear the pending UI tool call (after user action sends tool output)
+    func clearPendingUIToolCall() {
+        if let pending = pendingUIToolCall {
+            Logger.info("✅ UI tool cleared: \(pending.toolName) (callId: \(pending.callId.prefix(8)))", category: .ai)
+        }
+        pendingUIToolCall = nil
+    }
+
+    /// Queue a developer message while a UI tool is pending
+    func queueDeveloperMessage(_ payload: JSON) {
+        queuedDeveloperMessages.append(payload)
+        let title = payload["title"].stringValue
+        Logger.debug("📥 Developer message queued (pending UI tool): \(title)", category: .ai)
+    }
+
+    /// Drain queued developer messages (call after UI tool output is sent)
+    func drainQueuedDeveloperMessages() -> [JSON] {
+        let messages = queuedDeveloperMessages
+        queuedDeveloperMessages = []
+        if !messages.isEmpty {
+            Logger.info("📤 Flushing \(messages.count) queued developer message(s)", category: .ai)
+        }
+        return messages
+    }
+
+    /// Check if there are queued developer messages
+    func hasQueuedDeveloperMessages() -> Bool {
+        !queuedDeveloperMessages.isEmpty
+    }
+
     // MARK: - Pending Tool Response Tracking
     /// Store pending tool response payload(s) before sending
     /// These will be retried if a stream error occurs
@@ -161,5 +221,7 @@ actor LLMStateManager {
         currentToolPaneCard = .none
         pendingToolResponsePayloads = []
         pendingToolResponseRetryCount = 0
+        pendingUIToolCall = nil
+        queuedDeveloperMessages = []
     }
 }

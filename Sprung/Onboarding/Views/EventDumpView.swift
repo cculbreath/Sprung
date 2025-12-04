@@ -12,64 +12,111 @@ struct EventDumpView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var events: [String] = []
     @State private var metricsText: String = ""
+    @State private var conversationEntries: [ConversationLogEntry] = []
+    @State private var selectedTab = 0
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Metrics section
-                GroupBox {
-                    ScrollView {
-                        Text(metricsText)
-                            .font(.system(.caption, design: .monospaced))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .textSelection(.enabled)
+            TabView(selection: $selectedTab) {
+                // Events Tab
+                VStack(spacing: 0) {
+                    // Metrics section
+                    GroupBox {
+                        ScrollView {
+                            Text(metricsText)
+                                .font(.system(.caption, design: .monospaced))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .textSelection(.enabled)
+                        }
+                        .frame(maxHeight: 150)
+                    } label: {
+                        Text("Event Metrics")
+                            .font(.headline)
                     }
-                    .frame(maxHeight: 150)
-                } label: {
-                    Text("Event Metrics")
-                        .font(.headline)
+                    .padding()
+                    // Events section
+                    GroupBox {
+                        if events.isEmpty {
+                            ContentUnavailableView {
+                                Label("No Events", systemImage: "tray.fill")
+                            } description: {
+                                Text("Event history is empty")
+                            }
+                        } else {
+                            List {
+                                ForEach(Array(events.enumerated()), id: \.offset) { index, event in
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        HStack {
+                                            Text("#\(events.count - index)")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                                .monospacedDigit()
+                                            Spacer()
+                                        }
+                                        Text(event)
+                                            .font(.system(.caption, design: .monospaced))
+                                            .textSelection(.enabled)
+                                    }
+                                    .listRowSeparator(.visible)
+                                }
+                            }
+                            .listStyle(.plain)
+                        }
+                    } label: {
+                        HStack {
+                            Text("Recent Events")
+                                .font(.headline)
+                            Spacer()
+                            Text("\(events.count) events")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding([.horizontal, .bottom])
                 }
-                .padding()
-                // Events section
-                GroupBox {
-                    if events.isEmpty {
+                .tabItem { Label("Events", systemImage: "list.bullet") }
+                .tag(0)
+
+                // Conversation Log Tab
+                VStack(spacing: 0) {
+                    if conversationEntries.isEmpty {
                         ContentUnavailableView {
-                            Label("No Events", systemImage: "tray.fill")
+                            Label("No Messages", systemImage: "bubble.left.and.bubble.right")
                         } description: {
-                            Text("Event history is empty")
+                            Text("Conversation log is empty")
                         }
                     } else {
                         List {
-                            ForEach(Array(events.enumerated()), id: \.offset) { index, event in
+                            ForEach(conversationEntries) { entry in
                                 VStack(alignment: .leading, spacing: 4) {
                                     HStack {
-                                        Text("#\(events.count - index)")
-                                            .font(.caption)
+                                        Text(entry.formattedTimestamp)
+                                            .font(.caption2)
                                             .foregroundStyle(.secondary)
-                                            .monospacedDigit()
+                                        Text(entry.type.rawValue)
+                                            .font(.caption2)
+                                            .fontWeight(.semibold)
+                                            .foregroundStyle(colorForType(entry.type))
                                         Spacer()
                                     }
-                                    Text(event)
+                                    Text(entry.content)
                                         .font(.system(.caption, design: .monospaced))
                                         .textSelection(.enabled)
+                                    if !entry.metadata.isEmpty {
+                                        Text("meta: " + entry.metadata.map { "\($0.key)=\($0.value)" }.joined(separator: ", "))
+                                            .font(.caption2)
+                                            .foregroundStyle(.tertiary)
+                                    }
                                 }
                                 .listRowSeparator(.visible)
                             }
                         }
                         .listStyle(.plain)
                     }
-                } label: {
-                    HStack {
-                        Text("Recent Events")
-                            .font(.headline)
-                        Spacer()
-                        Text("\(events.count) events")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
                 }
-                .padding([.horizontal, .bottom])
+                .tabItem { Label("Conversation", systemImage: "bubble.left.and.bubble.right") }
+                .tag(1)
             }
-            .navigationTitle("Event Dump")
+            .navigationTitle("Debug Logs")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") {
@@ -77,16 +124,22 @@ struct EventDumpView: View {
                     }
                 }
                 ToolbarItem(placement: .automatic) {
-                    Button {
-                        exportEventDump()
+                    Menu {
+                        Button("Export Events") {
+                            exportEventDump()
+                        }
+                        Button("Export Conversation Log") {
+                            exportConversationLog()
+                        }
                     } label: {
                         Label("Export", systemImage: "square.and.arrow.up")
                     }
-                    .help("Export event dump to a text file")
+                    .help("Export logs to a text file")
                 }
                 ToolbarItem(placement: .automatic) {
                     Button("Refresh") {
                         loadEvents()
+                        loadConversationLog()
                     }
                 }
                 ToolbarItem(placement: .automatic) {
@@ -94,6 +147,7 @@ struct EventDumpView: View {
                         Task {
                             await coordinator.resetAllOnboardingData()
                             loadEvents()
+                            loadConversationLog()
                         }
                     }
                     .help("Reset ApplicantProfile, remove photo, delete uploads, and clear all interview data")
@@ -102,13 +156,16 @@ struct EventDumpView: View {
                     Button("Clear History") {
                         Task {
                             await coordinator.clearEventHistory()
+                            coordinator.conversationLogStore.clear()
                             loadEvents()
+                            loadConversationLog()
                         }
                     }
                 }
             }
             .task {
                 loadEvents()
+                loadConversationLog()
             }
         }
         .frame(width: 800, height: 600)
@@ -259,6 +316,46 @@ struct EventDumpView: View {
             consolidated.append("streamingMessageUpdated(id: \(prevId)) - \(streamingUpdateCount) updates, \(totalChars) chars total")
         }
         return consolidated
+    }
+
+    // MARK: - Conversation Log Functions
+
+    private func loadConversationLog() {
+        conversationEntries = coordinator.conversationLogStore.getEntries()
+    }
+
+    private func colorForType(_ type: ConversationLogEntryType) -> Color {
+        switch type {
+        case .user: return .blue
+        case .assistant: return .green
+        case .developer: return .orange
+        case .toolCall: return .purple
+        case .toolResponse: return .cyan
+        case .system: return .gray
+        }
+    }
+
+    private func exportConversationLog() {
+        let savePanel = NSSavePanel()
+        savePanel.nameFieldStringValue = "conversation-log-\(Date().formatted(.iso8601.year().month().day().time(includingFractionalSeconds: false).dateSeparator(.dash).dateTimeSeparator(.space).timeSeparator(.colon))).txt"
+        savePanel.allowedContentTypes = [.plainText]
+        savePanel.canCreateDirectories = true
+        savePanel.isExtensionHidden = false
+        savePanel.title = "Export Conversation Log"
+        savePanel.message = "Choose where to save the conversation log"
+
+        savePanel.begin { response in
+            guard response == .OK, let url = savePanel.url else { return }
+
+            let output = coordinator.conversationLogStore.exportLog()
+
+            do {
+                try output.write(to: url, atomically: true, encoding: .utf8)
+                Logger.info("Conversation log exported to: \(url.path)", category: .general)
+            } catch {
+                Logger.error("Failed to export conversation log: \(error.localizedDescription)", category: .general)
+            }
+        }
     }
 }
 #endif

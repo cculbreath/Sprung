@@ -31,6 +31,8 @@ actor ToolExecutor {
         switch result {
         case .immediate:
             return result
+        case .pendingUserAction:
+            return result
         case .error(let error):
             return errorResult(for: toolName, error: error)
         }

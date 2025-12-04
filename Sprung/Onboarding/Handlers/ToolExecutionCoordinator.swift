@@ -134,6 +134,14 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             errorOutput["error"].string = error.localizedDescription
             errorOutput["status"].string = "incomplete"
             await emitToolResponse(callId: callId, output: errorOutput)
+
+        case .pendingUserAction:
+            // Codex paradigm: UI tool presented, awaiting user action.
+            // Don't send tool response yet - it will be sent when user acts.
+            // Developer messages will be queued behind this pending tool.
+            let pendingToolName = toolName ?? "unknown"
+            await stateCoordinator.setPendingUIToolCall(callId: callId, toolName: pendingToolName)
+            Logger.info("🎯 UI tool pending user action: \(pendingToolName) (callId: \(callId.prefix(8)))", category: .ai)
         }
     }
     // MARK: - Event Emission

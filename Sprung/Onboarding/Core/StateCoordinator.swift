@@ -280,8 +280,15 @@ actor StateCoordinator: OnboardingEventEmitter {
                 originalText: originalText
             ))
         case .llmSendDeveloperMessage(let payload):
-            // Route developer messages through the queue to ensure they wait for pending tool responses
-            await streamQueueManager.enqueue(.developerMessage(payload: payload))
+            // Codex paradigm: If a UI tool is pending, queue developer messages behind it
+            // The queued messages will be flushed when the user provides input
+            if await llmStateManager.hasPendingUIToolCall() {
+                await llmStateManager.queueDeveloperMessage(payload)
+                Logger.debug("📥 Developer message queued (pending UI tool call)", category: .ai)
+            } else {
+                // No pending UI tool - route through stream queue normally
+                await streamQueueManager.enqueue(.developerMessage(payload: payload))
+            }
         case .llmToolCallBatchStarted(let expectedCount, let callIds):
             await streamQueueManager.startToolCallBatch(expectedCount: expectedCount, callIds: callIds)
         case .llmEnqueueToolResponse(let payload):
@@ -466,6 +473,46 @@ actor StateCoordinator: OnboardingEventEmitter {
     func getPendingToolResponsesForRetry() async -> [JSON]? {
         await llmStateManager.getPendingToolResponsesForRetry()
     }
+
+    // MARK: - Pending UI Tool Call (Codex Paradigm)
+    // UI tools present cards and await user action before responding.
+    // When a UI tool is pending, developer messages are queued behind it.
+
+    /// Set a UI tool as pending (awaiting user action)
+    func setPendingUIToolCall(callId: String, toolName: String) async {
+        await llmStateManager.setPendingUIToolCall(callId: callId, toolName: toolName)
+    }
+
+    /// Check if there's a pending UI tool awaiting user action
+    func hasPendingUIToolCall() async -> Bool {
+        await llmStateManager.hasPendingUIToolCall()
+    }
+
+    /// Get the pending UI tool call info
+    func getPendingUIToolCall() async -> (callId: String, toolName: String)? {
+        await llmStateManager.getPendingUIToolCall()
+    }
+
+    /// Clear the pending UI tool call (after user action sends tool output)
+    func clearPendingUIToolCall() async {
+        await llmStateManager.clearPendingUIToolCall()
+    }
+
+    /// Queue a developer message while a UI tool is pending
+    func queueDeveloperMessage(_ payload: JSON) async {
+        await llmStateManager.queueDeveloperMessage(payload)
+    }
+
+    /// Drain queued developer messages (call after UI tool output is sent)
+    func drainQueuedDeveloperMessages() async -> [JSON] {
+        await llmStateManager.drainQueuedDeveloperMessages()
+    }
+
+    /// Check if there are queued developer messages
+    func hasQueuedDeveloperMessages() async -> Bool {
+        await llmStateManager.hasQueuedDeveloperMessages()
+    }
+
     // MARK: - Snapshot Management
     struct StateSnapshot: Codable {
         let phase: InterviewPhase

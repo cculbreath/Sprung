@@ -97,12 +97,9 @@ struct SubmitForValidationTool: InterviewTool {
         }
         // Emit UI request to show the validation prompt
         await coordinator.eventBus.publish(.validationPromptRequested(prompt: payload.toValidationPrompt()))
-        // Return completed - the tool's job is to present UI, which it has done
-        // User's validation response will arrive as a new user message
-        var response = JSON()
-        response["message"].string = "UI presented. Awaiting user input."
-        response["status"].string = "completed"
-        return .immediate(response)
+        // Codex paradigm: Return pending - don't send tool response until user acts.
+        // The tool output will be sent when user confirms/rejects validation.
+        return .pendingUserAction
     }
 }
 private struct ValidationPayload {
