@@ -6,7 +6,7 @@ import SwiftyJSON
 actor StreamQueueManager {
     // MARK: - Types
     enum StreamRequestType {
-        case userMessage(payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String?, originalText: String?)
+        case userMessage(payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String?, originalText: String?, bundledDeveloperMessages: [JSON])
         case toolResponse(payload: JSON)
         case batchedToolResponses(payloads: [JSON])
         case developerMessage(payload: JSON)
@@ -232,12 +232,13 @@ actor StreamQueueManager {
     /// Emit the appropriate stream request event for LLMMessenger to handle
     private func emitStreamRequest(_ requestType: StreamRequestType) async {
         switch requestType {
-        case .userMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText):
+        case .userMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText, let bundledDeveloperMessages):
             await eventBus.publish(.llmExecuteUserMessage(
                 payload: payload,
                 isSystemGenerated: isSystemGenerated,
                 chatboxMessageId: chatboxMessageId,
-                originalText: originalText
+                originalText: originalText,
+                bundledDeveloperMessages: bundledDeveloperMessages
             ))
         case .toolResponse(let payload):
             await eventBus.publish(.llmExecuteToolResponse(payload: payload))

@@ -273,20 +273,18 @@ actor StateCoordinator: OnboardingEventEmitter {
         case .llmReasoningSummaryComplete(let text):
             await chatStore.completeReasoningSummary(finalText: text)
         case .llmEnqueueUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText):
-            // Flush any queued developer messages before the user message
-            // This batches status updates and sends them just before user action triggers LLM
-            let queuedDevMessages = await llmStateManager.drainQueuedDeveloperMessages()
-            for devPayload in queuedDevMessages {
-                await streamQueueManager.enqueue(.developerMessage(payload: devPayload))
-            }
-            if !queuedDevMessages.isEmpty {
-                Logger.info("📤 Flushed \(queuedDevMessages.count) queued developer message(s) before user message", category: .ai)
+            // Bundle any queued developer messages WITH the user message
+            // They'll be included as input items in the same API request
+            let bundledDevMessages = await llmStateManager.drainQueuedDeveloperMessages()
+            if !bundledDevMessages.isEmpty {
+                Logger.info("📦 Bundling \(bundledDevMessages.count) developer message(s) with user message", category: .ai)
             }
             await streamQueueManager.enqueue(.userMessage(
                 payload: payload,
                 isSystemGenerated: isSystemGenerated,
                 chatboxMessageId: chatboxMessageId,
-                originalText: originalText
+                originalText: originalText,
+                bundledDeveloperMessages: bundledDevMessages
             ))
         case .llmSendDeveloperMessage(let payload):
             // Codex paradigm: Always queue developer messages until user action
