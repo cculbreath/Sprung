@@ -201,7 +201,8 @@ struct OnboardingInterviewToolPane: View {
     }
     @ViewBuilder
     private func summaryContent() -> some View {
-        if coordinator.ui.phase == .phase2DeepDive {
+        switch coordinator.ui.phase {
+        case .phase2DeepDive:
             ScrollView {
                 VStack(spacing: 12) {
                     // Persistent upload drop zone - above knowledge card list for visibility
@@ -231,12 +232,42 @@ struct OnboardingInterviewToolPane: View {
                             }
                         }
                     )
-
-                    DraftKnowledgeListView(coordinator: coordinator)
                 }
             }
-        } else {
+        case .phase3WritingCorpus:
+            ScrollView {
+                WritingCorpusCollectionView(
+                    coordinator: coordinator,
+                    onDropFiles: { urls in
+                        Task {
+                            await coordinator.uploadWritingSamples(urls)
+                        }
+                    },
+                    onSelectFiles: {
+                        openWritingSamplePanel()
+                    }
+                )
+            }
+        default:
             Spacer()
+        }
+    }
+
+    private func openWritingSamplePanel() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [
+            UTType.pdf,
+            UTType(filenameExtension: "docx"),
+            UTType.plainText,
+            UTType(filenameExtension: "md")
+        ].compactMap { $0 }
+        panel.begin { result in
+            guard result == .OK, !panel.urls.isEmpty else { return }
+            Task {
+                await coordinator.uploadWritingSamples(panel.urls)
+            }
         }
     }
 

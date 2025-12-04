@@ -20,6 +20,9 @@ final class UIResponseCoordinator {
     func submitChoiceSelection(_ selectionIds: [String]) async {
         guard toolRouter.resolveChoice(selectionIds: selectionIds) != nil else { return }
 
+        // Clear the choice prompt and waiting state
+        await eventBus.publish(.choicePromptCleared)
+
         // Complete pending UI tool call (Codex paradigm)
         await completePendingUIToolCall(output: buildUICompletedOutput(message: "User selected: \(selectionIds.joined(separator: ", "))"))
 
@@ -33,22 +36,28 @@ final class UIResponseCoordinator {
     func completeUploadAndResume(id: UUID, fileURLs: [URL], coordinator: OnboardingInterviewCoordinator) async {
         guard await coordinator.completeUpload(id: id, fileURLs: fileURLs) != nil else { return }
 
-        // Complete pending UI tool call (Codex paradigm)
-        await completePendingUIToolCall(output: buildUICompletedOutput(message: "User uploaded \(fileURLs.count) file(s)"))
-
         // Check if any uploaded files require async extraction (PDF, DOCX, HTML, etc.)
-        // For these, skip sending immediate "upload successful" message - the DocumentArtifactMessenger
-        // will send a more informative message with the extracted content once processing completes
-        // Plain text formats (txt, md, rtf) are packaged immediately and don't need to wait
-        // HTML requires extraction to remove scripts, CSS, and other noise
+        // For these, send a tool response that tells the LLM to WAIT for extracted content.
+        // DocumentArtifactMessenger will send a user message with the full extracted text.
         let requiresAsyncExtraction = fileURLs.contains { url in
             let ext = url.pathExtension.lowercased()
             return ["pdf", "doc", "docx", "html", "htm"].contains(ext)
         }
         if requiresAsyncExtraction {
-            Logger.info("📄 Upload completed - async document extraction in progress, skipping immediate message", category: .ai)
+            // Send tool response with status="in_progress" to tell the API to wait
+            // The API will NOT generate a response until we send a follow-up message
+            // DocumentArtifactMessenger will send the extracted content which triggers the response
+            var output = JSON()
+            output["message"].string = "User uploaded \(fileURLs.count) file(s). Document extraction in progress - please wait for extracted content."
+            output["status"].string = "in_progress"  // Valid API status - makes API wait for follow-up
+            await completePendingUIToolCall(output: output)
+            Logger.info("📄 Upload completed - async extraction in progress, API will wait for follow-up", category: .ai)
             return
         }
+
+        // For non-extractable files (images, text), complete immediately
+        await completePendingUIToolCall(output: buildUICompletedOutput(message: "User uploaded \(fileURLs.count) file(s)"))
+
         var userMessage = JSON()
         userMessage["role"].string = "user"
         userMessage["content"].string = "Uploaded \(fileURLs.count) file(s) successfully."
@@ -437,6 +446,51 @@ final class UIResponseCoordinator {
             Logger.info("✅ Direct upload started: \(fileURLs.count) file(s)", category: .ai)
         } catch {
             Logger.error("❌ Direct upload failed: \(error.localizedDescription)", category: .ai)
+            // Clean up any processed files on error
+            for item in processed {
+                uploadStorage.removeFile(at: item.storageURL)
+            }
+        }
+    }
+
+    // MARK: - Writing Sample Upload (Phase 3)
+    /// Handles writing sample uploads with verbatim transcription for Phase 3
+    func uploadWritingSamples(_ fileURLs: [URL]) async {
+        guard !fileURLs.isEmpty else { return }
+
+        let uploadStorage = OnboardingUploadStorage()
+        var processed: [OnboardingProcessedUpload] = []
+
+        do {
+            processed = try fileURLs.map { try uploadStorage.processFile(at: $0) }
+
+            // Build upload metadata for writing sample
+            var metadata = JSON()
+            metadata["title"].string = "Writing sample"
+            metadata["instructions"].string = "Transcribe this writing sample verbatim for style analysis"
+            metadata["verbatim_transcription"].bool = true  // Flag for verbatim mode
+
+            // Convert to ProcessedUploadInfo for the event
+            let uploadInfos = processed.map { item in
+                ProcessedUploadInfo(
+                    storageURL: item.storageURL,
+                    contentType: item.contentType,
+                    filename: item.storageURL.lastPathComponent
+                )
+            }
+
+            // Emit uploadCompleted event with writing_sample type
+            // DocumentArtifactHandler will process with verbatim transcription
+            await eventBus.publish(.uploadCompleted(
+                files: uploadInfos,
+                requestKind: "writing_sample",
+                callId: nil,
+                metadata: metadata
+            ))
+
+            Logger.info("📝 Writing sample upload started: \(fileURLs.count) file(s)", category: .ai)
+        } catch {
+            Logger.error("❌ Writing sample upload failed: \(error.localizedDescription)", category: .ai)
             // Clean up any processed files on error
             for item in processed {
                 uploadStorage.removeFile(at: item.storageURL)

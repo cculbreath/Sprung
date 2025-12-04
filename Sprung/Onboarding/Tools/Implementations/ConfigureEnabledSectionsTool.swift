@@ -38,23 +38,22 @@ struct ConfigureEnabledSectionsTool: InterviewTool {
         return JSONSchema(
             type: .object,
             description: """
-                Present a section toggle UI card where user selects which JSON Resume sections to include in their final resume.
-                Use this at the end of skeleton_timeline to let user customize their resume structure. The UI shows toggles for each section with your proposed selections pre-checked.
-                RETURNS: { "message": "UI presented. Awaiting user input.", "status": "completed" }
-                The tool completes immediately after presenting UI. User's final section selections arrive as a new user message.
-                USAGE: Call after skeleton timeline is complete. Analyze user's timeline/profile to propose which sections they likely want. Set sections to true/false based on what you've gathered.
-                WORKFLOW:
-                1. Skeleton timeline is complete and validated
-                2. Analyze what data user provided (mentioned publications → "publications": true, no awards → "awards": false)
-                3. Build proposed_sections object: { "work": true, "education": true, "skills": true, ... }
-                4. Call configure_enabled_sections with your proposal
-                5. Tool returns immediately - section toggle card is now active
-                6. User confirms/modifies section selections (toggles on/off)
-                7. You receive user message with final enabled sections object
-                8. Call persist_data(dataType: "experience_defaults", data: { enabled_sections: <user-confirmed-object> })
-                Required sections (always include): basics (not toggleable - contact info always included)
-                Common sections: work, education, skills, projects, volunteer, awards, certificates, publications, languages, interests, references
-                DO NOT: Hardcode all sections to true. Be selective based on user's actual data. If they haven't mentioned awards, set "awards": false.
+                Present a section toggle UI card where user selects which JSON Resume sections to include.
+
+                CRITICAL: You MUST provide the proposed_sections parameter as an object mapping section keys to booleans.
+
+                CORRECT CALL FORMAT:
+                {
+                  "proposed_sections": {"work": true, "education": true, "skills": true, "projects": true, "publications": false},
+                  "rationale": "optional explanation"
+                }
+
+                INCORRECT (will fail):
+                {"rationale": "some text"}  ← MISSING proposed_sections!
+
+                Valid section keys: work, education, volunteer, awards, certificates, publications, skills, languages, interests, references, projects
+
+                Set sections to true/false based on user's data. If they mentioned publications, set "publications": true. If no awards mentioned, set "awards": false.
                 """,
             properties: properties,
             required: ["proposed_sections"],
@@ -69,7 +68,11 @@ struct ConfigureEnabledSectionsTool: InterviewTool {
     }()
     var name: String { OnboardingToolName.configureEnabledSections.rawValue }
     var description: String {
-        "Present section toggle UI. Pass object: {\"work\": true, \"education\": true, \"skills\": false, ...}. Returns immediately - selections arrive as user message."
+        """
+        Present section toggle UI. REQUIRED: proposed_sections object with section keys mapped to boolean values.
+        Example call: {"proposed_sections": {"work": true, "education": true, "skills": true, "projects": true, "publications": false}, "rationale": "optional explanation"}
+        The proposed_sections parameter is REQUIRED - do NOT omit it.
+        """
     }
     var parameters: JSONSchema { Self.schema }
     init(coordinator: OnboardingInterviewCoordinator) {

@@ -90,7 +90,31 @@ struct StartPhaseTwoTool: InterviewTool {
         - Set all initial statuses to "pending"
         - Include a helpful message explaining the plan to the user
         - After displaying the plan, begin working through items systematically
-        - For each item: mark in_progress → collect documents → generate card → mark complete
+
+        PER-ITEM WORKFLOW (CRITICAL - FOLLOW THIS ORDER):
+        1. **ALWAYS FIRST**: Call `set_current_knowledge_card` with the item ID
+           → This highlights the item and enables the "Done with this card" button
+           → Without this step, the user cannot signal when they're ready!
+
+        2. **ASK ABOUT DOCUMENTS FIRST** - Documents are your primary source material:
+           "Do you have any documents for this role? For example:
+           - Performance reviews or 360 feedback
+           - Project reports, design docs, or presentations
+           - Job description or role summary
+           - Websites, portfolios, or published work
+           - Software projects or git repositories
+           - Publications, patents, or awards"
+
+        3. Extract detail from uploaded documents; ask clarifying questions only for gaps
+
+        4. Wait for the user to click "Done with this card" or say they're ready
+
+        5. Call `submit_knowledge_card` with comprehensive prose (500-2000+ words) and sources
+
+        IMPORTANT REMINDERS:
+        - DOCUMENTS are far more efficient than Q&A - one PDF can replace 20 questions
+        - NEVER start asking questions about an item without calling set_current_knowledge_card FIRST
+        - The "Done" button only appears when a card is selected via set_current_knowledge_card
 
         DO NOT skip calling display_knowledge_card_plan. This is required to show the UI.
         """

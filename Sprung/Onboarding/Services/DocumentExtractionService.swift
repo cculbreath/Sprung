@@ -16,6 +16,24 @@ actor DocumentExtractionService {
         let returnTypes: [String]
         let autoPersist: Bool
         let timeout: TimeInterval?
+        /// When true, extracts verbatim text without summarization (for writing samples)
+        let verbatimTranscription: Bool
+
+        init(
+            fileURL: URL,
+            purpose: String,
+            returnTypes: [String] = [],
+            autoPersist: Bool = false,
+            timeout: TimeInterval? = nil,
+            verbatimTranscription: Bool = false
+        ) {
+            self.fileURL = fileURL
+            self.purpose = purpose
+            self.returnTypes = returnTypes
+            self.autoPersist = autoPersist
+            self.timeout = timeout
+            self.verbatimTranscription = verbatimTranscription
+        }
     }
 
     struct ExtractedArtifact {
@@ -76,6 +94,9 @@ actor DocumentExtractionService {
     /// Maximum pages for image-based PDF extraction
     private let maxPagesForImageExtraction = 10
 
+    /// Threshold above which PDFs get LLM summarization instead of full text enrichment
+    private let largePDFPageThreshold = 20
+
     // MARK: - Private Properties
     private var llmFacade: LLMFacade?
     private let maxCharactersForPrompt = 18_000
@@ -135,7 +156,7 @@ actor DocumentExtractionService {
         }
 
         let sha256 = sha256Hex(for: fileData)
-        let (rawText, initialIssues) = extractPlainText(from: fileURL)
+        let (rawText, initialIssues, pdfPageCount) = extractPlainText(from: fileURL)
 
         // If text extraction failed and this is a PDF, try image-based extraction
         if (rawText == nil || rawText?.isEmpty == true) && fileURL.pathExtension.lowercased() == "pdf" {
@@ -162,13 +183,40 @@ actor DocumentExtractionService {
 
         await notifyProgress(.fileAnalysis, .completed)
 
+        // For verbatim transcription mode (writing samples), skip summarization
+        // For large PDFs (> 20 pages), use LLM summarization unless verbatim mode
+        let isLargePDF = (pdfPageCount ?? 0) > largePDFPageThreshold && !request.verbatimTranscription
+        if isLargePDF {
+            Logger.info("📄 Large PDF detected (\(pdfPageCount ?? 0) pages), using LLM summarization", category: .ai)
+        }
+
         let llmStart = Date()
-        let aiStageDetail = request.purpose == "resume_timeline"
-            ? "Extracting resume details with Gemini AI..."
-            : "Processing document with Gemini AI..."
+        let aiStageDetail: String
+        if request.verbatimTranscription {
+            aiStageDetail = "Transcribing document verbatim..."
+        } else if isLargePDF {
+            aiStageDetail = "Summarizing \(pdfPageCount ?? 0)-page document with AI..."
+        } else if request.purpose == "resume_timeline" {
+            aiStageDetail = "Extracting resume details with Gemini AI..."
+        } else {
+            aiStageDetail = "Processing document with Gemini AI..."
+        }
         await notifyProgress(.aiExtraction, .active, detail: aiStageDetail)
 
-        let (markdown, markdownIssues) = try await enrichText(rawText, purpose: request.purpose, timeout: request.timeout)
+        let (markdown, markdownIssues): (String?, [String])
+        if request.verbatimTranscription {
+            // For writing samples: verbatim transcription with chunking for large documents
+            (markdown, markdownIssues) = try await transcribeVerbatim(
+                rawText,
+                pageCount: pdfPageCount,
+                timeout: request.timeout,
+                progress: progress
+            )
+        } else if isLargePDF {
+            (markdown, markdownIssues) = try await summarizeLargePDF(rawText, timeout: request.timeout)
+        } else {
+            (markdown, markdownIssues) = try await enrichText(rawText, purpose: request.purpose, timeout: request.timeout)
+        }
 
         let llmDurationMs = Int(Date().timeIntervalSince(llmStart) * 1000)
         Logger.info(
@@ -206,6 +254,13 @@ actor DocumentExtractionService {
             "source_file_url": fileURL.absoluteString,
             "source_filename": filename
         ]
+        if let pageCount = pdfPageCount {
+            metadata["page_count"] = pageCount
+        }
+        if isLargePDF {
+            metadata["extraction_method"] = "llm_summarization"
+            metadata["summarized"] = true
+        }
         if initialIssues.contains("truncated_input") {
             metadata["truncated_input"] = true
         }
@@ -281,16 +336,18 @@ actor DocumentExtractionService {
         }
     }
 
-    private func extractPlainText(from url: URL) -> (String?, [String]) {
+    /// Returns (text, issues, pageCount) - pageCount is nil for non-PDF documents
+    private func extractPlainText(from url: URL) -> (String?, [String], Int?) {
         var issues: [String] = []
         let ext = url.pathExtension.lowercased()
 
         if ext == "pdf" {
             guard let document = PDFDocument(url: url) else {
-                return (nil, ["text_extraction_warning"])
+                return (nil, ["text_extraction_warning"], nil)
             }
+            let pageCount = document.pageCount
             var text = ""
-            for index in 0..<document.pageCount {
+            for index in 0..<pageCount {
                 guard let page = document.page(at: index) else { continue }
                 if let pageText = page.string {
                     text.append(pageText)
@@ -298,9 +355,9 @@ actor DocumentExtractionService {
                 }
             }
             if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return (nil, ["text_extraction_warning"])
+                return (nil, ["text_extraction_warning"], pageCount)
             }
-            return (text, issues)
+            return (text, issues, pageCount)
         }
 
         if ext == "docx" {
@@ -310,23 +367,23 @@ actor DocumentExtractionService {
             if let attributed = try? NSAttributedString(url: url, options: options, documentAttributes: nil) {
                 let text = attributed.string
                 if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    return (nil, ["text_extraction_warning"])
+                    return (nil, ["text_extraction_warning"], nil)
                 }
-                return (text, issues)
+                return (text, issues, nil)
             } else {
                 issues.append("text_extraction_warning")
                 if let plain = try? String(contentsOf: url, encoding: .utf8) {
-                    return (plain, issues)
+                    return (plain, issues, nil)
                 }
-                return (nil, issues)
+                return (nil, issues, nil)
             }
         }
 
         if let text = try? String(contentsOf: url, encoding: .utf8) {
-            return (text, issues)
+            return (text, issues, nil)
         }
 
-        return (nil, ["text_extraction_warning"])
+        return (nil, ["text_extraction_warning"], nil)
     }
 
     private func enrichText(_ rawText: String, purpose: String, timeout: TimeInterval?) async throws -> (String?, [String]) {
@@ -370,6 +427,209 @@ Requirements:
                 issues.append("llm_failure_empty_response")
                 return (nil, issues)
             }
+            return (text, issues)
+        } catch let error as LLMError {
+            if case .clientError(let message) = error, message.contains("not found") || message.contains("not valid") {
+                onInvalidModelId?(modelId)
+                throw ExtractionError.llmFailed("\(modelId) is not a valid model ID.")
+            }
+            issues.append("llm_failure_\(error.localizedDescription)")
+            return (nil, issues)
+        } catch {
+            issues.append("llm_failure_\(error.localizedDescription)")
+            return (nil, issues)
+        }
+    }
+
+    /// Transcribe document verbatim for writing samples
+    /// For documents > 10 pages, chunks into 10-page segments and processes serially
+    private func transcribeVerbatim(
+        _ rawText: String,
+        pageCount: Int?,
+        timeout: TimeInterval?,
+        progress: ExtractionProgressHandler?
+    ) async throws -> (String?, [String]) {
+        let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return (nil, ["llm_failure_empty_input"])
+        }
+
+        guard let facade = llmFacade else {
+            return (nil, ["llm_failure_not_configured"])
+        }
+
+        let modelId = currentModelId()
+        var issues: [String] = []
+
+        // Estimate characters per page (rough approximation)
+        let estimatedCharsPerPage = 3000
+        let effectivePageCount = pageCount ?? max(1, trimmed.count / estimatedCharsPerPage)
+
+        // If document is 10 pages or less, process in one go
+        if effectivePageCount <= maxPagesForImageExtraction {
+            return try await transcribeChunk(trimmed, chunkNumber: nil, totalChunks: nil, facade: facade, modelId: modelId)
+        }
+
+        // For larger documents, chunk into ~10-page segments and process serially
+        Logger.info("📄 Large document (\(effectivePageCount) pages), chunking for verbatim transcription", category: .ai)
+
+        let chunkSize = maxPagesForImageExtraction * estimatedCharsPerPage
+        var chunks: [String] = []
+        var startIndex = trimmed.startIndex
+
+        while startIndex < trimmed.endIndex {
+            let endIndex = trimmed.index(startIndex, offsetBy: chunkSize, limitedBy: trimmed.endIndex) ?? trimmed.endIndex
+            chunks.append(String(trimmed[startIndex..<endIndex]))
+            startIndex = endIndex
+        }
+
+        var allTranscriptions: [String] = []
+        let totalChunks = chunks.count
+
+        for (index, chunk) in chunks.enumerated() {
+            let chunkNumber = index + 1
+            Logger.info("📄 Processing chunk \(chunkNumber)/\(totalChunks) for verbatim transcription", category: .ai)
+
+            // Update progress if available
+            if let progress {
+                await progress(ExtractionProgressUpdate(
+                    stage: .aiExtraction,
+                    state: .active,
+                    detail: "Transcribing section \(chunkNumber) of \(totalChunks)..."
+                ))
+            }
+
+            let (transcription, chunkIssues) = try await transcribeChunk(
+                chunk,
+                chunkNumber: chunkNumber,
+                totalChunks: totalChunks,
+                facade: facade,
+                modelId: modelId
+            )
+
+            issues.append(contentsOf: chunkIssues)
+
+            if let transcription {
+                allTranscriptions.append(transcription)
+            }
+        }
+
+        if allTranscriptions.isEmpty {
+            return (nil, issues)
+        }
+
+        // Combine all chunks with section markers
+        let combined = allTranscriptions.joined(separator: "\n\n---\n\n")
+        issues.append("verbatim_transcription")
+        if totalChunks > 1 {
+            issues.append("chunked_\(totalChunks)_sections")
+        }
+
+        return (combined, issues)
+    }
+
+    /// Transcribe a single chunk of text verbatim
+    private func transcribeChunk(
+        _ text: String,
+        chunkNumber: Int?,
+        totalChunks: Int?,
+        facade: LLMFacade,
+        modelId: String
+    ) async throws -> (String?, [String]) {
+        var issues: [String] = []
+
+        let chunkContext: String
+        if let num = chunkNumber, let total = totalChunks, total > 1 {
+            chunkContext = " (Section \(num) of \(total))"
+        } else {
+            chunkContext = ""
+        }
+
+        let prompt = """
+You are a document transcription assistant. Your task is to provide a VERBATIM transcription of the provided text\(chunkContext).
+
+Requirements:
+- Transcribe ALL text exactly as written - do not summarize, paraphrase, or condense
+- Preserve the original formatting, structure, and paragraph breaks
+- Maintain headings, bullet points, and lists as they appear
+- Keep the original voice, tone, and word choices intact
+- If there are any unclear or illegible portions, mark them with [unclear]
+- Do not add commentary, analysis, or interpretation
+- Do not omit any content
+
+This is a writing sample that will be used to analyze the author's writing style, so accuracy and completeness are critical.
+
+Text to transcribe:
+```
+\(text)
+```
+
+Return the complete verbatim transcription:
+"""
+
+        do {
+            let transcription = try await callFacadeText(facade: facade, prompt: prompt, modelId: modelId)
+            if transcription.isEmpty {
+                issues.append("llm_failure_empty_response")
+                return (nil, issues)
+            }
+            return (transcription, issues)
+        } catch let error as LLMError {
+            if case .clientError(let message) = error, message.contains("not found") || message.contains("not valid") {
+                onInvalidModelId?(modelId)
+                throw ExtractionError.llmFailed("\(modelId) is not a valid model ID.")
+            }
+            issues.append("llm_failure_\(error.localizedDescription)")
+            return (nil, issues)
+        } catch {
+            issues.append("llm_failure_\(error.localizedDescription)")
+            return (nil, issues)
+        }
+    }
+
+    /// Summarize a large PDF (> 20 pages) using LLM for resume/cover letter preparation
+    private func summarizeLargePDF(_ rawText: String, timeout: TimeInterval?) async throws -> (String?, [String]) {
+        let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return (nil, ["llm_failure_empty_input"])
+        }
+
+        guard let facade = llmFacade else {
+            return (nil, ["llm_failure_not_configured"])
+        }
+
+        let modelId = currentModelId()
+        var issues: [String] = []
+
+        // For large documents, we send the full text without truncation
+        // The LLM will summarize appropriately
+        let prompt = """
+Extract and summarize the content of this PDF to support resume and cover letter drafting for the applicant (me).
+
+Output format: Provide a structured, page-by-page transcription in markdown.
+
+Content handling rules:
+- Text passages: Transcribe verbatim when feasible. For lengthy sections, provide a comprehensive summary that preserves key details, achievements, and distinctive phrasing.
+- Original writing by the applicant (essays, statements, project descriptions): Quote in full or summarize exhaustively—do not omit substantive content.
+- Diagrams, figures, and visual content: Provide a brief description of key elements and their purpose/significance.
+
+Framing: This document is being prepared as source material for my own application materials. Highlight strengths, accomplishments, and distinguishing qualifications. This is not intended as a neutral third-party assessment—advocate for the candidate where the evidence supports it.
+
+When summarizing, include brief qualitative notes on what makes particular achievements or experiences notable (e.g., scope, difficulty, originality, impact).
+
+Document text begins:
+```
+\(trimmed)
+```
+"""
+
+        do {
+            let text = try await callFacadeText(facade: facade, prompt: prompt, modelId: modelId)
+            if text.isEmpty {
+                issues.append("llm_failure_empty_response")
+                return (nil, issues)
+            }
+            issues.append("large_pdf_summarized")
             return (text, issues)
         } catch let error as LLMError {
             if case .clientError(let message) = error, message.contains("not found") || message.contains("not valid") {

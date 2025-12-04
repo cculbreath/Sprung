@@ -60,12 +60,10 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
             return
         }
         await emit(.processingStateChanged(true, statusMessage: "Starting interview..."))
-        // Send user message to trigger conversational response
-        // The system prompt's OPENING SEQUENCE section instructs the LLM to:
-        // 1. Offer a warm welcome message
-        // 2. Immediately invoke get_applicant_profile tool
+
+        // Send user message to trigger agent_ready - the tool response contains welcome preamble instructions
         var payload = JSON()
-        payload["text"].string = "I'm ready to begin."
+        payload["text"].string = "I'm ready to begin. Call agent_ready to receive the interview workflow."
         await emit(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
         Logger.info("📤 Initial user message sent to trigger greeting and get_applicant_profile", category: .ai)
     }

@@ -56,8 +56,11 @@ final class OnboardingUIState {
         }
     }
     func updateTimeline(_ timeline: JSON?) {
+        let oldToken = self.timelineUIChangeToken
         self.skeletonTimeline = timeline
         self.timelineUIChangeToken += 1
+        let cardCount = timeline?["experiences"].array?.count ?? 0
+        Logger.info("📊 OnboardingUIState.updateTimeline: token \(oldToken) → \(self.timelineUIChangeToken), cards=\(cardCount)", category: .ai)
     }
     func updateWizardProgress(step: StateCoordinator.WizardStep, completed: Set<StateCoordinator.WizardStep>) {
         self.wizardStep = step

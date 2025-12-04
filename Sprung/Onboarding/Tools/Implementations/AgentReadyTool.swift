@@ -28,125 +28,58 @@ struct AgentReadyTool: InterviewTool {
     }
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {
-        // Return simple acknowledgment
-        // The "I am ready to begin" message will be sent AFTER the tool response
-        // is delivered to the LLM (handled in ToolExecutionCoordinator)
         var result = JSON()
         result["status"].string = "completed"
         result["content"].string = """
-I am ready to begin. Follow this EXACT sequence ONE STEP AT A TIME:
+Ready. Follow this workflow ONE STEP AT A TIME:
 
-PREAMBLE RULE: Before EVERY tool call, you MUST first output a brief preamble message as assistant text. \
-This preamble appears in the user's chatbox and explains what you're about to do. \
-Never call a tool without first writing preamble text in the same response.
+## Step 1: Profile Intake
+Write welcome preamble: "Welcome! I'm here to help you build a comprehensive, evidence-backed profile of your career. This isn't a test—it's a collaborative session to uncover the great work you've done. We'll use this profile to create perfectly tailored resumes and cover letters later. Let me open your profile card."
+Then call `get_applicant_profile`. STOP and wait for user completion.
 
-STEP 1: Output this preamble as your assistant text, then call `get_applicant_profile`:
-   PREAMBLE: "Welcome! I'm here to help you build a comprehensive, evidence-backed profile of your career. \
-   This isn't a test—it's a collaborative session to uncover the great work you've done. \
-   We'll use this profile to create perfectly tailored resumes and cover letters later. Let me open your profile card."
-   TOOL: `get_applicant_profile` to present the profile intake card.
-   Then STOP. Do not proceed further in this message.
-STEP 2: WAIT for user to complete profile intake. When completed, you will receive a user message indicating completion.
-STEP 3: Process the profile data based on how user provided it:
-   - If user UPLOADED a document: Parse the provided ArtifactRecord to extract contact info, \
-   then call `validate_applicant_profile` for user confirmation.
-   - If user entered data via FORM (contacts import or manual entry): The data arrives already validated. \
-   DO NOT call `validate_applicant_profile`. Acknowledge receipt and proceed to STEP 4.
-STEP 4: After profile is validated and persisted (you'll receive confirmation), \
-call `validated_applicant_profile_data()` to retrieve the persisted profile.
-STEP 5: Check the retrieved profile's `basics.image` field:
-   - If image is present: Acknowledge existing photo, then immediately proceed to STEP 6 (skeleton_timeline) in the SAME message.
-   - If image is empty: Ask user ONLY this question: "Would you like to add a headshot photograph to your résumé profile?"
-   CRITICAL: After asking about photo, STOP your message. DO NOT ask about skeleton_timeline yet.
-   WAIT for user response to photo question:
-     - If user says yes: Call `get_user_upload` with these EXACT parameters:
-       - title: "Upload Headshot"
-       - prompt_to_user: "Please provide a professional quality photograph for inclusion on résumé layouts that require a picture"
-       - target_key: "basics.image" (REQUIRED - saves photo to profile)
-       - target_deliverable: "ApplicantProfile"
-       - target_phase_objectives: ["skeleton_timeline"]
-       - allowed_types: ["jpg", "jpeg", "png"]
-       Then WAIT for upload completion. After upload completes, proceed to STEP 6.
-     - If user says no: Proceed to STEP 6.
-STEP 6: Begin skeleton_timeline workflow.
-   First, check if a resume/CV was already uploaded during the applicant_profile workflow (STEP 3):
-   - If YES (artifact exists): Use that document to extract timeline data and proceed directly to timeline card workflow below.
-   - If NO (no resume artifact): Continue to resume upload step.
-   If no resume exists yet:
-   - Write this as assistant text: "I've opened an upload form for your resume or CV. \
-   If you prefer to skip the upload and build your timeline conversationally instead, you can cancel the form and we'll do it through chat."
-   - Immediately call `get_user_upload` with:
-     - title: "Upload Resume/CV"
-     - prompt_to_user: "Please upload your resume or CV for timeline extraction"
-     - target_phase_objectives: ["skeleton_timeline"]
-   - WAIT for user action:
-     - If they UPLOAD: Extract timeline data and proceed to timeline card workflow
-     - If they SKIP/CANCEL: Begin conversational interview about work history (most recent first)
-   Timeline card workflow (applies to BOTH document extraction AND conversational paths):
-   - Call `display_timeline_entries_for_review` first to activate timeline EDITOR in Tool Pane
-   - For EACH position, call `create_timeline_card` with: title, organization, location, start, end
-   - One card per previous position/role
-   - Cards appear in the editor immediately when created
-   - User can edit, delete, reorder cards and click "Save Timeline" to send changes back to you
-   CRITICAL - TRUST USER EDITS:
-   - When user clicks "Save Timeline" after making changes, ALL edits are PURPOSEFUL and INTENTIONAL
-   - ASSUME deleted cards were meant to be deleted - don't question or ask to restore them
-   - ASSUME modified fields (dates, titles, locations) are corrections - don't second-guess them
-   - ASSUME reordered cards reflect user's preferred chronology
-   - ONLY ask about changes if there's a genuine conflict (e.g., overlapping dates that don't make sense)
-   - DO NOT confirm every single edit - trust the user knows what they want
-   - Simply acknowledge "I've updated the timeline with your changes" and move forward
-   CHATBOX-INITIATED EDITS (when user requests changes via chat):
-   - When user describes changes in the chatbox (e.g., "merge X and Y into one entry", "combine these roles"):
-     1. Call `get_timeline_entries()` to retrieve current cards with their IDs
-     2. Identify which cards need to be merged, split, or modified
-     3. Use `delete_timeline_card(id)` to remove cards being merged/replaced
-     4. Use `create_timeline_card()` to create new combined entries OR `update_timeline_card(id, fields)` to modify
-     5. Confirm changes to user: "I've merged X and Y into a single consulting entry"
-   - DO NOT ask user to make edits manually when they've explicitly asked YOU to make changes
-   - Chat requests = YOU act programmatically. Timeline editor = user edits directly.
-   - Continue refining cards based on user feedback until timeline is complete
-   - When timeline is complete, call `submit_for_validation` with validation_type="skeleton_timeline" to present FINAL APPROVAL UI
-   VALIDATION PHASE:
-   - User sees timeline cards with "Confirm" and "Reject" buttons
-   - User CAN make edits during validation (adding, deleting, modifying cards)
-   - If user makes edits, buttons change to "Submit Changes Only" and "Confirm with Changes"
-   - If user clicks "Submit Changes Only":
-     * Validation prompt closes, conversation resumes
-     * You receive message: "User made changes to the timeline cards and submitted them for review"
-     * This is NORMAL workflow - acknowledge changes, ask clarifying questions if needed
-     * When satisfied, call submit_for_validation again for final approval
-   - If user clicks "Confirm" (no edits) or "Confirm with Changes" (with edits):
-     * Timeline is finalized
-     * Mark skeleton_timeline objective complete
-     * Proceed immediately to STEP 7
-STEP 7: Configure enabled résumé sections.
-   After skeleton_timeline is validated, call `configure_enabled_sections` with these REQUIRED parameters:
-   - proposed_sections: An object mapping section keys to boolean values (REQUIRED)
-   - rationale: Optional explanation for your choices
-   CORRECT FORMAT: configure_enabled_sections({ "proposed_sections": { "work": true, "education": true, "skills": true, "publications": false, "projects": true }, "rationale": "..." })
-   WRONG FORMAT: configure_enabled_sections({ "rationale": "..." }) - MISSING proposed_sections!
-   Section key options: work, education, volunteer, awards, certificates, publications, skills, languages, interests, references, projects
-   - Analyze the user's timeline and any uploaded documents to determine which sections they likely want
-   - Set sections to true if user has provided relevant data or mentioned them
-   - Set sections to false if no data exists for that section
-   - The tool presents a Section Toggle UI where user can confirm/modify your proposal
-   - After user confirms their section selections, the enabled_sections objective is complete
-   - Proceed immediately to STEP 8
-STEP 8: Dossier seed questions and AUTO-TRANSITION to Phase 2.
-   After enabled_sections is confirmed:
-   1. Ask 2–3 quick questions about the user's goals, target roles, and motivations:
-      - "What types of roles are you targeting?" (e.g., software, robotics, aerospace, R&D)
-      - "What kind of work environment energizes you?" (e.g., team-based, hands-on, research)
-   2. For each answer, call persist_data(dataType: 'candidate_dossier_entry', payload: {question, answer, asked_at})
-   3. After collecting answers (or if user wants to skip), mark dossier_seed objective complete
-   4. IMMEDIATELY call `next_phase` to transition to Phase 2
-   CRITICAL: Do NOT wait for user to request Phase 2 transition. This happens AUTOMATICALLY after dossier questions.
-RULES:
-- Process ONE STEP per message cycle
-- NEVER combine the photo question with skeleton_timeline questions
-- WAIT for user response before proceeding to next step
-- DO NOT ask for contact details via chat - use the profile intake card UI
+## Step 2: Process Profile Data
+- UPLOAD path: Parse ArtifactRecord → call `validate_applicant_profile` → wait for validation
+- FORM path (contacts/manual): Data is pre-validated. Acknowledge and continue.
+After validation, call `validated_applicant_profile_data()` to retrieve the persisted profile.
+
+## Step 3: Photo (Optional)
+Check `basics.image` in retrieved profile:
+- If present: Skip to Step 4
+- If empty: Ask "Would you like to add a headshot?" Then STOP and wait.
+  - If yes: Call `get_user_upload` with title="Upload Headshot", target_key="basics.image", allowed_types=["jpg","jpeg","png"]
+  - If no: Continue to Step 4
+
+## Step 4: Resume Upload Offer
+Call `list_artifacts` to check for existing resume. A .vcf does NOT count.
+- If resume exists: Skip to timeline workflow
+- If no resume: Write preamble about opening upload form, call `get_user_upload` with title="Upload Resume/CV", target_phase_objectives=["skeleton_timeline"]. Wait for upload or cancel.
+
+## Step 5: Timeline Editor
+After resume step completes:
+1. Call `display_timeline_entries_for_review` to activate editor
+2. For each position, call `create_timeline_card` with: title, organization, location, start, end
+3. User can edit cards directly; trust their changes without confirming each one
+4. When user requests changes via chat: use get_timeline_entries, then delete/create/update cards programmatically
+5. When complete, call `submit_for_validation(validation_type="skeleton_timeline")`
+
+## Step 6: Enabled Sections
+REQUIRED FORMAT - the proposed_sections object is MANDATORY:
+```json
+{"proposed_sections": {"work": true, "education": true, "skills": true, "projects": true, "publications": false, "awards": false}, "rationale": "optional"}
+```
+Do NOT call with only rationale - that will fail. The proposed_sections object with section keys mapped to boolean values is required.
+Propose sections based on what user mentioned (publications: true if they have papers, awards: false if none mentioned).
+Wait for user confirmation.
+
+## Step 7: Dossier Seed → Phase 2
+Ask 2-3 quick questions about goals/target roles. For each answer, call persist_data(dataType="candidate_dossier_entry").
+Then IMMEDIATELY call `next_phase` to transition to Phase 2. Don't wait for user to request it.
+
+## Rules
+- One step per message cycle
+- Always write preamble before tool calls
+- Wait for user response before proceeding
+- Trust user edits to timeline cards
 """
         result["disable_after_use"].bool = true
         return .immediate(result)

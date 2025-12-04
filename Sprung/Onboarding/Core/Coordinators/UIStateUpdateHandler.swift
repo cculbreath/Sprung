@@ -34,6 +34,9 @@ final class UIStateUpdateHandler {
             handleStateEvent: { [weak self] event in
                 await self?.handleStateSyncEvent(event)
             },
+            handleTimelineEvent: { [weak self] event in
+                await self?.handleTimelineEvent(event)
+            },
             performInitialSync: { [weak self] in
                 await self?.initialStateSync()
             }
@@ -110,6 +113,21 @@ final class UIStateUpdateHandler {
             await syncWizardProgressFromState()
         case .phaseAdvanceRequested:
             break
+        default:
+            break
+        }
+    }
+
+    // MARK: - Timeline Events
+    /// Handle timeline events directly to avoid queuing delays from streamAll()
+    /// This provides immediate UI updates when timeline cards are created/updated/deleted
+    func handleTimelineEvent(_ event: OnboardingEvent) async {
+        switch event {
+        case .timelineUIUpdateNeeded(let timeline):
+            let cardCount = timeline["experiences"].array?.count ?? 0
+            Logger.info("📊 UIStateUpdateHandler: Received timelineUIUpdateNeeded with \(cardCount) cards", category: .ai)
+            ui.updateTimeline(timeline)
+            Logger.info("📊 UIStateUpdateHandler: ui.updateTimeline called, new token=\(ui.timelineUIChangeToken)", category: .ai)
         default:
             break
         }

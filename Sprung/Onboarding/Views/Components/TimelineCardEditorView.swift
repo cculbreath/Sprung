@@ -21,6 +21,10 @@ struct TimelineCardEditorView: View {
     @State private var editingEntries: Set<UUID> = []
     @State private var lastLoadedToken: Int = -1  // Track last loaded version to prevent redundant loads
     var body: some View {
+        // IMPORTANT: Access timelineUIChangeToken in body to establish @Observable tracking
+        // Without this, onChange(of: timelineUIChangeToken) may not fire for LLM updates
+        let _ = coordinator.ui.timelineUIChangeToken
+
         VStack(alignment: .leading, spacing: 12) {
             header
             // Scrollable cards section
@@ -219,18 +223,26 @@ struct TimelineCardEditorView: View {
         errorMessage = nil
     }
     private func saveChanges() {
-        guard hasChanges, !isSaving else { return }
+        Logger.info("💾 saveChanges called: hasChanges=\(hasChanges), isSaving=\(isSaving)", category: .ai)
+        guard hasChanges, !isSaving else {
+            Logger.info("💾 saveChanges guard failed: hasChanges=\(hasChanges), isSaving=\(isSaving)", category: .ai)
+            return
+        }
         let updatedCards = TimelineCardAdapter.cards(from: drafts)
         let diff = TimelineDiffBuilder.diff(original: baselineCards, updated: updatedCards)
+        Logger.info("💾 Diff calculated: isEmpty=\(diff.isEmpty), added=\(diff.added.count), removed=\(diff.removed.count), updated=\(diff.updated.count), reordered=\(diff.reordered)", category: .ai)
         guard diff.isEmpty == false else {
+            Logger.info("💾 saveChanges: diff is empty, skipping", category: .ai)
             hasChanges = false
             errorMessage = nil
             return
         }
         isSaving = true
         errorMessage = nil
+        Logger.info("💾 saveChanges: calling coordinator.applyUserTimelineUpdate with \(updatedCards.count) cards", category: .ai)
         Task { @MainActor in
             await coordinator.applyUserTimelineUpdate(cards: updatedCards, meta: meta, diff: diff)
+            Logger.info("💾 saveChanges: applyUserTimelineUpdate completed", category: .ai)
             await MainActor.run {
                 baselineCards = updatedCards
                 hasChanges = false

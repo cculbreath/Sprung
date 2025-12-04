@@ -65,8 +65,8 @@ actor LLMMessenger: OnboardingEventEmitter {
         // and comes back as llmExecuteDeveloperMessage
         case .llmToolResponseMessage(let payload):
             await sendToolResponse(payload)
-        case .llmExecuteUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText, let bundledDeveloperMessages):
-            await executeUserMessage(payload, isSystemGenerated: isSystemGenerated, chatboxMessageId: chatboxMessageId, originalText: originalText, bundledDeveloperMessages: bundledDeveloperMessages)
+        case .llmExecuteUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText, let bundledDeveloperMessages, let toolChoice):
+            await executeUserMessage(payload, isSystemGenerated: isSystemGenerated, chatboxMessageId: chatboxMessageId, originalText: originalText, bundledDeveloperMessages: bundledDeveloperMessages, toolChoice: toolChoice)
         case .llmExecuteToolResponse(let payload):
             await executeToolResponse(payload)
         case .llmExecuteBatchedToolResponses(let payloads):
@@ -95,11 +95,11 @@ actor LLMMessenger: OnboardingEventEmitter {
             originalText: originalText
         ))
     }
-    private func executeUserMessage(_ payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String? = nil, originalText: String? = nil, bundledDeveloperMessages: [JSON] = []) async {
+    private func executeUserMessage(_ payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String? = nil, originalText: String? = nil, bundledDeveloperMessages: [JSON] = [], toolChoice: String? = nil) async {
         await emit(.llmStatus(status: .busy))
         let text = payload["content"].string ?? payload["text"].stringValue
         do {
-            let request = await buildUserMessageRequest(text: text, isSystemGenerated: isSystemGenerated, bundledDeveloperMessages: bundledDeveloperMessages)
+            let request = await buildUserMessageRequest(text: text, isSystemGenerated: isSystemGenerated, bundledDeveloperMessages: bundledDeveloperMessages, forcedToolChoice: toolChoice)
             let messageId = UUID().uuidString
             await emit(.llmUserMessageSent(messageId: messageId, payload: payload, isSystemGenerated: isSystemGenerated))
             currentStreamTask = Task {
@@ -421,7 +421,7 @@ actor LLMMessenger: OnboardingEventEmitter {
         let validation = await stateCoordinator.pendingValidationPrompt
         return validation?.dataType == "skeleton_timeline"
     }
-    private func buildUserMessageRequest(text: String, isSystemGenerated: Bool, bundledDeveloperMessages: [JSON] = []) async -> ModelResponseParameter {
+    private func buildUserMessageRequest(text: String, isSystemGenerated: Bool, bundledDeveloperMessages: [JSON] = [], forcedToolChoice: String? = nil) async -> ModelResponseParameter {
         let previousResponseId = await contextAssembler.getPreviousResponseId()
         var inputItems: [InputItem] = []
 
@@ -465,7 +465,15 @@ actor LLMMessenger: OnboardingEventEmitter {
             content: .text(text)
         )))
         let tools = await getToolSchemas()
-        let toolChoice = await determineToolChoice(for: text, isSystemGenerated: isSystemGenerated)
+
+        // Use forced tool choice if specified, otherwise determine automatically
+        let toolChoice: ToolChoiceMode
+        if let forcedTool = forcedToolChoice {
+            toolChoice = .functionTool(FunctionTool(name: forcedTool))
+            Logger.info("🎯 Using forced toolChoice: \(forcedTool)", category: .ai)
+        } else {
+            toolChoice = await determineToolChoice(for: text, isSystemGenerated: isSystemGenerated)
+        }
         let modelId = await stateCoordinator.getCurrentModelId()
         var parameters = ModelResponseParameter(
             input: .array(inputItems),

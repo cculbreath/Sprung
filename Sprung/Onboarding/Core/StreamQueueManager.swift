@@ -6,7 +6,7 @@ import SwiftyJSON
 actor StreamQueueManager {
     // MARK: - Types
     enum StreamRequestType {
-        case userMessage(payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String?, originalText: String?, bundledDeveloperMessages: [JSON])
+        case userMessage(payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String?, originalText: String?, bundledDeveloperMessages: [JSON], toolChoice: String?)
         case toolResponse(payload: JSON)
         case batchedToolResponses(payloads: [JSON])
         case developerMessage(payload: JSON)
@@ -176,7 +176,8 @@ actor StreamQueueManager {
         }
     }
     /// Process the stream queue serially
-    /// Priority: tool responses must be sent before developer messages when tool calls are pending
+    /// Priority: tool responses must complete before ANY other messages when tool calls are pending
+    /// This prevents duplicate LLM responses when UI flows send messages during tool execution
     private func processQueue() async {
         while !streamQueue.isEmpty {
             guard !isStreaming else {
@@ -184,11 +185,11 @@ actor StreamQueueManager {
                 return
             }
             // Find the next request to process
-            // Priority: tool responses > user messages > developer messages
-            // Developer messages must wait if tool responses are expected OR being held
+            // Priority: tool responses MUST complete before user or developer messages
+            // This prevents race conditions where user messages trigger LLM turns before tool responses arrive
             let nextIndex: Int
             if expectedToolResponseCount > 0 || hasPendingToolResponse() || !collectedToolResponses.isEmpty {
-                // Tool responses are expected - prioritize them over developer messages
+                // Tool responses are expected - they MUST be processed first
                 if let toolIndex = streamQueue.firstIndex(where: { request in
                     if case .toolResponse = request { return true }
                     if case .batchedToolResponses = request { return true }
@@ -196,18 +197,10 @@ actor StreamQueueManager {
                 }) {
                     nextIndex = toolIndex
                 } else {
-                    // No tool response in queue yet - wait for it before processing developer messages
-                    // But allow user messages to go through
-                    if let userIndex = streamQueue.firstIndex(where: { request in
-                        if case .userMessage = request { return true }
-                        return false
-                    }) {
-                        nextIndex = userIndex
-                    } else {
-                        // Only developer messages in queue - wait for tool responses
-                        Logger.warning("⏸️ Queue has developer message but waiting for tool responses (expectedCount: \(expectedToolResponseCount), held: \(collectedToolResponses.count), callIds: \(expectedToolCallIds))", category: .ai)
-                        return
-                    }
+                    // No tool response in queue yet - wait for it before processing ANY messages
+                    // This prevents duplicate LLM responses from user messages arriving during tool execution
+                    Logger.debug("⏸️ Queue waiting for tool responses (expectedCount: \(expectedToolResponseCount), held: \(collectedToolResponses.count), queue: \(streamQueue.count))", category: .ai)
+                    return
                 }
             } else {
                 // No pending tool calls - process in FIFO order
@@ -232,13 +225,14 @@ actor StreamQueueManager {
     /// Emit the appropriate stream request event for LLMMessenger to handle
     private func emitStreamRequest(_ requestType: StreamRequestType) async {
         switch requestType {
-        case .userMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText, let bundledDeveloperMessages):
+        case .userMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText, let bundledDeveloperMessages, let toolChoice):
             await eventBus.publish(.llmExecuteUserMessage(
                 payload: payload,
                 isSystemGenerated: isSystemGenerated,
                 chatboxMessageId: chatboxMessageId,
                 originalText: originalText,
-                bundledDeveloperMessages: bundledDeveloperMessages
+                bundledDeveloperMessages: bundledDeveloperMessages,
+                toolChoice: toolChoice
             ))
         case .toolResponse(let payload):
             await eventBus.publish(.llmExecuteToolResponse(payload: payload))

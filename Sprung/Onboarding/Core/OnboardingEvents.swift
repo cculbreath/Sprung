@@ -70,6 +70,10 @@ enum OnboardingEvent {
     case knowledgeCardPersisted(card: JSON) // emitted when a knowledge card is approved and persisted
     case knowledgeCardsReplaced(cards: [JSON]) // emitted when persisted knowledge cards replace in-memory state
 
+    // MARK: - Phase 3 Operations
+    case writingSamplePersisted(sample: JSON) // emitted when a writing sample is persisted
+    case candidateDossierPersisted(dossier: JSON) // emitted when final candidate dossier is persisted
+
     // MARK: - Knowledge Card Workflow (event-driven coordination)
     case knowledgeCardDoneButtonClicked(itemId: String?) // UI emits when user clicks "Done with this card"
     case knowledgeCardSubmissionPending(card: JSON) // Tool emits when card submitted for approval
@@ -346,7 +350,8 @@ actor EventCoordinator {
              .knowledgeCardDoneButtonClicked, .knowledgeCardSubmissionPending,
              .knowledgeCardAutoPersistRequested, .knowledgeCardAutoPersisted,
              .toolGatingRequested, .planItemStatusChangeRequested,
-             .draftKnowledgeCardProduced, .draftKnowledgeCardUpdated, .draftKnowledgeCardRemoved:
+             .draftKnowledgeCardProduced, .draftKnowledgeCardUpdated, .draftKnowledgeCardRemoved,
+             .writingSamplePersisted, .candidateDossierPersisted:
             return .artifact
         // Evidence Requirements (treated as state/objectives)
         case .evidenceRequirementAdded, .evidenceRequirementUpdated, .evidenceRequirementRemoved:
@@ -476,6 +481,10 @@ actor EventCoordinator {
             description = "Knowledge card persisted: \(card["title"].stringValue)"
         case .knowledgeCardsReplaced(let cards):
             description = "Knowledge cards replaced (\(cards.count))"
+        case .writingSamplePersisted(let sample):
+            description = "Writing sample persisted: \(sample["name"].stringValue)"
+        case .candidateDossierPersisted:
+            description = "Candidate dossier persisted"
         case .knowledgeCardDoneButtonClicked(let itemId):
             description = "Knowledge card done button clicked: \(itemId ?? "no item")"
         case .knowledgeCardSubmissionPending(let card):

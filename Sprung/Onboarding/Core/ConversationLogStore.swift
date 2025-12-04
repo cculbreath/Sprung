@@ -74,7 +74,8 @@ final class ConversationLogStore {
             addEntry(type: .user, content: "Message added to chatbox", metadata: ["messageId": String(messageId.prefix(8))])
 
         case .llmUserMessageSent(let messageId, let payload, let isSystemGenerated):
-            let text = payload["text"].stringValue
+            // Check both "text" and "content" keys - different code paths use different keys
+            let text = payload["text"].string ?? payload["content"].stringValue
             let truncated = text.count > 200 ? String(text.prefix(200)) + "..." : text
             let source = isSystemGenerated ? "system" : "user"
             addEntry(type: .user, content: truncated, metadata: ["source": source, "messageId": String(messageId.prefix(8))])

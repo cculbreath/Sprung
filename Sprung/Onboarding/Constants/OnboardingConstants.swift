@@ -39,6 +39,10 @@ enum OnboardingToolName: String, CaseIterable {
     case submitKnowledgeCard = "submit_knowledge_card"
     case persistData = "persist_data"
     case setObjectiveStatus = "set_objective_status"
+
+    // Phase 3 Tools
+    case startPhaseThree = "start_phase_three"
+    case ingestWritingSample = "ingest_writing_sample"
 }
 // MARK: - Objective IDs
 /// All objective IDs used in the onboarding interview flow.
@@ -96,6 +100,8 @@ enum OnboardingDataType: String, CaseIterable {
     case writingSample = "writing_sample"
     case candidateDossier = "candidate_dossier"
     case candidateDossierEntry = "candidate_dossier_entry"
+    case experienceDefaults = "experience_defaults"
+    case enabledSections = "enabled_sections"
 }
 // MARK: - Convenience Extensions
 extension OnboardingToolName {

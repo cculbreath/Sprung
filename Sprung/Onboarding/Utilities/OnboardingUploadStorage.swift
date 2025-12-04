@@ -37,15 +37,34 @@ struct OnboardingUploadStorage {
         uploadsDirectory = directory
     }
     func processFile(at sourceURL: URL) throws -> OnboardingProcessedUpload {
+        Logger.info("📦 [TRACE] processFile called for: \(sourceURL.lastPathComponent)", category: .ai)
         let identifier = UUID().uuidString
         let destinationFilename = "\(identifier)_\(sourceURL.lastPathComponent)"
         let destinationURL = uploadsDirectory.appendingPathComponent(destinationFilename)
+        Logger.info("📦 [TRACE] destination: \(destinationURL.path)", category: .ai)
+
+        // Start accessing security-scoped resource (required for files from NSOpenPanel in sandboxed apps)
+        Logger.info("📦 [TRACE] About to call startAccessingSecurityScopedResource", category: .ai)
+        let didStartAccessing = sourceURL.startAccessingSecurityScopedResource()
+        Logger.info("📦 [TRACE] startAccessingSecurityScopedResource returned: \(didStartAccessing)", category: .ai)
+        defer {
+            if didStartAccessing {
+                Logger.info("📦 [TRACE] Calling stopAccessingSecurityScopedResource", category: .ai)
+                sourceURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
         do {
+            Logger.info("📦 [TRACE] Checking if destination exists", category: .ai)
             if fileManager.fileExists(atPath: destinationURL.path) {
+                Logger.info("📦 [TRACE] Removing existing file at destination", category: .ai)
                 try fileManager.removeItem(at: destinationURL)
             }
+            Logger.info("📦 [TRACE] About to copy file", category: .ai)
             try fileManager.copyItem(at: sourceURL, to: destinationURL)
+            Logger.info("📦 [TRACE] File copy completed successfully", category: .ai)
         } catch {
+            Logger.error("📦 [TRACE] File copy failed: \(error.localizedDescription)", category: .ai)
             throw ToolError.executionFailed("Failed to store uploaded file: \(error.localizedDescription)")
         }
         return OnboardingProcessedUpload(
