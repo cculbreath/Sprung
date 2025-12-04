@@ -1,7 +1,26 @@
 import Foundation
 import SwiftyJSON
+
+/// Experience type for timeline cards
+enum ExperienceType: String, Codable, CaseIterable {
+    case work
+    case education
+    case volunteer
+    case project
+
+    var displayName: String {
+        switch self {
+        case .work: return "Work"
+        case .education: return "Education"
+        case .volunteer: return "Volunteer"
+        case .project: return "Project"
+        }
+    }
+}
+
 struct TimelineCard: Identifiable, Equatable {
     var id: String
+    var experienceType: ExperienceType
     var title: String
     var organization: String
     var location: String
@@ -11,6 +30,7 @@ struct TimelineCard: Identifiable, Equatable {
     var highlights: [String]
     init(
         id: String = UUID().uuidString,
+        experienceType: ExperienceType = .work,
         title: String = "",
         organization: String = "",
         location: String = "",
@@ -20,6 +40,7 @@ struct TimelineCard: Identifiable, Equatable {
         highlights: [String] = []
     ) {
         self.id = id
+        self.experienceType = experienceType
         self.title = title
         self.organization = organization
         self.location = location
@@ -34,6 +55,7 @@ struct TimelineCard: Identifiable, Equatable {
             return nil
         }
         id = resolvedId
+        experienceType = ExperienceType(rawValue: json["experience_type"].stringValue) ?? .work
         title = json["title"].stringValue
         organization = json["organization"].stringValue
         location = json["location"].stringValue
@@ -47,6 +69,7 @@ struct TimelineCard: Identifiable, Equatable {
     }
     init(id: String = UUID().uuidString, fields: JSON) {
         self.id = id
+        experienceType = ExperienceType(rawValue: fields["experience_type"].stringValue) ?? .work
         title = fields["title"].stringValue
         organization = fields["organization"].stringValue
         location = fields["location"].stringValue
@@ -59,8 +82,15 @@ struct TimelineCard: Identifiable, Equatable {
         }
     }
     func applying(fields: JSON) -> TimelineCard {
-        TimelineCard(
+        let newType: ExperienceType
+        if let typeString = fields["experience_type"].string {
+            newType = ExperienceType(rawValue: typeString) ?? experienceType
+        } else {
+            newType = experienceType
+        }
+        return TimelineCard(
             id: id,
+            experienceType: newType,
             title: fields["title"].string ?? title,
             organization: fields["organization"].string ?? organization,
             location: fields["location"].string ?? location,
@@ -78,6 +108,7 @@ struct TimelineCard: Identifiable, Equatable {
     var json: JSON {
         var payload = JSON()
         payload["id"].string = id
+        payload["experience_type"].string = experienceType.rawValue
         payload["title"].string = title
         payload["organization"].string = organization
         payload["location"].string = location
