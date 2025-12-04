@@ -203,39 +203,42 @@ struct OnboardingInterviewToolPane: View {
     private func summaryContent() -> some View {
         switch coordinator.ui.phase {
         case .phase2DeepDive:
-            ScrollView {
-                VStack(spacing: 12) {
-                    // Persistent upload drop zone - above knowledge card list for visibility
-                    PersistentUploadDropZone(
-                        onDropFiles: { urls in
-                            Task {
-                                await coordinator.uploadFilesDirectly(urls)
-                            }
-                        },
-                        onSelectFiles: {
-                            openDirectUploadPanel()
-                        },
-                        onSelectGitRepo: { repoURL in
-                            Task {
-                                await coordinator.startGitRepoAnalysis(repoURL)
-                            }
+            VStack(spacing: 12) {
+                // Persistent upload drop zone - above tabs for visibility
+                PersistentUploadDropZone(
+                    onDropFiles: { urls in
+                        Task {
+                            await coordinator.uploadFilesDirectly(urls)
                         }
-                    )
+                    },
+                    onSelectFiles: {
+                        openDirectUploadPanel()
+                    },
+                    onSelectGitRepo: { repoURL in
+                        Task {
+                            await coordinator.startGitRepoAnalysis(repoURL)
+                        }
+                    }
+                )
 
-                    // Knowledge card collection UI with todo list
-                    KnowledgeCardCollectionView(
-                        coordinator: coordinator,
-                        onDoneWithCard: { itemId in
-                            Task {
-                                // Emit event for handler to process
-                                await coordinator.eventBus.publish(.knowledgeCardDoneButtonClicked(itemId: itemId))
-                            }
+                // Knowledge card collection UI with todo list and done button
+                KnowledgeCardCollectionView(
+                    coordinator: coordinator,
+                    onDoneWithCard: { itemId in
+                        Task {
+                            // Emit event for handler to process
+                            await coordinator.eventBus.publish(.knowledgeCardDoneButtonClicked(itemId: itemId))
                         }
-                    )
-                }
+                    }
+                )
+
+                Divider()
+
+                // Tabbed view for browsing all collected data
+                ToolPaneTabsView(coordinator: coordinator)
             }
         case .phase3WritingCorpus:
-            ScrollView {
+            VStack(spacing: 12) {
                 WritingCorpusCollectionView(
                     coordinator: coordinator,
                     onDropFiles: { urls in
@@ -257,9 +260,15 @@ struct OnboardingInterviewToolPane: View {
                         }
                     }
                 )
+
+                Divider()
+
+                // Tabbed view for browsing all collected data
+                ToolPaneTabsView(coordinator: coordinator)
             }
         default:
-            Spacer()
+            // Show tabs in all other phases for data visibility
+            ToolPaneTabsView(coordinator: coordinator)
         }
     }
 
