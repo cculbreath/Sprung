@@ -120,6 +120,7 @@ final class OnboardingDependencyContainer {
     private let applicantProfileStore: ApplicantProfileStore
     private let resRefStore: ResRefStore
     private let coverRefStore: CoverRefStore
+    private let experienceDefaultsStore: ExperienceDefaultsStore
     let sessionStore: OnboardingSessionStore
     private let dataStore: InterviewDataStore
     let documentExtractionService: DocumentExtractionService
@@ -142,6 +143,7 @@ final class OnboardingDependencyContainer {
         applicantProfileStore: ApplicantProfileStore,
         resRefStore: ResRefStore,
         coverRefStore: CoverRefStore,
+        experienceDefaultsStore: ExperienceDefaultsStore,
         sessionStore: OnboardingSessionStore,
         dataStore: InterviewDataStore,
         preferences: OnboardingPreferences
@@ -153,6 +155,7 @@ final class OnboardingDependencyContainer {
         self.applicantProfileStore = applicantProfileStore
         self.resRefStore = resRefStore
         self.coverRefStore = coverRefStore
+        self.experienceDefaultsStore = experienceDefaultsStore
         self.sessionStore = sessionStore
         self.dataStore = dataStore
 
@@ -418,6 +421,7 @@ final class OnboardingDependencyContainer {
             applicantProfileStore: applicantProfileStore,
             resRefStore: resRefStore,
             coverRefStore: coverRefStore,
+            experienceDefaultsStore: experienceDefaultsStore,
             eventBus: eventBus,
             dataStore: dataStore,
             coordinator: coordinator

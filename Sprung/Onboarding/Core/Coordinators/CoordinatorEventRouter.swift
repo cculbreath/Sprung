@@ -11,6 +11,7 @@ final class CoordinatorEventRouter {
     private let applicantProfileStore: ApplicantProfileStore
     private let resRefStore: ResRefStore
     private let coverRefStore: CoverRefStore
+    private let experienceDefaultsStore: ExperienceDefaultsStore
     private let eventBus: EventCoordinator
     private let dataStore: InterviewDataStore
     // Weak reference to the parent coordinator to delegate specific actions back if needed
@@ -28,6 +29,7 @@ final class CoordinatorEventRouter {
         applicantProfileStore: ApplicantProfileStore,
         resRefStore: ResRefStore,
         coverRefStore: CoverRefStore,
+        experienceDefaultsStore: ExperienceDefaultsStore,
         eventBus: EventCoordinator,
         dataStore: InterviewDataStore,
         coordinator: OnboardingInterviewCoordinator
@@ -39,6 +41,7 @@ final class CoordinatorEventRouter {
         self.applicantProfileStore = applicantProfileStore
         self.resRefStore = resRefStore
         self.coverRefStore = coverRefStore
+        self.experienceDefaultsStore = experienceDefaultsStore
         self.eventBus = eventBus
         self.dataStore = dataStore
         self.coordinator = coordinator
@@ -123,9 +126,10 @@ final class CoordinatorEventRouter {
             if let phase = InterviewPhase(rawValue: phaseName) {
                 ui.phase = phase
                 Logger.info("📊 CoordinatorEventRouter: UI phase updated to \(phase.rawValue)", category: .ai)
-                // Persist writing corpus when transitioning to complete
+                // Persist data when transitioning to complete
                 if phase == .complete {
                     await persistWritingCorpusOnComplete()
+                    await propagateExperienceDefaults()
                 }
             } else {
                 Logger.warning("📊 CoordinatorEventRouter: Could not convert phaseName '\(phaseName)' to InterviewPhase", category: .ai)
@@ -353,5 +357,117 @@ final class CoordinatorEventRouter {
 
         coverRefStore.addCoverRef(coverRef)
         Logger.info("💾 Candidate dossier persisted to CoverRef: \(name)", category: .ai)
+    }
+
+    // MARK: - Experience Defaults Propagation
+
+    /// Propagate timeline cards to ExperienceDefaults when interview completes
+    private func propagateExperienceDefaults() async {
+        Logger.info("📋 Propagating timeline cards to ExperienceDefaults", category: .ai)
+
+        guard let timeline = ui.skeletonTimeline,
+              let experiences = timeline["experiences"].array else {
+            Logger.warning("⚠️ No timeline experiences to propagate", category: .ai)
+            return
+        }
+
+        // Load current draft
+        var draft = experienceDefaultsStore.loadDraft()
+
+        // Process each timeline card based on experience_type
+        for card in experiences {
+            let experienceType = card["experience_type"].string ?? "work"
+
+            switch experienceType {
+            case "work":
+                let workDraft = createWorkExperienceDraft(from: card)
+                draft.work.append(workDraft)
+                draft.isWorkEnabled = true
+
+            case "education":
+                let eduDraft = createEducationDraft(from: card)
+                draft.education.append(eduDraft)
+                draft.isEducationEnabled = true
+
+            case "volunteer":
+                let volDraft = createVolunteerDraft(from: card)
+                draft.volunteer.append(volDraft)
+                draft.isVolunteerEnabled = true
+
+            case "project":
+                let projDraft = createProjectDraft(from: card)
+                draft.projects.append(projDraft)
+                draft.isProjectsEnabled = true
+
+            default:
+                // Default to work experience
+                let workDraft = createWorkExperienceDraft(from: card)
+                draft.work.append(workDraft)
+                draft.isWorkEnabled = true
+            }
+        }
+
+        // Save the draft
+        experienceDefaultsStore.save(draft: draft)
+        Logger.info("✅ Propagated \(experiences.count) timeline cards to ExperienceDefaults", category: .ai)
+    }
+
+    private func createWorkExperienceDraft(from card: JSON) -> WorkExperienceDraft {
+        var draft = WorkExperienceDraft()
+        draft.name = card["organization"].stringValue
+        draft.position = card["title"].stringValue
+        draft.location = card["location"].stringValue
+        draft.url = card["url"].stringValue
+        draft.startDate = card["start"].stringValue
+        draft.endDate = card["end"].stringValue
+        draft.summary = card["summary"].stringValue
+        draft.highlights = card["highlights"].arrayValue.map { highlight in
+            var h = HighlightDraft()
+            h.text = highlight.stringValue
+            return h
+        }
+        return draft
+    }
+
+    private func createEducationDraft(from card: JSON) -> EducationExperienceDraft {
+        var draft = EducationExperienceDraft()
+        draft.institution = card["organization"].stringValue
+        draft.url = card["url"].stringValue
+        draft.area = card["title"].stringValue
+        draft.startDate = card["start"].stringValue
+        draft.endDate = card["end"].stringValue
+        return draft
+    }
+
+    private func createVolunteerDraft(from card: JSON) -> VolunteerExperienceDraft {
+        var draft = VolunteerExperienceDraft()
+        draft.organization = card["organization"].stringValue
+        draft.position = card["title"].stringValue
+        draft.url = card["url"].stringValue
+        draft.startDate = card["start"].stringValue
+        draft.endDate = card["end"].stringValue
+        draft.summary = card["summary"].stringValue
+        draft.highlights = card["highlights"].arrayValue.map { highlight in
+            var h = VolunteerHighlightDraft()
+            h.text = highlight.stringValue
+            return h
+        }
+        return draft
+    }
+
+    private func createProjectDraft(from card: JSON) -> ProjectExperienceDraft {
+        var draft = ProjectExperienceDraft()
+        draft.name = card["title"].stringValue
+        draft.description = card["summary"].stringValue
+        draft.startDate = card["start"].stringValue
+        draft.endDate = card["end"].stringValue
+        draft.url = card["url"].stringValue
+        draft.organization = card["organization"].stringValue
+        draft.highlights = card["highlights"].arrayValue.map { highlight in
+            var h = ProjectHighlightDraft()
+            h.text = highlight.stringValue
+            return h
+        }
+        return draft
     }
 }

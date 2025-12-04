@@ -140,6 +140,7 @@ final class AppDependencies {
             applicantProfileStore: applicantProfileStore,
             resRefStore: resRefStore,
             coverRefStore: coverRefStore,
+            experienceDefaultsStore: experienceDefaultsStore,
             sessionStore: onboardingSessionStore,
             dataStore: interviewDataStore,
             preferences: preferences

@@ -7,6 +7,11 @@ struct CreateTimelineCardTool: InterviewTool {
             type: .object,
             description: "Timeline card fields mapping to JSON Resume work entry schema. Phase 1 skeleton entries contain only basic facts (who, what, where, when) - no descriptions or highlights.",
             properties: [
+                "experience_type": JSONSchema(
+                    type: .string,
+                    description: "Type of experience: 'work', 'education', 'volunteer', 'project'. Defaults to 'work' if not specified.",
+                    enum: ["work", "education", "volunteer", "project"]
+                ),
                 "title": JSONSchema(
                     type: .string,
                     description: "Position or role title (e.g., 'Senior Software Engineer', 'Graduate Student')"
@@ -67,10 +72,12 @@ struct CreateTimelineCardTool: InterviewTool {
         return .immediate(result)
     }
     /// Normalizes timeline card fields to enforce Phase 1 skeleton-only constraints.
-    /// Keeps only: title, organization, location, start, end, url
+    /// Keeps only: experience_type, title, organization, location, start, end, url
     /// Validates ISO 8601 date strings and drops summary/highlights.
     private func normalizePhaseOneFields(_ fields: JSON) throws -> JSON {
         var normalized = JSON()
+        // Keep experience type (defaults to "work" if not specified)
+        normalized["experience_type"].string = fields["experience_type"].string ?? "work"
         // Keep allowed Phase 1 fields
         if let title = fields["title"].string {
             normalized["title"].string = title
