@@ -78,15 +78,22 @@ extension OnboardingEvent {
     }
 
     /// Create an artifact completed event
+    /// Uses llmSendUserMessage (not developer) so it flows through without being queued
+    /// behind pending UI tools. This ensures artifact completion triggers LLM processing.
     static func artifactIngestionCompleted(result: IngestionResult, planItemId: String?) -> OnboardingEvent {
         var payload = JSON()
-        payload["type"].string = "artifact_ready"
+        // Build message text (no chatbox tags - this is system-generated)
+        var messageText = "Artifact ready: \(result.artifactId)"
+        if let planItemId = planItemId {
+            messageText += " (plan_item_id: \(planItemId))"
+        }
+        messageText += ". Source: \(result.source.rawValue). Use list_artifacts to see details."
+        payload["text"].string = messageText
         payload["artifact_id"].string = result.artifactId
         payload["source"].string = result.source.rawValue
         if let planItemId = planItemId {
             payload["plan_item_id"].string = planItemId
         }
-        payload["message"].string = "Artifact ready. Use list_artifacts to see details."
-        return .llmSendDeveloperMessage(payload: payload)
+        return .llmSendUserMessage(payload: payload, isSystemGenerated: true)
     }
 }
