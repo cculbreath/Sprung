@@ -156,7 +156,7 @@ struct OnboardingInterviewToolPane: View {
         }
         .padding(.vertical, 24)
         .padding(.horizontal, 24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .overlay {
             ZStack {
                 if let extraction = coordinator.ui.pendingExtraction {
