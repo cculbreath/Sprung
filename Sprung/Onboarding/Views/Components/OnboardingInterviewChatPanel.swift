@@ -2,16 +2,24 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 /// ViewModifier to conditionally apply intelligence glow effect when processing,
-/// or drop shadow when idle
+/// or drop shadow when idle. Uses opacity transitions to preserve scroll position.
 private struct ConditionalIntelligenceGlow<S: InsettableShape>: ViewModifier {
     let isActive: Bool
     let shape: S
     func body(content: Content) -> some View {
-        if isActive {
-            content.intelligenceOverlay(in: shape)
-        } else {
-            content.shadow(color: Color.black.opacity(0.18), radius: 20, y: 16)
-        }
+        // Always apply both effects with opacity control to preserve view identity
+        // and prevent scroll position reset when toggling states
+        content
+            .shadow(
+                color: Color.black.opacity(isActive ? 0 : 0.18),
+                radius: 20,
+                y: 16
+            )
+            .overlay {
+                shape.intelligenceStroke()
+                    .opacity(isActive ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.3), value: isActive)
+            }
     }
 }
 struct OnboardingInterviewChatPanel: View {
