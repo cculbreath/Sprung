@@ -13,7 +13,7 @@ struct SubmitForValidationTool: InterviewTool {
             "validation_type": JSONSchema(
                 type: .string,
                 description: "Type of data being validated. Each type presents specialized validation UI.",
-                enum: ["applicant_profile", "skeleton_timeline", "enabled_sections", "knowledge_card"]
+                enum: ["applicant_profile", "skeleton_timeline", "enabled_sections", "knowledge_card", "candidate_dossier"]
             ),
             "data": JSONSchema(
                 type: .object,
@@ -59,6 +59,10 @@ struct SubmitForValidationTool: InterviewTool {
                 - applicant_profile: Contact info validation (no editing during validation)
                 - skeleton_timeline: Timeline cards final approval with optional editing. Data is auto-fetched from current timeline state.
                 - enabled_sections: Resume sections confirmation (no editing during validation)
+                Phase 2 validation_types:
+                - knowledge_card: Knowledge card approval
+                Phase 3 validation_types:
+                - candidate_dossier: Final dossier review with writing samples, knowledge cards, and profile summary
                 IMPORTANT FOR TIMELINE: Call display_timeline_entries_for_review FIRST (opens editor), let user edit/save, \
                 THEN call submit_for_validation(validation_type="skeleton_timeline", summary="...", data={}) for final approval. \
                 The current timeline data will be automatically retrieved.
@@ -110,7 +114,7 @@ private struct ValidationPayload {
         guard let type = json["validation_type"].string, !type.isEmpty else {
             throw ToolError.invalidParameters("validation_type must be provided")
         }
-        let validTypes = ["applicant_profile", "skeleton_timeline", "enabled_sections", "knowledge_card"]
+        let validTypes = ["applicant_profile", "skeleton_timeline", "enabled_sections", "knowledge_card", "candidate_dossier"]
         guard validTypes.contains(type) else {
             throw ToolError.invalidParameters("validation_type must be one of: \(validTypes.joined(separator: ", "))")
         }

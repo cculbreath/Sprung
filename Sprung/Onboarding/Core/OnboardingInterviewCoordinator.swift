@@ -430,6 +430,11 @@ final class OnboardingInterviewCoordinator {
     func uploadFilesDirectly(_ fileURLs: [URL]) async {
         await uiResponseCoordinator.uploadFilesDirectly(fileURLs)
     }
+
+    /// Uploads writing samples for Phase 3 with verbatim transcription
+    func uploadWritingSamples(_ fileURLs: [URL]) async {
+        await uiResponseCoordinator.uploadWritingSamples(fileURLs)
+    }
     func submitValidationAndResume(
         status: String,
         updatedData: JSON?,

@@ -67,8 +67,17 @@ final class InterviewLifecycleController {
         let baseDeveloperMessage = phaseRegistry.buildSystemPrompt(for: phase)
         let orchestrator = makeOrchestrator(service: service, baseDeveloperMessage: baseDeveloperMessage)
         self.orchestrator = orchestrator
+
+        // Publish phase transition BEFORE orchestrator sends initial message
+        // This ensures the phase intro (with toolChoice=agent_ready) is queued
+        // and can be bundled with the initial "I'm ready to begin" user message
+        if !isResuming {
+            await eventBus.publish(.phaseTransitionApplied(phase: phase.rawValue, timestamp: Date()))
+        }
+
         // Initialize orchestrator with resume flag
         // Now safe to send initial message - StateCoordinator is already subscribed
+        // and phase intro is already queued for bundling
         do {
             try await orchestrator.startInterview(isResuming: isResuming)
         } catch {
@@ -100,13 +109,8 @@ final class InterviewLifecycleController {
         )
         transcriptPersistenceHandler = transcriptHandler
         await transcriptHandler.start()
-        // Send phase introductory prompt for the current phase (only if not resuming)
-        // This sends the phase-specific instructions as a developer message,
-        // followed by "I am ready to begin" as a user message to trigger the conversation
-        if !isResuming {
-            let currentPhase = await state.phase
-            await eventBus.publish(.phaseTransitionApplied(phase: currentPhase.rawValue, timestamp: Date()))
-        }
+        // Note: Phase transition is published earlier in this function (before orchestrator starts)
+        // so that the phase intro can be bundled with the initial "I'm ready to begin" message
         return true
     }
     func updateOpenAIService(_ service: OpenAIService?) {
@@ -188,6 +192,16 @@ final class InterviewLifecycleController {
             }
         }
         stateUpdateTasks.append(stateTask)
+        // Timeline topic - separate stream for immediate UI updates
+        // This avoids the congested streamAll() queue
+        let timelineTask = Task { [weak self] in
+            guard let self else { return }
+            for await event in await self.eventBus.stream(topic: .timeline) {
+                if Task.isCancelled { break }
+                await handlers.handleTimelineEvent(event)
+            }
+        }
+        stateUpdateTasks.append(timelineTask)
         Task {
             await handlers.performInitialSync()
         }
@@ -212,5 +226,6 @@ struct StateUpdateHandlers {
     let handleArtifactEvent: (OnboardingEvent) async -> Void
     let handleLLMEvent: (OnboardingEvent) async -> Void
     let handleStateEvent: (OnboardingEvent) async -> Void
+    let handleTimelineEvent: (OnboardingEvent) async -> Void
     let performInitialSync: () async -> Void
 }

@@ -25,6 +25,7 @@ struct OnboardingInterviewChatPanel: View {
     @State private var composerHeight: CGFloat = ChatComposerTextView.minimumHeight
     @State private var isStreamingMessage = false
     @State private var showMessageFailedAlert = false
+    @State private var lastStreamingContentLength: Int = 0
     var body: some View {
         let horizontalPadding: CGFloat = 32
         let topPadding: CGFloat = 28
@@ -173,6 +174,7 @@ struct OnboardingInterviewChatPanel: View {
             if oldValue == true && newValue == false && isStreamingMessage {
                 // LLM message was finalized, scroll to bottom
                 isStreamingMessage = false
+                lastStreamingContentLength = 0
                 Task { @MainActor in
                     try? await Task.sleep(for: .milliseconds(100))
                     withAnimation(.easeInOut(duration: 0.3)) {
@@ -180,9 +182,29 @@ struct OnboardingInterviewChatPanel: View {
                     }
                     state.shouldAutoScroll = true
                 }
-            } else if newValue == true {
-                // Processing started, might be streaming
+            } else if oldValue == false && newValue == true {
+                // Processing started - scroll to bottom if auto-scroll is enabled
                 isStreamingMessage = true
+                lastStreamingContentLength = 0
+                if state.shouldAutoScroll {
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(50))
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            proxy.scrollTo("bottom", anchor: .bottom)
+                        }
+                    }
+                }
+            }
+        }
+        // Track streaming message content changes for auto-scroll during streaming
+        .onChange(of: streamingMessageContentLength) { _, newLength in
+            // Only auto-scroll if streaming and user hasn't scrolled away
+            if isStreamingMessage && state.shouldAutoScroll && newLength > lastStreamingContentLength {
+                lastStreamingContentLength = newLength
+                // Scroll to bottom on content updates
+                withAnimation(.easeInOut(duration: 0.1)) {
+                    proxy.scrollTo("bottom", anchor: .bottom)
+                }
             }
         }
         .onAppear {
@@ -267,6 +289,15 @@ struct OnboardingInterviewChatPanel: View {
         withAnimation(.easeInOut(duration: 0.3)) {
             proxy.scrollTo("bottom", anchor: .bottom)
         }
+    }
+
+    /// Track the content length of the last assistant message for streaming scroll updates
+    private var streamingMessageContentLength: Int {
+        guard let lastMessage = coordinator.ui.messages.last,
+              lastMessage.role == .assistant else {
+            return 0
+        }
+        return lastMessage.text.count
     }
     private func exportTranscript() {
         let panel = NSSavePanel()

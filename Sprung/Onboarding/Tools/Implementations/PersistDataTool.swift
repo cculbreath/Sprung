@@ -21,6 +21,8 @@ struct PersistDataTool: InterviewTool {
                     - enabled_sections: Alternative format for enabled sections (array of section names)
                     - candidate_dossier_entry: Single Q&A entry for dossier seed (requires: question, answer, asked_at)
                     - knowledge_card: Deep dive expertise card from Phase 2
+                    - writing_sample: Writing sample with style analysis notes (Phase 3)
+                    - candidate_dossier: Final compiled candidate dossier (Phase 3)
                     """,
                 enum: [
                     "applicant_profile",
@@ -28,7 +30,9 @@ struct PersistDataTool: InterviewTool {
                     "experience_defaults",
                     "enabled_sections",
                     "candidate_dossier_entry",
-                    "knowledge_card"
+                    "knowledge_card",
+                    "writing_sample",
+                    "candidate_dossier"
                 ]
             ),
             "data": JSONSchema(
@@ -45,7 +49,8 @@ struct PersistDataTool: InterviewTool {
                 RETURNS: { "persisted": { "id": "<uuid>", "type": "<dataType>", "status": "created" } }
                 USAGE: Call after submit_for_validation returns user_validated status, or when persisting incremental data like candidate_dossier_entry.
                 Phase 1 dataTypes: applicant_profile, skeleton_timeline, experience_defaults, candidate_dossier_entry
-                Phase 2+ dataTypes: knowledge_card
+                Phase 2 dataTypes: knowledge_card
+                Phase 3 dataTypes: writing_sample, candidate_dossier
                 ERROR: Will fail if dataType is not in the enum or if required fields are missing from payload.
                 """,
             properties: properties,
@@ -111,6 +116,14 @@ struct PersistDataTool: InterviewTool {
             // Optional: emit knowledge card persisted event
             await eventBus.publish(.knowledgeCardPersisted(card: payload))
             Logger.info("📤 Emitted .knowledgeCardPersisted event", category: .ai)
+        case "writing_sample":
+            // Emit writing sample persisted event
+            await eventBus.publish(.writingSamplePersisted(sample: payload))
+            Logger.info("📤 Emitted .writingSamplePersisted event", category: .ai)
+        case "candidate_dossier":
+            // Emit candidate dossier persisted event
+            await eventBus.publish(.candidateDossierPersisted(dossier: payload))
+            Logger.info("📤 Emitted .candidateDossierPersisted event", category: .ai)
         default:
             // Other data types don't trigger state events
             Logger.debug("💾 Persisted \(dataType) (no domain event)", category: .ai)

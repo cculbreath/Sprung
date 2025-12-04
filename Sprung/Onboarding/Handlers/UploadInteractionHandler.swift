@@ -113,15 +113,20 @@ final class UploadInteractionHandler {
             ]
         )
         let shouldReportProgress = request.kind == .resume
+        Logger.info("📤 [TRACE] shouldReportProgress=\(shouldReportProgress), fileURLs.count=\(fileURLs.count)", category: .ai)
         if shouldReportProgress && !fileURLs.isEmpty {
+            Logger.info("📤 [TRACE] About to call extractionProgressHandler", category: .ai)
             await extractionProgressHandler?(ExtractionProgressUpdate(
                 stage: .fileAnalysis,
                 state: .active,
                 detail: request.metadata.title
             ))
+            Logger.info("📤 [TRACE] extractionProgressHandler completed", category: .ai)
         }
         // Track uploaded items
+        Logger.info("📤 [TRACE] About to track uploaded items, fileURLs.isEmpty=\(fileURLs.isEmpty)", category: .ai)
         if !fileURLs.isEmpty {
+            Logger.info("📤 [TRACE] Mapping fileURLs to OnboardingUploadedItem", category: .ai)
             let newItems = fileURLs.map {
                 OnboardingUploadedItem(
                     id: UUID(),
@@ -194,8 +199,14 @@ final class UploadInteractionHandler {
                         metadata: uploadMetadata
                     ))
                 } else {
-                    // Process files through storage
-                    processed = try fileURLs.map { try uploadStorage.processFile(at: $0) }
+                    // Process files through storage (off main thread to avoid blocking UI)
+                    Logger.info("📤 [TRACE] About to call processFile for \(fileURLs.count) file(s)", category: .ai)
+                    let storage = uploadStorage
+                    let urls = fileURLs
+                    processed = try await Task.detached {
+                        try urls.map { try storage.processFile(at: $0) }
+                    }.value
+                    Logger.info("📤 [TRACE] processFile completed", category: .ai)
                     var filesJSON: [JSON] = []
                     for item in processed {
                         var json = item.toJSON()

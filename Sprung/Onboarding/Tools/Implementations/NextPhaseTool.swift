@@ -90,6 +90,8 @@ struct NextPhaseTool: InterviewTool {
             // Chain to the bootstrap tool for the new phase
             if nextPhase == .phase2DeepDive {
                 response["next_required_tool"].string = OnboardingToolName.startPhaseTwo.rawValue
+            } else if nextPhase == .phase3WritingCorpus {
+                response["next_required_tool"].string = OnboardingToolName.startPhaseThree.rawValue
             }
             return .immediate(response)
         }

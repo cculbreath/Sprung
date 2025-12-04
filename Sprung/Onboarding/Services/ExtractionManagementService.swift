@@ -83,8 +83,11 @@ final class ExtractionManagementService: OnboardingEventEmitter {
     }
     // MARK: - Progress Updates
     func updateExtractionProgress(with update: ExtractionProgressUpdate) {
+        Logger.info("📊 [TRACE] updateExtractionProgress called: stage=\(update.stage), state=\(update.state)", category: .ai)
         Task {
+            Logger.info("📊 [TRACE] Inside Task, about to check pendingExtraction", category: .ai)
             if var extraction = await state.pendingExtraction {
+                Logger.info("📊 [TRACE] pendingExtraction exists, applying update", category: .ai)
                 extraction.applyProgressUpdate(update)
                 // Create status message based on the update
                 let statusMessage = createStatusMessage(for: update)

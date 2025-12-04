@@ -9,6 +9,7 @@ final class CoordinatorEventRouter {
     private let phaseTransitionController: PhaseTransitionController
     private let toolRouter: ToolHandler
     private let applicantProfileStore: ApplicantProfileStore
+    private let resRefStore: ResRefStore
     private let eventBus: EventCoordinator
     private let dataStore: InterviewDataStore
     // Weak reference to the parent coordinator to delegate specific actions back if needed
@@ -24,6 +25,7 @@ final class CoordinatorEventRouter {
         phaseTransitionController: PhaseTransitionController,
         toolRouter: ToolHandler,
         applicantProfileStore: ApplicantProfileStore,
+        resRefStore: ResRefStore,
         eventBus: EventCoordinator,
         dataStore: InterviewDataStore,
         coordinator: OnboardingInterviewCoordinator
@@ -33,6 +35,7 @@ final class CoordinatorEventRouter {
         self.phaseTransitionController = phaseTransitionController
         self.toolRouter = toolRouter
         self.applicantProfileStore = applicantProfileStore
+        self.resRefStore = resRefStore
         self.eventBus = eventBus
         self.dataStore = dataStore
         self.coordinator = coordinator
@@ -48,15 +51,19 @@ final class CoordinatorEventRouter {
         }
     }
     private func handleEvent(_ event: OnboardingEvent) async {
+        // Log ALL events to track potential blocking (info level for debugging)
+        Logger.info("📊 CoordinatorEventRouter: Processing event: \(String(describing: event))", category: .ai)
         switch event {
         case .objectiveStatusChanged(let id, _, let newStatus, _, _, _, _):
+            Logger.debug("📊 CoordinatorEventRouter: objectiveStatusChanged received - id=\(id), newStatus=\(newStatus)", category: .ai)
             if id == "applicant_profile" && newStatus == "completed" {
+                Logger.info("📊 CoordinatorEventRouter: Dismissing profile summary for applicant_profile completion", category: .ai)
                 toolRouter.profileHandler.dismissProfileSummary()
             }
-        case .timelineCardCreated, .timelineCardUpdated,
-             .timelineCardDeleted, .timelineCardsReordered, .skeletonTimelineReplaced:
-            let timeline = await state.artifacts.skeletonTimeline
-            ui.updateTimeline(timeline)
+        case .timelineUIUpdateNeeded:
+            // Timeline UI updates are now handled by UIStateUpdateHandler via topic-specific stream
+            // This provides immediate updates without waiting in the congested streamAll() queue
+            break
         case .artifactRecordPersisted:
             break
         case .processingStateChanged:
@@ -102,12 +109,17 @@ final class CoordinatorEventRouter {
         case .toolCallCompleted:
             break
         case .objectiveStatusRequested(let id, let response):
+            Logger.info("📊 CoordinatorEventRouter: objectiveStatusRequested - awaiting status for \(id)", category: .ai)
             let status = await state.getObjectiveStatus(id)?.rawValue
             response(status)
+            Logger.info("📊 CoordinatorEventRouter: objectiveStatusRequested - completed for \(id)", category: .ai)
         case .phaseTransitionApplied(let phaseName, _):
             await phaseTransitionController.handlePhaseTransition(phaseName)
             if let phase = InterviewPhase(rawValue: phaseName) {
                 ui.phase = phase
+                Logger.info("📊 CoordinatorEventRouter: UI phase updated to \(phase.rawValue)", category: .ai)
+            } else {
+                Logger.warning("📊 CoordinatorEventRouter: Could not convert phaseName '\(phaseName)' to InterviewPhase", category: .ai)
             }
 
         // MARK: - Knowledge Card Workflow Events
@@ -134,29 +146,26 @@ final class CoordinatorEventRouter {
 
     /// Handle "Done with this card" button click
     private func handleDoneButtonClicked(itemId: String?) async {
-        guard let coordinator = coordinator else {
-            Logger.error("❌ CoordinatorEventRouter: Coordinator not set", category: .ai)
-            return
-        }
-
         // Ungate submit_knowledge_card tool
         await state.includeTool(OnboardingToolName.submitKnowledgeCard.rawValue)
 
-        // Send developer message to force tool call
-        let title = """
-            User clicked "Done with this card" for item "\(itemId ?? "unknown")". \
-            submit_knowledge_card is now ENABLED. \
-            Generate the knowledge card NOW by calling submit_knowledge_card with the card JSON and summary.
+        // Send system-generated user message to trigger LLM response
+        // Using user message instead of developer message ensures the LLM responds immediately
+        // Force toolChoice to ensure the LLM calls submit_knowledge_card
+        let itemInfo = itemId ?? "unknown"
+        var userMessage = JSON()
+        userMessage["role"].string = "user"
+        userMessage["content"].string = """
+            I'm done with the "\(itemInfo)" card. \
+            Please generate and submit the knowledge card now.
             """
-        let details: [String: String] = itemId != nil ? ["item_id": itemId!, "action": "generate_card"] : ["action": "generate_card"]
-
-        await coordinator.sendDeveloperMessage(
-            title: title,
-            details: details,
+        await eventBus.publish(.llmEnqueueUserMessage(
+            payload: userMessage,
+            isSystemGenerated: true,
             toolChoice: OnboardingToolName.submitKnowledgeCard.rawValue
-        )
+        ))
 
-        Logger.info("✅ Done button handled: tool ungated, developer message sent", category: .ai)
+        Logger.info("✅ Done button handled: tool ungated, user message sent with forced toolChoice for item '\(itemInfo)'", category: .ai)
     }
 
     /// Handle auto-persist request after user confirms
@@ -170,9 +179,12 @@ final class CoordinatorEventRouter {
         Logger.info("💾 Auto-persisting knowledge card: \(cardTitle)", category: .ai)
 
         do {
-            // Persist to data store
+            // Persist to data store (JSON file)
             let identifier = try await dataStore.persist(dataType: "knowledge_card", payload: card)
-            Logger.info("✅ Knowledge card persisted with identifier: \(identifier)", category: .ai)
+            Logger.info("✅ Knowledge card persisted to InterviewDataStore with identifier: \(identifier)", category: .ai)
+
+            // Persist to SwiftData (ResRef) for use in resume generation
+            persistToResRef(card: card)
 
             // Emit persisted event (StateCoordinator will update artifact repository)
             await eventBus.publish(.knowledgeCardPersisted(card: card))
@@ -202,6 +214,40 @@ final class CoordinatorEventRouter {
         } catch {
             Logger.error("❌ Failed to auto-persist knowledge card: \(error)", category: .ai)
         }
+    }
+
+    /// Persist knowledge card to SwiftData as a ResRef for use in resume generation
+    private func persistToResRef(card: JSON) {
+        let title = card["title"].stringValue
+        let content = card["content"].stringValue
+        let cardType = card["type"].string
+        let timePeriod = card["time_period"].string
+        let organization = card["organization"].string
+        let location = card["location"].string
+
+        // Encode sources array as JSON string
+        var sourcesJSON: String?
+        if let sourcesArray = card["sources"].array, !sourcesArray.isEmpty {
+            if let data = try? JSON(sourcesArray).rawData(),
+               let jsonString = String(data: data, encoding: .utf8) {
+                sourcesJSON = jsonString
+            }
+        }
+
+        let resRef = ResRef(
+            name: title,
+            content: content,
+            enabledByDefault: true,  // Knowledge cards default to enabled
+            cardType: cardType,
+            timePeriod: timePeriod,
+            organization: organization,
+            location: location,
+            sourcesJSON: sourcesJSON,
+            isFromOnboarding: true
+        )
+
+        resRefStore.addResRef(resRef)
+        Logger.info("✅ Knowledge card persisted to ResRef (SwiftData): \(title)", category: .ai)
     }
 
     /// Handle plan item status change request

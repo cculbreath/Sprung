@@ -12,9 +12,11 @@ struct PhaseThreeScript: PhaseScript {
         .dossierComplete
     ])
     let allowedTools: [String] = OnboardingToolName.rawValues([
+        .startPhaseThree,        // Bootstrap tool - returns knowledge cards + instructions
         .getUserOption,
         .getUserUpload,
         .cancelUserUpload,
+        .ingestWritingSample,    // Capture writing samples from chat text
         .submitForValidation,
         .persistData,
         .setObjectiveStatus,
@@ -84,12 +86,20 @@ struct PhaseThreeScript: PhaseScript {
            - Save the finalized dossier via `persist_data`.
            - Congratulate the user, summarize next steps, and set both the sub-objective and parent objective to completed.
         ### Tools Available:
-        - `get_user_upload`: Request file uploads
+        - `get_user_upload`: Request file uploads (for writing sample documents)
+        - `ingest_writing_sample`: Capture writing samples from text pasted in chat (when user types/pastes text instead of uploading)
         - `submit_for_validation`: Show dossier summary for approval
         - `persist_data`: Save writing samples, style analysis notes, and the final dossier
         - `set_objective_status`: Mark sub-objectives and parents as completed
         - `list_artifacts`, `get_artifact`, `request_raw_file`: Reference previously collected materials
         - `next_phase`: Mark the interview complete
+
+        ### Writing Sample Collection:
+        Users can provide writing samples in two ways:
+        1. **File upload**: Use `get_user_upload` with type "writing_sample" for documents (PDF, DOCX, TXT)
+        2. **Chat paste**: When users paste text directly in chat, use `ingest_writing_sample` to capture it as an artifact
+
+        Always offer both options and accept whatever format the user prefers.
         ### Key Constraints:
         - Respect the user's writing-analysis consent preferences; skip the analysis sub-objective when consent is not provided
         - Keep the dossier comprehensive but approachable—highlight actionable insights rather than dumping raw data

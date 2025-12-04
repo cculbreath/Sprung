@@ -41,9 +41,8 @@ final class PhaseTransitionController {
         introPayload["text"].string = introPrompt
         introPayload["reasoningEffort"].string = "low"  // GPT-5.1 supports: none, low, medium, high
 
-        // Note: Phase intro prompts are queued and may be delivered after bootstrap tools
-        // have already been called. Don't force toolChoice here - let instructions guide behavior.
-        // The agent_ready/start_phase_two tools are called naturally at phase start.
+        // Don't force toolChoice - let the model output preamble text naturally before calling tools
+        // The initial user message includes explicit instructions to output the welcome message
 
         await eventBus.publish(.llmSendDeveloperMessage(
             payload: introPayload
