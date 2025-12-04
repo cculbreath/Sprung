@@ -98,8 +98,9 @@ enum OnboardingEvent {
     // MARK: - Timeline Operations
     case timelineCardCreated(card: JSON)
     case timelineCardUpdated(id: String, fields: JSON)
-    case timelineCardDeleted(id: String)
+    case timelineCardDeleted(id: String, fromUI: Bool = false)
     case timelineCardsReordered(ids: [String])
+    case timelineUIUpdateNeeded(timeline: JSON)  // Emitted AFTER repository update, signals UI to refresh
     // MARK: - Objective Management
     case objectiveStatusRequested(id: String, response: (String?) -> Void)
     case objectiveStatusUpdateRequested(id: String, status: String, source: String?, notes: String?, details: [String: String]?)
@@ -118,13 +119,13 @@ enum OnboardingEvent {
     case llmToolResponseMessage(payload: JSON)
     case llmStatus(status: LLMStatus)
     // Stream request events (for enqueueing via StateCoordinator)
-    case llmEnqueueUserMessage(payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String? = nil, originalText: String? = nil)
+    case llmEnqueueUserMessage(payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String? = nil, originalText: String? = nil, toolChoice: String? = nil)
     case llmEnqueueToolResponse(payload: JSON)
     // Parallel tool call batching - signals how many tool responses to collect before sending
     case llmToolCallBatchStarted(expectedCount: Int, callIds: [String])
     case llmExecuteBatchedToolResponses(payloads: [JSON])
     // Stream execution events (for serial processing via StateCoordinator)
-    case llmExecuteUserMessage(payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String? = nil, originalText: String? = nil, bundledDeveloperMessages: [JSON] = [])
+    case llmExecuteUserMessage(payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String? = nil, originalText: String? = nil, bundledDeveloperMessages: [JSON] = [], toolChoice: String? = nil)
     case llmExecuteToolResponse(payload: JSON)
     case llmExecuteDeveloperMessage(payload: JSON)
     case llmStreamCompleted  // Signal that a stream finished and queue can process next item
@@ -132,6 +133,9 @@ enum OnboardingEvent {
     case llmReasoningSummaryDelta(delta: String)  // Incremental reasoning text for sidebar
     case llmReasoningSummaryComplete(text: String)  // Final reasoning text for sidebar
     case llmReasoningItemsForToolCalls(ids: [String])  // Reasoning item IDs to pass back with tool outputs
+    // Session persistence events
+    case llmResponseIdUpdated(responseId: String?)  // previousResponseId updated after API response
+    case knowledgeCardPlanUpdated(items: [KnowledgeCardPlanItem], currentFocus: String?, message: String?)  // Plan updated
     // MARK: - Phase Management (§6 spec)
     case phaseTransitionRequested(from: String, to: String, reason: String?)
     case phaseTransitionApplied(phase: String, timestamp: Date)
@@ -216,9 +220,11 @@ actor EventCoordinator {
         subscriberContinuations[topic]?[id] = nil
     }
     /// Subscribe to all events (for compatibility/debugging)
+    /// Uses unbounded buffer to ensure critical events are never dropped
+    /// during high-traffic periods (e.g., LLM streaming generates hundreds of delta events)
     func streamAll() -> AsyncStream<OnboardingEvent> {
         let subscriberId = UUID()
-        let stream = AsyncStream<OnboardingEvent>(bufferingPolicy: .bufferingNewest(50)) { continuation in
+        let stream = AsyncStream<OnboardingEvent>(bufferingPolicy: .unbounded) { continuation in
             Task { [weak self] in
                 // Register this continuation for ALL topics
                 for topic in EventTopic.allCases {
@@ -248,6 +254,11 @@ actor EventCoordinator {
         addToHistoryWithConsolidation(event)
         // Broadcast to ALL subscriber continuations for this topic
         if let continuations = subscriberContinuations[topic] {
+            let subscriberCount = continuations.count
+            // Log delivery for timelineUIUpdateNeeded to trace the issue
+            if case .timelineUIUpdateNeeded = event {
+                Logger.info("[EventBus] Delivering timelineUIUpdateNeeded to \(subscriberCount) subscriber(s) on topic: \(topic)", category: .ai)
+            }
             for continuation in continuations.values {
                 continuation.yield(event)
             }
@@ -309,6 +320,7 @@ actor EventCoordinator {
              .llmToolCallBatchStarted, .llmExecuteBatchedToolResponses,
              .llmExecuteUserMessage, .llmExecuteToolResponse, .llmExecuteDeveloperMessage, .llmStreamCompleted,
              .llmReasoningSummaryDelta, .llmReasoningSummaryComplete, .llmReasoningItemsForToolCalls, .llmCancelRequested,
+             .llmResponseIdUpdated,
              .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized:
             return .llm
         // State events
@@ -323,7 +335,7 @@ actor EventCoordinator {
         case .objectiveStatusRequested, .objectiveStatusUpdateRequested, .objectiveStatusChanged:
             return .objective
         // Tool events
-        case .toolCallRequested, .toolCallCompleted:
+        case .toolCallRequested, .toolCallCompleted, .knowledgeCardPlanUpdated:
             return .tool
         // Artifact events
         case .uploadCompleted,
@@ -352,7 +364,7 @@ actor EventCoordinator {
             return .toolpane
         // Timeline events
         case .timelineCardCreated, .timelineCardUpdated, .timelineCardDeleted, .timelineCardsReordered,
-             .skeletonTimelineReplaced:
+             .skeletonTimelineReplaced, .timelineUIUpdateNeeded:
             return .timeline
         // Processing events
         case .processingStateChanged, .streamingStatusUpdated, .waitingStateChanged,
@@ -505,10 +517,12 @@ actor EventCoordinator {
             description = "Timeline card created"
         case .timelineCardUpdated(let id, _):
             description = "Timeline card \(id) updated"
-        case .timelineCardDeleted(let id):
-            description = "Timeline card \(id) deleted"
+        case .timelineCardDeleted(let id, let fromUI):
+            description = "Timeline card \(id) deleted\(fromUI ? " (from UI)" : "")"
         case .timelineCardsReordered:
             description = "Timeline cards reordered"
+        case .timelineUIUpdateNeeded:
+            description = "Timeline UI update needed"
         case .objectiveStatusRequested:
             description = "Objective status requested"
         case .objectiveStatusUpdateRequested(let id, let status, _, _, _):
@@ -537,19 +551,21 @@ actor EventCoordinator {
             description = "LLM send developer message requested"
         case .llmToolResponseMessage:
             description = "LLM tool response requested"
-        case .llmEnqueueUserMessage(_, let isSystemGenerated, let chatboxMessageId, _):
+        case .llmEnqueueUserMessage(_, let isSystemGenerated, let chatboxMessageId, _, let toolChoice):
             let chatboxInfo = chatboxMessageId.map { " chatbox:\($0.prefix(8))..." } ?? ""
-            description = "LLM enqueue user message (system: \(isSystemGenerated)\(chatboxInfo))"
+            let toolInfo = toolChoice.map { " toolChoice:\($0)" } ?? ""
+            description = "LLM enqueue user message (system: \(isSystemGenerated)\(chatboxInfo)\(toolInfo))"
         case .llmEnqueueToolResponse:
             description = "LLM enqueue tool response"
         case .llmToolCallBatchStarted(let expectedCount, _):
             description = "LLM tool call batch started (expecting \(expectedCount) responses)"
         case .llmExecuteBatchedToolResponses(let payloads):
             description = "LLM execute batched tool responses (\(payloads.count) responses)"
-        case .llmExecuteUserMessage(_, let isSystemGenerated, let chatboxMessageId, _, let bundledDevMessages):
+        case .llmExecuteUserMessage(_, let isSystemGenerated, let chatboxMessageId, _, let bundledDevMessages, let toolChoice):
             let chatboxInfo = chatboxMessageId.map { " chatbox:\($0.prefix(8))..." } ?? ""
             let bundledInfo = bundledDevMessages.isEmpty ? "" : " +\(bundledDevMessages.count) dev msgs"
-            description = "LLM execute user message (system: \(isSystemGenerated)\(chatboxInfo)\(bundledInfo))"
+            let toolInfo = toolChoice.map { " toolChoice:\($0)" } ?? ""
+            description = "LLM execute user message (system: \(isSystemGenerated)\(chatboxInfo)\(bundledInfo)\(toolInfo))"
         case .llmExecuteToolResponse:
             description = "LLM execute tool response"
         case .llmExecuteDeveloperMessage:
@@ -584,6 +600,10 @@ actor EventCoordinator {
             description = "Dismiss Profile Summary Requested"
         case .toolPaneCardRestored(let card):
             description = "ToolPane card restored: \(card.rawValue)"
+        case .llmResponseIdUpdated(let responseId):
+            description = "LLM response ID updated: \(responseId?.prefix(12) ?? "nil")..."
+        case .knowledgeCardPlanUpdated(let items, let focus, _):
+            description = "Knowledge card plan updated: \(items.count) items, focus: \(focus ?? "none")"
         }
         Logger.debug("[Event] \(description)", category: .ai)
     }

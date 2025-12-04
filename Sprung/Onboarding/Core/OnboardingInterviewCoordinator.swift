@@ -267,6 +267,8 @@ final class OnboardingInterviewCoordinator {
         ui.knowledgeCardPlan = items
         ui.knowledgeCardPlanFocus = currentFocus
         ui.knowledgeCardPlanMessage = message
+        // Emit event for persistence
+        await eventBus.publish(.knowledgeCardPlanUpdated(items: items, currentFocus: currentFocus, message: message))
         Logger.info("📋 Knowledge card plan updated: \(items.count) items, focus=\(currentFocus ?? "none"), phase=\(ui.phase.rawValue)", category: .ai)
     }
 

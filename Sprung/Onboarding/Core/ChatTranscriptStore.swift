@@ -77,6 +77,10 @@ actor ChatTranscriptStore: OnboardingEventEmitter {
     /// Set previous response ID for Responses API threading
     func setPreviousResponseId(_ responseId: String?) {
         previousResponseId = responseId
+        // Emit event for persistence
+        Task {
+            await eventBus.publish(.llmResponseIdUpdated(responseId: responseId))
+        }
     }
     /// Get previous response ID
     func getPreviousResponseId() -> String? {
