@@ -88,6 +88,7 @@ final class OnboardingInterviewCoordinator {
         applicantProfileStore: ApplicantProfileStore,
         resRefStore: ResRefStore,
         coverRefStore: CoverRefStore,
+        experienceDefaultsStore: ExperienceDefaultsStore,
         sessionStore: OnboardingSessionStore,
         dataStore: InterviewDataStore,
         preferences: OnboardingPreferences
@@ -100,6 +101,7 @@ final class OnboardingInterviewCoordinator {
             applicantProfileStore: applicantProfileStore,
             resRefStore: resRefStore,
             coverRefStore: coverRefStore,
+            experienceDefaultsStore: experienceDefaultsStore,
             sessionStore: sessionStore,
             dataStore: dataStore,
             preferences: preferences
