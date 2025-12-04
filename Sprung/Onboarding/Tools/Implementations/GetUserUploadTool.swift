@@ -90,12 +90,9 @@ struct GetUserUploadTool: InterviewTool {
         )
         // Emit UI request to show the upload picker
         await coordinator.eventBus.publish(.uploadRequestPresented(request: uploadRequest))
-        // Return completed - the tool's job is to present UI, which it has done
-        // User's upload will arrive as a new user message
-        var response = JSON()
-        response["message"].string = "UI presented. Awaiting user input."
-        response["status"].string = "completed"
-        return .immediate(response)
+        // Codex paradigm: Return pending - don't send tool response until user acts.
+        // The tool output will be sent when user completes/cancels the upload.
+        return .pendingUserAction
     }
 }
 // MARK: - Payload Parsing

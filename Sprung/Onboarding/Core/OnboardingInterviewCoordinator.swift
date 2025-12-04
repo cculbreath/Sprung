@@ -16,6 +16,7 @@ final class OnboardingInterviewCoordinator {
     var phaseRegistry: PhaseScriptRegistry { container.phaseRegistry }
     var toolRegistry: ToolRegistry { container.toolRegistry }
     var ui: OnboardingUIState { container.ui }
+    var conversationLogStore: ConversationLogStore { container.conversationLogStore }
     // MARK: - Private Accessors (for internal use)
     // Session & Lifecycle
     private var sessionCoordinator: InterviewSessionCoordinator { container.sessionCoordinator }

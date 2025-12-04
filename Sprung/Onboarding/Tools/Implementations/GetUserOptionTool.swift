@@ -71,12 +71,9 @@ struct GetUserOptionTool: InterviewTool {
         let payload = try OptionPromptPayload(json: params)
         // Emit UI request to show the choice prompt
         await coordinator.eventBus.publish(.choicePromptRequested(prompt: payload.toChoicePrompt()))
-        // Return completed - the tool's job is to present UI, which it has done
-        // User's selection will arrive as a new user message
-        var response = JSON()
-        response["message"].string = "UI presented. Awaiting user input."
-        response["status"].string = "completed"
-        return .immediate(response)
+        // Codex paradigm: Return pending - don't send tool response until user acts.
+        // The tool output will be sent when user makes a selection.
+        return .pendingUserAction
     }
 }
 private struct OptionPromptPayload {

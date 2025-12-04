@@ -88,12 +88,9 @@ struct ConfigureEnabledSectionsTool: InterviewTool {
         )
         // Emit UI request to show the section toggle UI
         await coordinator.eventBus.publish(.sectionToggleRequested(request: request))
-        // Return completed - the tool's job is to present UI, which it has done
-        // User's section selection will arrive as a new user message
-        var response = JSON()
-        response["message"].string = "UI presented. Awaiting user input."
-        response["status"].string = "completed"
-        return .immediate(response)
+        // Codex paradigm: Return pending - don't send tool response until user acts.
+        // The tool output will be sent when user confirms section selections.
+        return .pendingUserAction
     }
 }
 private struct SectionTogglePayload {

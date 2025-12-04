@@ -19,6 +19,10 @@ final class UIResponseCoordinator {
     // MARK: - Choice Selection
     func submitChoiceSelection(_ selectionIds: [String]) async {
         guard toolRouter.resolveChoice(selectionIds: selectionIds) != nil else { return }
+
+        // Complete pending UI tool call (Codex paradigm)
+        await completePendingUIToolCall(output: buildUICompletedOutput(message: "User selected: \(selectionIds.joined(separator: ", "))"))
+
         var userMessage = JSON()
         userMessage["role"].string = "user"
         userMessage["content"].string = "Selected option(s): \(selectionIds.joined(separator: ", "))"
@@ -28,6 +32,10 @@ final class UIResponseCoordinator {
     // MARK: - Upload Handling
     func completeUploadAndResume(id: UUID, fileURLs: [URL], coordinator: OnboardingInterviewCoordinator) async {
         guard await coordinator.completeUpload(id: id, fileURLs: fileURLs) != nil else { return }
+
+        // Complete pending UI tool call (Codex paradigm)
+        await completePendingUIToolCall(output: buildUICompletedOutput(message: "User uploaded \(fileURLs.count) file(s)"))
+
         // Check if any uploaded files require async extraction (PDF, DOCX, HTML, etc.)
         // For these, skip sending immediate "upload successful" message - the DocumentArtifactMessenger
         // will send a more informative message with the extracted content once processing completes
@@ -49,6 +57,10 @@ final class UIResponseCoordinator {
     }
     func completeUploadAndResume(id: UUID, link: URL, coordinator: OnboardingInterviewCoordinator) async {
         guard await coordinator.toolRouter.completeUpload(id: id, link: link) != nil else { return }
+
+        // Complete pending UI tool call (Codex paradigm)
+        await completePendingUIToolCall(output: buildUICompletedOutput(message: "User provided URL: \(link.absoluteString)"))
+
         var userMessage = JSON()
         userMessage["role"].string = "user"
         userMessage["content"].string = "Uploaded file from URL: \(link.absoluteString)"
@@ -57,6 +69,13 @@ final class UIResponseCoordinator {
     }
     func skipUploadAndResume(id: UUID, coordinator: OnboardingInterviewCoordinator) async {
         guard await coordinator.skipUpload(id: id) != nil else { return }
+
+        // Complete pending UI tool call with cancelled status (Codex paradigm)
+        var output = JSON()
+        output["message"].string = "User skipped the upload"
+        output["status"].string = "cancelled"
+        await completePendingUIToolCall(output: output)
+
         var userMessage = JSON()
         userMessage["role"].string = "user"
         userMessage["content"].string = "Skipped upload."
@@ -72,6 +91,9 @@ final class UIResponseCoordinator {
         coordinator: OnboardingInterviewCoordinator
     ) async {
         guard await coordinator.submitValidationResponse(status: status, updatedData: updatedData, changes: changes, notes: notes) != nil else { return }
+
+        // Complete pending UI tool call (Codex paradigm)
+        await completePendingUIToolCall(output: buildUICompletedOutput(message: "Validation response: \(status)"))
 
         // Check for pending knowledge card that needs auto-persist
         let isConfirmed = ["confirmed", "confirmed_with_changes", "approved", "modified"].contains(status.lowercased())
@@ -147,6 +169,10 @@ final class UIResponseCoordinator {
     // MARK: - Applicant Profile Handling
     func confirmApplicantProfile(draft: ApplicantProfileDraft) async {
         guard let resolution = toolRouter.resolveApplicantProfile(with: draft) else { return }
+
+        // Complete pending UI tool call (Codex paradigm)
+        await completePendingUIToolCall(output: buildUICompletedOutput(message: "Profile confirmed via validation"))
+
         // Extract the actual profile data from the resolution
         let profileData = resolution["data"]
         let status = resolution["status"].stringValue
@@ -215,6 +241,13 @@ final class UIResponseCoordinator {
     }
     func rejectApplicantProfile(reason: String) async {
         guard toolRouter.rejectApplicantProfile(reason: reason) != nil else { return }
+
+        // Complete pending UI tool call with rejection (Codex paradigm)
+        var output = JSON()
+        output["message"].string = "Profile rejected: \(reason)"
+        output["status"].string = "rejected"
+        await completePendingUIToolCall(output: output)
+
         var userMessage = JSON()
         userMessage["role"].string = "user"
         userMessage["content"].string = "Applicant profile rejected. Reason: \(reason)"
@@ -222,6 +255,9 @@ final class UIResponseCoordinator {
         Logger.info("✅ Applicant profile rejected and user message sent to LLM", category: .ai)
     }
     func submitProfileDraft(draft: ApplicantProfileDraft, source: OnboardingApplicantProfileIntakeState.Source) async {
+        // Complete pending UI tool call (Codex paradigm)
+        await completePendingUIToolCall(output: buildUICompletedOutput(message: "Profile submitted via \(source == .contacts ? "contacts" : "manual entry")"))
+
         // Close the profile intake UI via event
         await eventBus.publish(.applicantProfileIntakeCleared)
         // Store profile in StateCoordinator/ArtifactRepository (which will emit the event)
@@ -295,6 +331,10 @@ final class UIResponseCoordinator {
     // MARK: - Section Toggle Handling
     func confirmSectionToggle(enabled: [String]) async {
         guard toolRouter.resolveSectionToggle(enabled: enabled) != nil else { return }
+
+        // Complete pending UI tool call (Codex paradigm)
+        await completePendingUIToolCall(output: buildUICompletedOutput(message: "Sections selected: \(enabled.joined(separator: ", "))"))
+
         // Mark enabled_sections objective as complete
         await eventBus.publish(.objectiveStatusUpdateRequested(
             id: "enabled_sections",
@@ -312,6 +352,13 @@ final class UIResponseCoordinator {
     }
     func rejectSectionToggle(reason: String) async {
         guard toolRouter.rejectSectionToggle(reason: reason) != nil else { return }
+
+        // Complete pending UI tool call with rejection (Codex paradigm)
+        var output = JSON()
+        output["message"].string = "Section toggle rejected: \(reason)"
+        output["status"].string = "rejected"
+        await completePendingUIToolCall(output: output)
+
         var userMessage = JSON()
         userMessage["role"].string = "user"
         userMessage["content"].string = "Section toggle rejected. Reason: \(reason)"
@@ -434,5 +481,40 @@ final class UIResponseCoordinator {
             lines.append("- [\(id)] \(title) @ \(org) (\(start) - \(end))")
         }
         return lines.joined(separator: "\n")
+    }
+
+    // MARK: - Codex Paradigm: Pending Tool Output Management
+
+    /// Complete a pending UI tool call by sending the tool output and flushing queued developer messages.
+    /// This implements the Codex CLI paradigm where UI tools defer their response until user action.
+    private func completePendingUIToolCall(output: JSON) async {
+        guard let pending = await state.getPendingUIToolCall() else {
+            Logger.debug("⚠️ No pending UI tool call to complete", category: .ai)
+            return
+        }
+
+        // Build and emit the tool response
+        var payload = JSON()
+        payload["callId"].string = pending.callId
+        payload["output"] = output
+        await eventBus.publish(.llmToolResponseMessage(payload: payload))
+        Logger.info("📤 Pending tool output sent: \(pending.toolName) (callId: \(pending.callId.prefix(8)))", category: .ai)
+
+        // Clear the pending tool call
+        await state.clearPendingUIToolCall()
+
+        // Drain and enqueue any queued developer messages
+        let queuedMessages = await state.drainQueuedDeveloperMessages()
+        for devPayload in queuedMessages {
+            await eventBus.publish(.llmSendDeveloperMessage(payload: devPayload))
+        }
+    }
+
+    /// Build a standard "UI presented, awaiting input" output for pending tools
+    private func buildUICompletedOutput(message: String? = nil) -> JSON {
+        var output = JSON()
+        output["message"].string = message ?? "UI presented. Awaiting user input."
+        output["status"].string = "completed"
+        return output
     }
 }

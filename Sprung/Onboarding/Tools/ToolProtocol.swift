@@ -22,6 +22,11 @@ extension InterviewTool {
 enum ToolResult {
     case immediate(JSON)
     case error(ToolError)
+    /// Tool has presented UI and is awaiting user action.
+    /// Based on Codex CLI paradigm: tool output deferred until user acts.
+    /// Developer messages are queued behind the pending tool.
+    /// The callId is filled in by ToolExecutionCoordinator (tools don't have access to it).
+    case pendingUserAction
 }
 enum ToolError: Error {
     case invalidParameters(String)

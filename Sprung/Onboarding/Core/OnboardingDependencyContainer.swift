@@ -124,6 +124,7 @@ final class OnboardingDependencyContainer {
     // MARK: - UI State
     let ui: OnboardingUIState
     let wizardTracker: WizardProgressTracker
+    let conversationLogStore: ConversationLogStore
     // MARK: - Late-Initialized Components (Require Coordinator Reference)
     private(set) var toolRegistrar: OnboardingToolRegistrar!
     private(set) var coordinatorEventRouter: CoordinatorEventRouter!
@@ -153,6 +154,7 @@ final class OnboardingDependencyContainer {
         // 2. Initialize UI state
         self.ui = OnboardingUIState(preferences: preferences)
         self.wizardTracker = WizardProgressTracker()
+        self.conversationLogStore = ConversationLogStore()
 
         // 3. Initialize state stores
         let stores = Self.createStateStores(eventBus: core.eventBus, phasePolicy: core.phasePolicy)
@@ -244,6 +246,10 @@ final class OnboardingDependencyContainer {
         tools.toolRouter.uploadHandler.updateExtractionProgressHandler { [services] update in
             Task { @MainActor in services.extractionManagementService.updateExtractionProgress(with: update) }
         }
+
+        // 13. Start conversation log listening
+        conversationLogStore.startListening(eventBus: core.eventBus)
+
         Logger.info("🏗️ OnboardingDependencyContainer initialized", category: .ai)
     }
 
