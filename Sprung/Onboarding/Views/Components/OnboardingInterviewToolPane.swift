@@ -7,153 +7,18 @@ struct OnboardingInterviewToolPane: View {
     @Environment(ExperienceDefaultsStore.self) private var experienceDefaultsStore
     @Bindable var coordinator: OnboardingInterviewCoordinator
     @Binding var isOccupied: Bool
+    @State private var selectedTab: ToolPaneTabsView<AnyView>.Tab = .interview
+
     var body: some View {
         let paneOccupied = isPaneOccupied(coordinator: coordinator)
         let isLLMActive = coordinator.ui.isProcessing || coordinator.ui.pendingStreamingStatus != nil
-        // Always show spinner during any busy state, regardless of what cards are shown
         let showSpinner = coordinator.ui.pendingExtraction != nil || isLLMActive
-        return VStack(alignment: .leading, spacing: 16) {
-            if coordinator.ui.pendingExtraction != nil {
-                Spacer(minLength: 0)
-            } else {
-                let uploads = uploadRequests()
-                if !uploads.isEmpty {
-                    uploadRequestsView(uploads)
-                } else if let intake = coordinator.pendingApplicantProfileIntake {
-                    ApplicantProfileIntakeCard(
-                        state: intake,
-                        coordinator: coordinator
-                    )
-                } else if let prompt = coordinator.pendingChoicePrompt {
-                    InterviewChoicePromptCard(
-                        prompt: prompt,
-                        onSubmit: { selection in
-                            Task {
-                                await coordinator.submitChoiceSelection(selection)
-                            }
-                        },
-                        onCancel: {
-                            // Note: Choice cancellation not implemented - user must make a selection
-                        }
-                    )
-                } else if let validation = coordinator.pendingValidationPrompt {
-                    if validation.dataType == "knowledge_card" {
-                        KnowledgeCardValidationHost(
-                            prompt: validation,
-                            artifactsJSON: coordinator.ui.artifactRecords,
-                            coordinator: coordinator
-                        )
-                    } else if validation.dataType == "skeleton_timeline" {
-                        // Check mode to determine which UI to show
-                        TimelineCardEditorView(
-                            timeline: validation.payload,
-                            coordinator: coordinator,
-                            mode: validation.mode == .editor ? .editor : .validation,
-                            onValidationSubmit: validation.mode == .validation ? { status in
-                                Task {
-                                    await coordinator.submitValidationAndResume(
-                                        status: status,
-                                        updatedData: nil,  // Timeline already saved, no modifications
-                                        changes: nil,
-                                        notes: nil
-                                    )
-                                }
-                            } : nil,
-                            onSubmitChangesOnly: validation.mode == .validation ? {
-                                Task {
-                                    // Clear validation prompt and let LLM reassess changes
-                                    await coordinator.clearValidationPromptAndNotifyLLM(
-                                        message: "User made changes to the timeline cards and submitted them for review. Please reassess the updated timeline, ask any clarifying questions if needed, or submit for validation again when ready."
-                                    )
-                                }
-                            } : nil
-                        )
-                    } else {
-                        OnboardingValidationReviewCard(
-                            prompt: validation,
-                            onSubmit: { decision, updated, notes in
-                                Task {
-                                    await coordinator.submitValidationAndResume(
-                                        status: decision.rawValue,
-                                        updatedData: updated,
-                                        changes: nil,
-                                        notes: notes
-                                    )
-                                }
-                            },
-                            onCancel: {
-                                // Note: Validation cancellation not implemented - user must approve or reject
-                            }
-                        )
-                    }
-                } else if let phaseAdvanceRequest = coordinator.ui.pendingPhaseAdvanceRequest {
-                    OnboardingPhaseAdvanceDialog(
-                        request: phaseAdvanceRequest,
-                        onSubmit: { decision, feedback in
-                            Task {
-                                switch decision {
-                                case .approved:
-                                    await coordinator.approvePhaseAdvance()
-                                case .denied:
-                                    await coordinator.denyPhaseAdvance(feedback: nil)
-                                case .deniedWithFeedback:
-                                    await coordinator.denyPhaseAdvance(feedback: feedback)
-                                }
-                            }
-                        },
-                        onCancel: nil
-                    )
-                } else if let profileRequest = coordinator.pendingApplicantProfileRequest {
-                    ApplicantProfileReviewCard(
-                        request: profileRequest,
-                        fallbackDraft: ApplicantProfileDraft(profile: applicantProfileStore.currentProfile()),
-                        onConfirm: { draft in
-                            Task {
-                                await coordinator.confirmApplicantProfile(draft: draft)
-                            }
-                        },
-                        onCancel: {
-                            Task {
-                                await coordinator.rejectApplicantProfile(reason: "User cancelled")
-                            }
-                        }
-                    )
-                } else if let sectionToggle = coordinator.pendingSectionToggleRequest {
-                    ResumeSectionsToggleCard(
-                        request: sectionToggle,
-                        existingDraft: experienceDefaultsStore.loadDraft(),
-                        onConfirm: { enabled in
-                            Task {
-                                await coordinator.confirmSectionToggle(enabled: enabled)
-                            }
-                        },
-                        onCancel: {
-                            Task {
-                                await coordinator.rejectSectionToggle(reason: "User cancelled")
-                            }
-                        }
-                    )
-                } else if let profileSummary = coordinator.pendingApplicantProfileSummary {
-                    ApplicantProfileSummaryCard(
-                        profile: profileSummary,
-                        imageData: nil  // Image data is in the JSON profile
-                    )
-                } else if shouldShowProfileUntilTimelineLoads {
-                    // Keep showing profile summary until timeline is ready
-                    // This prevents a jarring transition from profile card to empty state
-                    if let storedProfile = coordinator.ui.lastApplicantProfileSummary {
-                        ApplicantProfileSummaryCard(
-                            profile: storedProfile,
-                            imageData: nil
-                        )
-                    } else {
-                        supportingContent()
-                    }
-                } else {
-                    supportingContent()
-                }
-            }
-        }
+
+        return ToolPaneTabsView(
+            coordinator: coordinator,
+            interviewContent: { AnyView(interviewTabContent) },
+            selectedTab: $selectedTab
+        )
         .padding(.vertical, 24)
         .padding(.horizontal, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -167,7 +32,6 @@ struct OnboardingInterviewToolPane: View {
                     .transition(.opacity.combined(with: .scale))
                     .zIndex(1)
                 } else if showSpinner {
-                    // Use currentStatusMessage if available, otherwise fall back to pendingStreamingStatusSync
                     let statusText = coordinator.ui.currentStatusMessage ?? coordinator.ui.pendingStreamingStatus?
                         .trimmingCharacters(in: .whitespacesAndNewlines)
                     AnimatedThinkingText(statusMessage: statusText)
@@ -190,96 +54,197 @@ struct OnboardingInterviewToolPane: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .animation(
-            .easeInOut(duration: 0.2),
-            value: showSpinner
-        )
+        .animation(.easeInOut(duration: 0.2), value: showSpinner)
         .onAppear { isOccupied = paneOccupied }
         .onChange(of: paneOccupied) { _, newValue in
             isOccupied = newValue
         }
-    }
-    @ViewBuilder
-    private func supportingContent() -> some View {
-        if let extraction = coordinator.ui.pendingExtraction {
-            VStack(alignment: .leading, spacing: 16) {
-                ExtractionStatusCard(extraction: extraction)
-                summaryContent()
+        // Auto-switch to Interview tab when LLM surfaces interactive content
+        .onChange(of: hasInteractiveCard(coordinator: coordinator)) { _, hasCard in
+            if hasCard && selectedTab != .interview {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedTab = .interview
+                }
             }
-        } else {
-            summaryContent()
         }
     }
+
+    // MARK: - Interview Tab Content
+
     @ViewBuilder
-    private func summaryContent() -> some View {
+    private var interviewTabContent: some View {
+        let uploads = uploadRequests()
+        if !uploads.isEmpty {
+            uploadRequestsView(uploads)
+        } else if let intake = coordinator.pendingApplicantProfileIntake {
+            ApplicantProfileIntakeCard(
+                state: intake,
+                coordinator: coordinator
+            )
+        } else if let prompt = coordinator.pendingChoicePrompt {
+            InterviewChoicePromptCard(
+                prompt: prompt,
+                onSubmit: { selection in
+                    Task {
+                        await coordinator.submitChoiceSelection(selection)
+                    }
+                },
+                onCancel: { }
+            )
+        } else if let validation = coordinator.pendingValidationPrompt {
+            validationContent(validation)
+        } else if let phaseAdvanceRequest = coordinator.ui.pendingPhaseAdvanceRequest {
+            OnboardingPhaseAdvanceDialog(
+                request: phaseAdvanceRequest,
+                onSubmit: { decision, feedback in
+                    Task {
+                        switch decision {
+                        case .approved:
+                            await coordinator.approvePhaseAdvance()
+                        case .denied:
+                            await coordinator.denyPhaseAdvance(feedback: nil)
+                        case .deniedWithFeedback:
+                            await coordinator.denyPhaseAdvance(feedback: feedback)
+                        }
+                    }
+                },
+                onCancel: nil
+            )
+        } else if let profileRequest = coordinator.pendingApplicantProfileRequest {
+            ApplicantProfileReviewCard(
+                request: profileRequest,
+                fallbackDraft: ApplicantProfileDraft(profile: applicantProfileStore.currentProfile()),
+                onConfirm: { draft in
+                    Task {
+                        await coordinator.confirmApplicantProfile(draft: draft)
+                    }
+                },
+                onCancel: {
+                    Task {
+                        await coordinator.rejectApplicantProfile(reason: "User cancelled")
+                    }
+                }
+            )
+        } else if let sectionToggle = coordinator.pendingSectionToggleRequest {
+            ResumeSectionsToggleCard(
+                request: sectionToggle,
+                existingDraft: experienceDefaultsStore.loadDraft(),
+                onConfirm: { enabled in
+                    Task {
+                        await coordinator.confirmSectionToggle(enabled: enabled)
+                    }
+                },
+                onCancel: {
+                    Task {
+                        await coordinator.rejectSectionToggle(reason: "User cancelled")
+                    }
+                }
+            )
+        } else if let profileSummary = coordinator.pendingApplicantProfileSummary {
+            ApplicantProfileSummaryCard(
+                profile: profileSummary,
+                imageData: nil
+            )
+        } else if shouldShowProfileUntilTimelineLoads, let storedProfile = coordinator.ui.lastApplicantProfileSummary {
+            ApplicantProfileSummaryCard(
+                profile: storedProfile,
+                imageData: nil
+            )
+        } else {
+            // Phase-specific default content for Interview tab
+            phaseSpecificInterviewContent
+        }
+    }
+
+    @ViewBuilder
+    private func validationContent(_ validation: OnboardingValidationPrompt) -> some View {
+        if validation.dataType == "knowledge_card" {
+            KnowledgeCardValidationHost(
+                prompt: validation,
+                artifactsJSON: coordinator.ui.artifactRecords,
+                coordinator: coordinator
+            )
+        } else if validation.dataType == "skeleton_timeline" {
+            TimelineCardEditorView(
+                timeline: validation.payload,
+                coordinator: coordinator,
+                mode: validation.mode == .editor ? .editor : .validation,
+                onValidationSubmit: validation.mode == .validation ? { status in
+                    Task {
+                        await coordinator.submitValidationAndResume(
+                            status: status,
+                            updatedData: nil,
+                            changes: nil,
+                            notes: nil
+                        )
+                    }
+                } : nil,
+                onSubmitChangesOnly: validation.mode == .validation ? {
+                    Task {
+                        await coordinator.clearValidationPromptAndNotifyLLM(
+                            message: "User made changes to the timeline cards and submitted them for review. Please reassess the updated timeline, ask any clarifying questions if needed, or submit for validation again when ready."
+                        )
+                    }
+                } : nil
+            )
+        } else {
+            OnboardingValidationReviewCard(
+                prompt: validation,
+                onSubmit: { decision, updated, notes in
+                    Task {
+                        await coordinator.submitValidationAndResume(
+                            status: decision.rawValue,
+                            updatedData: updated,
+                            changes: nil,
+                            notes: notes
+                        )
+                    }
+                },
+                onCancel: { }
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var phaseSpecificInterviewContent: some View {
         switch coordinator.ui.phase {
         case .phase2DeepDive:
             VStack(spacing: 12) {
-                // Persistent upload drop zone - above tabs for visibility
                 PersistentUploadDropZone(
                     onDropFiles: { urls in
-                        Task {
-                            await coordinator.uploadFilesDirectly(urls)
-                        }
+                        Task { await coordinator.uploadFilesDirectly(urls) }
                     },
-                    onSelectFiles: {
-                        openDirectUploadPanel()
-                    },
+                    onSelectFiles: { openDirectUploadPanel() },
                     onSelectGitRepo: { repoURL in
-                        Task {
-                            await coordinator.startGitRepoAnalysis(repoURL)
-                        }
+                        Task { await coordinator.startGitRepoAnalysis(repoURL) }
                     }
                 )
-
-                // Knowledge card collection UI with todo list and done button
                 KnowledgeCardCollectionView(
                     coordinator: coordinator,
                     onDoneWithCard: { itemId in
                         Task {
-                            // Emit event for handler to process
                             await coordinator.eventBus.publish(.knowledgeCardDoneButtonClicked(itemId: itemId))
                         }
                     }
                 )
-
-                Divider()
-
-                // Tabbed view for browsing all collected data
-                ToolPaneTabsView(coordinator: coordinator)
             }
         case .phase3WritingCorpus:
-            VStack(spacing: 12) {
-                WritingCorpusCollectionView(
-                    coordinator: coordinator,
-                    onDropFiles: { urls in
-                        Task {
-                            await coordinator.uploadWritingSamples(urls)
-                        }
-                    },
-                    onSelectFiles: {
-                        openWritingSamplePanel()
-                    },
-                    onDoneWithSamples: {
-                        Task {
-                            await coordinator.completeWritingSamplesCollection()
-                        }
-                    },
-                    onEndInterview: {
-                        Task {
-                            await coordinator.endInterview()
-                        }
-                    }
-                )
-
-                Divider()
-
-                // Tabbed view for browsing all collected data
-                ToolPaneTabsView(coordinator: coordinator)
-            }
+            WritingCorpusCollectionView(
+                coordinator: coordinator,
+                onDropFiles: { urls in
+                    Task { await coordinator.uploadWritingSamples(urls) }
+                },
+                onSelectFiles: { openWritingSamplePanel() },
+                onDoneWithSamples: {
+                    Task { await coordinator.completeWritingSamplesCollection() }
+                },
+                onEndInterview: {
+                    Task { await coordinator.endInterview() }
+                }
+            )
         default:
-            // Show tabs in all other phases for data visibility
-            ToolPaneTabsView(coordinator: coordinator)
+            // Phase 1 or other: show empty state with guidance
+            InterviewTabEmptyState(phase: coordinator.ui.phase)
         }
     }
 
@@ -619,5 +584,67 @@ private struct ApplicantProfileSummaryCard: View {
             components.append(country)
         }
         return components.isEmpty ? nil : components.joined(separator: ", ")
+    }
+}
+
+private struct InterviewTabEmptyState: View {
+    let phase: InterviewPhase
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: icon)
+                .font(.largeTitle)
+                .foregroundStyle(.secondary)
+
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(.primary)
+
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
+    }
+
+    private var icon: String {
+        switch phase {
+        case .phase1CoreFacts:
+            return "person.text.rectangle"
+        case .phase2DeepDive:
+            return "doc.badge.plus"
+        case .phase3WritingCorpus:
+            return "text.document"
+        case .complete:
+            return "checkmark.circle"
+        }
+    }
+
+    private var title: String {
+        switch phase {
+        case .phase1CoreFacts:
+            return "Building Your Profile"
+        case .phase2DeepDive:
+            return "Deep Dive"
+        case .phase3WritingCorpus:
+            return "Writing Samples"
+        case .complete:
+            return "Interview Complete"
+        }
+    }
+
+    private var message: String {
+        switch phase {
+        case .phase1CoreFacts:
+            return "The AI is gathering information about your background. Interactive cards will appear here as the conversation progresses."
+        case .phase2DeepDive:
+            return "Upload documents or add artifacts to support your experience entries."
+        case .phase3WritingCorpus:
+            return "Upload writing samples to help capture your voice and style."
+        case .complete:
+            return "The interview has been completed. You can browse your collected data in the other tabs."
+        }
     }
 }

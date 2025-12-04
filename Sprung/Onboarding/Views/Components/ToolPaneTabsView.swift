@@ -1,16 +1,18 @@
 import SwiftUI
 import SwiftyJSON
 
-/// Tabbed view for the tool pane showing timeline cards, artifacts, and knowledge cards.
-/// Provides quick access to all collected data throughout the interview.
-struct ToolPaneTabsView: View {
+/// Tabbed view for the tool pane showing interview content, timeline cards, artifacts, and knowledge cards.
+/// The Interview tab shows LLM-surfaced interactive content; other tabs provide browse access to collected data.
+struct ToolPaneTabsView<InterviewContent: View>: View {
     enum Tab: String, CaseIterable {
+        case interview = "Interview"
         case timeline = "Timeline"
         case artifacts = "Artifacts"
         case knowledge = "Knowledge"
 
         var icon: String {
             switch self {
+            case .interview: return "bubble.left.and.bubble.right"
             case .timeline: return "calendar.badge.clock"
             case .artifacts: return "doc.text"
             case .knowledge: return "brain.head.profile"
@@ -19,18 +21,19 @@ struct ToolPaneTabsView: View {
     }
 
     let coordinator: OnboardingInterviewCoordinator
-    @State private var selectedTab: Tab = .timeline
+    @ViewBuilder let interviewContent: () -> InterviewContent
+    @Binding var selectedTab: Tab
 
     var body: some View {
         VStack(spacing: 0) {
             // Tab picker
-            HStack(spacing: 4) {
+            HStack(spacing: 2) {
                 ForEach(Tab.allCases, id: \.self) { tab in
                     tabButton(for: tab)
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
             .background(Color(nsColor: .controlBackgroundColor))
             .cornerRadius(10)
 
@@ -38,10 +41,7 @@ struct ToolPaneTabsView: View {
                 .padding(.vertical, 8)
 
             // Tab content
-            ScrollView {
-                tabContent
-                    .padding(.horizontal, 4)
-            }
+            tabContent
         }
     }
 
@@ -51,15 +51,15 @@ struct ToolPaneTabsView: View {
                 selectedTab = tab
             }
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: 3) {
                 Image(systemName: tab.icon)
-                    .font(.caption)
+                    .font(.caption2)
                 Text(tab.rawValue)
-                    .font(.caption.weight(.medium))
-                badgeNumber(for: tab)
+                    .font(.caption2.weight(.medium))
+                badgeView(for: tab)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(selectedTab == tab ? Color.accentColor.opacity(0.15) : Color.clear)
@@ -70,13 +70,13 @@ struct ToolPaneTabsView: View {
     }
 
     @ViewBuilder
-    private func badgeNumber(for tab: Tab) -> some View {
+    private func badgeView(for tab: Tab) -> some View {
         let total = tabItemTotal(for: tab)
         if total != 0 {
             Text("\(total)")
                 .font(.caption2.weight(.semibold))
-                .padding(.horizontal, 5)
-                .padding(.vertical, 2)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 1)
                 .background(
                     Capsule()
                         .fill(selectedTab == tab ? Color.accentColor.opacity(0.2) : Color.secondary.opacity(0.15))
@@ -86,6 +86,8 @@ struct ToolPaneTabsView: View {
 
     private func tabItemTotal(for tab: Tab) -> Int {
         switch tab {
+        case .interview:
+            return 0 // Interview tab doesn't show a count badge
         case .timeline:
             let experiences = coordinator.ui.skeletonTimeline?["experiences"].array
             return experiences?.isEmpty == false ? experiences!.count : 0
@@ -99,12 +101,26 @@ struct ToolPaneTabsView: View {
     @ViewBuilder
     private var tabContent: some View {
         switch selectedTab {
+        case .interview:
+            ScrollView {
+                interviewContent()
+                    .padding(.horizontal, 4)
+            }
         case .timeline:
-            TimelineTabContent(coordinator: coordinator)
+            ScrollView {
+                TimelineTabContent(coordinator: coordinator)
+                    .padding(.horizontal, 4)
+            }
         case .artifacts:
-            ArtifactsTabContent(coordinator: coordinator)
+            ScrollView {
+                ArtifactsTabContent(coordinator: coordinator)
+                    .padding(.horizontal, 4)
+            }
         case .knowledge:
-            KnowledgeTabContent(coordinator: coordinator)
+            ScrollView {
+                KnowledgeTabContent(coordinator: coordinator)
+                    .padding(.horizontal, 4)
+            }
         }
     }
 }
