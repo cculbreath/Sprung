@@ -140,6 +140,19 @@ final class OnboardingInterviewCoordinator {
     func startInterview(resumeExisting: Bool = false) async -> Bool {
         await sessionCoordinator.startInterview(resumeExisting: resumeExisting)
     }
+
+    /// Check if there's an active session that can be resumed
+    func hasActiveSession() -> Bool {
+        container.sessionPersistenceHandler.hasActiveSession()
+    }
+
+    /// Delete the current SwiftData session (used when starting over)
+    func deleteCurrentSession() {
+        if let session = container.sessionPersistenceHandler.getActiveSession() {
+            container.sessionStore.deleteSession(session)
+            Logger.info("🗑️ Deleted SwiftData session: \(session.id)", category: .ai)
+        }
+    }
     func endInterview() async {
         await sessionCoordinator.endInterview()
     }
@@ -503,6 +516,9 @@ final class OnboardingInterviewCoordinator {
     }
     func resetAllOnboardingData() async {
         Logger.info("🗑️ Resetting all onboarding data", category: .ai)
+        // Delete SwiftData session
+        deleteCurrentSession()
+        Logger.info("✅ SwiftData session deleted", category: .ai)
         await MainActor.run {
             let profile = applicantProfileStore.currentProfile()
             profile.name = "John Doe"

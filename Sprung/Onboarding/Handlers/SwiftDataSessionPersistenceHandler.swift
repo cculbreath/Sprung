@@ -134,6 +134,26 @@ final class SwiftDataSessionPersistenceHandler {
         }
         subscriptionTasks.append(toolTask)
 
+        // Subscribe to state events (for timeline, profile, sections)
+        let stateTask = Task { [weak self] in
+            guard let self else { return }
+            for await event in await self.eventBus.stream(topic: .state) {
+                if Task.isCancelled { break }
+                self.handleStateEvent(event)
+            }
+        }
+        subscriptionTasks.append(stateTask)
+
+        // Subscribe to timeline events
+        let timelineTask = Task { [weak self] in
+            guard let self else { return }
+            for await event in await self.eventBus.stream(topic: .timeline) {
+                if Task.isCancelled { break }
+                self.handleTimelineEvent(event)
+            }
+        }
+        subscriptionTasks.append(timelineTask)
+
         Logger.info("▶️ SwiftDataSessionPersistenceHandler started", category: .ai)
     }
 
@@ -215,6 +235,36 @@ final class SwiftDataSessionPersistenceHandler {
 
         case .planItemStatusChangeRequested(let itemId, let status):
             sessionStore.updatePlanItemStatus(session, itemId: itemId, status: status)
+
+        default:
+            break
+        }
+    }
+
+    private func handleStateEvent(_ event: OnboardingEvent) {
+        guard let session = currentSession else { return }
+
+        switch event {
+        case .applicantProfileStored(let profile):
+            sessionStore.updateApplicantProfile(session, profileJSON: profile.rawString())
+
+        case .skeletonTimelineStored(let timeline):
+            sessionStore.updateSkeletonTimeline(session, timelineJSON: timeline.rawString())
+
+        case .enabledSectionsUpdated(let sections):
+            sessionStore.updateEnabledSections(session, sections: sections)
+
+        default:
+            break
+        }
+    }
+
+    private func handleTimelineEvent(_ event: OnboardingEvent) {
+        guard let session = currentSession else { return }
+
+        switch event {
+        case .skeletonTimelineReplaced(let timeline, _, _):
+            sessionStore.updateSkeletonTimeline(session, timelineJSON: timeline.rawString())
 
         default:
             break
@@ -321,5 +371,49 @@ final class SwiftDataSessionPersistenceHandler {
     /// Get restored objective statuses
     func getRestoredObjectiveStatuses(_ session: OnboardingSession) -> [String: String] {
         sessionStore.restoreObjectiveStatuses(session)
+    }
+
+    /// Get restored artifacts as JSON for restoring to ArtifactRepository
+    func getRestoredArtifacts(_ session: OnboardingSession) -> [JSON] {
+        sessionStore.getArtifacts(session).map { record in
+            var json = JSON()
+            json["id"].string = record.id.uuidString
+            json["source_type"].string = record.sourceType
+            json["filename"].string = record.sourceFilename
+            json["extracted_text"].string = record.extractedContent
+            json["source_hash"].string = record.sourceHash
+            json["raw_file_path"].string = record.rawFileRelativePath
+            json["plan_item_id"].string = record.planItemId
+            json["ingested_at"].string = ISO8601DateFormatter().string(from: record.ingestedAt)
+            if let metadataJSON = record.metadataJSON,
+               let data = metadataJSON.data(using: .utf8),
+               let metadata = try? JSON(data: data) {
+                json["metadata"] = metadata
+            }
+            return json
+        }
+    }
+
+    /// Get restored skeleton timeline JSON
+    func getRestoredSkeletonTimeline(_ session: OnboardingSession) -> JSON? {
+        guard let jsonString = sessionStore.getSkeletonTimeline(session),
+              let data = jsonString.data(using: .utf8) else {
+            return nil
+        }
+        return try? JSON(data: data)
+    }
+
+    /// Get restored applicant profile JSON
+    func getRestoredApplicantProfile(_ session: OnboardingSession) -> JSON? {
+        guard let jsonString = sessionStore.getApplicantProfile(session),
+              let data = jsonString.data(using: .utf8) else {
+            return nil
+        }
+        return try? JSON(data: data)
+    }
+
+    /// Get restored enabled sections
+    func getRestoredEnabledSections(_ session: OnboardingSession) -> Set<String> {
+        sessionStore.getEnabledSections(session)
     }
 }

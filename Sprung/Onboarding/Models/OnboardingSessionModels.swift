@@ -25,6 +25,12 @@ class OnboardingSession {
     var lastActiveAt: Date
     /// Whether the interview has been completed
     var isComplete: Bool
+    /// Skeleton timeline JSON (for restoring timeline state)
+    var skeletonTimelineJSON: String?
+    /// Applicant profile JSON (for restoring profile state)
+    var applicantProfileJSON: String?
+    /// Enabled sections as comma-separated string
+    var enabledSectionsCSV: String?
 
     // MARK: - Relationships
     @Relationship(deleteRule: .cascade, inverse: \OnboardingObjectiveRecord.session)
@@ -45,7 +51,10 @@ class OnboardingSession {
         phase: String = "phase1_core_facts",
         startedAt: Date = Date(),
         lastActiveAt: Date = Date(),
-        isComplete: Bool = false
+        isComplete: Bool = false,
+        skeletonTimelineJSON: String? = nil,
+        applicantProfileJSON: String? = nil,
+        enabledSectionsCSV: String? = nil
     ) {
         self.id = id
         self.previousResponseId = previousResponseId
@@ -53,6 +62,9 @@ class OnboardingSession {
         self.startedAt = startedAt
         self.lastActiveAt = lastActiveAt
         self.isComplete = isComplete
+        self.skeletonTimelineJSON = skeletonTimelineJSON
+        self.applicantProfileJSON = applicantProfileJSON
+        self.enabledSectionsCSV = enabledSectionsCSV
     }
 }
 
