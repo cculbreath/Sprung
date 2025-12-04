@@ -121,13 +121,13 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
             )
 
             await ingestionCoordinator?.handleIngestionCompleted(pendingId: pendingId, result: result)
-            await eventBus.publish(.processingStateChanged(false))
+            // Note: Don't emit processingStateChanged(false) - let the LLM response handler manage it
 
             Logger.info("✅ Git repository analysis completed: \(repoName)", category: .ai)
 
         } catch {
             await ingestionCoordinator?.handleIngestionFailed(pendingId: pendingId, error: error.localizedDescription)
-            await eventBus.publish(.processingStateChanged(false))
+            // Note: Don't emit processingStateChanged(false) - let coordinator handle it
             Logger.error("❌ Git repository analysis failed: \(error.localizedDescription)", category: .ai)
         }
 

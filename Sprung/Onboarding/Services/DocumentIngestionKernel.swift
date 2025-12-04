@@ -81,7 +81,7 @@ actor DocumentIngestionKernel: ArtifactIngestionKernel {
         metadata: JSON
     ) async {
         do {
-            // Emit processing state
+            // Emit processing state (don't emit false - let coordinator manage batch state)
             await eventBus.publish(.processingStateChanged(true, statusMessage: "Extracting text from \(fileURL.lastPathComponent)..."))
 
             let artifactRecord = try await documentProcessingService.processDocument(
@@ -108,14 +108,16 @@ actor DocumentIngestionKernel: ArtifactIngestionKernel {
                 source: .document
             )
 
-            // Notify coordinator
+            // Notify coordinator (coordinator manages processing state for batches)
             await ingestionCoordinator?.handleIngestionCompleted(pendingId: pendingId, result: result)
 
-            await eventBus.publish(.processingStateChanged(false))
+            // Note: We don't emit processingStateChanged(false) here because:
+            // 1. For batches, this would hide spinner before all files are done
+            // 2. The coordinator or LLM response handler should manage the final state
 
         } catch {
             await ingestionCoordinator?.handleIngestionFailed(pendingId: pendingId, error: error.localizedDescription)
-            await eventBus.publish(.processingStateChanged(false))
+            // Note: Don't emit processingStateChanged(false) - let coordinator handle it
         }
 
         // Clean up task reference
