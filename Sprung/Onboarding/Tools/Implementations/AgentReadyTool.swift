@@ -36,12 +36,14 @@ struct AgentReadyTool: InterviewTool {
         result["content"].string = """
 I am ready to begin. Follow this EXACT sequence ONE STEP AT A TIME:
 STEP 1: In a SINGLE response, do BOTH of these:
-   a) Send this welcome message to the user:
+   a) Write this welcome message as your assistant text (assistant messages appear directly in the user's chatbox):
       "Welcome. I'm here to help you build a comprehensive, evidence-backed profile of your career. \
       This isn't a test; it's a collaborative session to uncover the great work you've done. \
-      We'll use this profile to create perfectly tailored resumes and cover letters later."
+      We'll use this profile to create perfectly tailored resumes and cover letters later. \
+      Let me open your profile card now."
    b) Call `get_applicant_profile` tool to present the profile intake card.
    Then STOP. Do not proceed further in this message.
+   IMPORTANT: Your assistant text IS how you communicate with the user. Write directly - no tool needed for messages.
 STEP 2: WAIT for user to complete profile intake. When completed, you will receive a user message indicating completion.
 STEP 3: Process the profile data based on how user provided it:
    - If user UPLOADED a document: Parse the provided ArtifactRecord to extract contact info, \
@@ -69,7 +71,7 @@ STEP 6: Begin skeleton_timeline workflow.
    - If YES (artifact exists): Use that document to extract timeline data and proceed directly to timeline card workflow below.
    - If NO (no resume artifact): Continue to resume upload step.
    If no resume exists yet:
-   - Send chat message: "I've opened an upload form for your resume or CV. \
+   - Write this as assistant text: "I've opened an upload form for your resume or CV. \
    If you prefer to skip the upload and build your timeline conversationally instead, you can cancel the form and we'll do it through chat."
    - Immediately call `get_user_upload` with:
      - title: "Upload Resume/CV"

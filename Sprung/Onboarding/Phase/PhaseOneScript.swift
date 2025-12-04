@@ -211,7 +211,7 @@ struct PhaseOneScript: PhaseScript {
                 1. START HERE: Call `agent_ready` tool. The tool response contains the complete step-by-step workflow.
                    IMPORTANT: The tool response instructions are AUTHORITATIVE and override these instructions if they differ.
                 2. The agent_ready tool will instruct you to:
-                   a) Send welcome message
+                   a) Write welcome message as assistant text (shown directly in chatbox)
                    b) Call `get_applicant_profile` to present profile intake card
                    c) Wait for user completion
                    d) Process profile data based on input method:
