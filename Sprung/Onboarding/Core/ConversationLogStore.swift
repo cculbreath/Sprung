@@ -87,9 +87,10 @@ final class ConversationLogStore {
 
         // Tool responses sent to LLM
         case .llmSentToolResponseMessage(let messageId, let payload):
-            let toolName = payload["toolName"].stringValue
-            let resultPreview = payload["result"].rawString()?.prefix(150) ?? "..."
-            addEntry(type: .toolResponse, content: "\(toolName) → \(resultPreview)", metadata: ["messageId": String(messageId.prefix(8))])
+            let callId = payload["callId"].stringValue
+            let output = payload["output"]
+            let resultPreview = output.rawString()?.prefix(150) ?? "{}"
+            addEntry(type: .toolResponse, content: " → \(resultPreview)", metadata: ["messageId": String(messageId.prefix(8)), "callId": String(callId.prefix(12))])
 
         // Tool calls from LLM (incoming requests)
         case .toolCallRequested(let call, _):
