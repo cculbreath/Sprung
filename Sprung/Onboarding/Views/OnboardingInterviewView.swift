@@ -24,8 +24,6 @@ struct OnboardingInterviewView: View {
         @Bindable var uiState = viewModel
         // --- Card visual constants ---
         let corner: CGFloat = 44
-        let shadowR: CGFloat = 30
-        let shadowY: CGFloat = 22
         let cardShape = RoundedRectangle(cornerRadius: corner, style: .continuous)
         let contentStack = VStack(spacing: 0) {
             // Progress bar anchored close to top
@@ -56,22 +54,14 @@ struct OnboardingInterviewView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal, 32)
         }
+        // Uses system window shadow via BorderlessOverlayWindow.hasShadow = true
+        // No SwiftUI shadow overlay needed - system shadow has proper hit testing
         let styledContent = contentStack
             .frame(minWidth: 1040)
             .padding(.horizontal, 32)
             .padding(.vertical, 24)
-            .mask(cardShape)
+            .clipShape(cardShape)
             .background(cardShape.fill(.thickMaterial))
-            .overlay(
-                cardShape
-                    .stroke(.clear)
-                    .shadow(color: .black.opacity(0.5), radius: shadowR, y: shadowY)
-                    .allowsHitTesting(false)
-            )
-            .padding(.top, shadowR)
-            .padding(.leading, shadowR)
-            .padding(.trailing, shadowR)
-            .padding(.bottom, shadowR + abs(shadowY))
         // --- Lifecycle bindings and tasks ---
         let withLifecycle = styledContent
             .task {
