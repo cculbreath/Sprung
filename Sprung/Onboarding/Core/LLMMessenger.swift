@@ -65,8 +65,8 @@ actor LLMMessenger: OnboardingEventEmitter {
         // and comes back as llmExecuteDeveloperMessage
         case .llmToolResponseMessage(let payload):
             await sendToolResponse(payload)
-        case .llmExecuteUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText):
-            await executeUserMessage(payload, isSystemGenerated: isSystemGenerated, chatboxMessageId: chatboxMessageId, originalText: originalText)
+        case .llmExecuteUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText, let bundledDeveloperMessages):
+            await executeUserMessage(payload, isSystemGenerated: isSystemGenerated, chatboxMessageId: chatboxMessageId, originalText: originalText, bundledDeveloperMessages: bundledDeveloperMessages)
         case .llmExecuteToolResponse(let payload):
             await executeToolResponse(payload)
         case .llmExecuteBatchedToolResponses(let payloads):
@@ -95,11 +95,11 @@ actor LLMMessenger: OnboardingEventEmitter {
             originalText: originalText
         ))
     }
-    private func executeUserMessage(_ payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String? = nil, originalText: String? = nil) async {
+    private func executeUserMessage(_ payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String? = nil, originalText: String? = nil, bundledDeveloperMessages: [JSON] = []) async {
         await emit(.llmStatus(status: .busy))
         let text = payload["content"].string ?? payload["text"].stringValue
         do {
-            let request = await buildUserMessageRequest(text: text, isSystemGenerated: isSystemGenerated)
+            let request = await buildUserMessageRequest(text: text, isSystemGenerated: isSystemGenerated, bundledDeveloperMessages: bundledDeveloperMessages)
             let messageId = UUID().uuidString
             await emit(.llmUserMessageSent(messageId: messageId, payload: payload, isSystemGenerated: isSystemGenerated))
             currentStreamTask = Task {
@@ -421,7 +421,7 @@ actor LLMMessenger: OnboardingEventEmitter {
         let validation = await stateCoordinator.pendingValidationPrompt
         return validation?.dataType == "skeleton_timeline"
     }
-    private func buildUserMessageRequest(text: String, isSystemGenerated: Bool) async -> ModelResponseParameter {
+    private func buildUserMessageRequest(text: String, isSystemGenerated: Bool, bundledDeveloperMessages: [JSON] = []) async -> ModelResponseParameter {
         let previousResponseId = await contextAssembler.getPreviousResponseId()
         var inputItems: [InputItem] = []
 
@@ -443,6 +443,21 @@ actor LLMMessenger: OnboardingEventEmitter {
             } else {
                 Logger.info("📋 Fresh start: including base developer message", category: .ai)
             }
+        }
+
+        // Include bundled developer messages (status updates, etc.) before the user message
+        // These are included in the same request to avoid separate LLM turns
+        for devPayload in bundledDeveloperMessages {
+            let devText = devPayload["text"].stringValue
+            if !devText.isEmpty {
+                inputItems.append(.message(InputMessage(
+                    role: "developer",
+                    content: .text(devText)
+                )))
+            }
+        }
+        if !bundledDeveloperMessages.isEmpty {
+            Logger.info("📦 Included \(bundledDeveloperMessages.count) bundled developer message(s) in request", category: .ai)
         }
 
         inputItems.append(.message(InputMessage(

@@ -124,7 +124,7 @@ enum OnboardingEvent {
     case llmToolCallBatchStarted(expectedCount: Int, callIds: [String])
     case llmExecuteBatchedToolResponses(payloads: [JSON])
     // Stream execution events (for serial processing via StateCoordinator)
-    case llmExecuteUserMessage(payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String? = nil, originalText: String? = nil)
+    case llmExecuteUserMessage(payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String? = nil, originalText: String? = nil, bundledDeveloperMessages: [JSON] = [])
     case llmExecuteToolResponse(payload: JSON)
     case llmExecuteDeveloperMessage(payload: JSON)
     case llmStreamCompleted  // Signal that a stream finished and queue can process next item
