@@ -86,6 +86,8 @@ final class OnboardingInterviewCoordinator {
         llmFacade: LLMFacade?,
         documentExtractionService: DocumentExtractionService,
         applicantProfileStore: ApplicantProfileStore,
+        resRefStore: ResRefStore,
+        sessionStore: OnboardingSessionStore,
         dataStore: InterviewDataStore,
         preferences: OnboardingPreferences
     ) {
@@ -95,6 +97,8 @@ final class OnboardingInterviewCoordinator {
             llmFacade: llmFacade,
             documentExtractionService: documentExtractionService,
             applicantProfileStore: applicantProfileStore,
+            resRefStore: resRefStore,
+            sessionStore: sessionStore,
             dataStore: dataStore,
             preferences: preferences
         )
@@ -201,7 +205,8 @@ final class OnboardingInterviewCoordinator {
             Logger.info("🗑️ UI deletion synced: removed card \(id) from coordinator cache", category: .ai)
         }
         // Also emit the event so StateCoordinator updates its state
-        await eventBus.publish(.timelineCardDeleted(id: id))
+        // Pass fromUI: true so CoordinatorEventRouter doesn't re-increment the UI token
+        await eventBus.publish(.timelineCardDeleted(id: id, fromUI: true))
     }
     func reorderTimelineCards(orderedIds: [String]) async -> JSON {
         await timelineManagementService.reorderTimelineCards(orderedIds: orderedIds)
@@ -262,6 +267,7 @@ final class OnboardingInterviewCoordinator {
         ui.knowledgeCardPlan = items
         ui.knowledgeCardPlanFocus = currentFocus
         ui.knowledgeCardPlanMessage = message
+        Logger.info("📋 Knowledge card plan updated: \(items.count) items, focus=\(currentFocus ?? "none"), phase=\(ui.phase.rawValue)", category: .ai)
     }
 
     /// Get the currently focused plan item ID

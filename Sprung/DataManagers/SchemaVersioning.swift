@@ -45,7 +45,13 @@ enum SprungSchema {
         LanguageExperienceDefault.self,
         InterestExperienceDefault.self,
         InterestKeywordDefault.self,
-        ReferenceExperienceDefault.self
+        ReferenceExperienceDefault.self,
+        // Onboarding Session Models
+        OnboardingSession.self,
+        OnboardingObjectiveRecord.self,
+        OnboardingArtifactRecord.self,
+        OnboardingMessageRecord.self,
+        OnboardingPlanItemRecord.self
     ]
     static var schema: Schema {
         Schema(models)

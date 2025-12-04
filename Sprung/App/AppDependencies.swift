@@ -27,6 +27,7 @@ final class AppDependencies {
     let experienceDefaultsStore: ExperienceDefaultsStore
     let careerKeywordStore: CareerKeywordStore
     let applicantProfileStore: ApplicantProfileStore
+    let onboardingSessionStore: OnboardingSessionStore
     let documentExtractionService: DocumentExtractionService
     let onboardingCoordinator: OnboardingInterviewCoordinator
     let llmService: _LLMService
@@ -57,6 +58,7 @@ final class AppDependencies {
         ).installDefaultsIfNeeded()
         let applicantProfileStore = ApplicantProfileStore(context: modelContext)
         self.applicantProfileStore = applicantProfileStore
+        self.onboardingSessionStore = OnboardingSessionStore(context: modelContext)
         // Core export orchestration
         let resumeExportService = ResumeExportService(
             templateStore: templateStore,
@@ -136,6 +138,8 @@ final class AppDependencies {
             llmFacade: llmFacade,
             documentExtractionService: documentExtractionService,
             applicantProfileStore: applicantProfileStore,
+            resRefStore: resRefStore,
+            sessionStore: onboardingSessionStore,
             dataStore: interviewDataStore,
             preferences: preferences
         )
