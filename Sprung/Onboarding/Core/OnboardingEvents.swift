@@ -546,9 +546,10 @@ actor EventCoordinator {
             description = "LLM tool call batch started (expecting \(expectedCount) responses)"
         case .llmExecuteBatchedToolResponses(let payloads):
             description = "LLM execute batched tool responses (\(payloads.count) responses)"
-        case .llmExecuteUserMessage(_, let isSystemGenerated, let chatboxMessageId, _):
+        case .llmExecuteUserMessage(_, let isSystemGenerated, let chatboxMessageId, _, let bundledDevMessages):
             let chatboxInfo = chatboxMessageId.map { " chatbox:\($0.prefix(8))..." } ?? ""
-            description = "LLM execute user message (system: \(isSystemGenerated)\(chatboxInfo))"
+            let bundledInfo = bundledDevMessages.isEmpty ? "" : " +\(bundledDevMessages.count) dev msgs"
+            description = "LLM execute user message (system: \(isSystemGenerated)\(chatboxInfo)\(bundledInfo))"
         case .llmExecuteToolResponse:
             description = "LLM execute tool response"
         case .llmExecuteDeveloperMessage:
