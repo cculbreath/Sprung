@@ -12,6 +12,8 @@ final class InterviewSessionCoordinator {
     private let documentArtifactHandler: DocumentArtifactHandler
     private let documentArtifactMessenger: DocumentArtifactMessenger
     private let ui: OnboardingUIState
+    private let sessionPersistenceHandler: SwiftDataSessionPersistenceHandler
+    private let chatTranscriptStore: ChatTranscriptStore
     // MARK: - Callbacks
     private var subscribeToStateUpdates: (() -> Void)?
     // MARK: - Initialization
@@ -22,7 +24,9 @@ final class InterviewSessionCoordinator {
         dataPersistenceService: DataPersistenceService,
         documentArtifactHandler: DocumentArtifactHandler,
         documentArtifactMessenger: DocumentArtifactMessenger,
-        ui: OnboardingUIState
+        ui: OnboardingUIState,
+        sessionPersistenceHandler: SwiftDataSessionPersistenceHandler,
+        chatTranscriptStore: ChatTranscriptStore
     ) {
         self.lifecycleController = lifecycleController
         self.phaseTransitionController = phaseTransitionController
@@ -31,6 +35,8 @@ final class InterviewSessionCoordinator {
         self.documentArtifactHandler = documentArtifactHandler
         self.documentArtifactMessenger = documentArtifactMessenger
         self.ui = ui
+        self.sessionPersistenceHandler = sessionPersistenceHandler
+        self.chatTranscriptStore = chatTranscriptStore
     }
     // MARK: - Configuration
     /// Set the callback for subscribing to state updates after interview starts.
@@ -38,12 +44,23 @@ final class InterviewSessionCoordinator {
         self.subscribeToStateUpdates = callback
     }
     // MARK: - Interview Lifecycle
-    /// Start a new interview.
-    /// - Parameter resumeExisting: Ignored; always starts fresh.
+    /// Start a new interview or resume an existing one.
+    /// - Parameter resumeExisting: If true, attempts to resume from persisted session.
     /// - Returns: True if interview started successfully
     func startInterview(resumeExisting: Bool = false) async -> Bool {
+        // Start session persistence handler (listens to events)
+        sessionPersistenceHandler.start()
+
+        // Check for existing session to resume
+        if resumeExisting, let existingSession = sessionPersistenceHandler.getActiveSession() {
+            Logger.info("🔄 Resuming existing interview session: \(existingSession.id)", category: .ai)
+            return await resumeSession(existingSession)
+        }
+
+        // Start fresh interview
         Logger.info("🚀 Starting fresh interview (session coordinator)", category: .ai)
         await resetForFreshStart()
+        _ = sessionPersistenceHandler.startSession(resumeExisting: false)
         await state.setPhase(.phase1CoreFacts)
         await phaseTransitionController.registerObjectivesForCurrentPhase()
         subscribeToStateUpdates?()
@@ -60,8 +77,53 @@ final class InterviewSessionCoordinator {
         }
         return true
     }
+
+    /// Resume from an existing persisted session
+    private func resumeSession(_ session: OnboardingSession) async -> Bool {
+        // Restore messages to chat transcript
+        await sessionPersistenceHandler.restoreSession(session, to: chatTranscriptStore)
+
+        // Restore UI state
+        let phase = InterviewPhase(rawValue: session.phase) ?? .phase1CoreFacts
+        ui.phase = phase
+        ui.knowledgeCardPlan = sessionPersistenceHandler.getRestoredPlanItems(session)
+
+        // Set phase in state coordinator
+        await state.setPhase(phase)
+        await phaseTransitionController.registerObjectivesForCurrentPhase()
+
+        // Restore objective statuses
+        let objectiveStatuses = sessionPersistenceHandler.getRestoredObjectiveStatuses(session)
+        for (objectiveId, status) in objectiveStatuses {
+            await state.restoreObjectiveStatus(objectiveId: objectiveId, status: status)
+        }
+
+        // Mark session as resumed
+        _ = sessionPersistenceHandler.startSession(resumeExisting: true)
+
+        subscribeToStateUpdates?()
+        await documentArtifactHandler.start()
+        await documentArtifactMessenger.start()
+
+        // Start LLM with resume flag
+        let success = await lifecycleController.startInterview(isResuming: true)
+        if success {
+            ui.isActive = await state.isActive
+            Logger.info("🎛️ Resumed session isActive synced: \(ui.isActive)", category: .ai)
+        }
+
+        if let orchestrator = lifecycleController.orchestrator {
+            let cfg = ModelProvider.forTask(.orchestrator)
+            await orchestrator.setModelId(ui.preferences.preferredModelId ?? cfg.id)
+        }
+
+        Logger.info("✅ Session resumed: \(session.id), phase=\(phase.rawValue)", category: .ai)
+        return true
+    }
     /// End the current interview session.
     func endInterview() async {
+        sessionPersistenceHandler.endSession(markComplete: false)
+        sessionPersistenceHandler.stop()
         await lifecycleController.endInterview()
         ui.isActive = await state.isActive
         Logger.info("🎛️ Session isActive synced: \(ui.isActive)", category: .ai)

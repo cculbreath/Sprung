@@ -272,7 +272,7 @@ actor StateCoordinator: OnboardingEventEmitter {
             await chatStore.updateReasoningSummary(delta: delta)
         case .llmReasoningSummaryComplete(let text):
             await chatStore.completeReasoningSummary(finalText: text)
-        case .llmEnqueueUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText):
+        case .llmEnqueueUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText, let toolChoice):
             // Bundle any queued developer messages WITH the user message
             // They'll be included as input items in the same API request
             let bundledDevMessages = await llmStateManager.drainQueuedDeveloperMessages()
@@ -284,7 +284,8 @@ actor StateCoordinator: OnboardingEventEmitter {
                 isSystemGenerated: isSystemGenerated,
                 chatboxMessageId: chatboxMessageId,
                 originalText: originalText,
-                bundledDeveloperMessages: bundledDevMessages
+                bundledDeveloperMessages: bundledDevMessages,
+                toolChoice: toolChoice
             ))
         case .llmSendDeveloperMessage(let payload):
             // Codex paradigm: Always queue developer messages until user action
@@ -345,16 +346,51 @@ actor StateCoordinator: OnboardingEventEmitter {
     private func handleTimelineEvent(_ event: OnboardingEvent) async {
         switch event {
         case .timelineCardCreated(let card):
+            Logger.info("📊 StateCoordinator: Received timelineCardCreated", category: .ai)
             await artifactRepository.createTimelineCard(card)
             Logger.info("📊 StateCoordinator: Timeline sync updated. Cards count: \(artifactRepository.skeletonTimelineSync?["experiences"].array?.count ?? 0)", category: .ai)
+            // Emit UI update event AFTER repository is updated
+            if let timeline = await artifactRepository.getSkeletonTimeline() {
+                await emit(.timelineUIUpdateNeeded(timeline: timeline))
+                Logger.info("📊 StateCoordinator: Emitted timelineUIUpdateNeeded after card create", category: .ai)
+            }
         case .timelineCardUpdated(let id, let fields):
+            Logger.info("📊 StateCoordinator: Received timelineCardUpdated for id=\(id)", category: .ai)
             await artifactRepository.updateTimelineCard(id: id, fields: fields)
-        case .timelineCardDeleted(let id):
+            // Emit UI update event AFTER repository is updated
+            if let timeline = await artifactRepository.getSkeletonTimeline() {
+                await emit(.timelineUIUpdateNeeded(timeline: timeline))
+                Logger.info("📊 StateCoordinator: Emitted timelineUIUpdateNeeded after card \(id) update", category: .ai)
+            } else {
+                Logger.warning("📊 StateCoordinator: No timeline found after card \(id) update - UI update skipped", category: .ai)
+            }
+        case .timelineCardDeleted(let id, let fromUI):
+            Logger.info("📊 StateCoordinator: Received timelineCardDeleted for id=\(id), fromUI=\(fromUI)", category: .ai)
             await artifactRepository.deleteTimelineCard(id: id)
+            // Only emit UI update for non-UI deletions (UI-initiated already has the update)
+            if !fromUI, let timeline = await artifactRepository.getSkeletonTimeline() {
+                await emit(.timelineUIUpdateNeeded(timeline: timeline))
+                Logger.info("📊 StateCoordinator: Emitted timelineUIUpdateNeeded after card \(id) delete", category: .ai)
+            }
         case .timelineCardsReordered(let orderedIds):
+            Logger.info("📊 StateCoordinator: Received timelineCardsReordered", category: .ai)
             await artifactRepository.reorderTimelineCards(orderedIds: orderedIds)
+            // Emit UI update event AFTER repository is updated
+            if let timeline = await artifactRepository.getSkeletonTimeline() {
+                await emit(.timelineUIUpdateNeeded(timeline: timeline))
+                Logger.info("📊 StateCoordinator: Emitted timelineUIUpdateNeeded after reorder", category: .ai)
+            }
         case .skeletonTimelineReplaced(let timeline, let diff, _):
+            Logger.info("📊 StateCoordinator: Received skeletonTimelineReplaced", category: .ai)
             await artifactRepository.replaceSkeletonTimeline(timeline, diff: diff)
+            // Emit UI update event AFTER repository is updated
+            if let updatedTimeline = await artifactRepository.getSkeletonTimeline() {
+                await emit(.timelineUIUpdateNeeded(timeline: updatedTimeline))
+                Logger.info("📊 StateCoordinator: Emitted timelineUIUpdateNeeded after timeline replace", category: .ai)
+            }
+        case .timelineUIUpdateNeeded:
+            // Don't handle our own event to avoid loops
+            break
         default:
             break
         }
@@ -657,6 +693,14 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
     func getObjectivesForPhase(_ phase: InterviewPhase) async -> [ObjectiveStore.ObjectiveEntry] {
         await objectiveStore.getObjectivesForPhase(phase)
+    }
+    /// Restore an objective status from persisted session
+    func restoreObjectiveStatus(objectiveId: String, status: String) async {
+        guard let objectiveStatus = ObjectiveStatus(rawValue: status) else {
+            Logger.warning("⚠️ Invalid objective status to restore: \(status)", category: .ai)
+            return
+        }
+        await objectiveStore.setObjectiveStatus(objectiveId, status: objectiveStatus, source: "session_restore")
     }
     // Artifact delegation
     func getArtifactRecord(id: String) async -> JSON? {

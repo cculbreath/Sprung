@@ -112,6 +112,8 @@ final class OnboardingDependencyContainer {
     let chatTranscriptStore: ChatTranscriptStore
     let sessionUIState: SessionUIState
     let draftKnowledgeStore: DraftKnowledgeStore
+    // MARK: - Session Persistence
+    let sessionPersistenceHandler: SwiftDataSessionPersistenceHandler
     // MARK: - Tool Execution
     let toolExecutor: ToolExecutor
     // MARK: - External Dependencies (Passed In)
@@ -220,18 +222,27 @@ final class OnboardingDependencyContainer {
         self.dataPersistenceService = services.dataPersistenceService
         self.ingestionCoordinator = services.ingestionCoordinator
 
-        // 9. Initialize session and query coordinators
+        // 9. Initialize session persistence handler first (needed by session coordinator)
+        self.sessionPersistenceHandler = SwiftDataSessionPersistenceHandler(
+            eventBus: core.eventBus,
+            sessionStore: sessionStore,
+            chatTranscriptStore: stores.chatTranscriptStore
+        )
+
+        // 10. Initialize session and query coordinators
         self.sessionCoordinator = InterviewSessionCoordinator(
             lifecycleController: controllers.lifecycleController,
             phaseTransitionController: controllers.phaseTransitionController, state: state,
             dataPersistenceService: services.dataPersistenceService,
             documentArtifactHandler: docs.documentArtifactHandler,
-            documentArtifactMessenger: docs.documentArtifactMessenger, ui: ui
+            documentArtifactMessenger: docs.documentArtifactMessenger, ui: ui,
+            sessionPersistenceHandler: sessionPersistenceHandler,
+            chatTranscriptStore: stores.chatTranscriptStore
         )
         self.artifactQueryCoordinator = ArtifactQueryCoordinator(state: state, eventBus: core.eventBus)
         self.uiStateUpdateHandler = UIStateUpdateHandler(ui: ui, state: state, wizardTracker: wizardTracker)
 
-        // 10. Initialize artifact ingestion infrastructure
+        // 11. Initialize artifact ingestion infrastructure
         let ingestion = Self.createArtifactIngestionComponents(
             eventBus: core.eventBus, documentProcessingService: docs.documentProcessingService, llmFacade: llmFacade
         )
@@ -239,7 +250,7 @@ final class OnboardingDependencyContainer {
         self.gitIngestionKernel = ingestion.gitIngestionKernel
         self.artifactIngestionCoordinator = ingestion.artifactIngestionCoordinator
 
-        // 11. Initialize remaining handlers
+        // 12. Initialize remaining handlers
         self.profilePersistenceHandler = ProfilePersistenceHandler(
             applicantProfileStore: applicantProfileStore, toolRouter: tools.toolRouter, eventBus: core.eventBus
         )
@@ -247,7 +258,7 @@ final class OnboardingDependencyContainer {
             eventBus: core.eventBus, toolRouter: tools.toolRouter, state: state
         )
 
-        // 12. Post-init configuration
+        // 13. Post-init configuration
         controllers.phaseTransitionController.setLifecycleController(controllers.lifecycleController)
         tools.toolRouter.uploadHandler.updateExtractionProgressHandler { [services] update in
             Task { @MainActor in services.extractionManagementService.updateExtractionProgress(with: update) }
