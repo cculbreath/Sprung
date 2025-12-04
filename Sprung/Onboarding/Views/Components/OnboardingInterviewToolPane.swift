@@ -245,6 +245,16 @@ struct OnboardingInterviewToolPane: View {
                     },
                     onSelectFiles: {
                         openWritingSamplePanel()
+                    },
+                    onDoneWithSamples: {
+                        Task {
+                            await coordinator.completeWritingSamplesCollection()
+                        }
+                    },
+                    onEndInterview: {
+                        Task {
+                            await coordinator.endInterview()
+                        }
                     }
                 )
             }

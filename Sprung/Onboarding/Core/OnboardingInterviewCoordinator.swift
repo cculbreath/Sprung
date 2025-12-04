@@ -87,6 +87,7 @@ final class OnboardingInterviewCoordinator {
         documentExtractionService: DocumentExtractionService,
         applicantProfileStore: ApplicantProfileStore,
         resRefStore: ResRefStore,
+        coverRefStore: CoverRefStore,
         sessionStore: OnboardingSessionStore,
         dataStore: InterviewDataStore,
         preferences: OnboardingPreferences
@@ -98,6 +99,7 @@ final class OnboardingInterviewCoordinator {
             documentExtractionService: documentExtractionService,
             applicantProfileStore: applicantProfileStore,
             resRefStore: resRefStore,
+            coverRefStore: coverRefStore,
             sessionStore: sessionStore,
             dataStore: dataStore,
             preferences: preferences
@@ -153,9 +155,55 @@ final class OnboardingInterviewCoordinator {
             Logger.info("🗑️ Deleted SwiftData session: \(session.id)", category: .ai)
         }
     }
+    /// Called when user is done with the interview - triggers finalization flow
     func endInterview() async {
-        await sessionCoordinator.endInterview()
+        Logger.info("🏁 User clicked 'End Interview' - initiating finalization flow", category: .ai)
+
+        // Mark dossier objective as completed if not already
+        await eventBus.publish(.objectiveStatusUpdateRequested(
+            id: "dossier_complete",
+            status: "completed",
+            source: "user_action",
+            notes: "User clicked 'End Interview' button",
+            details: nil
+        ))
+
+        // Send a system-generated message to trigger ExperienceDefaults generation and finalization
+        var userMessage = SwiftyJSON.JSON()
+        userMessage["role"].string = "user"
+        userMessage["content"].string = """
+            I'm ready to finish the interview. Please:
+            1. Finalize and persist the candidate dossier
+            2. Complete any remaining Phase 3 objectives
+            3. Call next_phase to complete the interview
+            """
+        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
     }
+
+    /// Called when user clicks "Done with Writing Samples" button in Phase 3
+    /// Marks the writing samples objective complete and triggers dossier compilation
+    func completeWritingSamplesCollection() async {
+        Logger.info("📝 User marked writing samples collection as complete", category: .ai)
+
+        // Mark the writing samples objective as completed
+        await eventBus.publish(.objectiveStatusUpdateRequested(
+            id: "one_writing_sample",
+            status: "completed",
+            source: "user_action",
+            notes: "User clicked 'Done with Writing Samples' button",
+            details: nil
+        ))
+
+        // Send a system-generated user message to trigger dossier compilation
+        var userMessage = SwiftyJSON.JSON()
+        userMessage["role"].string = "user"
+        userMessage["content"].string = """
+            I'm done uploading writing samples. \
+            Please analyze the samples (if I consented to style analysis) and proceed to compile my candidate dossier.
+            """
+        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+    }
+
     // MARK: - Evidence Handling
     func handleEvidenceUpload(url: URL, requirementId: String) async {
         await ingestionCoordinator.handleEvidenceUpload(url: url, requirementId: requirementId)

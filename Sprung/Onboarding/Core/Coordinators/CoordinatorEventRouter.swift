@@ -10,6 +10,7 @@ final class CoordinatorEventRouter {
     private let toolRouter: ToolHandler
     private let applicantProfileStore: ApplicantProfileStore
     private let resRefStore: ResRefStore
+    private let coverRefStore: CoverRefStore
     private let eventBus: EventCoordinator
     private let dataStore: InterviewDataStore
     // Weak reference to the parent coordinator to delegate specific actions back if needed
@@ -26,6 +27,7 @@ final class CoordinatorEventRouter {
         toolRouter: ToolHandler,
         applicantProfileStore: ApplicantProfileStore,
         resRefStore: ResRefStore,
+        coverRefStore: CoverRefStore,
         eventBus: EventCoordinator,
         dataStore: InterviewDataStore,
         coordinator: OnboardingInterviewCoordinator
@@ -36,6 +38,7 @@ final class CoordinatorEventRouter {
         self.toolRouter = toolRouter
         self.applicantProfileStore = applicantProfileStore
         self.resRefStore = resRefStore
+        self.coverRefStore = coverRefStore
         self.eventBus = eventBus
         self.dataStore = dataStore
         self.coordinator = coordinator
@@ -56,6 +59,8 @@ final class CoordinatorEventRouter {
         switch event {
         case .objectiveStatusChanged(let id, _, let newStatus, _, _, _, _):
             Logger.debug("📊 CoordinatorEventRouter: objectiveStatusChanged received - id=\(id), newStatus=\(newStatus)", category: .ai)
+            // Update UI state for views to track objective progress
+            ui.objectiveStatuses[id] = newStatus
             if id == "applicant_profile" && newStatus == "completed" {
                 Logger.info("📊 CoordinatorEventRouter: Dismissing profile summary for applicant_profile completion", category: .ai)
                 toolRouter.profileHandler.dismissProfileSummary()
@@ -118,6 +123,10 @@ final class CoordinatorEventRouter {
             if let phase = InterviewPhase(rawValue: phaseName) {
                 ui.phase = phase
                 Logger.info("📊 CoordinatorEventRouter: UI phase updated to \(phase.rawValue)", category: .ai)
+                // Persist writing corpus when transitioning to complete
+                if phase == .complete {
+                    await persistWritingCorpusOnComplete()
+                }
             } else {
                 Logger.warning("📊 CoordinatorEventRouter: Could not convert phaseName '\(phaseName)' to InterviewPhase", category: .ai)
             }
@@ -267,5 +276,82 @@ final class CoordinatorEventRouter {
 
         coordinator?.updatePlanItemStatus(itemId: itemId, status: planStatus)
         Logger.info("📋 Plan item status updated: \(itemId) → \(status)", category: .ai)
+    }
+
+    // MARK: - Writing Corpus Persistence
+
+    /// Persist writing samples to CoverRefStore and candidate dossier to ResRefStore when interview completes
+    private func persistWritingCorpusOnComplete() async {
+        Logger.info("💾 Persisting writing corpus and dossier on interview completion", category: .ai)
+
+        // Get artifact records from UI state (synced from StateCoordinator)
+        let artifacts = ui.artifactRecords
+
+        // Persist writing samples to CoverRefStore
+        let writingSamples = artifacts.filter { artifact in
+            artifact["source_type"].stringValue == "writing_sample" ||
+            artifact["metadata"]["writing_type"].exists()
+        }
+
+        for sample in writingSamples {
+            persistWritingSampleToCoverRef(sample: sample)
+        }
+
+        Logger.info("✅ Persisted \(writingSamples.count) writing samples to CoverRefStore", category: .ai)
+
+        // Persist candidate dossier if present (to CoverRefStore for cover letter generation)
+        if let dossier = artifacts.first(where: { $0["source_type"].stringValue == "candidate_dossier" }) {
+            persistDossierToCoverRef(dossier: dossier)
+            Logger.info("✅ Persisted candidate dossier to CoverRefStore", category: .ai)
+        }
+
+        // Emit events for persistence completion
+        await eventBus.publish(.writingSamplePersisted(sample: JSON(["count": writingSamples.count])))
+    }
+
+    /// Convert a writing sample artifact to CoverRef and persist
+    private func persistWritingSampleToCoverRef(sample: JSON) {
+        let name = sample["metadata"]["name"].string ??
+                   sample["filename"].stringValue.replacingOccurrences(of: ".txt", with: "")
+        let content = sample["extracted_text"].stringValue
+
+        // Skip if no content
+        guard !content.isEmpty else {
+            Logger.warning("⚠️ Skipping writing sample with empty content: \(name)", category: .ai)
+            return
+        }
+
+        let coverRef = CoverRef(
+            name: name,
+            content: content,
+            enabledByDefault: true,
+            type: .writingSample
+        )
+
+        coverRefStore.addCoverRef(coverRef)
+        Logger.info("💾 Writing sample persisted to CoverRef: \(name)", category: .ai)
+    }
+
+    /// Convert candidate dossier to CoverRef and persist (for cover letter generation)
+    private func persistDossierToCoverRef(dossier: JSON) {
+        let name = dossier["metadata"]["title"].string ?? "Candidate Dossier"
+        let content = dossier["content"].stringValue
+
+        // Skip if no content
+        guard !content.isEmpty else {
+            Logger.warning("⚠️ Skipping dossier with empty content", category: .ai)
+            return
+        }
+
+        // Use backgroundFact type for dossier - it provides candidate background context
+        let coverRef = CoverRef(
+            name: name,
+            content: content,
+            enabledByDefault: true,
+            type: .backgroundFact
+        )
+
+        coverRefStore.addCoverRef(coverRef)
+        Logger.info("💾 Candidate dossier persisted to CoverRef: \(name)", category: .ai)
     }
 }

@@ -14,6 +14,8 @@ struct WritingCorpusCollectionView: View {
     let coordinator: OnboardingInterviewCoordinator
     let onDropFiles: ([URL]) -> Void
     let onSelectFiles: () -> Void
+    let onDoneWithSamples: () -> Void
+    let onEndInterview: () -> Void
 
     private var writingSamples: [JSON] {
         coordinator.ui.artifactRecords.filter { artifact in
@@ -22,23 +24,44 @@ struct WritingCorpusCollectionView: View {
         }
     }
 
+    /// Check if writing samples collection is complete (based on objective status)
+    private var writingSamplesComplete: Bool {
+        coordinator.ui.objectiveStatuses["one_writing_sample"] == "completed"
+    }
+
+    /// Check if dossier is complete (based on objective status)
+    private var dossierComplete: Bool {
+        coordinator.ui.objectiveStatuses["dossier_complete"] == "completed"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            headerSection
+            if !writingSamplesComplete {
+                // Phase 3.1: Writing Sample Collection
+                headerSection
 
-            // Upload drop zone for writing samples
-            WritingSampleDropZone(
-                onDropFiles: onDropFiles,
-                onSelectFiles: onSelectFiles
-            )
+                // Upload drop zone for writing samples
+                WritingSampleDropZone(
+                    onDropFiles: onDropFiles,
+                    onSelectFiles: onSelectFiles
+                )
 
-            // List of collected samples
-            if !writingSamples.isEmpty {
-                collectedSamplesList
+                // List of collected samples
+                if !writingSamples.isEmpty {
+                    collectedSamplesList
+                }
+
+                // Simple sample count indicator
+                sampleStatusSection
+
+                // "Done with Writing Samples" button
+                if !writingSamples.isEmpty {
+                    doneWithSamplesButton
+                }
+            } else {
+                // Phase 3.2: Dossier Finalization
+                dossierSection
             }
-
-            // Simple sample count indicator
-            sampleStatusSection
         }
         .padding(12)
         .background(Color(nsColor: .controlBackgroundColor))
@@ -47,6 +70,72 @@ struct WritingCorpusCollectionView: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
         )
+    }
+
+    private var doneWithSamplesButton: some View {
+        Button(action: onDoneWithSamples) {
+            HStack {
+                Image(systemName: "checkmark.circle.fill")
+                Text("Done with Writing Samples")
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.regular)
+        .padding(.top, 8)
+    }
+
+    private var dossierSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header for dossier phase
+            VStack(alignment: .leading, spacing: 2) {
+                HStack {
+                    Text("Dossier Finalization")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    if dossierComplete {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    }
+                }
+
+                Text("The assistant is compiling your candidate dossier. Answer any follow-up questions in chat.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+            }
+
+            // Summary of collected writing samples
+            if !writingSamples.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(writingSamples.count) writing sample\(writingSamples.count == 1 ? "" : "s") collected")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.green.opacity(0.1))
+                .cornerRadius(6)
+            }
+
+            // "End Interview" button
+            endInterviewButton
+        }
+    }
+
+    private var endInterviewButton: some View {
+        Button(action: onEndInterview) {
+            HStack {
+                Image(systemName: "flag.checkered")
+                Text("End Interview")
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(.green)
+        .controlSize(.regular)
+        .padding(.top, 8)
     }
 
     private var headerSection: some View {

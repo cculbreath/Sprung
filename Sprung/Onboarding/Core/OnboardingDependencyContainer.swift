@@ -119,6 +119,7 @@ final class OnboardingDependencyContainer {
     // MARK: - External Dependencies (Passed In)
     private let applicantProfileStore: ApplicantProfileStore
     private let resRefStore: ResRefStore
+    private let coverRefStore: CoverRefStore
     let sessionStore: OnboardingSessionStore
     private let dataStore: InterviewDataStore
     let documentExtractionService: DocumentExtractionService
@@ -140,6 +141,7 @@ final class OnboardingDependencyContainer {
         documentExtractionService: DocumentExtractionService,
         applicantProfileStore: ApplicantProfileStore,
         resRefStore: ResRefStore,
+        coverRefStore: CoverRefStore,
         sessionStore: OnboardingSessionStore,
         dataStore: InterviewDataStore,
         preferences: OnboardingPreferences
@@ -150,6 +152,7 @@ final class OnboardingDependencyContainer {
         self.documentExtractionService = documentExtractionService
         self.applicantProfileStore = applicantProfileStore
         self.resRefStore = resRefStore
+        self.coverRefStore = coverRefStore
         self.sessionStore = sessionStore
         self.dataStore = dataStore
 
@@ -414,6 +417,7 @@ final class OnboardingDependencyContainer {
             toolRouter: toolRouter,
             applicantProfileStore: applicantProfileStore,
             resRefStore: resRefStore,
+            coverRefStore: coverRefStore,
             eventBus: eventBus,
             dataStore: dataStore,
             coordinator: coordinator
