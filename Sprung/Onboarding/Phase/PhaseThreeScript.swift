@@ -100,6 +100,24 @@ struct PhaseThreeScript: PhaseScript {
         2. **Chat paste**: When users paste text directly in chat, use `ingest_writing_sample` to capture it as an artifact
 
         Always offer both options and accept whatever format the user prefers.
+
+        ### UI-Driven Subphase Transitions:
+        Phase 3 uses a two-part UI workflow controlled by user buttons:
+
+        **Subphase 1: Writing Sample Collection**
+        - The UI shows a drop zone for file uploads and a list of collected samples
+        - Users can upload files or paste text in chat
+        - When satisfied, user clicks "Done with Writing Samples" button
+        - This marks `one_writing_sample` objective as completed and sends you a message to proceed
+        - You should then analyze samples (if consented) and begin dossier compilation
+
+        **Subphase 2: Dossier Finalization**
+        - The UI switches to show dossier status and an "End Interview" button
+        - Continue asking any clarifying questions needed to complete the dossier
+        - When user clicks "End Interview", they're signaling readiness to finish
+        - Finalize the dossier, persist it, and call `next_phase` to complete the interview
+
+        Do NOT mark objectives as completed until the user signals readiness via the UI buttons.
         ### Key Constraints:
         - Respect the user's writing-analysis consent preferences; skip the analysis sub-objective when consent is not provided
         - Keep the dossier comprehensive but approachable—highlight actionable insights rather than dumping raw data
