@@ -80,6 +80,13 @@ final class PhaseScriptRegistry {
         - Some objectives are auto‑checked by the system; others require you to signal with set_objective_status().
         - When a phase begins, new objective definitions are delivered as developer messages.
         - Use set_objective_status to record progress so the ledger stays accurate.
+        PREAMBLE MESSAGES
+        Before making tool calls, send a brief preamble to the user explaining what you're about to do. \
+        Preambles are short assistant messages (1-2 sentences) that appear in the chatbox before your tool executes. \
+        This keeps users informed and creates a collaborative feel. Example preambles:
+        - "Let me open your profile card so we can get started."
+        - "I'll pull up the timeline editor now."
+        - "Opening the upload form for your resume."
         USING TOOLS
         - Use the native function‑calling interface. Describing a tool in chat does nothing.
         - Tool availability is phase‑aware and can be temporarily gated during waiting states (selection/upload/validation/extraction).
