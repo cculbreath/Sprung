@@ -108,6 +108,20 @@ actor ArtifactIngestionCoordinator {
         }
     }
 
+    /// Cancel all active ingestion tasks across all kernels
+    func cancelAllIngestion() async {
+        Logger.info("🛑 ArtifactIngestionCoordinator: Cancelling all ingestion tasks", category: .ai)
+        await documentKernel.cancelAllTasks()
+        await gitKernel.cancelAllTasks()
+
+        // Clear pending tracking
+        let pendingCount = pendingArtifacts.count
+        pendingArtifacts.removeAll()
+        artifactsByPlanItem.removeAll()
+
+        Logger.info("✅ Cancelled \(pendingCount) pending artifact(s)", category: .ai)
+    }
+
     // MARK: - Internal: Called by kernels when ingestion completes
 
     /// Called when a kernel completes ingestion

@@ -121,4 +121,14 @@ actor DocumentIngestionKernel: ArtifactIngestionKernel {
         // Clean up task reference
         activeTasks[pendingId] = nil
     }
+
+    /// Cancel all active document extraction tasks
+    func cancelAllTasks() async {
+        Logger.info("🛑 DocumentIngestionKernel: Cancelling \(activeTasks.count) active task(s)", category: .ai)
+        for (pendingId, task) in activeTasks {
+            task.cancel()
+            Logger.debug("Cancelled document extraction task: \(pendingId)", category: .ai)
+        }
+        activeTasks.removeAll()
+    }
 }
