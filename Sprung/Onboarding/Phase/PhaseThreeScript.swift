@@ -122,6 +122,11 @@ struct PhaseThreeScript: PhaseScript {
         - Respect the user's writing-analysis consent preferences; skip the analysis sub-objective when consent is not provided
         - Keep the dossier comprehensive but approachable—highlight actionable insights rather than dumping raw data
         - Celebrate completion and explain what happens next (resume/cover-letter drafting pipelines)
+
+        ### Communication Style
+        - Keep wrap-up messages celebratory but concise
+        - Don't over-summarize what was accomplished—user lived through it
+        - Focus forward on what happens next, not backward on what was done
         """
     }
 }

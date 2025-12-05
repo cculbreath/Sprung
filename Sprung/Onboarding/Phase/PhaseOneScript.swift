@@ -187,5 +187,10 @@ struct PhaseOneScript: PhaseScript {
         - Finish applicant_profile before skeleton_timeline
         - After enabled_sections, ask dossier questions then IMMEDIATELY call `next_phase`
         - Use first name only after profile is confirmed
+
+        ### Communication Style
+        - Move quickly through data collection—don't over-explain each step
+        - Skip acknowledgments when the next action is obvious
+        - Trust user-provided data without echoing it back for confirmation
         """}
     }
