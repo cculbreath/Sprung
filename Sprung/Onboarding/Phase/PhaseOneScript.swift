@@ -36,39 +36,23 @@ struct PhaseOneScript: PhaseScript {
     ])
     var objectiveWorkflows: [String: ObjectiveWorkflow] {
         [
+            // Note: contactSourceSelected and contactDataCollected don't emit developer messages
+            // because when contacts import validates the profile, all these objectives complete
+            // simultaneously and the user message already contains all needed context.
             OnboardingObjectiveId.contactSourceSelected.rawValue: ObjectiveWorkflow(
                 id: OnboardingObjectiveId.contactSourceSelected.rawValue,
-                onComplete: { context in
-                    let source = context.details["source"] ?? context.details["status"] ?? "unknown"
-                    let title = """
-                        Contact source selected: \(source). \
-                        Continue guiding the user through the applicant profile intake card that remains on screen.
-                        """
-                    let details = ["source": source, "next_objective": OnboardingObjectiveId.contactDataCollected.rawValue]
-                    return [.developerMessage(title: title, details: details, payload: nil)]
-                }
+                onComplete: { _ in [] }  // No message - bundled with user message
             ),
             OnboardingObjectiveId.contactDataCollected.rawValue: ObjectiveWorkflow(
                 id: OnboardingObjectiveId.contactDataCollected.rawValue,
                 dependsOn: [OnboardingObjectiveId.contactSourceSelected.rawValue],
                 autoStartWhenReady: true,
-                onComplete: { context in
-                    let mode = context.details["source"] ?? context.details["status"] ?? "unspecified"
-                    let title = "Applicant contact data collected via \(mode). Await validation status before re-requesting any details."
-                    let details = ["source": mode, "next_objective": OnboardingObjectiveId.contactDataValidated.rawValue]
-                    return [.developerMessage(title: title, details: details, payload: nil)]
-                }
+                onComplete: { _ in [] }  // No message - bundled with user message
             ),
             OnboardingObjectiveId.contactDataValidated.rawValue: ObjectiveWorkflow(
                 id: OnboardingObjectiveId.contactDataValidated.rawValue,
                 dependsOn: [OnboardingObjectiveId.contactDataCollected.rawValue],
-                onComplete: { context in
-                    // Note: Photo request is handled via contact_photo_collected.onBegin
-                    // Keep this message minimal to avoid conflicting instructions
-                    let title = "Contact data validated. Photo objective starting next."
-                    let details = ["status": context.status.rawValue, "next_step": "contact_photo_collected"]
-                    return [.developerMessage(title: title, details: details, payload: nil)]
-                }
+                onComplete: { _ in [] }  // No message - photo prompt handled by onBegin below
             ),
             OnboardingObjectiveId.contactPhotoCollected.rawValue: ObjectiveWorkflow(
                 id: OnboardingObjectiveId.contactPhotoCollected.rawValue,
@@ -101,14 +85,7 @@ struct PhaseOneScript: PhaseScript {
             OnboardingObjectiveId.applicantProfile.rawValue: ObjectiveWorkflow(
                 id: OnboardingObjectiveId.applicantProfile.rawValue,
                 dependsOn: [OnboardingObjectiveId.contactDataValidated.rawValue],
-                onComplete: { context in
-                    // Note: This fires after contactDataValidated, but the photo flow
-                    // may still be waiting for user response. DO NOT add instructions here
-                    // that would cause the LLM to advance.
-                    let title = "Applicant profile data persisted. (Informational only - do not change current workflow.)"
-                    let details = ["status": context.status.rawValue, "informational": "true"]
-                    return [.developerMessage(title: title, details: details, payload: nil)]
-                }
+                onComplete: { _ in [] }  // No message - photo flow handles next step
             ),
             OnboardingObjectiveId.skeletonTimeline.rawValue: ObjectiveWorkflow(
                 id: OnboardingObjectiveId.skeletonTimeline.rawValue,
