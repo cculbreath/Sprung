@@ -134,11 +134,14 @@ actor ArtifactIngestionCoordinator {
         pending.status = .completed
         pendingArtifacts[pendingId] = pending
 
-        // Emit artifact record produced event
+        // Emit artifact record produced event (DocumentArtifactMessenger batches these)
         await eventBus.publish(.artifactRecordProduced(record: result.artifactRecord))
 
-        // Notify LLM that artifact is ready
-        await eventBus.publish(.artifactIngestionCompleted(result: result, planItemId: pending.planItemId))
+        // For git repositories, send immediate notification (not batched)
+        // Documents are batched by DocumentArtifactMessenger which listens to artifactRecordProduced
+        if result.source == .gitRepository {
+            await eventBus.publish(.artifactIngestionCompleted(result: result, planItemId: pending.planItemId))
+        }
 
         Logger.info("✅ Artifact ingestion completed: \(pending.filename)", category: .ai)
     }
