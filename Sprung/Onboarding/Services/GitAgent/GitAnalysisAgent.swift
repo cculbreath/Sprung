@@ -179,42 +179,63 @@ class GitAnalysisAgent {
                     throw GitAgentError.agentDidNotComplete
                 }
 
-                // Execute each tool call
-                for toolCall in toolCalls {
-                    let toolName = toolCall.function.name ?? "unknown"
-                    let toolDetail = extractToolDetail(name: toolName, arguments: toolCall.function.arguments)
-                    let progressMessage = toolDetail.isEmpty ? "Executing: \(toolName)" : "Executing: \(toolName) - \(toolDetail)"
-                    await emitEvent(.gitAgentToolExecuting(toolName: toolName, turn: turnCount))
-                    await updateProgress(progressMessage)
+                // Check for completion tool first (terminates the agent loop)
+                if let completionCall = toolCalls.first(where: { $0.function.name == CompleteAnalysisTool.name }) {
+                    do {
+                        let result = try parseCompleteAnalysis(arguments: completionCall.function.arguments)
+                        status = .completed
+                        await emitEvent(.gitAgentProgressUpdated(message: "Analysis complete!", turn: turnCount))
+                        await updateProgress("Analysis complete!")
+                        return result
+                    } catch {
+                        // Send detailed error back to LLM so it can retry with corrected JSON
+                        let errorMessage = buildParsingErrorMessage(arguments: completionCall.function.arguments, error: error)
+                        Logger.warning("⚠️ GitAgent: complete_analysis parsing failed, asking LLM to retry: \(error.localizedDescription)", category: .ai)
+                        messages.append(buildToolResultMessage(
+                            toolCallId: completionCall.id ?? UUID().uuidString,
+                            result: errorMessage
+                        ))
+                        continue
+                    }
+                }
 
-                    // Check for completion tool
-                    if toolName == CompleteAnalysisTool.name {
-                        do {
-                            let result = try parseCompleteAnalysis(arguments: toolCall.function.arguments)
-                            status = .completed
-                            await emitEvent(.gitAgentProgressUpdated(message: "Analysis complete!", turn: turnCount))
-                            await updateProgress("Analysis complete!")
-                            return result
-                        } catch {
-                            // Send detailed error back to LLM so it can retry with corrected JSON
-                            let errorMessage = buildParsingErrorMessage(arguments: toolCall.function.arguments, error: error)
-                            Logger.warning("⚠️ GitAgent: complete_analysis parsing failed, asking LLM to retry: \(error.localizedDescription)", category: .ai)
-                            messages.append(buildToolResultMessage(
-                                toolCallId: toolCall.id ?? UUID().uuidString,
-                                result: errorMessage
-                            ))
-                            continue
+                // Filter to non-completion tool calls for parallel execution
+                let executableCalls = toolCalls.filter { $0.function.name != CompleteAnalysisTool.name }
+
+                // Log parallel execution
+                let toolNames = executableCalls.map { $0.function.name ?? "unknown" }
+                if executableCalls.count > 1 {
+                    await updateProgress("Executing \(executableCalls.count) tools in parallel: \(toolNames.joined(separator: ", "))")
+                    Logger.info("🚀 GitAgent: Executing \(executableCalls.count) tools in parallel", category: .ai)
+                }
+
+                // Execute tool calls concurrently
+                let results = await withTaskGroup(of: (String, String, String).self, returning: [(String, String, String)].self) { group in
+                    for toolCall in executableCalls {
+                        let toolId = toolCall.id ?? UUID().uuidString
+                        let toolName = toolCall.function.name ?? "unknown"
+                        let arguments = toolCall.function.arguments
+
+                        group.addTask { [self] in
+                            await self.emitEvent(.gitAgentToolExecuting(toolName: toolName, turn: self.turnCount))
+                            let result = await self.executeTool(name: toolName, arguments: arguments)
+                            return (toolId, toolName, result)
                         }
                     }
 
-                    // Execute the tool
-                    let toolResult = await executeTool(name: toolName, arguments: toolCall.function.arguments)
+                    var collected: [(String, String, String)] = []
+                    for await result in group {
+                        collected.append(result)
+                    }
+                    return collected
+                }
 
-                    // Add tool result to messages
-                    messages.append(buildToolResultMessage(
-                        toolCallId: toolCall.id ?? UUID().uuidString,
-                        result: toolResult
-                    ))
+                // Add all tool results to messages (order doesn't matter for tool responses)
+                for (toolId, toolName, result) in results {
+                    let toolDetail = extractToolDetail(name: toolName, arguments: executableCalls.first { $0.id == toolId }?.function.arguments ?? "")
+                    let progressMessage = toolDetail.isEmpty ? "Completed: \(toolName)" : "Completed: \(toolName) - \(toolDetail)"
+                    await updateProgress(progressMessage)
+                    messages.append(buildToolResultMessage(toolCallId: toolId, result: result))
                 }
             }
 
