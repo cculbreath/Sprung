@@ -492,6 +492,22 @@ actor StateCoordinator: OnboardingEventEmitter {
     func getCurrentModelId() async -> String {
         await llmStateManager.getCurrentModelId()
     }
+    /// Get whether flex processing is enabled
+    func getUseFlexProcessing() async -> Bool {
+        await llmStateManager.getUseFlexProcessing()
+    }
+    /// Set whether to use flex processing tier (50% cost savings, variable latency)
+    func setUseFlexProcessing(_ enabled: Bool) async {
+        await llmStateManager.setUseFlexProcessing(enabled)
+    }
+    /// Get the default reasoning effort level
+    func getDefaultReasoningEffort() async -> String {
+        await llmStateManager.getDefaultReasoningEffort()
+    }
+    /// Set the default reasoning effort level (none, minimal, low, medium, high)
+    func setDefaultReasoningEffort(_ effort: String) async {
+        await llmStateManager.setDefaultReasoningEffort(effort)
+    }
     // MARK: - Pending Tool Response Tracking
     /// Store pending tool response payload(s) before sending (for retry on stream error)
     func setPendingToolResponses(_ payloads: [JSON]) async {

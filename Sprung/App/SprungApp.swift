@@ -15,6 +15,11 @@ struct SprungApp: App {
     private let appDependencies: AppDependencies
     private let appEnvironment: AppEnvironment
     init() {
+        // Register default values for settings before any code reads them
+        UserDefaults.standard.register(defaults: [
+            "onboardingInterviewDefaultModelId": "gpt-5"
+        ])
+
         // Preflight backup before opening/migrating the store
         SwiftDataBackupManager.performPreflightBackupIfNeeded()
         var resolvedContainer: ModelContainer

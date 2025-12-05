@@ -4,11 +4,15 @@ import SwiftData
 struct SettingsView: View {
     @AppStorage("fixOverflowMaxIterations") private var fixOverflowMaxIterations: Int = 3
     @AppStorage("reasoningEffort") private var reasoningEffort: String = "medium"
-    @AppStorage("onboardingInterviewDefaultModelId") private var onboardingModelId: String = "openai/gpt-5.1"
+    @AppStorage("onboardingInterviewDefaultModelId") private var onboardingModelId: String = "gpt-5"
     @AppStorage("onboardingPDFExtractionModelId") private var pdfExtractionModelId: String = "google/gemini-2.0-flash-001"
     @AppStorage("onboardingGitIngestModelId") private var gitIngestModelId: String = "openai/gpt-4o-mini"
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var onboardingWebSearchAllowed: Bool = true
     @AppStorage("onboardingInterviewAllowWritingAnalysisDefault") private var onboardingWritingAllowed: Bool = false
+    @AppStorage("onboardingInterviewReasoningEffort") private var onboardingReasoningEffort: String = "none"
+    @AppStorage("onboardingInterviewHardTaskReasoningEffort") private var onboardingHardTaskReasoningEffort: String = "medium"
+    @AppStorage("onboardingInterviewFlexProcessing") private var onboardingFlexProcessing: Bool = true
+    @AppStorage("onboardingInterviewPromptCacheRetention") private var onboardingPromptCacheRetention: Bool = true
     @Environment(OnboardingInterviewCoordinator.self) private var onboardingCoordinator
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(ApplicantProfileStore.self) private var applicantProfileStore
@@ -20,14 +24,38 @@ struct SettingsView: View {
     @State private var resetError: String?
     @State private var isResetting = false
     private let dataResetService = DataResetService()
-    private let onboardingDefaultModelFallback = "openai/gpt-5.1"
     private let pdfExtractionFallbackModelId = "google/gemini-2.0-flash-001"
-    // GPT-5.1 supports: none, low, medium, high (not "minimal")
+
+    /// Available GPT-5 and GPT-5.1 models for onboarding interviews (uses OpenAI directly, not OpenRouter)
+    private let onboardingInterviewModelOptions: [(id: String, name: String)] = [
+        // GPT-5.1 family (preferred - supports "none" reasoning)
+        ("gpt-5.1", "GPT-5.1"),
+        ("gpt-5.1-codex", "GPT-5.1 Codex"),
+        ("gpt-5.1-codex-mini", "GPT-5.1 Codex Mini"),
+        ("gpt-5.1-codex-max", "GPT-5.1 Codex Max"),
+        // GPT-5 family (requires "minimal" reasoning minimum)
+        ("gpt-5", "GPT-5"),
+        ("gpt-5-mini", "GPT-5 Mini"),
+        ("gpt-5-nano", "GPT-5 Nano"),
+        ("gpt-5-pro", "GPT-5 Pro"),
+        ("gpt-5-codex", "GPT-5 Codex")
+    ]
+
+    /// Models that support extended prompt cache retention (24h)
+    private let promptCacheRetentionCompatibleModels: Set<String> = [
+        "gpt-5.1", "gpt-5.1-codex", "gpt-5.1-codex-mini", "gpt-5.1-chat-latest",
+        "gpt-5", "gpt-5-codex", "gpt-4.1"
+    ]
+
+    // Reasoning options differ by model family:
+    // - GPT-5: minimal, low, medium, high (NO "none")
+    // - GPT-5.1: none, low, medium, high (NO "minimal")
     private let reasoningOptions: [(value: String, label: String, detail: String)] = [
-        ("none", "None", "Fastest responses; no explicit reasoning"),
-        ("low", "Low", "Faster responses with basic reasoning"),
+        ("none", "None", "GPT-5.1 only; fastest responses, no reasoning tokens"),
+        ("minimal", "Minimal", "GPT-5 only; lightweight reasoning"),
+        ("low", "Low", "Light reasoning for moderately complex tasks"),
         ("medium", "Medium", "Balanced speed and reasoning depth"),
-        ("high", "High", "Thorough reasoning with detailed analysis")
+        ("high", "High", "Maximum reasoning; best for complex tasks")
     ]
     var body: some View {
         Form {
@@ -80,6 +108,11 @@ struct SettingsView: View {
                     }
                 ))
                 .toggleStyle(.switch)
+                Divider()
+                    .padding(.vertical, 8)
+                onboardingReasoningPicker
+                onboardingFlexProcessingToggle
+                onboardingPromptCacheRetentionToggle
             }, header: {
                 SettingsSectionHeader(title: "Onboarding Interview", systemImage: "wand.and.stars")
             })
@@ -154,12 +187,10 @@ struct SettingsView: View {
             Text("This is your final chance to cancel. Once confirmed, all data will be deleted and the app will restart.")
         })
         .task {
-            sanitizeOnboardingModelIfNeeded()
             sanitizePDFExtractionModelIfNeeded()
             sanitizeGitIngestModelIfNeeded()
         }
         .onChange(of: enabledLLMStore.enabledModels.map(\.modelId)) { _, _ in
-            sanitizeOnboardingModelIfNeeded()
             sanitizePDFExtractionModelIfNeeded()
             sanitizeGitIngestModelIfNeeded()
         }
@@ -204,30 +235,16 @@ private struct SettingsSectionHeader: View {
 private extension SettingsView {
     var onboardingInterviewModelPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if onboardingInterviewModels.isEmpty {
-                Label("Enable GPT-5.1 in Options… to use the onboarding interview.", systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-                    .font(.callout)
-            } else {
-                Picker("Default Interview Model", selection: Binding(
-                    get: { onboardingModelId },
-                    set: { newValue in
-                        onboardingModelId = newValue
-                        onboardingModelId = newValue
-                    }
-                )) {
-                    ForEach(onboardingInterviewModels, id: \.modelId) { model in
-                        Text(model.displayName.isEmpty ? model.modelId : model.displayName)
-                            .tag(model.modelId)
-                    }
+            Picker("Default Interview Model", selection: $onboardingModelId) {
+                ForEach(onboardingInterviewModelOptions, id: \.id) { model in
+                    Text(model.name).tag(model.id)
                 }
-                .pickerStyle(.menu)
-                .disabled(onboardingInterviewModels.count == 1)
-                Text("Currently, only GPT-5.1 is supported for onboarding interviews.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 4)
             }
+            .pickerStyle(.menu)
+            Text("GPT-5 and GPT-5.1 models supported. Note: GPT-5 requires \"Minimal\" reasoning (no \"None\"), while GPT-5.1 supports \"None\" (no \"Minimal\").")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .padding(.top, 4)
         }
     }
     var pdfExtractionModelPicker: some View {
@@ -285,19 +302,117 @@ private extension SettingsView {
             }
         }
     }
-    var onboardingInterviewModels: [EnabledLLM] {
-        // For now, only GPT-5.1 is supported for onboarding interviews
-        enabledLLMStore.enabledModels
-            .filter { $0.modelId == "openai/gpt-5.1" }
+
+    /// Returns true if the selected model is GPT-5 (not 5.1)
+    var isGPT5Model: Bool {
+        let id = onboardingModelId.lowercased()
+        return id.hasPrefix("gpt-5") && !id.hasPrefix("gpt-5.1")
     }
-    var openAIModels: [EnabledLLM] {
-        enabledLLMStore.enabledModels
-            .filter { $0.modelId.lowercased().hasPrefix("openai/") }
-            .sorted { lhs, rhs in
-                (lhs.displayName.isEmpty ? lhs.modelId : lhs.displayName)
-                    < (rhs.displayName.isEmpty ? rhs.modelId : rhs.displayName)
+
+    /// Returns true if the selected model is GPT-5.1
+    var isGPT51Model: Bool {
+        onboardingModelId.lowercased().hasPrefix("gpt-5.1")
+    }
+
+    /// Filters reasoning options based on selected model family
+    var availableReasoningOptions: [(value: String, label: String, detail: String)] {
+        if isGPT5Model {
+            // GPT-5: minimal, low, medium, high (NO "none")
+            return reasoningOptions.filter { $0.value != "none" }
+        } else {
+            // GPT-5.1: none, low, medium, high (NO "minimal")
+            return reasoningOptions.filter { $0.value != "minimal" }
+        }
+    }
+
+    /// Filters hard task reasoning options based on selected model family
+    var availableHardTaskReasoningOptions: [(value: String, label: String, detail: String)] {
+        if isGPT5Model {
+            // GPT-5: minimal, low, medium, high
+            return reasoningOptions.filter { $0.value != "none" }
+        } else {
+            // GPT-5.1: low, medium, high (exclude none for hard tasks)
+            return reasoningOptions.filter { $0.value != "none" && $0.value != "minimal" }
+        }
+    }
+
+    var onboardingReasoningPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("Default Reasoning Effort", selection: $onboardingReasoningEffort) {
+                ForEach(availableReasoningOptions, id: \.value) { option in
+                    Text(option.label).tag(option.value)
+                }
             }
+            .pickerStyle(.menu)
+            .onChange(of: onboardingModelId) { _, _ in
+                // Auto-adjust reasoning if current selection is incompatible
+                if isGPT5Model && onboardingReasoningEffort == "none" {
+                    onboardingReasoningEffort = "minimal"
+                } else if isGPT51Model && onboardingReasoningEffort == "minimal" {
+                    onboardingReasoningEffort = "none"
+                }
+            }
+            Text("Controls how much the model \"thinks\" before responding. Higher effort improves quality but increases latency and cost.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.top, 4)
+
+            Picker("Hard Task Reasoning Effort", selection: $onboardingHardTaskReasoningEffort) {
+                ForEach(availableHardTaskReasoningOptions, id: \.value) { option in
+                    Text(option.label).tag(option.value)
+                }
+            }
+            .pickerStyle(.menu)
+            .onChange(of: onboardingModelId) { _, _ in
+                // Auto-adjust hard task reasoning if current selection is incompatible
+                // Default to "medium" for both model families
+                if isGPT5Model && (onboardingHardTaskReasoningEffort == "none") {
+                    onboardingHardTaskReasoningEffort = "medium"
+                } else if isGPT51Model && onboardingHardTaskReasoningEffort == "minimal" {
+                    onboardingHardTaskReasoningEffort = "medium"
+                }
+            }
+            Text("Used for complex operations like knowledge card generation and profile validation.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.top, 4)
+        }
     }
+
+    var onboardingFlexProcessingToggle: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle("Use Flex Processing (50% cost savings)", isOn: $onboardingFlexProcessing)
+                .toggleStyle(.switch)
+            Text("Flex tier offers 50% lower cost with variable latency. Requests may be delayed during high-traffic periods. Best for non-time-critical tasks like document ingestion.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.top, 4)
+        }
+    }
+
+    /// Whether the selected model supports extended prompt cache retention
+    var isPromptCacheRetentionCompatible: Bool {
+        promptCacheRetentionCompatibleModels.contains(onboardingModelId)
+    }
+
+    var onboardingPromptCacheRetentionToggle: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle("Extended Prompt Cache Retention (24h)", isOn: $onboardingPromptCacheRetention)
+                .toggleStyle(.switch)
+            if onboardingPromptCacheRetention && !isPromptCacheRetentionCompatible {
+                Label("Not supported by \(onboardingModelId). Will be ignored.", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .font(.caption)
+                    .padding(.top, 4)
+            } else {
+                Text("Extends prompt cache lifetime to 24 hours (vs default 5-10 min). Improves cache hits for longer interview sessions.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
+            }
+        }
+    }
+
     var allOpenRouterModels: [EnabledLLM] {
         enabledLLMStore.enabledModels
             .sorted { lhs, rhs in
@@ -307,19 +422,6 @@ private extension SettingsView {
                 return (lhs.displayName.isEmpty ? lhs.modelId : lhs.displayName)
                     < (rhs.displayName.isEmpty ? rhs.modelId : rhs.displayName)
             }
-    }
-    @discardableResult
-    func sanitizeOnboardingModelIfNeeded() -> String {
-        let ids = onboardingInterviewModels.map(\.modelId)
-        let (sanitized, adjusted) = ModelPreferenceValidator.sanitize(
-            requested: onboardingModelId,
-            available: ids,
-            fallback: onboardingDefaultModelFallback
-        )
-        if adjusted {
-            onboardingModelId = sanitized
-        }
-        return sanitized
     }
     @discardableResult
     func sanitizePDFExtractionModelIfNeeded() -> String {

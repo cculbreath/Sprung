@@ -66,14 +66,16 @@ final class InterviewSessionCoordinator {
         subscribeToStateUpdates?()
         await documentArtifactHandler.start()
         await documentArtifactMessenger.start()
+
+        // Set model ID BEFORE starting interview (so first message uses correct model)
+        let modelId = OnboardingModelConfig.currentModelId
+        Logger.info("🎯 Setting interview model from settings: \(modelId)", category: .ai)
+        await state.setModelId(modelId)
+
         let success = await lifecycleController.startInterview(isResuming: false)
         if success {
             ui.isActive = await state.isActive
             Logger.info("🎛️ Session isActive synced: \(ui.isActive)", category: .ai)
-        }
-        if let orchestrator = lifecycleController.orchestrator {
-            let cfg = ModelProvider.forTask(.orchestrator)
-            await orchestrator.setModelId(ui.preferences.preferredModelId ?? cfg.id)
         }
         return true
     }
@@ -115,16 +117,16 @@ final class InterviewSessionCoordinator {
         await documentArtifactHandler.start()
         await documentArtifactMessenger.start()
 
+        // Set model ID BEFORE starting interview (so first message uses correct model)
+        let modelId = OnboardingModelConfig.currentModelId
+        Logger.info("🎯 Setting interview model from settings (resume): \(modelId)", category: .ai)
+        await state.setModelId(modelId)
+
         // Start LLM with resume flag
         let success = await lifecycleController.startInterview(isResuming: true)
         if success {
             ui.isActive = await state.isActive
             Logger.info("🎛️ Resumed session isActive synced: \(ui.isActive)", category: .ai)
-        }
-
-        if let orchestrator = lifecycleController.orchestrator {
-            let cfg = ModelProvider.forTask(.orchestrator)
-            await orchestrator.setModelId(ui.preferences.preferredModelId ?? cfg.id)
         }
 
         Logger.info("✅ Session resumed: \(session.id), phase=\(phase.rawValue)", category: .ai)
