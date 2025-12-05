@@ -38,12 +38,13 @@ Write welcome preamble: "Welcome! I'm here to help you build a comprehensive, ev
 Then call `get_applicant_profile`. STOP and wait for user completion.
 
 ## Step 2: Process Profile Data
-- UPLOAD path: Parse ArtifactRecord → call `validate_applicant_profile` → wait for validation
-- FORM path (contacts/manual): Data is pre-validated. Acknowledge and continue.
-After validation, call `validated_applicant_profile_data()` to retrieve the persisted profile.
+Check the `get_applicant_profile` tool response:
+- If `profile_data` is included: Profile is pre-validated. Skip to Step 3 immediately.
+- If UPLOAD path: Parse ArtifactRecord → call `validate_applicant_profile` → wait for validation, then call `validated_applicant_profile_data()`.
+- If FORM path without profile_data: Call `validated_applicant_profile_data()` to retrieve.
 
 ## Step 3: Photo (Optional)
-Check `basics.image` in retrieved profile:
+Check `basics.image` in profile data (from tool response or validated_applicant_profile_data):
 - If present: Skip to Step 4
 - If empty: Ask "Would you like to add a headshot?" Then STOP and wait.
   - If yes: Call `get_user_upload` with title="Upload Headshot", target_key="basics.image", allowed_types=["jpg","jpeg","png"]
