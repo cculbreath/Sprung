@@ -56,10 +56,10 @@ Sprung/Onboarding/Logs/*.txt
 Sprung/Onboarding/Spec/
 Sprung/Onboarding/Spec and Docs/
 Sprung/Onboarding/Spec/Recent work (done).md
-docs/
 planning/
 consolelog.pid
 Agents.md
+Plans.md
 Agents.md
 
 # SwiftLint reports
