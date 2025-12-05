@@ -475,6 +475,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             toolChoice = await determineToolChoice(for: text, isSystemGenerated: isSystemGenerated)
         }
         let modelId = await stateCoordinator.getCurrentModelId()
+        let useFlexTier = await stateCoordinator.getUseFlexProcessing()
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(modelId),
@@ -489,8 +490,21 @@ actor LLMMessenger: OnboardingEventEmitter {
         parameters.toolChoice = toolChoice
         parameters.tools = tools
         parameters.parallelToolCalls = await shouldEnableParallelToolCalls()
+        if useFlexTier {
+            parameters.serviceTier = "flex"
+        }
+        // Apply extended cache retention if enabled in settings
+        let useCacheRetention = UserDefaults.standard.bool(forKey: "onboardingInterviewPromptCacheRetention")
+        if useCacheRetention {
+            parameters.promptCacheRetention = "24h"
+        }
+        // Apply default reasoning effort from settings
+        let effectiveReasoning = await stateCoordinator.getDefaultReasoningEffort()
+        if effectiveReasoning != "none" {
+            parameters.reasoning = Reasoning(effort: effectiveReasoning)
+        }
         Logger.info(
-            "📝 Built request: previousResponseId=\(previousResponseId?.description ?? "nil"), inputItems=\(inputItems.count), parallelToolCalls=\(parameters.parallelToolCalls?.description ?? "nil")",
+            "📝 Built request: previousResponseId=\(previousResponseId?.description ?? "nil"), inputItems=\(inputItems.count), parallelToolCalls=\(parameters.parallelToolCalls?.description ?? "nil"), serviceTier=\(parameters.serviceTier ?? "default"), cacheRetention=\(useCacheRetention ? "24h" : "default"), reasoningEffort=\(effectiveReasoning)",
             category: .ai
         )
         return parameters
@@ -533,6 +547,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             toolChoice = .auto
         }
         let modelId = await stateCoordinator.getCurrentModelId()
+        let useFlexTier = await stateCoordinator.getUseFlexProcessing()
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(modelId),
@@ -547,9 +562,19 @@ actor LLMMessenger: OnboardingEventEmitter {
         parameters.toolChoice = toolChoice
         parameters.tools = tools
         parameters.parallelToolCalls = await shouldEnableParallelToolCalls()
-        // Set reasoning effort if provided
-        if let effort = reasoningEffort {
-            parameters.reasoning = Reasoning(effort: effort)
+        if useFlexTier {
+            parameters.serviceTier = "flex"
+        }
+        // Apply extended cache retention if enabled in settings
+        let useCacheRetention = UserDefaults.standard.bool(forKey: "onboardingInterviewPromptCacheRetention")
+        if useCacheRetention {
+            parameters.promptCacheRetention = "24h"
+        }
+        // Set reasoning effort (use provided value or default from settings)
+        let defaultReasoning = await stateCoordinator.getDefaultReasoningEffort()
+        let effectiveReasoning = reasoningEffort ?? defaultReasoning
+        if effectiveReasoning != "none" {
+            parameters.reasoning = Reasoning(effort: effectiveReasoning)
         }
         let toolChoiceDesc: String
         switch toolChoice {
@@ -575,7 +600,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             inputItems=\(inputItems.count), \
             toolChoice=\(toolChoiceDesc), \
             parallelToolCalls=\(parameters.parallelToolCalls?.description ?? "nil"), \
-            reasoningEffort=\(reasoningEffort ?? "default")
+            reasoningEffort=\(effectiveReasoning)
             """,
             category: .ai
         )
@@ -588,6 +613,7 @@ actor LLMMessenger: OnboardingEventEmitter {
         )
         let tools = await getToolSchemas()
         let modelId = await stateCoordinator.getCurrentModelId()
+        let useFlexTier = await stateCoordinator.getUseFlexProcessing()
         let previousResponseId = await contextAssembler.getPreviousResponseId()
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
@@ -611,11 +637,21 @@ actor LLMMessenger: OnboardingEventEmitter {
 
         parameters.tools = tools
         parameters.parallelToolCalls = await shouldEnableParallelToolCalls()
-        // Set reasoning effort if provided
-        if let effort = reasoningEffort {
-            parameters.reasoning = Reasoning(effort: effort)
+        if useFlexTier {
+            parameters.serviceTier = "flex"
         }
-        Logger.info("📝 Built tool response request: parallelToolCalls=\(parameters.parallelToolCalls?.description ?? "nil"), toolChoice=\(forcedToolChoice ?? "auto")", category: .ai)
+        // Apply extended cache retention if enabled in settings
+        let useCacheRetention = UserDefaults.standard.bool(forKey: "onboardingInterviewPromptCacheRetention")
+        if useCacheRetention {
+            parameters.promptCacheRetention = "24h"
+        }
+        // Set reasoning effort (use provided value or default from settings)
+        let defaultReasoning = await stateCoordinator.getDefaultReasoningEffort()
+        let effectiveReasoning = reasoningEffort ?? defaultReasoning
+        if effectiveReasoning != "none" {
+            parameters.reasoning = Reasoning(effort: effectiveReasoning)
+        }
+        Logger.info("📝 Built tool response request: parallelToolCalls=\(parameters.parallelToolCalls?.description ?? "nil"), toolChoice=\(forcedToolChoice ?? "auto"), serviceTier=\(parameters.serviceTier ?? "default"), cacheRetention=\(useCacheRetention ? "24h" : "default"), reasoningEffort=\(effectiveReasoning)", category: .ai)
         return parameters
     }
     /// Build request for batched tool responses (parallel tool calls)
@@ -623,6 +659,7 @@ actor LLMMessenger: OnboardingEventEmitter {
         let inputItems = await contextAssembler.buildForBatchedToolResponses(payloads: payloads)
         let tools = await getToolSchemas()
         let modelId = await stateCoordinator.getCurrentModelId()
+        let useFlexTier = await stateCoordinator.getUseFlexProcessing()
         let previousResponseId = await contextAssembler.getPreviousResponseId()
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
@@ -638,7 +675,20 @@ actor LLMMessenger: OnboardingEventEmitter {
         parameters.toolChoice = .auto
         parameters.tools = tools
         parameters.parallelToolCalls = await shouldEnableParallelToolCalls()
-        Logger.info("📝 Built batched tool response request: \(inputItems.count) tool outputs, parallelToolCalls=\(parameters.parallelToolCalls?.description ?? "nil")", category: .ai)
+        if useFlexTier {
+            parameters.serviceTier = "flex"
+        }
+        // Apply extended cache retention if enabled in settings
+        let useCacheRetention = UserDefaults.standard.bool(forKey: "onboardingInterviewPromptCacheRetention")
+        if useCacheRetention {
+            parameters.promptCacheRetention = "24h"
+        }
+        // Apply default reasoning effort from settings
+        let effectiveReasoning = await stateCoordinator.getDefaultReasoningEffort()
+        if effectiveReasoning != "none" {
+            parameters.reasoning = Reasoning(effort: effectiveReasoning)
+        }
+        Logger.info("📝 Built batched tool response request: \(inputItems.count) tool outputs, parallelToolCalls=\(parameters.parallelToolCalls?.description ?? "nil"), serviceTier=\(parameters.serviceTier ?? "default"), cacheRetention=\(useCacheRetention ? "24h" : "default"), reasoningEffort=\(effectiveReasoning)", category: .ai)
         return parameters
     }
     /// Get tool schemas from ToolRegistry, filtered by allowed tools from StateCoordinator
