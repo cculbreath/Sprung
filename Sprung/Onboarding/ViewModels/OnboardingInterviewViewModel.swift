@@ -28,15 +28,10 @@ final class OnboardingInterviewViewModel {
         coordinator: OnboardingInterviewCoordinator?,
         defaultModelId: String,
         defaultWebSearchAllowed: Bool,
-        defaultWritingAnalysisAllowed: Bool,
-        availableModelIds: [String]
+        defaultWritingAnalysisAllowed: Bool
     ) {
         if !hasInitialized {
-            syncModelSelection(
-                applyingDefaults: true,
-                defaultModelId: defaultModelId,
-                availableModelIds: availableModelIds
-            )
+            selectedModelId = defaultModelId
             hasInitialized = true
         }
         Task {
@@ -51,33 +46,9 @@ final class OnboardingInterviewViewModel {
             }
         }
     }
-    func syncModelSelection(
-        applyingDefaults: Bool,
-        defaultModelId: String,
-        availableModelIds: [String]
-    ) {
-        if !selectedModelId.isEmpty && !applyingDefaults {
-            return
-        }
-        if availableModelIds.contains(defaultModelId) {
-            selectedModelId = defaultModelId
-        } else if availableModelIds.contains(fallbackModelId) {
-            selectedModelId = fallbackModelId
-        } else if let first = availableModelIds.first {
-            selectedModelId = first
-        } else {
-            selectedModelId = fallbackModelId
-        }
-    }
-    func handleDefaultModelChange(
-        newValue: String,
-        availableModelIds: [String]
-    ) {
-        syncModelSelection(
-            applyingDefaults: true,
-            defaultModelId: newValue,
-            availableModelIds: availableModelIds
-        )
+
+    func handleDefaultModelChange(newValue: String) {
+        selectedModelId = newValue
     }
     func clearImportError() {
         importErrorText = nil

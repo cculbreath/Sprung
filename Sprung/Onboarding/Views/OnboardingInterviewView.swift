@@ -2,17 +2,16 @@ import AppKit
 import SwiftUI
 struct OnboardingInterviewView: View {
     @Environment(OnboardingInterviewCoordinator.self) private var interviewCoordinator
-    @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(AppEnvironment.self) private var appEnvironment
     @Environment(DebugSettingsStore.self) private var debugSettings
     @State private var viewModel = OnboardingInterviewViewModel(
-        fallbackModelId: "openai/gpt-5.1"
+        fallbackModelId: OnboardingModelConfig.currentModelId
     )
     @State private var showResumePrompt = false
     #if DEBUG
     @State private var showEventDump = false
     #endif
-    @AppStorage("onboardingInterviewDefaultModelId") private var defaultModelId = "openai/gpt-5.1"
+    @AppStorage("onboardingInterviewDefaultModelId") private var defaultModelId = "gpt-5"
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var defaultWebSearchAllowed = true
     @AppStorage("onboardingInterviewAllowWritingAnalysisDefault") private var defaultWritingAnalysisAllowed = true
     @Namespace private var wizardTransition
@@ -65,28 +64,19 @@ struct OnboardingInterviewView: View {
         // --- Lifecycle bindings and tasks ---
         let withLifecycle = styledContent
             .task {
-                let modelIds = openAIModels.map(\.modelId)
                 uiState.configureIfNeeded(
                     coordinator: interviewCoordinator,
                     defaultModelId: defaultModelId,
                     defaultWebSearchAllowed: defaultWebSearchAllowed,
-                    defaultWritingAnalysisAllowed: defaultWritingAnalysisAllowed,
-                    availableModelIds: modelIds
+                    defaultWritingAnalysisAllowed: defaultWritingAnalysisAllowed
                 )
-                applyPreferredModel()
             }
             .onChange(of: defaultModelId) { _, newValue in
-                let modelIds = openAIModels.map(\.modelId)
-                uiState.handleDefaultModelChange(
-                    newValue: newValue,
-                    availableModelIds: modelIds
-                )
-                applyPreferredModel()
+                uiState.handleDefaultModelChange(newValue: newValue)
             }
             .onChange(of: defaultWebSearchAllowed) { _, newValue in
                 if !coordinator.ui.isActive {
                     uiState.webSearchAllowed = newValue
-                    applyPreferredModel()
                 }
             }
             .onChange(of: defaultWritingAnalysisAllowed) { _, newValue in
@@ -103,9 +93,6 @@ struct OnboardingInterviewView: View {
                 if coordinator.ui.isActive {
                     uiState.writingAnalysisAllowed = newValue
                 }
-            }
-            .onChange(of: enabledLLMStore.enabledModels) { _, _ in
-                applyPreferredModel()
             }
         let withSheets = withLifecycle
             .sheet(isPresented: Binding(
@@ -230,7 +217,7 @@ private extension OnboardingInterviewView {
     ) -> Bool {
         switch coordinator.wizardTracker.currentStep {
         case .introduction:
-            return openAIModels.isEmpty || appEnvironment.appState.openAiApiKey.isEmpty
+            return appEnvironment.appState.openAiApiKey.isEmpty
         case .resumeIntake:
             return coordinator.ui.isProcessing ||
             coordinator.pendingChoicePrompt != nil ||
@@ -265,28 +252,12 @@ private extension OnboardingInterviewView {
     func handleBack(
         coordinator: OnboardingInterviewCoordinator
     ) {
-        switch coordinator.wizardTracker.currentStep {
-        case .resumeIntake:
-            // Wizard steps are now derived from objectives - no manual reset needed
-            reinitializeUIState()
-        case .artifactDiscovery:
-            // Wizard steps are now derived from objectives - no manual setting needed
-            break
-        case .writingCorpus:
-            // Wizard steps are now derived from objectives - no manual setting needed
-            break
-        case .wrapUp:
-            // Wizard steps are now derived from objectives - no manual setting needed
-            break
-        case .introduction:
-            break
-        }
+        // Wizard steps are now derived from objectives - no manual reset needed
     }
     func handleCancel() {
         Task {
             await interviewCoordinator.endInterview()
         }
-        reinitializeUIState()
         if let window = NSApp.windows.first(where: { $0 is BorderlessOverlayWindow }) {
             window.orderOut(nil)
         }
@@ -336,40 +307,5 @@ private extension OnboardingInterviewView {
             #endif
             _ = await interviewCoordinator.startInterview(resumeExisting: false)
         }
-    }
-    var openAIModels: [EnabledLLM] {
-        enabledLLMStore.enabledModels
-            .filter { $0.modelId.lowercased().hasPrefix("openai/") }
-            .sorted { lhs, rhs in
-                (lhs.displayName.isEmpty ? lhs.modelId : lhs.displayName)
-                < (rhs.displayName.isEmpty ? rhs.modelId : rhs.displayName)
-            }
-    }
-    func reinitializeUIState() {
-        viewModel.configureIfNeeded(
-            coordinator: interviewCoordinator,
-            defaultModelId: defaultModelId,
-            defaultWebSearchAllowed: defaultWebSearchAllowed,
-            defaultWritingAnalysisAllowed: defaultWritingAnalysisAllowed,
-            availableModelIds: openAIModels.map(\.modelId)
-        )
-        applyPreferredModel()
-    }
-    func applyPreferredModel() {
-        // Note: Model configuration is handled via OpenAIService and ModelProvider
-        //
-        // let resolvedId = interviewService.setPreferredDefaults(
-        //     modelId: targetId,
-        //     backend: .openAI,
-        //     webSearchAllowed: viewModel.webSearchAllowed
-        // )
-        //
-        // if viewModel.selectedModelId != resolvedId {
-        //     viewModel.selectedModelId = resolvedId
-        // }
-        //
-        // if defaultModelId != resolvedId {
-        //     defaultModelId = resolvedId
-        // }
     }
 }

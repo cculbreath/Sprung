@@ -10,8 +10,12 @@ actor LLMStateManager {
     private var lastResponseId: String?
     /// Last "clean" response ID (no pending tool calls) - safe to restore from
     private var lastCleanResponseId: String?
-    /// Current model ID being used
-    private var currentModelId: String = "gpt-5.1"
+    /// Current model ID being used (reads from settings)
+    private var currentModelId: String = OnboardingModelConfig.currentModelId
+    /// Whether to use flex processing tier (50% cost savings, variable latency)
+    private var useFlexProcessing: Bool = true
+    /// Default reasoning effort level for LLM calls (none, minimal, low, medium, high)
+    private var defaultReasoningEffort: String = "none"
     /// Current tool pane card being displayed
     private var currentToolPaneCard: OnboardingToolPaneCard = .none
     /// Pending tool response payloads that haven't been acknowledged yet
@@ -79,6 +83,24 @@ actor LLMStateManager {
     func setModelId(_ modelId: String) {
         currentModelId = modelId
         Logger.info("🔧 Model ID set to: \(modelId)", category: .ai)
+    }
+    /// Get whether flex processing is enabled
+    func getUseFlexProcessing() -> Bool {
+        useFlexProcessing
+    }
+    /// Set whether to use flex processing tier
+    func setUseFlexProcessing(_ enabled: Bool) {
+        useFlexProcessing = enabled
+        Logger.info("🔧 Flex processing \(enabled ? "enabled" : "disabled") (50% cost savings)", category: .ai)
+    }
+    /// Get the default reasoning effort level
+    func getDefaultReasoningEffort() -> String {
+        defaultReasoningEffort
+    }
+    /// Set the default reasoning effort level (none, low, medium, high)
+    func setDefaultReasoningEffort(_ effort: String) {
+        defaultReasoningEffort = effort
+        Logger.info("🔧 Default reasoning effort set to: \(effort)", category: .ai)
     }
     // MARK: - Tool Pane Card
     /// Get the current tool pane card
@@ -217,7 +239,7 @@ actor LLMStateManager {
         allowedToolNames = []
         lastResponseId = nil
         lastCleanResponseId = nil
-        currentModelId = "gpt-5.1"
+        currentModelId = OnboardingModelConfig.currentModelId
         currentToolPaneCard = .none
         pendingToolResponsePayloads = []
         pendingToolResponseRetryCount = 0

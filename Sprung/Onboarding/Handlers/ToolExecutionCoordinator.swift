@@ -108,10 +108,17 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             }
             // Determine reasoning effort for specific tools
             // GPT-5.1 supports: none, low, medium, high (not "minimal")
+            // Hard tasks use elevated reasoning; all others use default from settings
+            let hardTaskTools: Set<String> = [
+                "submit_knowledge_card",
+                "validate_applicant_profile",
+                "display_knowledge_card_plan"
+            ]
             let reasoningEffort: String? = {
-                if toolName == "agent_ready" || toolName == "get_applicant_profile" || toolName == "start_phase_two" {
-                    return "low"
+                if let name = toolName, hardTaskTools.contains(name) {
+                    return UserDefaults.standard.string(forKey: "onboardingInterviewHardTaskReasoningEffort") ?? "medium"
                 }
+                // All other tools use default reasoning (nil = LLMMessenger applies default from settings)
                 return nil
             }()
 

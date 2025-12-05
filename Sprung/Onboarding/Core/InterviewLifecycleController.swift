@@ -55,6 +55,16 @@ final class InterviewLifecycleController {
         }
         // Set interview as active
         await state.setActiveState(true)
+
+        // Apply user settings from AppStorage
+        let flexProcessingEnabled = UserDefaults.standard.bool(forKey: "onboardingInterviewFlexProcessing")
+        // Default to true if key doesn't exist (first launch)
+        let flexDefault = UserDefaults.standard.object(forKey: "onboardingInterviewFlexProcessing") == nil
+        await state.setUseFlexProcessing(flexDefault ? true : flexProcessingEnabled)
+        let reasoningEffort = UserDefaults.standard.string(forKey: "onboardingInterviewReasoningEffort") ?? "medium"
+        await state.setDefaultReasoningEffort(reasoningEffort)
+        Logger.info("⚙️ Applied settings: flexProcessing=\(flexDefault ? true : flexProcessingEnabled), reasoning=\(reasoningEffort)", category: .ai)
+
         // Start event subscriptions BEFORE orchestrator sends initial message
         // StateCoordinator must be listening for .llmEnqueueUserMessage events
         // to process the queue and emit .llmExecuteUserMessage for LLMMessenger

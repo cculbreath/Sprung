@@ -6,6 +6,20 @@
 //  Provides type safety and IDE autocomplete for tool names, objective IDs, and data types.
 //
 import Foundation
+
+// MARK: - Model Configuration
+/// Default model configuration for onboarding interview
+enum OnboardingModelConfig {
+    /// UserDefaults key for the selected interview model
+    static let userDefaultsKey = "onboardingInterviewDefaultModelId"
+
+    /// Returns the currently configured model ID from settings
+    /// Default is registered in SprungApp.init()
+    static var currentModelId: String {
+        UserDefaults.standard.string(forKey: userDefaultsKey)!
+    }
+}
+
 // MARK: - Tool Names
 /// All tool names used in the onboarding interview flow.
 /// Use these enum cases instead of raw strings for type safety.
