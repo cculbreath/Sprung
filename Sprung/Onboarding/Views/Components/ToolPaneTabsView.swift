@@ -56,6 +56,8 @@ struct ToolPaneTabsView<InterviewContent: View>: View {
                     .font(.caption2)
                 Text(tab.rawValue)
                     .font(.caption2.weight(.medium))
+                    .lineLimit(1)
+                    .fixedSize()
                 badgeView(for: tab)
             }
             .padding(.horizontal, 8)
