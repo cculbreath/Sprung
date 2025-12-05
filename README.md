@@ -1,43 +1,51 @@
-# Sprung: Your AI-Powered Job Search Copilot for macOS
+# Sprung: AI-Powered Job Search Copilot for macOS
 
 [![macOS](https://img.shields.io/badge/macOS-14.0%2B-blue.svg)](https://www.apple.com/macos/sonoma)
 [![Swift](https://img.shields.io/badge/Swift-5.9-orange.svg)](https://swift.org)
-[![Xcode](https://img.shields.io/badge/Xcode-15.0%2B-blue.svg)](https://developer.apple.com/xcode/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-Sprung is a native macOS application that streamlines your entire job search workflow. From finding job postings to crafting the perfect resume and cover letter, Sprung uses the power of generative AI to help you land your dream job.
+**Sprung** is a native macOS application designed to streamline your entire job search workflow. By combining a robust resume builder, job application tracker, and powerful Generative AI, Sprung helps you craft tailored application materials and land your dream job.
 
-![Sprung App Screenshot](https://via.placeholder.com/800x450.png?text=Sprung+App+Screenshot)
-*(Add a screenshot or GIF of the app here)*
+![Sprung Dashboard](docs/images/dashboard.png)
 
-## ✨ Key Features
+## Key Features
 
-*   **📝 AI-Powered Resume & Cover Letter Crafting:**
-    *   Generate, review, and version your resumes.
-    *   Build JSON-backed resume templates.
-    *   Export to professional-looking PDFs.
-    *   Write data-driven cover letters that are tailored to each job description.
-    *   Get AI-powered suggestions and talking points.
-    *   Listen to your cover letters with on-device Text-to-Speech.
+*   **AI-Powered Resume Studio:**
+    *   **Split-View Editor:** Edit your resume data (JSON-backed) while seeing a live PDF preview.
+    *   **Version Control:** Create and manage multiple versions of your resume tailored to different roles.
+    *   **Templating:** Robust Mustache-based templating system for professional PDF exports.
+    *   **Smart Tree Structure:** Resume data is stored in a flexible tree structure, allowing for deep customization without breaking the schema.
 
-*   **🗃️ Smart Job Application Tracking:**
-    *   Keep all your job applications in one place.
-    *   Store links, descriptions, salaries, and other important details.
-    *   Assign specific resumes and cover letters to each application.
+*   **Generative AI Integration:**
+    *   **Cover Letter Writer:** Generate data-driven cover letters tailored specifically to a job description.
+    *   **Onboarding Interview:** A conversational AI agent interviews you to build your initial "Applicant Profile" and work history timeline.
+    *   **Document Chat:** "Chat" with your documents to get feedback, rewrite suggestions, and identify missing keywords.
+    *   **Multi-Model Support:** Bring your own keys for OpenAI (GPT-4o), Anthropic (Claude 3.5 Sonnet), Google (Gemini 1.5 Pro), or OpenRouter.
 
-*   **🤖 Interactive Document Chat:**
-    *   "Chat" with your resumes and cover letters.
-    *   Ask for feedback, request rewrites, and get suggestions for improvement.
-    *   Let the AI analyze your documents and highlight missing keywords.
+*   **Job Application Tracker:**
+    *   **Kanban Workflow:** Track applications from "Draft" to "Applied" to "Interviewing" and "Offer".
+    *   **Context Awareness:** Link specific resumes and cover letters to each job application so you never lose track of what you sent.
+    *   **Web Scraping:** Automatically extract job details from URLs (via SwiftSoup).
 
-*   **🎙️ AI Onboarding Interview:**
-    *   Get started quickly with an AI-powered onboarding interview that helps you build your applicant profile.
+## Architecture
 
-## 🚀 Why Sprung?
+Sprung is built with a **Hybrid Event-Driven + Reactive Architecture** designed for stability and clean separation of concerns:
 
-Most job search tools only solve one part of the problem. Sprung is an all-in-one solution that brings everything together in a single, beautiful, and native macOS application. With its powerful AI features, Sprung helps you create high-quality application materials that stand out from the crowd.
+*   **StateCoordinator (Actor):** The Single Source of Truth. All state mutations flow through this actor to ensure data consistency.
+*   **EventCoordinator:** Handles process orchestration (e.g., LLM request/response cycles) using `AsyncStream` topics.
+*   **SwiftUI @Observable:** Used strictly for UI reactivity. Views bind to observable state for smooth updates without tight coupling to business logic.
+*   **SwiftData:** Modern persistence layer for storing Resumes, Job Applications, and History.
 
-## 🛠️ Getting Started
+For a deeper dive, check out [.arch-spec.md](.arch-spec.md).
+
+## Getting Started
+
+### Prerequisites
+*   macOS 14.0 (Sonoma) or later.
+*   Xcode 15.0+ (for building from source).
+*   API Key(s) for OpenAI, Anthropic, or OpenRouter.
+
+### Installation
 
 1.  **Clone the repository:**
     ```bash
@@ -45,130 +53,27 @@ Most job search tools only solve one part of the problem. Sprung is an all-in-on
     cd Sprung
     ```
 
-2.  **Open the project in Xcode:**
+2.  **Open in Xcode:**
     ```bash
     open Sprung.xcodeproj
     ```
 
-3.  **Resolve Swift Package dependencies (first run):**
-    ```bash
-    xcodebuild -resolvePackageDependencies -project Sprung.xcodeproj -scheme Sprung
-    ```
+3.  **Resolve Dependencies:**
+    Xcode should automatically resolve Swift Package Manager dependencies (SwiftOpenAI, SwiftSoup, GRMustache.swift, etc.). If not, go to `File > Packages > Resolve Package Versions`.
 
-4.  **Add your API keys:**
-    *   You'll need API keys for OpenAI, Gemini, and/or OpenRouter.
-    *   Add them in the "Settings" screen of the app. Keys are securely stored in the macOS Keychain.
+4.  **Run:**
+    Press `Cmd + R` to build and run.
 
-5.  **Build and run the app (⌘ + R).**
+### Configuration
+Upon first launch, navigate to **Settings** (in the menu bar or app preferences) to enter your AI provider API keys. Keys are securely stored in the **macOS Keychain** and are never synced or exported.
 
-## 🏗️ Technology & Architecture
+## Contributing
 
-Sprung is built with modern Apple technologies:
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
 
-*   **SwiftUI:** For a beautiful and responsive user interface.
-*   **SwiftData:** for robust and efficient data persistence.
-*   **Generative AI:** A flexible architecture that supports multiple LLMs (OpenAI, Gemini, OpenRouter).
+## License
 
-The app uses a dependency injection pattern to manage dependencies and ensure a clean and maintainable codebase. For a deeper dive into the architecture, see [`docs/architecture.md`](docs/architecture.md).
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 📚 Template Data Flow Cheat Sheet
-
-Sprung separates *where* data originates from *how* it is rendered. Understanding the pipeline makes it easier to introduce new fields, wire up the Experience Editor, and avoid unintended regressions.
-
-### Primary Data Sources
-
-- **Applicant Profile (`ApplicantProfile` SwiftData model):** Onboarding records that capture name, headline, contact information, links, etc. When we build a render context, `ResumeTemplateContextBuilder.profileContext` maps these values into the sections referenced by the manifest’s `applicantProfile` bindings.
-- **Experience Editor (`ExperienceDefaults` SwiftData model):** Stores reusable work, education, project, and skill entries. `ExperienceDefaultsEncoder` converts these records to the array-based JSON structure, and the builder merges them before template-specific data so they act as global defaults.
-- **Template Seed (`TemplateSeedStore` per template):** Template-specific example content maintained from the Template Editor’s “Seed” tab. Seeds are merged after experience defaults, letting them override shared defaults for a single template without touching the runtime resume.
-- **Resume Tree (`Resume.rootNode` of `TreeNode`s):** Once a resume exists, its content lives in a tree detached from the manifest/seed. `ResumeTemplateDataBuilder` walks that tree to produce Mustache-ready dictionaries. Tree nodes are created during JSON imports or template operations and persist independently—changing templates later won’t retroactively rewrite existing resumes.
-
-### Manifest vs. Seed Responsibilities
-
-- **Manifest (`TemplateManifest`):** Describes *shape*, *editor metadata*, and *behaviour*. Each section defines its fields, input types, repeatability, validation hints, and behaviors (styling, applicant profile bindings, etc.). Manifest overrides are stored per template and merged on load (see `TemplateManifestDefaults.apply`). They also expose structural hints like `keys-in-editor`, `transparentKeys`, and `editorLabels` used by the resume tree and Template Editor UI.
-- **Seed:** Supplies *data*. Seeds are literal JSON payloads encoded in SwiftData. They never change the schema; they simply provide sample values that merge against the context at runtime.
-
-### Merge Order (highest priority last)
-
-1. **Manifest defaults** – `TemplateManifest.makeDefaultContext()` provides base values like styling or any section defaults encoded in the manifest.
-2. **Experience defaults** – Converted through `ExperienceDefaultsEncoder.makeSeedDictionary` and merged in.
-3. **Template seed** – Template-specific sample content.
-4. **Applicant profile** – Mapped via the manifest’s applicant-profile bindings.
-5. **Resume tree** – When rendering a specific resume, `ResumeTemplateDataBuilder` reads the stored `TreeNode`s, overriding earlier data with whatever the user saved.
-
-`ResumeTemplateContextBuilder.mergeValue` handles all merge stages. Dictionaries merge recursively (unless both sides contain only scalars). Arrays now support **custom-only overlays**: if a seed entry only contains `custom` (and optional `__key`), the builder merges that `custom` payload onto the corresponding Experience Editor row instead of replacing the whole section.
-
-### Tree Nodes & Template Independence
-
-- `JsonToTree` and `ResumeTemplateDataBuilder` convert manifest-aware JSON into a tree of nodes. Each `TreeNode` records path metadata, user-entered values, and editor hints.
-- Once nodes are created (for example, when a resume is generated), they survive template edits. Switching templates only changes how future renders interpret the tree; the underlying node values remain untouched—ensuring the resume content is stable.
-
-### Key Manifest Flags
-
-- **`keys-in-editor`** – Ordered list of paths that drives the Resume Editor’s view hierarchy (`TreeNode.rebuildViewHierarchy`). Helpful for flattening deeply nested JSON into a curated editor experience.
-- **`transparentKeys`** – Allows the editor to “look through” container nodes when locating keys. Any section listed here gets skipped while walking the tree, keeping the editor hierarchy shallow even if the data model nests values.
-- **`section-visibility` / `section-visibility-labels`** – Default on/off state and display labels for toggleable sections. `ResumeTemplateDataBuilder.applySectionVisibility` reads these to set `workBool`, `educationBool`, etc.
-- **`sections` override** – The `sections` block in a manifest lets you replace or extend the schema for a specific section. For example, you can append custom fields to `education` without touching source defaults.
-
-### Adding Custom Fields
-
-**Manifest snippet (append to `sections.education`):**
-
-```json
-"sections": {
-  "education": {
-    "type": "arrayOfObjects",
-    "titleTemplate": "{{studyType}} in {{area}}",
-    "fields": [
-      { "key": "institution", "input": "text", "required": true },
-      { "key": "area", "input": "text" },
-      {
-        "key": "custom",
-        "children": [
-          { "key": "location", "input": "text", "placeholder": "San Luis Obispo, CA" }
-        ]
-      }
-    ]
-  }
-}
-```
-
-**Seed overlay (merges onto Experience Editor rows):**
-
-```json
-{
-  "education": [
-    { "custom": { "location": "San Luis Obispo, CA" } },
-    { "custom": { "location": "Kent, Ohio" } }
-  ]
-}
-```
-
-Because of the custom overlay support, the entries above augment existing education data from the Experience Editor instead of replacing the section outright. Include a `__key` (usually the array index or a known identifier) if you need to target a specific row explicitly.
-
-### Runtime Template Rendering
-
-1. `ResumeTemplateDataBuilder.buildContext` collects section keys from the resume tree and manifest.
-2. For each section, it resolves behaviours (styling, font sizes, editor keys) and builds the concrete value (string, array, dictionary) expected by Mustache templates.
-3. The resulting dictionary feeds both PDF/HTML rendering and plain-text exports. Templates reference values directly (e.g., `{{custom.location}}`) without hitting the file system or manifests at runtime in accordance with the project’s “no filesystem templates” rule.
-
-Armed with the manifest schema, seeds, and `TreeNode` storage, you can safely introduce bespoke fields while keeping the Experience Editor, resume rendering, and AI workflows aligned.
-
-## 🙌 Contributing
-
-We welcome contributions from the community! Whether you want to fix a bug, add a new feature, or improve the documentation, your help is appreciated.
-
-Please read our [Contributing Guidelines](CONTRIBUTING.md) to get started.
-
-## 🗺️ Roadmap
-
-We have exciting plans for the future of Sprung! Here are some of the things we're working on:
-
-*   Expanding our test coverage.
-*   Adding more advanced AI features.
-*   Improving the resume export pipeline.
-
-For a more detailed look at our roadmap, please see [`docs/roadmap.md`](docs/roadmap.md).
-
-## 📄 License
-
-Sprung is released under the MIT License. See [LICENSE](LICENSE) for details and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for bundled dependency attributions.
+---
+*Built by Christopher Culbreath*
