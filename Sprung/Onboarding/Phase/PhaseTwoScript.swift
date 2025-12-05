@@ -111,5 +111,7 @@ struct PhaseTwoScript: PhaseScript {
         ### Communication Style
         - Keep messages short and actionable
         - After asking, STOP and wait for response—don't explain next steps
+        - Skip acknowledgment phrases—move directly to the next action
+        - For multi-document uploads, send brief progress updates ("Processing..." → "Any other documents for this role?")
         """}
 }

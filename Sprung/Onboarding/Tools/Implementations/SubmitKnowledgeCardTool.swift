@@ -125,6 +125,11 @@ struct SubmitKnowledgeCardTool: InterviewTool {
             After collecting evidence for the current plan item (set via set_current_knowledge_card),
             call this tool to submit the completed knowledge card for user approval.
 
+            BEFORE CALLING, VERIFY:
+            - All required fields (id, title, content, sources) are populated
+            - At least one source is linked (artifact or chat)
+            - Content is comprehensive (500+ words for substantial roles)
+
             WHAT HAPPENS:
             1. Tool validates the card (sources are REQUIRED)
             2. Tool links the card to the current plan item
