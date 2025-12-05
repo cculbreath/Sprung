@@ -267,9 +267,6 @@ final class UIResponseCoordinator {
         Logger.info("✅ Applicant profile rejected and user message sent to LLM", category: .ai)
     }
     func submitProfileDraft(draft: ApplicantProfileDraft, source: OnboardingApplicantProfileIntakeState.Source) async {
-        // Complete pending UI tool call (Codex paradigm)
-        await completePendingUIToolCall(output: buildUICompletedOutput(message: "Profile submitted via \(source == .contacts ? "contacts" : "manual entry")"))
-
         // Close the profile intake UI via event
         await eventBus.publish(.applicantProfileIntakeCleared)
         // Store profile in StateCoordinator/ArtifactRepository (which will emit the event)
@@ -311,26 +308,22 @@ final class UIResponseCoordinator {
             details: nil
         ))
         Logger.info("✅ applicant_profile objective marked complete via draft submission", category: .ai)
-        // Build user message with the full profile JSON wrapped with validation status
-        var userMessage = JSON()
-        userMessage["role"].string = "user"
-        // Create message with full JSON data including validation_status hint
-        let introText = "I have provided my contact information via \(source == .contacts ? "contacts import" : "manual entry"). This data has been validated by me through the UI and is ready to use."
-        // Wrap profile data with validation_status
+
+        // Build comprehensive tool output that includes profile data
+        // This eliminates the need for a separate user message, reducing LLM round trips
         var wrappedData = JSON()
         wrappedData["applicant_profile"] = profileJSON
         wrappedData["validation_status"].string = "validated_by_user"
-        let jsonText = wrappedData.rawString() ?? "{}"
-        userMessage["content"].string = """
-        \(introText)
-        Profile data (JSON):
-        ```json
-        \(jsonText)
-        ```
-        An artifact record has been created with this contact information. Do NOT call validate_applicant_profile - this data is already validated.
-        """
-        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
-        Logger.info("✅ Profile submitted with detailed data sent to LLM (source: \(source == .contacts ? "contacts" : "manual"))", category: .ai)
+
+        var output = JSON()
+        output["message"].string = "Profile submitted via \(source == .contacts ? "contacts import" : "manual entry") and validated by user"
+        output["status"].string = "completed"
+        output["profile_data"] = wrappedData
+        output["instructions"].string = "Profile is validated. Do NOT call validate_applicant_profile. Proceed to ask about profile photo, then continue workflow."
+
+        // Complete pending UI tool call with full profile data (Codex paradigm)
+        await completePendingUIToolCall(output: output)
+        Logger.info("✅ Profile submitted with data included in tool response (source: \(source == .contacts ? "contacts" : "manual"))", category: .ai)
     }
     func submitProfileURL(_ urlString: String) async {
         // Process URL submission (creates artifact if needed)
