@@ -148,14 +148,15 @@ struct PhaseOneScript: PhaseScript {
                 onComplete: { context in
                     let title = """
                         Dossier seed complete. All Phase 1 objectives are satisfied. \
-                        Call next_phase NOW to transition to Phase 2.
+                        Transitioning to Phase 2.
                         """
                     let details = [
                         "status": context.status.rawValue,
                         "action": "call_next_phase",
                         "immediate": "true"
                     ]
-                    return [.developerMessage(title: title, details: details, payload: nil)]
+                    // Force next_phase tool call - weaker models may acknowledge but not execute without forcing
+                    return [.developerMessage(title: title, details: details, payload: nil, toolChoice: OnboardingToolName.nextPhase.rawValue)]
                 }
             )
         ]

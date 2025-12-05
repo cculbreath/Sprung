@@ -164,14 +164,14 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
     // MARK: - Workflow Output Processing
     private func processWorkflowOutput(_ output: ObjectiveWorkflowOutput, objectiveId: String) async {
         switch output {
-        case .developerMessage(let title, let details, let payload):
-            await sendDeveloperMessage(title: title, details: details, payload: payload)
+        case .developerMessage(let title, let details, let payload, let toolChoice):
+            await sendDeveloperMessage(title: title, details: details, payload: payload, toolChoice: toolChoice)
         case .triggerPhotoFollowUp(let extraDetails):
             await triggerPhotoFollowUp(extraDetails: extraDetails)
         }
     }
     /// Send a developer message to the LLM
-    private func sendDeveloperMessage(title: String, details: [String: String], payload: JSON?) async {
+    private func sendDeveloperMessage(title: String, details: [String: String], payload: JSON?, toolChoice: String? = nil) async {
         var messagePayload = JSON()
         messagePayload["text"].string = "Developer status: \(title)"
         if !details.isEmpty {
@@ -183,6 +183,11 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
         }
         if let payload = payload {
             messagePayload["payload"] = payload
+        }
+        // Force specific tool call if specified (helps weaker models follow instructions)
+        if let toolChoice = toolChoice {
+            messagePayload["toolChoice"].string = toolChoice
+            Logger.info("🎯 Forcing toolChoice: \(toolChoice)", category: .ai)
         }
         Logger.info("📤 Workflow sending developer message: \(title)", category: .ai)
         await emit(.llmSendDeveloperMessage(payload: messagePayload))
