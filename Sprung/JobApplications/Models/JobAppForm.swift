@@ -2,7 +2,6 @@
 //  JobAppForm.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 9/1/24.
 //
 import SwiftData
 @Observable class JobAppForm {

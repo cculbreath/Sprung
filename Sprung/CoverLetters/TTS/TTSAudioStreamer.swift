@@ -3,7 +3,6 @@
 //  TTSAudioStreamer.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 4/23/25.
 //
 import AudioToolbox // for AudioFileTypeID
 import ChunkedAudioPlayer

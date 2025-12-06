@@ -2,7 +2,6 @@
 //  DebugSettingsView.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 5/13/25.
 //
 import SwiftUI
 struct DebugSettingsView: View {

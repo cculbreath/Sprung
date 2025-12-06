@@ -3,7 +3,6 @@
 //  OpenAITTSProvider.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 4/22/25.
 //
 import AVFoundation
 import Foundation

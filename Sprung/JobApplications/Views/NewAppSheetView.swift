@@ -2,7 +2,6 @@
 //  NewAppSheetView.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 9/1/24.
 //
 import Foundation
 import SwiftUI

@@ -2,7 +2,6 @@
 //  TextToSpeechSettingsView.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 4/24/25.
 //
 import AVFoundation // Needed for AVAudioPlayerDelegate potentially
 import SwiftUI

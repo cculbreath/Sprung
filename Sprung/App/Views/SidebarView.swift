@@ -2,7 +2,6 @@
 //  SidebarView.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on .
 //
 import SwiftData
 import SwiftUI

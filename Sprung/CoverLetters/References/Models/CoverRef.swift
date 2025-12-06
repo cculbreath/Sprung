@@ -2,7 +2,6 @@
 //  CoverRef.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on .
 //
 import Foundation
 import SwiftData

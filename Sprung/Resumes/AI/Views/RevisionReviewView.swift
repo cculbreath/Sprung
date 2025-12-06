@@ -2,7 +2,6 @@
 //  RevisionReviewView.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 9/9/24.
 //  Refactored on 6/19/25 - Enhanced for professional, polished appearance
 //
 import SwiftData

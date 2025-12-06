@@ -2,7 +2,6 @@
 //  RoundedTagView.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 9/9/24.
 //
 import SwiftUI
 struct RoundedTagView: View {

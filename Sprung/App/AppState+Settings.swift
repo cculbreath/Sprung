@@ -2,7 +2,6 @@
 //  AppState+Settings.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 5/20/25.
 //
 import Foundation
 /// Extension to AppState to provide access to application settings

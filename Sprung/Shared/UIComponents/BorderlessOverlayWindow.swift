@@ -2,7 +2,6 @@
 //  BorderlessOverlayWindow.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 10/22/25.
 //
 import Cocoa
 

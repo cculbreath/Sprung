@@ -2,7 +2,6 @@
 //  AppWindowView.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 9/1/24.
 //  Renamed from TabWrapperView to better reflect responsibility
 //
 import SwiftUI

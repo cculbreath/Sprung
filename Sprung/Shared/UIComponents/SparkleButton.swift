@@ -2,7 +2,6 @@
 //  SparkleButton.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 1/31/25.
 //
 import SwiftUI
 struct SparkleButton: View {

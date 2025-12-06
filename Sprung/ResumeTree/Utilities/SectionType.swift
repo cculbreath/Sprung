@@ -2,7 +2,6 @@
 //  SectionType.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 2/27/25.
 //
 import Foundation
 /// Defines different section types.

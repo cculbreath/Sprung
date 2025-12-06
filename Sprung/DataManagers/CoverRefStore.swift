@@ -2,7 +2,6 @@
 //  CoverRefStore.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 9/12/24.
 //
 import Foundation
 import SwiftData

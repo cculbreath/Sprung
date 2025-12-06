@@ -2,7 +2,6 @@
 //  TTSTypes.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 5/21/25.
 //
 import Foundation
 /// Protocol that marks an LLM client as capable of handling Text-to-Speech requests

@@ -2,7 +2,6 @@
 //  SkillReorderService.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 6/4/25.
 //
 import Foundation
 /// Service for skill reordering using the unified LLM facade
