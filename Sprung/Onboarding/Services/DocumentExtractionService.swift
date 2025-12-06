@@ -157,25 +157,26 @@ actor DocumentExtractionService {
         }
 
         let sha256 = sha256Hex(for: fileData)
-        let (rawText, initialIssues, pdfPageCount) = extractPlainText(from: fileURL)
 
-        // If text extraction failed and this is a PDF, try image-based extraction
-        if (rawText == nil || rawText?.isEmpty == true) && fileURL.pathExtension.lowercased() == "pdf" {
-            Logger.info("📄 Text extraction failed for PDF, attempting image-based extraction", category: .ai)
-            await notifyProgress(.fileAnalysis, .active, detail: "No extractable text, processing pages as images...")
-            return try await extractPDFViaImages(
-                fileURL: fileURL,
+        // For PDFs: Send directly to Gemini via native PDF support (no PDFKit/image conversion needed)
+        if fileURL.pathExtension.lowercased() == "pdf" {
+            Logger.info("📄 Using native PDF extraction via Gemini", category: .ai)
+            await notifyProgress(.fileAnalysis, .completed, detail: "PDF ready for AI processing")
+            return try await extractPDFNatively(
                 fileData: fileData,
                 filename: filename,
                 sizeInBytes: sizeInBytes,
                 contentType: contentType,
                 sha256: sha256,
                 purpose: request.purpose,
-                timeout: request.timeout,
+                verbatimTranscription: request.verbatimTranscription,
                 autoPersist: request.autoPersist,
                 progress: progress
             )
         }
+
+        // For non-PDF documents (DOCX, text): Extract text first, then send to LLM
+        let (rawText, initialIssues, _) = extractPlainText(from: fileURL)
 
         guard let rawText, !rawText.isEmpty else {
             await notifyProgress(.fileAnalysis, .failed, detail: "No extractable text")
@@ -184,38 +185,21 @@ actor DocumentExtractionService {
 
         await notifyProgress(.fileAnalysis, .completed)
 
-        // For verbatim transcription mode (writing samples), skip summarization
-        // For large PDFs (> 20 pages), use LLM summarization unless verbatim mode
-        let isLargePDF = (pdfPageCount ?? 0) > largePDFPageThreshold && !request.verbatimTranscription
-        if isLargePDF {
-            Logger.info("📄 Large PDF detected (\(pdfPageCount ?? 0) pages), using LLM summarization", category: .ai)
-        }
-
         let llmStart = Date()
-        let aiStageDetail: String
-        if request.verbatimTranscription {
-            aiStageDetail = "Transcribing document verbatim..."
-        } else if isLargePDF {
-            aiStageDetail = "Summarizing \(pdfPageCount ?? 0)-page document with AI..."
-        } else if request.purpose == "resume_timeline" {
-            aiStageDetail = "Extracting resume details with Gemini AI..."
-        } else {
-            aiStageDetail = "Processing document with Gemini AI..."
-        }
+        let aiStageDetail = request.purpose == "resume_timeline"
+            ? "Extracting resume details with Gemini AI..."
+            : "Processing document with Gemini AI..."
         await notifyProgress(.aiExtraction, .active, detail: aiStageDetail)
 
         let enrichmentResult: EnrichmentResult
         if request.verbatimTranscription {
-            // For writing samples: verbatim transcription with chunking for large documents
             let (markdown, markdownIssues) = try await transcribeVerbatim(
                 rawText,
-                pageCount: pdfPageCount,
+                pageCount: nil,
                 timeout: request.timeout,
                 progress: progress
             )
             enrichmentResult = EnrichmentResult(title: nil, content: markdown, issues: markdownIssues)
-        } else if isLargePDF {
-            enrichmentResult = try await summarizeLargePDF(rawText, timeout: request.timeout)
         } else {
             enrichmentResult = try await enrichText(rawText, purpose: request.purpose, timeout: request.timeout)
         }
@@ -257,13 +241,6 @@ actor DocumentExtractionService {
             "source_file_url": fileURL.absoluteString,
             "source_filename": filename
         ]
-        if let pageCount = pdfPageCount {
-            metadata["page_count"] = pageCount
-        }
-        if isLargePDF {
-            metadata["extraction_method"] = "llm_summarization"
-            metadata["summarized"] = true
-        }
         if initialIssues.contains("truncated_input") {
             metadata["truncated_input"] = true
         }
@@ -734,6 +711,149 @@ Example response format:
 
     // MARK: - Image-Based PDF Extraction
 
+    // MARK: - Native PDF Extraction
+
+    /// Extract content from a PDF by sending it directly to Gemini via OpenRouter
+    /// This is the preferred method as it doesn't require PDFKit or image conversion
+    private func extractPDFNatively(
+        fileData: Data,
+        filename: String,
+        sizeInBytes: Int,
+        contentType: String,
+        sha256: String,
+        purpose: String,
+        verbatimTranscription: Bool,
+        autoPersist: Bool,
+        progress: ExtractionProgressHandler?
+    ) async throws -> ExtractionResult {
+        func notifyProgress(_ stage: ExtractionProgressStage, _ state: ExtractionProgressStageState, detail: String? = nil) async {
+            guard let progress else { return }
+            await progress(ExtractionProgressUpdate(stage: stage, state: state, detail: detail))
+        }
+
+        guard let facade = llmFacade else {
+            throw ExtractionError.llmNotConfigured
+        }
+
+        let modelId = currentModelId()
+        let llmStart = Date()
+
+        await notifyProgress(.aiExtraction, .active, detail: "Sending PDF to Gemini for extraction...")
+
+        // Build prompt based on purpose
+        var prompt: String
+        if verbatimTranscription {
+            prompt = """
+            You are a document transcription assistant. Your task is to provide a VERBATIM transcription of the PDF.
+
+            Requirements:
+            - Transcribe ALL text exactly as written - do not summarize, paraphrase, or condense
+            - Preserve the original formatting, structure, and paragraph breaks
+            - Maintain headings, bullet points, and lists as they appear
+            - Keep the original voice, tone, and word choices intact
+            - Do not add commentary, analysis, or interpretation
+            - Do not omit any content
+
+            This is a writing sample that will be used to analyze the author's writing style, so accuracy and completeness are critical.
+            """
+        } else {
+            prompt = """
+            You are a document extraction assistant. Extract ALL text content from this PDF into high-quality Markdown.
+
+            Requirements:
+            - Reconstruct headings, bullet lists, numbered lists, and tables when possible
+            - Process every page in order with no omissions
+            - Keep original ordering of sections
+            - Describe any diagrams, charts, or figures you see
+            - Do not invent content; only extract what you can see
+            - Use Markdown tables for tabular data
+            - For contact details, list them as bullet points
+            """
+            if purpose == "resume_timeline" {
+                prompt += "\n- Highlight employment sections clearly. Use headings per job."
+            }
+        }
+
+        prompt += """
+
+        Respond with a JSON object containing:
+        - "title": A concise, descriptive title for this document (e.g., "John Smith Resume", "Q3 2024 Project Report")
+        - "content": The extracted/transcribed content in Markdown format
+
+        Example response format:
+        {"title": "Document Title Here", "content": "# Heading\\n\\nContent here..."}
+        """
+
+        var issues: [String] = ["native_pdf_extraction"]
+
+        do {
+            let text = try await callFacadeTextWithPDF(facade: facade, prompt: prompt, pdfData: fileData, modelId: modelId)
+
+            let llmDurationMs = Int(Date().timeIntervalSince(llmStart) * 1000)
+            Logger.info(
+                "📄 Native PDF extraction completed",
+                category: .diagnostics,
+                metadata: [
+                    "filename": filename,
+                    "duration_ms": "\(llmDurationMs)"
+                ]
+            )
+
+            if text.isEmpty {
+                issues.append("llm_failure_empty_response")
+                await notifyProgress(.aiExtraction, .failed, detail: "Empty response from AI")
+                throw ExtractionError.noTextExtracted
+            }
+
+            let parsed = parseEnrichmentResponse(text)
+            await notifyProgress(.aiExtraction, .completed)
+
+            var metadata: [String: Any] = [
+                "character_count": parsed.content.count,
+                "source_format": contentType,
+                "purpose": purpose,
+                "extraction_method": "native_pdf"
+            ]
+            if let title = parsed.title {
+                metadata["title"] = title
+            }
+
+            let artifact = ExtractedArtifact(
+                id: UUID().uuidString,
+                filename: filename,
+                title: parsed.title,
+                contentType: contentType,
+                sizeInBytes: sizeInBytes,
+                sha256: sha256,
+                extractedContent: parsed.content,
+                metadata: metadata
+            )
+
+            let quality = Quality(confidence: 0.9, issues: issues)
+
+            return ExtractionResult(
+                status: .ok,
+                artifact: artifact,
+                quality: quality,
+                derivedApplicantProfile: nil,
+                derivedSkeletonTimeline: nil,
+                persisted: false
+            )
+        } catch let error as LLMError {
+            if case .clientError(let message) = error, message.contains("not found") || message.contains("not valid") {
+                onInvalidModelId?(modelId)
+                throw ExtractionError.llmFailed("\(modelId) is not a valid model ID.")
+            }
+            await notifyProgress(.aiExtraction, .failed, detail: error.localizedDescription)
+            throw ExtractionError.llmFailed(error.localizedDescription)
+        } catch {
+            await notifyProgress(.aiExtraction, .failed, detail: error.localizedDescription)
+            throw ExtractionError.llmFailed(error.localizedDescription)
+        }
+    }
+
+    // MARK: - Legacy Image-Based Extraction (kept as fallback)
+
     /// Extract content from a PDF by converting pages to images and using vision-capable LLM
     private func extractPDFViaImages(
         fileURL: URL,
@@ -941,6 +1061,21 @@ Example response format:
             prompt: prompt,
             modelId: modelId,
             images: images,
+            temperature: 0.1
+        )
+    }
+
+    @MainActor
+    private func callFacadeTextWithPDF(
+        facade: LLMFacade,
+        prompt: String,
+        pdfData: Data,
+        modelId: String
+    ) async throws -> String {
+        try await facade.executeTextWithPDF(
+            prompt: prompt,
+            modelId: modelId,
+            pdfData: pdfData,
             temperature: 0.1
         )
     }

@@ -45,6 +45,15 @@ final class _OpenAIResponsesClient: LLMClient {
             temperature: temperature
         )
     }
+    func executeTextWithPDF(
+        prompt: String,
+        modelId: String,
+        pdfData: Data,
+        temperature: Double?
+    ) async throws -> String {
+        // OpenAI Responses API doesn't support native PDF - would need conversion
+        throw LLMError.clientError("PDF input is not supported via OpenAI Responses API. Use OpenRouter backend.")
+    }
     func executeStructured<T>(
         prompt: String,
         modelId: String,

@@ -219,6 +219,21 @@ final class LLMFacade {
         let altClient = try resolveClient(for: backend)
         return try await altClient.executeTextWithImages(prompt: prompt, modelId: modelId, images: images, temperature: temperature)
     }
+    func executeTextWithPDF(
+        prompt: String,
+        modelId: String,
+        pdfData: Data,
+        temperature: Double? = nil,
+        backend: Backend = .openRouter
+    ) async throws -> String {
+        // PDFs are supported natively by OpenRouter for models that support file input
+        if backend == .openRouter {
+            try await validate(modelId: modelId, requires: [])
+            return try await client.executeTextWithPDF(prompt: prompt, modelId: modelId, pdfData: pdfData, temperature: temperature)
+        }
+        let altClient = try resolveClient(for: backend)
+        return try await altClient.executeTextWithPDF(prompt: prompt, modelId: modelId, pdfData: pdfData, temperature: temperature)
+    }
     // Structured
     func executeStructured<T: Codable & Sendable>(
         prompt: String,

@@ -150,6 +150,20 @@ final class _SwiftOpenAIClient: LLMClient {
         }
         return content
     }
+    func executeTextWithPDF(prompt: String, modelId: String, pdfData: Data, temperature: Double? = nil) async throws -> String {
+        let params = _LLMRequestBuilder.buildPDFRequest(
+            prompt: prompt,
+            modelId: modelId,
+            pdfData: pdfData,
+            temperature: temperature ?? defaultTemperature
+        )
+        let response = try await executor.execute(parameters: params)
+        let dto = _LLMVendorMapper.responseDTO(from: response)
+        guard let content = dto.choices.first?.message?.text else {
+            throw LLMError.unexpectedResponseFormat
+        }
+        return content
+    }
     func executeStructured<T: Codable & Sendable>(prompt: String, modelId: String, as: T.Type, temperature: Double? = nil) async throws -> T {
         let params = _LLMRequestBuilder.buildStructuredRequest(
             prompt: prompt,

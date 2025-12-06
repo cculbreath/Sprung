@@ -223,7 +223,7 @@
       "location" : "https://github.com/cculbreath/SwiftOpenAI.git",
       "state" : {
         "branch" : "feature/allowed-tools-envelope",
-        "revision" : "22d3debd2b4e4a3f704bdd22816c8c7c01001aa7"
+        "revision" : "64fee871a3be884030b0a18202352eb1be394839"
       }
     },
     {
