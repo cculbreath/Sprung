@@ -73,12 +73,16 @@ actor DocumentProcessingService {
             )
         }
         let extractedText = artifact.extractedContent
+        let extractedTitle = artifact.title
         let artifactId = artifact.id
         Logger.info("✅ Text extraction completed: \(artifactId)", category: .ai)
         // Step 3: Create artifact record
         var artifactRecord = JSON()
         artifactRecord["id"].string = artifactId
         artifactRecord["filename"].string = filename
+        if let title = extractedTitle {
+            artifactRecord["title"].string = title
+        }
         artifactRecord["document_type"].string = documentType
         artifactRecord["storage_path"].string = storagePath
         artifactRecord["extracted_text"].string = extractedText

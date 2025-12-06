@@ -160,14 +160,25 @@ struct EvidenceItem: Equatable {
 struct ArtifactRecord: Identifiable, Equatable {
     var id: String
     var filename: String
+    var title: String?
     var contentType: String?
     var sizeInBytes: Int
     var sha256: String?
     var extractedContent: String
     var metadata: JSON
+
+    /// Display name for the artifact (title if available, otherwise filename)
+    var displayName: String {
+        if let title, !title.isEmpty {
+            return title
+        }
+        return filename
+    }
+
     init(
         id: String = UUID().uuidString,
         filename: String,
+        title: String? = nil,
         contentType: String? = nil,
         sizeInBytes: Int = 0,
         sha256: String? = nil,
@@ -176,6 +187,7 @@ struct ArtifactRecord: Identifiable, Equatable {
     ) {
         self.id = id
         self.filename = filename
+        self.title = title
         self.contentType = contentType
         self.sizeInBytes = sizeInBytes
         self.sha256 = sha256
@@ -194,6 +206,8 @@ struct ArtifactRecord: Identifiable, Equatable {
             id = UUID().uuidString
         }
         filename = json["filename"].stringValue
+        // Try multiple sources for title: direct field, or metadata.title
+        title = json["title"].string ?? json["metadata"]["title"].string
         contentType = json["content_type"].string
         sizeInBytes = json["size_bytes"].intValue
         // Try both keys for compatibility - artifact records use "extracted_text"
@@ -206,6 +220,9 @@ struct ArtifactRecord: Identifiable, Equatable {
         var json = JSON()
         json["id"].string = id
         json["filename"].string = filename
+        if let title {
+            json["title"].string = title
+        }
         if let contentType {
             json["content_type"].string = contentType
         }

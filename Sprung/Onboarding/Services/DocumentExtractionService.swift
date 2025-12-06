@@ -39,6 +39,7 @@ actor DocumentExtractionService {
     struct ExtractedArtifact {
         let id: String
         let filename: String
+        let title: String?
         let contentType: String
         let sizeInBytes: Int
         let sha256: String
@@ -203,19 +204,20 @@ actor DocumentExtractionService {
         }
         await notifyProgress(.aiExtraction, .active, detail: aiStageDetail)
 
-        let (markdown, markdownIssues): (String?, [String])
+        let enrichmentResult: EnrichmentResult
         if request.verbatimTranscription {
             // For writing samples: verbatim transcription with chunking for large documents
-            (markdown, markdownIssues) = try await transcribeVerbatim(
+            let (markdown, markdownIssues) = try await transcribeVerbatim(
                 rawText,
                 pageCount: pdfPageCount,
                 timeout: request.timeout,
                 progress: progress
             )
+            enrichmentResult = EnrichmentResult(title: nil, content: markdown, issues: markdownIssues)
         } else if isLargePDF {
-            (markdown, markdownIssues) = try await summarizeLargePDF(rawText, timeout: request.timeout)
+            enrichmentResult = try await summarizeLargePDF(rawText, timeout: request.timeout)
         } else {
-            (markdown, markdownIssues) = try await enrichText(rawText, purpose: request.purpose, timeout: request.timeout)
+            enrichmentResult = try await enrichText(rawText, purpose: request.purpose, timeout: request.timeout)
         }
 
         let llmDurationMs = Int(Date().timeIntervalSince(llmStart) * 1000)
@@ -228,22 +230,23 @@ actor DocumentExtractionService {
             ]
         )
 
-        let enrichedContent = markdown ?? rawText
+        let enrichedContent = enrichmentResult.content ?? rawText
+        let extractedTitle = enrichmentResult.title
         let aiDetail: String? = {
-            if let failure = markdownIssues.first(where: { $0.hasPrefix("llm_failure") }) {
+            if let failure = enrichmentResult.issues.first(where: { $0.hasPrefix("llm_failure") }) {
                 return failure.replacingOccurrences(of: "llm_failure_", with: "")
             }
-            if markdown == nil {
+            if enrichmentResult.content == nil {
                 return "Using original text"
             }
             return nil
         }()
 
-        let aiState: ExtractionProgressStageState = markdownIssues.contains(where: { $0.hasPrefix("llm_failure") }) ? .failed : .completed
+        let aiState: ExtractionProgressStageState = enrichmentResult.issues.contains(where: { $0.hasPrefix("llm_failure") }) ? .failed : .completed
         await notifyProgress(.aiExtraction, aiState, detail: aiDetail)
 
         var issues = initialIssues
-        issues.append(contentsOf: markdownIssues)
+        issues.append(contentsOf: enrichmentResult.issues)
 
         let confidence = estimateConfidence(for: enrichedContent, issues: issues)
 
@@ -264,10 +267,14 @@ actor DocumentExtractionService {
         if initialIssues.contains("truncated_input") {
             metadata["truncated_input"] = true
         }
+        if let title = extractedTitle {
+            metadata["title"] = title
+        }
 
         let artifact = ExtractedArtifact(
             id: UUID().uuidString,
             filename: filename,
+            title: extractedTitle,
             contentType: contentType,
             sizeInBytes: sizeInBytes,
             sha256: sha256,
@@ -386,14 +393,21 @@ actor DocumentExtractionService {
         return (nil, ["text_extraction_warning"], nil)
     }
 
-    private func enrichText(_ rawText: String, purpose: String, timeout: TimeInterval?) async throws -> (String?, [String]) {
+    /// Result of text enrichment including optional title
+    struct EnrichmentResult {
+        let title: String?
+        let content: String?
+        let issues: [String]
+    }
+
+    private func enrichText(_ rawText: String, purpose: String, timeout: TimeInterval?) async throws -> EnrichmentResult {
         let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            return (nil, ["llm_failure_empty_input"])
+            return EnrichmentResult(title: nil, content: nil, issues: ["llm_failure_empty_input"])
         }
 
         guard let facade = llmFacade else {
-            return (nil, ["llm_failure_not_configured"])
+            return EnrichmentResult(title: nil, content: nil, issues: ["llm_failure_not_configured"])
         }
 
         let modelId = currentModelId()
@@ -407,6 +421,7 @@ actor DocumentExtractionService {
 
         var prompt = """
 You are a document extraction assistant. Convert the provided plain text into high-quality Markdown that preserves the document's logical structure.
+
 Requirements:
 - Reconstruct headings, bullet lists, numbered lists, and tables when possible.
 - Process every page of the source document; include the full content in order with no omissions.
@@ -419,26 +434,77 @@ Requirements:
         if purpose == "resume_timeline" {
             prompt += "- Highlight employment sections clearly. Use headings per job.\n"
         }
-        prompt += "\nPlain text input begins:\n```\n\(input)\n```\n\nReturn only the formatted Markdown content."
+        prompt += """
+
+Plain text input begins:
+```
+\(input)
+```
+
+Respond with a JSON object containing:
+- "title": A concise, descriptive title for this document (e.g., "John Smith Resume", "Q3 2024 Project Report", "Senior Developer Cover Letter")
+- "content": The formatted Markdown content
+
+Example response format:
+{"title": "Document Title Here", "content": "# Heading\\n\\nContent here..."}
+"""
 
         do {
             let text = try await callFacadeText(facade: facade, prompt: prompt, modelId: modelId)
             if text.isEmpty {
                 issues.append("llm_failure_empty_response")
-                return (nil, issues)
+                return EnrichmentResult(title: nil, content: nil, issues: issues)
             }
-            return (text, issues)
+            let parsed = parseEnrichmentResponse(text)
+            return EnrichmentResult(title: parsed.title, content: parsed.content, issues: issues)
         } catch let error as LLMError {
             if case .clientError(let message) = error, message.contains("not found") || message.contains("not valid") {
                 onInvalidModelId?(modelId)
                 throw ExtractionError.llmFailed("\(modelId) is not a valid model ID.")
             }
             issues.append("llm_failure_\(error.localizedDescription)")
-            return (nil, issues)
+            return EnrichmentResult(title: nil, content: nil, issues: issues)
         } catch {
             issues.append("llm_failure_\(error.localizedDescription)")
-            return (nil, issues)
+            return EnrichmentResult(title: nil, content: nil, issues: issues)
         }
+    }
+
+    /// Parse enrichment response - tries JSON first, falls back to plain text
+    private func parseEnrichmentResponse(_ response: String) -> (title: String?, content: String) {
+        let trimmed = response.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Try to parse as JSON
+        if let data = trimmed.data(using: .utf8) {
+            do {
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    let title = json["title"] as? String
+                    let content = json["content"] as? String ?? trimmed
+                    return (title, content)
+                }
+            } catch {
+                // Not valid JSON, continue to fallback
+            }
+        }
+
+        // Try to extract JSON from markdown code block
+        if trimmed.contains("```json") || trimmed.contains("```") {
+            let jsonPattern = #"```(?:json)?\s*(\{[\s\S]*?\})\s*```"#
+            if let regex = try? NSRegularExpression(pattern: jsonPattern, options: []),
+               let match = regex.firstMatch(in: trimmed, options: [], range: NSRange(trimmed.startIndex..., in: trimmed)),
+               let jsonRange = Range(match.range(at: 1), in: trimmed) {
+                let jsonString = String(trimmed[jsonRange])
+                if let data = jsonString.data(using: .utf8),
+                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    let title = json["title"] as? String
+                    let content = json["content"] as? String ?? trimmed
+                    return (title, content)
+                }
+            }
+        }
+
+        // Fallback: use full response as content, no title
+        return (nil, trimmed)
     }
 
     /// Transcribe document verbatim for writing samples
@@ -588,14 +654,14 @@ Return the complete verbatim transcription:
     }
 
     /// Summarize a large PDF (> 20 pages) using LLM for resume/cover letter preparation
-    private func summarizeLargePDF(_ rawText: String, timeout: TimeInterval?) async throws -> (String?, [String]) {
+    private func summarizeLargePDF(_ rawText: String, timeout: TimeInterval?) async throws -> EnrichmentResult {
         let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            return (nil, ["llm_failure_empty_input"])
+            return EnrichmentResult(title: nil, content: nil, issues: ["llm_failure_empty_input"])
         }
 
         guard let facade = llmFacade else {
-            return (nil, ["llm_failure_not_configured"])
+            return EnrichmentResult(title: nil, content: nil, issues: ["llm_failure_not_configured"])
         }
 
         let modelId = currentModelId()
@@ -605,8 +671,6 @@ Return the complete verbatim transcription:
         // The LLM will summarize appropriately
         let prompt = """
 Extract and summarize the content of this PDF to support resume and cover letter drafting for the applicant (me).
-
-Output format: Provide a structured, page-by-page transcription in markdown.
 
 Content handling rules:
 - Text passages: Transcribe verbatim when feasible. For lengthy sections, provide a comprehensive summary that preserves key details, achievements, and distinctive phrasing.
@@ -621,26 +685,34 @@ Document text begins:
 ```
 \(trimmed)
 ```
+
+Respond with a JSON object containing:
+- "title": A concise, descriptive title for this document (e.g., "John Smith Resume", "Q3 2024 Project Report", "PhD Thesis - Machine Learning")
+- "content": The structured, page-by-page summary in markdown format
+
+Example response format:
+{"title": "Document Title Here", "content": "# Summary\\n\\nContent here..."}
 """
 
         do {
             let text = try await callFacadeText(facade: facade, prompt: prompt, modelId: modelId)
             if text.isEmpty {
                 issues.append("llm_failure_empty_response")
-                return (nil, issues)
+                return EnrichmentResult(title: nil, content: nil, issues: issues)
             }
             issues.append("large_pdf_summarized")
-            return (text, issues)
+            let parsed = parseEnrichmentResponse(text)
+            return EnrichmentResult(title: parsed.title, content: parsed.content, issues: issues)
         } catch let error as LLMError {
             if case .clientError(let message) = error, message.contains("not found") || message.contains("not valid") {
                 onInvalidModelId?(modelId)
                 throw ExtractionError.llmFailed("\(modelId) is not a valid model ID.")
             }
             issues.append("llm_failure_\(error.localizedDescription)")
-            return (nil, issues)
+            return EnrichmentResult(title: nil, content: nil, issues: issues)
         } catch {
             issues.append("llm_failure_\(error.localizedDescription)")
-            return (nil, issues)
+            return EnrichmentResult(title: nil, content: nil, issues: issues)
         }
     }
 
@@ -710,7 +782,7 @@ Document text begins:
         await notifyProgress(.aiExtraction, .active, detail: aiStageDetail)
 
         let llmStart = Date()
-        let (extractedText, issues) = try await extractTextFromImages(imageDataArray, purpose: purpose)
+        let enrichmentResult = try await extractTextFromImages(imageDataArray, purpose: purpose)
 
         let llmDurationMs = Int(Date().timeIntervalSince(llmStart) * 1000)
         Logger.info(
@@ -723,14 +795,16 @@ Document text begins:
             ]
         )
 
-        let aiState: ExtractionProgressStageState = issues.contains(where: { $0.hasPrefix("llm_failure") }) ? .failed : .completed
+        let aiState: ExtractionProgressStageState = enrichmentResult.issues.contains(where: { $0.hasPrefix("llm_failure") }) ? .failed : .completed
         await notifyProgress(.aiExtraction, aiState)
 
         var allIssues = ["image_based_extraction"]
-        allIssues.append(contentsOf: issues)
+        allIssues.append(contentsOf: enrichmentResult.issues)
 
+        let extractedText = enrichmentResult.content ?? ""
+        let extractedTitle = enrichmentResult.title
         let confidence = estimateConfidence(for: extractedText, issues: allIssues)
-        let metadata: [String: Any] = [
+        var metadata: [String: Any] = [
             "character_count": extractedText.count,
             "source_format": contentType,
             "purpose": purpose,
@@ -739,10 +813,14 @@ Document text begins:
             "extraction_method": "image_vision",
             "page_count": pageCount
         ]
+        if let title = extractedTitle {
+            metadata["title"] = title
+        }
 
         let artifact = ExtractedArtifact(
             id: UUID().uuidString,
             filename: filename,
+            title: extractedTitle,
             contentType: contentType,
             sizeInBytes: sizeInBytes,
             sha256: sha256,
@@ -751,7 +829,7 @@ Document text begins:
         )
 
         let status: ExtractionResult.Status
-        if issues.contains(where: { $0.hasPrefix("llm_failure") }) {
+        if enrichmentResult.issues.contains(where: { $0.hasPrefix("llm_failure") }) {
             status = .partial
         } else {
             status = .ok
@@ -774,11 +852,11 @@ Document text begins:
     }
 
     /// Extract text from image data using a vision-capable LLM via LLMFacade
-    private func extractTextFromImages(_ imageDataArray: [Data], purpose: String) async throws -> (String, [String]) {
+    private func extractTextFromImages(_ imageDataArray: [Data], purpose: String) async throws -> EnrichmentResult {
         var issues: [String] = []
 
         guard let facade = llmFacade else {
-            return ("", ["llm_failure_not_configured"])
+            return EnrichmentResult(title: nil, content: "", issues: ["llm_failure_not_configured"])
         }
 
         let modelId = currentModelId()
@@ -799,7 +877,15 @@ Requirements:
         if purpose == "resume_timeline" {
             prompt += "\n- Highlight employment sections clearly. Use headings per job."
         }
-        prompt += "\n\nExtract the complete content from all page images and return only the formatted Markdown."
+        prompt += """
+
+Respond with a JSON object containing:
+- "title": A concise, descriptive title for this document (e.g., "John Smith Resume", "Q3 2024 Project Report")
+- "content": The formatted Markdown content extracted from all pages
+
+Example response format:
+{"title": "Document Title Here", "content": "# Heading\\n\\nContent here..."}
+"""
 
         do {
             let text = try await callFacadeTextWithImages(
@@ -811,20 +897,21 @@ Requirements:
 
             if text.isEmpty {
                 issues.append("llm_failure_empty_response")
-                return ("", issues)
+                return EnrichmentResult(title: nil, content: "", issues: issues)
             }
 
-            return (text, issues)
+            let parsed = parseEnrichmentResponse(text)
+            return EnrichmentResult(title: parsed.title, content: parsed.content, issues: issues)
         } catch let error as LLMError {
             if case .clientError(let message) = error, message.contains("not found") || message.contains("not valid") {
                 onInvalidModelId?(modelId)
                 throw ExtractionError.llmFailed("\(modelId) is not a valid model ID.")
             }
             issues.append("llm_failure_\(error.localizedDescription)")
-            return ("", issues)
+            return EnrichmentResult(title: nil, content: "", issues: issues)
         } catch {
             issues.append("llm_failure_\(error.localizedDescription)")
-            return ("", issues)
+            return EnrichmentResult(title: nil, content: "", issues: issues)
         }
     }
 
