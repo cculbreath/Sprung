@@ -1,11 +1,19 @@
-# Sprung
+<p align="center">
+  <img src="docs/images/hero_logo.png" alt="Sprung" width="400">
+</p>
 
-**AI-Powered Job Search Copilot for macOS**
+<p align="center">
+  <strong>AI-Powered Job Search Copilot for macOS</strong>
+</p>
 
-[![macOS](https://img.shields.io/badge/macOS-14.0%2B-blue.svg)](https://www.apple.com/macos/sonoma)
-[![Swift](https://img.shields.io/badge/Swift-5.9+-orange.svg)](https://swift.org)
-[![SwiftUI](https://img.shields.io/badge/SwiftUI-5.0-purple.svg)](https://developer.apple.com/xcode/swiftui/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+<p align="center">
+  <a href="https://www.apple.com/macos/sonoma"><img src="https://img.shields.io/badge/macOS-14.0%2B-blue.svg" alt="macOS"></a>
+  <a href="https://swift.org"><img src="https://img.shields.io/badge/Swift-5.9+-orange.svg" alt="Swift"></a>
+  <a href="https://developer.apple.com/xcode/swiftui/"><img src="https://img.shields.io/badge/SwiftUI-5.0-purple.svg" alt="SwiftUI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
+</p>
+
+---
 
 Sprung is a native macOS application that transforms how you approach job searching. Instead of spending hours manually tailoring resumes and cover letters for each application, Sprung combines a structured resume editor, AI-powered content generation, and application tracking into a unified workflow.
 
