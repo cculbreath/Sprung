@@ -28,13 +28,11 @@ actor SessionUIState: OnboardingEventEmitter {
     private(set) var pendingValidationPrompt: OnboardingValidationPrompt?
     private(set) var pendingExtraction: OnboardingPendingExtraction?
     private(set) var pendingStreamingStatus: String?
-    private(set) var pendingPhaseAdvanceRequest: OnboardingPhaseAdvanceRequest?
     // MARK: - Synchronous Caches (for SwiftUI)
     nonisolated(unsafe) private(set) var isProcessingSync = false
     nonisolated(unsafe) private(set) var isActiveSync = false
     nonisolated(unsafe) private(set) var pendingExtractionSync: OnboardingPendingExtraction?
     nonisolated(unsafe) private(set) var pendingStreamingStatusSync: String?
-    nonisolated(unsafe) private(set) var pendingPhaseAdvanceRequestSync: OnboardingPhaseAdvanceRequest?
     // MARK: - Initialization
     init(eventBus: EventCoordinator, phasePolicy: PhasePolicy, initialPhase: InterviewPhase) {
         self.eventBus = eventBus
@@ -124,11 +122,6 @@ actor SessionUIState: OnboardingEventEmitter {
         pendingStreamingStatus = status
         pendingStreamingStatusSync = status
     }
-    /// Set pending phase advance request
-    func setPendingPhaseAdvanceRequest(_ request: OnboardingPhaseAdvanceRequest?) {
-        pendingPhaseAdvanceRequest = request
-        pendingPhaseAdvanceRequestSync = request
-    }
     // MARK: - Tool Gating Logic
     // Tool Gating Strategy:
     // When the system enters a waiting state (upload, selection, validation, extraction, processing),
@@ -202,14 +195,12 @@ actor SessionUIState: OnboardingEventEmitter {
         pendingValidationPrompt = nil
         pendingExtraction = nil
         pendingStreamingStatus = nil
-        pendingPhaseAdvanceRequest = nil
         excludedTools = []
         // Reset sync caches
         isProcessingSync = false
         isActiveSync = false
         pendingExtractionSync = nil
         pendingStreamingStatusSync = nil
-        pendingPhaseAdvanceRequestSync = nil
         Logger.info("🔄 SessionUIState reset", category: .ai)
     }
 }

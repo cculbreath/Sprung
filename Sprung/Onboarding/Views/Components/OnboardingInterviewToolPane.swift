@@ -93,23 +93,6 @@ struct OnboardingInterviewToolPane: View {
             )
         } else if let validation = coordinator.pendingValidationPrompt {
             validationContent(validation)
-        } else if let phaseAdvanceRequest = coordinator.ui.pendingPhaseAdvanceRequest {
-            OnboardingPhaseAdvanceDialog(
-                request: phaseAdvanceRequest,
-                onSubmit: { decision, feedback in
-                    Task {
-                        switch decision {
-                        case .approved:
-                            await coordinator.approvePhaseAdvance()
-                        case .denied:
-                            await coordinator.denyPhaseAdvance(feedback: nil)
-                        case .deniedWithFeedback:
-                            await coordinator.denyPhaseAdvance(feedback: feedback)
-                        }
-                    }
-                },
-                onCancel: nil
-            )
         } else if let profileRequest = coordinator.pendingApplicantProfileRequest {
             ApplicantProfileReviewCard(
                 request: profileRequest,
@@ -403,7 +386,6 @@ struct OnboardingInterviewToolPane: View {
         if coordinator.pendingValidationPrompt != nil { return true }
         if coordinator.pendingApplicantProfileRequest != nil { return true }
         if coordinator.pendingSectionToggleRequest != nil { return true }
-        if coordinator.ui.pendingPhaseAdvanceRequest != nil { return true }
         return false
     }
     private func hasSummaryCard(

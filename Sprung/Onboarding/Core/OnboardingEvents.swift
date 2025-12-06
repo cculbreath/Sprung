@@ -48,10 +48,6 @@ enum OnboardingEvent {
     case sectionToggleRequested(request: OnboardingSectionToggleRequest)
     case sectionToggleCleared
     case toolPaneCardRestored(OnboardingToolPaneCard)
-    case phaseAdvanceRequested(request: OnboardingPhaseAdvanceRequest)
-    case phaseAdvanceDismissed
-    case phaseAdvanceApproved(request: OnboardingPhaseAdvanceRequest)
-    case phaseAdvanceDenied(feedback: String?)
     // MARK: - Artifact Management (§4.8 spec)
     case artifactGetRequested(id: UUID)
     case artifactNewRequested(fileURL: URL, kind: OnboardingUploadKind, performExtraction: Bool)
@@ -327,8 +323,7 @@ actor EventCoordinator {
              .applicantProfileStored, .skeletonTimelineStored, .enabledSectionsUpdated:
             return .state
         // Phase events
-        case .phaseTransitionRequested, .phaseTransitionApplied, .phaseAdvanceRequested, .phaseAdvanceDismissed,
-             .phaseAdvanceApproved, .phaseAdvanceDenied:
+        case .phaseTransitionRequested, .phaseTransitionApplied:
             return .phase
         // Objective events
         case .objectiveStatusRequested, .objectiveStatusUpdateRequested, .objectiveStatusChanged:
@@ -443,14 +438,6 @@ actor EventCoordinator {
             description = "Section toggle requested"
         case .sectionToggleCleared:
             description = "Section toggle cleared"
-        case .phaseAdvanceRequested:
-            description = "Phase advance requested"
-        case .phaseAdvanceDismissed:
-            description = "Phase advance dismissed"
-        case .phaseAdvanceApproved:
-            description = "Phase advance approved"
-        case .phaseAdvanceDenied:
-            description = "Phase advance denied"
         case .artifactGetRequested(let id):
             description = "Artifact get requested: \(id)"
         case .artifactNewRequested:
