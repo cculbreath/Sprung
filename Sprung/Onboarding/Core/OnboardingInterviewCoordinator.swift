@@ -26,19 +26,19 @@ final class OnboardingInterviewCoordinator {
     // UI State
     private var uiStateUpdateHandler: UIStateUpdateHandler { container.uiStateUpdateHandler }
     private var uiResponseCoordinator: UIResponseCoordinator { container.uiResponseCoordinator }
-    private var coordinatorEventRouter: CoordinatorEventRouter { container.coordinatorEventRouter! }
+    private var coordinatorEventRouter: CoordinatorEventRouter { container.coordinatorEventRouter }
     // Phase & Objective Management
     private var phaseTransitionController: PhaseTransitionController { container.phaseTransitionController }
     // Services
     private var extractionManagementService: ExtractionManagementService { container.extractionManagementService }
     private var timelineManagementService: TimelineManagementService { container.timelineManagementService }
-    private var ingestionCoordinator: IngestionCoordinator { container.ingestionCoordinator }
     private var profilePersistenceHandler: ProfilePersistenceHandler { container.profilePersistenceHandler }
     // Tool Interaction
-    private var toolInteractionCoordinator: ToolInteractionCoordinator { container.toolInteractionCoordinator! }
+    private var toolInteractionCoordinator: ToolInteractionCoordinator { container.toolInteractionCoordinator }
     // Debug/Reset only
     #if DEBUG
     private var applicantProfileStore: ApplicantProfileStore { container.getApplicantProfileStore() }
+    private var resRefStore: ResRefStore { container.getResRefStore() }
     #endif
     // MARK: - Computed Properties (Read from StateCoordinator)
     var currentPhase: InterviewPhase {
@@ -49,6 +49,11 @@ final class OnboardingInterviewCoordinator {
     }
     var artifacts: OnboardingArtifacts {
         get async { await state.artifacts }
+    }
+
+    /// Knowledge cards created during onboarding (persisted as ResRefs)
+    var onboardingKnowledgeCards: [ResRef] {
+        container.onboardingKnowledgeCards
     }
     // MARK: - UI State Properties (from ToolRouter)
     var pendingUploadRequests: [OnboardingUploadRequest] {
@@ -120,7 +125,6 @@ final class OnboardingInterviewCoordinator {
         Logger.info("🎯 OnboardingInterviewCoordinator initialized with event-driven architecture", category: .ai)
         Task { await subscribeToEvents() }
         Task { await profilePersistenceHandler.start() }
-        Task { await ingestionCoordinator.start() }
     }
     // MARK: - Service Updates
     func updateOpenAIService(_ service: OpenAIService?) {
@@ -208,7 +212,7 @@ final class OnboardingInterviewCoordinator {
 
     // MARK: - Evidence Handling
     func handleEvidenceUpload(url: URL, requirementId: String) async {
-        await ingestionCoordinator.handleEvidenceUpload(url: url, requirementId: requirementId)
+        await container.artifactIngestionCoordinator.handleEvidenceUpload(url: url, requirementId: requirementId)
     }
     // MARK: - Phase Management
     func advancePhase() async -> InterviewPhase? {
@@ -338,24 +342,6 @@ final class OnboardingInterviewCoordinator {
     /// Get the currently focused plan item ID
     func getCurrentPlanItemFocus() -> String? {
         ui.knowledgeCardPlanFocus
-    }
-
-    /// Update a plan item's status (e.g., mark as completed after card persist)
-    func updatePlanItemStatus(itemId: String, status: KnowledgeCardPlanItem.Status) {
-        guard let index = ui.knowledgeCardPlan.firstIndex(where: { $0.id == itemId }) else {
-            Logger.warning("⚠️ Could not find plan item \(itemId) to update status", category: .ai)
-            return
-        }
-        let item = ui.knowledgeCardPlan[index]
-        ui.knowledgeCardPlan[index] = KnowledgeCardPlanItem(
-            id: item.id,
-            title: item.title,
-            type: item.type,
-            description: item.description,
-            status: status,
-            timelineEntryId: item.timelineEntryId
-        )
-        Logger.info("✅ Plan item \(itemId) status updated to \(status.rawValue)", category: .ai)
     }
 
     /// Check if there's a pending knowledge card awaiting validation
@@ -547,9 +533,6 @@ final class OnboardingInterviewCoordinator {
         Logger.info("✅ All streams and ingestion cancelled", category: .ai)
     }
     // MARK: - Data Store Management (Delegated to InterviewSessionCoordinator)
-    func loadPersistedArtifacts() async {
-        await sessionCoordinator.loadPersistedArtifacts()
-    }
     func clearArtifacts() {
         sessionCoordinator.clearArtifacts()
     }
@@ -588,6 +571,10 @@ final class OnboardingInterviewCoordinator {
         deleteCurrentSession()
         Logger.info("✅ SwiftData session deleted", category: .ai)
         await MainActor.run {
+            // Delete onboarding knowledge cards (ResRefs with isFromOnboarding=true)
+            resRefStore.deleteOnboardingResRefs()
+            Logger.info("✅ Onboarding knowledge cards deleted", category: .ai)
+
             let profile = applicantProfileStore.currentProfile()
             profile.name = "John Doe"
             profile.email = "applicant@example.com"

@@ -17,7 +17,6 @@ private struct StateStores {
     let artifactRepository: ArtifactRepository
     let chatTranscriptStore: ChatTranscriptStore
     let sessionUIState: SessionUIState
-    let draftKnowledgeStore: DraftKnowledgeStore
 }
 
 /// Groups document processing components for initialization
@@ -47,7 +46,6 @@ private struct Services {
     let extractionManagementService: ExtractionManagementService
     let timelineManagementService: TimelineManagementService
     let dataPersistenceService: DataPersistenceService
-    let ingestionCoordinator: IngestionCoordinator
 }
 
 /// Groups artifact ingestion components for initialization
@@ -93,7 +91,6 @@ final class OnboardingDependencyContainer {
     let extractionManagementService: ExtractionManagementService
     let timelineManagementService: TimelineManagementService
     let dataPersistenceService: DataPersistenceService
-    let ingestionCoordinator: IngestionCoordinator
 
     // MARK: - Artifact Ingestion Infrastructure
     let documentIngestionKernel: DocumentIngestionKernel
@@ -111,7 +108,6 @@ final class OnboardingDependencyContainer {
     let artifactRepository: ArtifactRepository
     let chatTranscriptStore: ChatTranscriptStore
     let sessionUIState: SessionUIState
-    let draftKnowledgeStore: DraftKnowledgeStore
     // MARK: - Session Persistence
     let sessionPersistenceHandler: SwiftDataSessionPersistenceHandler
     // MARK: - Tool Execution
@@ -131,10 +127,11 @@ final class OnboardingDependencyContainer {
     let ui: OnboardingUIState
     let wizardTracker: WizardProgressTracker
     let conversationLogStore: ConversationLogStore
+    // MARK: - Early-Initialized Coordinators (No Coordinator Reference Needed)
+    let toolInteractionCoordinator: ToolInteractionCoordinator
+    let coordinatorEventRouter: CoordinatorEventRouter
     // MARK: - Late-Initialized Components (Require Coordinator Reference)
     private(set) var toolRegistrar: OnboardingToolRegistrar!
-    private(set) var coordinatorEventRouter: CoordinatorEventRouter!
-    private(set) var toolInteractionCoordinator: ToolInteractionCoordinator!
     // MARK: - Initialization
     init(
         openAIService: OpenAIService?,
@@ -176,14 +173,12 @@ final class OnboardingDependencyContainer {
         self.artifactRepository = stores.artifactRepository
         self.chatTranscriptStore = stores.chatTranscriptStore
         self.sessionUIState = stores.sessionUIState
-        self.draftKnowledgeStore = stores.draftKnowledgeStore
 
         // 4. Initialize state coordinator
         self.state = StateCoordinator(
             eventBus: core.eventBus, phasePolicy: core.phasePolicy,
             objectives: stores.objectiveStore, artifacts: stores.artifactRepository,
-            chat: stores.chatTranscriptStore, uiState: stores.sessionUIState,
-            draftStore: stores.draftKnowledgeStore
+            chat: stores.chatTranscriptStore, uiState: stores.sessionUIState
         )
 
         // 5. Initialize document services
@@ -220,13 +215,11 @@ final class OnboardingDependencyContainer {
         let services = Self.createServices(
             eventBus: core.eventBus, state: state, toolRouter: tools.toolRouter,
             wizardTracker: wizardTracker, phaseTransitionController: controllers.phaseTransitionController,
-            dataStore: dataStore, applicantProfileStore: applicantProfileStore,
-            documentProcessingService: docs.documentProcessingService
+            dataStore: dataStore, applicantProfileStore: applicantProfileStore
         )
         self.extractionManagementService = services.extractionManagementService
         self.timelineManagementService = services.timelineManagementService
         self.dataPersistenceService = services.dataPersistenceService
-        self.ingestionCoordinator = services.ingestionCoordinator
 
         // 9. Initialize session persistence handler first (needed by session coordinator)
         self.sessionPersistenceHandler = SwiftDataSessionPersistenceHandler(
@@ -258,19 +251,30 @@ final class OnboardingDependencyContainer {
 
         // 12. Initialize remaining handlers
         self.profilePersistenceHandler = ProfilePersistenceHandler(
-            applicantProfileStore: applicantProfileStore, toolRouter: tools.toolRouter, eventBus: core.eventBus
+            applicantProfileStore: applicantProfileStore, toolRouter: tools.toolRouter, eventBus: core.eventBus, ui: ui
         )
         self.uiResponseCoordinator = UIResponseCoordinator(
             eventBus: core.eventBus, toolRouter: tools.toolRouter, state: state, ui: ui
         )
+        // 13. Initialize early coordinators (don't need coordinator reference)
+        self.toolInteractionCoordinator = ToolInteractionCoordinator(
+            eventBus: core.eventBus, toolRouter: tools.toolRouter
+        )
+        self.coordinatorEventRouter = CoordinatorEventRouter(
+            ui: ui, state: state, phaseTransitionController: controllers.phaseTransitionController,
+            toolRouter: tools.toolRouter, applicantProfileStore: applicantProfileStore,
+            resRefStore: resRefStore, coverRefStore: coverRefStore,
+            experienceDefaultsStore: experienceDefaultsStore,
+            eventBus: core.eventBus, dataStore: dataStore
+        )
 
-        // 13. Post-init configuration
+        // 14. Post-init configuration
         controllers.phaseTransitionController.setLifecycleController(controllers.lifecycleController)
         tools.toolRouter.uploadHandler.updateExtractionProgressHandler { [services] update in
             Task { @MainActor in services.extractionManagementService.updateExtractionProgress(with: update) }
         }
 
-        // 13. Start conversation log listening
+        // 15. Start conversation log listening
         conversationLogStore.startListening(eventBus: core.eventBus)
 
         Logger.info("🏗️ OnboardingDependencyContainer initialized", category: .ai)
@@ -298,8 +302,7 @@ final class OnboardingDependencyContainer {
             objectiveStore: ObjectiveStore(eventBus: eventBus, phasePolicy: phasePolicy, initialPhase: .phase1CoreFacts),
             artifactRepository: ArtifactRepository(eventBus: eventBus),
             chatTranscriptStore: ChatTranscriptStore(eventBus: eventBus),
-            sessionUIState: SessionUIState(eventBus: eventBus, phasePolicy: phasePolicy, initialPhase: .phase1CoreFacts),
-            draftKnowledgeStore: DraftKnowledgeStore(eventBus: eventBus)
+            sessionUIState: SessionUIState(eventBus: eventBus, phasePolicy: phasePolicy, initialPhase: .phase1CoreFacts)
         )
     }
 
@@ -359,8 +362,7 @@ final class OnboardingDependencyContainer {
     private static func createServices(
         eventBus: EventCoordinator, state: StateCoordinator, toolRouter: ToolHandler,
         wizardTracker: WizardProgressTracker, phaseTransitionController: PhaseTransitionController,
-        dataStore: InterviewDataStore, applicantProfileStore: ApplicantProfileStore,
-        documentProcessingService: DocumentProcessingService
+        dataStore: InterviewDataStore, applicantProfileStore: ApplicantProfileStore
     ) -> Services {
         Services(
             extractionManagementService: ExtractionManagementService(
@@ -371,10 +373,7 @@ final class OnboardingDependencyContainer {
             ),
             dataPersistenceService: DataPersistenceService(
                 eventBus: eventBus, state: state, dataStore: dataStore,
-                applicantProfileStore: applicantProfileStore, toolRouter: toolRouter, wizardTracker: wizardTracker
-            ),
-            ingestionCoordinator: IngestionCoordinator(
-                eventBus: eventBus, state: state, documentProcessingService: documentProcessingService
+                toolRouter: toolRouter, wizardTracker: wizardTracker
             )
         )
     }
@@ -387,7 +386,8 @@ final class OnboardingDependencyContainer {
         )
         let gitKernel = GitIngestionKernel(eventBus: eventBus)
         let coordinator = ArtifactIngestionCoordinator(
-            eventBus: eventBus, documentKernel: documentKernel, gitKernel: gitKernel
+            eventBus: eventBus, documentKernel: documentKernel, gitKernel: gitKernel,
+            documentProcessingService: documentProcessingService
         )
         Task {
             await documentKernel.setIngestionCoordinator(coordinator)
@@ -406,30 +406,12 @@ final class OnboardingDependencyContainer {
         coordinator: OnboardingInterviewCoordinator,
         onModelAvailabilityIssue: @escaping (String) -> Void
     ) {
-        // Initialize components requiring coordinator reference
+        // Initialize tool registrar (only component still requiring coordinator reference)
         self.toolRegistrar = OnboardingToolRegistrar(
             coordinator: coordinator,
             toolRegistry: toolRegistry,
             dataStore: dataStore,
             eventBus: eventBus
-        )
-        self.coordinatorEventRouter = CoordinatorEventRouter(
-            ui: ui,
-            state: state,
-            phaseTransitionController: phaseTransitionController,
-            toolRouter: toolRouter,
-            applicantProfileStore: applicantProfileStore,
-            resRefStore: resRefStore,
-            coverRefStore: coverRefStore,
-            experienceDefaultsStore: experienceDefaultsStore,
-            eventBus: eventBus,
-            dataStore: dataStore,
-            coordinator: coordinator
-        )
-        self.toolInteractionCoordinator = ToolInteractionCoordinator(
-            eventBus: eventBus,
-            toolRouter: toolRouter,
-            dataStore: dataStore
         )
         // Register tools
         toolRegistrar.registerTools(
@@ -462,5 +444,13 @@ final class OnboardingDependencyContainer {
     }
     func getDataStore() -> InterviewDataStore {
         dataStore
+    }
+    func getResRefStore() -> ResRefStore {
+        resRefStore
+    }
+
+    /// Knowledge cards created during onboarding (persisted as ResRefs with isFromOnboarding=true)
+    var onboardingKnowledgeCards: [ResRef] {
+        resRefStore.resRefs.filter { $0.isFromOnboarding }
     }
 }
