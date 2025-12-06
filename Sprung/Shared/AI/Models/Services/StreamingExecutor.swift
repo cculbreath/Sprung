@@ -20,11 +20,18 @@ final class _StreamingExecutor {
             (reasoning.exclude != nil && reasoning.exclude != false)
         if hasOverride {
             parameters.reasoningEffort = nil
-            parameters.reasoning = ChatCompletionParameters.ReasoningOverrides(
-                effort: reasoning.effort,
-                exclude: reasoning.exclude,
-                maxTokens: reasoning.maxTokens
-            )
+            // Build reasoning dictionary for OpenRouter
+            var reasoningDict: [String: Any] = [:]
+            if let effort = reasoning.effort {
+                reasoningDict["effort"] = effort
+            }
+            if let exclude = reasoning.exclude {
+                reasoningDict["exclude"] = exclude
+            }
+            if let maxTokens = reasoning.maxTokens {
+                reasoningDict["max_tokens"] = maxTokens
+            }
+            parameters.reasoning = reasoningDict
             let effortDescription = reasoning.effort ?? "<nil>"
             let excludeDescription = String(describing: reasoning.exclude)
             let maxTokensDescription = String(describing: reasoning.maxTokens)
