@@ -93,18 +93,10 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
         switch result {
         case .immediate(let output):
             // Special handling for extract_document tool - emit artifact record produced event
+            // DocumentArtifactMessenger will batch and send the extracted content to the LLM
+            // No separate developer message needed - tool response + content message suffice
             if toolName == "extract_document", output["artifact_record"] != .null {
                 await emit(.artifactRecordProduced(record: output["artifact_record"]))
-                // Optional: Emit developer message about artifact storage
-                var devPayload = JSON()
-                devPayload["text"].string = "Developer status: Artifact stored"
-                let artifactId = output["artifact_record"]["id"].stringValue
-                devPayload["details"] = JSON([
-                    "artifact_id": artifactId,
-                    "status": "stored"
-                ])
-                devPayload["payload"] = output["artifact_record"]
-                await emit(.llmSendDeveloperMessage(payload: devPayload))
             }
             // Determine reasoning effort for specific tools
             // GPT-5.1 supports: none, low, medium, high (not "minimal")

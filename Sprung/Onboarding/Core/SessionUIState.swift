@@ -9,6 +9,7 @@ actor SessionUIState: OnboardingEventEmitter {
     // MARK: - Policy
     private let phasePolicy: PhasePolicy
     private var currentPhase: InterviewPhase
+    private var excludedTools: Set<String> = []
     // MARK: - Session State
     private(set) var isActive = false
     private(set) var isProcessing = false
@@ -166,12 +167,28 @@ actor SessionUIState: OnboardingEventEmitter {
             }
         }
     }
-    /// Get allowed tools for the current phase
+    /// Get allowed tools for the current phase, minus any excluded tools
     private func getAllowedToolsForCurrentPhase() -> Set<String> {
-        return phasePolicy.allowedTools[currentPhase] ?? []
+        let phaseTools = phasePolicy.allowedTools[currentPhase] ?? []
+        return phaseTools.subtracting(excludedTools)
     }
     /// Public API to trigger tool permission republication
     func publishToolPermissionsNow() async {
+        await publishToolPermissions()
+    }
+    /// Update excluded tools and republish permissions
+    func setExcludedTools(_ tools: Set<String>) async {
+        excludedTools = tools
+        await publishToolPermissions()
+    }
+    /// Add a tool to the excluded set
+    func excludeTool(_ toolName: String) async {
+        excludedTools.insert(toolName)
+        await publishToolPermissions()
+    }
+    /// Remove a tool from the excluded set
+    func includeTool(_ toolName: String) async {
+        excludedTools.remove(toolName)
         await publishToolPermissions()
     }
     // MARK: - State Management
@@ -186,6 +203,7 @@ actor SessionUIState: OnboardingEventEmitter {
         pendingExtraction = nil
         pendingStreamingStatus = nil
         pendingPhaseAdvanceRequest = nil
+        excludedTools = []
         // Reset sync caches
         isProcessingSync = false
         isActiveSync = false

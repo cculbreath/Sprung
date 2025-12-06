@@ -835,16 +835,16 @@ actor StateCoordinator: OnboardingEventEmitter {
     func excludeTool(_ toolName: String) async {
         excludedTools.insert(toolName)
         Logger.info("🚫 Tool excluded from future calls: \(toolName)", category: .ai)
-        // Republish allowed tools to update subscribers
-        await publishAllowedToolsNow()
+        // Update SessionUIState's excluded tools (this also republishes permissions)
+        await uiState.excludeTool(toolName)
     }
 
     /// Re-include a previously excluded tool (e.g., when user action enables it)
     func includeTool(_ toolName: String) async {
         excludedTools.remove(toolName)
         Logger.info("✅ Tool re-included in allowed calls: \(toolName)", category: .ai)
-        // Republish allowed tools to update subscribers
-        await publishAllowedToolsNow()
+        // Update SessionUIState's excluded tools (this also republishes permissions)
+        await uiState.includeTool(toolName)
     }
     var isProcessing: Bool {
         get async {

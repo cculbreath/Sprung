@@ -283,13 +283,15 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
         }
 
         messageText += "Artifact ID: \(artifactId)\n\n"
-        messageText += "Use `list_artifacts` to see the full analysis details, or generate knowledge cards based on these findings."
+        messageText += "This artifact is now available via `list_artifacts` and `get_artifact`. Do NOT respond to this message—continue with the current workflow."
 
-        // Only text is sent to LLM - metadata fields are ignored
+        // Send as developer message (context/instruction) rather than user message
+        // This provides the artifact data without triggering a conversational response
         var payload = JSON()
-        payload["text"].string = messageText
+        payload["title"].string = "Git Repository Analysis Complete"
+        payload["content"].string = messageText
 
-        await emit(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
-        Logger.info("📤 Git analysis artifact sent to LLM: \(artifactId)", category: .ai)
+        await emit(.llmSendDeveloperMessage(payload: payload))
+        Logger.info("📤 Git analysis artifact sent to LLM (developer message): \(artifactId)", category: .ai)
     }
 }
