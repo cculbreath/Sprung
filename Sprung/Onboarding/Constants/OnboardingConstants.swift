@@ -16,7 +16,7 @@ enum OnboardingModelConfig {
     /// Returns the currently configured model ID from settings
     /// Default is registered in SprungApp.init()
     static var currentModelId: String {
-        UserDefaults.standard.string(forKey: userDefaultsKey)!
+        UserDefaults.standard.string(forKey: userDefaultsKey) ?? "gpt-4o"
     }
 }
 

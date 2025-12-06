@@ -170,10 +170,6 @@ final class InterviewSessionCoordinator {
         Logger.info("🎛️ Session isActive synced: \(ui.isActive)", category: .ai)
     }
     // MARK: - Data Persistence
-    /// Load artifacts persisted from a previous session.
-    func loadPersistedArtifacts() async {
-        await dataPersistenceService.loadPersistedArtifacts()
-    }
     /// Clear all artifacts from the current session.
     func clearArtifacts() {
         Task {

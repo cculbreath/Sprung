@@ -96,14 +96,12 @@ struct SettingsView: View {
                     get: { onboardingWebSearchAllowed },
                     set: { newValue in
                         onboardingWebSearchAllowed = newValue
-                        onboardingWebSearchAllowed = newValue
                     }
                 ))
                 .toggleStyle(.switch)
                 Toggle("Allow writing-style analysis by default", isOn: Binding(
                     get: { onboardingWritingAllowed },
                     set: { newValue in
-                        onboardingWritingAllowed = newValue
                         onboardingWritingAllowed = newValue
                     }
                 ))

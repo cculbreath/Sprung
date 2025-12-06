@@ -27,13 +27,12 @@ final class UIResponseCoordinator {
         await eventBus.publish(.choicePromptCleared)
 
         // Complete pending UI tool call (Codex paradigm)
-        await completePendingUIToolCall(output: buildUICompletedOutput(message: "User selected: \(selectionIds.joined(separator: ", "))"))
-
-        var userMessage = JSON()
-        userMessage["role"].string = "user"
-        userMessage["content"].string = "Selected option(s): \(selectionIds.joined(separator: ", "))"
-        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
-        Logger.info("✅ Choice selection submitted and user message sent to LLM", category: .ai)
+        // No separate user message needed - tool response contains the selection info
+        var output = JSON()
+        output["message"].string = "User selected option(s): \(selectionIds.joined(separator: ", "))"
+        output["status"].string = "completed"
+        await completePendingUIToolCall(output: output)
+        Logger.info("✅ Choice selection - info included in tool response", category: .ai)
     }
     // MARK: - Upload Handling
     func completeUploadAndResume(id: UUID, fileURLs: [URL], coordinator: OnboardingInterviewCoordinator) async {
@@ -58,41 +57,36 @@ final class UIResponseCoordinator {
             return
         }
 
-        // For non-extractable files (images, text), complete immediately
-        await completePendingUIToolCall(output: buildUICompletedOutput(message: "User uploaded \(fileURLs.count) file(s)"))
-
-        var userMessage = JSON()
-        userMessage["role"].string = "user"
-        userMessage["content"].string = "Uploaded \(fileURLs.count) file(s) successfully."
-        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
-        Logger.info("✅ Upload completed and user message sent to LLM", category: .ai)
+        // For non-extractable files (images, text), complete immediately with all info in tool response
+        // No separate user message needed - tool response contains the completion info
+        let filenames = fileURLs.map { $0.lastPathComponent }.joined(separator: ", ")
+        var output = JSON()
+        output["message"].string = "User uploaded \(fileURLs.count) file(s): \(filenames)"
+        output["status"].string = "completed"
+        await completePendingUIToolCall(output: output)
+        Logger.info("✅ Upload completed (non-extractable files) - info included in tool response", category: .ai)
     }
     func completeUploadAndResume(id: UUID, link: URL, coordinator: OnboardingInterviewCoordinator) async {
         guard await coordinator.toolRouter.completeUpload(id: id, link: link) != nil else { return }
 
-        // Complete pending UI tool call (Codex paradigm)
-        await completePendingUIToolCall(output: buildUICompletedOutput(message: "User provided URL: \(link.absoluteString)"))
-
-        var userMessage = JSON()
-        userMessage["role"].string = "user"
-        userMessage["content"].string = "Uploaded file from URL: \(link.absoluteString)"
-        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
-        Logger.info("✅ Upload from URL completed and user message sent to LLM", category: .ai)
+        // Complete pending UI tool call with all info in tool response
+        // No separate user message needed - tool response contains the completion info
+        var output = JSON()
+        output["message"].string = "User provided URL: \(link.absoluteString)"
+        output["status"].string = "completed"
+        await completePendingUIToolCall(output: output)
+        Logger.info("✅ Upload from URL completed - info included in tool response", category: .ai)
     }
     func skipUploadAndResume(id: UUID, coordinator: OnboardingInterviewCoordinator) async {
         guard await coordinator.skipUpload(id: id) != nil else { return }
 
-        // Complete pending UI tool call with cancelled status (Codex paradigm)
+        // Complete pending UI tool call with cancelled status
+        // No separate user message needed - tool response contains the completion info
         var output = JSON()
         output["message"].string = "User skipped the upload"
         output["status"].string = "cancelled"
         await completePendingUIToolCall(output: output)
-
-        var userMessage = JSON()
-        userMessage["role"].string = "user"
-        userMessage["content"].string = "Skipped upload."
-        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
-        Logger.info("✅ Upload skipped and user message sent to LLM", category: .ai)
+        Logger.info("✅ Upload skipped - info included in tool response", category: .ai)
     }
     // MARK: - Validation Handling
     func submitValidationAndResume(
@@ -104,8 +98,29 @@ final class UIResponseCoordinator {
     ) async {
         guard await coordinator.submitValidationResponse(status: status, updatedData: updatedData, changes: changes, notes: notes) != nil else { return }
 
+        // Map status values from UI buttons to normalized status
+        let statusDescription: String
+        switch status.lowercased() {
+        case "confirmed", "confirmed_with_changes", "approved", "modified":
+            statusDescription = "confirmed"
+        case "rejected":
+            statusDescription = "rejected"
+        default:
+            statusDescription = status.lowercased()
+        }
+
+        // Build tool response message with notes if provided
+        var message = "Validation response: \(statusDescription)"
+        if let notes = notes, !notes.isEmpty {
+            message += ". Notes: \(notes)"
+        }
+
         // Complete pending UI tool call (Codex paradigm)
-        await completePendingUIToolCall(output: buildUICompletedOutput(message: "Validation response: \(status)"))
+        // No separate user message needed - tool response contains the validation info
+        var output = JSON()
+        output["message"].string = message
+        output["status"].string = "completed"
+        await completePendingUIToolCall(output: output)
 
         // Check for pending knowledge card that needs auto-persist
         let isConfirmed = ["confirmed", "confirmed_with_changes", "approved", "modified"].contains(status.lowercased())
@@ -118,28 +133,7 @@ final class UIResponseCoordinator {
             return
         }
 
-        // Regular validation response (non-knowledge-card)
-        var userMessage = JSON()
-        userMessage["role"].string = "user"
-
-        // Map status values from UI buttons to LLM messages
-        let statusDescription: String
-        switch status.lowercased() {
-        case "confirmed", "confirmed_with_changes", "approved", "modified":
-            statusDescription = "confirmed"
-        case "rejected":
-            statusDescription = "rejected"
-        default:
-            statusDescription = status.lowercased()
-        }
-
-        userMessage["content"].string = "Validation response: \(statusDescription)"
-        if let notes = notes, !notes.isEmpty {
-            userMessage["content"].string = userMessage["content"].stringValue + ". Notes: \(notes)"
-        }
-
-        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
-        Logger.info("✅ Validation response submitted and user message sent to LLM", category: .ai)
+        Logger.info("✅ Validation response - info included in tool response", category: .ai)
     }
     func clearValidationPromptAndNotifyLLM(message: String) async {
         // Clear the validation prompt
@@ -255,16 +249,12 @@ final class UIResponseCoordinator {
         guard toolRouter.rejectApplicantProfile(reason: reason) != nil else { return }
 
         // Complete pending UI tool call with rejection (Codex paradigm)
+        // No separate user message needed - tool response contains the rejection info
         var output = JSON()
-        output["message"].string = "Profile rejected: \(reason)"
+        output["message"].string = "Applicant profile rejected. Reason: \(reason)"
         output["status"].string = "rejected"
         await completePendingUIToolCall(output: output)
-
-        var userMessage = JSON()
-        userMessage["role"].string = "user"
-        userMessage["content"].string = "Applicant profile rejected. Reason: \(reason)"
-        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
-        Logger.info("✅ Applicant profile rejected and user message sent to LLM", category: .ai)
+        Logger.info("✅ Applicant profile rejected - info included in tool response", category: .ai)
     }
     func submitProfileDraft(draft: ApplicantProfileDraft, source: OnboardingApplicantProfileIntakeState.Source) async {
         // Close the profile intake UI via event
@@ -316,10 +306,9 @@ final class UIResponseCoordinator {
         wrappedData["validation_status"].string = "validated_by_user"
 
         var output = JSON()
-        output["message"].string = "Profile submitted via \(source == .contacts ? "contacts import" : "manual entry") and validated by user"
+        output["message"].string = "Profile submitted via \(source == .contacts ? "contacts import" : "manual entry") and validated by user. Proceed to photo step."
         output["status"].string = "completed"
         output["profile_data"] = wrappedData
-        output["instructions"].string = "Profile is validated. Do NOT call validate_applicant_profile. Proceed to ask about profile photo, then continue workflow."
 
         // Complete pending UI tool call with full profile data (Codex paradigm)
         await completePendingUIToolCall(output: output)
@@ -340,7 +329,11 @@ final class UIResponseCoordinator {
         guard toolRouter.resolveSectionToggle(enabled: enabled) != nil else { return }
 
         // Complete pending UI tool call (Codex paradigm)
-        await completePendingUIToolCall(output: buildUICompletedOutput(message: "Sections selected: \(enabled.joined(separator: ", "))"))
+        // No separate user message needed - tool response contains the completion info
+        var output = JSON()
+        output["message"].string = "Section toggle confirmed. Enabled sections: \(enabled.joined(separator: ", "))"
+        output["status"].string = "completed"
+        await completePendingUIToolCall(output: output)
 
         // Mark enabled_sections objective as complete
         await eventBus.publish(.objectiveStatusUpdateRequested(
@@ -350,27 +343,18 @@ final class UIResponseCoordinator {
             notes: "Section toggle confirmed by user",
             details: ["sections": enabled.joined(separator: ", ")]
         ))
-        Logger.info("✅ enabled_sections objective marked complete", category: .ai)
-        var userMessage = JSON()
-        userMessage["role"].string = "user"
-        userMessage["content"].string = "Section toggle confirmed. Enabled sections: \(enabled.joined(separator: ", "))"
-        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
-        Logger.info("✅ Section toggle confirmed and user message sent to LLM", category: .ai)
+        Logger.info("✅ Section toggle confirmed - info included in tool response", category: .ai)
     }
     func rejectSectionToggle(reason: String) async {
         guard toolRouter.rejectSectionToggle(reason: reason) != nil else { return }
 
         // Complete pending UI tool call with rejection (Codex paradigm)
+        // No separate user message needed - tool response contains the rejection info
         var output = JSON()
         output["message"].string = "Section toggle rejected: \(reason)"
         output["status"].string = "rejected"
         await completePendingUIToolCall(output: output)
-
-        var userMessage = JSON()
-        userMessage["role"].string = "user"
-        userMessage["content"].string = "Section toggle rejected. Reason: \(reason)"
-        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
-        Logger.info("✅ Section toggle rejected and user message sent to LLM", category: .ai)
+        Logger.info("✅ Section toggle rejected - info included in tool response", category: .ai)
     }
     // MARK: - Model Availability
     func notifyInvalidModel(id: String) {

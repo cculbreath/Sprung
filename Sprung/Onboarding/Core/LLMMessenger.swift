@@ -716,7 +716,6 @@ actor LLMMessenger: OnboardingEventEmitter {
             return
         }
         Logger.info("🛑 Cancelling LLM stream...", category: .ai)
-        Logger.info("🛑 Cancelling LLM stream...", category: .ai)
         task.cancel()
         currentStreamTask = nil
         await networkRouter.cancelPendingStreams()

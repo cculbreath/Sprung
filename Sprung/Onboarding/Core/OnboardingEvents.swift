@@ -60,9 +60,8 @@ enum OnboardingEvent {
     case artifactDeleted(id: UUID)
     // Upload completion (generic)
     case uploadCompleted(files: [ProcessedUploadInfo], requestKind: String, callId: String?, metadata: JSON)
-    // Artifact pipeline (tool → state → persistence)
+    // Artifact pipeline (tool → state → SwiftData persistence)
     case artifactRecordProduced(record: JSON)  // emitted when a tool returns an artifact_record
-    case artifactRecordPersisted(record: JSON) // emitted after persistence/index update succeeds
     case artifactRecordsReplaced(records: [JSON]) // emitted when persisted artifact records replace in-memory state
     case artifactMetadataUpdateRequested(artifactId: String, updates: JSON) // emitted when LLM requests metadata update
     case artifactMetadataUpdated(artifact: JSON) // emitted after StateCoordinator updates metadata (includes full artifact)
@@ -81,10 +80,6 @@ enum OnboardingEvent {
     case knowledgeCardAutoPersisted(title: String) // Emitted after successful auto-persist
     case toolGatingRequested(toolName: String, exclude: Bool) // Request to gate/ungate a tool
     case planItemStatusChangeRequested(itemId: String, status: String) // Request to change plan item status
-    // MARK: - Draft Knowledge Cards
-    case draftKnowledgeCardProduced(KnowledgeCardDraft)
-    case draftKnowledgeCardUpdated(KnowledgeCardDraft)
-    case draftKnowledgeCardRemoved(UUID)
     // MARK: - Evidence Requirements
     case evidenceRequirementAdded(EvidenceRequirement)
     case evidenceRequirementUpdated(EvidenceRequirement)
@@ -344,13 +339,12 @@ actor EventCoordinator {
         // Artifact events
         case .uploadCompleted,
              .artifactGetRequested, .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted,
-             .artifactRecordProduced, .artifactRecordPersisted, .artifactRecordsReplaced,
+             .artifactRecordProduced, .artifactRecordsReplaced,
              .artifactMetadataUpdateRequested, .artifactMetadataUpdated,
              .knowledgeCardPersisted, .knowledgeCardsReplaced,
              .knowledgeCardDoneButtonClicked, .knowledgeCardSubmissionPending,
              .knowledgeCardAutoPersistRequested, .knowledgeCardAutoPersisted,
              .toolGatingRequested, .planItemStatusChangeRequested,
-             .draftKnowledgeCardProduced, .draftKnowledgeCardUpdated, .draftKnowledgeCardRemoved,
              .writingSamplePersisted, .candidateDossierPersisted:
             return .artifact
         // Evidence Requirements (treated as state/objectives)
@@ -469,8 +463,6 @@ actor EventCoordinator {
             description = "Artifact deleted: \(id)"
         case .artifactRecordProduced(let record):
             description = "Artifact record produced: \(record["id"].stringValue)"
-        case .artifactRecordPersisted(let record):
-            description = "Artifact record persisted: \(record["id"].stringValue)"
         case .artifactRecordsReplaced(let records):
             description = "Artifact records replaced (\(records.count))"
         case .artifactMetadataUpdateRequested(let artifactId, let updates):
@@ -497,12 +489,6 @@ actor EventCoordinator {
             description = "Tool gating requested: \(toolName) (exclude: \(exclude))"
         case .planItemStatusChangeRequested(let itemId, let status):
             description = "Plan item status change requested: \(itemId) → \(status)"
-        case .draftKnowledgeCardProduced(let draft):
-            description = "Draft knowledge card produced: \(draft.title)"
-        case .draftKnowledgeCardUpdated(let draft):
-            description = "Draft knowledge card updated: \(draft.title)"
-        case .draftKnowledgeCardRemoved(let id):
-            description = "Draft knowledge card removed: \(id)"
         case .evidenceRequirementAdded(let req):
             description = "Evidence requirement added: \(req.description)"
         case .evidenceRequirementUpdated(let req):

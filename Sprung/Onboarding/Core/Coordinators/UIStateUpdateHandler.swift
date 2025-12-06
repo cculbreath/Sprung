@@ -73,7 +73,7 @@ final class UIStateUpdateHandler {
     func handleArtifactEvent(_ event: OnboardingEvent) async {
         switch event {
         case .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted,
-             .artifactRecordProduced, .artifactRecordPersisted, .artifactRecordsReplaced,
+             .artifactRecordProduced, .artifactRecordsReplaced,
              .knowledgeCardPersisted, .knowledgeCardsReplaced:
             await syncArtifactRecordsFromState()
             await syncWizardProgressFromState()

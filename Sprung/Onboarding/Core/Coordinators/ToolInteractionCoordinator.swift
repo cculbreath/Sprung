@@ -13,16 +13,13 @@ final class ToolInteractionCoordinator {
     // MARK: - Properties
     private let eventBus: EventCoordinator
     private let toolRouter: ToolHandler
-    private let dataStore: InterviewDataStore
     // MARK: - Initialization
     init(
         eventBus: EventCoordinator,
-        toolRouter: ToolHandler,
-        dataStore: InterviewDataStore
+        toolRouter: ToolHandler
     ) {
         self.eventBus = eventBus
         self.toolRouter = toolRouter
-        self.dataStore = dataStore
     }
     // MARK: - Tool UI Presentations
     func presentUploadRequest(_ request: OnboardingUploadRequest) {
@@ -71,17 +68,12 @@ final class ToolInteractionCoordinator {
         notes: String?
     ) async -> JSON? {
         let pendingValidation = toolRouter.pendingValidationPrompt
-        // Special handling for knowledge card persistence
+        // Emit knowledge card persisted event for in-memory tracking
         if let validation = pendingValidation,
            validation.dataType == "knowledge_card",
            let data = updatedData,
            data != .null,
            ["approved", "modified"].contains(status.lowercased()) {
-            do {
-                _ = try await dataStore.persist(dataType: "knowledge_card", payload: data)
-            } catch {
-                Logger.error("Failed to persist knowledge card: \\(error)", category: .ai)
-            }
             await eventBus.publish(.knowledgeCardPersisted(card: data))
         }
         let result = toolRouter.submitValidationResponse(

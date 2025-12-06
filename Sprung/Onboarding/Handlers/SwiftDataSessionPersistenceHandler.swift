@@ -194,8 +194,13 @@ final class SwiftDataSessionPersistenceHandler {
         guard let session = currentSession else { return }
 
         switch event {
-        case .artifactRecordPersisted(let record):
+        case .artifactRecordProduced(let record):
+            // Persist to SwiftData when artifact is produced
             persistArtifact(session: session, record: record)
+
+        case .artifactMetadataUpdated(let artifact):
+            // Re-persist when metadata is updated
+            persistArtifact(session: session, record: artifact)
 
         default:
             break

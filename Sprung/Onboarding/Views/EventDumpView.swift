@@ -213,8 +213,6 @@ struct EventDumpView: View {
             } else {
                 return "skeletonTimelineReplaced"
             }
-        case .artifactRecordPersisted(let record):
-            return "artifactRecordPersisted(id: \(record["id"].stringValue))"
         case .knowledgeCardPersisted(let card):
             return "knowledgeCardPersisted(title: \(card["title"].stringValue))"
         default:

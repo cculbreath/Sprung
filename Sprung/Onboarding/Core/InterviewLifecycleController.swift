@@ -18,7 +18,6 @@ final class InterviewLifecycleController {
     // MARK: - Lifecycle State
     private(set) var orchestrator: InterviewOrchestrator?
     private(set) var workflowEngine: ObjectiveWorkflowEngine?
-    private(set) var artifactPersistenceHandler: ArtifactPersistenceHandler?
     private(set) var transcriptPersistenceHandler: TranscriptPersistenceHandler?
     // Event subscription tracking
     private var eventSubscriptionTask: Task<Void, Never>?
@@ -105,13 +104,6 @@ final class InterviewLifecycleController {
         )
         workflowEngine = engine
         await engine.start()
-        // Start artifact persistence handler
-        let persistenceHandler = ArtifactPersistenceHandler(
-            eventBus: eventBus,
-            dataStore: dataStore
-        )
-        artifactPersistenceHandler = persistenceHandler
-        await persistenceHandler.start()
         // Start transcript persistence handler
         let transcriptHandler = TranscriptPersistenceHandler(
             eventBus: eventBus,
@@ -142,9 +134,6 @@ final class InterviewLifecycleController {
         // Stop workflow engine
         await workflowEngine?.stop()
         workflowEngine = nil
-        // Stop artifact persistence handler
-        await artifactPersistenceHandler?.stop()
-        artifactPersistenceHandler = nil
         // Stop transcript persistence handler
         await transcriptPersistenceHandler?.stop()
         transcriptPersistenceHandler = nil

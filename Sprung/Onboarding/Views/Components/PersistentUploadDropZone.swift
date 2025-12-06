@@ -141,7 +141,6 @@ struct PersistentUploadDropZone: View {
             if FileManager.default.fileExists(atPath: gitDir.path) {
                 onSelectGitRepo?(url)
             } else {
-                // TODO: Show error that this is not a git repository
                 Logger.warning("Selected directory is not a git repository: \(url.path)", category: .ai)
             }
         }
