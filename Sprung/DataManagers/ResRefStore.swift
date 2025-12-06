@@ -35,5 +35,15 @@ final class ResRefStore: SwiftDataStore {
         modelContext.delete(resRef)
         saveContext()
     }
+
+    /// Deletes all ResRefs created during onboarding
+    func deleteOnboardingResRefs() {
+        let onboardingRefs = resRefs.filter { $0.isFromOnboarding }
+        for resRef in onboardingRefs {
+            modelContext.delete(resRef)
+        }
+        saveContext()
+        Logger.info("🗑️ Deleted \(onboardingRefs.count) onboarding ResRefs", category: .ai)
+    }
     // `saveContext()` now from `SwiftDataStore`.
 }

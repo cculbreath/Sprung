@@ -7,15 +7,18 @@ final class ProfilePersistenceHandler {
     private let applicantProfileStore: ApplicantProfileStore
     private let toolRouter: ToolHandler
     private let eventBus: EventCoordinator
+    private let ui: OnboardingUIState
     private var subscriptionTask: Task<Void, Never>?
     init(
         applicantProfileStore: ApplicantProfileStore,
         toolRouter: ToolHandler,
-        eventBus: EventCoordinator
+        eventBus: EventCoordinator,
+        ui: OnboardingUIState
     ) {
         self.applicantProfileStore = applicantProfileStore
         self.toolRouter = toolRouter
         self.eventBus = eventBus
+        self.ui = ui
     }
     /// Start listening to applicant profile events
     func start() async {
@@ -46,11 +49,21 @@ final class ProfilePersistenceHandler {
         draft.apply(to: profile, replaceMissing: false)
         applicantProfileStore.save(profile)
         Logger.info("💾 Applicant profile persisted to SwiftData", category: .ai)
-        // Update summary card if showing (e.g., when photo is added)
+
+        // Regenerate JSON from persisted profile to ensure image is included
+        let updatedDraft = ApplicantProfileDraft(profile: profile)
+        let updatedJSON = updatedDraft.toSafeJSON()
+
+        // Update summary card if showing via pendingApplicantProfileSummary
         if toolRouter.profileHandler.pendingApplicantProfileSummary != nil {
-            let updatedDraft = ApplicantProfileDraft(profile: profile)
-            let updatedJSON = updatedDraft.toSafeJSON()
             toolRouter.profileHandler.updateProfileSummary(profile: updatedJSON)
+        }
+
+        // Also update fallback UI state (used after profile objective completes)
+        // This ensures photo uploads after profile completion still show in the card
+        if ui.lastApplicantProfileSummary != nil {
+            ui.lastApplicantProfileSummary = updatedJSON
+            Logger.debug("📸 Updated lastApplicantProfileSummary with new profile data", category: .ai)
         }
     }
 }

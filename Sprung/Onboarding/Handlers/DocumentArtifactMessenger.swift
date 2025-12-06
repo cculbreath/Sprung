@@ -204,12 +204,9 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
             messageText += "\n\n"
         }
 
-        // Create consolidated user message payload
+        // Create consolidated user message payload (only text is sent to LLM)
         var payload = JSON()
         payload["text"].string = messageText
-        payload["artifact_ids"] = JSON(artifactIds)
-        payload["artifact_count"].int = artifacts.count
-        payload["is_batch"].bool = true
 
         // Emit single LLM message event for all artifacts
         await emit(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
@@ -222,14 +219,14 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
         let filename = record["filename"].stringValue
         let extractedText = record["extracted_text"].stringValue
 
-        var messageText = "I've uploaded a document (\(documentType)): \(filename)\n\n"
+        var messageText = "I've uploaded a document (\(documentType)): \(filename)\n"
+        messageText += "Artifact ID: \(artifactId)\n\n"
         messageText += "Here is the extracted content:\n\n"
         messageText += extractedText
 
+        // Only text is sent to LLM - metadata fields are ignored
         var payload = JSON()
         payload["text"].string = messageText
-        payload["artifact_id"].string = artifactId
-        payload["artifact_record"] = record
 
         await emit(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
         Logger.info("📤 Single document artifact sent to LLM: \(artifactId)", category: .ai)
@@ -285,13 +282,12 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
             messageText += "\n"
         }
 
+        messageText += "Artifact ID: \(artifactId)\n\n"
         messageText += "Use `list_artifacts` to see the full analysis details, or generate knowledge cards based on these findings."
 
+        // Only text is sent to LLM - metadata fields are ignored
         var payload = JSON()
         payload["text"].string = messageText
-        payload["artifact_id"].string = artifactId
-        payload["artifact_type"].string = "git_analysis"
-        payload["artifact_record"] = record
 
         await emit(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
         Logger.info("📤 Git analysis artifact sent to LLM: \(artifactId)", category: .ai)

@@ -16,7 +16,6 @@ actor StateCoordinator: OnboardingEventEmitter {
     private let artifactRepository: ArtifactRepository
     private let chatStore: ChatTranscriptStore
     private let uiState: SessionUIState
-    private let draftKnowledgeStore: DraftKnowledgeStore
     private let streamQueueManager: StreamQueueManager
     private let llmStateManager: LLMStateManager
     // MARK: - Phase Policy
@@ -51,8 +50,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         objectives: ObjectiveStore,
         artifacts: ArtifactRepository,
         chat: ChatTranscriptStore,
-        uiState: SessionUIState,
-        draftStore: DraftKnowledgeStore
+        uiState: SessionUIState
     ) {
         self.eventBus = eventBus
         self.phasePolicy = phasePolicy
@@ -60,7 +58,6 @@ actor StateCoordinator: OnboardingEventEmitter {
         self.artifactRepository = artifacts
         self.chatStore = chat
         self.uiState = uiState
-        self.draftKnowledgeStore = draftStore
         self.streamQueueManager = StreamQueueManager(eventBus: eventBus)
         self.llmStateManager = LLMStateManager()
         Logger.info("🎯 StateCoordinator initialized (orchestrator mode with injected services)", category: .ai)
@@ -399,8 +396,6 @@ actor StateCoordinator: OnboardingEventEmitter {
         switch event {
         case .artifactRecordProduced(let record):
             await artifactRepository.upsertArtifactRecord(record)
-        case .artifactRecordPersisted(let record):
-            await artifactRepository.upsertArtifactRecord(record)
         case .artifactRecordsReplaced(let records):
             await artifactRepository.setArtifactRecords(records)
         case .artifactMetadataUpdateRequested(let artifactId, let updates):
@@ -409,12 +404,6 @@ actor StateCoordinator: OnboardingEventEmitter {
             await artifactRepository.addKnowledgeCard(card)
         case .knowledgeCardsReplaced(let cards):
             await artifactRepository.setKnowledgeCards(cards)
-        case .draftKnowledgeCardProduced(let draft):
-            await draftKnowledgeStore.addDraft(draft)
-        case .draftKnowledgeCardUpdated(let draft):
-            await draftKnowledgeStore.updateDraft(draft)
-        case .draftKnowledgeCardRemoved(let id):
-            await draftKnowledgeStore.removeDraft(id: id)
         case .toolGatingRequested(let toolName, let exclude):
             // Handle tool gating via events
             if exclude {

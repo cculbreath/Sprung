@@ -67,36 +67,30 @@ protocol ArtifactIngestionKernel {
 /// Events emitted by the ingestion system
 extension OnboardingEvent {
     /// Create an artifact pending event
+    /// Note: Only payload["text"] is used by LLMMessenger - other fields are ignored
     static func artifactIngestionStarted(pending: PendingArtifact) -> OnboardingEvent {
         var payload = JSON()
-        payload["artifact_id"].string = pending.id
-        payload["source"].string = pending.source.rawValue
-        payload["filename"].string = pending.filename
+        var messageText = "Developer status: Processing artifact \(pending.filename) (ID: \(pending.id), source: \(pending.source.rawValue))"
         if let planItemId = pending.planItemId {
-            payload["plan_item_id"].string = planItemId
+            messageText += ", plan_item_id: \(planItemId)"
         }
-        payload["status"].string = "pending"
-        payload["message"].string = "Processing \(pending.filename)..."
+        messageText += ". Please wait for completion."
+        payload["text"].string = messageText
         return .llmSendDeveloperMessage(payload: payload)
     }
 
     /// Create an artifact completed event
     /// Uses llmSendUserMessage (not developer) so it flows through without being queued
     /// behind pending UI tools. This ensures artifact completion triggers LLM processing.
+    /// Note: Only payload["text"] is used by LLMMessenger - other fields are ignored
     static func artifactIngestionCompleted(result: IngestionResult, planItemId: String?) -> OnboardingEvent {
         var payload = JSON()
-        // Build message text (no chatbox tags - this is system-generated)
-        var messageText = "Artifact ready: \(result.artifactId)"
+        var messageText = "Artifact ready: \(result.artifactId) (source: \(result.source.rawValue))"
         if let planItemId = planItemId {
-            messageText += " (plan_item_id: \(planItemId))"
+            messageText += ", plan_item_id: \(planItemId)"
         }
-        messageText += ". Source: \(result.source.rawValue). Use list_artifacts to see details."
+        messageText += ". Use list_artifacts to see details."
         payload["text"].string = messageText
-        payload["artifact_id"].string = result.artifactId
-        payload["source"].string = result.source.rawValue
-        if let planItemId = planItemId {
-            payload["plan_item_id"].string = planItemId
-        }
         return .llmSendUserMessage(payload: payload, isSystemGenerated: true)
     }
 }

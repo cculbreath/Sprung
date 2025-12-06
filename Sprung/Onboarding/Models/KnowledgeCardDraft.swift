@@ -196,7 +196,10 @@ struct ArtifactRecord: Identifiable, Equatable {
         filename = json["filename"].stringValue
         contentType = json["content_type"].string
         sizeInBytes = json["size_bytes"].intValue
-        extractedContent = json["extracted_content"].stringValue
+        // Try both keys for compatibility - artifact records use "extracted_text"
+        extractedContent = json["extracted_text"].stringValue.isEmpty
+            ? json["extracted_content"].stringValue
+            : json["extracted_text"].stringValue
         metadata = json["metadata"]
     }
     func toJSON() -> JSON {
@@ -210,7 +213,7 @@ struct ArtifactRecord: Identifiable, Equatable {
         if let sha256 {
             json["sha256"].string = sha256
         }
-        json["extracted_content"].string = extractedContent
+        json["extracted_text"].string = extractedContent
         json["metadata"] = metadata
         return json
     }

@@ -35,7 +35,6 @@ final class OnboardingUIState {
     var artifactRecords: [JSON] = []
     var pendingPhaseAdvanceRequest: OnboardingPhaseAdvanceRequest?
     var evidenceRequirements: [EvidenceRequirement] = []
-    var drafts: [KnowledgeCardDraft] = []
     /// Stores last shown profile summary to display until skeleton timeline loads
     var lastApplicantProfileSummary: JSON?
     // MARK: - Knowledge Card Plan State

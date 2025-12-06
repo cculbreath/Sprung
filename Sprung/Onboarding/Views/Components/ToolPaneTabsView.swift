@@ -252,6 +252,7 @@ private struct TimelineCardRow: View {
 
 private struct ArtifactsTabContent: View {
     let coordinator: OnboardingInterviewCoordinator
+    @State private var expandedArtifactIds: Set<String> = []
 
     private var artifacts: [ArtifactRecord] {
         coordinator.ui.artifactRecords.map { ArtifactRecord(json: $0) }
@@ -263,7 +264,19 @@ private struct ArtifactsTabContent: View {
                 emptyState
             } else {
                 ForEach(artifacts) { artifact in
-                    ArtifactRow(artifact: artifact)
+                    ArtifactRow(
+                        artifact: artifact,
+                        isExpanded: expandedArtifactIds.contains(artifact.id),
+                        onToggleExpand: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                if expandedArtifactIds.contains(artifact.id) {
+                                    expandedArtifactIds.remove(artifact.id)
+                                } else {
+                                    expandedArtifactIds.insert(artifact.id)
+                                }
+                            }
+                        }
+                    )
                 }
             }
         }
@@ -281,47 +294,163 @@ private struct ArtifactsTabContent: View {
 
 private struct ArtifactRow: View {
     let artifact: ArtifactRecord
+    let isExpanded: Bool
+    let onToggleExpand: () -> Void
+
+    private var hasContent: Bool {
+        !artifact.extractedContent.isEmpty
+    }
+
+    private var contentPreview: String {
+        let content = artifact.extractedContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        if content.count <= 100 {
+            return content
+        }
+        return String(content.prefix(100)) + "..."
+    }
 
     var body: some View {
-        HStack(spacing: 10) {
-            fileIcon
-                .frame(width: 32, height: 32)
+        VStack(alignment: .leading, spacing: 0) {
+            // Header row (always visible)
+            Button(action: onToggleExpand) {
+                HStack(spacing: 10) {
+                    fileIcon
+                        .frame(width: 32, height: 32)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(artifact.filename)
-                    .font(.subheadline.weight(.medium))
-                    .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(artifact.filename)
+                            .font(.subheadline.weight(.medium))
+                            .lineLimit(1)
 
-                HStack(spacing: 8) {
-                    if let contentType = artifact.contentType {
-                        Text(contentType.components(separatedBy: "/").last ?? contentType)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: 8) {
+                            if let contentType = artifact.contentType {
+                                Text(contentType.components(separatedBy: "/").last ?? contentType)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            if artifact.sizeInBytes > 0 {
+                                Text(formatFileSize(artifact.sizeInBytes))
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
                     }
 
-                    if artifact.sizeInBytes > 0 {
-                        Text(formatFileSize(artifact.sizeInBytes))
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                    Spacer()
+
+                    if hasContent {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                            .font(.caption)
+                    }
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                }
+                .padding(10)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            // Expanded content
+            if isExpanded {
+                Divider()
+                    .padding(.horizontal, 10)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    if hasContent {
+                        // Content section
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text("Extracted Content")
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Text("\(artifact.extractedContent.count) chars")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
+
+                            ScrollView {
+                                Text(artifact.extractedContent)
+                                    .font(.caption)
+                                    .foregroundStyle(.primary)
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .frame(maxHeight: 200)
+                            .padding(8)
+                            .background(Color(nsColor: .textBackgroundColor))
+                            .cornerRadius(6)
+                        }
+                    } else {
+                        // No content yet
+                        HStack {
+                            Image(systemName: "clock")
+                                .foregroundStyle(.secondary)
+                            Text("Content not yet extracted")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                    }
+
+                    // Metadata section (if available)
+                    if !artifact.metadata.isEmpty {
+                        metadataSection
                     }
                 }
-            }
-
-            Spacer()
-
-            if !artifact.extractedContent.isEmpty {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-                    .font(.caption)
+                .padding(10)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .padding(10)
         .background(Color(nsColor: .controlBackgroundColor))
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+                .stroke(isExpanded ? Color.accentColor.opacity(0.5) : Color(nsColor: .separatorColor), lineWidth: isExpanded ? 1.5 : 1)
         )
+    }
+
+    @ViewBuilder
+    private var metadataSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Metadata")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 2) {
+                if let purpose = artifact.metadata["purpose"].string {
+                    metadataRow(label: "Purpose", value: purpose)
+                }
+                if let title = artifact.metadata["title"].string {
+                    metadataRow(label: "Title", value: title)
+                }
+                if let sha = artifact.sha256 {
+                    metadataRow(label: "SHA256", value: String(sha.prefix(16)) + "...")
+                }
+            }
+            .padding(8)
+            .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
+            .cornerRadius(6)
+        }
+    }
+
+    private func metadataRow(label: String, value: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(label + ":")
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 60, alignment: .trailing)
+            Text(value)
+                .font(.caption2)
+                .foregroundStyle(.primary)
+                .textSelection(.enabled)
+        }
     }
 
     @ViewBuilder
@@ -339,6 +468,7 @@ private struct ArtifactRow: View {
         if contentType.contains("image") { return "photo" }
         if contentType.contains("json") { return "curlybraces" }
         if contentType.contains("text") { return "doc.plaintext" }
+        if contentType.contains("git") { return "chevron.left.forwardslash.chevron.right" }
         return "doc"
     }
 
@@ -356,9 +486,15 @@ private struct ArtifactRow: View {
 
 private struct KnowledgeTabContent: View {
     let coordinator: OnboardingInterviewCoordinator
+    @State private var expandedCardIds: Set<String> = []
 
     private var planItems: [KnowledgeCardPlanItem] {
         coordinator.ui.knowledgeCardPlan
+    }
+
+    /// Persisted knowledge cards from ResRefStore (SwiftData)
+    private var knowledgeCards: [ResRef] {
+        coordinator.onboardingKnowledgeCards
     }
 
     private var currentFocus: String? {
@@ -372,7 +508,21 @@ private struct KnowledgeTabContent: View {
             } else {
                 progressHeader
                 ForEach(planItems) { item in
-                    KnowledgePlanRow(item: item, isFocused: item.id == currentFocus)
+                    KnowledgePlanRow(
+                        item: item,
+                        resRef: knowledgeCards.first { $0.name == item.title },
+                        isFocused: item.id == currentFocus,
+                        isExpanded: expandedCardIds.contains(item.id),
+                        onToggleExpand: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                if expandedCardIds.contains(item.id) {
+                                    expandedCardIds.remove(item.id)
+                                } else {
+                                    expandedCardIds.insert(item.id)
+                                }
+                            }
+                        }
+                    )
                 }
             }
         }
@@ -406,38 +556,226 @@ private struct KnowledgeTabContent: View {
 
 private struct KnowledgePlanRow: View {
     let item: KnowledgeCardPlanItem
+    let resRef: ResRef?  // Persisted knowledge card from SwiftData
     let isFocused: Bool
+    let isExpanded: Bool
+    let onToggleExpand: () -> Void
+
+    private var hasContent: Bool {
+        item.description != nil || resRef != nil
+    }
 
     var body: some View {
-        HStack(spacing: 8) {
-            statusIcon
-                .frame(width: 18)
+        VStack(alignment: .leading, spacing: 0) {
+            // Header row (always visible)
+            Button(action: onToggleExpand) {
+                HStack(spacing: 8) {
+                    statusIcon
+                        .frame(width: 18)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.title)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(item.status == .completed ? .secondary : .primary)
-                    .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.title)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(item.status == .completed ? .secondary : .primary)
+                            .lineLimit(1)
 
-                if let description = item.description {
-                    Text(description)
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(2)
+                        if !isExpanded, let description = item.description {
+                            Text(description)
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                        }
+                    }
+
+                    Spacer()
+
+                    typeBadge
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
+                .padding(10)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
 
-            Spacer()
+            // Expanded content
+            if isExpanded {
+                Divider()
+                    .padding(.horizontal, 10)
 
-            typeBadge
+                VStack(alignment: .leading, spacing: 10) {
+                    // Description section
+                    if let description = item.description {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Description")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.secondary)
+                            Text(description)
+                                .font(.caption)
+                                .foregroundStyle(.primary)
+                                .textSelection(.enabled)
+                        }
+                    }
+
+                    // Knowledge card content section (for completed cards)
+                    if let resRef = resRef {
+                        resRefContentSection(resRef)
+                    } else if item.status == .pending {
+                        HStack {
+                            Image(systemName: "clock")
+                                .foregroundStyle(.secondary)
+                            Text("Waiting to be processed")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                    } else if item.status == .inProgress {
+                        HStack {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                            Text("Currently being generated...")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                    } else if item.status == .skipped {
+                        HStack {
+                            Image(systemName: "minus.circle")
+                                .foregroundStyle(.secondary)
+                            Text("This card was skipped")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                    }
+
+                    // Metadata row
+                    if item.timelineEntryId != nil || resRef?.organization != nil || resRef?.timePeriod != nil {
+                        metadataSection
+                    }
+                }
+                .padding(10)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
-        .padding(10)
         .background(backgroundColor)
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(borderColor, lineWidth: isFocused ? 2 : 1)
+                .stroke(borderColor, lineWidth: isFocused || isExpanded ? 1.5 : 1)
         )
+    }
+
+    @ViewBuilder
+    private func resRefContentSection(_ resRef: ResRef) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("Knowledge Card Content")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(resRef.content.count) chars")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
+            ScrollView {
+                Text(resRef.content)
+                    .font(.caption)
+                    .foregroundStyle(.primary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxHeight: 200)
+            .padding(8)
+            .background(Color(nsColor: .textBackgroundColor))
+            .cornerRadius(6)
+
+            // Sources section (parsed from sourcesJSON)
+            if let sourcesJSON = resRef.sourcesJSON,
+               let data = sourcesJSON.data(using: .utf8),
+               let sources = try? JSON(data: data).array,
+               !sources.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Sources (\(sources.count))")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+
+                    ForEach(Array(sources.enumerated()), id: \.offset) { _, source in
+                        HStack(spacing: 6) {
+                            let sourceType = source["type"].stringValue
+                            Image(systemName: sourceType == "artifact" ? "doc" : "bubble.left")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                            if let artifactId = source["artifact_id"].string {
+                                Text(artifactId)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            } else if let excerpt = source["chat_excerpt"].string {
+                                Text(excerpt)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                            } else {
+                                Text(sourceType)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                .padding(8)
+                .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
+                .cornerRadius(6)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var metadataSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Details")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 2) {
+                if let org = resRef?.organization {
+                    metadataRow(label: "Organization", value: org)
+                }
+                if let period = resRef?.timePeriod {
+                    metadataRow(label: "Period", value: period)
+                }
+                if let location = resRef?.location {
+                    metadataRow(label: "Location", value: location)
+                }
+                if let timelineId = item.timelineEntryId {
+                    metadataRow(label: "Timeline", value: timelineId)
+                }
+            }
+            .padding(8)
+            .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
+            .cornerRadius(6)
+        }
+    }
+
+    private func metadataRow(label: String, value: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(label + ":")
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 70, alignment: .trailing)
+            Text(value)
+                .font(.caption2)
+                .foregroundStyle(.primary)
+                .textSelection(.enabled)
+        }
     }
 
     @ViewBuilder
@@ -483,7 +821,9 @@ private struct KnowledgePlanRow: View {
     }
 
     private var borderColor: Color {
-        if isFocused && item.status == .inProgress {
+        if isExpanded {
+            return Color.accentColor.opacity(0.5)
+        } else if isFocused && item.status == .inProgress {
             return Color.accentColor
         } else if item.status == .completed {
             return Color.green.opacity(0.3)

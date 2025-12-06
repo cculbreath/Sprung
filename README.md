@@ -1,79 +1,247 @@
-# Sprung: AI-Powered Job Search Copilot for macOS
+# Sprung
+
+**AI-Powered Job Search Copilot for macOS**
 
 [![macOS](https://img.shields.io/badge/macOS-14.0%2B-blue.svg)](https://www.apple.com/macos/sonoma)
-[![Swift](https://img.shields.io/badge/Swift-5.9-orange.svg)](https://swift.org)
+[![Swift](https://img.shields.io/badge/Swift-5.9+-orange.svg)](https://swift.org)
+[![SwiftUI](https://img.shields.io/badge/SwiftUI-5.0-purple.svg)](https://developer.apple.com/xcode/swiftui/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-**Sprung** is a native macOS application designed to streamline your entire job search workflow. By combining a robust resume builder, job application tracker, and powerful Generative AI, Sprung helps you craft tailored application materials and land your dream job.
+Sprung is a native macOS application that transforms how you approach job searching. Instead of spending hours manually tailoring resumes and cover letters for each application, Sprung combines a structured resume editor, AI-powered content generation, and application tracking into a unified workflow.
 
-![Sprung Dashboard](docs/images/dashboard.png)
+![Sprung Main Interface](docs/images/main-interface.png)
 
-## Key Features
+## Why Sprung?
 
-*   **AI-Powered Resume Studio:**
-    *   **Split-View Editor:** Edit your resume data (JSON-backed) while seeing a live PDF preview.
-    *   **Version Control:** Create and manage multiple versions of your resume tailored to different roles.
-    *   **Templating:** Robust Mustache-based templating system for professional PDF exports.
-    *   **Smart Tree Structure:** Resume data is stored in a flexible tree structure, allowing for deep customization without breaking the schema.
+Job seekers face a common problem: crafting compelling, tailored application materials takes significant time, and tracking multiple applications across companies becomes chaotic. Sprung solves this by:
 
-*   **Generative AI Integration:**
-    *   **Cover Letter Writer:** Generate data-driven cover letters tailored specifically to a job description.
-    *   **Onboarding Interview:** A conversational AI agent interviews you to build your initial "Applicant Profile" and work history timeline.
-    *   **Document Chat:** "Chat" with your documents to get feedback, rewrite suggestions, and identify missing keywords.
-    *   **Multi-Model Support:** Bring your own keys for OpenAI (GPT-4o), Anthropic (Claude 3.5 Sonnet), Google (Gemini 1.5 Pro), or OpenRouter.
+- **Building your professional knowledge base** through an AI interview that extracts and organizes your experience
+- **Generating tailored materials** using your actual background, not generic templates
+- **Maintaining context** across applications so you never lose track of what you sent where
+- **Storing everything locally** with your API keys secured in macOS Keychain
 
-*   **Job Application Tracker:**
-    *   **Kanban Workflow:** Track applications from "Draft" to "Applied" to "Interviewing" and "Offer".
-    *   **Context Awareness:** Link specific resumes and cover letters to each job application so you never lose track of what you sent.
-    *   **Web Scraping:** Automatically extract job details from URLs (via SwiftSoup).
+## Features
+
+### Resume Studio
+
+A split-view editor where you work with your resume data on the left while seeing a live PDF preview on the right.
+
+![Resume Editor](docs/images/resume-editor.png)
+
+- **Tree-based data model**: Your resume is stored as structured JSON, not formatted text. This enables AI to work with discrete facts rather than parsing documents.
+- **Version control**: Create multiple resume versions tailored to different role types (e.g., "Backend Engineer", "Technical Lead")
+- **Mustache templating**: Professional PDF generation using customizable templates
+- **Export options**: PDF, plain text, or JSON for use with other tools
+
+### AI Onboarding Interview
+
+A conversational agent that interviews you to build your professional profile and work history timeline.
+
+![Onboarding Interview](docs/images/onboarding-interview.png)
+
+- **Structured extraction**: The AI asks targeted questions to capture your experience as discrete, reusable facts
+- **Document ingestion**: Upload existing resumes, LinkedIn exports, or portfolio content for the AI to parse
+- **Git repository analysis**: Point the AI at your code projects to extract technical accomplishments
+- **Progressive refinement**: The interview spans multiple phases, from basic contact info through deep-dive experience exploration
+
+### Cover Letter Generation
+
+Generate cover letters that draw from your actual experience, not generic phrases.
+
+![Cover Letter Writer](docs/images/cover-letter.png)
+
+- **Job description analysis**: Paste a job posting and the AI identifies key requirements
+- **Experience matching**: Your knowledge base is searched for relevant accomplishments
+- **Multi-model support**: Compare outputs from different AI models side-by-side
+- **Text-to-speech**: Listen to generated content with streaming audio playback
+
+### Job Application Tracker
+
+A Kanban-style board for tracking applications through your pipeline.
+
+![Application Tracker](docs/images/job-tracker.png)
+
+- **Status workflow**: New → Unsubmitted → Submitted → Interview Pending → Offer → Closed
+- **Context linking**: Associate specific resume versions and cover letters with each application
+- **Web scraping**: Paste a job URL and automatically extract company, title, and description
+- **Application notes**: Track interview feedback, contacts, and follow-up items
+
+### Multi-Model AI Support
+
+Bring your own API keys for the models you prefer:
+
+| Provider | Models |
+|----------|--------|
+| **OpenAI** | GPT-4o, GPT-4 Turbo |
+| **Anthropic** | Claude 3.5 Sonnet, Claude 3 Opus |
+| **Google** | Gemini 1.5 Pro |
+| **OpenRouter** | Access to 100+ models |
+
+All API keys are stored securely in the **macOS Keychain** and never leave your machine.
 
 ## Architecture
 
-Sprung is built with a **Hybrid Event-Driven + Reactive Architecture** designed for stability and clean separation of concerns:
+Sprung uses a **Hybrid Event-Driven + Reactive Architecture** designed for stability and clean separation of concerns:
 
-*   **StateCoordinator (Actor):** The Single Source of Truth. All state mutations flow through this actor to ensure data consistency.
-*   **EventCoordinator:** Handles process orchestration (e.g., LLM request/response cycles) using `AsyncStream` topics.
-*   **SwiftUI @Observable:** Used strictly for UI reactivity. Views bind to observable state for smooth updates without tight coupling to business logic.
-*   **SwiftData:** Modern persistence layer for storing Resumes, Job Applications, and History.
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        SwiftUI Views                        │
+│                    (@Observable binding)                    │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+┌─────────────────────────▼───────────────────────────────────┐
+│                    EventCoordinator                         │
+│            (AsyncStream pub/sub messaging)                  │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+┌─────────────────────────▼───────────────────────────────────┐
+│                    StateCoordinator                         │
+│              (Actor - single source of truth)               │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+┌─────────────────────────▼───────────────────────────────────┐
+│                       SwiftData                             │
+│                   (Persistent storage)                      │
+└─────────────────────────────────────────────────────────────┘
+```
 
-For a deeper dive, check out [.arch-spec.md](.arch-spec.md).
+- **StateCoordinator (Actor)**: Single source of truth for all state. Mutations flow through this actor for consistency.
+- **EventCoordinator**: Pub/sub messaging using `AsyncStream` topics for cross-component communication.
+- **SwiftUI @Observable**: UI reactivity layer. Views bind to observable state without tight coupling to business logic.
+- **SwiftData**: Modern persistence for Resumes, Job Applications, Cover Letters, and Templates.
+
+For architectural details, see [.arch-spec.md](.arch-spec.md).
+
+## Project Structure
+
+```
+Sprung/
+├── App/                    # Application entry point, settings, windows
+│   ├── SprungApp.swift     # @main entry point
+│   ├── AppDelegate.swift   # Multi-window management
+│   └── Views/              # Settings, template editor
+├── Resumes/                # Resume builder and export
+│   ├── Models/             # Resume data model
+│   ├── Services/           # Export coordination
+│   └── Views/              # Editor UI
+├── CoverLetters/           # Cover letter generation
+│   ├── AI/Services/        # LLM-powered generation
+│   └── TTS/Services/       # Text-to-speech streaming
+├── JobApplications/        # Application tracking
+│   ├── Models/             # JobApp data model
+│   └── Views/              # Kanban board UI
+├── Onboarding/             # AI interview system
+│   ├── Core/               # StateCoordinator, EventCoordinator
+│   ├── Handlers/           # Business logic
+│   ├── Phase/              # Interview phase scripts
+│   ├── Tools/              # AI tool definitions
+│   └── Views/              # Interview UI
+├── ResumeTree/             # Tree-based resume data model
+├── Templates/              # Mustache template system
+├── DataManagers/           # SwiftData stores
+├── Shared/                 # Utilities, LLM clients, UI components
+│   ├── AI/Models/          # LLM client abstractions
+│   └── Utilities/          # Logger, helpers
+└── Export/                 # PDF and text generation
+```
 
 ## Getting Started
 
 ### Prerequisites
-*   macOS 14.0 (Sonoma) or later.
-*   Xcode 15.0+ (for building from source).
-*   API Key(s) for OpenAI, Anthropic, or OpenRouter.
+
+- **macOS 14.0** (Sonoma) or later
+- **Xcode 15.0+** (for building from source)
+- At least one AI provider API key (OpenAI, Anthropic, Google, or OpenRouter)
 
 ### Installation
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/cculbreath/Sprung.git
-    cd Sprung
-    ```
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/cculbreath/Sprung.git
+   cd Sprung
+   ```
 
-2.  **Open in Xcode:**
-    ```bash
-    open Sprung.xcodeproj
-    ```
+2. **Open in Xcode:**
+   ```bash
+   open Sprung.xcodeproj
+   ```
 
-3.  **Resolve Dependencies:**
-    Xcode should automatically resolve Swift Package Manager dependencies (SwiftOpenAI, SwiftSoup, GRMustache.swift, etc.). If not, go to `File > Packages > Resolve Package Versions`.
+3. **Resolve dependencies:**
 
-4.  **Run:**
-    Press `Cmd + R` to build and run.
+   Xcode should automatically resolve Swift Package Manager dependencies. If not:
+   ```
+   File → Packages → Resolve Package Versions
+   ```
+
+4. **Build and run:**
+
+   Press `Cmd + R` or:
+   ```bash
+   xcodebuild -project Sprung.xcodeproj -scheme Sprung build
+   ```
 
 ### Configuration
-Upon first launch, navigate to **Settings** (in the menu bar or app preferences) to enter your AI provider API keys. Keys are securely stored in the **macOS Keychain** and are never synced or exported.
+
+On first launch, open **Settings** (menu bar → Sprung → Settings, or `Cmd + ,`) to enter your API keys.
+
+![Settings](docs/images/settings.png)
+
+Keys are stored in the **macOS Keychain** and are never:
+- Written to disk in plaintext
+- Synced to iCloud
+- Transmitted except to the respective AI provider
+
+## Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| [SwiftOpenAI](https://github.com/jamesrochabrun/SwiftOpenAI) | OpenAI API client (custom fork with tool support) |
+| [SwiftSoup](https://github.com/scinfu/SwiftSoup) | HTML parsing for job posting extraction |
+| [GRMustache.swift](https://github.com/groue/GRMustache.swift) | Template rendering for PDF generation |
+| [SwiftyJSON](https://github.com/SwiftyJSON/SwiftyJSON) | Dynamic JSON handling for resume data |
+| [swift-collections](https://github.com/apple/swift-collections) | Apple collections library |
+| [swift-chunked-audio-player](https://github.com/cculbreath/swift-chunked-audio-player) | Streaming TTS audio playback |
+
+## Building
+
+### Quick build with error filtering:
+```bash
+xcodebuild -project Sprung.xcodeproj -scheme Sprung build 2>&1 | grep -Ei "(error:|warning:|failed|succeeded)"
+```
+
+### Release build:
+```bash
+xcodebuild -project Sprung.xcodeproj -scheme Sprung -configuration Release build
+```
+
+### Clean build:
+```bash
+xcodebuild -project Sprung.xcodeproj -scheme Sprung clean build
+```
 
 ## Contributing
 
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+### Quick start for contributors:
+
+1. Fork the repository
+2. Create a feature branch from `main`
+3. Make changes following existing code style
+4. Ensure the project builds without errors
+5. Submit a pull request with a clear description
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see [LICENSE](LICENSE) for details.
+
+## Acknowledgments
+
+- Built with Swift, SwiftUI, and SwiftData
+- AI capabilities powered by OpenAI, Anthropic, and Google APIs
+- PDF templating via GRMustache.swift
+- HTML parsing via SwiftSoup
 
 ---
-*Built by Christopher Culbreath*
+
+*Built by [Christopher Culbreath](https://github.com/cculbreath)*
