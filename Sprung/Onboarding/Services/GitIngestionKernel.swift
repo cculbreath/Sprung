@@ -114,6 +114,24 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
             record["analysis"] = analysis
             record["raw_data"] = gitData
 
+            // Set extracted_text from analysis summary for artifact display
+            if let summary = analysis["summary"].string, !summary.isEmpty {
+                record["extracted_text"].string = summary
+            } else {
+                // Fallback: build a summary from highlights and skills
+                var summaryParts: [String] = []
+                if let highlights = analysis["highlights"].array {
+                    summaryParts.append(contentsOf: highlights.prefix(5).compactMap { $0.string })
+                }
+                if let skills = analysis["skills"].array {
+                    let skillNames = skills.prefix(10).compactMap { $0["skill"].string }
+                    if !skillNames.isEmpty {
+                        summaryParts.append("Skills: " + skillNames.joined(separator: ", "))
+                    }
+                }
+                record["extracted_text"].string = summaryParts.joined(separator: "\n\n")
+            }
+
             let result = IngestionResult(
                 artifactId: record["id"].stringValue,
                 artifactRecord: record,

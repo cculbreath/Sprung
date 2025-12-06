@@ -318,12 +318,18 @@ private struct ArtifactRow: View {
                         .frame(width: 32, height: 32)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(artifact.filename)
+                        Text(artifact.displayName)
                             .font(.subheadline.weight(.medium))
-                            .lineLimit(1)
+                            .lineLimit(2)
 
                         HStack(spacing: 8) {
-                            if let contentType = artifact.contentType {
+                            // Show filename if different from display name (title)
+                            if artifact.title != nil && !artifact.filename.isEmpty {
+                                Text(artifact.filename)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            } else if let contentType = artifact.contentType {
                                 Text(contentType.components(separatedBy: "/").last ?? contentType)
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
