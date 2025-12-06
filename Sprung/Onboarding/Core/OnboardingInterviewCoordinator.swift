@@ -448,6 +448,12 @@ final class OnboardingInterviewCoordinator {
     func denyPhaseAdvance(feedback: String?) async {
         await eventBus.publish(.phaseAdvanceDenied(feedback: feedback))
     }
+    /// Request phase advance from UI button (sends user message to trigger next_phase tool)
+    func requestPhaseAdvanceFromUI() async {
+        var payload = JSON()
+        payload["text"].string = "<chatbox>I'm ready to move on to the next phase.</chatbox>"
+        await eventBus.publish(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
+    }
     // MARK: - UI Response Handling (Send User Messages)
     func submitChoiceSelection(_ selectionIds: [String]) async {
         await uiResponseCoordinator.submitChoiceSelection(selectionIds)

@@ -225,6 +225,11 @@ struct OnboardingInterviewToolPane: View {
                         Task {
                             await coordinator.eventBus.publish(.knowledgeCardDoneButtonClicked(itemId: itemId))
                         }
+                    },
+                    onAdvanceToNextPhase: {
+                        Task {
+                            await coordinator.requestPhaseAdvanceFromUI()
+                        }
                     }
                 )
             }

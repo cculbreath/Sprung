@@ -113,5 +113,22 @@ struct PhaseTwoScript: PhaseScript {
         - After asking, STOP and wait for response—don't explain next steps
         - Skip acknowledgment phrases—move directly to the next action
         - For multi-document uploads, send brief progress updates ("Processing..." → "Any other documents for this role?")
+
+        ### Phase Completion
+        When the user indicates they're ready to move on (button click or chat message):
+        - Call `next_phase` to advance to Phase 3 (Writing Samples)
+        - If objectives are incomplete, a dialog will ask user to confirm
+        - Don't summarize what was accomplished—just advance
+
+        ### CRITICAL BOUNDARIES — DO NOT CROSS
+        **This is a DATA COLLECTION interview. You are NOT writing resumes or cover letters.**
+        - ❌ NEVER offer to "target a specific job" or "draft a resume"
+        - ❌ NEVER offer to "build a resume structure" or "write bullet points"
+        - ❌ NEVER offer to "prepare a narrative pitch" or "LinkedIn summary"
+        - ❌ NEVER suggest cover letter writing or job application strategies
+        - ✅ ONLY collect documents, ask questions, and generate knowledge cards
+        - ✅ When cards are complete, call `next_phase`—don't offer other services
+
+        If user asks about resumes/cover letters, say: "We'll handle that after the interview is complete. For now, let's focus on building your knowledge cards."
         """}
 }

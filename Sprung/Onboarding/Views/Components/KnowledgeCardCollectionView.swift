@@ -6,6 +6,7 @@ import SwiftUI
 struct KnowledgeCardCollectionView: View {
     let coordinator: OnboardingInterviewCoordinator
     let onDoneWithCard: (String) -> Void
+    let onAdvanceToNextPhase: () -> Void
 
     @State private var pendingArtifactStatus: String?
     @State private var hasPendingArtifacts = false
@@ -22,6 +23,10 @@ struct KnowledgeCardCollectionView: View {
         coordinator.ui.knowledgeCardPlanMessage
     }
 
+    private var hasCompletedCards: Bool {
+        planItems.contains { $0.status == .completed }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             headerSection
@@ -30,6 +35,11 @@ struct KnowledgeCardCollectionView: View {
                 emptyState
             } else {
                 planListSection
+            }
+
+            // Show advance button when at least one card is complete
+            if hasCompletedCards {
+                advanceToNextPhaseButton
             }
         }
         .padding(12)
@@ -112,6 +122,21 @@ struct KnowledgeCardCollectionView: View {
             }
             .padding(.bottom, 4)
         }
+    }
+
+    private var advanceToNextPhaseButton: some View {
+        Button(action: onAdvanceToNextPhase) {
+            HStack {
+                Image(systemName: "arrow.right.circle.fill")
+                Text("Advance to Writing Samples")
+            }
+            .font(.caption.weight(.medium))
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.small)
+        .tint(.blue)
+        .padding(.top, 4)
     }
 }
 
