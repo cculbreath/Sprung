@@ -150,7 +150,8 @@ struct PhaseOneScript: PhaseScript {
         - **dossier_seed**: 2-3 questions about goals/target roles → auto-transition to Phase 2
 
         ### Workflow
-        START: Call `agent_ready`. The tool response contains the complete step-by-step workflow.
+        START: Write a warm welcome message, then call `agent_ready`. The tool response contains the complete step-by-step workflow.
+        Example: "Welcome! I'm here to help you build a clear, evidence-backed profile we'll later use for tailored resumes and cover letters. Let me get started."
 
         ### Coordinator Messages
         Developer messages with "Objective update:" or "Developer status:" are authoritative. Don't re-validate completed objectives—acknowledge and proceed.

@@ -16,23 +16,19 @@ actor DocumentExtractionService {
         let returnTypes: [String]
         let autoPersist: Bool
         let timeout: TimeInterval?
-        /// When true, extracts verbatim text without summarization (for writing samples)
-        let verbatimTranscription: Bool
 
         init(
             fileURL: URL,
             purpose: String,
             returnTypes: [String] = [],
             autoPersist: Bool = false,
-            timeout: TimeInterval? = nil,
-            verbatimTranscription: Bool = false
+            timeout: TimeInterval? = nil
         ) {
             self.fileURL = fileURL
             self.purpose = purpose
             self.returnTypes = returnTypes
             self.autoPersist = autoPersist
             self.timeout = timeout
-            self.verbatimTranscription = verbatimTranscription
         }
     }
 
@@ -70,7 +66,6 @@ actor DocumentExtractionService {
         case unsupportedType(String)
         case unreadableData
         case noTextExtracted
-        case pdfTooLarge(pageCount: Int)
         case llmFailed(String)
         case llmNotConfigured
 
@@ -82,8 +77,6 @@ actor DocumentExtractionService {
                 return "The document could not be read. Please try another file."
             case .noTextExtracted:
                 return "The document did not contain extractable text."
-            case .pdfTooLarge(let pageCount):
-                return "This PDF has \(pageCount) pages. Image-based extraction is limited to 10 pages or fewer. Please split the document or provide a text-based PDF."
             case .llmFailed(let description):
                 return "Extraction failed: \(description)"
             case .llmNotConfigured:
@@ -91,12 +84,6 @@ actor DocumentExtractionService {
             }
         }
     }
-
-    /// Maximum pages for image-based PDF extraction
-    private let maxPagesForImageExtraction = 10
-
-    /// Threshold above which PDFs get LLM summarization instead of full text enrichment
-    private let largePDFPageThreshold = 20
 
     // MARK: - Private Properties
     private var llmFacade: LLMFacade?
@@ -158,18 +145,19 @@ actor DocumentExtractionService {
 
         let sha256 = sha256Hex(for: fileData)
 
-        // For PDFs: Send directly to Gemini via native PDF support (no PDFKit/image conversion needed)
+        // For PDFs: Send directly to OpenRouter which handles parsing automatically
+        // OpenRouter supports native PDF for any model - it parses with pdf-text engine (free) by default
         if fileURL.pathExtension.lowercased() == "pdf" {
-            Logger.info("📄 Using native PDF extraction via Gemini", category: .ai)
-            await notifyProgress(.fileAnalysis, .completed, detail: "PDF ready for AI processing")
-            return try await extractPDFNatively(
+            Logger.info("📄 Sending PDF directly to Gemini via OpenRouter", category: .ai)
+            return try await extractPDFDirect(
+                fileURL: fileURL,
                 fileData: fileData,
                 filename: filename,
                 sizeInBytes: sizeInBytes,
                 contentType: contentType,
                 sha256: sha256,
                 purpose: request.purpose,
-                verbatimTranscription: request.verbatimTranscription,
+                timeout: request.timeout,
                 autoPersist: request.autoPersist,
                 progress: progress
             )
@@ -191,18 +179,7 @@ actor DocumentExtractionService {
             : "Processing document with Gemini AI..."
         await notifyProgress(.aiExtraction, .active, detail: aiStageDetail)
 
-        let enrichmentResult: EnrichmentResult
-        if request.verbatimTranscription {
-            let (markdown, markdownIssues) = try await transcribeVerbatim(
-                rawText,
-                pageCount: nil,
-                timeout: request.timeout,
-                progress: progress
-            )
-            enrichmentResult = EnrichmentResult(title: nil, content: markdown, issues: markdownIssues)
-        } else {
-            enrichmentResult = try await enrichText(rawText, purpose: request.purpose, timeout: request.timeout)
-        }
+        let enrichmentResult = try await enrichText(rawText, purpose: request.purpose, timeout: request.timeout)
 
         let llmDurationMs = Int(Date().timeIntervalSince(llmStart) * 1000)
         Logger.info(
@@ -484,215 +461,6 @@ Example response format:
         return (nil, trimmed)
     }
 
-    /// Transcribe document verbatim for writing samples
-    /// For documents > 10 pages, chunks into 10-page segments and processes serially
-    private func transcribeVerbatim(
-        _ rawText: String,
-        pageCount: Int?,
-        timeout: TimeInterval?,
-        progress: ExtractionProgressHandler?
-    ) async throws -> (String?, [String]) {
-        let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            return (nil, ["llm_failure_empty_input"])
-        }
-
-        guard let facade = llmFacade else {
-            return (nil, ["llm_failure_not_configured"])
-        }
-
-        let modelId = currentModelId()
-        var issues: [String] = []
-
-        // Estimate characters per page (rough approximation)
-        let estimatedCharsPerPage = 3000
-        let effectivePageCount = pageCount ?? max(1, trimmed.count / estimatedCharsPerPage)
-
-        // If document is 10 pages or less, process in one go
-        if effectivePageCount <= maxPagesForImageExtraction {
-            return try await transcribeChunk(trimmed, chunkNumber: nil, totalChunks: nil, facade: facade, modelId: modelId)
-        }
-
-        // For larger documents, chunk into ~10-page segments and process serially
-        Logger.info("📄 Large document (\(effectivePageCount) pages), chunking for verbatim transcription", category: .ai)
-
-        let chunkSize = maxPagesForImageExtraction * estimatedCharsPerPage
-        var chunks: [String] = []
-        var startIndex = trimmed.startIndex
-
-        while startIndex < trimmed.endIndex {
-            let endIndex = trimmed.index(startIndex, offsetBy: chunkSize, limitedBy: trimmed.endIndex) ?? trimmed.endIndex
-            chunks.append(String(trimmed[startIndex..<endIndex]))
-            startIndex = endIndex
-        }
-
-        var allTranscriptions: [String] = []
-        let totalChunks = chunks.count
-
-        for (index, chunk) in chunks.enumerated() {
-            let chunkNumber = index + 1
-            Logger.info("📄 Processing chunk \(chunkNumber)/\(totalChunks) for verbatim transcription", category: .ai)
-
-            // Update progress if available
-            if let progress {
-                await progress(ExtractionProgressUpdate(
-                    stage: .aiExtraction,
-                    state: .active,
-                    detail: "Transcribing section \(chunkNumber) of \(totalChunks)..."
-                ))
-            }
-
-            let (transcription, chunkIssues) = try await transcribeChunk(
-                chunk,
-                chunkNumber: chunkNumber,
-                totalChunks: totalChunks,
-                facade: facade,
-                modelId: modelId
-            )
-
-            issues.append(contentsOf: chunkIssues)
-
-            if let transcription {
-                allTranscriptions.append(transcription)
-            }
-        }
-
-        if allTranscriptions.isEmpty {
-            return (nil, issues)
-        }
-
-        // Combine all chunks with section markers
-        let combined = allTranscriptions.joined(separator: "\n\n---\n\n")
-        issues.append("verbatim_transcription")
-        if totalChunks > 1 {
-            issues.append("chunked_\(totalChunks)_sections")
-        }
-
-        return (combined, issues)
-    }
-
-    /// Transcribe a single chunk of text verbatim
-    private func transcribeChunk(
-        _ text: String,
-        chunkNumber: Int?,
-        totalChunks: Int?,
-        facade: LLMFacade,
-        modelId: String
-    ) async throws -> (String?, [String]) {
-        var issues: [String] = []
-
-        let chunkContext: String
-        if let num = chunkNumber, let total = totalChunks, total > 1 {
-            chunkContext = " (Section \(num) of \(total))"
-        } else {
-            chunkContext = ""
-        }
-
-        let prompt = """
-You are a document transcription assistant. Your task is to provide a VERBATIM transcription of the provided text\(chunkContext).
-
-Requirements:
-- Transcribe ALL text exactly as written - do not summarize, paraphrase, or condense
-- Preserve the original formatting, structure, and paragraph breaks
-- Maintain headings, bullet points, and lists as they appear
-- Keep the original voice, tone, and word choices intact
-- If there are any unclear or illegible portions, mark them with [unclear]
-- Do not add commentary, analysis, or interpretation
-- Do not omit any content
-
-This is a writing sample that will be used to analyze the author's writing style, so accuracy and completeness are critical.
-
-Text to transcribe:
-```
-\(text)
-```
-
-Return the complete verbatim transcription:
-"""
-
-        do {
-            let transcription = try await callFacadeText(facade: facade, prompt: prompt, modelId: modelId)
-            if transcription.isEmpty {
-                issues.append("llm_failure_empty_response")
-                return (nil, issues)
-            }
-            return (transcription, issues)
-        } catch let error as LLMError {
-            if case .clientError(let message) = error, message.contains("not found") || message.contains("not valid") {
-                onInvalidModelId?(modelId)
-                throw ExtractionError.llmFailed("\(modelId) is not a valid model ID.")
-            }
-            issues.append("llm_failure_\(error.localizedDescription)")
-            return (nil, issues)
-        } catch {
-            issues.append("llm_failure_\(error.localizedDescription)")
-            return (nil, issues)
-        }
-    }
-
-    /// Summarize a large PDF (> 20 pages) using LLM for resume/cover letter preparation
-    private func summarizeLargePDF(_ rawText: String, timeout: TimeInterval?) async throws -> EnrichmentResult {
-        let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            return EnrichmentResult(title: nil, content: nil, issues: ["llm_failure_empty_input"])
-        }
-
-        guard let facade = llmFacade else {
-            return EnrichmentResult(title: nil, content: nil, issues: ["llm_failure_not_configured"])
-        }
-
-        let modelId = currentModelId()
-        var issues: [String] = []
-
-        // For large documents, we send the full text without truncation
-        // The LLM will summarize appropriately
-        let prompt = """
-Extract and summarize the content of this PDF to support resume and cover letter drafting for the applicant (me).
-
-Content handling rules:
-- Text passages: Transcribe verbatim when feasible. For lengthy sections, provide a comprehensive summary that preserves key details, achievements, and distinctive phrasing.
-- Original writing by the applicant (essays, statements, project descriptions): Quote in full or summarize exhaustively—do not omit substantive content.
-- Diagrams, figures, and visual content: Provide a brief description of key elements and their purpose/significance.
-
-Framing: This document is being prepared as source material for my own application materials. Highlight strengths, accomplishments, and distinguishing qualifications. This is not intended as a neutral third-party assessment—advocate for the candidate where the evidence supports it.
-
-When summarizing, include brief qualitative notes on what makes particular achievements or experiences notable (e.g., scope, difficulty, originality, impact).
-
-Document text begins:
-```
-\(trimmed)
-```
-
-Respond with a JSON object containing:
-- "title": A concise, descriptive title for this document (e.g., "John Smith Resume", "Q3 2024 Project Report", "PhD Thesis - Machine Learning")
-- "content": The structured, page-by-page summary in markdown format
-
-Example response format:
-{"title": "Document Title Here", "content": "# Summary\\n\\nContent here..."}
-"""
-
-        do {
-            let text = try await callFacadeText(facade: facade, prompt: prompt, modelId: modelId)
-            if text.isEmpty {
-                issues.append("llm_failure_empty_response")
-                return EnrichmentResult(title: nil, content: nil, issues: issues)
-            }
-            issues.append("large_pdf_summarized")
-            let parsed = parseEnrichmentResponse(text)
-            return EnrichmentResult(title: parsed.title, content: parsed.content, issues: issues)
-        } catch let error as LLMError {
-            if case .clientError(let message) = error, message.contains("not found") || message.contains("not valid") {
-                onInvalidModelId?(modelId)
-                throw ExtractionError.llmFailed("\(modelId) is not a valid model ID.")
-            }
-            issues.append("llm_failure_\(error.localizedDescription)")
-            return EnrichmentResult(title: nil, content: nil, issues: issues)
-        } catch {
-            issues.append("llm_failure_\(error.localizedDescription)")
-            return EnrichmentResult(title: nil, content: nil, issues: issues)
-        }
-    }
-
     private func estimateConfidence(for text: String, issues: [String]) -> Double {
         var confidence = min(0.95, Double(text.count) / 10_000.0 + 0.4)
         if issues.contains(where: { $0.hasPrefix("llm_failure") }) {
@@ -709,153 +477,11 @@ Example response format:
         return hashed.map { String(format: "%02x", $0) }.joined()
     }
 
-    // MARK: - Image-Based PDF Extraction
+    // MARK: - PDF Extraction
 
-    // MARK: - Native PDF Extraction
-
-    /// Extract content from a PDF by sending it directly to Gemini via OpenRouter
-    /// This is the preferred method as it doesn't require PDFKit or image conversion
-    private func extractPDFNatively(
-        fileData: Data,
-        filename: String,
-        sizeInBytes: Int,
-        contentType: String,
-        sha256: String,
-        purpose: String,
-        verbatimTranscription: Bool,
-        autoPersist: Bool,
-        progress: ExtractionProgressHandler?
-    ) async throws -> ExtractionResult {
-        func notifyProgress(_ stage: ExtractionProgressStage, _ state: ExtractionProgressStageState, detail: String? = nil) async {
-            guard let progress else { return }
-            await progress(ExtractionProgressUpdate(stage: stage, state: state, detail: detail))
-        }
-
-        guard let facade = llmFacade else {
-            throw ExtractionError.llmNotConfigured
-        }
-
-        let modelId = currentModelId()
-        let llmStart = Date()
-
-        await notifyProgress(.aiExtraction, .active, detail: "Sending PDF to Gemini for extraction...")
-
-        // Build prompt based on purpose
-        var prompt: String
-        if verbatimTranscription {
-            prompt = """
-            You are a document transcription assistant. Your task is to provide a VERBATIM transcription of the PDF.
-
-            Requirements:
-            - Transcribe ALL text exactly as written - do not summarize, paraphrase, or condense
-            - Preserve the original formatting, structure, and paragraph breaks
-            - Maintain headings, bullet points, and lists as they appear
-            - Keep the original voice, tone, and word choices intact
-            - Do not add commentary, analysis, or interpretation
-            - Do not omit any content
-
-            This is a writing sample that will be used to analyze the author's writing style, so accuracy and completeness are critical.
-            """
-        } else {
-            prompt = """
-            You are a document extraction assistant. Extract ALL text content from this PDF into high-quality Markdown.
-
-            Requirements:
-            - Reconstruct headings, bullet lists, numbered lists, and tables when possible
-            - Process every page in order with no omissions
-            - Keep original ordering of sections
-            - Describe any diagrams, charts, or figures you see
-            - Do not invent content; only extract what you can see
-            - Use Markdown tables for tabular data
-            - For contact details, list them as bullet points
-            """
-            if purpose == "resume_timeline" {
-                prompt += "\n- Highlight employment sections clearly. Use headings per job."
-            }
-        }
-
-        prompt += """
-
-        Respond with a JSON object containing:
-        - "title": A concise, descriptive title for this document (e.g., "John Smith Resume", "Q3 2024 Project Report")
-        - "content": The extracted/transcribed content in Markdown format
-
-        Example response format:
-        {"title": "Document Title Here", "content": "# Heading\\n\\nContent here..."}
-        """
-
-        var issues: [String] = ["native_pdf_extraction"]
-
-        do {
-            let text = try await callFacadeTextWithPDF(facade: facade, prompt: prompt, pdfData: fileData, modelId: modelId)
-
-            let llmDurationMs = Int(Date().timeIntervalSince(llmStart) * 1000)
-            Logger.info(
-                "📄 Native PDF extraction completed",
-                category: .diagnostics,
-                metadata: [
-                    "filename": filename,
-                    "duration_ms": "\(llmDurationMs)"
-                ]
-            )
-
-            if text.isEmpty {
-                issues.append("llm_failure_empty_response")
-                await notifyProgress(.aiExtraction, .failed, detail: "Empty response from AI")
-                throw ExtractionError.noTextExtracted
-            }
-
-            let parsed = parseEnrichmentResponse(text)
-            await notifyProgress(.aiExtraction, .completed)
-
-            var metadata: [String: Any] = [
-                "character_count": parsed.content.count,
-                "source_format": contentType,
-                "purpose": purpose,
-                "extraction_method": "native_pdf"
-            ]
-            if let title = parsed.title {
-                metadata["title"] = title
-            }
-
-            let artifact = ExtractedArtifact(
-                id: UUID().uuidString,
-                filename: filename,
-                title: parsed.title,
-                contentType: contentType,
-                sizeInBytes: sizeInBytes,
-                sha256: sha256,
-                extractedContent: parsed.content,
-                metadata: metadata
-            )
-
-            let quality = Quality(confidence: 0.9, issues: issues)
-
-            return ExtractionResult(
-                status: .ok,
-                artifact: artifact,
-                quality: quality,
-                derivedApplicantProfile: nil,
-                derivedSkeletonTimeline: nil,
-                persisted: false
-            )
-        } catch let error as LLMError {
-            if case .clientError(let message) = error, message.contains("not found") || message.contains("not valid") {
-                onInvalidModelId?(modelId)
-                throw ExtractionError.llmFailed("\(modelId) is not a valid model ID.")
-            }
-            await notifyProgress(.aiExtraction, .failed, detail: error.localizedDescription)
-            throw ExtractionError.llmFailed(error.localizedDescription)
-        } catch {
-            await notifyProgress(.aiExtraction, .failed, detail: error.localizedDescription)
-            throw ExtractionError.llmFailed(error.localizedDescription)
-        }
-    }
-
-    // MARK: - Legacy Image-Based Extraction (kept as fallback)
-
-    /// Extract content from a PDF by converting pages to images and using vision-capable LLM
-    private func extractPDFViaImages(
+    /// Extract content from a PDF by sending it directly to OpenRouter
+    /// OpenRouter automatically parses PDFs using pdf-text engine (free) for any model
+    private func extractPDFDirect(
         fileURL: URL,
         fileData: Data,
         filename: String,
@@ -872,166 +498,106 @@ Example response format:
             await progress(ExtractionProgressUpdate(stage: stage, state: state, detail: detail))
         }
 
-        // Check page count
-        guard let pageCount = ImageConversionService.shared.getPDFPageCount(pdfData: fileData) else {
-            await notifyProgress(.fileAnalysis, .failed, detail: "Unable to read PDF")
-            throw ExtractionError.unreadableData
-        }
-
-        Logger.info("📄 PDF has \(pageCount) pages, max for image extraction is \(maxPagesForImageExtraction)", category: .ai)
-
-        // If too many pages, throw user-facing error
-        if pageCount > maxPagesForImageExtraction {
-            await notifyProgress(.fileAnalysis, .failed, detail: "PDF has too many pages (\(pageCount))")
-            throw ExtractionError.pdfTooLarge(pageCount: pageCount)
-        }
-
-        await notifyProgress(.fileAnalysis, .active, detail: "Converting \(pageCount) PDF page(s) to images...")
-
-        // Convert pages to images - get raw Data instead of base64
-        guard let imageDataArray = ImageConversionService.shared.convertPDFPagesToImageData(pdfData: fileData, maxPages: maxPagesForImageExtraction),
-              !imageDataArray.isEmpty else {
-            await notifyProgress(.fileAnalysis, .failed, detail: "Failed to convert PDF pages to images")
-            throw ExtractionError.noTextExtracted
-        }
-
-        await notifyProgress(.fileAnalysis, .completed, detail: "Converted \(imageDataArray.count) page(s)")
-
-        // Use vision-capable model to extract content
-        let aiStageDetail = "Analyzing \(imageDataArray.count) page image(s) with AI..."
-        await notifyProgress(.aiExtraction, .active, detail: aiStageDetail)
-
-        let llmStart = Date()
-        let enrichmentResult = try await extractTextFromImages(imageDataArray, purpose: purpose)
-
-        let llmDurationMs = Int(Date().timeIntervalSince(llmStart) * 1000)
-        Logger.info(
-            "📄 Image-based extraction LLM phase completed",
-            category: .diagnostics,
-            metadata: [
-                "filename": filename,
-                "page_count": "\(imageDataArray.count)",
-                "duration_ms": "\(llmDurationMs)"
-            ]
-        )
-
-        let aiState: ExtractionProgressStageState = enrichmentResult.issues.contains(where: { $0.hasPrefix("llm_failure") }) ? .failed : .completed
-        await notifyProgress(.aiExtraction, aiState)
-
-        var allIssues = ["image_based_extraction"]
-        allIssues.append(contentsOf: enrichmentResult.issues)
-
-        let extractedText = enrichmentResult.content ?? ""
-        let extractedTitle = enrichmentResult.title
-        let confidence = estimateConfidence(for: extractedText, issues: allIssues)
-        var metadata: [String: Any] = [
-            "character_count": extractedText.count,
-            "source_format": contentType,
-            "purpose": purpose,
-            "source_file_url": fileURL.absoluteString,
-            "source_filename": filename,
-            "extraction_method": "image_vision",
-            "page_count": pageCount
-        ]
-        if let title = extractedTitle {
-            metadata["title"] = title
-        }
-
-        let artifact = ExtractedArtifact(
-            id: UUID().uuidString,
-            filename: filename,
-            title: extractedTitle,
-            contentType: contentType,
-            sizeInBytes: sizeInBytes,
-            sha256: sha256,
-            extractedContent: extractedText,
-            metadata: metadata
-        )
-
-        let status: ExtractionResult.Status
-        if enrichmentResult.issues.contains(where: { $0.hasPrefix("llm_failure") }) {
-            status = .partial
-        } else {
-            status = .ok
-        }
-
-        if autoPersist {
-            allIssues.append("auto_persist_not_supported")
-        }
-
-        let quality = Quality(confidence: confidence, issues: allIssues)
-
-        return ExtractionResult(
-            status: status,
-            artifact: artifact,
-            quality: quality,
-            derivedApplicantProfile: nil,
-            derivedSkeletonTimeline: nil,
-            persisted: false
-        )
-    }
-
-    /// Extract text from image data using a vision-capable LLM via LLMFacade
-    private func extractTextFromImages(_ imageDataArray: [Data], purpose: String) async throws -> EnrichmentResult {
-        var issues: [String] = []
+        await notifyProgress(.fileAnalysis, .active, detail: "Preparing PDF for extraction...")
 
         guard let facade = llmFacade else {
-            return EnrichmentResult(title: nil, content: "", issues: ["llm_failure_not_configured"])
+            await notifyProgress(.fileAnalysis, .failed, detail: "LLM not configured")
+            throw ExtractionError.llmFailed("LLM facade not configured")
         }
 
         let modelId = currentModelId()
+        await notifyProgress(.fileAnalysis, .completed, detail: "Using \(modelId)")
 
-        var prompt = """
-You are a document extraction assistant. Analyze the provided page images and extract ALL text content into high-quality Markdown.
+        let prompt = """
+Extract and summarize the content of this PDF to support resume and cover letter drafting for the applicant (me).
 
-Requirements:
-- Extract all visible text from each page image
-- Reconstruct headings, bullet lists, numbered lists, and tables when possible
-- Process every page in order with no omissions
-- Keep original ordering of sections
-- Describe any diagrams, charts, or figures you see
-- Do not invent content; only extract what you can see
-- Use Markdown tables for tabular data
-- For contact details, list them as bullet points
-"""
-        if purpose == "resume_timeline" {
-            prompt += "\n- Highlight employment sections clearly. Use headings per job."
-        }
-        prompt += """
+Output format: Provide a structured, page-by-page transcription in markdown.
+
+Content handling rules:
+- Text passages: Transcribe verbatim when feasible. For lengthy sections, provide a comprehensive summary that preserves key details, achievements, and distinctive phrasing.
+- Original writing by the applicant (essays, statements, project descriptions): Quote in full or summarize exhaustively—do not omit substantive content.
+- Diagrams, figures, and visual content: Provide a brief description of key elements and their purpose/significance.
+
+Framing: This document is being prepared as source material for my own application materials. Highlight strengths, accomplishments, and distinguishing qualifications. This is not intended as a neutral third-party assessment—advocate for the candidate where the evidence supports it.
+
+When summarizing, include brief qualitative notes on what makes particular achievements or experiences notable (e.g., scope, difficulty, originality, impact).
 
 Respond with a JSON object containing:
 - "title": A concise, descriptive title for this document (e.g., "John Smith Resume", "Q3 2024 Project Report")
-- "content": The formatted Markdown content extracted from all pages
+- "content": The structured, page-by-page transcription in markdown format
 
 Example response format:
-{"title": "Document Title Here", "content": "# Heading\\n\\nContent here..."}
+{"title": "Document Title Here", "content": "# Page 1\\n\\nContent here..."}
 """
 
+        await notifyProgress(.aiExtraction, .active, detail: "Extracting text from PDF...")
+
+        let llmStart = Date()
         do {
-            let text = try await callFacadeTextWithImages(
+            let text = try await callFacadeTextWithPDF(
                 facade: facade,
                 prompt: prompt,
-                modelId: modelId,
-                images: imageDataArray
+                pdfData: fileData,
+                modelId: modelId
+            )
+
+            let llmDurationMs = Int(Date().timeIntervalSince(llmStart) * 1000)
+            Logger.info(
+                "📄 Direct PDF extraction completed",
+                category: .diagnostics,
+                metadata: [
+                    "filename": filename,
+                    "duration_ms": "\(llmDurationMs)"
+                ]
             )
 
             if text.isEmpty {
-                issues.append("llm_failure_empty_response")
-                return EnrichmentResult(title: nil, content: "", issues: issues)
+                await notifyProgress(.aiExtraction, .failed, detail: "No text extracted")
+                throw ExtractionError.noTextExtracted
             }
 
             let parsed = parseEnrichmentResponse(text)
-            return EnrichmentResult(title: parsed.title, content: parsed.content, issues: issues)
-        } catch let error as LLMError {
-            if case .clientError(let message) = error, message.contains("not found") || message.contains("not valid") {
-                onInvalidModelId?(modelId)
-                throw ExtractionError.llmFailed("\(modelId) is not a valid model ID.")
+            let extractedText = parsed.content
+            let extractedTitle = parsed.title
+
+            await notifyProgress(.aiExtraction, .completed)
+
+            var metadata: [String: Any] = [
+                "character_count": extractedText.count,
+                "source_format": contentType,
+                "purpose": purpose,
+                "source_file_url": fileURL.absoluteString,
+                "source_filename": filename,
+                "extraction_method": "native_pdf"
+            ]
+            if let title = extractedTitle {
+                metadata["title"] = title
             }
-            issues.append("llm_failure_\(error.localizedDescription)")
-            return EnrichmentResult(title: nil, content: "", issues: issues)
+
+            let artifact = ExtractedArtifact(
+                id: UUID().uuidString,
+                filename: filename,
+                title: extractedTitle,
+                contentType: contentType,
+                sizeInBytes: sizeInBytes,
+                sha256: sha256,
+                extractedContent: extractedText,
+                metadata: metadata
+            )
+
+            let quality = Quality(confidence: estimateConfidence(for: extractedText, issues: []), issues: [])
+
+            return ExtractionResult(
+                status: .ok,
+                artifact: artifact,
+                quality: quality,
+                derivedApplicantProfile: nil,
+                derivedSkeletonTimeline: nil,
+                persisted: false
+            )
         } catch {
-            issues.append("llm_failure_\(error.localizedDescription)")
-            return EnrichmentResult(title: nil, content: "", issues: issues)
+            await notifyProgress(.aiExtraction, .failed, detail: error.localizedDescription)
+            throw ExtractionError.llmFailed(error.localizedDescription)
         }
     }
 
@@ -1046,21 +612,6 @@ Example response format:
         try await facade.executeText(
             prompt: prompt,
             modelId: modelId,
-            temperature: 0.1
-        )
-    }
-
-    @MainActor
-    private func callFacadeTextWithImages(
-        facade: LLMFacade,
-        prompt: String,
-        modelId: String,
-        images: [Data]
-    ) async throws -> String {
-        try await facade.executeTextWithImages(
-            prompt: prompt,
-            modelId: modelId,
-            images: images,
             temperature: 0.1
         )
     }

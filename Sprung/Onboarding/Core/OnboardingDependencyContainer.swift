@@ -183,7 +183,8 @@ final class OnboardingDependencyContainer {
 
         // 5. Initialize document services
         let docs = Self.createDocumentComponents(
-            eventBus: core.eventBus, documentExtractionService: documentExtractionService, dataStore: dataStore
+            eventBus: core.eventBus, documentExtractionService: documentExtractionService, dataStore: dataStore,
+            stateCoordinator: state
         )
         self.uploadStorage = docs.uploadStorage
         self.documentProcessingService = docs.documentProcessingService
@@ -307,7 +308,8 @@ final class OnboardingDependencyContainer {
     }
 
     private static func createDocumentComponents(
-        eventBus: EventCoordinator, documentExtractionService: DocumentExtractionService, dataStore: InterviewDataStore
+        eventBus: EventCoordinator, documentExtractionService: DocumentExtractionService, dataStore: InterviewDataStore,
+        stateCoordinator: StateCoordinator
     ) -> DocumentComponents {
         let uploadStorage = OnboardingUploadStorage()
         let documentProcessingService = DocumentProcessingService(
@@ -317,7 +319,7 @@ final class OnboardingDependencyContainer {
             uploadStorage: uploadStorage, documentProcessingService: documentProcessingService,
             documentArtifactHandler: DocumentArtifactHandler(eventBus: eventBus,
                                                              documentProcessingService: documentProcessingService),
-            documentArtifactMessenger: DocumentArtifactMessenger(eventBus: eventBus)
+            documentArtifactMessenger: DocumentArtifactMessenger(eventBus: eventBus, stateCoordinator: stateCoordinator)
         )
     }
 

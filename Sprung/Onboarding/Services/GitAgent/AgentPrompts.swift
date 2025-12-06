@@ -91,8 +91,17 @@ enum GitAgentPrompts {
         ## Important
         - Be evidence-based: Only report skills you can substantiate with file references
         - Be thorough but efficient: Aim to complete in 10-20 turns
-        - Be honest: If the codebase is small or limited, say so
+        - If the codebase is small or limited, acknowledge scope but still highlight what IS demonstrated
         - Focus on quality over quantity of skills identified
+
+        ## Framing
+        This analysis is being prepared to support the developer's job applications. Highlight strengths, accomplishments, and distinguishing qualifications. Frame findings positively where the evidence supports it—this is not a neutral code review but an advocacy document for the candidate.
+
+        When describing skills and patterns:
+        - Emphasize what makes implementations notable (scope, difficulty, elegance, real-world applicability)
+        - Note sophisticated patterns, good architectural decisions, and professional practices
+        - If code shows growth or learning, frame it as adaptability and continuous improvement
+        - Translate technical observations into language that resonates with hiring managers
         """
 
         // Add author filter context if provided

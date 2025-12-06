@@ -8,6 +8,7 @@ struct OnboardingInterviewToolPane: View {
     @Bindable var coordinator: OnboardingInterviewCoordinator
     @Binding var isOccupied: Bool
     @State private var selectedTab: ToolPaneTabsView<AnyView>.Tab = .interview
+    @State private var isPaneDropTargetHighlighted = false
 
     var body: some View {
         let paneOccupied = isPaneOccupied(coordinator: coordinator)
@@ -24,6 +25,24 @@ struct OnboardingInterviewToolPane: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .overlay {
             ZStack {
+                // Drop zone highlight border
+                if isPaneDropTargetHighlighted {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(
+                            Color.accentColor,
+                            style: StrokeStyle(lineWidth: 2.5, dash: [10, 6])
+                        )
+                        .padding(6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.accentColor.opacity(0.06))
+                                .padding(6)
+                        )
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                        .zIndex(0)
+                }
+
                 if let extraction = coordinator.ui.pendingExtraction {
                     ExtractionProgressOverlay(
                         items: extraction.progressItems,
@@ -55,6 +74,7 @@ struct OnboardingInterviewToolPane: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .animation(.easeInOut(duration: 0.2), value: showSpinner)
+        .animation(.easeInOut(duration: 0.15), value: isPaneDropTargetHighlighted)
         .onAppear { isOccupied = paneOccupied }
         .onChange(of: paneOccupied) { _, newValue in
             isOccupied = newValue
@@ -64,6 +84,37 @@ struct OnboardingInterviewToolPane: View {
             if hasCard && selectedTab != .interview {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     selectedTab = .interview
+                }
+            }
+        }
+        // Pane-level drop zone - catches drops anywhere in the tool pane
+        .onDrop(of: DropZoneHandler.acceptedDropTypes, isTargeted: $isPaneDropTargetHighlighted) { providers in
+            handlePaneDrop(providers: providers)
+            return true
+        }
+    }
+
+    // MARK: - Pane Drop Handling
+
+    private func handlePaneDrop(providers: [NSItemProvider]) {
+        DropZoneHandler.handleDrop(providers: providers) { urls in
+            guard !urls.isEmpty else { return }
+
+            // Route based on context
+            let pendingUploads = uploadRequests()
+            if let uploadRequest = pendingUploads.first {
+                // Complete the pending upload request
+                Task {
+                    await coordinator.completeUploadAndResume(id: uploadRequest.id, fileURLs: urls)
+                }
+            } else {
+                // No pending request - route based on phase
+                switch coordinator.ui.phase {
+                case .phase3WritingCorpus:
+                    Task { await coordinator.uploadWritingSamples(urls) }
+                default:
+                    // Phase 1, Phase 2, or complete - use direct upload
+                    Task { await coordinator.uploadFilesDirectly(urls) }
                 }
             }
         }

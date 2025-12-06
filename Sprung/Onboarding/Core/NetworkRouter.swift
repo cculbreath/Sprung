@@ -125,6 +125,9 @@ actor NetworkRouter: OnboardingEventEmitter {
         }
     }
     private func processContentDelta(_ index: Int, _ text: String) async {
+        // Skip empty text - OpenAI sends empty output_text items before tool-only responses
+        guard !text.isEmpty else { return }
+
         let itemId = "message_\(index)"
         // Initialize buffer for new message
         if streamingBuffers[itemId] == nil {
