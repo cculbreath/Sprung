@@ -14,9 +14,6 @@ final class CoordinatorEventRouter {
     private let experienceDefaultsStore: ExperienceDefaultsStore
     private let eventBus: EventCoordinator
     private let dataStore: InterviewDataStore
-    // Weak reference to the parent coordinator to delegate specific actions back if needed
-    // In a pure event architecture, this should be minimized, but useful for transition
-    private weak var coordinator: OnboardingInterviewCoordinator?
 
     // Pending knowledge card for auto-persist after user confirmation
     private var pendingKnowledgeCard: JSON?
@@ -31,8 +28,7 @@ final class CoordinatorEventRouter {
         coverRefStore: CoverRefStore,
         experienceDefaultsStore: ExperienceDefaultsStore,
         eventBus: EventCoordinator,
-        dataStore: InterviewDataStore,
-        coordinator: OnboardingInterviewCoordinator
+        dataStore: InterviewDataStore
     ) {
         self.ui = ui
         self.state = state
@@ -44,7 +40,6 @@ final class CoordinatorEventRouter {
         self.experienceDefaultsStore = experienceDefaultsStore
         self.eventBus = eventBus
         self.dataStore = dataStore
-        self.coordinator = coordinator
     }
 
     // MARK: - Pending Card Management
@@ -72,8 +67,6 @@ final class CoordinatorEventRouter {
             // Timeline UI updates are now handled by UIStateUpdateHandler via topic-specific stream
             // This provides immediate updates without waiting in the congested streamAll() queue
             break
-        case .artifactRecordPersisted:
-            break
         case .processingStateChanged:
             break
         case .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized:
@@ -99,14 +92,6 @@ final class CoordinatorEventRouter {
             }
         case .evidenceRequirementRemoved(let id):
             ui.evidenceRequirements.removeAll { $0.id == id }
-        case .draftKnowledgeCardProduced(let draft):
-            ui.drafts.append(draft)
-        case .draftKnowledgeCardUpdated(let draft):
-            if let index = ui.drafts.firstIndex(where: { $0.id == draft.id }) {
-                ui.drafts[index] = draft
-            }
-        case .draftKnowledgeCardRemoved(let id):
-            ui.drafts.removeAll { $0.id == id }
         case .applicantProfileStored:
             // Handled by ProfilePersistenceHandler
             break
@@ -189,44 +174,36 @@ final class CoordinatorEventRouter {
         }
 
         let cardTitle = card["title"].stringValue
-        Logger.info("💾 Auto-persisting knowledge card: \(cardTitle)", category: .ai)
+        Logger.info("💾 Persisting knowledge card to SwiftData: \(cardTitle)", category: .ai)
 
-        do {
-            // Persist to data store (JSON file)
-            let identifier = try await dataStore.persist(dataType: "knowledge_card", payload: card)
-            Logger.info("✅ Knowledge card persisted to InterviewDataStore with identifier: \(identifier)", category: .ai)
+        // Persist to SwiftData (ResRef) - single source of truth for knowledge cards
+        persistToResRef(card: card)
 
-            // Persist to SwiftData (ResRef) for use in resume generation
-            persistToResRef(card: card)
+        // Emit persisted event (for UI updates)
+        await eventBus.publish(.knowledgeCardPersisted(card: card))
 
-            // Emit persisted event (StateCoordinator will update artifact repository)
-            await eventBus.publish(.knowledgeCardPersisted(card: card))
-
-            // Update plan item status if linked
-            if let planItemId = card["plan_item_id"].string {
-                await handlePlanItemStatusChange(itemId: planItemId, status: "completed")
-            }
-
-            // Clear pending card
-            pendingKnowledgeCard = nil
-
-            // Emit success event
-            await eventBus.publish(.knowledgeCardAutoPersisted(title: cardTitle))
-
-            // Send LLM message about successful persistence
-            var userMessage = JSON()
-            userMessage["role"].string = "user"
-            userMessage["content"].string = """
-                Knowledge card confirmed and persisted: "\(cardTitle)".
-                The plan item has been marked complete.
-                Proceed to the next pending plan item, or call display_knowledge_card_plan to see progress.
-                """
-            await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
-
-            Logger.info("✅ Knowledge card auto-persist complete: \(cardTitle)", category: .ai)
-        } catch {
-            Logger.error("❌ Failed to auto-persist knowledge card: \(error)", category: .ai)
+        // Update plan item status if linked
+        if let planItemId = card["plan_item_id"].string {
+            await handlePlanItemStatusChange(itemId: planItemId, status: "completed")
         }
+
+        // Clear pending card
+        pendingKnowledgeCard = nil
+
+        // Emit success event
+        await eventBus.publish(.knowledgeCardAutoPersisted(title: cardTitle))
+
+        // Send LLM message about successful persistence
+        var userMessage = JSON()
+        userMessage["role"].string = "user"
+        userMessage["content"].string = """
+            Knowledge card confirmed and persisted: "\(cardTitle)".
+            The plan item has been marked complete.
+            Proceed to the next pending plan item, or call display_knowledge_card_plan to see progress.
+            """
+        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+
+        Logger.info("✅ Knowledge card persisted: \(cardTitle)", category: .ai)
     }
 
     /// Persist knowledge card to SwiftData as a ResRef for use in resume generation
@@ -263,7 +240,7 @@ final class CoordinatorEventRouter {
         Logger.info("✅ Knowledge card persisted to ResRef (SwiftData): \(title)", category: .ai)
     }
 
-    /// Handle plan item status change request
+    /// Handle plan item status change request - updates UI state directly
     private func handlePlanItemStatusChange(itemId: String, status: String) async {
         // Convert status string to enum
         let planStatus: KnowledgeCardPlanItem.Status
@@ -278,7 +255,20 @@ final class CoordinatorEventRouter {
             planStatus = .pending
         }
 
-        coordinator?.updatePlanItemStatus(itemId: itemId, status: planStatus)
+        // Update UI state directly (no coordinator needed)
+        guard let index = ui.knowledgeCardPlan.firstIndex(where: { $0.id == itemId }) else {
+            Logger.warning("⚠️ Could not find plan item \(itemId) to update status", category: .ai)
+            return
+        }
+        let item = ui.knowledgeCardPlan[index]
+        ui.knowledgeCardPlan[index] = KnowledgeCardPlanItem(
+            id: item.id,
+            title: item.title,
+            type: item.type,
+            description: item.description,
+            status: planStatus,
+            timelineEntryId: item.timelineEntryId
+        )
         Logger.info("📋 Plan item status updated: \(itemId) → \(status)", category: .ai)
     }
 

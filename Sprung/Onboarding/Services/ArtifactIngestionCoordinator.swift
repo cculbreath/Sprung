@@ -14,6 +14,7 @@ actor ArtifactIngestionCoordinator {
     private let eventBus: EventCoordinator
     private let documentKernel: DocumentIngestionKernel
     private let gitKernel: GitIngestionKernel
+    private let documentProcessingService: DocumentProcessingService
 
     /// Currently pending artifacts by ID
     private var pendingArtifacts: [String: PendingArtifact] = [:]
@@ -24,15 +25,42 @@ actor ArtifactIngestionCoordinator {
     init(
         eventBus: EventCoordinator,
         documentKernel: DocumentIngestionKernel,
-        gitKernel: GitIngestionKernel
+        gitKernel: GitIngestionKernel,
+        documentProcessingService: DocumentProcessingService
     ) {
         self.eventBus = eventBus
         self.documentKernel = documentKernel
         self.gitKernel = gitKernel
+        self.documentProcessingService = documentProcessingService
         Logger.info("📦 ArtifactIngestionCoordinator initialized", category: .ai)
     }
 
     // MARK: - Public API
+
+    /// Process an evidence upload and store as artifact (Phase 2 evidence requirements)
+    func handleEvidenceUpload(url: URL, requirementId: String) async {
+        Logger.info("📎 Handling evidence upload for requirement: \(requirementId)", category: .ai)
+        await eventBus.publish(.processingStateChanged(true, statusMessage: "Processing evidence..."))
+
+        do {
+            var metadata = JSON()
+            metadata["evidence_requirement_id"].string = requirementId
+
+            let record = try await documentProcessingService.processDocument(
+                fileURL: url,
+                documentType: "evidence",
+                callId: nil,
+                metadata: metadata
+            )
+            await eventBus.publish(.artifactRecordProduced(record: record))
+            Logger.info("✅ Evidence processed and artifact stored (ID: \(record["id"].stringValue))", category: .ai)
+        } catch {
+            Logger.error("❌ Evidence upload failed: \(error.localizedDescription)", category: .ai)
+            await eventBus.publish(.errorOccurred("Failed to process evidence: \(error.localizedDescription)"))
+        }
+
+        await eventBus.publish(.processingStateChanged(false))
+    }
 
     /// Ingest a document file (PDF, DOCX, etc.)
     func ingestDocument(
