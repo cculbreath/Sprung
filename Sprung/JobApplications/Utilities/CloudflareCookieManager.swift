@@ -2,7 +2,6 @@
 //  CloudflareCookieManager.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 4/19/25.
 //
 import Foundation
 import WebKit

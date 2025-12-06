@@ -2,7 +2,6 @@
 //  JobRecommendationService.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 6/4/25.
 //
 import Foundation
 /// Service for job recommendation using the unified LLM architecture

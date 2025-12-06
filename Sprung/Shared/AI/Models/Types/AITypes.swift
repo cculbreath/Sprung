@@ -2,7 +2,6 @@
 //  AITypes.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 5/20/25.
 //
 import Foundation
 // This file defines types that are used in the AI protocol interfaces

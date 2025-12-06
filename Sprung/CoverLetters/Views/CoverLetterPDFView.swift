@@ -2,7 +2,6 @@
 //  CoverLetterPDFView.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 4/20/25.
 //
 import PDFKit
 import SwiftUI

@@ -2,7 +2,6 @@
 //  CoverLetterModelNameFormatter.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 6/11/25.
 //
 import Foundation
 class CoverLetterModelNameFormatter {

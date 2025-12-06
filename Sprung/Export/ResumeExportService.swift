@@ -2,7 +2,6 @@
 //  ResumeExportService.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 4/16/25.
 //
 import Foundation
 import AppKit

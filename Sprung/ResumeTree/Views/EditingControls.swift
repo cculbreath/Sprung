@@ -1,7 +1,6 @@
 //  EditingControls.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 1/29/25.
 //
 import SwiftUI
 struct EditingControls: View {

@@ -2,7 +2,6 @@
 //  CoverLetterPrompts.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 9/14/24.
 //
 import Foundation
 enum CoverAiMode: String, Codable {

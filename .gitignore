@@ -10,6 +10,7 @@ weasy/
 .build/
 physcloudresume/scripts/
 test_*
+
 # Local tooling databases
 .opencode/
 .opencode.json
@@ -38,16 +39,18 @@ CLAUDE.md
 build/
 clean-commit-msg.sh
 
+# Local documentation
 agents.md
+Agents.md
+Plans.md
 
 .swift-module-cache/
-agents.md
 .periphery.yml
-.gitignore
 .claude
 build.log
 
 consolelog.txt
+consolelog.pid
 
 Sprung/flattened_output/
 Sprung/Onboarding/logs and docs/
@@ -57,12 +60,13 @@ Sprung/Onboarding/Spec/
 Sprung/Onboarding/Spec and Docs/
 Sprung/Onboarding/Spec/Recent work (done).md
 planning/
-consolelog.pid
-Agents.md
-Plans.md
-Agents.md
 
 # SwiftLint reports
 swiftlint-report.txt
 swiftlint-autofix.log
 swiftlint-report-after-fix.txt
+
+# Audit reports (local only)
+onboarding_audit.md
+onboarding_audit_global.md
+onboarding_code_quality.md

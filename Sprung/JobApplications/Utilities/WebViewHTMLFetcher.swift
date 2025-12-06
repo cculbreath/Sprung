@@ -2,7 +2,6 @@
 //  WebViewHTMLFetcher.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 4/19/25.
 //
 //  This is a heavier‑weight fallback for sites where a raw `URLSession` fetch
 //  continues to be blocked by Cloudflare even after solving the challenge.

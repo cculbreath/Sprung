@@ -2,7 +2,6 @@
 //  NodeHeaderView.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 2/27/25.
 //
 import SwiftUI
 /// Header row for a parent node.  No state lives here; it queries and mutates

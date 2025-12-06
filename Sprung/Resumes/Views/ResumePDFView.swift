@@ -2,7 +2,6 @@
 //  ResumePDFView.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 1/31/25.
 //
 //  ResumePDFView.swift
 //  Sprung

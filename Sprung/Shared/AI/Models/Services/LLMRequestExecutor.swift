@@ -2,7 +2,6 @@
 //  LLMRequestExecutor.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 6/10/25.
 //
 import Foundation
 import SwiftOpenAI

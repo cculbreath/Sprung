@@ -2,7 +2,6 @@
 //  ResumeExportView.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 9/16/24.
 //
 import PDFKit
 import SwiftUI

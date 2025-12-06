@@ -2,7 +2,6 @@
 //  CoverLetterView.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 9/12/24.
 //  Simplified after removing legacy button management
 //
 import SwiftUI

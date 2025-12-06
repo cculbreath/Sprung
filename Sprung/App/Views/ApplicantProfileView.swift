@@ -2,7 +2,6 @@
 //  ApplicantProfileView.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 4/21/25.
 //
 import AppKit
 import Observation

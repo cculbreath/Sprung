@@ -2,7 +2,6 @@
 //  CoverLetterPDFGenerator.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 4/20/25.
 //
 import AppKit
 import CoreText

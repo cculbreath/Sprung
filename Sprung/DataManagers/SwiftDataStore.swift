@@ -2,7 +2,6 @@
 //  SwiftDataStore.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 4/20/25.
 //
 //  SwiftDataStore.swift
 //  Sprung

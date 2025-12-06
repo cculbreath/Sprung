@@ -2,7 +2,6 @@
 //  ModelSelectionSheet.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 6/4/25.
 //
 import SwiftUI
 /// Unified model selection sheet for all single model operations

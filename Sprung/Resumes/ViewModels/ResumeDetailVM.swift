@@ -2,7 +2,6 @@
 //  ResumeDetailVM.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 4/17/25.
 //
 import Foundation
 import Observation

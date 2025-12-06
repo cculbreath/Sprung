@@ -2,7 +2,6 @@
 //  MultiModelChooseBestCoverLetterSheet.swift
 //  Sprung
 //
-//  Created by Christopher Culbreath on 5/23/25.
 //
 import SwiftUI
 import SwiftData
