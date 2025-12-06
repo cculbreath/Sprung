@@ -2,9 +2,13 @@
 //  DocumentArtifactMessenger.swift
 //  Sprung
 //
-//  Thin handler that sends document artifacts to the LLM as user messages.
+//  Thin handler that sends document artifacts to the LLM.
 //  Implements batching: when multiple files are uploaded together, waits for
 //  all processing to complete before sending a single consolidated message.
+//
+//  Key optimization: When a pending UI tool call exists (from get_user_upload),
+//  completes it with extracted content instead of sending a separate user message.
+//  This eliminates an unnecessary LLM round trip.
 //
 import Foundation
 import SwiftyJSON
@@ -14,6 +18,7 @@ import SwiftyJSON
 actor DocumentArtifactMessenger: OnboardingEventEmitter {
     // MARK: - Properties
     let eventBus: EventCoordinator
+    private let stateCoordinator: StateCoordinator
 
     // MARK: - Lifecycle State
     private var subscriptionTask: Task<Void, Never>?
@@ -38,8 +43,9 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
     }
 
     // MARK: - Initialization
-    init(eventBus: EventCoordinator) {
+    init(eventBus: EventCoordinator, stateCoordinator: StateCoordinator) {
         self.eventBus = eventBus
+        self.stateCoordinator = stateCoordinator
         Logger.info("📤 DocumentArtifactMessenger initialized", category: .ai)
     }
 
@@ -187,49 +193,103 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
 
         Logger.info("📤 Sending batched artifacts to LLM: \(artifacts.count) document(s)", category: .ai)
 
-        // Build consolidated message
-        var messageText = "I've uploaded \(artifacts.count) document(s). Here are the extracted contents:\n\n"
+        // Build consolidated message content
+        let messageText = buildExtractedContentMessage(artifacts: artifacts)
 
-        var artifactIds: [String] = []
+        // Check if there's a pending UI tool call (from get_user_upload)
+        // If so, complete it with extracted content instead of sending a separate user message
+        // This eliminates an unnecessary LLM round trip
+        if let pendingCall = await stateCoordinator.getPendingUIToolCall() {
+            Logger.info("📤 Completing pending tool call with extracted content (call: \(pendingCall.callId.prefix(8))...)", category: .ai)
+
+            // Build tool output with extracted content
+            var output = JSON()
+            output["status"].string = "completed"
+            output["message"].string = "Document extraction complete. \(artifacts.count) document(s) processed."
+            output["extracted_content"].string = messageText
+
+            // Build tool response payload
+            var payload = JSON()
+            payload["callId"].string = pendingCall.callId
+            payload["output"] = output
+
+            // Emit tool response (this completes the pending tool call)
+            await emit(.llmToolResponseMessage(payload: payload))
+
+            // Clear the pending tool call
+            await stateCoordinator.clearPendingUIToolCall()
+
+            Logger.info("✅ Batch of \(artifacts.count) artifact(s) sent via tool response (eliminated extra LLM turn)", category: .ai)
+        } else {
+            // No pending tool call - send as user message (fallback for direct uploads)
+            var payload = JSON()
+            payload["text"].string = messageText
+
+            await emit(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
+            Logger.info("✅ Batch of \(artifacts.count) artifact(s) sent as user message", category: .ai)
+        }
+    }
+
+    /// Build the extracted content message for artifacts
+    private func buildExtractedContentMessage(artifacts: [JSON]) -> String {
+        var messageText = "I've uploaded \(artifacts.count == 1 ? "a document" : "\(artifacts.count) document(s)") (resume): "
+
         for (index, artifact) in artifacts.enumerated() {
             let filename = artifact["filename"].stringValue
             let extractedText = artifact["extracted_text"].stringValue
             let artifactId = artifact["id"].stringValue
-            artifactIds.append(artifactId)
 
-            messageText += "---\n"
-            messageText += "**Document \(index + 1): \(filename)**\n"
+            if artifacts.count > 1 {
+                messageText += "\n---\n"
+                messageText += "**Document \(index + 1): \(filename)**\n"
+            } else {
+                messageText += "\(filename)\n"
+            }
             messageText += "Artifact ID: \(artifactId)\n\n"
+            messageText += "Here is the extracted content:\n\n"
             messageText += extractedText
             messageText += "\n\n"
         }
 
-        // Create consolidated user message payload (only text is sent to LLM)
-        var payload = JSON()
-        payload["text"].string = messageText
-
-        // Emit single LLM message event for all artifacts
-        await emit(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
-        Logger.info("✅ Batch of \(artifacts.count) artifact(s) sent to LLM", category: .ai)
+        return messageText
     }
 
     private func sendSingleArtifact(_ record: JSON) async {
+        // Use the batch helper with a single artifact
+        let messageText = buildExtractedContentMessage(artifacts: [record])
         let artifactId = record["id"].stringValue
-        let documentType = record["document_type"].stringValue
-        let filename = record["filename"].stringValue
-        let extractedText = record["extracted_text"].stringValue
 
-        var messageText = "I've uploaded a document (\(documentType)): \(filename)\n"
-        messageText += "Artifact ID: \(artifactId)\n\n"
-        messageText += "Here is the extracted content:\n\n"
-        messageText += extractedText
+        // Check if there's a pending UI tool call (from get_user_upload)
+        // If so, complete it with extracted content instead of sending a separate user message
+        if let pendingCall = await stateCoordinator.getPendingUIToolCall() {
+            Logger.info("📤 Completing pending tool call with extracted content (call: \(pendingCall.callId.prefix(8))...)", category: .ai)
 
-        // Only text is sent to LLM - metadata fields are ignored
-        var payload = JSON()
-        payload["text"].string = messageText
+            // Build tool output with extracted content
+            var output = JSON()
+            output["status"].string = "completed"
+            output["message"].string = "Document extraction complete."
+            output["extracted_content"].string = messageText
 
-        await emit(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
-        Logger.info("📤 Single document artifact sent to LLM: \(artifactId)", category: .ai)
+            // Build tool response payload
+            var payload = JSON()
+            payload["callId"].string = pendingCall.callId
+            payload["output"] = output
+
+            // Emit tool response (this completes the pending tool call)
+            await emit(.llmToolResponseMessage(payload: payload))
+
+            // Clear the pending tool call
+            await stateCoordinator.clearPendingUIToolCall()
+
+            Logger.info("✅ Single artifact sent via tool response (eliminated extra LLM turn): \(artifactId)", category: .ai)
+        } else {
+            // No pending tool call - send as user message (fallback for direct uploads)
+            var payload = JSON()
+            payload["text"].string = messageText
+
+            await emit(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
+            Logger.info("📤 Single document artifact sent as user message: \(artifactId)", category: .ai)
+        }
     }
 
     /// Send git repository analysis artifact to LLM

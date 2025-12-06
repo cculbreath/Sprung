@@ -52,8 +52,13 @@ final class CoordinatorEventRouter {
         }
     }
     private func handleEvent(_ event: OnboardingEvent) async {
-        // Log ALL events to track potential blocking (info level for debugging)
-        Logger.info("📊 CoordinatorEventRouter: Processing event: \(String(describing: event))", category: .ai)
+        // Log events - use debug level for high-frequency streaming events to reduce console noise
+        switch event {
+        case .streamingMessageUpdated, .llmReasoningSummaryDelta:
+            Logger.debug("📊 CoordinatorEventRouter: Processing event: \(String(describing: event))", category: .ai)
+        default:
+            Logger.info("📊 CoordinatorEventRouter: Processing event: \(String(describing: event))", category: .ai)
+        }
         switch event {
         case .objectiveStatusChanged(let id, _, let newStatus, _, _, _, _):
             Logger.debug("📊 CoordinatorEventRouter: objectiveStatusChanged received - id=\(id), newStatus=\(newStatus)", category: .ai)

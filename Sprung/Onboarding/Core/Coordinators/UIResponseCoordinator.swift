@@ -39,21 +39,17 @@ final class UIResponseCoordinator {
         guard await coordinator.completeUpload(id: id, fileURLs: fileURLs) != nil else { return }
 
         // Check if any uploaded files require async extraction (PDF, DOCX, HTML, etc.)
-        // For these, send a tool response that tells the LLM to WAIT for extracted content.
-        // DocumentArtifactMessenger will send a user message with the full extracted text.
+        // For these, DON'T send a tool response yet - keep the tool call pending.
+        // DocumentArtifactMessenger will complete the tool call with extracted content,
+        // eliminating an unnecessary LLM round trip.
         let requiresAsyncExtraction = fileURLs.contains { url in
             let ext = url.pathExtension.lowercased()
             return ["pdf", "doc", "docx", "html", "htm"].contains(ext)
         }
         if requiresAsyncExtraction {
-            // Send tool response with status="in_progress" to tell the API to wait
-            // The API will NOT generate a response until we send a follow-up message
-            // DocumentArtifactMessenger will send the extracted content which triggers the response
-            var output = JSON()
-            output["message"].string = "User uploaded \(fileURLs.count) file(s). Document extraction in progress - please wait for extracted content."
-            output["status"].string = "in_progress"  // Valid API status - makes API wait for follow-up
-            await completePendingUIToolCall(output: output)
-            Logger.info("📄 Upload completed - async extraction in progress, API will wait for follow-up", category: .ai)
+            // Don't complete the tool call yet - leave it pending
+            // DocumentArtifactMessenger will complete it with extracted content
+            Logger.info("📄 Upload completed - async extraction in progress, tool response deferred until extraction completes", category: .ai)
             return
         }
 
