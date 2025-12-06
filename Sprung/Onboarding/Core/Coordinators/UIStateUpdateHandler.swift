@@ -119,8 +119,6 @@ final class UIStateUpdateHandler {
         switch event {
         case .stateSnapshot, .stateAllowedToolsUpdated:
             await syncWizardProgressFromState()
-        case .phaseAdvanceRequested:
-            break
         default:
             break
         }
