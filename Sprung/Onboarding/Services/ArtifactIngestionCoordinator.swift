@@ -162,14 +162,15 @@ actor ArtifactIngestionCoordinator {
         pending.status = .completed
         pendingArtifacts[pendingId] = pending
 
-        // Emit artifact record produced event (DocumentArtifactMessenger batches these)
+        // Emit artifact record produced event
+        // DocumentArtifactMessenger handles this:
+        // - PDF artifacts are batched and sent as user messages
+        // - Git artifacts are sent as developer messages (queued until next user action)
         await eventBus.publish(.artifactRecordProduced(record: result.artifactRecord))
 
-        // For git repositories, send immediate notification (not batched)
-        // Documents are batched by DocumentArtifactMessenger which listens to artifactRecordProduced
-        if result.source == .gitRepository {
-            await eventBus.publish(.artifactIngestionCompleted(result: result, planItemId: pending.planItemId))
-        }
+        // Note: We no longer send a separate artifactIngestionCompleted user message for git repos.
+        // The developer message from DocumentArtifactMessenger.sendGitArtifact() contains
+        // the full analysis and will be bundled with the next user action.
 
         Logger.info("✅ Artifact ingestion completed: \(pending.filename)", category: .ai)
     }
