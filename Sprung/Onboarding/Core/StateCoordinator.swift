@@ -330,12 +330,6 @@ actor StateCoordinator: OnboardingEventEmitter {
                     await emit(.phaseTransitionApplied(phase: newPhase.rawValue, timestamp: Date()))
                 }
             }
-        case .phaseAdvanceRequested(let request):
-            await uiState.setPendingPhaseAdvanceRequest(request)
-        case .phaseTransitionApplied:
-            await uiState.setPendingPhaseAdvanceRequest(nil)
-        case .phaseAdvanceDismissed:
-            await uiState.setPendingPhaseAdvanceRequest(nil)
         default:
             break
         }
@@ -864,11 +858,6 @@ actor StateCoordinator: OnboardingEventEmitter {
     var pendingStreamingStatus: String? {
         get async {
             nil
-        }
-    }
-    var pendingPhaseAdvanceRequest: OnboardingPhaseAdvanceRequest? {
-        get async {
-            await uiState.pendingPhaseAdvanceRequest
         }
     }
 }

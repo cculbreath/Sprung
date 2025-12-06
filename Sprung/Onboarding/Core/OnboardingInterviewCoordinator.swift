@@ -77,11 +77,6 @@ final class OnboardingInterviewCoordinator {
     var pendingSectionToggleRequest: OnboardingSectionToggleRequest? {
         toolRouter.pendingSectionToggleRequest
     }
-    var pendingPhaseAdvanceRequest: OnboardingPhaseAdvanceRequest? {
-        get async {
-            await state.pendingPhaseAdvanceRequest
-        }
-    }
     func eventStream(for topic: EventTopic) async -> AsyncStream<OnboardingEvent> {
         await eventBus.stream(topic: topic)
     }
@@ -441,13 +436,6 @@ final class OnboardingInterviewCoordinator {
         await uiResponseCoordinator.submitProfileURL(urlString)
     }
     // MARK: - Phase Advance
-    func approvePhaseAdvance() async {
-        guard let request = await state.pendingPhaseAdvanceRequest else { return }
-        await eventBus.publish(.phaseAdvanceApproved(request: request))
-    }
-    func denyPhaseAdvance(feedback: String?) async {
-        await eventBus.publish(.phaseAdvanceDenied(feedback: feedback))
-    }
     /// Request phase advance from UI button (sends user message to trigger next_phase tool)
     func requestPhaseAdvanceFromUI() async {
         var payload = JSON()

@@ -33,7 +33,6 @@ final class OnboardingUIState {
     var pendingExtraction: OnboardingPendingExtraction?
     var pendingStreamingStatus: String?
     var artifactRecords: [JSON] = []
-    var pendingPhaseAdvanceRequest: OnboardingPhaseAdvanceRequest?
     var evidenceRequirements: [EvidenceRequirement] = []
     /// Stores last shown profile summary to display until skeleton timeline loads
     var lastApplicantProfileSummary: JSON?
