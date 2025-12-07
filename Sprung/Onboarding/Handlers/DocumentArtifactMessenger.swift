@@ -27,8 +27,9 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
     // MARK: - Batch State
     /// Tracks expected artifacts from current batch
     private var pendingBatch: PendingBatch?
-    /// Timeout for batch completion (seconds)
-    private let batchTimeoutSeconds: Double = 30.0
+    /// Timeout per document in batch (seconds)
+    /// Large PDFs (20+ MB) can take 2+ minutes to extract via Google Files API
+    private let timeoutPerDocumentSeconds: Double = 120.0
 
     private struct PendingBatch {
         let expectedCount: Int
@@ -111,9 +112,11 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
 
         pendingBatch = PendingBatch(expectedCount: expectedCount)
 
-        // Start timeout task
+        // Start timeout task (scales with number of documents)
+        let batchTimeout = timeoutPerDocumentSeconds * Double(expectedCount)
+        Logger.debug("📦 Batch timeout set to \(Int(batchTimeout))s for \(expectedCount) document(s)", category: .ai)
         let timeoutTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(self?.batchTimeoutSeconds ?? 30.0))
+            try? await Task.sleep(for: .seconds(batchTimeout))
             guard !Task.isCancelled else { return }
             await self?.handleBatchTimeout()
         }
@@ -185,9 +188,14 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
     }
 
     private func handleBatchTimeout() async {
-        guard let batch = pendingBatch, !batch.collectedArtifacts.isEmpty else {
+        guard let batch = pendingBatch else { return }
+
+        if batch.collectedArtifacts.isEmpty {
             Logger.warning("⚠️ Batch timeout with no artifacts collected", category: .ai)
+            batch.timeoutTask?.cancel()
             pendingBatch = nil
+            // Still emit batchUploadCompleted to clear the hasBatchUploadInProgress flag
+            await emit(.batchUploadCompleted)
             return
         }
 
