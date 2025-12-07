@@ -3,6 +3,7 @@
 //  Sprung
 //
 //  LLM message orchestration (Spec §4.3)
+import AppKit
 import Foundation
 import SwiftOpenAI
 import SwiftyJSON
@@ -165,6 +166,49 @@ actor LLMMessenger: OnboardingEventEmitter {
             await stateCoordinator.markStreamCompleted()
         } catch {
             Logger.error("❌ Failed to send message: \(error)", category: .ai)
+
+            // Check for "No tool output found" error - conversation state is out of sync
+            let errorDescription = String(describing: error)
+            if errorDescription.contains("No tool output found for function call") {
+                // Extract call_id from error
+                if let callId = extractCallIdFromError(errorDescription) {
+                    Logger.warning("🔧 Attempting recovery: sending synthetic tool response for \(callId)", category: .ai)
+
+                    // Try to recover by sending a synthetic tool response
+                    let recovered = await attemptToolOutputRecovery(
+                        callId: callId,
+                        originalPayload: payload,
+                        isSystemGenerated: isSystemGenerated,
+                        chatboxMessageId: chatboxMessageId,
+                        originalText: originalText,
+                        bundledDeveloperMessages: bundledDeveloperMessages,
+                        toolChoice: toolChoice
+                    )
+
+                    if recovered {
+                        Logger.info("✅ Recovery successful - conversation unblocked", category: .ai)
+                        await stateCoordinator.markStreamCompleted()
+                        return
+                    }
+                }
+
+                // Recovery failed - show alert
+                Logger.error("🔧 Recovery failed for pending tool call", category: .ai)
+                await showConversationSyncErrorAlert(callId: extractCallIdFromError(errorDescription))
+                await emit(.errorOccurred("Conversation sync error: Recovery failed. Use 'Reset Conversation' to recover."))
+                await emit(.llmStatus(status: .error))
+
+                if let chatboxMessageId = chatboxMessageId, let originalText = originalText {
+                    await emit(.llmUserMessageFailed(
+                        messageId: chatboxMessageId,
+                        originalText: originalText,
+                        error: "Conversation sync error - recovery failed"
+                    ))
+                }
+                await stateCoordinator.markStreamCompleted()
+                return
+            }
+
             await emit(.errorOccurred("Failed to send message: \(error.localizedDescription)"))
             await emit(.llmStatus(status: .error))
             // For chatbox messages, emit failure event so UI can restore the message to input box
@@ -770,12 +814,24 @@ actor LLMMessenger: OnboardingEventEmitter {
         return false
     }
     private func surfaceErrorToUI(error: Error) async {
+        // Check for insufficient credits error - show popup alert
+        if let llmError = error as? LLMError {
+            if case .insufficientCredits(let requested, let available) = llmError {
+                await showInsufficientCreditsAlert(requested: requested, available: available)
+                return
+            }
+        }
+
         let errorMessage: String
         let errorDescription = error.localizedDescription
         if errorDescription.contains("network") || errorDescription.contains("connection") {
             errorMessage = "I'm having trouble connecting to the AI service. Please check your network connection and try again."
         } else if errorDescription.contains("401") || errorDescription.contains("403") {
             errorMessage = "There's an authentication issue with the AI service. Please check your API key and try again."
+        } else if errorDescription.contains("402") || errorDescription.lowercased().contains("insufficient credits") {
+            // Fallback for 402 if not caught as LLMError
+            await showInsufficientCreditsAlert(requested: 0, available: 0)
+            return
         } else if errorDescription.contains("429") {
             errorMessage = "The AI service is currently rate-limited. Please wait a moment and try again."
         } else if errorDescription.contains("500") || errorDescription.contains("503") {
@@ -786,5 +842,155 @@ actor LLMMessenger: OnboardingEventEmitter {
         let payload = JSON(["text": errorMessage])
         await emit(.llmUserMessageSent(messageId: UUID().uuidString, payload: payload, isSystemGenerated: true))
         Logger.error("📢 Error surfaced to UI: \(errorMessage)", category: .ai)
+    }
+
+    /// Show a popup alert for insufficient OpenRouter credits
+    @MainActor
+    private func showInsufficientCreditsAlert(requested: Int, available: Int) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Insufficient OpenRouter Credits"
+
+        if requested > 0 && available > 0 {
+            alert.informativeText = """
+            This request requires more credits than available.
+
+            Requested: \(requested.formatted()) tokens
+            Available: \(available.formatted()) tokens
+
+            Please add credits at OpenRouter to continue using the AI features.
+            """
+        } else {
+            alert.informativeText = """
+            Your OpenRouter account has insufficient credits to complete this request.
+
+            Please add credits at OpenRouter to continue using the AI features.
+            """
+        }
+
+        alert.addButton(withTitle: "Add Credits")
+        alert.addButton(withTitle: "OK")
+
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            // Open OpenRouter credits page
+            if let url = URL(string: "https://openrouter.ai/settings/credits") {
+                NSWorkspace.shared.open(url)
+            }
+        }
+
+        Logger.warning("💳 Insufficient credits alert shown to user (requested: \(requested), available: \(available))", category: .ai)
+    }
+
+    /// Extract call_id from "No tool output found for function call <call_id>" error
+    private func extractCallIdFromError(_ errorDescription: String) -> String? {
+        // Pattern: "No tool output found for function call call_XXXX"
+        guard let range = errorDescription.range(of: "function call ") else { return nil }
+        let afterPrefix = errorDescription[range.upperBound...]
+        // Find end of call_id (next quote, period, or end)
+        if let endRange = afterPrefix.rangeOfCharacter(from: CharacterSet(charactersIn: "\".,} ")) {
+            return String(afterPrefix[..<endRange.lowerBound])
+        }
+        return String(afterPrefix)
+    }
+
+    /// Attempt to recover from "No tool output found" error by sending a synthetic tool response
+    /// Returns true if recovery was successful
+    private func attemptToolOutputRecovery(
+        callId: String,
+        originalPayload: JSON,
+        isSystemGenerated: Bool,
+        chatboxMessageId: String?,
+        originalText: String?,
+        bundledDeveloperMessages: [JSON],
+        toolChoice: String?
+    ) async -> Bool {
+        Logger.info("🔧 Recovery: Sending synthetic tool response for call_id: \(callId)", category: .ai)
+
+        // Build synthetic tool output - acknowledge the error gracefully
+        // Note: "status" field is extracted by ConversationContextAssembler and sent to API
+        // Valid API statuses are: "in_progress", "completed", "incomplete"
+        var toolOutput = JSON()
+        toolOutput["status"].string = "incomplete"  // API-level status indicating tool didn't complete normally
+        toolOutput["error"].string = "Tool execution was interrupted due to a sync issue. The system has recovered."
+        toolOutput["recovered"].bool = true
+
+        // Build tool response request using existing method
+        let request = await buildToolResponseRequest(
+            output: toolOutput,
+            callId: callId,
+            reasoningEffort: nil,
+            forcedToolChoice: nil
+        )
+
+        do {
+            // Send the synthetic tool response
+            let stream = try await service.responseCreateStream(request)
+            for try await streamEvent in stream {
+                await networkRouter.handleResponseEvent(streamEvent)
+
+                // Update conversation state when response completes
+                if case .responseCompleted(let completed) = streamEvent {
+                    let hadToolCalls = completed.response.output.contains { item in
+                        if case .functionCall = item { return true }
+                        return false
+                    }
+                    await stateCoordinator.updateConversationState(
+                        responseId: completed.response.id,
+                        hadToolCalls: hadToolCalls
+                    )
+                    // Store in conversation context for next request
+                    await contextAssembler.storePreviousResponseId(completed.response.id)
+                }
+            }
+
+            Logger.info("🔧 Recovery: Synthetic tool response sent successfully", category: .ai)
+
+            // Now retry the original user message
+            Logger.info("🔧 Recovery: Retrying original user message", category: .ai)
+
+            // Small delay to ensure state is updated
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
+
+            // Re-execute the original message
+            await executeUserMessage(
+                originalPayload,
+                isSystemGenerated: isSystemGenerated,
+                chatboxMessageId: chatboxMessageId,
+                originalText: originalText,
+                bundledDeveloperMessages: bundledDeveloperMessages,
+                toolChoice: toolChoice
+            )
+
+            return true
+        } catch {
+            Logger.error("🔧 Recovery failed: \(error)", category: .ai)
+            return false
+        }
+    }
+
+    /// Show alert for conversation sync error when auto-recovery fails
+    @MainActor
+    private func showConversationSyncErrorAlert(callId: String?) {
+        let alert = NSAlert()
+        alert.alertStyle = .critical
+        alert.messageText = "Conversation Recovery Failed"
+        alert.informativeText = """
+        The AI conversation could not be recovered automatically.
+
+        Your interview data (profile, knowledge cards, timeline) is safely saved.
+
+        You may need to restart the interview. Your collected data will be preserved.
+        """
+
+        if let callId = callId {
+            alert.informativeText += "\n\nTechnical: call_id: \(callId)"
+        }
+
+        alert.addButton(withTitle: "OK")
+
+        _ = alert.runModal()
+
+        Logger.error("🔧 Conversation sync error alert shown - auto-recovery failed (callId: \(callId ?? "unknown"))", category: .ai)
     }
 }

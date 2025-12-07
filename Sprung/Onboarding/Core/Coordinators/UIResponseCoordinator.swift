@@ -44,7 +44,7 @@ final class UIResponseCoordinator {
         // eliminating an unnecessary LLM round trip.
         let requiresAsyncExtraction = fileURLs.contains { url in
             let ext = url.pathExtension.lowercased()
-            return ["pdf", "doc", "docx", "html", "htm"].contains(ext)
+            return ["pdf", "docx", "html", "htm"].contains(ext)
         }
         if requiresAsyncExtraction {
             // Don't complete the tool call yet - leave it pending

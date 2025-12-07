@@ -277,12 +277,12 @@ extension JobApp {
                     debugWindow?.makeKeyAndOrderFront(nil)
                     checkPageLoaded()
                 }
-                // Ultimate timeout after 60 seconds to allow fallback to ScrapingDog
+                // Ultimate timeout after 60 seconds
                 DispatchQueue.main.asyncAfter(deadline: .now() + LinkedInScrapeTiming.ultimateTimeout) {
                     guard !hasResumed else { return }
                     hasResumed = true
                     Logger.warning(
-                        "⚠️ [LinkedIn Scraper] Timeout reached after 60 seconds - will fallback to ScrapingDog"
+                        "⚠️ [LinkedIn Scraper] Timeout reached after 60 seconds"
                     )
                     // Restore original delegate and clean up to prevent crashes
                     webView.navigationDelegate = originalDelegate

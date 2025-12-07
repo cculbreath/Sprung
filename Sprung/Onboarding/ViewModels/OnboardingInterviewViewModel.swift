@@ -7,28 +7,27 @@ final class OnboardingInterviewViewModel {
     var userInput: String = ""
     var shouldAutoScroll = true
     var webSearchAllowed: Bool
-    var writingAnalysisAllowed: Bool
     var showImportError = false
     var importErrorText: String?
     private let fallbackModelId: String
     private var hasInitialized = false
+
     init(
         fallbackModelId: String,
-        defaultWebSearchAllowed: Bool = true,
-        defaultWritingAnalysisAllowed: Bool = true
+        defaultWebSearchAllowed: Bool = true
     ) {
         self.fallbackModelId = fallbackModelId
         self.webSearchAllowed = defaultWebSearchAllowed
-        self.writingAnalysisAllowed = defaultWritingAnalysisAllowed
     }
+
     var currentModelId: String {
         selectedModelId.isEmpty ? fallbackModelId : selectedModelId
     }
+
     func configureIfNeeded(
         coordinator: OnboardingInterviewCoordinator?,
         defaultModelId: String,
-        defaultWebSearchAllowed: Bool,
-        defaultWritingAnalysisAllowed: Bool
+        defaultWebSearchAllowed: Bool
     ) {
         if !hasInitialized {
             selectedModelId = defaultModelId
@@ -38,11 +37,9 @@ final class OnboardingInterviewViewModel {
             if let coordinator = coordinator, coordinator.ui.isActive {
                 await MainActor.run {
                     webSearchAllowed = coordinator.ui.preferences.allowWebSearch
-                    writingAnalysisAllowed = coordinator.ui.preferences.allowWritingAnalysis
                 }
             } else {
                 webSearchAllowed = defaultWebSearchAllowed
-                writingAnalysisAllowed = defaultWritingAnalysisAllowed
             }
         }
     }
@@ -50,6 +47,7 @@ final class OnboardingInterviewViewModel {
     func handleDefaultModelChange(newValue: String) {
         selectedModelId = newValue
     }
+
     func clearImportError() {
         importErrorText = nil
         showImportError = false

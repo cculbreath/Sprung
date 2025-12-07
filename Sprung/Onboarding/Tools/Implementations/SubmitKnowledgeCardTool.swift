@@ -184,6 +184,15 @@ struct SubmitKnowledgeCardTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
+        // Check if batch upload is in progress - reject to prevent interrupting uploads
+        let hasBatchInProgress = await MainActor.run { coordinator.ui.hasBatchUploadInProgress }
+        if hasBatchInProgress {
+            return .error(.executionFailed(
+                "Cannot submit knowledge card while document uploads are in progress. " +
+                "Wait for the user to finish uploading evidence documents and click 'Done with this card' before resubmitting."
+            ))
+        }
+
         // Extract and validate card
         let card = params["card"]
         guard card != .null else {

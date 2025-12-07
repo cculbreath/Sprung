@@ -57,7 +57,7 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         }
 
         // Categorize files by type
-        let extractableExtensions = Set(["pdf", "doc", "docx", "html", "htm", "txt", "rtf"])
+        let extractableExtensions = Set(["pdf", "docx", "html", "htm", "txt", "rtf"])
         let imageExtensions = Set(["png", "jpg", "jpeg", "gif", "webp", "heic", "tiff", "bmp"])
 
         let extractableFiles = files.filter { file in

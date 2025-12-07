@@ -119,7 +119,7 @@ private struct UploadRequestPayload {
             throw ToolError.invalidParameters("prompt_to_user must be provided and non-empty.")
         }
         let formats = (json["allowed_types"].arrayObject as? [String]) ?? [
-            "pdf", "txt", "rtf", "doc", "docx", "jpg", "jpeg", "png", "gif", "md", "html", "htm"
+            "pdf", "txt", "rtf", "docx", "jpg", "jpeg", "png", "gif", "md", "html", "htm"
         ]
         let normalized = formats.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
         let allowMultiple = json["allow_multiple"].bool ?? (kind != .resume)

@@ -17,7 +17,14 @@ struct PersistDataTool: InterviewTool {
                     Valid types:
                     - applicant_profile: Contact info (name, email, phone, location, URLs, social profiles)
                     - skeleton_timeline: Complete timeline of positions/education entries
-                    - experience_defaults: Enabled resume sections configuration
+                    - experience_defaults: Resume defaults generated from knowledge cards. REQUIRED structure:
+                        {
+                            "work": [{ "name": "Company", "position": "Title", "location": "City, ST", "startDate": "YYYY-MM", "endDate": "YYYY-MM" or "Present", "summary": "Brief role description", "highlights": ["Achievement 1", "Achievement 2", ...] }],
+                            "education": [{ "institution": "School", "area": "Field of Study", "studyType": "Degree Type", "startDate": "YYYY", "endDate": "YYYY", "score": "GPA if relevant" }],
+                            "projects": [{ "name": "Project Name", "description": "What it does", "startDate": "YYYY-MM", "endDate": "YYYY-MM", "highlights": ["Key accomplishment"], "keywords": ["tech", "stack"] }],
+                            "skills": [{ "name": "Skill Category", "level": "Expert/Advanced/Intermediate", "keywords": ["specific", "technologies"] }],
+                            "languages": [{ "language": "English", "fluency": "Native" }]
+                        }
                     - enabled_sections: Alternative format for enabled sections (array of section names)
                     - candidate_dossier_entry: Single Q&A entry for dossier seed (requires: question, answer, asked_at)
                     - knowledge_card: Deep dive expertise card from Phase 2
@@ -72,8 +79,8 @@ struct PersistDataTool: InterviewTool {
             throw ToolError.invalidParameters("dataType must be a non-empty string")
         }
         let payload = params["data"]
-        guard payload != .null else {
-            throw ToolError.invalidParameters("data must be a JSON object to persist")
+        guard payload != .null, payload.type != .null else {
+            throw ToolError.invalidParameters("Missing required 'data' parameter. You must include the actual content to persist as a JSON object in the 'data' field. For candidate_dossier, include the full dossier content: {\"dataType\": \"candidate_dossier\", \"data\": {\"headline\": \"...\", \"summary\": \"...\", ...}}")
         }
         do {
             let identifier = try await dataStore.persist(dataType: dataType, payload: payload)
@@ -103,7 +110,18 @@ struct PersistDataTool: InterviewTool {
             let normalizedTimeline = TimelineCardAdapter.normalizedTimeline(payload)
             await eventBus.publish(.skeletonTimelineStored(normalizedTimeline))
             Logger.info("📤 Emitted .skeletonTimelineStored event", category: .ai)
-        case "experience_defaults", "enabled_sections":
+        case "experience_defaults":
+            // Check if this is full experience defaults (has work/education/skills arrays) or just enabled sections
+            if payload["work"].exists() || payload["education"].exists() || payload["skills"].exists() || payload["projects"].exists() {
+                // Full experience defaults from LLM - emit event to populate ExperienceDefaults store
+                await eventBus.publish(.experienceDefaultsGenerated(defaults: payload))
+                Logger.info("📤 Emitted .experienceDefaultsGenerated event with full resume data", category: .ai)
+            } else if let sections = extractEnabledSections(from: payload) {
+                // Legacy format: just enabled section names
+                await eventBus.publish(.enabledSectionsUpdated(sections))
+                Logger.info("📤 Emitted .enabledSectionsUpdated event with \(sections.count) sections", category: .ai)
+            }
+        case "enabled_sections":
             // Extract enabled sections and emit event
             if let sections = extractEnabledSections(from: payload) {
                 await eventBus.publish(.enabledSectionsUpdated(sections))

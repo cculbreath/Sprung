@@ -9,7 +9,7 @@ import Security
 enum APIKeyType: String {
     case openRouter = "openRouterApiKey"
     case openAI = "openAiApiKey"
-    case scrapingDog = "scrapingDogApiKey"
+    case gemini = "geminiApiKey"
 }
 struct APIKeyManager {
     private static let service = Bundle.main.bundleIdentifier ?? "physicscloud.Sprung"

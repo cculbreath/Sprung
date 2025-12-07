@@ -125,7 +125,7 @@ private struct ValidationPayload {
             self.data = json["data"]
         } else {
             guard let data = json["data"].dictionary, !data.isEmpty else {
-                throw ToolError.invalidParameters("data must be a non-empty object")
+                throw ToolError.invalidParameters("Missing required 'data' parameter. For \(type) validation, you must include the complete data object to validate. Example: {\"validation_type\": \"\(type)\", \"data\": {...your content...}, \"summary\": \"...\"}")
             }
             self.data = json["data"]
         }

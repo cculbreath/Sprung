@@ -17,6 +17,8 @@ enum LLMError: LocalizedError {
     case timeout
     case unauthorized(String)
     case invalidModelId(String)
+    case insufficientCredits(requested: Int, available: Int)
+
     var errorDescription: String? {
         switch self {
         case .clientError(let message):
@@ -37,6 +39,8 @@ enum LLMError: LocalizedError {
             return "Access denied for model '\(modelId)'. This model may require special authorization or billing setup."
         case .invalidModelId(let modelId):
             return "Model '\(modelId)' is no longer available."
+        case .insufficientCredits(let requested, let available):
+            return "Insufficient OpenRouter credits. Requested \(requested) tokens but only \(available) available."
         }
     }
 }

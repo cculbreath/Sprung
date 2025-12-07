@@ -18,8 +18,13 @@ struct WritingCorpusCollectionView: View {
     let onEndInterview: () -> Void
 
     private var writingSamples: [JSON] {
+        // Check multiple fields since writing samples can come from different sources:
+        // - IngestWritingSampleTool (chat paste): sets source_type = "writing_sample"
+        // - File uploads via get_user_upload: sets document_type = "writingSample" or "writing_sample"
         coordinator.ui.artifactRecords.filter { artifact in
             artifact["source_type"].stringValue == "writing_sample" ||
+            artifact["document_type"].stringValue == "writingSample" ||
+            artifact["document_type"].stringValue == "writing_sample" ||
             artifact["metadata"]["writing_type"].exists()
         }
     }
