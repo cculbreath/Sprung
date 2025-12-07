@@ -457,8 +457,8 @@ final class OnboardingInterviewCoordinator {
     }
 
     /// Uploads files directly (from persistent drop zone, no pending request needed)
-    func uploadFilesDirectly(_ fileURLs: [URL]) async {
-        await uiResponseCoordinator.uploadFilesDirectly(fileURLs)
+    func uploadFilesDirectly(_ fileURLs: [URL], extractionMethod: LargePDFExtractionMethod? = nil) async {
+        await uiResponseCoordinator.uploadFilesDirectly(fileURLs, extractionMethod: extractionMethod)
     }
 
     /// Uploads writing samples for Phase 3 with verbatim transcription

@@ -49,7 +49,8 @@ final class _OpenAIResponsesClient: LLMClient {
         prompt: String,
         modelId: String,
         pdfData: Data,
-        temperature: Double?
+        temperature: Double?,
+        maxTokens: Int?
     ) async throws -> String {
         // OpenAI Responses API doesn't support native PDF - would need conversion
         throw LLMError.clientError("PDF input is not supported via OpenAI Responses API. Use OpenRouter backend.")

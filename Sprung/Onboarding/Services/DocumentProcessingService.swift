@@ -46,12 +46,23 @@ actor DocumentProcessingService {
         let modelId = UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId") ?? "google/gemini-2.0-flash-001"
         Logger.info("🔍 Extracting text with model: \(modelId)", category: .ai)
         statusCallback?("Extracting text from \(filename)...")
+
+        // Check for extraction method preference in metadata (for large PDFs)
+        let extractionMethod: LargePDFExtractionMethod?
+        if let methodString = metadata["extraction_method"].string {
+            extractionMethod = LargePDFExtractionMethod(rawValue: methodString)
+            Logger.info("📄 Using extraction method: \(methodString)", category: .ai)
+        } else {
+            extractionMethod = nil
+        }
+
         let extractionRequest = DocumentExtractionService.ExtractionRequest(
             fileURL: fileURL,
             purpose: documentType,
             returnTypes: ["text"],
             autoPersist: false,
-            timeout: nil
+            timeout: nil,
+            extractionMethod: extractionMethod
         )
         // Create progress handler that maps to status callback
         let progressHandler: ExtractionProgressHandler? = statusCallback.map { callback in

@@ -139,13 +139,12 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
             )
 
             await ingestionCoordinator?.handleIngestionCompleted(pendingId: pendingId, result: result)
-            // Note: Don't emit processingStateChanged(false) - let the LLM response handler manage it
+            // Note: DocumentArtifactMessenger.sendGitArtifact turns off the spinner after sending the developer message
 
             Logger.info("✅ Git repository analysis completed: \(repoName)", category: .ai)
 
         } catch {
             await ingestionCoordinator?.handleIngestionFailed(pendingId: pendingId, error: error.localizedDescription)
-            // Note: Don't emit processingStateChanged(false) - let coordinator handle it
             Logger.error("❌ Git repository analysis failed: \(error.localizedDescription)", category: .ai)
         }
 

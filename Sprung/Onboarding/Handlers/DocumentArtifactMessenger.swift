@@ -123,8 +123,15 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
             return
         }
 
+        // Handle image artifacts - send to LLM with context
+        if contentType.lowercased().hasPrefix("image/") {
+            await sendImageArtifact(record)
+            return
+        }
+
         // Only process PDF documents for batching
         guard contentType.lowercased().contains("pdf") else {
+            Logger.debug("📄 Skipping non-PDF artifact: \(contentType)", category: .ai)
             return
         }
 
@@ -292,6 +299,44 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
         }
     }
 
+    /// Send image artifact to LLM with context about current workflow
+    private func sendImageArtifact(_ record: JSON) async {
+        let artifactId = record["id"].stringValue
+        let filename = record["filename"].stringValue
+        let storageURLString = record["storage_url"].stringValue
+
+        guard let storageURL = URL(string: storageURLString),
+              FileManager.default.fileExists(atPath: storageURL.path) else {
+            Logger.warning("⚠️ Image artifact file not found: \(storageURLString)", category: .ai)
+            return
+        }
+
+        // Read image data
+        guard let imageData = try? Data(contentsOf: storageURL) else {
+            Logger.warning("⚠️ Failed to read image data: \(filename)", category: .ai)
+            return
+        }
+
+        // Build message with image context
+        let messageText = """
+        I've uploaded an image as supporting evidence: \(filename)
+
+        Artifact ID: \(artifactId)
+
+        Please review this image and incorporate any relevant information into the current knowledge card or interview context.
+        """
+
+        // Send as user message with image attachment
+        var payload = JSON()
+        payload["text"].string = messageText
+        payload["image_data"].string = imageData.base64EncodedString()
+        payload["image_filename"].string = filename
+        payload["content_type"].string = record["content_type"].stringValue
+
+        await emit(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
+        Logger.info("🖼️ Image artifact sent to LLM: \(artifactId)", category: .ai)
+    }
+
     /// Send git repository analysis artifact to LLM
     private func sendGitArtifact(_ record: JSON) async {
         let artifactId = record["id"].stringValue
@@ -343,15 +388,13 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
         }
 
         messageText += "Artifact ID: \(artifactId)\n\n"
-        messageText += "This artifact is now available via `list_artifacts` and `get_artifact`. Do NOT respond to this message—continue with the current workflow."
+        messageText += "This artifact is now available via `list_artifacts` and `get_artifact`. Please acknowledge receipt and briefly summarize what you learned about my skills and experience from this repository."
 
-        // Send as developer message (context/instruction) rather than user message
-        // This provides the artifact data without triggering a conversational response
+        // Send as user message so the LLM acknowledges receipt
         var payload = JSON()
-        payload["title"].string = "Git Repository Analysis Complete"
-        payload["content"].string = messageText
+        payload["text"].string = messageText
 
-        await emit(.llmSendDeveloperMessage(payload: payload))
-        Logger.info("📤 Git analysis artifact sent to LLM (developer message): \(artifactId)", category: .ai)
+        await emit(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
+        Logger.info("📤 Git analysis artifact sent to LLM (user message): \(artifactId)", category: .ai)
     }
 }

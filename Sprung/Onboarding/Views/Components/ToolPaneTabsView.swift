@@ -516,7 +516,7 @@ private struct KnowledgeTabContent: View {
                 ForEach(planItems) { item in
                     KnowledgePlanRow(
                         item: item,
-                        resRef: knowledgeCards.first { $0.name == item.title },
+                        resRef: findMatchingResRef(for: item),
                         isFocused: item.id == currentFocus,
                         isExpanded: expandedCardIds.contains(item.id),
                         onToggleExpand: {
@@ -557,6 +557,31 @@ private struct KnowledgeTabContent: View {
                 .foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 4)
+    }
+
+    /// Find a matching ResRef for a plan item using fuzzy matching
+    /// Priority: 1) Exact title match, 2) Plan item title contained in ResRef name, 3) Organization match
+    private func findMatchingResRef(for item: KnowledgeCardPlanItem) -> ResRef? {
+        let itemTitle = item.title.lowercased()
+
+        // 1. Try exact match first
+        if let exact = knowledgeCards.first(where: { $0.name.lowercased() == itemTitle }) {
+            return exact
+        }
+
+        // 2. Try fuzzy match: plan item title contained in ResRef name
+        if let fuzzy = knowledgeCards.first(where: { $0.name.lowercased().contains(itemTitle) }) {
+            return fuzzy
+        }
+
+        // 3. Try matching on organization if plan item looks like an org name
+        if let orgMatch = knowledgeCards.first(where: {
+            $0.organization?.lowercased().contains(itemTitle) == true
+        }) {
+            return orgMatch
+        }
+
+        return nil
     }
 }
 

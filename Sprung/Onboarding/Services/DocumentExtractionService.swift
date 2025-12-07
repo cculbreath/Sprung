@@ -16,19 +16,22 @@ actor DocumentExtractionService {
         let returnTypes: [String]
         let autoPersist: Bool
         let timeout: TimeInterval?
+        let extractionMethod: LargePDFExtractionMethod?
 
         init(
             fileURL: URL,
             purpose: String,
             returnTypes: [String] = [],
             autoPersist: Bool = false,
-            timeout: TimeInterval? = nil
+            timeout: TimeInterval? = nil,
+            extractionMethod: LargePDFExtractionMethod? = nil
         ) {
             self.fileURL = fileURL
             self.purpose = purpose
             self.returnTypes = returnTypes
             self.autoPersist = autoPersist
             self.timeout = timeout
+            self.extractionMethod = extractionMethod
         }
     }
 
@@ -68,6 +71,7 @@ actor DocumentExtractionService {
         case noTextExtracted
         case llmFailed(String)
         case llmNotConfigured
+        case corruptedOutput(String)
 
         var userFacingMessage: String {
             switch self {
@@ -81,8 +85,30 @@ actor DocumentExtractionService {
                 return "Extraction failed: \(description)"
             case .llmNotConfigured:
                 return "PDF extraction model is not configured. Add an OpenRouter API key in Settings."
+            case .corruptedOutput(let description):
+                return "PDF extraction produced corrupted output: \(description). Try using a different extraction method or model."
             }
         }
+    }
+
+    /// Check if extracted content contains corruption indicators (e.g., repeated dots from OCR failures)
+    /// Returns a description of the issue if corrupted, nil if content looks okay
+    private func detectCorruptedOutput(_ content: String) -> String? {
+        // Pattern: 20 or more dots in a row (possibly with spaces)
+        // This catches ". . . . . . . . . ." patterns from corrupted PDFs
+        let dotPattern = try? NSRegularExpression(pattern: "(?:\\s*\\.\\s*){20,}", options: [])
+        if let match = dotPattern?.firstMatch(in: content, options: [], range: NSRange(content.startIndex..., in: content)) {
+            let matchLength = match.range.length
+            return "Detected \(matchLength) repeated dots - likely OCR or encoding failure"
+        }
+
+        // Also check for very long runs of the same character (500+)
+        let repeatedCharPattern = try? NSRegularExpression(pattern: "(.)\\1{500,}", options: [])
+        if repeatedCharPattern?.firstMatch(in: content, options: [], range: NSRange(content.startIndex..., in: content)) != nil {
+            return "Detected extremely long character repetition - likely encoding failure"
+        }
+
+        return nil
     }
 
     // MARK: - Private Properties
@@ -90,6 +116,10 @@ actor DocumentExtractionService {
     private let maxCharactersForPrompt = 18_000
     private let defaultModelId = "google/gemini-2.0-flash-001"
     private var availableModelIds: [String] = []
+
+    /// Maximum PDF size for direct upload to Gemini (18MB)
+    /// Gemini rejects PDFs around 19-20MB, so we use 18MB as a safe threshold
+    private let maxPDFSizeBytes = 18 * 1024 * 1024
 
     init(llmFacade: LLMFacade?) {
         self.llmFacade = llmFacade
@@ -145,22 +175,32 @@ actor DocumentExtractionService {
 
         let sha256 = sha256Hex(for: fileData)
 
-        // For PDFs: Send directly to OpenRouter which handles parsing automatically
-        // OpenRouter supports native PDF for any model - it parses with pdf-text engine (free) by default
+        // For PDFs: Check extraction method preference
+        // - textExtract: Extract text locally with PDFKit, then send to LLM (bypasses size limits)
+        // - chunkedNative (default): Send PDF directly to Gemini (chunks if >20MB)
         if fileURL.pathExtension.lowercased() == "pdf" {
-            Logger.info("📄 Sending PDF directly to Gemini via OpenRouter", category: .ai)
-            return try await extractPDFDirect(
-                fileURL: fileURL,
-                fileData: fileData,
-                filename: filename,
-                sizeInBytes: sizeInBytes,
-                contentType: contentType,
-                sha256: sha256,
-                purpose: request.purpose,
-                timeout: request.timeout,
-                autoPersist: request.autoPersist,
-                progress: progress
-            )
+            // Use text extraction if explicitly requested, or if large PDF with no preference
+            let useTextExtraction = request.extractionMethod == .textExtract
+
+            if useTextExtraction {
+                Logger.info("📄 Using text extraction method (PDFKit) for PDF", category: .ai)
+                // Use the same text-based flow as other documents
+                // extractPlainText handles PDFs via PDFKit
+            } else {
+                Logger.info("📄 Sending PDF directly to Gemini via OpenRouter", category: .ai)
+                return try await extractPDFDirect(
+                    fileURL: fileURL,
+                    fileData: fileData,
+                    filename: filename,
+                    sizeInBytes: sizeInBytes,
+                    contentType: contentType,
+                    sha256: sha256,
+                    purpose: request.purpose,
+                    timeout: request.timeout,
+                    autoPersist: request.autoPersist,
+                    progress: progress
+                )
+            }
         }
 
         // For non-PDF documents (DOCX, text): Extract text first, then send to LLM
@@ -481,6 +521,7 @@ Example response format:
 
     /// Extract content from a PDF by sending it directly to OpenRouter
     /// OpenRouter automatically parses PDFs using pdf-text engine (free) for any model
+    /// For PDFs > 20MB: compress first, then split if still too large
     private func extractPDFDirect(
         fileURL: URL,
         fileData: Data,
@@ -506,6 +547,76 @@ Example response format:
         }
 
         let modelId = currentModelId()
+
+        if sizeInBytes > maxPDFSizeBytes {
+            let sizeMB = Double(sizeInBytes) / 1_048_576.0
+            Logger.info(
+                "📄 PDF exceeds 20MB limit (\(String(format: "%.1f", sizeMB))MB), splitting into chunks...",
+                category: .ai
+            )
+            await notifyProgress(.fileAnalysis, .active, detail: "Splitting large PDF into chunks...")
+
+            guard let chunks = splitPDF(data: fileData, filename: filename) else {
+                await notifyProgress(.fileAnalysis, .failed, detail: "Failed to split PDF")
+                throw ExtractionError.llmFailed("Failed to split large PDF into chunks")
+            }
+
+            await notifyProgress(.fileAnalysis, .completed, detail: "Split into \(chunks.count) chunks")
+
+            // Process chunks serially
+            let (extractedTitle, combinedContent) = try await processChunkedPDF(
+                chunks: chunks,
+                filename: filename,
+                modelId: modelId,
+                facade: facade,
+                progress: progress
+            )
+
+            await notifyProgress(.aiExtraction, .completed)
+
+            var metadata: [String: Any] = [
+                "character_count": combinedContent.count,
+                "source_format": contentType,
+                "purpose": purpose,
+                "source_file_url": fileURL.absoluteString,
+                "source_filename": filename,
+                "extraction_method": "chunked_pdf",
+                "chunks_processed": chunks.count
+            ]
+            if let title = extractedTitle {
+                metadata["title"] = title
+            }
+
+            let artifact = ExtractedArtifact(
+                id: UUID().uuidString,
+                filename: filename,
+                title: extractedTitle,
+                contentType: contentType,
+                sizeInBytes: sizeInBytes,
+                sha256: sha256,
+                extractedContent: combinedContent,
+                metadata: metadata
+            )
+
+            let quality = Quality(confidence: estimateConfidence(for: combinedContent, issues: []), issues: [])
+
+            // Check for corrupted output before returning
+            if let corruptionIssue = detectCorruptedOutput(combinedContent) {
+                Logger.error("📄 Chunked PDF extraction produced corrupted output: \(corruptionIssue)", category: .ai)
+                await notifyProgress(.aiExtraction, .failed, detail: corruptionIssue)
+                throw ExtractionError.corruptedOutput(corruptionIssue)
+            }
+
+            return ExtractionResult(
+                status: .ok,
+                artifact: artifact,
+                quality: quality,
+                derivedApplicantProfile: nil,
+                derivedSkeletonTimeline: nil,
+                persisted: false
+            )
+        }
+
         await notifyProgress(.fileAnalysis, .completed, detail: "Using \(modelId)")
 
         let prompt = """
@@ -587,6 +698,13 @@ Example response format:
 
             let quality = Quality(confidence: estimateConfidence(for: extractedText, issues: []), issues: [])
 
+            // Check for corrupted output before returning
+            if let corruptionIssue = detectCorruptedOutput(extractedText) {
+                Logger.error("📄 Direct PDF extraction produced corrupted output: \(corruptionIssue)", category: .ai)
+                await notifyProgress(.aiExtraction, .failed, detail: corruptionIssue)
+                throw ExtractionError.corruptedOutput(corruptionIssue)
+            }
+
             return ExtractionResult(
                 status: .ok,
                 artifact: artifact,
@@ -599,6 +717,223 @@ Example response format:
             await notifyProgress(.aiExtraction, .failed, detail: error.localizedDescription)
             throw ExtractionError.llmFailed(error.localizedDescription)
         }
+    }
+
+    // MARK: - PDF Size Management
+
+    /// Split a PDF into chunks that each stay under maxPDFSizeBytes
+    /// Strategy: Split into fixed 25-page chunks, then merge adjacent chunks where possible
+    private func splitPDF(data: Data, filename: String) -> [(data: Data, pageRange: String)]? {
+        guard let document = PDFDocument(data: data) else {
+            Logger.warning("📄 Failed to load PDF for splitting", category: .ai)
+            return nil
+        }
+
+        let totalPages = document.pageCount
+        guard totalPages > 0 else { return nil }
+
+        // Step 1: Create fixed 25-page chunks
+        let chunkSize = 25
+        var rawChunks: [(doc: PDFDocument, startPage: Int, endPage: Int)] = []
+
+        for startPage in stride(from: 0, to: totalPages, by: chunkSize) {
+            let endPage = min(startPage + chunkSize - 1, totalPages - 1)
+            let chunkDoc = PDFDocument()
+
+            for pageIndex in startPage...endPage {
+                guard let page = document.page(at: pageIndex) else { continue }
+                chunkDoc.insert(page, at: chunkDoc.pageCount)
+            }
+
+            rawChunks.append((doc: chunkDoc, startPage: startPage, endPage: endPage))
+        }
+
+        // Step 2: Merge adjacent chunks where combined size stays under limit
+        var mergedChunks: [(data: Data, pageRange: String)] = []
+        var pendingChunk: (doc: PDFDocument, startPage: Int, endPage: Int)?
+
+        for chunk in rawChunks {
+            if let pending = pendingChunk {
+                // Try merging pending with current
+                let combined = PDFDocument()
+                for i in 0..<pending.doc.pageCount {
+                    if let page = pending.doc.page(at: i) {
+                        combined.insert(page, at: combined.pageCount)
+                    }
+                }
+                for i in 0..<chunk.doc.pageCount {
+                    if let page = chunk.doc.page(at: i) {
+                        combined.insert(page, at: combined.pageCount)
+                    }
+                }
+
+                if let combinedData = combined.dataRepresentation(), combinedData.count <= maxPDFSizeBytes {
+                    // Merge succeeded - keep combined as pending
+                    pendingChunk = (doc: combined, startPage: pending.startPage, endPage: chunk.endPage)
+                } else {
+                    // Can't merge - finalize pending, start new pending with current
+                    if let pendingData = pending.doc.dataRepresentation() {
+                        let pageRange = "\(pending.startPage + 1)-\(pending.endPage + 1)"
+                        mergedChunks.append((data: pendingData, pageRange: pageRange))
+                    }
+                    pendingChunk = chunk
+                }
+            } else {
+                pendingChunk = chunk
+            }
+        }
+
+        // Finalize last pending chunk
+        if let pending = pendingChunk, let pendingData = pending.doc.dataRepresentation() {
+            let pageRange = "\(pending.startPage + 1)-\(pending.endPage + 1)"
+            mergedChunks.append((data: pendingData, pageRange: pageRange))
+        }
+
+        // Log results
+        for chunk in mergedChunks {
+            Logger.debug(
+                "📄 Created PDF chunk",
+                category: .ai,
+                metadata: [
+                    "filename": filename,
+                    "pages": chunk.pageRange,
+                    "size_mb": String(format: "%.2f", Double(chunk.data.count) / 1_048_576.0)
+                ]
+            )
+        }
+
+        Logger.info(
+            "📄 PDF split complete",
+            category: .ai,
+            metadata: [
+                "filename": filename,
+                "total_pages": "\(totalPages)",
+                "chunks": "\(mergedChunks.count)"
+            ]
+        )
+
+        return mergedChunks.isEmpty ? nil : mergedChunks
+    }
+
+    /// Process PDF chunks serially, building a continuous summary
+    /// Each chunk receives the previous summary and appends to it for coherent output
+    private func processChunkedPDF(
+        chunks: [(data: Data, pageRange: String)],
+        filename: String,
+        modelId: String,
+        facade: LLMFacade,
+        progress: ExtractionProgressHandler?
+    ) async throws -> (title: String?, content: String) {
+        func notifyProgress(_ stage: ExtractionProgressStage, _ state: ExtractionProgressStageState, detail: String? = nil) async {
+            guard let progress else { return }
+            await progress(ExtractionProgressUpdate(stage: stage, state: state, detail: detail))
+        }
+
+        var accumulatedContent = ""
+        var extractedTitle: String?
+        let totalChunks = chunks.count
+
+        for (index, chunk) in chunks.enumerated() {
+            let chunkNumber = index + 1
+            let isFirstChunk = index == 0
+
+            await notifyProgress(
+                .aiExtraction,
+                .active,
+                detail: "Processing chunk \(chunkNumber)/\(totalChunks) (pages \(chunk.pageRange))..."
+            )
+
+            let chunkPrompt: String
+            if isFirstChunk {
+                // First chunk: extract content
+                chunkPrompt = """
+Extract and summarize the content of this PDF section (pages \(chunk.pageRange) of a \(totalChunks)-part document) to support resume and cover letter drafting for the applicant (me).
+
+Output format: Provide a structured, page-by-page transcription in markdown.
+
+Content handling rules:
+- Text passages: Transcribe verbatim when feasible. For lengthy sections, provide a comprehensive summary that preserves key details, achievements, and distinctive phrasing.
+- Original writing by the applicant (essays, statements, project descriptions): Quote in full or summarize exhaustively—do not omit substantive content.
+- Diagrams, figures, and visual content: Provide a brief description of key elements and their purpose/significance.
+
+Framing: This document is being prepared as source material for my own application materials. Highlight strengths, accomplishments, and distinguishing qualifications. This is not intended as a neutral third-party assessment—advocate for the candidate where the evidence supports it.
+
+When summarizing, include brief qualitative notes on what makes particular achievements or experiences notable (e.g., scope, difficulty, originality, impact).
+
+Respond with a JSON object containing:
+- "title": A concise, descriptive title for this document (e.g., "John Smith Resume", "Q3 2024 Project Report")
+- "content": The structured, page-by-page transcription in markdown format
+
+Example: {"title": "Document Title Here", "content": "# Page 1\\n\\nContent here..."}
+"""
+            } else {
+                // Subsequent chunks: append to existing extracted content
+                chunkPrompt = """
+You are continuing to extract content from a multi-part PDF document. This is part \(chunkNumber) of \(totalChunks) (pages \(chunk.pageRange)).
+
+Here is the extracted content from the previous sections:
+---
+\(accumulatedContent)
+---
+
+Now extract the content from this new section and APPEND it to the existing extracted content. The final result should read as a continuous, coherent document—not separate chunks.
+
+Content handling rules:
+- Integrate new content seamlessly with the existing extraction
+- Maintain consistent formatting and structure
+- Text passages: Transcribe verbatim when feasible, or provide comprehensive summaries preserving key details
+- Original writing by the applicant: Quote in full or summarize exhaustively—do not omit substantive content
+- Diagrams, figures, and visual content: Provide brief descriptions of key elements
+
+Framing: This document is being prepared as source material for the applicant's job materials. Highlight strengths, accomplishments, and distinguishing qualifications. Advocate for the candidate where the evidence supports it.
+
+Respond with a JSON object containing:
+- "title": null (title already captured)
+- "content": The COMPLETE updated extraction (previous content + new content integrated together)
+
+Important: Return the full accumulated extracted content, not just the new section.
+"""
+            }
+
+            do {
+                let text = try await callFacadeTextWithPDF(
+                    facade: facade,
+                    prompt: chunkPrompt,
+                    pdfData: chunk.data,
+                    modelId: modelId
+                )
+
+                if !text.isEmpty {
+                    let parsed = parseEnrichmentResponse(text)
+
+                    // Capture title from first chunk
+                    if isFirstChunk, let title = parsed.title {
+                        extractedTitle = title
+                    }
+
+                    // Update accumulated content
+                    accumulatedContent = parsed.content
+                }
+
+                Logger.info(
+                    "📄 Chunk \(chunkNumber)/\(totalChunks) processed",
+                    category: .ai,
+                    metadata: [
+                        "pages": chunk.pageRange,
+                        "accumulated_chars": "\(accumulatedContent.count)"
+                    ]
+                )
+            } catch {
+                Logger.error(
+                    "📄 Chunk \(chunkNumber) failed: \(error.localizedDescription)",
+                    category: .ai
+                )
+                // Fail fast on chunk errors - don't create partial artifacts
+                throw ExtractionError.llmFailed("PDF extraction failed on pages \(chunk.pageRange): \(error.localizedDescription)")
+            }
+        }
+
+        return (extractedTitle, accumulatedContent)
     }
 
     // MARK: - MainActor Bridge Methods
@@ -616,18 +951,23 @@ Example response format:
         )
     }
 
-    @MainActor
+    /// Call LLMFacade for PDF extraction
+    /// Note: NOT marked @MainActor - Swift automatically hops to MainActor when calling
+    /// facade.executeTextWithPDF. Keeping this function off MainActor reduces contention
+    /// with event processing that runs on MainActor via CoordinatorEventRouter.
     private func callFacadeTextWithPDF(
         facade: LLMFacade,
         prompt: String,
         pdfData: Data,
-        modelId: String
+        modelId: String,
+        maxTokens: Int? = 16000
     ) async throws -> String {
         try await facade.executeTextWithPDF(
             prompt: prompt,
             modelId: modelId,
             pdfData: pdfData,
-            temperature: 0.1
+            temperature: 0.1,
+            maxTokens: maxTokens
         )
     }
 }

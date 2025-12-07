@@ -237,7 +237,8 @@ struct _LLMRequestBuilder {
         modelId: String,
         pdfData: Data,
         filename: String = "document.pdf",
-        temperature: Double
+        temperature: Double,
+        maxTokens: Int? = nil
     ) -> ChatCompletionParameters {
         let base64PDF = pdfData.base64EncodedString()
         let dataURL = "data:application/pdf;base64,\(base64PDF)"
@@ -256,6 +257,7 @@ struct _LLMRequestBuilder {
         return ChatCompletionParameters(
             messages: [message],
             model: .custom(modelId),
+            maxTokens: maxTokens,
             temperature: temperature
         )
     }
