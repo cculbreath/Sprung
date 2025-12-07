@@ -81,10 +81,14 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
             if metadata["target_key"].string != nil {
                 return
             }
-            // Count only PDF files since we only process those
-            let pdfCount = files.filter { $0.filename.lowercased().hasSuffix(".pdf") }.count
-            if pdfCount > 0 {
-                await startBatch(expectedCount: pdfCount)
+            // Count extractable document files (PDFs and text files)
+            let extractableExtensions = Set(["pdf", "txt", "docx", "html", "htm", "md", "rtf"])
+            let extractableCount = files.filter { file in
+                let ext = file.filename.lowercased().split(separator: ".").last.map(String.init) ?? ""
+                return extractableExtensions.contains(ext)
+            }.count
+            if extractableCount > 0 {
+                await startBatch(expectedCount: extractableCount)
             }
 
         case .artifactRecordProduced(let record):
@@ -100,7 +104,10 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
         // Cancel any existing batch timeout
         pendingBatch?.timeoutTask?.cancel()
 
-        Logger.info("📦 Starting artifact batch: expecting \(expectedCount) PDF(s)", category: .ai)
+        Logger.info("📦 Starting artifact batch: expecting \(expectedCount) document(s)", category: .ai)
+
+        // Emit batch started event - this prevents validation prompts from interrupting uploads
+        await emit(.batchUploadStarted(expectedCount: expectedCount))
 
         pendingBatch = PendingBatch(expectedCount: expectedCount)
 
@@ -129,9 +136,13 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
             return
         }
 
-        // Only process PDF documents for batching
-        guard contentType.lowercased().contains("pdf") else {
-            Logger.debug("📄 Skipping non-PDF artifact: \(contentType)", category: .ai)
+        // Process extractable document types (PDFs and text files)
+        let extractableTypes = ["application/pdf", "text/plain", "text/html", "text/markdown"]
+        let isExtractable = extractableTypes.contains { contentType.lowercased().contains($0.lowercased()) } ||
+                           contentType.lowercased().contains("pdf") ||
+                           contentType.lowercased().hasPrefix("text/")
+        guard isExtractable else {
+            Logger.debug("📄 Skipping non-extractable artifact: \(contentType)", category: .ai)
             return
         }
 
@@ -192,6 +203,9 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
 
         let artifacts = batch.collectedArtifacts
         pendingBatch = nil
+
+        // Emit batch completed event - allows validation prompts to proceed
+        await emit(.batchUploadCompleted)
 
         guard !artifacts.isEmpty else {
             Logger.warning("⚠️ Batch complete but no artifacts to send", category: .ai)
@@ -343,52 +357,115 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
         let filename = record["filename"].stringValue
         let analysis = record["analysis"]
 
-        // Build a comprehensive message with the git analysis
+        // Build a comprehensive message with the git analysis (new schema)
         var messageText = "Git repository analysis completed for: \(filename)\n\n"
 
-        // Include summary
-        if let summary = analysis["summary"].string, !summary.isEmpty {
-            messageText += "**Summary:**\n\(summary)\n\n"
+        // Repository summary
+        let repoSummary = analysis["repository_summary"]
+        if repoSummary.exists() {
+            messageText += "**Project:** \(repoSummary["name"].stringValue)\n"
+            messageText += "\(repoSummary["description"].stringValue)\n"
+            messageText += "Domain: \(repoSummary["primary_domain"].stringValue) | "
+            messageText += "Type: \(repoSummary["project_type"].stringValue)\n\n"
         }
 
-        // Include languages
-        if let languages = analysis["languages"].array, !languages.isEmpty {
-            messageText += "**Languages:**\n"
-            for lang in languages {
-                let name = lang["name"].stringValue
-                let proficiency = lang["proficiency"].stringValue
-                messageText += "- \(name) (\(proficiency))\n"
+        // Technical skills with resume bullets
+        if let skills = analysis["technical_skills"].array, !skills.isEmpty {
+            // Group by category for cleaner display
+            let languages = skills.filter { $0["category"].stringValue == "language" }
+            let frameworks = skills.filter { $0["category"].stringValue == "framework" }
+            let tools = skills.filter { ["tool", "platform", "database"].contains($0["category"].stringValue) }
+
+            if !languages.isEmpty {
+                messageText += "**Languages:**\n"
+                for lang in languages {
+                    messageText += "- \(lang["skill_name"].stringValue) (\(lang["proficiency_level"].stringValue))\n"
+                }
+                messageText += "\n"
+            }
+
+            if !frameworks.isEmpty {
+                messageText += "**Frameworks:**\n"
+                for fw in frameworks {
+                    messageText += "- \(fw["skill_name"].stringValue) (\(fw["proficiency_level"].stringValue))\n"
+                }
+                messageText += "\n"
+            }
+
+            if !tools.isEmpty {
+                messageText += "**Tools & Platforms:**\n"
+                for tool in tools {
+                    messageText += "- \(tool["skill_name"].stringValue) (\(tool["proficiency_level"].stringValue))\n"
+                }
+                messageText += "\n"
+            }
+
+            // Show some resume bullets
+            messageText += "**Sample Resume Bullets:**\n"
+            for skill in skills.prefix(5) {
+                if let bullets = skill["resume_bullets"].array, let firstBullet = bullets.first?.string {
+                    messageText += "- \(firstBullet)\n"
+                }
             }
             messageText += "\n"
         }
 
-        // Include technologies
-        if let techs = analysis["technologies"].array, !techs.isEmpty {
-            messageText += "**Technologies:** \(techs.compactMap { $0.string }.joined(separator: ", "))\n\n"
-        }
-
-        // Include skills with evidence
-        if let skills = analysis["skills"].array, !skills.isEmpty {
-            messageText += "**Skills with Evidence:**\n"
-            for skill in skills.prefix(10) {
-                let skillName = skill["skill"].stringValue
-                let evidence = skill["evidence"].stringValue
-                messageText += "- **\(skillName)**: \(evidence)\n"
+        // AI Collaboration Profile
+        let aiProfile = analysis["ai_collaboration_profile"]
+        if aiProfile.exists() {
+            let detected = aiProfile["detected_ai_usage"].boolValue
+            let rating = aiProfile["collaboration_quality_rating"].stringValue
+            messageText += "**AI Collaboration:** "
+            if detected {
+                messageText += "\(rating.replacingOccurrences(of: "_", with: " ").capitalized)\n"
+                if let positioning = aiProfile["resume_positioning"]["framing_recommendation"].string {
+                    messageText += "Resume positioning: \(positioning)\n"
+                }
+            } else {
+                messageText += "No AI usage detected\n"
             }
             messageText += "\n"
         }
 
-        // Include highlights
-        if let highlights = analysis["highlights"].array, !highlights.isEmpty {
+        // Architectural competencies
+        if let competencies = analysis["architectural_competencies"].array, !competencies.isEmpty {
+            messageText += "**Architectural Competencies:**\n"
+            for comp in competencies.prefix(5) {
+                messageText += "- \(comp["competency"].stringValue) (\(comp["proficiency_level"].stringValue))\n"
+            }
+            messageText += "\n"
+        }
+
+        // Professional attributes with cover letter phrases
+        if let attrs = analysis["professional_attributes"].array, !attrs.isEmpty {
+            messageText += "**Professional Attributes:**\n"
+            for attr in attrs.prefix(5) {
+                messageText += "- \(attr["attribute"].stringValue) (\(attr["strength_level"].stringValue))\n"
+            }
+            messageText += "\n"
+        }
+
+        // Notable achievements
+        if let achievements = analysis["notable_achievements"].array, !achievements.isEmpty {
             messageText += "**Notable Achievements:**\n"
-            for highlight in highlights {
-                messageText += "- \(highlight.stringValue)\n"
+            for achievement in achievements.prefix(8) {
+                messageText += "- \(achievement["resume_bullet"].stringValue)\n"
             }
             messageText += "\n"
+        }
+
+        // Keyword cloud for ATS
+        let keywords = analysis["keyword_cloud"]
+        if keywords.exists() {
+            if let primary = keywords["primary"].array, !primary.isEmpty {
+                messageText += "**Primary Keywords (ATS):** \(primary.compactMap { $0.string }.joined(separator: ", "))\n\n"
+            }
         }
 
         messageText += "Artifact ID: \(artifactId)\n\n"
-        messageText += "This artifact is now available via `list_artifacts` and `get_artifact`. Please acknowledge receipt and briefly summarize what you learned about my skills and experience from this repository."
+        messageText += "This artifact is now available via `list_artifacts` and `get_artifact`. "
+        messageText += "The full analysis includes resume_bullets and cover_letter_phrases ready for use. "
+        messageText += "Please acknowledge receipt and briefly summarize what you learned about my skills and experience from this repository."
 
         // Send as user message so the LLM acknowledges receipt
         var payload = JSON()

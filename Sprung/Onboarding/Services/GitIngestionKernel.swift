@@ -280,53 +280,15 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
             eventBus: eventBus
         )
 
-        // Convert GitAnalysisResult to JSON
-        var result = JSON()
-        result["summary"].string = analysisResult.summary
-
-        // Convert languages
-        result["languages"] = JSON(analysisResult.languages.map { lang in
-            [
-                "name": lang.name,
-                "proficiency": lang.proficiency,
-                "evidence": lang.evidence
-            ] as [String: Any]
-        })
-
-        // Convert technologies
-        result["technologies"] = JSON(analysisResult.technologies)
-
-        // Convert skills
-        result["skills"] = JSON(analysisResult.skills.map { skill in
-            [
-                "skill": skill.skill,
-                "evidence": skill.evidence
-            ] as [String: Any]
-        })
-
-        // Convert development patterns
-        if let patterns = analysisResult.developmentPatterns {
-            var patternsObj: [String: Any] = [:]
-            if let codeQuality = patterns.codeQuality {
-                patternsObj["code_quality"] = codeQuality
-            }
-            if let testingPractices = patterns.testingPractices {
-                patternsObj["testing_practices"] = testingPractices
-            }
-            if let documentationQuality = patterns.documentationQuality {
-                patternsObj["documentation_quality"] = documentationQuality
-            }
-            if let architectureStyle = patterns.architectureStyle {
-                patternsObj["architecture_style"] = architectureStyle
-            }
-            result["development_patterns"] = JSON(patternsObj)
+        // Convert GitAnalysisResult to JSON using Codable (CodingKeys handle snake_case)
+        var result: JSON
+        do {
+            let data = try JSONEncoder().encode(analysisResult)
+            result = try JSON(data: data)
+        } catch {
+            Logger.error("Failed to encode GitAnalysisResult: \(error)", category: .ai)
+            result = JSON()
         }
-
-        // Convert highlights
-        result["highlights"] = JSON(analysisResult.highlights)
-
-        // Include evidence files for reference
-        result["evidence_files"] = JSON(analysisResult.evidenceFiles)
 
         // Merge in the original git metadata
         result["git_metadata"] = gitData

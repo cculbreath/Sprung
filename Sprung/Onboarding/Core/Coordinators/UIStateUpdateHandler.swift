@@ -65,6 +65,12 @@ final class UIStateUpdateHandler {
             if let statusMessage = statusMessage {
                 ui.currentStatusMessage = statusMessage
             }
+        case .batchUploadStarted(let expectedCount):
+            ui.hasBatchUploadInProgress = true
+            Logger.info("📦 Batch upload started: \(expectedCount) document(s) expected, blocking validation prompts", category: .ai)
+        case .batchUploadCompleted:
+            ui.hasBatchUploadInProgress = false
+            Logger.info("📦 Batch upload completed, validation prompts can proceed", category: .ai)
         default:
             break
         }

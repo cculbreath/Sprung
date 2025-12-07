@@ -8,7 +8,6 @@ struct SettingsView: View {
     @AppStorage("onboardingPDFExtractionModelId") private var pdfExtractionModelId: String = "google/gemini-2.0-flash-001"
     @AppStorage("onboardingGitIngestModelId") private var gitIngestModelId: String = "openai/gpt-4o-mini"
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var onboardingWebSearchAllowed: Bool = true
-    @AppStorage("onboardingInterviewAllowWritingAnalysisDefault") private var onboardingWritingAllowed: Bool = false
     @AppStorage("onboardingInterviewReasoningEffort") private var onboardingReasoningEffort: String = "none"
     @AppStorage("onboardingInterviewHardTaskReasoningEffort") private var onboardingHardTaskReasoningEffort: String = "medium"
     @AppStorage("onboardingInterviewFlexProcessing") private var onboardingFlexProcessing: Bool = true
@@ -23,8 +22,12 @@ struct SettingsView: View {
     @State private var showFinalResetConfirmation = false
     @State private var resetError: String?
     @State private var isResetting = false
+    @State private var geminiModels: [GoogleAIService.GeminiModel] = []
+    @State private var isLoadingGeminiModels = false
+    @State private var geminiModelError: String?
     private let dataResetService = DataResetService()
-    private let pdfExtractionFallbackModelId = "google/gemini-2.0-flash-001"
+    private let pdfExtractionFallbackModelId = "gemini-2.0-flash"
+    private let googleAIService = GoogleAIService()
 
     /// Available GPT-5 and GPT-5.1 models for onboarding interviews (uses OpenAI directly, not OpenRouter)
     private let onboardingInterviewModelOptions: [(id: String, name: String)] = [
@@ -57,133 +60,131 @@ struct SettingsView: View {
         ("medium", "Medium", "Balanced speed and reasoning depth"),
         ("high", "High", "Maximum reasoning; best for complex tasks")
     ]
+
     var body: some View {
         Form {
-            Section(content: {
+            // MARK: - API Keys
+            Section {
                 APIKeysSettingsView()
-            }, header: {
-                SettingsSectionHeader(title: "API Keys", systemImage: "key.2.on.ring")
-            })
-            Section(content: {
-                Picker("Reasoning Effort", selection: $reasoningEffort) {
-                    ForEach(reasoningOptions, id: \.value) { option in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(option.label)
-                                .fontWeight(.semibold)
-                            Text(option.detail)
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
+            } header: {
+                SettingsSectionHeader(title: "API Keys", systemImage: "key.fill")
+            }
+
+            // MARK: - Resume & Cover Letter AI
+            Section {
+                VStack(alignment: .leading, spacing: 12) {
+                    Picker("Reasoning Effort", selection: $reasoningEffort) {
+                        ForEach(reasoningOptions, id: \.value) { option in
+                            Text(option.label).tag(option.value)
                         }
-                        .tag(option.value)
                     }
+                    .pickerStyle(.menu)
+                    Text("Controls AI reasoning depth for resume customization and cover letter writing.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
-                .pickerStyle(.radioGroup)
-                Stepper(value: $fixOverflowMaxIterations, in: 1 ... 10) {
-                    Text("Fix Overflow Attempts: \(fixOverflowMaxIterations)")
+                VStack(alignment: .leading, spacing: 12) {
+                    Stepper(value: $fixOverflowMaxIterations, in: 1 ... 10) {
+                        HStack {
+                            Text("Fix Overflow Attempts")
+                            Spacer()
+                            Text("\(fixOverflowMaxIterations)")
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+                    }
+                    Text("How many times AI will attempt to correct overflowing resume sections.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
-                Text("Controls how many times the AI will attempt to correct overflowing resume sections when using 'Fix Overflow'.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 4)
-            }, header: {
-                SettingsSectionHeader(title: "AI Reasoning", systemImage: "sparkles")
-            })
-            Section(content: {
+            } header: {
+                SettingsSectionHeader(title: "Resume & Cover Letter", systemImage: "doc.text.fill")
+            }
+
+            // MARK: - Onboarding Interview
+            Section {
                 onboardingInterviewModelPicker
                 pdfExtractionModelPicker
                 gitIngestModelPicker
-                Toggle("Allow web search during interviews by default", isOn: Binding(
-                    get: { onboardingWebSearchAllowed },
-                    set: { newValue in
-                        onboardingWebSearchAllowed = newValue
-                    }
-                ))
-                .toggleStyle(.switch)
-                Toggle("Allow writing-style analysis by default", isOn: Binding(
-                    get: { onboardingWritingAllowed },
-                    set: { newValue in
-                        onboardingWritingAllowed = newValue
-                    }
-                ))
-                .toggleStyle(.switch)
+
+                Toggle("Allow web search during interviews", isOn: $onboardingWebSearchAllowed)
+
                 Divider()
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 4)
+
                 onboardingReasoningPicker
                 onboardingFlexProcessingToggle
                 onboardingPromptCacheRetentionToggle
-            }, header: {
+            } header: {
                 SettingsSectionHeader(title: "Onboarding Interview", systemImage: "wand.and.stars")
-            })
-            Section(content: {
+            }
+
+            // MARK: - Voice & Audio
+            Section {
                 TextToSpeechSettingsView()
-            }, header: {
+            } header: {
                 SettingsSectionHeader(title: "Voice & Audio", systemImage: "speaker.wave.2.fill")
-            })
-            Section(content: {
+            }
+
+            // MARK: - Debugging
+            Section {
                 DebugSettingsView()
-            }, header: {
-                SettingsSectionHeader(title: "Debugging", systemImage: "wrench.and.screwdriver")
-            })
-            Section(content: {
+            } header: {
+                SettingsSectionHeader(title: "Debugging", systemImage: "ladybug.fill")
+            }
+
+            // MARK: - Danger Zone
+            Section {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Resetting will permanently delete all your data, including:")
+                    Text("Resetting will permanently delete all your data:")
                         .font(.callout)
-                        .foregroundStyle(.secondary)
                     VStack(alignment: .leading, spacing: 6) {
-                        Label("All resumes and cover letters", systemImage: "doc.fill")
-                            .font(.callout)
+                        Label("Resumes, cover letters, and templates", systemImage: "doc.fill")
                         Label("Job application records", systemImage: "briefcase.fill")
-                            .font(.callout)
                         Label("Interview data and artifacts", systemImage: "wand.and.stars.inverse")
-                            .font(.callout)
                         Label("User profile information", systemImage: "person.fill")
-                            .font(.callout)
                         Label("All settings and preferences", systemImage: "gear")
-                            .font(.callout)
                     }
-                    .foregroundStyle(.orange)
-                    Button(action: { showFactoryResetConfirmation = true }) {
-                        HStack {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                            Text("Factory Reset")
-                            Spacer()
-                        }
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+
+                    Button(role: .destructive) {
+                        showFactoryResetConfirmation = true
+                    } label: {
+                        Label("Factory Reset", systemImage: "exclamationmark.triangle.fill")
                     }
                     .buttonStyle(.bordered)
-                    .tint(.red)
                     .disabled(isResetting)
                 }
-                .padding(.vertical, 4)
-            }, header: {
+            } header: {
                 SettingsSectionHeader(title: "Danger Zone", systemImage: "exclamationmark.octagon.fill")
-            })
+            }
         }
         .formStyle(.grouped)
         .frame(minWidth: 520, idealWidth: 680, maxWidth: 780,
-               minHeight: 480, idealHeight: 640, maxHeight: .infinity)
-        .padding(.vertical, 12)
-        .alert("⚠️ Factory Reset", isPresented: $showFactoryResetConfirmation, actions: {
+               minHeight: 480, idealHeight: 700, maxHeight: .infinity)
+        .alert("Factory Reset", isPresented: $showFactoryResetConfirmation) {
             Button("Cancel", role: .cancel) {
                 showFactoryResetConfirmation = false
             }
-            Button("Continue to Confirmation", role: .destructive) {
+            Button("Continue", role: .destructive) {
                 showFinalResetConfirmation = true
             }
-        }, message: {
-            Text("This will permanently delete all resumes, cover letters, job applications, user profile data, and settings. This action cannot be undone.\n\nAre you sure?")
-        })
-        .alert("🔴 Confirm Factory Reset", isPresented: $showFinalResetConfirmation, actions: {
+        } message: {
+            Text("This will permanently delete all resumes, cover letters, job applications, user profile data, and settings. This action cannot be undone.")
+        }
+        .alert("Confirm Factory Reset", isPresented: $showFinalResetConfirmation) {
             Button("Cancel", role: .cancel) {
                 showFinalResetConfirmation = false
             }
-            Button("Yes, Reset Everything", role: .destructive) {
+            Button("Reset Everything", role: .destructive) {
                 Task {
                     await performReset()
                 }
             }
-        }, message: {
+        } message: {
             Text("This is your final chance to cancel. Once confirmed, all data will be deleted and the app will restart.")
-        })
+        }
         .task {
             sanitizePDFExtractionModelIfNeeded()
             sanitizeGitIngestModelIfNeeded()
@@ -193,6 +194,7 @@ struct SettingsView: View {
             sanitizeGitIngestModelIfNeeded()
         }
     }
+
     private func performReset() async {
         isResetting = true
         defer { isResetting = false }
@@ -205,78 +207,132 @@ struct SettingsView: View {
                 careerKeywordStore: careerKeywordStore
             )
             resetError = ""
-            // Brief delay before exiting to allow UI to update
-            try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
-            // Exit the app cleanly - user can relaunch
+            try await Task.sleep(nanoseconds: 1_000_000_000)
             NSApplication.shared.terminate(nil)
         } catch {
             resetError = error.localizedDescription
         }
     }
 }
+
+// MARK: - Section Header
 private struct SettingsSectionHeader: View {
     let title: String
     let systemImage: String
+
     var body: some View {
-        Label {
-            Text(title)
-                .font(.headline)
-                .fontWeight(.semibold)
-        } icon: {
-            Image(systemName: systemImage)
-                .symbolRenderingMode(.monochrome)
-                .imageScale(.medium)
-        }
-        .foregroundStyle(.primary)
+        Label(title, systemImage: systemImage)
+            .font(.headline)
+            .fontWeight(.semibold)
+            .foregroundStyle(.primary)
     }
 }
+
+// MARK: - Onboarding Interview Settings
 private extension SettingsView {
     var onboardingInterviewModelPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Picker("Default Interview Model", selection: $onboardingModelId) {
+            Picker("Interview Model", selection: $onboardingModelId) {
                 ForEach(onboardingInterviewModelOptions, id: \.id) { model in
                     Text(model.name).tag(model.id)
                 }
             }
             .pickerStyle(.menu)
-            Text("GPT-5 and GPT-5.1 models supported. Note: GPT-5 requires \"Minimal\" reasoning (no \"None\"), while GPT-5.1 supports \"None\" (no \"Minimal\").")
+            Text("GPT-5 requires \"Minimal\" reasoning; GPT-5.1 supports \"None\".")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
-                .padding(.top, 4)
         }
     }
+
     var pdfExtractionModelPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if allOpenRouterModels.isEmpty {
-                Label("Enable OpenRouter models in Options… before adjusting the PDF extraction model.", systemImage: "exclamationmark.triangle.fill")
+            if !hasGeminiKey {
+                Label("Add Google Gemini API key above to enable native PDF extraction.", systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
                     .font(.callout)
-            } else {
-                Picker("PDF Extraction Model", selection: Binding(
-                    get: { pdfExtractionModelId },
-                    set: { newValue in
-                        pdfExtractionModelId = newValue
-                        _ = sanitizePDFExtractionModelIfNeeded()
+            } else if isLoadingGeminiModels {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Loading Gemini models...")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            } else if let error = geminiModelError {
+                VStack(alignment: .leading, spacing: 4) {
+                    Label("Failed to load models", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .font(.callout)
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("Retry") {
+                        Task { await loadGeminiModels() }
                     }
-                )) {
-                    ForEach(allOpenRouterModels, id: \.modelId) { model in
-                        Text(model.displayName.isEmpty ? model.modelId : model.displayName)
-                            .tag(model.modelId)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            } else if geminiModels.isEmpty {
+                HStack {
+                    Text("No Gemini models available")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    Button("Load Models") {
+                        Task { await loadGeminiModels() }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            } else {
+                Picker("PDF Extraction Model", selection: $pdfExtractionModelId) {
+                    ForEach(geminiModels) { model in
+                        Text(model.displayName)
+                            .tag(model.id)
                     }
                 }
                 .pickerStyle(.menu)
-                Text("Model used to extract structured data from resume PDFs. Gemini 2.0 Flash is recommended for cost-effective multimodal extraction.")
-                    .font(.caption)
+                Text("Uses Google's Files API for native PDF processing up to 2GB.")
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
-                    .padding(.top, 4)
             }
         }
+        .task {
+            if hasGeminiKey && geminiModels.isEmpty {
+                await loadGeminiModels()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .apiKeysChanged)) { _ in
+            if hasGeminiKey && geminiModels.isEmpty {
+                Task { await loadGeminiModels() }
+            }
+        }
+    }
+
+    private var hasGeminiKey: Bool {
+        APIKeyManager.get(.gemini) != nil
+    }
+
+    @MainActor
+    private func loadGeminiModels() async {
+        isLoadingGeminiModels = true
+        geminiModelError = nil
+        do {
+            geminiModels = try await googleAIService.fetchAvailableModels()
+            if !geminiModels.contains(where: { $0.id == pdfExtractionModelId }) {
+                if let first = geminiModels.first {
+                    pdfExtractionModelId = first.id
+                }
+            }
+        } catch {
+            geminiModelError = error.localizedDescription
+        }
+        isLoadingGeminiModels = false
     }
 
     var gitIngestModelPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
             if allOpenRouterModels.isEmpty {
-                Label("Enable OpenRouter models in Options… before adjusting the Git ingest model.", systemImage: "exclamationmark.triangle.fill")
+                Label("Enable OpenRouter models in Options before adjusting Git ingest model.", systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
                     .font(.callout)
             } else {
@@ -293,120 +349,100 @@ private extension SettingsView {
                     }
                 }
                 .pickerStyle(.menu)
-                Text("Model used to analyze git repositories for coding skills and achievements. Runs asynchronously during Phase 2.")
-                    .font(.caption)
+                Text("Analyzes git repositories for coding skills during onboarding.")
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
-                    .padding(.top, 4)
             }
         }
     }
 
-    /// Returns true if the selected model is GPT-5 (not 5.1)
     var isGPT5Model: Bool {
         let id = onboardingModelId.lowercased()
         return id.hasPrefix("gpt-5") && !id.hasPrefix("gpt-5.1")
     }
 
-    /// Returns true if the selected model is GPT-5.1
     var isGPT51Model: Bool {
         onboardingModelId.lowercased().hasPrefix("gpt-5.1")
     }
 
-    /// Filters reasoning options based on selected model family
     var availableReasoningOptions: [(value: String, label: String, detail: String)] {
         if isGPT5Model {
-            // GPT-5: minimal, low, medium, high (NO "none")
             return reasoningOptions.filter { $0.value != "none" }
         } else {
-            // GPT-5.1: none, low, medium, high (NO "minimal")
             return reasoningOptions.filter { $0.value != "minimal" }
         }
     }
 
-    /// Filters hard task reasoning options based on selected model family
     var availableHardTaskReasoningOptions: [(value: String, label: String, detail: String)] {
         if isGPT5Model {
-            // GPT-5: minimal, low, medium, high
             return reasoningOptions.filter { $0.value != "none" }
         } else {
-            // GPT-5.1: low, medium, high (exclude none for hard tasks)
             return reasoningOptions.filter { $0.value != "none" && $0.value != "minimal" }
         }
     }
 
     var onboardingReasoningPicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Picker("Default Reasoning Effort", selection: $onboardingReasoningEffort) {
+        VStack(alignment: .leading, spacing: 12) {
+            Picker("Default Reasoning", selection: $onboardingReasoningEffort) {
                 ForEach(availableReasoningOptions, id: \.value) { option in
                     Text(option.label).tag(option.value)
                 }
             }
             .pickerStyle(.menu)
             .onChange(of: onboardingModelId) { _, _ in
-                // Auto-adjust reasoning if current selection is incompatible
                 if isGPT5Model && onboardingReasoningEffort == "none" {
                     onboardingReasoningEffort = "minimal"
                 } else if isGPT51Model && onboardingReasoningEffort == "minimal" {
                     onboardingReasoningEffort = "none"
                 }
             }
-            Text("Controls how much the model \"thinks\" before responding. Higher effort improves quality but increases latency and cost.")
-                .font(.caption)
+            Text("Controls reasoning depth for standard interview tasks.")
+                .font(.footnote)
                 .foregroundStyle(.secondary)
-                .padding(.top, 4)
 
-            Picker("Hard Task Reasoning Effort", selection: $onboardingHardTaskReasoningEffort) {
+            Picker("Hard Task Reasoning", selection: $onboardingHardTaskReasoningEffort) {
                 ForEach(availableHardTaskReasoningOptions, id: \.value) { option in
                     Text(option.label).tag(option.value)
                 }
             }
             .pickerStyle(.menu)
             .onChange(of: onboardingModelId) { _, _ in
-                // Auto-adjust hard task reasoning if current selection is incompatible
-                // Default to "medium" for both model families
-                if isGPT5Model && (onboardingHardTaskReasoningEffort == "none") {
+                if isGPT5Model && onboardingHardTaskReasoningEffort == "none" {
                     onboardingHardTaskReasoningEffort = "medium"
                 } else if isGPT51Model && onboardingHardTaskReasoningEffort == "minimal" {
                     onboardingHardTaskReasoningEffort = "medium"
                 }
             }
-            Text("Used for complex operations like knowledge card generation and profile validation.")
-                .font(.caption)
+            Text("Used for knowledge card generation and profile validation.")
+                .font(.footnote)
                 .foregroundStyle(.secondary)
-                .padding(.top, 4)
         }
     }
 
     var onboardingFlexProcessingToggle: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Toggle("Use Flex Processing (50% cost savings)", isOn: $onboardingFlexProcessing)
-                .toggleStyle(.switch)
-            Text("Flex tier offers 50% lower cost with variable latency. Requests may be delayed during high-traffic periods. Best for non-time-critical tasks like document ingestion.")
-                .font(.caption)
+            Toggle("Flex Processing (50% cost savings)", isOn: $onboardingFlexProcessing)
+            Text("Variable latency for non-time-critical tasks like document ingestion.")
+                .font(.footnote)
                 .foregroundStyle(.secondary)
-                .padding(.top, 4)
         }
     }
 
-    /// Whether the selected model supports extended prompt cache retention
     var isPromptCacheRetentionCompatible: Bool {
         promptCacheRetentionCompatibleModels.contains(onboardingModelId)
     }
 
     var onboardingPromptCacheRetentionToggle: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Toggle("Extended Prompt Cache Retention (24h)", isOn: $onboardingPromptCacheRetention)
-                .toggleStyle(.switch)
+            Toggle("Extended Prompt Cache (24h)", isOn: $onboardingPromptCacheRetention)
             if onboardingPromptCacheRetention && !isPromptCacheRetentionCompatible {
-                Label("Not supported by \(onboardingModelId). Will be ignored.", systemImage: "exclamationmark.triangle.fill")
+                Label("Not supported by \(onboardingModelId)", systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
-                    .font(.caption)
-                    .padding(.top, 4)
+                    .font(.footnote)
             } else {
-                Text("Extends prompt cache lifetime to 24 hours (vs default 5-10 min). Improves cache hits for longer interview sessions.")
-                    .font(.caption)
+                Text("Extends cache lifetime for longer interview sessions.")
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
-                    .padding(.top, 4)
             }
         }
     }
@@ -414,16 +450,17 @@ private extension SettingsView {
     var allOpenRouterModels: [EnabledLLM] {
         enabledLLMStore.enabledModels
             .sorted { lhs, rhs in
-                // Sort Gemini 2.0 Flash first, then alphabetically
                 if lhs.modelId == "google/gemini-2.0-flash-001" { return true }
                 if rhs.modelId == "google/gemini-2.0-flash-001" { return false }
                 return (lhs.displayName.isEmpty ? lhs.modelId : lhs.displayName)
                     < (rhs.displayName.isEmpty ? rhs.modelId : rhs.displayName)
             }
     }
+
     @discardableResult
     func sanitizePDFExtractionModelIfNeeded() -> String {
-        let ids = allOpenRouterModels.map(\.modelId)
+        let ids = geminiModels.map(\.id)
+        guard !ids.isEmpty else { return pdfExtractionModelId }
         let (sanitized, adjusted) = ModelPreferenceValidator.sanitize(
             requested: pdfExtractionModelId,
             available: ids,

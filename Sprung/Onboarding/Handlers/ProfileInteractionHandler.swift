@@ -120,7 +120,7 @@ final class ProfileInteractionHandler {
         let metadata = OnboardingUploadMetadata(
             title: "Upload Contact Information",
             instructions: "Please upload a document that contains your basic contact information.",
-            accepts: ["pdf", "doc", "docx", "txt", "md"],
+            accepts: ["pdf", "docx", "txt", "md"],
             allowMultiple: false,
             targetPhaseObjectives: ["1A"],
             targetDeliverable: "ApplicantProfile",

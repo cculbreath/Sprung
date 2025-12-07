@@ -125,7 +125,6 @@ final class DataResetService {
         defaults.removeObject(forKey: "onboardingInterviewDefaultModelId")
         defaults.removeObject(forKey: "onboardingPDFExtractionModelId")
         defaults.removeObject(forKey: "onboardingInterviewAllowWebSearchDefault")
-        defaults.removeObject(forKey: "onboardingInterviewAllowWritingAnalysisDefault")
         // Reset AI settings
         defaults.removeObject(forKey: "reasoningEffort")
         defaults.removeObject(forKey: "fixOverflowMaxIterations")

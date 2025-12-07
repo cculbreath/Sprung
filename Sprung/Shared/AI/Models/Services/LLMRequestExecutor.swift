@@ -87,9 +87,15 @@ actor _LLMRequestExecutor {
             } catch {
                 lastError = error
                 Logger.debug("❌ Request failed with error: \(error)", category: .networking)
-                // Handle SwiftOpenAI APIErrors with enhanced 403 detection
+                // Handle SwiftOpenAI APIErrors with enhanced error detection
                 if let apiError = error as? SwiftOpenAI.APIError {
                     Logger.debug("🔍 SwiftOpenAI APIError details: \(apiError.displayDescription)", category: .networking)
+                    // Check for 402 Insufficient Credits
+                    if apiError.displayDescription.contains("status code 402") {
+                        let (requested, available) = parseCreditsError(apiError.displayDescription)
+                        Logger.warning("💳 402 Insufficient credits: requested \(requested), available \(available)", category: .networking)
+                        throw LLMError.insufficientCredits(requested: requested, available: available)
+                    }
                     // Check for 403 Unauthorized specifically
                     if apiError.displayDescription.contains("status code 403") {
                         let modelId = extractModelId(from: parameters)
@@ -105,7 +111,7 @@ actor _LLMRequestExecutor {
                 // Don't retry on certain errors
                 if let appError = error as? LLMError {
                     switch appError {
-                    case .decodingFailed, .unexpectedResponseFormat, .clientError, .unauthorized, .invalidModelId:
+                    case .decodingFailed, .unexpectedResponseFormat, .clientError, .unauthorized, .invalidModelId, .insufficientCredits:
                         throw appError
                     case .rateLimited(let retryAfter):
                         if let delay = retryAfter, attempt < retries {
@@ -167,9 +173,15 @@ actor _LLMRequestExecutor {
             } catch {
                 lastError = error
                 Logger.debug("❌ Streaming request failed with error: \(error)", category: .networking)
-                // Handle SwiftOpenAI APIErrors with enhanced 403 detection
+                // Handle SwiftOpenAI APIErrors with enhanced error detection
                 if let apiError = error as? SwiftOpenAI.APIError {
                     Logger.debug("🔍 SwiftOpenAI APIError details: \(apiError.displayDescription)", category: .networking)
+                    // Check for 402 Insufficient Credits
+                    if apiError.displayDescription.contains("status code 402") {
+                        let (requested, available) = parseCreditsError(apiError.displayDescription)
+                        Logger.warning("💳 402 Insufficient credits: requested \(requested), available \(available)", category: .networking)
+                        throw LLMError.insufficientCredits(requested: requested, available: available)
+                    }
                     // Check for 403 Unauthorized specifically
                     if apiError.displayDescription.contains("status code 403") {
                         let modelId = extractModelId(from: parameters)
@@ -185,7 +197,7 @@ actor _LLMRequestExecutor {
                 // Don't retry on certain errors
                 if let appError = error as? LLMError {
                     switch appError {
-                    case .decodingFailed, .unexpectedResponseFormat, .clientError, .unauthorized, .invalidModelId:
+                    case .decodingFailed, .unexpectedResponseFormat, .clientError, .unauthorized, .invalidModelId, .insufficientCredits:
                         throw appError
                     case .rateLimited(let retryAfter):
                         if let delay = retryAfter, attempt < retries {
@@ -233,5 +245,36 @@ actor _LLMRequestExecutor {
     /// Extract model ID from chat completion parameters for error reporting
     private func extractModelId(from parameters: ChatCompletionParameters) -> String {
         return parameters.model
+    }
+
+    /// Parse token counts from 402 insufficient credits error message
+    /// Example: "You requested up to 64000 tokens, but can only afford 14924"
+    private func parseCreditsError(_ description: String) -> (requested: Int, available: Int) {
+        // Try to extract "requested X tokens" and "afford Y"
+        var requested = 0
+        var available = 0
+
+        // Pattern: "requested up to X tokens"
+        if let requestedRange = description.range(of: "requested up to "),
+           let tokensRange = description.range(of: " tokens", range: requestedRange.upperBound..<description.endIndex) {
+            let numberStr = description[requestedRange.upperBound..<tokensRange.lowerBound]
+            requested = Int(numberStr) ?? 0
+        }
+
+        // Pattern: "can only afford X"
+        if let affordRange = description.range(of: "can only afford ") {
+            // Find the end of the number (next non-digit or end of string)
+            let startIndex = affordRange.upperBound
+            var endIndex = startIndex
+            while endIndex < description.endIndex && description[endIndex].isNumber {
+                endIndex = description.index(after: endIndex)
+            }
+            if startIndex < endIndex {
+                let numberStr = description[startIndex..<endIndex]
+                available = Int(numberStr) ?? 0
+            }
+        }
+
+        return (requested, available)
     }
 }

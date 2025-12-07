@@ -313,7 +313,6 @@ struct OnboardingInterviewToolPane: View {
             UTType.pdf,
             UTType(filenameExtension: "docx"),
             UTType.plainText,
-            UTType(filenameExtension: "pptx"),
             UTType.png,
             UTType.jpeg,
             UTType(filenameExtension: "md"),
@@ -409,7 +408,7 @@ struct OnboardingInterviewToolPane: View {
             case .resume, .coverletter:
                 candidates = ["pdf", "docx", "txt", "json"]
             case .artifact, .portfolio, .generic:
-                candidates = ["pdf", "pptx", "docx", "txt", "json"]
+                candidates = ["pdf", "docx", "txt", "json"]
             case .writingSample:
                 candidates = ["pdf", "docx", "txt", "md"]
             case .transcript, .certificate:

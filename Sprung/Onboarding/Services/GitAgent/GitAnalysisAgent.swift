@@ -50,18 +50,27 @@ enum GitAgentError: LocalizedError {
 
 // MARK: - Analysis Result
 
+/// Comprehensive git repository analysis result matching the complete_analysis tool schema
 struct GitAnalysisResult: Codable {
-    let summary: String
-    let languages: [CompleteAnalysisTool.LanguageSkill]
-    let technologies: [String]
-    let skills: [CompleteAnalysisTool.SkillAssessment]
-    let developmentPatterns: CompleteAnalysisTool.DevelopmentPatterns?
-    let highlights: [String]
+    let repositorySummary: CompleteAnalysisTool.RepositorySummary
+    let technicalSkills: [CompleteAnalysisTool.TechnicalSkill]
+    let aiCollaborationProfile: CompleteAnalysisTool.AICollaborationProfile
+    let architecturalCompetencies: [CompleteAnalysisTool.ArchitecturalCompetency]?
+    let professionalAttributes: [CompleteAnalysisTool.ProfessionalAttribute]?
+    let quantitativeMetrics: CompleteAnalysisTool.QuantitativeMetrics?
+    let notableAchievements: [CompleteAnalysisTool.NotableAchievement]
+    let keywordCloud: CompleteAnalysisTool.KeywordCloud
     let evidenceFiles: [String]
 
     enum CodingKeys: String, CodingKey {
-        case summary, languages, technologies, skills, highlights
-        case developmentPatterns = "development_patterns"
+        case repositorySummary = "repository_summary"
+        case technicalSkills = "technical_skills"
+        case aiCollaborationProfile = "ai_collaboration_profile"
+        case architecturalCompetencies = "architectural_competencies"
+        case professionalAttributes = "professional_attributes"
+        case quantitativeMetrics = "quantitative_metrics"
+        case notableAchievements = "notable_achievements"
+        case keywordCloud = "keyword_cloud"
         case evidenceFiles = "evidence_files"
     }
 }
@@ -497,12 +506,14 @@ class GitAnalysisAgent {
         do {
             let params = try JSONDecoder().decode(CompleteAnalysisTool.Parameters.self, from: data)
             return GitAnalysisResult(
-                summary: params.summary,
-                languages: params.languages,
-                technologies: params.technologies,
-                skills: params.skills,
-                developmentPatterns: params.developmentPatterns,
-                highlights: params.highlights,
+                repositorySummary: params.repositorySummary,
+                technicalSkills: params.technicalSkills,
+                aiCollaborationProfile: params.aiCollaborationProfile,
+                architecturalCompetencies: params.architecturalCompetencies,
+                professionalAttributes: params.professionalAttributes,
+                quantitativeMetrics: params.quantitativeMetrics,
+                notableAchievements: params.notableAchievements,
+                keywordCloud: params.keywordCloud,
                 evidenceFiles: params.evidenceFiles
             )
         } catch {

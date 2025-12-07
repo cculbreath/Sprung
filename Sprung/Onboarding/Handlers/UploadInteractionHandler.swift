@@ -58,7 +58,7 @@ final class UploadInteractionHandler {
     func completeUpload(id: UUID, link: URL) async -> JSON? {
         // Simple heuristic: If it has a file extension we recognize, download it.
         // Otherwise, treat it as a web resource artifact.
-        let fileExtensions = ["pdf", "docx", "doc", "txt", "rtf", "jpg", "png"]
+        let fileExtensions = ["pdf", "docx", "txt", "rtf", "jpg", "png"]
         let ext = link.pathExtension.lowercased()
         let isFile = !ext.isEmpty && fileExtensions.contains(ext)
         if isFile {

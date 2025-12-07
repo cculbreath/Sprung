@@ -242,7 +242,7 @@ struct NewAppSheetView: View {
             }
             return
         }
-        // Try direct LinkedIn extraction first
+        // Try direct LinkedIn extraction
         if await JobApp.extractLinkedInJobDetails(
             from: url.absoluteString,
             jobAppStore: jobAppStore,
@@ -254,68 +254,11 @@ struct NewAppSheetView: View {
             }
             return
         }
-        // Fallback to ScrapingDog if a key is configured
-        guard let scrapingDogApiKey = APIKeyManager.get(.scrapingDog),
-              !scrapingDogApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              let jobID = linkedinJobId(from: url)
-        else {
-            await MainActor.run {
-                errorMessage = "Direct LinkedIn extraction failed and no ScrapingDog API key is configured. Add a key from Settings to enable fallback scraping."
-                showError = true
-                isLoading = false
-            }
-            return
+        // Direct extraction failed
+        await MainActor.run {
+            errorMessage = "LinkedIn extraction failed. Please ensure you're logged into LinkedIn and the job posting is still available."
+            showError = true
+            isLoading = false
         }
-        await fetchLinkedInWithScrapingDog(jobID: jobID, postingURL: url, apiKey: scrapingDogApiKey)
-    }
-    private func fetchLinkedInWithScrapingDog(jobID: String, postingURL: URL, apiKey: String) async {
-        let requestURL =
-            "https://api.scrapingdog.com/linkedinjobs?api_key=\(apiKey)&job_id=\(jobID)"
-        guard let url = URL(string: requestURL) else { return }
-        do {
-            // Create URLSession with 60 second timeout
-            let config = URLSessionConfiguration.default
-            config.timeoutIntervalForRequest = 60.0
-            config.timeoutIntervalForResource = 60.0
-            let session = URLSession(configuration: config)
-            let (data, response) = try await session.data(from: url)
-            if let httpResponse = response as? HTTPURLResponse,
-               httpResponse.statusCode != 200 {
-                // Handle HTTP error (non-200 status code)
-                Logger.error("🚨 ScrapingDog HTTP error: \(httpResponse.statusCode)")
-                await MainActor.run {
-                    errorMessage = "HTTP Error: \(httpResponse.statusCode)"
-                    showError = true
-                    isLoading = false
-                }
-                return
-            }
-            let jobDetails = try JSONDecoder().decode([JobApp].self, from: data)
-            if let jobDetail = jobDetails.first {
-                jobDetail.postingURL = postingURL.absoluteString
-                jobAppStore.selectedApp = jobAppStore.addJobApp(jobDetail)
-                Logger.info("✅ Successfully imported job from ScrapingDog: \(jobDetail.jobPosition)")
-                isPresented = false
-            }
-        } catch {
-            // Handle network or decoding error
-            Logger.error("🚨 ScrapingDog fetch error: \(error)")
-            await MainActor.run {
-                errorMessage = "Network or parsing error: \(error.localizedDescription)"
-                showError = true
-                isLoading = false
-            }
-            return
-        }
-        isLoading = false
-    }
-    private func linkedinJobId(from url: URL) -> String? {
-        let candidates = url.pathComponents.reversed()
-        for component in candidates where !component.isEmpty && component != "view" {
-            if component.allSatisfy(\.isNumber) {
-                return component
-            }
-        }
-        return nil
     }
 }

@@ -10,6 +10,11 @@ final class OnboardingUIState {
     var isProcessing: Bool = false
     var currentStatusMessage: String?
     var isActive: Bool = false
+
+    // MARK: - Batch Upload State
+    /// True when a batch of documents is being processed (extraction in progress)
+    /// Used to prevent validation prompts from interrupting batch uploads
+    var hasBatchUploadInProgress: Bool = false
     // MARK: - Chat State
     var messages: [OnboardingMessage] = []
     var modelAvailabilityMessage: String?

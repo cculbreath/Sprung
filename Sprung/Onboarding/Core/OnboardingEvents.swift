@@ -27,6 +27,9 @@ enum OnboardingEvent {
     case waitingStateChanged(String?, statusMessage: String? = nil)
     case pendingExtractionUpdated(OnboardingPendingExtraction?, statusMessage: String? = nil)
     case errorOccurred(String)
+    // MARK: - Batch Upload State
+    case batchUploadStarted(expectedCount: Int) // emitted when batch document upload begins
+    case batchUploadCompleted // emitted when batch document upload finishes
     // MARK: - Data Storage
     case applicantProfileStored(JSON)
     case skeletonTimelineStored(JSON)
@@ -68,6 +71,7 @@ enum OnboardingEvent {
     // MARK: - Phase 3 Operations
     case writingSamplePersisted(sample: JSON) // emitted when a writing sample is persisted
     case candidateDossierPersisted(dossier: JSON) // emitted when final candidate dossier is persisted
+    case experienceDefaultsGenerated(defaults: JSON) // emitted when LLM generates resume defaults from knowledge cards
 
     // MARK: - Knowledge Card Workflow (event-driven coordination)
     case knowledgeCardDoneButtonClicked(itemId: String?) // UI emits when user clicks "Done with this card"
@@ -340,7 +344,7 @@ actor EventCoordinator {
              .knowledgeCardDoneButtonClicked, .knowledgeCardSubmissionPending,
              .knowledgeCardAutoPersistRequested, .knowledgeCardAutoPersisted,
              .toolGatingRequested, .planItemStatusChangeRequested,
-             .writingSamplePersisted, .candidateDossierPersisted:
+             .writingSamplePersisted, .candidateDossierPersisted, .experienceDefaultsGenerated:
             return .artifact
         // Evidence Requirements (treated as state/objectives)
         case .evidenceRequirementAdded, .evidenceRequirementUpdated, .evidenceRequirementRemoved:
@@ -362,7 +366,7 @@ actor EventCoordinator {
             return .timeline
         // Processing events
         case .processingStateChanged, .streamingStatusUpdated, .waitingStateChanged,
-             .pendingExtractionUpdated, .errorOccurred:
+             .pendingExtractionUpdated, .errorOccurred, .batchUploadStarted, .batchUploadCompleted:
             return .processing
         }
     }
@@ -406,6 +410,10 @@ actor EventCoordinator {
             description = "Pending extraction: \(extraction?.title ?? "nil")\(statusInfo)"
         case .errorOccurred(let error):
             description = "Error: \(error)"
+        case .batchUploadStarted(let expectedCount):
+            description = "Batch upload started: expecting \(expectedCount) document(s)"
+        case .batchUploadCompleted:
+            description = "Batch upload completed"
         case .applicantProfileStored:
             description = "Profile stored"
         case .skeletonTimelineStored:
@@ -464,6 +472,10 @@ actor EventCoordinator {
             description = "Writing sample persisted: \(sample["name"].stringValue)"
         case .candidateDossierPersisted:
             description = "Candidate dossier persisted"
+        case .experienceDefaultsGenerated(let defaults):
+            let workCount = defaults["work"].arrayValue.count
+            let skillsCount = defaults["skills"].arrayValue.count
+            description = "Experience defaults generated (\(workCount) work, \(skillsCount) skills)"
         case .knowledgeCardDoneButtonClicked(let itemId):
             description = "Knowledge card done button clicked: \(itemId ?? "no item")"
         case .knowledgeCardSubmissionPending(let card):

@@ -13,7 +13,6 @@ struct OnboardingInterviewView: View {
     #endif
     @AppStorage("onboardingInterviewDefaultModelId") private var defaultModelId = "gpt-5"
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var defaultWebSearchAllowed = true
-    @AppStorage("onboardingInterviewAllowWritingAnalysisDefault") private var defaultWritingAnalysisAllowed = true
     @Namespace private var wizardTransition
     var body: some View {
         bodyContent
@@ -67,8 +66,7 @@ struct OnboardingInterviewView: View {
                 uiState.configureIfNeeded(
                     coordinator: interviewCoordinator,
                     defaultModelId: defaultModelId,
-                    defaultWebSearchAllowed: defaultWebSearchAllowed,
-                    defaultWritingAnalysisAllowed: defaultWritingAnalysisAllowed
+                    defaultWebSearchAllowed: defaultWebSearchAllowed
                 )
             }
             .onChange(of: defaultModelId) { _, newValue in
@@ -79,19 +77,9 @@ struct OnboardingInterviewView: View {
                     uiState.webSearchAllowed = newValue
                 }
             }
-            .onChange(of: defaultWritingAnalysisAllowed) { _, newValue in
-                if !coordinator.ui.isActive {
-                    uiState.writingAnalysisAllowed = newValue
-                }
-            }
             .onChange(of: coordinator.ui.preferences.allowWebSearch) { _, newValue in
                 if coordinator.ui.isActive {
                     uiState.webSearchAllowed = newValue
-                }
-            }
-            .onChange(of: coordinator.ui.preferences.allowWritingAnalysis) { _, newValue in
-                if coordinator.ui.isActive {
-                    uiState.writingAnalysisAllowed = newValue
                 }
             }
         let withSheets = withLifecycle

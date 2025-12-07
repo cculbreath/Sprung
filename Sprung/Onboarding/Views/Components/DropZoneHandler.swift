@@ -12,7 +12,7 @@ import UniformTypeIdentifiers
 struct DropZoneHandler {
     /// File extensions accepted for drops
     static let acceptedExtensions = Set([
-        "pdf", "docx", "doc", "txt", "pptx", "png", "jpg", "jpeg", "md", "json", "gif", "webp", "heic", "html", "htm"
+        "pdf", "docx", "txt", "png", "jpg", "jpeg", "md", "json", "gif", "webp", "heic", "html", "htm"
     ])
 
     /// UTTypes accepted for drag and drop - includes file URLs and direct image types
