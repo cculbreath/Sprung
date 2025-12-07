@@ -150,12 +150,13 @@ final class _SwiftOpenAIClient: LLMClient {
         }
         return content
     }
-    func executeTextWithPDF(prompt: String, modelId: String, pdfData: Data, temperature: Double? = nil) async throws -> String {
+    func executeTextWithPDF(prompt: String, modelId: String, pdfData: Data, temperature: Double? = nil, maxTokens: Int? = nil) async throws -> String {
         let params = _LLMRequestBuilder.buildPDFRequest(
             prompt: prompt,
             modelId: modelId,
             pdfData: pdfData,
-            temperature: temperature ?? defaultTemperature
+            temperature: temperature ?? defaultTemperature,
+            maxTokens: maxTokens
         )
         let response = try await executor.execute(parameters: params)
         let dto = _LLMVendorMapper.responseDTO(from: response)

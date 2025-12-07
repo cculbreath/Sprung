@@ -98,8 +98,13 @@ actor LLMMessenger: OnboardingEventEmitter {
     private func executeUserMessage(_ payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String? = nil, originalText: String? = nil, bundledDeveloperMessages: [JSON] = [], toolChoice: String? = nil) async {
         await emit(.llmStatus(status: .busy))
         let text = payload["content"].string ?? payload["text"].stringValue
+
+        // Extract image data if present
+        let imageData = payload["image_data"].string
+        let imageContentType = payload["content_type"].string
+
         do {
-            let request = await buildUserMessageRequest(text: text, isSystemGenerated: isSystemGenerated, bundledDeveloperMessages: bundledDeveloperMessages, forcedToolChoice: toolChoice)
+            let request = await buildUserMessageRequest(text: text, isSystemGenerated: isSystemGenerated, bundledDeveloperMessages: bundledDeveloperMessages, forcedToolChoice: toolChoice, imageBase64: imageData, imageContentType: imageContentType)
             let messageId = UUID().uuidString
             await emit(.llmUserMessageSent(messageId: messageId, payload: payload, isSystemGenerated: isSystemGenerated))
             currentStreamTask = Task {
@@ -421,7 +426,7 @@ actor LLMMessenger: OnboardingEventEmitter {
         let validation = await stateCoordinator.pendingValidationPrompt
         return validation?.dataType == "skeleton_timeline"
     }
-    private func buildUserMessageRequest(text: String, isSystemGenerated: Bool, bundledDeveloperMessages: [JSON] = [], forcedToolChoice: String? = nil) async -> ModelResponseParameter {
+    private func buildUserMessageRequest(text: String, isSystemGenerated: Bool, bundledDeveloperMessages: [JSON] = [], forcedToolChoice: String? = nil, imageBase64: String? = nil, imageContentType: String? = nil) async -> ModelResponseParameter {
         let previousResponseId = await contextAssembler.getPreviousResponseId()
         var inputItems: [InputItem] = []
 
@@ -460,10 +465,26 @@ actor LLMMessenger: OnboardingEventEmitter {
             Logger.info("📦 Included \(bundledDeveloperMessages.count) bundled developer message(s) in request", category: .ai)
         }
 
-        inputItems.append(.message(InputMessage(
-            role: "user",
-            content: .text(text)
-        )))
+        // Build user message - with image if provided
+        if let imageData = imageBase64 {
+            // Build multimodal message with text + image
+            let mimeType = imageContentType ?? "image/jpeg"
+            let dataUrl = "data:\(mimeType);base64,\(imageData)"
+
+            var contentItems: [ContentItem] = [.text(TextContent(text: text))]
+            contentItems.append(.image(ImageContent(imageUrl: dataUrl)))
+
+            inputItems.append(.message(InputMessage(
+                role: "user",
+                content: .array(contentItems)
+            )))
+            Logger.info("🖼️ Including image attachment in user message (\(mimeType))", category: .ai)
+        } else {
+            inputItems.append(.message(InputMessage(
+                role: "user",
+                content: .text(text)
+            )))
+        }
         let tools = await getToolSchemas()
 
         // Use forced tool choice if specified, otherwise determine automatically

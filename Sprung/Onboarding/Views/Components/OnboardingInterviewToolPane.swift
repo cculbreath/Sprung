@@ -245,8 +245,8 @@ struct OnboardingInterviewToolPane: View {
         case .phase2DeepDive:
             VStack(spacing: 12) {
                 PersistentUploadDropZone(
-                    onDropFiles: { urls in
-                        Task { await coordinator.uploadFilesDirectly(urls) }
+                    onDropFiles: { urls, extractionMethod in
+                        Task { await coordinator.uploadFilesDirectly(urls, extractionMethod: extractionMethod) }
                     },
                     onSelectFiles: { openDirectUploadPanel() },
                     onSelectGitRepo: { repoURL in
