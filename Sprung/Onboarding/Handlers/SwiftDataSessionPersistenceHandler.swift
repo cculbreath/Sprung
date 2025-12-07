@@ -271,6 +271,12 @@ final class SwiftDataSessionPersistenceHandler {
         case .skeletonTimelineReplaced(let timeline, _, _):
             sessionStore.updateSkeletonTimeline(session, timelineJSON: timeline.rawString())
 
+        case .timelineUIUpdateNeeded(let timeline):
+            // Persist timeline when individual cards are created/updated/deleted
+            // StateCoordinator emits this after any card operation with the full updated timeline
+            sessionStore.updateSkeletonTimeline(session, timelineJSON: timeline.rawString())
+            Logger.debug("💾 Persisted timeline after card update (\(timeline["experiences"].array?.count ?? 0) cards)", category: .ai)
+
         default:
             break
         }

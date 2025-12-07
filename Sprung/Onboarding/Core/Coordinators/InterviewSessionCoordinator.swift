@@ -145,7 +145,10 @@ final class InterviewSessionCoordinator {
         // Restore skeleton timeline
         if let timeline = sessionPersistenceHandler.getRestoredSkeletonTimeline(session) {
             await state.restoreSkeletonTimeline(timeline)
-            Logger.info("📥 Restored skeleton timeline", category: .ai)
+            // Also sync to UI state for immediate display
+            ui.updateTimeline(timeline)
+            let cardCount = timeline["experiences"].array?.count ?? 0
+            Logger.info("📥 Restored skeleton timeline (\(cardCount) cards)", category: .ai)
         }
 
         // Restore applicant profile
