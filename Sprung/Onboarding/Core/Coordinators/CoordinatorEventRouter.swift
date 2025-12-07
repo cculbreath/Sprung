@@ -151,6 +151,13 @@ final class CoordinatorEventRouter {
 
     /// Handle "Done with this card" button click
     private func handleDoneButtonClicked(itemId: String?) async {
+        // Clear batch upload flag - user clicking "Done" means they're done with uploads
+        // This is a safety measure in case batch completion didn't fire properly
+        if ui.hasBatchUploadInProgress {
+            ui.hasBatchUploadInProgress = false
+            Logger.info("📦 Cleared batch upload flag on 'Done' button click", category: .ai)
+        }
+
         // Ungate submit_knowledge_card tool
         await state.includeTool(OnboardingToolName.submitKnowledgeCard.rawValue)
 
