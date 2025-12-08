@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>{{{basics.name}}}</title>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display:ital@0;1&display=swap');
+      :root {
+        --accent: #1d3557;
+        --accent-soft: #457b9d;
+        --muted: #5c677d;
+        --border: #d9dde5;
+        --paper: #ffffff;
+        --bg: #f5f7fb;
+        --text: #1f2430;
+      }
+      @page {
+        size: letter portrait;
+        margin: 0.55in 0.6in 0.55in 0.6in;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: 'DM Sans', 'Helvetica Neue', sans-serif;
+        line-height: 1.4;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .page {
+        max-width: 7.7in;
+        margin: 0 auto;
+        background: var(--paper);
+        border: 1px solid var(--border);
+        box-shadow: 0 10pt 30pt rgba(0,0,0,0.06);
+        overflow: hidden;
+      }
+      .banner {
+        background: linear-gradient(120deg, var(--accent) 0%, #0b2545 55%, #0a1f3d 100%);
+        color: #f7f9ff;
+        padding: 20pt 24pt 16pt;
+      }
+      .name {
+        font-family: 'DM Serif Display', serif;
+        font-size: 26pt;
+        letter-spacing: 0.3pt;
+        margin: 0;
+      }
+      .tagline {
+        margin-top: 4pt;
+        font-size: 11pt;
+        text-transform: uppercase;
+        letter-spacing: 1.4pt;
+        color: #c5d5f0;
+      }
+      .contact-line {
+        margin-top: 10pt;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10pt 16pt;
+        font-size: 9.5pt;
+      }
+      .contact-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6pt;
+      }
+      .contact-chip {
+        background: rgba(255, 255, 255, 0.12);
+        padding: 4pt 8pt;
+        border-radius: 999pt;
+      }
+      .content {
+        padding: 16pt 22pt 18pt;
+        display: flex;
+        flex-direction: column;
+        gap: 14pt;
+      }
+      .section {
+        page-break-inside: avoid;
+        break-inside: avoid;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 10pt;
+      }
+      .section:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+      }
+      .section-header {
+        display: flex;
+        align-items: baseline;
+        gap: 8pt;
+        margin-bottom: 6pt;
+      }
+      .section-title {
+        font-family: 'DM Serif Display', serif;
+        font-size: 13pt;
+        color: var(--accent);
+        text-transform: uppercase;
+        letter-spacing: 0.5pt;
+      }
+      .section-sub {
+        font-size: 9.5pt;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 1pt;
+      }
+      .summary-text {
+        font-size: 10.5pt;
+      }
+      .entry {
+        margin-top: 8pt;
+        padding: 8pt 10pt;
+        border: 1px solid var(--border);
+        border-radius: 8pt;
+        background: #fafbff;
+      }
+      .entry + .entry { margin-top: 8pt; }
+      .entry-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 10pt;
+      }
+      .role {
+        font-weight: 700;
+        font-size: 11pt;
+      }
+      .org {
+        color: var(--muted);
+        font-size: 10pt;
+      }
+      .dates {
+        font-size: 9pt;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+      .bullets {
+        margin: 6pt 0 0;
+        padding-left: 14pt;
+      }
+      .bullets li { margin-bottom: 2pt; font-size: 10pt; }
+      .pill-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6pt;
+        margin-top: 6pt;
+      }
+      .pill {
+        padding: 5pt 8pt;
+        border-radius: 999pt;
+        background: #eef1f8;
+        color: var(--text);
+        font-size: 9pt;
+        border: 1px solid var(--border);
+      }
+      .columns-2 {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(2.5in, 1fr));
+        gap: 10pt;
+      }
+      .project-card {
+        border: 1px solid var(--border);
+        border-radius: 8pt;
+        padding: 8pt 10pt;
+        background: #ffffff;
+      }
+      .project-name {
+        font-weight: 700;
+        font-size: 10.5pt;
+      }
+      .meta {
+        color: var(--muted);
+        font-size: 9pt;
+        margin-top: 2pt;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="banner">
+        {{#hasContent(basics.name)}}<div class="name">{{{basics.name}}}</div>{{/hasContent(basics.name)}}
+        {{#hasContent(custom.jobTitles)}}<div class="tagline">{{ join(custom.jobTitles, ' • ') }}</div>{{/hasContent(custom.jobTitles)}}
+        <div class="contact-line">
+          {{#hasContent(basics.location.city, basics.location.region)}}
+          <div class="contact-item contact-chip">{{basics.location.city}}{{#hasContent(basics.location.region)}}, {{basics.location.region}}{{/hasContent(basics.location.region)}}</div>
+          {{/hasContent(basics.location.city, basics.location.region)}}
+          {{#hasContent(basics.email)}}
+          <div class="contact-item contact-chip"><a href="mailto:{{{basics.email}}}" style="color:#f7f9ff; text-decoration:none;">{{{basics.email}}}</a></div>
+          {{/hasContent(basics.email)}}
+          {{#hasContent(basics.phone)}}
+          <div class="contact-item contact-chip">{{basics.phone}}</div>
+          {{/hasContent(basics.phone)}}
+          {{#hasContent(basics.url)}}
+          <div class="contact-item contact-chip"><a href="https://{{{basics.url}}}" style="color:#f7f9ff; text-decoration:none;">{{{basics.url}}}</a></div>
+          {{/hasContent(basics.url)}}
+          {{#basics.profiles}}
+          <div class="contact-item contact-chip">{{network}}{{#hasContent(username)}} · {{username}}{{/hasContent(username)}}{{#hasContent(url)}} · {{{url}}}{{/hasContent(url)}}</div>
+          {{/basics.profiles}}
+        </div>
+      </header>
+
+      <main class="content">
+        {{#hasContent(basics.summary)}}
+        <section class="section">
+          <div class="section-header">
+            <div class="section-title">Profile</div>
+            <div class="section-sub">Overview</div>
+          </div>
+          <div class="summary-text">{{{basics.summary}}}</div>
+        </section>
+        {{/hasContent(basics.summary)}}
+
+        {{#hasContent(work)}}
+        <section class="section">
+          <div class="section-header">
+            <div class="section-title">{{{custom.sectionLabels.work}}}</div>
+            <div class="section-sub">Experience</div>
+          </div>
+          {{#work}}
+          <div class="entry">
+            <div class="entry-head">
+              <div>
+                <div class="role">{{{position}}}</div>
+                <div class="org">{{{name}}}{{#hasContent(location)}} · {{location}}{{/hasContent(location)}}</div>
+              </div>
+              <div class="dates">{{ formatDate(startDate) }}{{#hasContent(endDate)}} – {{ formatDate(endDate) }}{{/hasContent(endDate)}}</div>
+            </div>
+            {{#hasContent(summary)}}<div class="summary-text" style="margin-top:4pt;">{{{summary}}}</div>{{/hasContent(summary)}}
+            {{#hasContent(highlights)}}
+            <ul class="bullets">
+              {{#highlights}}
+              <li>{{.}}</li>
+              {{/highlights}}
+            </ul>
+            {{/hasContent(highlights)}}
+          </div>
+          {{/work}}
+        </section>
+        {{/hasContent(work)}}
+
+        {{#hasContent(projects)}}
+        <section class="section">
+          <div class="section-header">
+            <div class="section-title">{{{custom.sectionLabels.projects}}}</div>
+            <div class="section-sub">Selected Work</div>
+          </div>
+          <div class="columns-2">
+            {{#projects}}
+            <div class="project-card">
+              <div class="project-name">{{{name}}}{{#hasContent(url)}} · {{{url}}}{{/hasContent(url)}}</div>
+              {{#hasContent(description)}}<div class="summary-text" style="font-size:10pt; margin-top:4pt;">{{{description}}}</div>{{/hasContent(description)}}
+              {{#hasContent(keywords)}}
+              <div class="pill-row">
+                {{#keywords}}
+                <span class="pill">{{.}}</span>
+                {{/keywords}}
+              </div>
+              {{/hasContent(keywords)}}
+            </div>
+            {{/projects}}
+          </div>
+        </section>
+        {{/hasContent(projects)}}
+
+        {{#hasContent(skills)}}
+        <section class="section">
+          <div class="section-header">
+            <div class="section-title">{{{custom.sectionLabels.skills}}}</div>
+            <div class="section-sub">Capabilities</div>
+          </div>
+          <div class="pill-row">
+            {{#skills}}
+            <span class="pill"><strong>{{{name}}}</strong>{{#hasContent(keywords)}} · {{ join(keywords, ', ') }}{{/hasContent(keywords)}}</span>
+            {{/skills}}
+          </div>
+        </section>
+        {{/hasContent(skills)}}
+
+        {{#hasContent(education)}}
+        <section class="section">
+          <div class="section-header">
+            <div class="section-title">{{{custom.sectionLabels.education}}}</div>
+            <div class="section-sub">Academics</div>
+          </div>
+          <div class="columns-2">
+            {{#education}}
+            <div class="entry" style="background:#fff;">
+              <div class="role">{{{institution}}}</div>
+              <div class="org">{{studyType}}{{#hasContent(area)}} · {{area}}{{/hasContent(area)}}</div>
+              <div class="dates">{{ formatDate(startDate) }}{{#hasContent(endDate)}} – {{ formatDate(endDate) }}{{/hasContent(endDate)}}</div>
+              {{#hasContent(courses)}}
+              <div class="pill-row">
+                {{#courses}}
+                <span class="pill">{{.}}</span>
+                {{/courses}}
+              </div>
+              {{/hasContent(courses)}}
+            </div>
+            {{/education}}
+          </div>
+        </section>
+        {{/hasContent(education)}}
+
+        {{#hasContent(volunteer)}}
+        <section class="section">
+          <div class="section-header">
+            <div class="section-title">{{{custom.sectionLabels.volunteer}}}</div>
+            <div class="section-sub">Community</div>
+          </div>
+          {{#volunteer}}
+          <div class="entry">
+            <div class="entry-head">
+              <div>
+                <div class="role">{{{position}}}</div>
+                <div class="org">{{{organization}}}</div>
+              </div>
+              <div class="dates">{{ formatDate(startDate) }}{{#hasContent(endDate)}} – {{ formatDate(endDate) }}{{/hasContent(endDate)}}</div>
+            </div>
+            {{#hasContent(summary)}}<div class="summary-text" style="margin-top:4pt;">{{{summary}}}</div>{{/hasContent(summary)}}
+          </div>
+          {{/volunteer}}
+        </section>
+        {{/hasContent(volunteer)}}
+
+        {{#hasContent(awards, certificates, publications)}}
+        <section class="section">
+          <div class="section-header">
+            <div class="section-title">Credentials</div>
+            <div class="section-sub">Recognition</div>
+          </div>
+          <div class="columns-2">
+            {{#awards}}
+            <div class="entry" style="background:#fff;">
+              <div class="role">{{title}}</div>
+              <div class="org">{{awarder}}</div>
+              <div class="dates">{{ formatDate(date) }}</div>
+              {{#hasContent(summary)}}<div class="summary-text" style="margin-top:4pt;">{{{summary}}}</div>{{/hasContent(summary)}}
+            </div>
+            {{/awards}}
+            {{#certificates}}
+            <div class="entry" style="background:#fff;">
+              <div class="role">{{name}}</div>
+              <div class="org">{{issuer}}</div>
+              <div class="dates">{{ formatDate(date) }}</div>
+              {{#hasContent(url)}}<div class="meta">{{{url}}}</div>{{/hasContent(url)}}
+            </div>
+            {{/certificates}}
+            {{#publications}}
+            <div class="entry" style="background:#fff;">
+              <div class="role">{{name}}</div>
+              <div class="org">{{publisher}}</div>
+              <div class="dates">{{ formatDate(releaseDate) }}</div>
+              {{#hasContent(summary)}}<div class="summary-text" style="margin-top:4pt;">{{{summary}}}</div>{{/hasContent(summary)}}
+            </div>
+            {{/publications}}
+          </div>
+        </section>
+        {{/hasContent(awards, certificates, publications)}}
+
+        {{#hasContent(languages, interests)}}
+        <section class="section">
+          <div class="section-header">
+            <div class="section-title">Additional</div>
+            <div class="section-sub">Capabilities</div>
+          </div>
+          {{#hasContent(languages)}}
+          <div class="pill-row">
+            {{#languages}}
+            <span class="pill">{{language}}{{#hasContent(fluency)}} · {{fluency}}{{/hasContent(fluency)}}</span>
+            {{/languages}}
+          </div>
+          {{/hasContent(languages)}}
+          {{#hasContent(interests)}}
+          <div class="pill-row">
+            {{#interests}}
+            <span class="pill">{{name}}{{#hasContent(keywords)}} · {{ join(keywords, ', ') }}{{/hasContent(keywords)}}</span>
+            {{/interests}}
+          </div>
+          {{/hasContent(interests)}}
+        </section>
+        {{/hasContent(languages, interests)}}
+
+        {{#hasContent(custom.moreInfo)}}
+        <section class="section">
+          <div class="section-header">
+            <div class="section-title">{{{custom.sectionLabels.moreInfo}}}</div>
+            <div class="section-sub">Notes</div>
+          </div>
+          <div class="summary-text">{{{custom.moreInfo}}}</div>
+        </section>
+        {{/hasContent(custom.moreInfo)}}
+      </main>
+    </div>
+  </body>
+</html>

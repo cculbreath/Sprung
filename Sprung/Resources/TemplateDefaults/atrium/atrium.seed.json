@@ -1,0 +1,23 @@
+{
+  "custom": {
+    "jobTitles": [
+      "Design Lead",
+      "Researcher",
+      "Strategist"
+    ],
+    "moreInfo": "Case studies and references are available upon request.",
+    "sectionLabels": {
+      "education": "Education",
+      "projects": "Projects",
+      "skills": "Skills",
+      "work": "Experience",
+      "volunteer": "Volunteer",
+      "awards": "Awards",
+      "certificates": "Certifications",
+      "publications": "Publications",
+      "languages": "Languages",
+      "interests": "Interests",
+      "moreInfo": "Additional Information"
+    }
+  }
+}

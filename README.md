@@ -40,6 +40,8 @@ Sprung is a native macOS copilot for job hunting. It keeps your data local, buil
 - **Template editor**: Built-in code editor and preview; templates stored locally for full control.
 - **Template editor UI**: Manage manifests, duplicate/import/export themes, and tweak HTML/CSS live before exporting resumes and cover letters.
 
+![Template Editor](docs/images/template-editor.png)
+
 ![Resume Editor](docs/images/resume-editor.png)
 
 ### Cover Letters
