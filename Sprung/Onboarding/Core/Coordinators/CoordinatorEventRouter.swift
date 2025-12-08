@@ -157,10 +157,10 @@ final class CoordinatorEventRouter {
 
     /// Trigger opportunistic dossier question when extraction starts
     private func triggerDossierCollection() async {
-        // Only trigger dossier questions in Phase 1 and Phase 2
+        // Only trigger opportunistic dossier questions in Phase 2
         let currentPhase = await state.phase
-        guard currentPhase == .phase1CoreFacts || currentPhase == .phase2DeepDive else {
-            Logger.debug("📋 Skipping dossier trigger - not in Phase 1 or 2", category: .ai)
+        guard currentPhase == .phase2DeepDive else {
+            Logger.debug("📋 Skipping dossier trigger - not in Phase 2", category: .ai)
             return
         }
 

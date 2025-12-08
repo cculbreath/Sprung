@@ -52,14 +52,14 @@ enum CandidateDossierField: String, CaseIterable {
         }
     }
 
-    /// Phase(s) where this field should be collected
+    /// Phase(s) where this field should be collected opportunistically
     var applicablePhases: Set<InterviewPhase> {
         switch self {
         case .jobSearchContext, .workArrangementPreferences, .availability, .uniqueCircumstances:
-            // Early fields - collect in Phase 1 or 2
-            return [.phase1CoreFacts, .phase2DeepDive]
+            // Collect during Phase 2 extraction dead time
+            return [.phase2DeepDive]
         case .strengthsToEmphasize, .pitfallsToAvoid:
-            // Strategic fields - better to collect after understanding the candidate
+            // Strategic fields - collect after understanding the candidate
             return [.phase2DeepDive, .phase3WritingCorpus]
         }
     }
