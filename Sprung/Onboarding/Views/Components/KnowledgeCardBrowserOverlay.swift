@@ -272,7 +272,7 @@ struct KnowledgeCardBrowserOverlay: View {
 
     private let cardWidth: CGFloat = 340
     private let cardHeight: CGFloat = 400
-    private let cardSpacing: CGFloat = -60 // Negative for overlap
+    private let visibleCardOffset: CGFloat = 220 // How far apart cards appear
 
     private var cardNavigationSection: some View {
         VStack(spacing: 16) {
@@ -287,92 +287,80 @@ struct KnowledgeCardBrowserOverlay: View {
     }
 
     private var coverflowCarousel: some View {
-        GeometryReader { outerGeo in
-            let centerX = outerGeo.size.width / 2
+        ZStack {
+            ForEach(Array(filteredCards.enumerated()), id: \.element.id) { index, card in
+                let offset = index - currentIndex
 
-            ScrollViewReader { scrollProxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: cardSpacing) {
-                        // Left padding to center first card
-                        Spacer()
-                            .frame(width: centerX - cardWidth / 2)
-
-                        ForEach(Array(filteredCards.enumerated()), id: \.element.id) { index, card in
-                            GeometryReader { geo in
-                                let midX = geo.frame(in: .global).midX
-                                let distanceFromCenter = midX - centerX
-                                let normalizedDistance = distanceFromCenter / cardWidth
-                                let isCenter = abs(normalizedDistance) < 0.3
-
-                                coverflowCard(
-                                    card: card,
-                                    index: index,
-                                    distanceFromCenter: normalizedDistance,
-                                    isCenter: isCenter
-                                )
-                                .frame(width: cardWidth, height: cardHeight)
-                            }
-                            .frame(width: cardWidth, height: cardHeight)
-                            .id(index)
-                        }
-
-                        // Right padding to center last card
-                        Spacer()
-                            .frame(width: centerX - cardWidth / 2)
-                    }
-                }
-                .scrollTargetBehavior(.viewAligned)
-                .onChange(of: currentIndex) { _, newIndex in
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        scrollProxy.scrollTo(newIndex, anchor: .center)
-                    }
-                }
-                .onAppear {
-                    // Scroll to initial position
-                    scrollProxy.scrollTo(currentIndex, anchor: .center)
-                }
+                coverflowCard(card: card, index: index, offset: offset)
             }
         }
         .frame(height: cardHeight + 40)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 30)
+                .onEnded { value in
+                    let threshold: CGFloat = 50
+                    if value.translation.width < -threshold {
+                        navigateNext()
+                    } else if value.translation.width > threshold {
+                        navigatePrevious()
+                    }
+                }
+        )
     }
 
     @ViewBuilder
-    private func coverflowCard(card: ResRef, index: Int, distanceFromCenter: CGFloat, isCenter: Bool) -> some View {
-        // For the selected card, always face forward regardless of scroll position
-        let isSelected = index == currentIndex
-        let effectiveDistance = isSelected ? 0 : distanceFromCenter
+    private func coverflowCard(card: ResRef, index: Int, offset: Int) -> some View {
+        let isSelected = offset == 0
+        let clampedOffset = max(-3, min(3, offset)) // Only render nearby cards
 
-        let rotation = min(max(effectiveDistance * 50, -65), 65)
-        let scale = isSelected ? 1.0 : max(0.7, 1 - abs(distanceFromCenter) * 0.25)
-        let opacity = isSelected ? 1.0 : max(0.4, 1 - abs(distanceFromCenter) * 0.5)
+        // Position: center card at 0, others offset to left/right
+        let xOffset = CGFloat(clampedOffset) * visibleCardOffset
 
-        KnowledgeCardView(
-            resRef: card,
-            isTopCard: isSelected,
-            onEdit: {
-                currentIndex = index
-                editingCard = card
-            },
-            onDelete: {
-                currentIndex = index
-                cardToDelete = card
-                showDeleteConfirmation = true
+        // Rotation: cards to the left rotate right, cards to the right rotate left
+        // Cap at 70° to avoid singular matrix at 90°
+        let rotation = Double(clampedOffset) * -35
+
+        // Scale: selected card is full size, others smaller
+        let scale = isSelected ? 1.0 : 0.75
+
+        // Opacity: fade out distant cards
+        let opacity = isSelected ? 1.0 : max(0.3, 1.0 - Double(abs(clampedOffset)) * 0.25)
+
+        // Z-index: selected on top
+        let zIndex = isSelected ? 100.0 : 50.0 - Double(abs(offset)) * 10.0
+
+        if abs(offset) <= 3 { // Only render cards within range
+            KnowledgeCardView(
+                resRef: card,
+                isTopCard: isSelected,
+                onEdit: {
+                    currentIndex = index
+                    editingCard = card
+                },
+                onDelete: {
+                    currentIndex = index
+                    cardToDelete = card
+                    showDeleteConfirmation = true
+                }
+            )
+            .frame(width: cardWidth, height: cardHeight)
+            .scaleEffect(scale)
+            .rotation3DEffect(
+                .degrees(rotation),
+                axis: (x: 0, y: 1, z: 0),
+                anchor: offset < 0 ? .trailing : (offset > 0 ? .leading : .center),
+                perspective: 0.5
+            )
+            .offset(x: xOffset)
+            .opacity(opacity)
+            .zIndex(zIndex)
+            .onTapGesture {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    currentIndex = index
+                }
             }
-        )
-        .scaleEffect(scale)
-        .rotation3DEffect(
-            .degrees(-rotation),
-            axis: (x: 0, y: 1, z: 0),
-            anchor: .center,
-            anchorZ: 0,
-            perspective: 0.4
-        )
-        .opacity(opacity)
-        .zIndex(isSelected ? 100.0 : 50.0 - Double(abs(distanceFromCenter)) * 10.0)
-        .onTapGesture {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                currentIndex = index
-            }
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: currentIndex)
         }
     }
 
