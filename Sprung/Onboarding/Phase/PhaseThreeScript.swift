@@ -19,6 +19,7 @@ struct PhaseThreeScript: PhaseScript {
         .ingestWritingSample,    // Capture writing samples from chat text
         .submitForValidation,
         .persistData,
+        .submitExperienceDefaults, // Submit resume defaults (validates against enabled sections)
         .setObjectiveStatus,
         .listArtifacts,
         .getArtifact,
@@ -90,6 +91,7 @@ struct PhaseThreeScript: PhaseScript {
         - `ingest_writing_sample`: Capture writing samples from text pasted in chat (when user types/pastes text instead of uploading)
         - `submit_for_validation`: Show dossier summary for approval
         - `persist_data`: Save writing samples, style analysis notes, and the final dossier
+        - `submit_experience_defaults`: Submit resume defaults for Experience Editor (REQUIRED before next_phase)
         - `set_objective_status`: Mark sub-objectives and parents as completed
         - `list_artifacts`, `get_artifact`, `request_raw_file`: Reference previously collected materials
         - `next_phase`: Mark the interview complete
@@ -124,71 +126,46 @@ struct PhaseThreeScript: PhaseScript {
         - Celebrate completion and explain what happens next (resume/cover-letter drafting pipelines)
 
         ### Resume Defaults Generation (REQUIRED before next_phase):
-        Before calling `next_phase` to complete the interview, you MUST generate resume defaults.
-        Use `persist_data` with dataType="experience_defaults" to save structured resume data that will populate the Experience Editor.
+        Before calling `next_phase`, you MUST call `submit_experience_defaults` to populate the Experience Editor.
 
-        IMPORTANT: Generate resume defaults based ONLY on entries in the final skeleton timeline from Phase 1.
-        The skeleton timeline is the authoritative source - it contains the positions and education the user confirmed.
-        Use knowledge cards from Phase 2 to enrich these timeline entries with detailed highlights and achievements.
+        The tool automatically validates against the user's enabled sections from Phase 1.
+        Only include sections the user enabled - the tool will filter out any disabled sections.
 
-        For each entry in the skeleton timeline, extract and synthesize:
-        - **work**: For each work experience in the timeline, create an entry with name (company), position, location, dates, summary, and 3-5 achievement-focused highlights from the corresponding knowledge card
-        - **education**: For each education entry in the timeline, include institution, area of study, degree type, dates
-        - **projects**: For project entries in the timeline, include name, description, highlights, and relevant keywords/technologies
-        - **skills**: Group skills mentioned across all knowledge cards by category (e.g., "Software Development", "Hardware & Instrumentation") with proficiency level and specific keywords
+        Base entries on the skeleton timeline from Phase 1, enriched with Phase 2 knowledge cards:
+        - **work**: name (company), position, location, startDate, endDate, summary, highlights (3-5 achievements)
+        - **education**: institution, area, studyType, startDate, endDate, score (optional), courses (optional)
+        - **projects**: name, description, startDate, endDate, highlights, keywords (technologies)
+        - **skills**: name (category), level (Expert/Advanced/Intermediate), keywords (specific technologies)
+        - **languages**: language, fluency (Native/Fluent/Professional)
 
-        Example persist_data call:
+        Example call:
         ```json
         {
-            "dataType": "experience_defaults",
-            "data": {
-                "work": [{
-                    "name": "Company Name",
-                    "position": "Job Title",
-                    "location": "City, State",
-                    "startDate": "2020-01",
-                    "endDate": "Present",
-                    "summary": "Brief description of role and responsibilities",
-                    "highlights": [
-                        "Quantified achievement with metrics",
-                        "Technical accomplishment demonstrating expertise",
-                        "Leadership or collaboration highlight"
-                    ]
-                }],
-                "education": [{
-                    "institution": "University Name",
-                    "area": "Field of Study",
-                    "studyType": "Ph.D.",
-                    "startDate": "2010",
-                    "endDate": "2015"
-                }],
-                "projects": [{
-                    "name": "Project Name",
-                    "description": "What the project does and its impact",
-                    "startDate": "2024-01",
-                    "endDate": "Present",
-                    "highlights": ["Key accomplishment"],
-                    "keywords": ["Swift", "SwiftUI", "LLM Integration"]
-                }],
-                "skills": [{
-                    "name": "Software Development",
-                    "level": "Expert",
-                    "keywords": ["Swift", "Python", "PHP", "JavaScript"]
-                }],
-                "languages": [{
-                    "language": "English",
-                    "fluency": "Native"
-                }]
-            }
+            "work": [{
+                "name": "Company Name",
+                "position": "Job Title",
+                "location": "City, State",
+                "startDate": "2020-01",
+                "endDate": "Present",
+                "summary": "Brief role description",
+                "highlights": ["Quantified achievement", "Technical accomplishment"]
+            }],
+            "education": [{
+                "institution": "University Name",
+                "area": "Field of Study",
+                "studyType": "Ph.D.",
+                "startDate": "2010",
+                "endDate": "2015"
+            }],
+            "skills": [{
+                "name": "Software Development",
+                "level": "Expert",
+                "keywords": ["Swift", "Python", "JavaScript"]
+            }]
         }
         ```
 
-        IMPORTANT: These defaults serve as a starting point for resume customization. Include:
-        - ONLY entries that appear in the final skeleton timeline (do not invent positions)
-        - Accurate but general achievements that can be tailored to specific job applications
-        - Quantified results where available (percentages, counts, timeframes)
-        - Technical skills with specific technologies grouped logically
-        - Rich highlights from knowledge cards for each timeline entry
+        Include ONLY entries from the skeleton timeline. The tool will confirm which sections were saved.
 
         ### Communication Style
         - Keep wrap-up messages celebratory but concise
