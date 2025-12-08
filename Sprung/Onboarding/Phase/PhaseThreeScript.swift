@@ -14,11 +14,9 @@ struct PhaseThreeScript: PhaseScript {
     let allowedTools: [String] = OnboardingToolName.rawValues([
         .startPhaseThree,        // Bootstrap tool - returns knowledge cards + instructions
         .getUserOption,
-        .getUserUpload,
-        .cancelUserUpload,
-        .ingestWritingSample,    // Capture writing samples from chat text
+        .ingestWritingSample,    // Capture writing samples from chat text (NOT for file uploads)
         .submitForValidation,
-        .persistData,
+        .persistData,            // For style analysis notes only (NOT for writing samples)
         .submitExperienceDefaults, // Submit resume defaults (validates against enabled sections)
         .submitCandidateDossier,   // Submit finalized candidate dossier
         .setObjectiveStatus,
@@ -68,9 +66,10 @@ struct PhaseThreeScript: PhaseScript {
            - Capture whether they consent to style analysis (check stored preferences if available).
            - Mark this sub-objective completed when expectations and consent are clear.
         2. `one_writing_sample.ingest_sample`
-           - Use `get_user_upload` (or accept pasted text) to collect the sample.
+           - Users drop files on the UI (auto-processed) OR paste text in chat (use `ingest_writing_sample`).
            - Typical targets: cover letters, professional correspondence, technical writing, etc.
            - Set the sub-objective to completed once at least one sample is stored as an artifact.
+           - Do NOT call persist_data for file uploads - they are auto-tagged as writing samples.
         3. `one_writing_sample.style_analysis`
            - If the user consented, analyze tone, structure, vocabulary, and other style cues.
            - Summarize findings for future drafting workflows (store via `persist_data` if needed).
@@ -89,10 +88,9 @@ struct PhaseThreeScript: PhaseScript {
            - Save resume defaults via `submit_experience_defaults`.
            - Congratulate the user, summarize next steps, and set both the sub-objective and parent objective to completed.
         ### Tools Available:
-        - `get_user_upload`: Request file uploads (for writing sample documents)
-        - `ingest_writing_sample`: Capture writing samples from text pasted in chat (when user types/pastes text instead of uploading)
+        - `ingest_writing_sample`: ONLY for text pasted in chat (NOT for file uploads)
         - `submit_for_validation`: Show dossier summary for approval
-        - `persist_data`: Save writing samples and style analysis notes
+        - `persist_data`: Save style analysis notes (NOT for writing samples - they're auto-created)
         - `submit_candidate_dossier`: Submit finalized candidate dossier (REQUIRED before next_phase)
         - `submit_experience_defaults`: Submit resume defaults for Experience Editor (REQUIRED before next_phase)
         - `set_objective_status`: Mark sub-objectives and parents as completed
@@ -100,11 +98,16 @@ struct PhaseThreeScript: PhaseScript {
         - `next_phase`: Mark the interview complete
 
         ### Writing Sample Collection:
-        Users can provide writing samples in two ways:
-        1. **File upload**: Use `get_user_upload` with type "writing_sample" for documents (PDF, DOCX, TXT)
-        2. **Chat paste**: When users paste text directly in chat, use `ingest_writing_sample` to capture it as an artifact
+        **IMPORTANT**: Files dropped on the UI are AUTOMATICALLY tagged as writing samples.
+        Do NOT call persist_data or any tool to re-create them - they already exist as artifacts.
 
-        Always offer both options and accept whatever format the user prefers.
+        Users can provide writing samples in two ways:
+        1. **File drop/upload**: Files dropped on the writing sample drop zone are AUTOMATICALLY processed
+           and stored as writing sample artifacts. No tool call needed - just acknowledge receipt.
+        2. **Chat paste**: When users paste text directly in chat, use `ingest_writing_sample` to capture it.
+
+        When you receive artifact notifications for writing samples, simply acknowledge them.
+        Do NOT duplicate them by calling persist_data.
 
         ### UI-Driven Subphase Transitions:
         Phase 3 uses a two-part UI workflow controlled by user buttons:

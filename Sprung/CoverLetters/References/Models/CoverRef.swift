@@ -16,15 +16,18 @@ class CoverRef: Identifiable, Codable {
     var name: String
     var enabledByDefault: Bool
     var type: CoverRefType
+    var isDossier: Bool
     init(
         name: String = "", content: String = "",
-        enabledByDefault: Bool = false, type: CoverRefType
+        enabledByDefault: Bool = false, type: CoverRefType,
+        isDossier: Bool = false
     ) {
         id = UUID().uuidString
         self.content = content
         self.name = name
         self.enabledByDefault = enabledByDefault
         self.type = type
+        self.isDossier = isDossier
     }
     // Manual Codable implementation
     enum CodingKeys: String, CodingKey {
@@ -33,6 +36,7 @@ class CoverRef: Identifiable, Codable {
         case name
         case enabledByDefault
         case type
+        case isDossier
     }
     // Required initializer for Decodable
     required init(from decoder: Decoder) throws {
@@ -42,6 +46,7 @@ class CoverRef: Identifiable, Codable {
         name = try container.decode(String.self, forKey: .name)
         enabledByDefault = try container.decode(Bool.self, forKey: .enabledByDefault)
         type = try container.decode(CoverRefType.self, forKey: .type)
+        isDossier = try container.decodeIfPresent(Bool.self, forKey: .isDossier) ?? false
     }
     // Required function for Encodable
     func encode(to encoder: Encoder) throws {
@@ -51,5 +56,6 @@ class CoverRef: Identifiable, Codable {
         try container.encode(name, forKey: .name)
         try container.encode(enabledByDefault, forKey: .enabledByDefault)
         try container.encode(type, forKey: .type)
+        try container.encode(isDossier, forKey: .isDossier)
     }
 }
