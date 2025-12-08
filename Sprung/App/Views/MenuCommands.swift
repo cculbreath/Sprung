@@ -7,13 +7,40 @@
 import Foundation
 import SwiftUI
 import SwiftData
+
+// MARK: - FocusedValue for Knowledge Cards Visibility
+/// Allows menu commands to read and toggle the Knowledge Cards pane visibility
+struct KnowledgeCardsVisibleKey: FocusedValueKey {
+    typealias Value = Binding<Bool>
+}
+
+extension FocusedValues {
+    var knowledgeCardsVisible: Binding<Bool>? {
+        get { self[KnowledgeCardsVisibleKey.self] }
+        set { self[KnowledgeCardsVisibleKey.self] = newValue }
+    }
+}
+
+// MARK: - Dynamic Knowledge Cards Menu Item
+/// Menu item that shows "Show" or "Hide" based on current visibility state
+struct KnowledgeCardsMenuItem: View {
+    @FocusedValue(\.knowledgeCardsVisible) var isVisible
+
+    var body: some View {
+        Button(isVisible?.wrappedValue == true ? "Hide Knowledge Cards" : "Show Knowledge Cards") {
+            NotificationCenter.default.post(name: .toggleKnowledgeCards, object: nil)
+        }
+        .keyboardShortcut("k", modifiers: [.command, .option])
+    }
+}
+
 // MARK: - Menu Command Notifications
 /// Central list of notifications bridging AppKit menu/toolbar commands into the SwiftUI layer.
 extension Notification.Name {
     // Job Application Commands
     static let newJobApp = Notification.Name("newJobApp")
     static let bestJob = Notification.Name("bestJob")
-    static let showSources = Notification.Name("showSources")
+    static let toggleKnowledgeCards = Notification.Name("toggleKnowledgeCards")
     // Resume Commands
     static let customizeResume = Notification.Name("customizeResume")
     static let clarifyCustomize = Notification.Name("clarifyCustomize")

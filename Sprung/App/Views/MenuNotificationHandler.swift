@@ -61,7 +61,7 @@ class MenuNotificationHandler {
             }
         }
         NotificationCenter.default.addObserver(
-            forName: .showSources,
+            forName: .toggleKnowledgeCards,
             object: nil,
             queue: .main
         ) { [weak self] _ in

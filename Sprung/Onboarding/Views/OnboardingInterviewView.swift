@@ -82,6 +82,11 @@ struct OnboardingInterviewView: View {
                     uiState.webSearchAllowed = newValue
                 }
             }
+            .onChange(of: coordinator.ui.interviewJustCompleted) { _, completed in
+                if completed {
+                    handleInterviewCompleted()
+                }
+            }
         let withSheets = withLifecycle
             .sheet(isPresented: Binding(
                 get: { coordinator.ui.pendingExtraction != nil },
@@ -115,7 +120,7 @@ struct OnboardingInterviewView: View {
             }, message: { message in
                 Text(message)
             })
-            .alert("Resume Previous Session?", isPresented: $showResumePrompt) {
+            .alert("Existing Onboarding Data Found", isPresented: $showResumePrompt) {
                 Button("Resume") {
                     resumeInterview()
                 }
@@ -124,7 +129,7 @@ struct OnboardingInterviewView: View {
                 }
                 Button("Cancel", role: .cancel) { }
             } message: {
-                Text("You have an unfinished onboarding session. Would you like to resume where you left off, or start over with a fresh session?")
+                Text("You have existing onboarding data (knowledge cards, cover letter sources, and experience defaults). Would you like to resume where you left off, or start over with a fresh session?\n\nWarning: Starting over will permanently delete all knowledge cards, cover letter sources, and experience defaults.")
             }
         return withSheets
             #if DEBUG
@@ -250,6 +255,19 @@ private extension OnboardingInterviewView {
             window.orderOut(nil)
         }
     }
+
+    /// Called when interview transitions to .complete phase - closes window and resets session
+    func handleInterviewCompleted() {
+        Logger.info("🏁 Interview completed - closing window and resetting session", category: .ai)
+        // Reset the flag so subsequent interviews can complete
+        interviewCoordinator.ui.interviewJustCompleted = false
+        // Delete the session so subsequent Interview button clicks start fresh
+        interviewCoordinator.deleteCurrentSession()
+        // Close the window
+        if let window = NSApp.windows.first(where: { $0 is BorderlessOverlayWindow }) {
+            window.orderOut(nil)
+        }
+    }
 }
 // MARK: - Helpers
 private extension OnboardingInterviewView {
@@ -266,9 +284,9 @@ private extension OnboardingInterviewView {
         Task { @MainActor in
             guard interviewCoordinator.ui.isActive == false else { return }
 
-            // Check for existing session
-            if interviewCoordinator.hasActiveSession() {
-                Logger.info("📝 Found existing session, showing resume prompt", category: .ai)
+            // Check for existing onboarding data (session, ResRefs, CoverRefs, ExperienceDefaults)
+            if interviewCoordinator.hasExistingOnboardingData() {
+                Logger.info("📝 Found existing onboarding data, showing resume prompt", category: .ai)
                 showResumePrompt = true
                 return
             }
@@ -287,12 +305,8 @@ private extension OnboardingInterviewView {
 
     func startOverInterview() {
         Task { @MainActor in
-            Logger.info("📝 Starting over - resetting all data", category: .ai)
-            #if DEBUG
-            await interviewCoordinator.resetAllOnboardingData()
-            #else
-            interviewCoordinator.deleteCurrentSession()
-            #endif
+            Logger.info("📝 Starting over - clearing all onboarding data", category: .ai)
+            interviewCoordinator.clearAllOnboardingData()
             _ = await interviewCoordinator.startInterview(resumeExisting: false)
         }
     }

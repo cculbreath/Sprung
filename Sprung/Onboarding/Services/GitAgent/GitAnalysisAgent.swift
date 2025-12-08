@@ -527,8 +527,8 @@ class GitAnalysisAgent {
         currentAction = message
         progress.append("[\(Date().formatted(date: .omitted, time: .standard))] \(message)")
         Logger.info("🤖 GitAgent: \(message)", category: .ai)
-        // Update spinner status message
-        await emitEvent(.processingStateChanged(true, statusMessage: "Git analysis: \(message)"))
+        // Update extraction status without blocking chat input
+        await emitEvent(.extractionStateChanged(true, statusMessage: "Git analysis: \(message)"))
     }
 
     /// Extract a human-readable detail from tool arguments for logging

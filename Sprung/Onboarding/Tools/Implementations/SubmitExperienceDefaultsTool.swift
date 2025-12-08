@@ -141,6 +141,17 @@ struct SubmitExperienceDefaultsTool: InterviewTool {
         )
 
         let properties: [String: JSONSchema] = [
+            "professional_summary": JSONSchema(
+                type: .string,
+                description: """
+                    A 2-4 sentence professional summary highlighting the candidate's key strengths,
+                    experience level, and career focus. This will be saved to the Applicant Profile
+                    for use in resume headers and cover letter introductions.
+                    Example: "Senior software engineer with 8+ years building scalable distributed systems.
+                    Proven track record leading cross-functional teams and delivering high-impact products.
+                    Passionate about developer experience and engineering excellence."
+                    """
+            ),
             "work": JSONSchema(type: .array, description: "Work experience entries (only if 'work' section enabled)", items: workItemSchema),
             "education": JSONSchema(type: .array, description: "Education entries (only if 'education' section enabled)", items: educationItemSchema),
             "projects": JSONSchema(type: .array, description: "Project entries (only if 'projects' section enabled)", items: projectItemSchema),
@@ -241,10 +252,22 @@ struct SubmitExperienceDefaultsTool: InterviewTool {
         // Emit event to populate ExperienceDefaultsStore
         await eventBus.publish(.experienceDefaultsGenerated(defaults: filteredPayload))
 
+        // Handle professional_summary - persist to ApplicantProfile
+        var summarySaved = false
+        if let professionalSummary = params["professional_summary"].string,
+           !professionalSummary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            var profileUpdate = JSON()
+            profileUpdate["summary"].string = professionalSummary
+            await eventBus.publish(.applicantProfileStored(profileUpdate))
+            summarySaved = true
+            Logger.info("📝 Professional summary saved to ApplicantProfile", category: .ai)
+        }
+
         // Build response
         var response = JSON()
         response["status"].string = "completed"
         response["sections_saved"].arrayObject = includedSections
+        response["professional_summary_saved"].bool = summarySaved
         if !skippedSections.isEmpty {
             response["sections_skipped"].arrayObject = skippedSections
             response["skipped_reason"].string = "Not in user's enabled sections from Phase 1"

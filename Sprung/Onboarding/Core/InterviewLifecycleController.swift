@@ -201,6 +201,15 @@ final class InterviewLifecycleController {
             }
         }
         stateUpdateTasks.append(timelineTask)
+        // Phase topic - for interview completion handling
+        let phaseTask = Task { [weak self] in
+            guard let self else { return }
+            for await event in await self.eventBus.stream(topic: .phase) {
+                if Task.isCancelled { break }
+                await handlers.handlePhaseEvent(event)
+            }
+        }
+        stateUpdateTasks.append(phaseTask)
         Task {
             await handlers.performInitialSync()
         }
@@ -226,5 +235,6 @@ struct StateUpdateHandlers {
     let handleLLMEvent: (OnboardingEvent) async -> Void
     let handleStateEvent: (OnboardingEvent) async -> Void
     let handleTimelineEvent: (OnboardingEvent) async -> Void
+    let handlePhaseEvent: (OnboardingEvent) async -> Void
     let performInitialSync: () async -> Void
 }
