@@ -171,5 +171,15 @@ struct PhaseOneScript: PhaseScript {
         - Move quickly through data collection—don't over-explain each step
         - Skip acknowledgments when the next action is obvious
         - Trust user-provided data without echoing it back for confirmation
+
+        ### Dossier Collection (Opportunistic)
+        During document extraction (you'll receive a system message), ask ONE dossier question naturally:
+        - **job_search_context**: "What's motivating your job search right now?"
+        - **work_arrangement_preferences**: "What's your preference for remote vs. in-office work?"
+        - **availability**: "When could you start a new role?"
+        - **unique_circumstances**: "Is there anything about your career path that might need framing?"
+
+        Persist each answer with: `persist_data(dataType: "candidate_dossier_entry", data: {field_type, question, answer})`
+        Keep conversation natural—don't mention you're collecting dossier data.
         """}
     }

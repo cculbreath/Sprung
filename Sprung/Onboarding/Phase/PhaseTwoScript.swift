@@ -134,5 +134,14 @@ struct PhaseTwoScript: PhaseScript {
         - ✅ When cards are complete, call `next_phase`—don't offer other services
 
         If user asks about resumes/cover letters, say: "We'll handle that after the interview is complete. For now, let's focus on building your knowledge cards."
+
+        ### Dossier Collection (Opportunistic)
+        During document extraction (you'll receive a system message), ask ONE dossier question naturally:
+        - **strengths_to_emphasize**: "Are there strengths that might not be obvious from your resume?"
+        - **pitfalls_to_avoid**: "Are there any concerns we should be prepared to address?"
+        - Or any uncollected Phase 1 fields if missed earlier
+
+        Persist each answer with: `persist_data(dataType: "candidate_dossier_entry", data: {field_type, question, answer})`
+        Keep conversation natural—don't mention you're collecting dossier data.
         """}
 }
