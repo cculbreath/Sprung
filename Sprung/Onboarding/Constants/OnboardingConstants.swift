@@ -58,6 +58,7 @@ enum OnboardingToolName: String, CaseIterable {
     case startPhaseThree = "start_phase_three"
     case ingestWritingSample = "ingest_writing_sample"
     case submitExperienceDefaults = "submit_experience_defaults"
+    case submitCandidateDossier = "submit_candidate_dossier"
 }
 // MARK: - Objective IDs
 /// All objective IDs used in the onboarding interview flow.

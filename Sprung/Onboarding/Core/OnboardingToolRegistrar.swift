@@ -63,6 +63,7 @@ final class OnboardingToolRegistrar {
         toolRegistry.register(StartPhaseThreeTool(coordinator: coordinator))
         toolRegistry.register(IngestWritingSampleTool(coordinator: coordinator, eventBus: eventBus))
         toolRegistry.register(SubmitExperienceDefaultsTool(coordinator: coordinator, eventBus: eventBus))
+        toolRegistry.register(SubmitCandidateDossierTool(eventBus: eventBus, dataStore: dataStore))
         Logger.info("✅ Registered \(toolRegistry.allTools().count) tools", category: .ai)
     }
 }

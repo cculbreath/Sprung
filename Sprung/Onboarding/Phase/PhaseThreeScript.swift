@@ -20,6 +20,7 @@ struct PhaseThreeScript: PhaseScript {
         .submitForValidation,
         .persistData,
         .submitExperienceDefaults, // Submit resume defaults (validates against enabled sections)
+        .submitCandidateDossier,   // Submit finalized candidate dossier
         .setObjectiveStatus,
         .listArtifacts,
         .getArtifact,
@@ -84,13 +85,15 @@ struct PhaseThreeScript: PhaseScript {
            - Address any revisions before proceeding.
            - Mark this sub-objective completed after the user signs off.
         6. `dossier_complete.persisted`
-           - Save the finalized dossier via `persist_data`.
+           - Save the finalized dossier via `submit_candidate_dossier`.
+           - Save resume defaults via `submit_experience_defaults`.
            - Congratulate the user, summarize next steps, and set both the sub-objective and parent objective to completed.
         ### Tools Available:
         - `get_user_upload`: Request file uploads (for writing sample documents)
         - `ingest_writing_sample`: Capture writing samples from text pasted in chat (when user types/pastes text instead of uploading)
         - `submit_for_validation`: Show dossier summary for approval
-        - `persist_data`: Save writing samples, style analysis notes, and the final dossier
+        - `persist_data`: Save writing samples and style analysis notes
+        - `submit_candidate_dossier`: Submit finalized candidate dossier (REQUIRED before next_phase)
         - `submit_experience_defaults`: Submit resume defaults for Experience Editor (REQUIRED before next_phase)
         - `set_objective_status`: Mark sub-objectives and parents as completed
         - `list_artifacts`, `get_artifact`, `request_raw_file`: Reference previously collected materials
@@ -166,6 +169,30 @@ struct PhaseThreeScript: PhaseScript {
         ```
 
         Include ONLY entries from the skeleton timeline. The tool will confirm which sections were saved.
+
+        ### Candidate Dossier Submission (REQUIRED before next_phase):
+        Call `submit_candidate_dossier` with the qualitative context gathered throughout the interview.
+        Only `job_search_context` is required; include other fields based on what was discussed.
+
+        Fields:
+        - **job_search_context** (required): Why looking, what seeking, priorities, compensation expectations
+        - **work_arrangement_preferences**: Remote/hybrid/onsite, relocation willingness, location constraints
+        - **availability**: Start timing, notice period, scheduling constraints
+        - **unique_circumstances**: Context for gaps, pivots, visa, sabbatical (keep factual/neutral)
+        - **strengths_to_emphasize**: Hidden strengths not obvious from resume, how to surface them
+        - **pitfalls_to_avoid**: Potential concerns and how to address/mitigate them
+        - **notes**: Private observations, deal-breakers, cultural fit indicators
+
+        Example call:
+        ```json
+        {
+            "job_search_context": "Seeking greater technical ownership; frustrated by bureaucracy. Priorities: autonomy, small team, modern stack. Target comp $160-180k.",
+            "work_arrangement_preferences": "Remote-first preferred. Would consider hybrid 2 days/week max.",
+            "availability": "2-week notice, could start 3 weeks from offer.",
+            "strengths_to_emphasize": "Bridge between technical depth and product thinking. Self-directed learner with follow-through.",
+            "pitfalls_to_avoid": "6-month gap—frame as intentional sabbatical for OSS work and skill investment."
+        }
+        ```
 
         ### Communication Style
         - Keep wrap-up messages celebratory but concise
