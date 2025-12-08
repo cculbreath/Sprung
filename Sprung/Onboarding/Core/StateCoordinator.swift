@@ -25,6 +25,9 @@ actor StateCoordinator: OnboardingEventEmitter {
     // MARK: - Core Interview State
     private(set) var phase: InterviewPhase = .phase1CoreFacts
     private(set) var evidenceRequirements: [EvidenceRequirement] = []
+
+    // MARK: - Dossier Tracking (Opportunistic Collection)
+    private var dossierTracker = CandidateDossierTracker()
     // MARK: - Wizard Progress (Computed from ObjectiveStore)
     enum WizardStep: String, CaseIterable {
         case introduction
@@ -204,6 +207,9 @@ actor StateCoordinator: OnboardingEventEmitter {
         case .evidenceRequirementRemoved(let id):
             evidenceRequirements.removeAll { $0.id == id }
             Logger.info("📋 Evidence requirement removed: \(id)", category: .ai)
+        case .dossierFieldCollected(let field):
+            dossierTracker.recordFieldCollected(field)
+            Logger.info("📋 Dossier field collected: \(field)", category: .ai)
         default:
             break
         }
@@ -831,6 +837,23 @@ actor StateCoordinator: OnboardingEventEmitter {
         Logger.info("🚫 Tool excluded from future calls: \(toolName)", category: .ai)
         // Update SessionUIState's excluded tools (this also republishes permissions)
         await uiState.excludeTool(toolName)
+    }
+
+    // MARK: - Dossier Tracking API
+
+    /// Get the next dossier field to collect for the current phase
+    func getNextDossierField() -> CandidateDossierField? {
+        dossierTracker.getNextField(for: phase)
+    }
+
+    /// Build a prompt for the LLM to ask a dossier question
+    func buildDossierPrompt() -> String? {
+        dossierTracker.buildDossierPrompt(for: phase)
+    }
+
+    /// Check if a dossier field has been collected
+    func hasDossierFieldCollected(_ field: CandidateDossierField) -> Bool {
+        dossierTracker.hasCollected(field)
     }
 
     /// Re-include a previously excluded tool (e.g., when user action enables it)
