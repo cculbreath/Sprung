@@ -26,6 +26,10 @@ final class ResumeDetailVM {
     var hasFontSizeNodes: Bool {
         !resume.fontSizeNodes.isEmpty
     }
+    /// Font size nodes sorted by index for display.
+    var fontSizeNodes: [FontSizeNode] {
+        resume.fontSizeNodes.sorted { $0.index < $1.index }
+    }
     private let sectionVisibilityDefaults: [String: Bool]
     private let sectionVisibilityLabels: [String: String]
     private let sectionVisibilityKeys: [String]
