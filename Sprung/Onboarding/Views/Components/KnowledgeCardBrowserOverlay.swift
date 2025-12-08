@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Floating overlay panel for browsing, editing, and managing knowledge cards.
@@ -162,6 +163,14 @@ struct KnowledgeCardBrowserOverlay: View {
             }
 
             Spacer()
+
+            // Export button
+            Button(action: exportCardsAsJSON) {
+                Label("Export", systemImage: "square.and.arrow.up")
+                    .font(.subheadline.weight(.medium))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.regular)
 
             // Add button
             Button(action: { showAddSheet = true }) {
@@ -469,5 +478,29 @@ struct KnowledgeCardBrowserOverlay: View {
             currentIndex -= 1
         }
         onCardDeleted(card)
+    }
+
+    private func exportCardsAsJSON() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "knowledge-cards.json"
+        panel.title = "Export Knowledge Cards"
+        panel.message = "Choose a location to save the knowledge cards JSON file."
+
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+
+            Task { @MainActor in
+                do {
+                    let encoder = JSONEncoder()
+                    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                    let data = try encoder.encode(cards)
+                    try data.write(to: url)
+                    Logger.info("Exported \(cards.count) knowledge cards to \(url.path)", category: .general)
+                } catch {
+                    Logger.error("Failed to export knowledge cards: \(error)", category: .general)
+                }
+            }
+        }
     }
 }
