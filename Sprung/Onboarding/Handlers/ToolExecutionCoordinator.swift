@@ -60,8 +60,16 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             let timelineTools = ["create_timeline_card", "update_timeline_card", "delete_timeline_card", "reorder_timeline_cards"]
             let isTimelineTool = timelineTools.contains(call.name)
             let isValidationState = waitingState == .validation
-            // Block non-timeline tools during validation, and all tools during other waiting states
-            if !isTimelineTool || !isValidationState {
+            let isExtractionState = waitingState == .extraction
+
+            // Allow ALL tools during extraction state (for dossier question collection)
+            if isExtractionState {
+                Logger.info("✅ Tool '\(call.name)' allowed during extraction state (dossier collection)", category: .ai)
+            } else if isTimelineTool && isValidationState {
+                // Allow timeline tools during validation state
+                Logger.info("✅ Timeline tool '\(call.name)' allowed during validation state", category: .ai)
+            } else {
+                // Block tools during other waiting states
                 Logger.warning("🚫 Tool call '\(call.name)' blocked - system in waiting state: \(waitingState.rawValue)", category: .ai)
                 await emitToolError(
                     callId: call.callId,
@@ -69,7 +77,6 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
                 )
                 return
             }
-            Logger.info("✅ Timeline tool '\(call.name)' allowed during validation state", category: .ai)
         }
         // Validate against allowed tools
         let allowedTools = await stateCoordinator.getAllowedToolsForCurrentPhase()
