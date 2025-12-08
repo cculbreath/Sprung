@@ -55,6 +55,17 @@ final class OnboardingInterviewCoordinator {
     var onboardingKnowledgeCards: [ResRef] {
         container.onboardingKnowledgeCards
     }
+
+    /// All knowledge cards (ResRefs) including both onboarding and manually created
+    var allKnowledgeCards: [ResRef] {
+        resRefStore.resRefs
+    }
+
+    /// Access to ResRefStore for CRUD operations on knowledge cards
+    func getResRefStore() -> ResRefStore {
+        resRefStore
+    }
+
     // MARK: - UI State Properties (from ToolRouter)
     var pendingUploadRequests: [OnboardingUploadRequest] {
         toolRouter.pendingUploadRequests
