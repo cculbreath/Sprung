@@ -353,9 +353,13 @@ final class CoordinatorEventRouter {
         Logger.info("✅ Persisted \(writingSamples.count) writing samples to CoverRefStore", category: .ai)
 
         // Persist candidate dossier if present (to CoverRefStore for cover letter generation)
-        if let dossier = artifacts.first(where: { $0["source_type"].stringValue == "candidate_dossier" }) {
+        // Fetch from InterviewDataStore where SubmitCandidateDossierTool persists it
+        let dossiers = await dataStore.list(dataType: "candidate_dossier")
+        if let dossier = dossiers.first {
             persistDossierToCoverRef(dossier: dossier)
             Logger.info("✅ Persisted candidate dossier to CoverRefStore", category: .ai)
+        } else {
+            Logger.warning("⚠️ No candidate dossier found in data store", category: .ai)
         }
 
         // Emit events for persistence completion
@@ -387,8 +391,34 @@ final class CoordinatorEventRouter {
 
     /// Convert candidate dossier to CoverRef and persist (for cover letter generation)
     private func persistDossierToCoverRef(dossier: JSON) {
-        let name = dossier["metadata"]["title"].string ?? "Candidate Dossier"
-        let content = dossier["content"].stringValue
+        let name = "Candidate Dossier"
+
+        // Build content from dossier fields
+        var contentParts: [String] = []
+
+        if let jobContext = dossier["job_search_context"].string, !jobContext.isEmpty {
+            contentParts.append("Job Search Context:\n\(jobContext)")
+        }
+        if let workPrefs = dossier["work_arrangement_preferences"].string, !workPrefs.isEmpty {
+            contentParts.append("Work Arrangement Preferences:\n\(workPrefs)")
+        }
+        if let availability = dossier["availability"].string, !availability.isEmpty {
+            contentParts.append("Availability:\n\(availability)")
+        }
+        if let circumstances = dossier["unique_circumstances"].string, !circumstances.isEmpty {
+            contentParts.append("Unique Circumstances:\n\(circumstances)")
+        }
+        if let strengths = dossier["strengths_to_emphasize"].string, !strengths.isEmpty {
+            contentParts.append("Strengths to Emphasize:\n\(strengths)")
+        }
+        if let pitfalls = dossier["pitfalls_to_avoid"].string, !pitfalls.isEmpty {
+            contentParts.append("Pitfalls to Avoid:\n\(pitfalls)")
+        }
+        if let notes = dossier["notes"].string, !notes.isEmpty {
+            contentParts.append("Notes:\n\(notes)")
+        }
+
+        let content = contentParts.joined(separator: "\n\n")
 
         // Skip if no content
         guard !content.isEmpty else {
@@ -401,7 +431,8 @@ final class CoordinatorEventRouter {
             name: name,
             content: content,
             enabledByDefault: true,
-            type: .backgroundFact
+            type: .backgroundFact,
+            isDossier: true
         )
 
         coverRefStore.addCoverRef(coverRef)
