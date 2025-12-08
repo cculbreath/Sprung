@@ -124,12 +124,15 @@ actor SessionUIState: OnboardingEventEmitter {
     }
     // MARK: - Tool Gating Logic
     // Tool Gating Strategy:
-    // When the system enters a waiting state (upload, selection, validation, extraction, processing),
+    // When the system enters a waiting state (upload, selection, validation, processing),
     // ALL tools are gated (empty tool set) to prevent the LLM from calling tools while waiting for
     // user input. This ensures:
     // 1. The LLM cannot make progress until the user responds
     // 2. Tool calls don't interfere with the UI continuation flow
     // 3. Clear state boundaries between AI processing and user interaction
+    //
+    // EXCEPTION: During extraction (.extraction state), tools remain ENABLED to allow
+    // dossier question collection during the "dead time" of PDF extraction (2+ minutes).
     //
     // The gating is enforced at two levels:
     // 1. LLMMessenger: Filters tool schemas based on allowedTools from .stateAllowedToolsUpdated events
@@ -140,8 +143,9 @@ actor SessionUIState: OnboardingEventEmitter {
     /// KEY METHOD: This is where SessionUIState publishes tool permissions
     private func publishToolPermissions() async {
         let tools: Set<String>
-        if let waitingState = waitingState {
-            // During waiting states, restrict to empty set (only continuation path allowed)
+        if let waitingState = waitingState, waitingState != .extraction {
+            // During waiting states (except extraction), restrict to empty set
+            // Extraction is special: tools stay enabled for dossier question collection
             tools = []
             await emit(.stateAllowedToolsUpdated(tools: tools))
             Logger.info("🚫 ALL TOOLS GATED - Waiting for user input (state: \(waitingState.rawValue))", category: .ai)
@@ -150,11 +154,13 @@ actor SessionUIState: OnboardingEventEmitter {
                 Logger.info("   ⛔️ Blocked tools (\(normalTools.count)): \(normalTools.sorted().joined(separator: ", "))", category: .ai)
             }
         } else {
-            // No waiting state - use normal phase-based tools
+            // No waiting state OR extraction state - use normal phase-based tools
             tools = getAllowedToolsForCurrentPhase()
             await emit(.stateAllowedToolsUpdated(tools: tools))
             if tools.isEmpty {
                 Logger.info("🔧 No tools available in current phase", category: .ai)
+            } else if waitingState == .extraction {
+                Logger.info("🔧 Tools enabled during extraction (\(tools.count)): allowing dossier questions", category: .ai)
             } else {
                 Logger.info("🔧 Tools enabled (\(tools.count)): \(tools.sorted().joined(separator: ", "))", category: .ai)
             }
