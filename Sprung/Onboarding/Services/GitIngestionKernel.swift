@@ -263,8 +263,8 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
             throw GitIngestionError.noLLMFacade
         }
 
-        // Get model from settings (OpenRouter-style ID, e.g., "openai/gpt-4o-mini")
-        let modelId = UserDefaults.standard.string(forKey: "onboardingGitIngestModelId") ?? "openai/gpt-4o-mini"
+        // Get model from settings (OpenRouter-style ID)
+        let modelId = UserDefaults.standard.string(forKey: "onboardingGitIngestModelId") ?? "anthropic/claude-haiku-4.5"
 
         // Get optional author filter from git data
         let authorFilter: String? = gitData["contributors"].array?.first?["name"].string
