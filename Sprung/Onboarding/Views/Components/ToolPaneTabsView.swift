@@ -96,7 +96,8 @@ struct ToolPaneTabsView<InterviewContent: View>: View {
         case .artifacts:
             return coordinator.ui.artifactRecords.isEmpty ? 0 : coordinator.ui.artifactRecords.count
         case .knowledge:
-            return coordinator.ui.knowledgeCardPlan.isEmpty ? 0 : coordinator.ui.knowledgeCardPlan.count
+            // Show total knowledge cards count
+            return coordinator.allKnowledgeCards.count
         }
     }
 
@@ -492,373 +493,154 @@ private struct ArtifactRow: View {
 
 private struct KnowledgeTabContent: View {
     let coordinator: OnboardingInterviewCoordinator
-    @State private var expandedCardIds: Set<String> = []
+    @State private var showBrowser = false
+
+    private var allCards: [ResRef] {
+        coordinator.allKnowledgeCards
+    }
 
     private var planItems: [KnowledgeCardPlanItem] {
         coordinator.ui.knowledgeCardPlan
     }
 
-    /// Persisted knowledge cards from ResRefStore (SwiftData)
-    private var knowledgeCards: [ResRef] {
-        coordinator.onboardingKnowledgeCards
-    }
-
-    private var currentFocus: String? {
-        coordinator.ui.knowledgeCardPlanFocus
+    private var resRefStore: ResRefStore {
+        coordinator.getResRefStore()
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if planItems.isEmpty {
-                emptyState
-            } else {
-                progressHeader
-                ForEach(planItems) { item in
-                    KnowledgePlanRow(
-                        item: item,
-                        resRef: findMatchingResRef(for: item),
-                        isFocused: item.id == currentFocus,
-                        isExpanded: expandedCardIds.contains(item.id),
-                        onToggleExpand: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                if expandedCardIds.contains(item.id) {
-                                    expandedCardIds.remove(item.id)
-                                } else {
-                                    expandedCardIds.insert(item.id)
-                                }
-                            }
-                        }
-                    )
-                }
-            }
-        }
-    }
+        VStack(spacing: 16) {
+            // Summary card
+            summaryCard
 
-    private var emptyState: some View {
-        ContentUnavailableView(
-            "No Knowledge Cards",
-            systemImage: "brain.head.profile",
-            description: Text("Knowledge card plan will appear here during Phase 2.")
-        )
-        .frame(height: 180)
-    }
-
-    private var progressHeader: some View {
-        let completed = planItems.filter { $0.status == .completed }.count
-        let total = planItems.count
-
-        return HStack {
-            Text("Progress")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text("\(completed)/\(total) completed")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-        }
-        .padding(.horizontal, 4)
-    }
-
-    /// Find a matching ResRef for a plan item using fuzzy matching
-    /// Priority: 1) Exact title match, 2) Plan item title contained in ResRef name, 3) Organization match
-    private func findMatchingResRef(for item: KnowledgeCardPlanItem) -> ResRef? {
-        let itemTitle = item.title.lowercased()
-
-        // 1. Try exact match first
-        if let exact = knowledgeCards.first(where: { $0.name.lowercased() == itemTitle }) {
-            return exact
-        }
-
-        // 2. Try fuzzy match: plan item title contained in ResRef name
-        if let fuzzy = knowledgeCards.first(where: { $0.name.lowercased().contains(itemTitle) }) {
-            return fuzzy
-        }
-
-        // 3. Try matching on organization if plan item looks like an org name
-        if let orgMatch = knowledgeCards.first(where: {
-            $0.organization?.lowercased().contains(itemTitle) == true
-        }) {
-            return orgMatch
-        }
-
-        return nil
-    }
-}
-
-private struct KnowledgePlanRow: View {
-    let item: KnowledgeCardPlanItem
-    let resRef: ResRef?  // Persisted knowledge card from SwiftData
-    let isFocused: Bool
-    let isExpanded: Bool
-    let onToggleExpand: () -> Void
-
-    private var hasContent: Bool {
-        item.description != nil || resRef != nil
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header row (always visible)
-            Button(action: onToggleExpand) {
-                HStack(spacing: 8) {
-                    statusIcon
-                        .frame(width: 18)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(item.title)
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(item.status == .completed ? .secondary : .primary)
-                            .lineLimit(1)
-
-                        if !isExpanded, let description = item.description {
-                            Text(description)
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                                .lineLimit(1)
-                        }
-                    }
-
+            // Open browser button
+            Button(action: { showBrowser = true }) {
+                HStack {
+                    Image(systemName: "rectangle.stack")
+                    Text("Browse All Cards")
                     Spacer()
-
-                    typeBadge
-
                     Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
+                        .font(.caption)
                         .foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
-                .padding(10)
-                .contentShape(Rectangle())
+                .font(.subheadline.weight(.medium))
+                .padding(12)
+                .frame(maxWidth: .infinity)
+                .background(Color.accentColor.opacity(0.1))
+                .foregroundStyle(Color.accentColor)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
             }
             .buttonStyle(.plain)
 
-            // Expanded content
-            if isExpanded {
-                Divider()
-                    .padding(.horizontal, 10)
-
-                VStack(alignment: .leading, spacing: 10) {
-                    // Description section
-                    if let description = item.description {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Description")
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(.secondary)
-                            Text(description)
-                                .font(.caption)
-                                .foregroundStyle(.primary)
-                                .textSelection(.enabled)
-                        }
-                    }
-
-                    // Knowledge card content section (for completed cards)
-                    if let resRef = resRef {
-                        resRefContentSection(resRef)
-                    } else if item.status == .pending {
-                        HStack {
-                            Image(systemName: "clock")
-                                .foregroundStyle(.secondary)
-                            Text("Waiting to be processed")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                    } else if item.status == .inProgress {
-                        HStack {
-                            ProgressView()
-                                .scaleEffect(0.7)
-                            Text("Currently being generated...")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                    } else if item.status == .skipped {
-                        HStack {
-                            Image(systemName: "minus.circle")
-                                .foregroundStyle(.secondary)
-                            Text("This card was skipped")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                    }
-
-                    // Metadata row
-                    if item.timelineEntryId != nil || resRef?.organization != nil || resRef?.timePeriod != nil {
-                        metadataSection
-                    }
-                }
-                .padding(10)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+            // Onboarding progress (if in interview)
+            if !planItems.isEmpty {
+                onboardingProgressSection
             }
         }
-        .background(backgroundColor)
-        .cornerRadius(8)
+        .sheet(isPresented: $showBrowser) {
+            KnowledgeCardBrowserOverlay(
+                isPresented: $showBrowser,
+                cards: .init(
+                    get: { allCards },
+                    set: { _ in }
+                ),
+                resRefStore: resRefStore,
+                onCardUpdated: { card in
+                    resRefStore.updateResRef(card)
+                },
+                onCardDeleted: { card in
+                    resRefStore.deleteResRef(card)
+                },
+                onCardAdded: { card in
+                    resRefStore.addResRef(card)
+                }
+            )
+        }
+    }
+
+    private var summaryCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "brain.head.profile")
+                    .font(.title3)
+                    .foregroundStyle(.purple)
+                Text("Knowledge Cards")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+            }
+
+            HStack(spacing: 16) {
+                statItem(count: allCards.count, label: "Total")
+                statItem(
+                    count: allCards.filter { $0.cardType?.lowercased() == "job" }.count,
+                    label: "Jobs",
+                    color: .blue
+                )
+                statItem(
+                    count: allCards.filter { $0.cardType?.lowercased() == "skill" }.count,
+                    label: "Skills",
+                    color: .purple
+                )
+            }
+        }
+        .padding(12)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(borderColor, lineWidth: isFocused || isExpanded ? 1.5 : 1)
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
         )
     }
 
-    @ViewBuilder
-    private func resRefContentSection(_ resRef: ResRef) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+    private func statItem(count: Int, label: String, color: Color = .primary) -> some View {
+        VStack(spacing: 2) {
+            Text("\(count)")
+                .font(.title2.weight(.bold).monospacedDigit())
+                .foregroundStyle(color)
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var onboardingProgressSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Knowledge Card Content")
+                Text("Onboarding Progress")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text("\(resRef.content.count) chars")
-                    .font(.caption2)
+                let completed = planItems.filter { $0.status == .completed }.count
+                Text("\(completed)/\(planItems.count)")
+                    .font(.caption.monospacedDigit())
                     .foregroundStyle(.tertiary)
             }
 
-            ScrollView {
-                Text(resRef.content)
-                    .font(.caption)
-                    .foregroundStyle(.primary)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(maxHeight: 200)
-            .padding(8)
-            .background(Color(nsColor: .textBackgroundColor))
-            .cornerRadius(6)
+            // Progress bar
+            GeometryReader { geometry in
+                let completed = planItems.filter { $0.status == .completed }.count
+                let progress = planItems.isEmpty ? 0 : CGFloat(completed) / CGFloat(planItems.count)
 
-            // Sources section (parsed from sourcesJSON)
-            if let sourcesJSON = resRef.sourcesJSON,
-               let data = sourcesJSON.data(using: .utf8),
-               let sources = try? JSON(data: data).array,
-               !sources.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Sources (\(sources.count))")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Color(nsColor: .separatorColor))
+                        .frame(height: 6)
 
-                    ForEach(Array(sources.enumerated()), id: \.offset) { _, source in
-                        HStack(spacing: 6) {
-                            let sourceType = source["type"].stringValue
-                            Image(systemName: sourceType == "artifact" ? "doc" : "bubble.left")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                            if let artifactId = source["artifact_id"].string {
-                                Text(artifactId)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            } else if let excerpt = source["chat_excerpt"].string {
-                                Text(excerpt)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(2)
-                            } else {
-                                Text(sourceType)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
-                .padding(8)
-                .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
-                .cornerRadius(6)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var metadataSection: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Details")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-
-            VStack(alignment: .leading, spacing: 2) {
-                if let org = resRef?.organization {
-                    metadataRow(label: "Organization", value: org)
-                }
-                if let period = resRef?.timePeriod {
-                    metadataRow(label: "Period", value: period)
-                }
-                if let location = resRef?.location {
-                    metadataRow(label: "Location", value: location)
-                }
-                if let timelineId = item.timelineEntryId {
-                    metadataRow(label: "Timeline", value: timelineId)
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Color.green)
+                        .frame(width: geometry.size.width * progress, height: 6)
+                        .animation(.easeInOut(duration: 0.3), value: progress)
                 }
             }
-            .padding(8)
-            .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
-            .cornerRadius(6)
+            .frame(height: 6)
         }
-    }
-
-    private func metadataRow(label: String, value: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Text(label + ":")
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 70, alignment: .trailing)
-            Text(value)
-                .font(.caption2)
-                .foregroundStyle(.primary)
-                .textSelection(.enabled)
-        }
-    }
-
-    @ViewBuilder
-    private var statusIcon: some View {
-        switch item.status {
-        case .completed:
-            Image(systemName: "checkmark.circle.fill")
-                .font(.caption)
-                .foregroundStyle(.green)
-        case .inProgress:
-            Image(systemName: "circle.dotted")
-                .font(.caption)
-                .foregroundStyle(Color.accentColor)
-                .symbolEffect(.pulse, options: .repeating)
-        case .pending:
-            Image(systemName: "circle")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        case .skipped:
-            Image(systemName: "minus.circle.fill")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var typeBadge: some View {
-        Text(item.type == .job ? "Job" : "Skill")
-            .font(.caption2)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(item.type == .job ? Color.blue.opacity(0.1) : Color.purple.opacity(0.1))
-            .foregroundStyle(item.type == .job ? .blue : .purple)
-            .cornerRadius(4)
-    }
-
-    private var backgroundColor: Color {
-        if isFocused && item.status == .inProgress {
-            return Color.accentColor.opacity(0.05)
-        } else if item.status == .completed {
-            return Color.green.opacity(0.03)
-        }
-        return Color(nsColor: .controlBackgroundColor)
-    }
-
-    private var borderColor: Color {
-        if isExpanded {
-            return Color.accentColor.opacity(0.5)
-        } else if isFocused && item.status == .inProgress {
-            return Color.accentColor
-        } else if item.status == .completed {
-            return Color.green.opacity(0.3)
-        }
-        return Color(nsColor: .separatorColor)
+        .padding(12)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+        )
     }
 }
+
