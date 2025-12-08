@@ -7,7 +7,7 @@ import SwiftData
 import SwiftUI
 struct FontSizePanelView: View {
     @State var isExpanded: Bool = false
-    @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+    @Environment(ResumeDetailVM.self) private var vm: ResumeDetailVM
     var body: some View {
         HStack {
             ToggleChevronView(isExpanded: $isExpanded)
@@ -21,17 +21,15 @@ struct FontSizePanelView: View {
         .padding(.vertical, 2)
         if isExpanded {
             VStack {
-                // Safely access fontSizeNodes to avoid CoreData faulting issues
-                if let resume = jobAppStore.selectedApp?.selectedRes {
-                    // Try to access fontSizeNodes with error handling
-                    let nodes = resume.fontSizeNodes.sorted { $0.index < $1.index }
-                    ForEach(nodes, id: \.id) { node in
-                        FontNodeView(node: node)
-                    }
-                } else {
+                let nodes = vm.fontSizeNodes
+                if nodes.isEmpty {
                     Text("No font sizes available")
                         .foregroundColor(.secondary)
                         .italic()
+                } else {
+                    ForEach(nodes, id: \.id) { node in
+                        FontNodeView(node: node)
+                    }
                 }
             }
             .padding(.trailing, 16) // Avoid overlap on trailing side.
