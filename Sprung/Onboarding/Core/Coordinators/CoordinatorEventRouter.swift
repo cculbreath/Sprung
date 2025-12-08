@@ -170,10 +170,10 @@ final class CoordinatorEventRouter {
             return
         }
 
-        // Emit developer message to prompt LLM to ask a dossier question
+        // Send as system-generated user message to trigger immediate LLM response
         var payload = JSON()
         payload["text"].string = prompt
-        await eventBus.publish(.llmSendDeveloperMessage(payload: payload))
+        await eventBus.publish(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
         Logger.info("📋 Triggered dossier collection during extraction", category: .ai)
     }
 
