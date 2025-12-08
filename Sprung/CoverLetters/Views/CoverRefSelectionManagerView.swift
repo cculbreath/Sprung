@@ -17,6 +17,7 @@ struct CoverRefSelectionManagerView: View {
     @Binding var selectedWritingSamples: Set<String>
     @State private var showAddSheet = false
     @State private var newRefType: CoverRefType = .backgroundFact
+    @State private var showBrowser = false
     var showGroupBox: Bool = true
     private var backgroundFacts: [CoverRef] {
         allCoverRefs.filter { $0.type == .backgroundFact }
@@ -39,6 +40,23 @@ struct CoverRefSelectionManagerView: View {
             // Include Resume Background toggle
             Toggle("Include Resume Background", isOn: $includeResumeRefs)
                 .toggleStyle(.checkbox)
+
+            // Browse All button
+            Button(action: { showBrowser = true }) {
+                HStack {
+                    Image(systemName: "rectangle.stack")
+                    Text("Browse All References")
+                    Spacer()
+                    Text("\(allCoverRefs.count)")
+                        .font(.caption)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(Color.accentColor.opacity(0.2))
+                        .clipShape(Capsule())
+                }
+            }
+            .buttonStyle(.bordered)
+
             // Background Facts Section
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
@@ -127,6 +145,25 @@ struct CoverRefSelectionManagerView: View {
                 refType: newRefType,
                 onAdd: { name, content in
                     addNewRef(name: name, content: content, type: newRefType)
+                }
+            )
+        }
+        .sheet(isPresented: $showBrowser) {
+            CoverRefBrowserOverlay(
+                isPresented: $showBrowser,
+                cards: .init(
+                    get: { allCoverRefs },
+                    set: { _ in }
+                ),
+                coverRefStore: coverRefStore,
+                onCardUpdated: { _ in
+                    // SwiftData will auto-refresh via @Query
+                },
+                onCardDeleted: { card in
+                    deleteRef(card)
+                },
+                onCardAdded: { card in
+                    coverRefStore.addCoverRef(card)
                 }
             )
         }
