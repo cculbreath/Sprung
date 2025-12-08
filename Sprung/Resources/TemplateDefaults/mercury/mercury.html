@@ -16,7 +16,7 @@
       }
       @page {
         size: letter portrait;
-        margin: 0.55in 0.6in 0.55in 0.6in;
+        margin: 0.65in;
       }
       * { box-sizing: border-box; }
       body {
@@ -29,12 +29,13 @@
         print-color-adjust: exact;
       }
       .page {
-        max-width: 7.7in;
+        max-width: 6.9in;
         margin: 0 auto;
         background: var(--paper);
         border: 1px solid var(--border);
         box-shadow: 0 10pt 30pt rgba(0,0,0,0.06);
         overflow: hidden;
+        padding: 0.25in 0.35in;
       }
       .banner {
         background: linear-gradient(120deg, var(--accent) 0%, #0b2545 55%, #0a1f3d 100%);
@@ -78,8 +79,6 @@
         gap: 14pt;
       }
       .section {
-        page-break-inside: avoid;
-        break-inside: avoid;
         border-bottom: 1px solid var(--border);
         padding-bottom: 10pt;
       }
@@ -181,7 +180,7 @@
     <div class="page">
       <header class="banner">
         {{#hasContent(basics.name)}}<div class="name">{{{basics.name}}}</div>{{/hasContent(basics.name)}}
-        {{#hasContent(custom.jobTitles)}}<div class="tagline">{{ join(custom.jobTitles, ' • ') }}</div>{{/hasContent(custom.jobTitles)}}
+        {{#hasContent(custom.jobTitles)}}<div class="tagline">{{ join(custom.jobTitles, ", ") }}</div>{{/hasContent(custom.jobTitles)}}
         <div class="contact-line">
           {{#hasContent(basics.location.city, basics.location.region)}}
           <div class="contact-item contact-chip">{{basics.location.city}}{{#hasContent(basics.location.region)}}, {{basics.location.region}}{{/hasContent(basics.location.region)}}</div>
@@ -216,7 +215,7 @@
         <section class="section">
           <div class="section-header">
             <div class="section-title">{{{custom.sectionLabels.work}}}</div>
-            <div class="section-sub">Experience</div>
+            <div class="section-sub">Career</div>
           </div>
           {{#work}}
           <div class="entry">

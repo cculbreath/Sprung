@@ -16,7 +16,7 @@
       }
       @page {
         size: letter portrait;
-        margin: 0.55in;
+        margin: 0.65in;
       }
       * { box-sizing: border-box; }
       body {
@@ -29,8 +29,9 @@
         print-color-adjust: exact;
       }
       .page {
-        max-width: 7.8in;
+        max-width: 6.9in;
         margin: 0 auto;
+        padding: 0.25in 0.35in;
       }
       .header {
         display: grid;
@@ -42,15 +43,15 @@
       }
       .name {
         font-family: 'Space Grotesk', 'Helvetica Neue', sans-serif;
-        font-size: 27pt;
+        font-size: 24pt;
         font-weight: 700;
-        letter-spacing: 0.4pt;
+        letter-spacing: 0.2pt;
       }
       .tagline {
         font-family: 'Space Grotesk', sans-serif;
         text-transform: uppercase;
         letter-spacing: 1.4pt;
-        font-size: 10.5pt;
+        font-size: 9.8pt;
         color: var(--muted);
         margin-top: 4pt;
       }
@@ -60,7 +61,7 @@
         gap: 6pt 12pt;
         justify-content: flex-end;
         font-family: 'Space Grotesk', sans-serif;
-        font-size: 9.5pt;
+        font-size: 9pt;
         color: var(--muted);
       }
       .contact span { display: inline-flex; align-items: center; gap: 5pt; }
@@ -68,26 +69,24 @@
       .body {
         display: grid;
         grid-template-columns: 2.4in 1fr;
-        gap: 16pt;
-        margin-top: 14pt;
+        gap: 12pt;
+        margin-top: 12pt;
       }
       .panel {
         background: var(--panel);
         border: 1px solid var(--border);
         border-radius: 10pt;
-        padding: 12pt 14pt;
-        page-break-inside: avoid;
-        break-inside: avoid;
+        padding: 10pt 12pt;
       }
       .section-title {
         font-family: 'Space Grotesk', sans-serif;
         text-transform: uppercase;
         letter-spacing: 1.1pt;
-        font-size: 11.5pt;
+        font-size: 10.8pt;
         color: var(--accent-dark);
-        margin-bottom: 8pt;
+        margin-bottom: 6pt;
       }
-      .summary-text { font-size: 10.5pt; }
+      .summary-text { font-size: 10pt; }
       .list-plain { list-style: none; padding: 0; margin: 0; }
       .pill {
         display: inline-block;
@@ -96,8 +95,8 @@
         border: 1px solid var(--border);
         background: #fff;
         font-family: 'Space Grotesk', sans-serif;
-        font-size: 9pt;
-        margin: 3pt 3pt 0 0;
+        font-size: 8.8pt;
+        margin: 2pt 3pt 0 0;
       }
       .edu-card {
         border-left: 3pt solid var(--accent);
@@ -109,13 +108,11 @@
       .main {
         display: flex;
         flex-direction: column;
-        gap: 12pt;
+        gap: 10pt;
       }
       .block {
         border-left: 3pt solid var(--accent);
         padding-left: 12pt;
-        page-break-inside: avoid;
-        break-inside: avoid;
       }
       .block + .block { margin-top: 10pt; }
       .block-head {
@@ -129,11 +126,11 @@
       }
       .block-title {
         font-family: 'Space Grotesk', sans-serif;
-        font-size: 13pt;
+        font-size: 12pt;
         font-weight: 700;
-        letter-spacing: 0.6pt;
+        letter-spacing: 0.4pt;
       }
-      .block-sub { font-family: 'Space Grotesk', sans-serif; font-size: 9pt; color: var(--muted); letter-spacing: 1pt; }
+      .block-sub { font-family: 'Space Grotesk', sans-serif; font-size: 8.6pt; color: var(--muted); letter-spacing: 0.8pt; }
       .entry { margin-bottom: 10pt; }
       .entry-head {
         display: flex;
@@ -172,7 +169,7 @@
       <header class="header">
         <div>
           {{#hasContent(basics.name)}}<div class="name">{{{basics.name}}}</div>{{/hasContent(basics.name)}}
-          {{#hasContent(custom.jobTitles)}}<div class="tagline">{{ join(custom.jobTitles, ' • ') }}</div>{{/hasContent(custom.jobTitles)}}
+          {{#hasContent(custom.jobTitles)}}<div class="tagline">{{ join(custom.jobTitles, ", ") }}</div>{{/hasContent(custom.jobTitles)}}
         </div>
         <div class="contact">
           {{#hasContent(basics.location.city, basics.location.region)}}<span><span class="dot"></span>{{basics.location.city}}{{#hasContent(basics.location.region)}}, {{basics.location.region}}{{/hasContent(basics.location.region)}}</span>{{/hasContent(basics.location.city, basics.location.region)}}
@@ -272,7 +269,7 @@
               <div class="project-card">
                 <div class="project-name">{{{name}}}{{#hasContent(url)}} · {{{url}}}{{/hasContent(url)}}</div>
                 {{#hasContent(description)}}<div class="project-desc">{{{description}}}</div>{{/hasContent(description)}}
-                {{#hasContent(keywords)}}<div class="meta">{{ join(keywords, ' • ') }}</div>{{/hasContent(keywords)}}
+                {{#hasContent(keywords)}}<div class="meta">{{ join(keywords, ", ") }}</div>{{/hasContent(keywords)}}
               </div>
               {{/projects}}
             </div>
