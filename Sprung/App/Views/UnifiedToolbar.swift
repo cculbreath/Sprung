@@ -9,8 +9,7 @@ func buildUnifiedToolbar(
     refresh: Binding<Bool>,
     sheets: Binding<AppSheets>,
     clarifyingQuestions: Binding<[ClarifyingQuestion]>,
-    showNewAppSheet: Binding<Bool>,
-    showSlidingList: Binding<Bool>
+    showNewAppSheet: Binding<Bool>
 ) -> some CustomizableToolbarContent {
     UnifiedToolbar(
         selectedTab: selectedTab,
@@ -18,8 +17,7 @@ func buildUnifiedToolbar(
         refresh: refresh,
         sheets: sheets,
         clarifyingQuestions: clarifyingQuestions,
-        showNewAppSheet: showNewAppSheet,
-        showSlidingList: showSlidingList
+        showNewAppSheet: showNewAppSheet
     )
 }
 struct UnifiedToolbar: CustomizableToolbarContent {
@@ -30,7 +28,6 @@ struct UnifiedToolbar: CustomizableToolbarContent {
     @Binding var sheets: AppSheets
     @Binding var clarifyingQuestions: [ClarifyingQuestion]
     @Binding var showNewAppSheet: Bool
-    @Binding var showSlidingList: Bool
     var body: some CustomizableToolbarContent {
         Group {
             navigationButtonsGroup
@@ -137,16 +134,13 @@ struct UnifiedToolbar: CustomizableToolbarContent {
             }
             ToolbarItem(id: "showSources", placement: .primaryAction, showsByDefault: true) {
                 Button(action: {
-                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8, blendDuration: 0.2)) {
-                        showSlidingList.toggle()
-                    }
+                    sheets.showKnowledgeCardsBrowser = true
                 }, label: {
-                    Label("Knowledge Cards", systemImage: "newspaper")
+                    Label("Knowledge Cards", systemImage: "rectangle.stack")
                         .font(.system(size: 14, weight: .light))
                 })
                 .buttonStyle(.automatic)
-                .help(showSlidingList ? "Hide Knowledge Cards" : "Show Knowledge Cards")
-                .disabled(jobAppStore.selectedApp == nil)
+                .help("Browse Knowledge Cards")
             }
             ToolbarItem(id: "inspector", placement: .primaryAction, showsByDefault: true) {
                 Button("Inspector", systemImage: "sidebar.right") {

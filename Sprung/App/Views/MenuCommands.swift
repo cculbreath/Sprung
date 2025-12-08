@@ -21,13 +21,11 @@ extension FocusedValues {
     }
 }
 
-// MARK: - Dynamic Knowledge Cards Menu Item
-/// Menu item that shows "Show" or "Hide" based on current visibility state
+// MARK: - Knowledge Cards Menu Item
+/// Menu item to open the Knowledge Cards browser
 struct KnowledgeCardsMenuItem: View {
-    @FocusedValue(\.knowledgeCardsVisible) var isVisible
-
     var body: some View {
-        Button(isVisible?.wrappedValue == true ? "Hide Knowledge Cards" : "Show Knowledge Cards") {
+        Button("Knowledge Cards...") {
             NotificationCenter.default.post(name: .toggleKnowledgeCards, object: nil)
         }
         .keyboardShortcut("k", modifiers: [.command, .option])
