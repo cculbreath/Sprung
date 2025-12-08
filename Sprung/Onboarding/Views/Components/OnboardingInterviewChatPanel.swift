@@ -119,10 +119,23 @@ struct OnboardingInterviewChatPanel: View {
                 }
                 .buttonStyle(.link)
                 .font(.caption)
+                Spacer()
+                // Extraction indicator (non-blocking - chat remains enabled)
+                if coordinator.ui.isExtractionInProgress {
+                    HStack(spacing: 6) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text(coordinator.ui.extractionStatusMessage ?? "Extracting...")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                }
             }
             .padding(.top, 8)
             .padding(.horizontal, horizontalPadding)
             .padding(.bottom, bottomPadding)
+            .animation(.easeInOut(duration: 0.2), value: coordinator.ui.isExtractionInProgress)
         }
         .frame(minWidth: 640, maxWidth: .infinity, maxHeight: .infinity)
         // .animation(.easeInOut(duration: 0.2), value: coordinator.latestReasoningSummary)
