@@ -769,6 +769,11 @@ actor StateCoordinator: OnboardingEventEmitter {
         await artifactRepository.listArtifactSummaries()
     }
 
+    /// Get enabled sections configured by user in Phase 1
+    func getEnabledSections() async -> Set<String> {
+        await artifactRepository.getEnabledSections()
+    }
+
     /// Direct access to artifact records for UI sync
     var artifactRecords: [JSON] {
         get async {
