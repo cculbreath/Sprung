@@ -102,20 +102,16 @@ struct CandidateDossierTracker {
             return nil
         }
 
+        // Natural prompt that tells LLM to fill time during extraction
+        // Framed as instruction, not something to acknowledge or repeat
         return """
-            OPPORTUNISTIC DOSSIER COLLECTION:
-            While the document is being extracted, ask the user about: \(nextField.description)
+            While this document processes, use the time to ask about: \(nextField.description)
 
-            Suggested question: "\(nextField.sampleQuestion)"
+            Ask naturally, e.g.: "\(nextField.sampleQuestion)"
 
-            When you receive their answer, persist it with:
-            persist_data(dataType: "candidate_dossier_entry", data: {
-                "field_type": "\(nextField.rawValue)",
-                "question": "[your question]",
-                "answer": "[their response]"
-            })
+            Start your response with something like "While we wait for that to process..." then ask the question.
 
-            Keep the conversation natural - don't mention you're collecting dossier data.
+            When they answer, call persist_data(dataType: "candidate_dossier_entry", data: {"field_type": "\(nextField.rawValue)", "question": "[your question]", "answer": "[their response]"})
             """
     }
 }

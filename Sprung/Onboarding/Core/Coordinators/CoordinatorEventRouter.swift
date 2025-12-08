@@ -18,6 +18,9 @@ final class CoordinatorEventRouter {
     // Pending knowledge card for auto-persist after user confirmation
     private var pendingKnowledgeCard: JSON?
 
+    // Track whether dossier question was triggered for current extraction session
+    private var hasDossierTriggeredThisExtraction: Bool = false
+
     init(
         ui: OnboardingUIState,
         state: StateCoordinator,
@@ -144,7 +147,14 @@ final class CoordinatorEventRouter {
         // MARK: - Dossier Collection Trigger
         case .extractionStateChanged(let inProgress, _):
             if inProgress {
-                await triggerDossierCollection()
+                // Only trigger dossier collection once per extraction session
+                if !hasDossierTriggeredThisExtraction {
+                    hasDossierTriggeredThisExtraction = true
+                    await triggerDossierCollection()
+                }
+            } else {
+                // Reset flag when extraction completes
+                hasDossierTriggeredThisExtraction = false
             }
 
         // All other events are handled elsewhere or don't need handling here
@@ -170,10 +180,11 @@ final class CoordinatorEventRouter {
             return
         }
 
-        // Send as system-generated user message to trigger immediate LLM response
+        // Send as developer message (bypasses queue) so LLM treats it as instruction, not user input
+        // This prevents the LLM from directly acknowledging the instruction text
         var payload = JSON()
         payload["text"].string = prompt
-        await eventBus.publish(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
+        await eventBus.publish(.llmExecuteDeveloperMessage(payload: payload))
         Logger.info("📋 Triggered dossier collection during extraction", category: .ai)
     }
 
