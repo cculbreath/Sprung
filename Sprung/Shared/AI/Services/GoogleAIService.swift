@@ -129,6 +129,8 @@ actor GoogleAIService {
     /// Upload a file to Google's Files API using resumable upload protocol
     func uploadFile(data: Data, mimeType: String, displayName: String) async throws -> UploadedFile {
         let apiKey = try getAPIKey()
+        let uploadStart = Date()
+        let sizeMB = Double(data.count) / 1_000_000
 
         // Step 1: Initiate resumable upload
         let initiateURL = URL(string: "\(baseURL)/upload/v1beta/files")!
@@ -144,9 +146,11 @@ actor GoogleAIService {
         let initiateBody: [String: Any] = ["file": ["display_name": displayName]]
         initiateRequest.httpBody = try JSONSerialization.data(withJSONObject: initiateBody)
 
-        Logger.info("📤 Initiating file upload: \(displayName) (\(data.count) bytes)", category: .ai)
+        Logger.info("📤 Initiating file upload: \(displayName) (\(String(format: "%.1f", sizeMB)) MB)", category: .ai)
 
         let (_, initiateResponse) = try await session.data(for: initiateRequest)
+        let initiateMs = Int(Date().timeIntervalSince(uploadStart) * 1000)
+        Logger.debug("📤 Upload session initiated in \(initiateMs)ms", category: .ai)
 
         guard let httpResponse = initiateResponse as? HTTPURLResponse,
               let uploadURLString = httpResponse.value(forHTTPHeaderField: "X-Goog-Upload-URL"),
@@ -154,16 +158,19 @@ actor GoogleAIService {
             throw GoogleAIError.uploadFailed("Failed to get upload URL")
         }
 
-        // Step 2: Upload file bytes
+        // Step 2: Upload file bytes using upload() for better large file performance
+        let dataUploadStart = Date()
         var uploadRequest = URLRequest(url: uploadURL)
         uploadRequest.httpMethod = "POST"
         uploadRequest.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
         uploadRequest.setValue("\(data.count)", forHTTPHeaderField: "Content-Length")
         uploadRequest.setValue("0", forHTTPHeaderField: "X-Goog-Upload-Offset")
         uploadRequest.setValue("upload, finalize", forHTTPHeaderField: "X-Goog-Upload-Command")
-        uploadRequest.httpBody = data
 
-        let (uploadData, uploadResponse) = try await session.data(for: uploadRequest)
+        let (uploadData, uploadResponse) = try await session.upload(for: uploadRequest, from: data)
+        let uploadMs = Int(Date().timeIntervalSince(dataUploadStart) * 1000)
+        let speedMBps = sizeMB / (Double(uploadMs) / 1000)
+        Logger.info("📤 File data uploaded in \(uploadMs)ms (\(String(format: "%.1f", speedMBps)) MB/s)", category: .ai)
 
         guard let uploadHttpResponse = uploadResponse as? HTTPURLResponse,
               uploadHttpResponse.statusCode == 200 else {
