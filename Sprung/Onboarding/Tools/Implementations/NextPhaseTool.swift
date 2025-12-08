@@ -18,10 +18,12 @@ struct NextPhaseTool: InterviewTool {
                 - { "status": "completed", "previous_phase": "...", "new_phase": "...", "next_required_tool": "start_phase_two" or "start_phase_three" }
                 - If objectives incomplete: includes "skipped_objectives" array
                 - Already complete: { "status": "completed", "message": "Interview is already complete" }
+                - If experience_defaults not persisted (Phase 3 → Complete): { "error": true, "reason": "missing_experience_defaults", ... }
                 Phase transitions:
                 - Phase 1 (Core Facts) → Phase 2 (Deep Dive) → call start_phase_two next
                 - Phase 2 (Deep Dive) → Phase 3 (Writing Corpus) → call start_phase_three next
-                - Phase 3 (Writing Corpus) → Complete
+                - Phase 3 (Writing Corpus) → Complete (REQUIRES experience_defaults to be persisted first)
+                IMPORTANT: Before transitioning from Phase 3 to Complete, you MUST call persist_data with dataType="experience_defaults".
                 """,
             properties: [:],
             required: [],
@@ -29,8 +31,10 @@ struct NextPhaseTool: InterviewTool {
         )
     }()
     private unowned let coordinator: OnboardingInterviewCoordinator
-    init(coordinator: OnboardingInterviewCoordinator) {
+    private let dataStore: InterviewDataStore
+    init(coordinator: OnboardingInterviewCoordinator, dataStore: InterviewDataStore) {
         self.coordinator = coordinator
+        self.dataStore = dataStore
     }
     var name: String { OnboardingToolName.nextPhase.rawValue }
     var description: String { "Transition to the next interview phase. Returns {status, new_phase, next_required_tool}." }
@@ -48,6 +52,27 @@ struct NextPhaseTool: InterviewTool {
             nextPhase = .phase3WritingCorpus
         case .phase3WritingCorpus:
             nextPhase = .complete
+            // VALIDATION: experience_defaults MUST be persisted before completing the interview
+            let experienceDefaults = await dataStore.list(dataType: "experience_defaults")
+            if experienceDefaults.isEmpty {
+                Logger.warning("⚠️ next_phase blocked: experience_defaults not persisted", category: .ai)
+                var response = JSON()
+                response["error"].bool = true
+                response["reason"].string = "missing_experience_defaults"
+                response["status"].string = "blocked"
+                response["message"].string = """
+                    Cannot complete interview: experience_defaults have not been persisted.
+                    You MUST call persist_data with dataType="experience_defaults" before calling next_phase.
+                    Use the knowledge cards and skeleton timeline to generate structured resume data with:
+                    - work: Array of work experience entries from timeline
+                    - education: Array of education entries from timeline
+                    - projects: Array of project entries (if any)
+                    - skills: Array of skill categories extracted from knowledge cards
+                    Example: persist_data({"dataType": "experience_defaults", "data": {"work": [...], "education": [...], "skills": [...]}})
+                    """
+                return .immediate(response)
+            }
+            Logger.info("✅ experience_defaults validated for Phase 3 → Complete transition", category: .ai)
         case .complete:
             var response = JSON()
             response["status"].string = "completed"
