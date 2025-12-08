@@ -21,6 +21,7 @@ class AppState {
     // OpenRouter service
     let openRouterService: OpenRouterService
     let modelValidationService: ModelValidationService
+    var llmService: _LLMService?
     // Debug/diagnostics settings
     var debugSettingsStore: DebugSettingsStore?
     // Cached API key state for SwiftUI bindings
@@ -55,11 +56,10 @@ class AppState {
             }
         }
     }
-    func reconfigureOpenRouterService(using llmService: _LLMService) {
+    func reconfigureOpenRouterService() {
         updateOpenRouterConfiguration(configureClient: true)
         refreshOpenAiKeyState()
-        // Also reconfigure LLMService to use the updated API key
-        llmService.reconfigureClient()
+        llmService?.reconfigureClient()
     }
     private func normalizedKey(for type: APIKeyType) -> String {
         guard let raw = APIKeyManager.get(type)?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
@@ -72,7 +72,6 @@ class AppState {
     }
     @MainActor
     private func handleAPIKeysChanged() {
-        updateOpenRouterConfiguration(configureClient: false)
-        refreshOpenAiKeyState()
+        reconfigureOpenRouterService()
     }
 }

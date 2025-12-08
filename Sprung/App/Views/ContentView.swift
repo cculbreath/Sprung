@@ -4,11 +4,13 @@ import SwiftUI
 import AppKit
 struct ContentView: View {
     // MARK: - Injected dependencies via SwiftUI Environment
+    @Environment(AppState.self) private var appState
     @Environment(AppEnvironment.self) private var appEnvironment
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(NavigationStateService.self) private var navigationState
     @Environment(ReasoningStreamManager.self) private var reasoningStreamManager
+    @Environment(EnabledLLMStore.self) private var enabledLLMStore
     // DragInfo is inherited from ContentViewLaunch
     // States managed by ContentView
     @State var tabRefresh: Bool = false
@@ -21,6 +23,8 @@ struct ContentView: View {
     @State private var refPopup: Bool = false
     @State private var didPromptTemplateEditor = false
     @State private var menuHandler = MenuNotificationHandler()
+    @AppStorage("hasCompletedSetupWizard") private var hasCompletedSetupWizard = false
+    @State private var showSetupWizard = false
     var body: some View {
         // Bindable references for selection binding
         @Bindable var jobAppStore = jobAppStore
@@ -111,6 +115,15 @@ struct ContentView: View {
                 TemplateSetupOverlay()
             }
         }
+        .sheet(isPresented: $showSetupWizard) {
+            SetupWizardView {
+                hasCompletedSetupWizard = true
+                showSetupWizard = false
+            }
+            .environment(appState)
+            .environment(enabledLLMStore)
+            .environment(appEnvironment.openRouterService)
+        }
         // Apply sheet modifier
         .appSheets(sheets: $sheets, clarifyingQuestions: $clarifyingQuestions, refPopup: $refPopup)
         .onChange(of: jobAppStore.selectedApp) { _, newValue in
@@ -155,16 +168,37 @@ struct ContentView: View {
                 openTemplateEditor()
                 didPromptTemplateEditor = true
             }
+            if shouldShowSetupWizard() {
+                showSetupWizard = true
+            }
         }
         .onChange(of: appEnvironment.requiresTemplateSetup) { _, requiresSetup in
             if requiresSetup {
                 openTemplateEditor()
             }
         }
+        .onChange(of: enabledLLMStore.enabledModels.count) { _, _ in
+            if shouldShowSetupWizard() {
+                showSetupWizard = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .apiKeysChanged)) { _ in
+            if shouldShowSetupWizard() {
+                showSetupWizard = true
+            }
+        }
         .focusedValue(\.knowledgeCardsVisible, $showSlidingList)
         // Environment objects (like DragInfo) are inherited from ContentViewLaunch
     }
     // MARK: - Helper Methods
+    private func shouldShowSetupWizard() -> Bool {
+        guard !hasCompletedSetupWizard else { return false }
+        let hasOpenRouterKey = !(APIKeyManager.get(.openRouter)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        let hasOpenAIKey = !(APIKeyManager.get(.openAI)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        let hasGeminiKey = !(APIKeyManager.get(.gemini)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        let hasModels = !enabledLLMStore.enabledModels.isEmpty
+        return !hasOpenRouterKey || !hasOpenAIKey || !hasGeminiKey || !hasModels
+    }
     private func openTemplateEditor() {
         presentTemplateEditorWindow()
     }

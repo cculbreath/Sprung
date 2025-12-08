@@ -6,7 +6,7 @@ struct SettingsView: View {
     @AppStorage("reasoningEffort") private var reasoningEffort: String = "medium"
     @AppStorage("onboardingInterviewDefaultModelId") private var onboardingModelId: String = "gpt-5"
     @AppStorage("onboardingPDFExtractionModelId") private var pdfExtractionModelId: String = "google/gemini-2.0-flash-001"
-    @AppStorage("onboardingGitIngestModelId") private var gitIngestModelId: String = "openai/gpt-4o-mini"
+    @AppStorage("onboardingGitIngestModelId") private var gitIngestModelId: String = "anthropic/claude-haiku-4.5"
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var onboardingWebSearchAllowed: Bool = true
     @AppStorage("onboardingInterviewReasoningEffort") private var onboardingReasoningEffort: String = "none"
     @AppStorage("onboardingInterviewHardTaskReasoningEffort") private var onboardingHardTaskReasoningEffort: String = "medium"
@@ -25,6 +25,7 @@ struct SettingsView: View {
     @State private var geminiModels: [GoogleAIService.GeminiModel] = []
     @State private var isLoadingGeminiModels = false
     @State private var geminiModelError: String?
+    @State private var showSetupWizard = false
     private let dataResetService = DataResetService()
     private let pdfExtractionFallbackModelId = "gemini-2.0-flash"
     private let googleAIService = GoogleAIService()
@@ -66,6 +67,10 @@ struct SettingsView: View {
             // MARK: - API Keys
             Section {
                 APIKeysSettingsView()
+                Button("Run Setup Wizard…") {
+                    showSetupWizard = true
+                }
+                .buttonStyle(.bordered)
             } header: {
                 SettingsSectionHeader(title: "API Keys", systemImage: "key.fill")
             }
@@ -192,6 +197,11 @@ struct SettingsView: View {
         .onChange(of: enabledLLMStore.enabledModels.map(\.modelId)) { _, _ in
             sanitizePDFExtractionModelIfNeeded()
             sanitizeGitIngestModelIfNeeded()
+        }
+        .sheet(isPresented: $showSetupWizard) {
+            SetupWizardView {
+                showSetupWizard = false
+            }
         }
     }
 
@@ -475,7 +485,7 @@ private extension SettingsView {
     @discardableResult
     func sanitizeGitIngestModelIfNeeded() -> String {
         let ids = allOpenRouterModels.map(\.modelId)
-        let fallback = "openai/gpt-4o-mini"
+        let fallback = "anthropic/claude-haiku-4.5"
         let (sanitized, adjusted) = ModelPreferenceValidator.sanitize(
             requested: gitIngestModelId,
             available: ids,

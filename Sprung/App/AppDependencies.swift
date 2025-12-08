@@ -105,6 +105,7 @@ final class AppDependencies {
             modelValidationService: appState.modelValidationService
         )
         self.llmService = llmService
+        appState.llmService = llmService
         // Create DocumentExtractionService with LLMFacade (unified LLM interface)
         let documentExtractionService = DocumentExtractionService(llmFacade: llmFacade)
         self.documentExtractionService = documentExtractionService

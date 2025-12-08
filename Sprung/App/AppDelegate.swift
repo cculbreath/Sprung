@@ -16,7 +16,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var modelContainer: ModelContainer?
     var enabledLLMStore: EnabledLLMStore?
     var applicantProfileStore: ApplicantProfileStore?
-    var llmService: _LLMService?
     var onboardingCoordinator: OnboardingInterviewCoordinator?
     var experienceDefaultsStore: ExperienceDefaultsStore?
     var careerKeywordStore: CareerKeywordStore?
@@ -105,7 +104,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                let container = self.modelContainer,
                let enabledLLMStore = self.enabledLLMStore,
                let applicantProfileStore = self.applicantProfileStore,
-               let llmService = self.llmService,
                let experienceDefaultsStore = self.experienceDefaultsStore,
                let careerKeywordStore = self.careerKeywordStore {
                 let appState = appEnvironment.appState
@@ -120,7 +118,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(experienceDefaultsStore)
                     .environment(careerKeywordStore)
                     .environment(appEnvironment.openRouterService)
-                    .environment(llmService)
                     .environment(debugSettingsStore)
                     .modelContainer(container)
                 hostingView = NSHostingView(rootView: AnyView(root))

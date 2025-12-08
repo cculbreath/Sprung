@@ -7,7 +7,6 @@ import SwiftUI
 struct APIKeysSettingsView: View {
     @Environment(AppState.self) private var appState
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
-    @Environment(_LLMService.self) private var llmService
     @Environment(OpenRouterService.self) private var openRouterService: OpenRouterService
     @State private var openRouterApiKey: String = APIKeyManager.get(.openRouter) ?? ""
     @State private var openAiTTSApiKey: String = APIKeyManager.get(.openAI) ?? ""
@@ -48,7 +47,7 @@ struct APIKeysSettingsView: View {
             Divider()
             HStack(spacing: 12) {
                 Button("Choose OpenRouter Models…") {
-                    appState.reconfigureOpenRouterService(using: llmService)
+                    appState.reconfigureOpenRouterService()
                     showModelSelectionSheet = true
                 }
                 .buttonStyle(.bordered)
@@ -71,7 +70,7 @@ struct APIKeysSettingsView: View {
                 }
             }
         }
-        .sheet(isPresented: $showModelSelectionSheet) {
+                .sheet(isPresented: $showModelSelectionSheet) {
             OpenRouterModelSelectionSheet()
                 .environment(appState)
         }
@@ -91,7 +90,7 @@ struct APIKeysSettingsView: View {
             _ = APIKeyManager.set(.openRouter, value: trimmed)
             openRouterApiKey = trimmed
         }
-        appState.reconfigureOpenRouterService(using: llmService)
+        appState.reconfigureOpenRouterService()
         NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
     }
     private func handleOpenAITTSSave(_ newValue: String) {
