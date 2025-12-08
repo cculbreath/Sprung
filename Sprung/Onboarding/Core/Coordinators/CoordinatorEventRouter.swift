@@ -141,10 +141,40 @@ final class CoordinatorEventRouter {
         case .planItemStatusChangeRequested(let itemId, let status):
             await handlePlanItemStatusChange(itemId: itemId, status: status)
 
+        // MARK: - Dossier Collection Trigger
+        case .extractionStateChanged(let inProgress, _):
+            if inProgress {
+                await triggerDossierCollection()
+            }
+
         // All other events are handled elsewhere or don't need handling here
         default:
             break
         }
+    }
+
+    // MARK: - Dossier Collection
+
+    /// Trigger opportunistic dossier question when extraction starts
+    private func triggerDossierCollection() async {
+        // Only trigger dossier questions in Phase 1 and Phase 2
+        let currentPhase = await state.phase
+        guard currentPhase == .phase1CoreFacts || currentPhase == .phase2DeepDive else {
+            Logger.debug("📋 Skipping dossier trigger - not in Phase 1 or 2", category: .ai)
+            return
+        }
+
+        // Build a dossier prompt for the current phase
+        guard let prompt = await state.buildDossierPrompt() else {
+            Logger.debug("📋 No uncollected dossier fields for current phase", category: .ai)
+            return
+        }
+
+        // Emit developer message to prompt LLM to ask a dossier question
+        var payload = JSON()
+        payload["text"].string = prompt
+        await eventBus.publish(.llmSendDeveloperMessage(payload: payload))
+        Logger.info("📋 Triggered dossier collection during extraction", category: .ai)
     }
 
     // MARK: - Knowledge Card Event Handlers
