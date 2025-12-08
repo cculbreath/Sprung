@@ -15,6 +15,13 @@ final class OnboardingUIState {
     /// True when a batch of documents is being processed (extraction in progress)
     /// Used to prevent validation prompts from interrupting batch uploads
     var hasBatchUploadInProgress: Bool = false
+
+    // MARK: - Extraction State (Non-Blocking)
+    /// True when document extraction is in progress (PDF processing, git analysis)
+    /// Unlike isProcessing, this does NOT block chat input - allows dossier questions during "dead time"
+    var isExtractionInProgress: Bool = false
+    /// Status message to display during extraction (e.g., "Extracting resume.pdf...")
+    var extractionStatusMessage: String?
     // MARK: - Chat State
     var messages: [OnboardingMessage] = []
     var modelAvailabilityMessage: String?
@@ -73,6 +80,15 @@ final class OnboardingUIState {
     func updateWizardProgress(step: StateCoordinator.WizardStep, completed: Set<StateCoordinator.WizardStep>) {
         self.wizardStep = step
         self.completedWizardSteps = completed
+    }
+
+    /// Update extraction state (non-blocking - chat remains enabled)
+    func updateExtraction(inProgress: Bool, statusMessage: String? = nil) {
+        self.isExtractionInProgress = inProgress
+        self.extractionStatusMessage = statusMessage
+        if !inProgress {
+            self.extractionStatusMessage = nil
+        }
     }
 
     /// Handle a failed message send by removing it from transcript and storing for input restoration

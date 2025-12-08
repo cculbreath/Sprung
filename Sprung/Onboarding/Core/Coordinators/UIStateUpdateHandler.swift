@@ -71,6 +71,9 @@ final class UIStateUpdateHandler {
         case .batchUploadCompleted:
             ui.hasBatchUploadInProgress = false
             Logger.info("📦 Batch upload completed, validation prompts can proceed", category: .ai)
+        case .extractionStateChanged(let inProgress, let statusMessage):
+            ui.updateExtraction(inProgress: inProgress, statusMessage: statusMessage)
+            Logger.info("📄 Extraction state: \(inProgress ? "started" : "completed") - \(statusMessage ?? "no message")", category: .ai)
         default:
             break
         }

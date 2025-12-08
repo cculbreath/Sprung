@@ -30,6 +30,11 @@ enum OnboardingEvent {
     // MARK: - Batch Upload State
     case batchUploadStarted(expectedCount: Int) // emitted when batch document upload begins
     case batchUploadCompleted // emitted when batch document upload finishes
+
+    // MARK: - Extraction State (Non-Blocking)
+    /// Extraction in progress (PDF processing, git analysis) - does NOT block chat input
+    /// Unlike processingStateChanged, this allows dossier questions during extraction "dead time"
+    case extractionStateChanged(Bool, statusMessage: String? = nil)
     // MARK: - Data Storage
     case applicantProfileStored(JSON)
     case skeletonTimelineStored(JSON)
@@ -72,6 +77,11 @@ enum OnboardingEvent {
     case writingSamplePersisted(sample: JSON) // emitted when a writing sample is persisted
     case candidateDossierPersisted(dossier: JSON) // emitted when final candidate dossier is persisted
     case experienceDefaultsGenerated(defaults: JSON) // emitted when LLM generates resume defaults from knowledge cards
+
+    // MARK: - Dossier Collection (Opportunistic)
+    /// Emitted when a dossier field is collected via persist_data(dataType: "candidate_dossier_entry")
+    /// Used to track which fields have been collected to avoid duplicate questions
+    case dossierFieldCollected(field: String)
 
     // MARK: - Knowledge Card Workflow (event-driven coordination)
     case knowledgeCardDoneButtonClicked(itemId: String?) // UI emits when user clicks "Done with this card"
@@ -366,8 +376,13 @@ actor EventCoordinator {
             return .timeline
         // Processing events
         case .processingStateChanged, .streamingStatusUpdated, .waitingStateChanged,
-             .pendingExtractionUpdated, .errorOccurred, .batchUploadStarted, .batchUploadCompleted:
+             .pendingExtractionUpdated, .errorOccurred, .batchUploadStarted, .batchUploadCompleted,
+             .extractionStateChanged:
             return .processing
+
+        // Dossier events (treated as state)
+        case .dossierFieldCollected:
+            return .state
         }
     }
     /// Get metrics for monitoring
@@ -414,6 +429,11 @@ actor EventCoordinator {
             description = "Batch upload started: expecting \(expectedCount) document(s)"
         case .batchUploadCompleted:
             description = "Batch upload completed"
+        case .extractionStateChanged(let inProgress, let statusMessage):
+            let statusInfo = statusMessage.map { " - \($0)" } ?? ""
+            description = "Extraction: \(inProgress ? "started" : "completed")\(statusInfo)"
+        case .dossierFieldCollected(let field):
+            description = "Dossier field collected: \(field)"
         case .applicantProfileStored:
             description = "Profile stored"
         case .skeletonTimelineStored:
