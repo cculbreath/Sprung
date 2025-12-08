@@ -78,25 +78,16 @@ struct KnowledgeCardBrowserOverlay: View {
             // Filter bar
             filterBar
 
-            // Card deck
-            deckSection
-
-            // Page indicator
-            if !filteredCards.isEmpty {
-                DeckPageIndicator(
-                    totalCount: filteredCards.count,
-                    currentIndex: currentIndex,
-                    onSelect: { index in
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                            currentIndex = index
-                        }
-                    }
-                )
-                .padding(.bottom, 16)
+            // Card deck with navigation
+            if filteredCards.isEmpty {
+                emptyFilterState
+            } else {
+                cardNavigationSection
             }
         }
-        .frame(width: 540, height: 640)
+        .frame(width: 540, height: 660)
         .background(Color(nsColor: .windowBackgroundColor))
+        .focusable()
         .onAppear {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                 dealAnimation = true
@@ -104,6 +95,14 @@ struct KnowledgeCardBrowserOverlay: View {
         }
         .onKeyPress(.escape) {
             dismissOverlay()
+            return .handled
+        }
+        .onKeyPress(.leftArrow) {
+            navigatePrevious()
+            return .handled
+        }
+        .onKeyPress(.rightArrow) {
+            navigateNext()
             return .handled
         }
         .sheet(item: $editingCard) { card in
@@ -269,29 +268,90 @@ struct KnowledgeCardBrowserOverlay: View {
         }
     }
 
-    private var deckSection: some View {
-        VStack {
-            if filteredCards.isEmpty {
-                emptyFilterState
-            } else {
-                KnowledgeCardDeckView(
-                    cards: .init(
-                        get: { filteredCards },
-                        set: { _ in }
-                    ),
-                    currentIndex: $currentIndex,
-                    onEdit: { card in
-                        editingCard = card
-                    },
-                    onDelete: { card in
-                        cardToDelete = card
+    private var cardNavigationSection: some View {
+        VStack(spacing: 12) {
+            // Navigation with arrows flanking the card
+            HStack(spacing: 16) {
+                // Previous button
+                Button(action: navigatePrevious) {
+                    Image(systemName: "chevron.left.circle.fill")
+                        .font(.system(size: 36))
+                        .foregroundStyle(currentIndex > 0 ? Color.accentColor : Color.secondary.opacity(0.3))
+                }
+                .buttonStyle(.plain)
+                .disabled(currentIndex == 0)
+
+                // Single card display
+                KnowledgeCardView(
+                    resRef: filteredCards[currentIndex],
+                    isTopCard: true,
+                    onEdit: { editingCard = filteredCards[currentIndex] },
+                    onDelete: {
+                        cardToDelete = filteredCards[currentIndex]
                         showDeleteConfirmation = true
                     }
                 )
+                .frame(width: 400, height: 420)
+
+                // Next button
+                Button(action: navigateNext) {
+                    Image(systemName: "chevron.right.circle.fill")
+                        .font(.system(size: 36))
+                        .foregroundStyle(currentIndex < filteredCards.count - 1 ? Color.accentColor : Color.secondary.opacity(0.3))
+                }
+                .buttonStyle(.plain)
+                .disabled(currentIndex >= filteredCards.count - 1)
             }
+            .padding(.horizontal, 8)
+
+            // Page indicator
+            HStack(spacing: 8) {
+                Text("\(currentIndex + 1) of \(filteredCards.count)")
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(.secondary)
+
+                // Dot indicators (up to 7)
+                HStack(spacing: 4) {
+                    ForEach(0..<min(7, filteredCards.count), id: \.self) { index in
+                        let actualIndex = dotIndexFor(displayIndex: index)
+                        Circle()
+                            .fill(actualIndex == currentIndex ? Color.accentColor : Color.secondary.opacity(0.3))
+                            .frame(width: actualIndex == currentIndex ? 8 : 6, height: actualIndex == currentIndex ? 8 : 6)
+                            .onTapGesture {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    currentIndex = actualIndex
+                                }
+                            }
+                    }
+                }
+            }
+            .padding(.vertical, 8)
         }
         .frame(maxHeight: .infinity)
-        .padding(.top, 20)
+        .padding(.top, 12)
+    }
+
+    private func dotIndexFor(displayIndex: Int) -> Int {
+        let maxDots = 7
+        guard filteredCards.count > maxDots else { return displayIndex }
+
+        let half = maxDots / 2
+        let start = max(0, min(currentIndex - half, filteredCards.count - maxDots))
+        return start + displayIndex
+    }
+
+    private func navigateNext() {
+        guard currentIndex < filteredCards.count - 1 else { return }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            currentIndex += 1
+        }
+    }
+
+    private func navigatePrevious() {
+        guard currentIndex > 0 else { return }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            currentIndex -= 1
+        }
     }
 
     private var emptyFilterState: some View {
