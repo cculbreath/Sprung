@@ -488,8 +488,16 @@ struct TemplateManifest: Codable {
     }
     func makeDefaultContext() -> [String: Any] {
         var context: [String: Any] = [:]
+        // First, add sections in sectionOrder
         for key in sectionOrder {
             if let value = sections[key]?.defaultContextValue() {
+                context[key] = value
+            }
+        }
+        // Also include sections with behaviors that may not be in sectionOrder
+        // (e.g., styling with fontSizes) to ensure font sizes are extracted during tree building
+        for (key, section) in sections where context[key] == nil {
+            if section.behavior != nil, let value = section.defaultContextValue() {
                 context[key] = value
             }
         }
