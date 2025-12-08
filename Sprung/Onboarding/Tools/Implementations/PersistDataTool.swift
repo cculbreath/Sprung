@@ -128,8 +128,13 @@ struct PersistDataTool: InterviewTool {
                 Logger.info("📤 Emitted .enabledSectionsUpdated event with \(sections.count) sections", category: .ai)
             }
         case "candidate_dossier_entry":
-            // No state mutation required for dossier entries - just persist
-            Logger.info("💾 Persisted candidate_dossier_entry (no event emission)", category: .ai)
+            // Emit dossier field collected event for tracking
+            if let fieldType = payload["field_type"].string {
+                await eventBus.publish(.dossierFieldCollected(field: fieldType))
+                Logger.info("📤 Emitted .dossierFieldCollected event for field: \(fieldType)", category: .ai)
+            } else {
+                Logger.info("💾 Persisted candidate_dossier_entry (no field_type for tracking)", category: .ai)
+            }
         case "knowledge_card":
             // Optional: emit knowledge card persisted event
             await eventBus.publish(.knowledgeCardPersisted(card: payload))
