@@ -95,7 +95,7 @@ struct KnowledgeCardBrowserOverlay: View {
                 .padding(.bottom, 16)
             }
         }
-        .frame(width: 560, height: 720)
+        .frame(width: 540, height: 640)
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {

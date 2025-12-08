@@ -12,15 +12,17 @@ struct KnowledgeCardDeckView: View {
     @State private var isDragging = false
 
     // Configuration
-    private let cardWidth: CGFloat = 400
-    private let cardHeight: CGFloat = 480
-    private let stackOffset: CGFloat = 20
-    private let scaleDecrement: CGFloat = 0.05
+    private let cardWidth: CGFloat = 420
+    private let cardHeight: CGFloat = 400
+    private let stackOffset: CGFloat = 25
+    private let scaleDecrement: CGFloat = 0.06
     private let dragThreshold: CGFloat = 80
 
     private var visibleRange: ClosedRange<Int> {
-        let start = max(0, currentIndex - 1)
-        let end = min(cards.count - 1, currentIndex + 1)
+        // Show up to 3 cards: current, next, and one after
+        let start = currentIndex
+        let end = min(cards.count - 1, currentIndex + 2)
+        guard start <= end else { return 0...0 }
         return start...end
     }
 
@@ -72,11 +74,12 @@ struct KnowledgeCardDeckView: View {
 
     private var cardStack: some View {
         ZStack {
-            // Render cards from back to front
+            // Render cards: back cards first (higher indices), front card last
             ForEach(Array(visibleRange.reversed()), id: \.self) { index in
                 if index < cards.count {
+                    let offset = index - currentIndex
                     cardAtIndex(index)
-                        .zIndex(Double(index == currentIndex ? 100 : index))
+                        .zIndex(Double(100 - offset)) // Front card has highest z
                 }
             }
         }
@@ -117,18 +120,17 @@ struct KnowledgeCardDeckView: View {
     // MARK: - Card Transforms
 
     private func xOffset(for offset: Int) -> CGFloat {
-        let baseOffset = CGFloat(offset) * stackOffset * 1.5
+        // Cards behind fan out to the right
+        let baseOffset = CGFloat(offset) * stackOffset
 
         // Apply drag offset only to current card
         if offset == 0 {
-            return baseOffset + dragOffset
+            return dragOffset
         }
 
         // Slightly shift adjacent cards based on drag
-        let dragInfluence = dragOffset * 0.2
-        if offset == -1 && dragOffset > 0 {
-            return baseOffset + dragInfluence
-        } else if offset == 1 && dragOffset < 0 {
+        let dragInfluence = dragOffset * 0.15
+        if offset > 0 && dragOffset < 0 {
             return baseOffset + dragInfluence
         }
 
@@ -136,34 +138,37 @@ struct KnowledgeCardDeckView: View {
     }
 
     private func yOffset(for offset: Int) -> CGFloat {
-        CGFloat(abs(offset)) * -stackOffset * 0.5
+        // Cards behind are slightly higher (peek above)
+        CGFloat(offset) * -stackOffset * 0.4
     }
 
     private func scale(for offset: Int) -> CGFloat {
-        let baseScale = 1.0 - (CGFloat(abs(offset)) * scaleDecrement)
+        let baseScale = 1.0 - (CGFloat(offset) * scaleDecrement)
 
         // Slightly scale based on drag
         if offset == 0 && isDragging {
             return baseScale * 0.98
         }
 
-        return baseScale
+        return max(0.85, baseScale)
     }
 
     private func opacity(for offset: Int) -> CGFloat {
-        switch abs(offset) {
+        switch offset {
         case 0: return 1.0
-        case 1: return 0.85
-        default: return 0.6
+        case 1: return 0.7
+        case 2: return 0.5
+        default: return 0.4
         }
     }
 
     private func rotation(for offset: Int) -> Double {
-        let baseRotation = Double(offset) * 3
+        // Cards behind rotate slightly
+        let baseRotation = Double(offset) * 2
 
-        // Add rotation during drag
+        // Add rotation during drag for front card
         if offset == 0 {
-            return baseRotation + Double(dragOffset / 30)
+            return Double(dragOffset / 40)
         }
 
         return baseRotation

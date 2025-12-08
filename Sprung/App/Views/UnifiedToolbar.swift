@@ -136,7 +136,7 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 Button(action: {
                     sheets.showKnowledgeCardsBrowser = true
                 }, label: {
-                    Label("Knowledge Cards", systemImage: "rectangle.stack")
+                    Label("Knowledge Cards", systemImage: "brain.head.profile")
                         .font(.system(size: 14, weight: .light))
                 })
                 .buttonStyle(.automatic)
