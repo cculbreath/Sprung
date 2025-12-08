@@ -85,7 +85,7 @@ struct KnowledgeCardBrowserOverlay: View {
                 cardNavigationSection
             }
         }
-        .frame(width: 540, height: 660)
+        .frame(width: 620, height: 680)
         .background(Color(nsColor: .windowBackgroundColor))
         .focusable()
         .onAppear {
@@ -268,67 +268,154 @@ struct KnowledgeCardBrowserOverlay: View {
         }
     }
 
+    // MARK: - Coverflow Card Browser
+
+    private let cardWidth: CGFloat = 340
+    private let cardHeight: CGFloat = 400
+    private let cardSpacing: CGFloat = -60 // Negative for overlap
+
     private var cardNavigationSection: some View {
-        VStack(spacing: 12) {
-            // Navigation with arrows flanking the card
-            HStack(spacing: 16) {
-                // Previous button
-                Button(action: navigatePrevious) {
-                    Image(systemName: "chevron.left.circle.fill")
-                        .font(.system(size: 36))
-                        .foregroundStyle(currentIndex > 0 ? Color.accentColor : Color.secondary.opacity(0.3))
-                }
-                .buttonStyle(.plain)
-                .disabled(currentIndex == 0)
+        VStack(spacing: 16) {
+            // Coverflow carousel
+            coverflowCarousel
 
-                // Single card display
-                KnowledgeCardView(
-                    resRef: filteredCards[currentIndex],
-                    isTopCard: true,
-                    onEdit: { editingCard = filteredCards[currentIndex] },
-                    onDelete: {
-                        cardToDelete = filteredCards[currentIndex]
-                        showDeleteConfirmation = true
+            // Navigation controls
+            navigationControls
+        }
+        .frame(maxHeight: .infinity)
+        .padding(.top, 8)
+    }
+
+    private var coverflowCarousel: some View {
+        GeometryReader { outerGeo in
+            let centerX = outerGeo.size.width / 2
+
+            ScrollViewReader { scrollProxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: cardSpacing) {
+                        // Left padding to center first card
+                        Spacer()
+                            .frame(width: centerX - cardWidth / 2)
+
+                        ForEach(Array(filteredCards.enumerated()), id: \.element.id) { index, card in
+                            GeometryReader { geo in
+                                let midX = geo.frame(in: .global).midX
+                                let distanceFromCenter = midX - centerX
+                                let normalizedDistance = distanceFromCenter / cardWidth
+                                let isCenter = abs(normalizedDistance) < 0.3
+
+                                coverflowCard(
+                                    card: card,
+                                    index: index,
+                                    distanceFromCenter: normalizedDistance,
+                                    isCenter: isCenter
+                                )
+                                .frame(width: cardWidth, height: cardHeight)
+                            }
+                            .frame(width: cardWidth, height: cardHeight)
+                            .id(index)
+                        }
+
+                        // Right padding to center last card
+                        Spacer()
+                            .frame(width: centerX - cardWidth / 2)
                     }
-                )
-                .frame(width: 400, height: 420)
-
-                // Next button
-                Button(action: navigateNext) {
-                    Image(systemName: "chevron.right.circle.fill")
-                        .font(.system(size: 36))
-                        .foregroundStyle(currentIndex < filteredCards.count - 1 ? Color.accentColor : Color.secondary.opacity(0.3))
                 }
-                .buttonStyle(.plain)
-                .disabled(currentIndex >= filteredCards.count - 1)
+                .scrollTargetBehavior(.viewAligned)
+                .onChange(of: currentIndex) { _, newIndex in
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        scrollProxy.scrollTo(newIndex, anchor: .center)
+                    }
+                }
+                .onAppear {
+                    // Scroll to initial position
+                    scrollProxy.scrollTo(currentIndex, anchor: .center)
+                }
             }
-            .padding(.horizontal, 8)
+        }
+        .frame(height: cardHeight + 40)
+    }
+
+    @ViewBuilder
+    private func coverflowCard(card: ResRef, index: Int, distanceFromCenter: CGFloat, isCenter: Bool) -> some View {
+        let rotation = min(max(distanceFromCenter * 45, -60), 60)
+        let scale = max(0.75, 1 - abs(distanceFromCenter) * 0.2)
+        let opacity = max(0.5, 1 - abs(distanceFromCenter) * 0.4)
+
+        KnowledgeCardView(
+            resRef: card,
+            isTopCard: isCenter,
+            onEdit: {
+                currentIndex = index
+                editingCard = card
+            },
+            onDelete: {
+                currentIndex = index
+                cardToDelete = card
+                showDeleteConfirmation = true
+            }
+        )
+        .scaleEffect(scale)
+        .rotation3DEffect(
+            .degrees(-rotation),
+            axis: (x: 0, y: 1, z: 0),
+            anchor: .center,
+            anchorZ: 0,
+            perspective: 0.5
+        )
+        .opacity(opacity)
+        .zIndex(Double(isCenter ? 100 : 50) - Double(abs(distanceFromCenter)) * 10)
+        .onTapGesture {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                currentIndex = index
+            }
+        }
+    }
+
+    private var navigationControls: some View {
+        HStack(spacing: 20) {
+            // Previous button
+            Button(action: navigatePrevious) {
+                Image(systemName: "chevron.left.circle.fill")
+                    .font(.system(size: 32))
+                    .foregroundStyle(currentIndex > 0 ? Color.accentColor : Color.secondary.opacity(0.3))
+            }
+            .buttonStyle(.plain)
+            .disabled(currentIndex == 0)
 
             // Page indicator
-            HStack(spacing: 8) {
+            VStack(spacing: 4) {
                 Text("\(currentIndex + 1) of \(filteredCards.count)")
-                    .font(.subheadline.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    .font(.subheadline.weight(.medium).monospacedDigit())
+                    .foregroundStyle(.primary)
 
-                // Dot indicators (up to 7)
-                HStack(spacing: 4) {
+                // Dot indicators
+                HStack(spacing: 6) {
                     ForEach(0..<min(7, filteredCards.count), id: \.self) { index in
                         let actualIndex = dotIndexFor(displayIndex: index)
                         Circle()
                             .fill(actualIndex == currentIndex ? Color.accentColor : Color.secondary.opacity(0.3))
-                            .frame(width: actualIndex == currentIndex ? 8 : 6, height: actualIndex == currentIndex ? 8 : 6)
+                            .frame(width: actualIndex == currentIndex ? 10 : 6, height: actualIndex == currentIndex ? 10 : 6)
+                            .animation(.spring(response: 0.3), value: currentIndex)
                             .onTapGesture {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                                     currentIndex = actualIndex
                                 }
                             }
                     }
                 }
             }
-            .padding(.vertical, 8)
+
+            // Next button
+            Button(action: navigateNext) {
+                Image(systemName: "chevron.right.circle.fill")
+                    .font(.system(size: 32))
+                    .foregroundStyle(currentIndex < filteredCards.count - 1 ? Color.accentColor : Color.secondary.opacity(0.3))
+            }
+            .buttonStyle(.plain)
+            .disabled(currentIndex >= filteredCards.count - 1)
         }
-        .frame(maxHeight: .infinity)
-        .padding(.top, 12)
+        .padding(.vertical, 8)
     }
 
     private func dotIndexFor(displayIndex: Int) -> Int {
@@ -342,14 +429,14 @@ struct KnowledgeCardBrowserOverlay: View {
 
     private func navigateNext() {
         guard currentIndex < filteredCards.count - 1 else { return }
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
             currentIndex += 1
         }
     }
 
     private func navigatePrevious() {
         guard currentIndex > 0 else { return }
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
             currentIndex -= 1
         }
     }
