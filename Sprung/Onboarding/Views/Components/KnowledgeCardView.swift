@@ -160,33 +160,35 @@ struct KnowledgeCardView: View {
     }
 
     private var contentSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Word count indicator
-            HStack {
-                Text("Content")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text("\(wordCount) words")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-            }
-
-            // Content preview
+        VStack(alignment: .leading, spacing: 0) {
+            // Content preview - fills available space
             if resRef.content.isEmpty {
                 Text("No content")
                     .font(.body)
                     .foregroundStyle(.tertiary)
                     .italic()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             } else {
-                Text(resRef.content)
-                    .font(.callout)
-                    .foregroundStyle(.primary)
-                    .lineLimit(isTopCard ? 8 : 4)
-                    .textSelection(.enabled)
+                ScrollView {
+                    Text(resRef.content)
+                        .font(.callout)
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                }
             }
+
+            // Word count at bottom
+            HStack {
+                Spacer()
+                Text("\(wordCount) words")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.top, 4)
         }
-        .padding(16)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
     private var footerSection: some View {
