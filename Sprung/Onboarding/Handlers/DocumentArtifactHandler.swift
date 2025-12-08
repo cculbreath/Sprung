@@ -78,11 +78,11 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         let totalCount = extractableFiles.count + imageFiles.count
         let isBatch = totalCount > 1
 
-        // Show spinner at start of batch - will remain visible until all files processed
+        // Show extraction indicator at start of batch (non-blocking - chat remains enabled)
         let initialStatus = isBatch
-            ? "Processing \(totalCount) file(s)..."
-            : "Processing \(files.first?.filename ?? "file")..."
-        await emit(.processingStateChanged(true, statusMessage: initialStatus))
+            ? "Extracting \(totalCount) document(s)..."
+            : "Extracting \(files.first?.filename ?? "file")..."
+        await emit(.extractionStateChanged(true, statusMessage: initialStatus))
 
         // Process each file in the batch
         var successCount = 0
@@ -95,11 +95,11 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
             let filename = file.filename
             Logger.info("📄 Document detected: \(filename) (\(currentIndex)/\(totalCount))", category: .ai)
 
-            // Update status for current file (keep spinner visible)
+            // Update extraction status for current file
             let status = isBatch
-                ? "Processing \(filename) (\(currentIndex)/\(totalCount))..."
-                : "Processing \(filename)..."
-            await emit(.processingStateChanged(true, statusMessage: status))
+                ? "Extracting \(filename) (\(currentIndex)/\(totalCount))..."
+                : "Extracting \(filename)..."
+            await emit(.extractionStateChanged(true, statusMessage: status))
 
             do {
                 // Call service to perform business logic with status callback
@@ -111,9 +111,9 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
                     metadata: metadata,
                     statusCallback: { [weak self] status in
                         Task {
-                            // Update status but keep spinner visible
+                            // Update extraction status (non-blocking)
                             let batchStatus = isBatch ? "[\(idx)/\(totalCount)] \(status)" : status
-                            await self?.emit(.processingStateChanged(true, statusMessage: batchStatus))
+                            await self?.emit(.extractionStateChanged(true, statusMessage: batchStatus))
                         }
                     }
                 )
@@ -124,14 +124,14 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
                 Logger.error("❌ Document processing failed: \(error.localizedDescription)", category: .ai)
                 failedFiles.append(filename)
 
-                // Show error briefly in status (keep spinner visible for batch)
+                // Show error briefly in status
                 let userMessage: String
                 if let extractionError = error as? DocumentExtractionService.ExtractionError {
                     userMessage = extractionError.userFacingMessage
                 } else {
-                    userMessage = "Failed to process \(filename)"
+                    userMessage = "Failed to extract \(filename)"
                 }
-                await emit(.processingStateChanged(true, statusMessage: userMessage))
+                await emit(.extractionStateChanged(true, statusMessage: userMessage))
                 // Brief delay so user can see the error message
                 try? await Task.sleep(for: .seconds(2))
             }
@@ -143,11 +143,11 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
             let filename = file.filename
             Logger.info("🖼️ Image detected: \(filename) (\(currentIndex)/\(totalCount))", category: .ai)
 
-            // Update status for current file
+            // Update extraction status for current file
             let status = isBatch
                 ? "Adding \(filename) (\(currentIndex)/\(totalCount))..."
                 : "Adding \(filename)..."
-            await emit(.processingStateChanged(true, statusMessage: status))
+            await emit(.extractionStateChanged(true, statusMessage: status))
 
             // Create artifact record for image without text extraction
             let artifactRecord = createImageArtifactRecord(
@@ -161,19 +161,19 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
             Logger.info("🖼️ Image artifact created: \(filename)", category: .ai)
         }
 
-        // All files processed - now hide spinner
+        // All files processed - clear extraction indicator
         if !failedFiles.isEmpty {
             // Show final error summary briefly
             let errorSummary = failedFiles.count == 1
-                ? "Failed to process \(failedFiles[0])"
-                : "Failed to process \(failedFiles.count) of \(totalCount) files"
-            await emit(.processingStateChanged(true, statusMessage: errorSummary))
+                ? "Failed to extract \(failedFiles[0])"
+                : "Failed to extract \(failedFiles.count) of \(totalCount) files"
+            await emit(.extractionStateChanged(true, statusMessage: errorSummary))
             try? await Task.sleep(for: .seconds(2))
         }
 
-        // Hide spinner after ALL files in batch are processed
-        await emit(.processingStateChanged(false))
-        Logger.info("📄 Batch processing complete: \(successCount)/\(totalCount) succeeded", category: .ai)
+        // Clear extraction indicator after ALL files in batch are processed
+        await emit(.extractionStateChanged(false))
+        Logger.info("📄 Batch extraction complete: \(successCount)/\(totalCount) succeeded", category: .ai)
     }
 
     /// Create an artifact record for an image file (no text extraction)
