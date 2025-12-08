@@ -88,17 +88,17 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
         let repoName = repoURL.lastPathComponent
 
         do {
-            await eventBus.publish(.processingStateChanged(true, statusMessage: "Gathering repository data..."))
+            await eventBus.publish(.extractionStateChanged(true, statusMessage: "Gathering repository data..."))
 
             // Step 1: Gather raw git data
             let gitData = try gatherGitData(repoPath: repoPath)
 
-            await eventBus.publish(.processingStateChanged(true, statusMessage: "Analyzing code patterns with multi-turn agent..."))
+            await eventBus.publish(.extractionStateChanged(true, statusMessage: "Analyzing code patterns with multi-turn agent..."))
 
             // Step 2: Run multi-turn agent to analyze actual code
             let analysis = try await runAnalysisAgent(gitData: gitData, repoName: repoName, repoURL: repoURL)
 
-            await eventBus.publish(.processingStateChanged(true, statusMessage: "Creating artifact record..."))
+            await eventBus.publish(.extractionStateChanged(true, statusMessage: "Creating artifact record..."))
 
             // Step 3: Create artifact record
             var record = JSON()
