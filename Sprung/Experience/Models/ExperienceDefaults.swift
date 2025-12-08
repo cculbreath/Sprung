@@ -4,7 +4,7 @@ import SwiftData
 final class ExperienceDefaults {
     @Attribute(.unique) var id: UUID
     /// Professional summary for resume headers and cover letter introductions
-    var summary: String
+    var summary: String = ""
     var isWorkEnabled: Bool
     var isVolunteerEnabled: Bool
     var isEducationEnabled: Bool
