@@ -1,0 +1,141 @@
+{
+  "custom": {
+    "fields": [
+      {
+        "allowsManualMutations": true,
+        "input": "text",
+        "key": "jobTitles",
+        "repeatable": true
+      },
+      {
+        "input": "textarea",
+        "key": "moreInfo"
+      },
+      {
+        "children": [
+          {
+            "input": "text",
+            "key": "work"
+          },
+          {
+            "input": "text",
+            "key": "projects"
+          },
+          {
+            "input": "text",
+            "key": "education"
+          },
+          {
+            "input": "text",
+            "key": "skills"
+          },
+          {
+            "input": "text",
+            "key": "volunteer"
+          },
+          {
+            "input": "text",
+            "key": "awards"
+          },
+          {
+            "input": "text",
+            "key": "certificates"
+          },
+          {
+            "input": "text",
+            "key": "publications"
+          },
+          {
+            "input": "text",
+            "key": "languages"
+          },
+          {
+            "input": "text",
+            "key": "interests"
+          },
+          {
+            "input": "text",
+            "key": "moreInfo"
+          }
+        ],
+        "key": "sectionLabels"
+      }
+    ]
+  },
+  "keys-in-editor": [
+    "basics",
+    "work",
+    "volunteer",
+    "education",
+    "projects",
+    "skills",
+    "awards",
+    "certificates",
+    "publications",
+    "languages",
+    "interests",
+    "custom",
+    "styling"
+  ],
+  "section-visibility": {
+    "education": true,
+    "projects": true,
+    "skills": true,
+    "work": true,
+    "volunteer": true,
+    "awards": true,
+    "certificates": true,
+    "publications": true,
+    "languages": true,
+    "interests": true
+  },
+  "section-visibility-labels": {
+    "education": "Education",
+    "projects": "Projects",
+    "skills": "Skills",
+    "work": "Work Experience",
+    "volunteer": "Volunteer",
+    "awards": "Awards",
+    "certificates": "Certificates",
+    "publications": "Publications",
+    "languages": "Languages",
+    "interests": "Interests"
+  },
+  "sectionOrder": [
+    "basics",
+    "work",
+    "volunteer",
+    "education",
+    "projects",
+    "skills",
+    "awards",
+    "certificates",
+    "publications",
+    "languages",
+    "interests",
+    "custom",
+    "styling"
+  ],
+  "styling": {
+    "fontSizes": {
+      "boxTitles": "15pt",
+      "contact": "9pt",
+      "degreeNames": "11pt",
+      "employerName": "11pt",
+      "moreInfo": "10pt",
+      "name": "27pt",
+      "projectText": "10pt",
+      "schools": "10pt",
+      "sectionTitle": "12pt",
+      "skillDescriptions": "9pt",
+      "skillNames": "10pt",
+      "summary": "10.5pt",
+      "workDates": "9pt",
+      "workHighlights": "10pt"
+    }
+  },
+  "transparentKeys": [
+    "basics",
+    "custom"
+  ]
+}

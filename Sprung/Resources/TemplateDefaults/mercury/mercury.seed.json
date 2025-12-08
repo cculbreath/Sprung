@@ -1,0 +1,23 @@
+{
+  "custom": {
+    "jobTitles": [
+      "Engineering Leader",
+      "Solution Architect",
+      "Mentor"
+    ],
+    "moreInfo": "Portfolio, references, and writing samples available on request.",
+    "sectionLabels": {
+      "education": "Education",
+      "projects": "Projects",
+      "skills": "Skills",
+      "work": "Experience",
+      "volunteer": "Volunteer",
+      "awards": "Awards",
+      "certificates": "Certifications",
+      "publications": "Publications",
+      "languages": "Languages",
+      "interests": "Interests",
+      "moreInfo": "Additional Information"
+    }
+  }
+}

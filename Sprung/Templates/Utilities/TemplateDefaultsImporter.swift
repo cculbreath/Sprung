@@ -34,23 +34,25 @@ struct TemplateDefaultsImporter {
         self.bundle = bundle
     }
     func installDefaultsIfNeeded() {
-        guard templateStore.templates().isEmpty else {
-            Logger.debug("TemplateDefaultsImporter: skipping install; templates already exist.")
-            return
-        }
         do {
-            try installDefaults()
-            Logger.info("✅ Template defaults installed from bundled resources.", category: .migration)
+            let installedCount = try installDefaults()
+            if installedCount > 0 {
+                Logger.info("✅ Installed \(installedCount) bundled template defaults.", category: .migration)
+            } else {
+                Logger.debug("TemplateDefaultsImporter: no missing templates to install.")
+            }
         } catch {
             Logger.error("❌ TemplateDefaultsImporter failed: \(error)", category: .migration)
         }
     }
-    private func installDefaults() throws {
+    private func installDefaults() throws -> Int {
         let catalogURL = try locateCatalog()
         let catalogData = try Data(contentsOf: catalogURL)
         let catalog = try JSONDecoder().decode(TemplateDefaultsCatalog.self, from: catalogData)
         let baseDirectory = catalogURL.deletingLastPathComponent()
-        for entry in catalog.templates {
+        let missing = catalog.templates.filter { templateStore.template(slug: $0.slug) == nil }
+        guard missing.isEmpty == false else { return 0 }
+        for entry in missing {
             let html = try readText(relativePath: entry.paths.html, baseDirectory: baseDirectory)
             let text = try readText(relativePath: entry.paths.text, baseDirectory: baseDirectory)
             let manifestString = try readText(relativePath: entry.paths.manifest, baseDirectory: baseDirectory)
@@ -73,6 +75,7 @@ struct TemplateDefaultsImporter {
                 attachTo: template
             )
         }
+        return missing.count
     }
     private func locateCatalog() throws -> URL {
         if let url = bundle.url(forResource: "catalog", withExtension: "json", subdirectory: "TemplateDefaults") {

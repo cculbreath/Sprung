@@ -47,7 +47,6 @@ struct SetupWizardView: View {
             }
             .frame(minWidth: 780, minHeight: 560)
             .navigationTitle("Welcome to Sprung")
-            .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showModelPicker) {
                 OpenRouterModelSelectionSheet()
                     .environment(enabledLLMStore)
