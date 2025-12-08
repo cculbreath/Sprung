@@ -162,6 +162,7 @@ struct ContentView: View {
                 openTemplateEditor()
             }
         }
+        .focusedValue(\.knowledgeCardsVisible, $showSlidingList)
         // Environment objects (like DragInfo) are inherited from ContentViewLaunch
     }
     // MARK: - Helper Methods

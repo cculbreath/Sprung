@@ -72,7 +72,8 @@ struct OnboardingValidationReviewCard: View {
         }
     }
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header
             Text("Review \(displayTitle)")
                 .font(.headline)
             if let message = prompt.message, !message.isEmpty {
@@ -80,32 +81,45 @@ struct OnboardingValidationReviewCard: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
-            contentView
-            Picker("Decision", selection: $decision) {
-                ForEach(Decision.allCases) { option in
-                    Text(option.label).tag(option)
+
+            // Scrollable content area
+            ScrollView {
+                contentView
+            }
+            .frame(maxHeight: 280)
+
+            // Sticky footer - always visible
+            VStack(alignment: .leading, spacing: 12) {
+                Picker("Decision", selection: $decision) {
+                    ForEach(Decision.allCases) { option in
+                        Text(option.label).tag(option)
+                    }
                 }
-            }
-            .pickerStyle(.segmented)
-            if shouldShowRawEditor {
-                rawJSONEditor
-            } else if decision == .modified {
-                Text("Changes will be sent back to the interviewer when you submit.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            notesEditor
-            if let errorMessage {
-                Text(errorMessage)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
-            }
-            HStack {
-                Button("Cancel", action: onCancel)
-                Spacer()
-                Button("Submit Decision", action: submit)
-                    .buttonStyle(.borderedProminent)
-                    .disabled(disableSubmit)
+                .pickerStyle(.segmented)
+
+                if shouldShowRawEditor {
+                    rawJSONEditor
+                } else if decision == .modified {
+                    Text("Changes will be sent back to the interviewer when you submit.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                notesEditor
+
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                }
+
+                HStack {
+                    Button("Cancel", action: onCancel)
+                    Spacer()
+                    Button("Submit Decision", action: submit)
+                        .buttonStyle(.borderedProminent)
+                        .disabled(disableSubmit)
+                }
             }
         }
         .padding(18)
@@ -239,11 +253,12 @@ struct OnboardingValidationReviewCard: View {
         }
     }
     private var notesEditor: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
             Text("Notes (optional)")
-                .font(.headline)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
             TextEditor(text: $notes)
-                .frame(minHeight: 80)
+                .frame(height: 50)
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
                         .stroke(Color.secondary.opacity(0.3))

@@ -37,7 +37,7 @@ struct ResRefView: View {
         @Bindable var jobAppStore = jobAppStore
         VStack(alignment: .leading) {
             HStack {
-                Text("Résumé Source Documents")
+                Text("Knowledge Cards")
                     .font(.headline)
                 Spacer()
             }
@@ -62,7 +62,7 @@ struct ResRefView: View {
                     Button(action: { isRefSheetPresented = true }) {
                         HStack {
                             Image(systemName: "plus.circle")
-                            Text("Add Background Document")
+                            Text("Add Knowledge Card")
                         }
                         .padding(8)
                         .background(isHovering ? Color(nsColor: .controlAccentColor).opacity(0.15) : Color.black.opacity(0.1))

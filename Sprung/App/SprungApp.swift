@@ -101,15 +101,16 @@ struct SprungApp: App {
                     appDelegate.showTemplateEditorWindow()
                 }
                 .keyboardShortcut("t", modifiers: [.command, .shift])
+                Button("Experience Editor...") {
+                    appDelegate.showExperienceEditorWindow()
+                }
+                .keyboardShortcut("x", modifiers: [.command, .shift])
             }
             CommandGroup(after: .importExport) {
             }
-            // View Menu - Show Inspectors and Sources
+            // View Menu - Show Inspectors and Knowledge Cards
             CommandGroup(after: .sidebar) {
-                Button("Show Sources") {
-                    NotificationCenter.default.post(name: .showSources, object: nil)
-                }
-                .keyboardShortcut("s", modifiers: [.command, .option])
+                KnowledgeCardsMenuItem()
                 Divider()
                 Button("Show Resume Inspector") {
                     NotificationCenter.default.post(name: .showResumeInspector, object: nil)
@@ -195,7 +196,7 @@ struct SprungApp: App {
             }
         }
         .commands {
-            CommandMenu("Interview") {
+            CommandMenu("Onboarding") {
                 Button("Initiate Onboarding Interview") {
                     Logger.info("🎙️ Menu command requested onboarding interview", category: .ui)
                     NotificationCenter.default.post(name: .startOnboardingInterview, object: nil)

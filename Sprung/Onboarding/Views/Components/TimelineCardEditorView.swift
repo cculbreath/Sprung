@@ -27,20 +27,21 @@ struct TimelineCardEditorView: View {
 
         VStack(alignment: .leading, spacing: 12) {
             header
-            // Scrollable cards section
+
+            // Scrollable cards section - uses remaining space but leaves room for footer
             ScrollView {
                 WorkExperienceSectionView(items: $drafts, callbacks: callbacks())
                     .padding(.horizontal, 4)
                     .padding(.vertical, 4)
             }
-            .frame(maxHeight: .infinity)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(Color(nsColor: .controlBackgroundColor))
             )
+
+            // Sticky footer - always visible
             footerButtons
         }
-        .frame(maxHeight: .infinity)
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)

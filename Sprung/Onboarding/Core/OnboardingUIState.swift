@@ -56,6 +56,11 @@ final class OnboardingUIState {
     // MARK: - Objective Status (for Phase 3 subphase tracking)
     var objectiveStatuses: [String: String] = [:]
 
+    // MARK: - Interview Completion State
+    /// Set to true when interview transitions to .complete phase
+    /// View observes this to close the window automatically
+    var interviewJustCompleted: Bool = false
+
     // MARK: - Preferences
     var preferences: OnboardingPreferences
     init(preferences: OnboardingPreferences) {

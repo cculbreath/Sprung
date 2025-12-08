@@ -450,6 +450,12 @@ final class OnboardingDependencyContainer {
     func getResRefStore() -> ResRefStore {
         resRefStore
     }
+    func getCoverRefStore() -> CoverRefStore {
+        coverRefStore
+    }
+    func getExperienceDefaultsStore() -> ExperienceDefaultsStore {
+        experienceDefaultsStore
+    }
 
     /// Knowledge cards created during onboarding (persisted as ResRefs with isFromOnboarding=true)
     var onboardingKnowledgeCards: [ResRef] {

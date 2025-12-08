@@ -35,11 +35,11 @@ final class OnboardingInterviewCoordinator {
     private var profilePersistenceHandler: ProfilePersistenceHandler { container.profilePersistenceHandler }
     // Tool Interaction
     private var toolInteractionCoordinator: ToolInteractionCoordinator { container.toolInteractionCoordinator }
-    // Debug/Reset only
-    #if DEBUG
+    // Data Stores (used for data existence checks and reset)
     private var applicantProfileStore: ApplicantProfileStore { container.getApplicantProfileStore() }
     private var resRefStore: ResRefStore { container.getResRefStore() }
-    #endif
+    private var coverRefStore: CoverRefStore { container.getCoverRefStore() }
+    private var experienceDefaultsStore: ExperienceDefaultsStore { container.getExperienceDefaultsStore() }
     // MARK: - Computed Properties (Read from StateCoordinator)
     var currentPhase: InterviewPhase {
         get async { await state.phase }
@@ -149,12 +149,71 @@ final class OnboardingInterviewCoordinator {
         container.sessionPersistenceHandler.hasActiveSession()
     }
 
+    /// Check if there's any existing onboarding data (session, ResRefs, CoverRefs, or ExperienceDefaults)
+    /// Used to determine whether to show the resume/start-over prompt
+    func hasExistingOnboardingData() -> Bool {
+        // Check for active session
+        if hasActiveSession() {
+            return true
+        }
+        // Check for onboarding ResRefs (knowledge cards)
+        let onboardingResRefs = resRefStore.resRefs.filter { $0.isFromOnboarding }
+        if !onboardingResRefs.isEmpty {
+            return true
+        }
+        // Check for CoverRefs
+        if !coverRefStore.storedCoverRefs.isEmpty {
+            return true
+        }
+        // Check for ExperienceDefaults with actual data
+        let defaults = experienceDefaultsStore.currentDefaults()
+        let hasExperienceData = !defaults.workExperiences.isEmpty ||
+            !defaults.educationRecords.isEmpty ||
+            !defaults.projects.isEmpty ||
+            !defaults.skills.isEmpty
+        if hasExperienceData {
+            return true
+        }
+        return false
+    }
+
     /// Delete the current SwiftData session (used when starting over)
     func deleteCurrentSession() {
         if let session = container.sessionPersistenceHandler.getActiveSession() {
             container.sessionStore.deleteSession(session)
             Logger.info("🗑️ Deleted SwiftData session: \(session.id)", category: .ai)
         }
+    }
+
+    /// Clear all onboarding data: session, ResRefs, CoverRefs, and ExperienceDefaults
+    /// Used when user chooses "Start Over" to begin fresh
+    func clearAllOnboardingData() {
+        Logger.info("🗑️ Clearing all onboarding data", category: .ai)
+        // Delete session
+        deleteCurrentSession()
+        // Delete onboarding ResRefs (knowledge cards)
+        resRefStore.deleteOnboardingResRefs()
+        // Delete all CoverRefs
+        for coverRef in coverRefStore.storedCoverRefs {
+            coverRefStore.deleteCoverRef(coverRef)
+        }
+        Logger.info("🗑️ Deleted all CoverRefs", category: .ai)
+        // Clear ExperienceDefaults
+        let defaults = experienceDefaultsStore.currentDefaults()
+        defaults.workExperiences.removeAll()
+        defaults.educationRecords.removeAll()
+        defaults.volunteerExperiences.removeAll()
+        defaults.projects.removeAll()
+        defaults.skills.removeAll()
+        defaults.awards.removeAll()
+        defaults.certificates.removeAll()
+        defaults.publications.removeAll()
+        defaults.languages.removeAll()
+        defaults.interests.removeAll()
+        defaults.references.removeAll()
+        experienceDefaultsStore.save(defaults)
+        experienceDefaultsStore.clearCache()
+        Logger.info("🗑️ Cleared ExperienceDefaults", category: .ai)
     }
     /// Called when user is done with the interview - triggers finalization flow
     func endInterview() async {

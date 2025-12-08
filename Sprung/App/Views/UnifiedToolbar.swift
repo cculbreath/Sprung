@@ -83,7 +83,7 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                         }
                     }
                 }, label: {
-                    Label("Interview", systemImage: "bubble.left.and.text.bubble.right")
+                    Label("Onboarding", systemImage: "bubble.left.and.text.bubble.right")
                         .font(.system(size: 14, weight: .light))
                 })
                 .buttonStyle(.automatic)
@@ -141,11 +141,11 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                         showSlidingList.toggle()
                     }
                 }, label: {
-                    Label("Sources", systemImage: "newspaper")
+                    Label("Knowledge Cards", systemImage: "newspaper")
                         .font(.system(size: 14, weight: .light))
                 })
                 .buttonStyle(.automatic)
-                .help("Show Sources")
+                .help(showSlidingList ? "Hide Knowledge Cards" : "Show Knowledge Cards")
                 .disabled(jobAppStore.selectedApp == nil)
             }
             ToolbarItem(id: "inspector", placement: .primaryAction, showsByDefault: true) {

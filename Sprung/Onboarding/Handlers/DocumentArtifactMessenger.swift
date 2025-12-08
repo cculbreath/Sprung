@@ -480,6 +480,10 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
         payload["text"].string = messageText
 
         await emit(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
+
+        // Turn off extraction indicator now that analysis is complete
+        await emit(.extractionStateChanged(false, statusMessage: nil))
+
         Logger.info("📤 Git analysis artifact sent to LLM (user message): \(artifactId)", category: .ai)
     }
 }

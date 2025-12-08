@@ -123,7 +123,7 @@ struct ApplicantProfileIntakeCard: View {
         }
     }
     private func manualEntryView(source: OnboardingApplicantProfileIntakeState.Source) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
             Text(source == .contacts ? "Review imported contact details" : "Enter your contact information")
                 .font(.headline)
             ScrollView {
@@ -134,9 +134,8 @@ struct ApplicantProfileIntakeCard: View {
                     showsProfessionalLabel: false,
                     emailSuggestions: draft.suggestedEmails
                 )
-                .padding(.bottom, 8)
             }
-            .frame(maxHeight: 340)
+            .frame(maxHeight: 300)
             HStack {
                 Button("Back") {
                     coordinator.resetProfileIntakeToOptions()
@@ -150,6 +149,7 @@ struct ApplicantProfileIntakeCard: View {
                 }
                 .buttonStyle(.borderedProminent)
             }
+            .padding(.top, 4)
         }
     }
     private var urlEntryView: some View {

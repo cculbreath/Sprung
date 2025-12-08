@@ -21,13 +21,13 @@ struct ResRefFormView: View {
     var body: some View {
         @Bindable var resRefStore = resRefStore
         VStack {
-            Text(existingResRef == nil ? "Add New Source" : "Edit Source")
+            Text(existingResRef == nil ? "Add Knowledge Card" : "Edit Knowledge Card")
                 .font(.headline)
                 .padding(.top)
             ScrollView { // Prevents unnecessary Form padding
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
-                        Text("Source Name:")
+                        Text("Name:")
                             .frame(width: 150, alignment: .trailing)
                         TextField("", text: $sourceName)
                             .frame(maxWidth: .infinity)

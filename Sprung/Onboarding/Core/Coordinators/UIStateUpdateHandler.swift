@@ -37,6 +37,9 @@ final class UIStateUpdateHandler {
             handleTimelineEvent: { [weak self] event in
                 await self?.handleTimelineEvent(event)
             },
+            handlePhaseEvent: { [weak self] event in
+                await self?.handlePhaseEvent(event)
+            },
             performInitialSync: { [weak self] in
                 await self?.initialStateSync()
             }
@@ -143,6 +146,20 @@ final class UIStateUpdateHandler {
             Logger.info("📊 UIStateUpdateHandler: Received timelineUIUpdateNeeded with \(cardCount) cards", category: .ai)
             ui.updateTimeline(timeline)
             Logger.info("📊 UIStateUpdateHandler: ui.updateTimeline called, new token=\(ui.timelineUIChangeToken)", category: .ai)
+        default:
+            break
+        }
+    }
+
+    // MARK: - Phase Events
+    /// Handle phase transition events - closes window when interview completes
+    func handlePhaseEvent(_ event: OnboardingEvent) async {
+        switch event {
+        case .phaseTransitionApplied(let phase, _):
+            if phase == InterviewPhase.complete.rawValue {
+                Logger.info("🏁 Interview complete - triggering window close", category: .ai)
+                ui.interviewJustCompleted = true
+            }
         default:
             break
         }
