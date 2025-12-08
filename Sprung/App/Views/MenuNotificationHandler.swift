@@ -65,10 +65,8 @@ class MenuNotificationHandler {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            guard let showSlidingList = self?.showSlidingList else { return }
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8, blendDuration: 0.2)) {
-                showSlidingList.wrappedValue.toggle()
-            }
+            // Open the knowledge cards deck browser sheet
+            self?.sheets?.wrappedValue.showKnowledgeCardsBrowser = true
         }
         // Resume Commands
         NotificationCenter.default.addObserver(

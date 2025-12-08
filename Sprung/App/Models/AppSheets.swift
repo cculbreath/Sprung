@@ -17,6 +17,8 @@ struct AppSheets {
     // UI state that was previously in ResumeButtons
     var showResumeInspector = false
     var showCoverLetterInspector = false
+    // Knowledge cards browser
+    var showKnowledgeCardsBrowser = false
 }
 // MARK: - Sheet Presentation ViewModifier
 struct AppSheetsModifier: ViewModifier {
@@ -28,6 +30,7 @@ struct AppSheetsModifier: ViewModifier {
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(AppState.self) private var appState
     @Environment(ResumeReviseViewModel.self) private var resumeReviseViewModel
+    @Environment(ResRefStore.self) private var resRefStore
     private var revisionSheetBinding: Binding<Bool> {
         Binding(
             get: { resumeReviseViewModel.showResumeRevisionSheet },
@@ -102,6 +105,25 @@ struct AppSheetsModifier: ViewModifier {
             .sheet(isPresented: $refPopup) {
                 ResRefView()
                     .padding()
+            }
+            .sheet(isPresented: $sheets.showKnowledgeCardsBrowser) {
+                KnowledgeCardBrowserOverlay(
+                    isPresented: $sheets.showKnowledgeCardsBrowser,
+                    cards: .init(
+                        get: { resRefStore.resRefs },
+                        set: { _ in }
+                    ),
+                    resRefStore: resRefStore,
+                    onCardUpdated: { card in
+                        resRefStore.updateResRef(card)
+                    },
+                    onCardDeleted: { card in
+                        resRefStore.deleteResRef(card)
+                    },
+                    onCardAdded: { card in
+                        resRefStore.addResRef(card)
+                    }
+                )
             }
     }
 }

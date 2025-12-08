@@ -75,8 +75,7 @@ struct ContentView: View {
                     refresh: $tabRefresh,
                     sheets: $sheets,
                     clarifyingQuestions: $clarifyingQuestions,
-                    showNewAppSheet: $sheets.showNewJobApp,
-                    showSlidingList: $showSlidingList
+                    showNewAppSheet: $sheets.showNewJobApp
                 )
             }
         }
