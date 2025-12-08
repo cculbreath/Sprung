@@ -145,7 +145,7 @@ struct SubmitExperienceDefaultsTool: InterviewTool {
                 type: .string,
                 description: """
                     A 2-4 sentence professional summary highlighting the candidate's key strengths,
-                    experience level, and career focus. This will be saved to the Applicant Profile
+                    experience level, and career focus. This will be saved to Experience Defaults
                     for use in resume headers and cover letter introductions.
                     Example: "Senior software engineer with 8+ years building scalable distributed systems.
                     Proven track record leading cross-functional teams and delivering high-impact products.
@@ -236,8 +236,17 @@ struct SubmitExperienceDefaultsTool: InterviewTool {
             }
         }
 
+        // Handle professional_summary - include in filteredPayload for ExperienceDefaults
+        var summarySaved = false
+        if let professionalSummary = params["professional_summary"].string,
+           !professionalSummary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            filteredPayload["professional_summary"].string = professionalSummary
+            summarySaved = true
+            Logger.info("📝 Professional summary included in experience defaults", category: .ai)
+        }
+
         // Check if we have any data to persist
-        guard !includedSections.isEmpty else {
+        guard !includedSections.isEmpty || summarySaved else {
             return .error(.executionFailed(
                 "No valid section data provided. Include at least one enabled section: \(enabledSections.sorted().joined(separator: ", "))"
             ))
@@ -251,17 +260,6 @@ struct SubmitExperienceDefaultsTool: InterviewTool {
 
         // Emit event to populate ExperienceDefaultsStore
         await eventBus.publish(.experienceDefaultsGenerated(defaults: filteredPayload))
-
-        // Handle professional_summary - persist to ApplicantProfile
-        var summarySaved = false
-        if let professionalSummary = params["professional_summary"].string,
-           !professionalSummary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            var profileUpdate = JSON()
-            profileUpdate["summary"].string = professionalSummary
-            await eventBus.publish(.applicantProfileStored(profileUpdate))
-            summarySaved = true
-            Logger.info("📝 Professional summary saved to ApplicantProfile", category: .ai)
-        }
 
         // Build response
         var response = JSON()

@@ -622,6 +622,13 @@ final class CoordinatorEventRouter {
             Logger.info("📋 Added \(pubsArray.count) publications", category: .ai)
         }
 
+        // Process professional summary
+        if let summary = defaults["professional_summary"].string,
+           !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            draft.summary = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+            Logger.info("📋 Added professional summary", category: .ai)
+        }
+
         // Save the draft
         experienceDefaultsStore.save(draft: draft)
         Logger.info("✅ Saved LLM-generated experience defaults to store", category: .ai)

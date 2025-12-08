@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 struct ApplicantProfileEditor: View {
     @Binding var draft: ApplicantProfileDraft
     var showPhotoSection: Bool = true
-    var showsSummary: Bool = true
+    var showsSummary: Bool = false  // Summary moved to Experience Defaults
     var showsProfessionalLabel: Bool = true
     var emailSuggestions: [String] = []
     @State private var selectedProfileID: UUID?

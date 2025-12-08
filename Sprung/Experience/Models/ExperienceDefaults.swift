@@ -3,6 +3,8 @@ import SwiftData
 @Model
 final class ExperienceDefaults {
     @Attribute(.unique) var id: UUID
+    /// Professional summary for resume headers and cover letter introductions
+    var summary: String
     var isWorkEnabled: Bool
     var isVolunteerEnabled: Bool
     var isEducationEnabled: Bool
@@ -38,6 +40,7 @@ final class ExperienceDefaults {
     var references: [ReferenceExperienceDefault]
     init(
         id: UUID = UUID(),
+        summary: String = "",
         isWorkEnabled: Bool = false,
         isVolunteerEnabled: Bool = false,
         isEducationEnabled: Bool = false,
@@ -62,6 +65,7 @@ final class ExperienceDefaults {
         references: [ReferenceExperienceDefault] = []
     ) {
         self.id = id
+        self.summary = summary
         self.isWorkEnabled = isWorkEnabled
         self.isVolunteerEnabled = isVolunteerEnabled
         self.isEducationEnabled = isEducationEnabled
