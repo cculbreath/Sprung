@@ -1,6 +1,8 @@
 import Foundation
 import SwiftData
 struct ExperienceDefaultsDraft: Equatable {
+    /// Professional summary for resume headers and cover letter introductions
+    var summary: String = ""
     var isWorkEnabled: Bool = false
     var isVolunteerEnabled: Bool = false
     var isEducationEnabled: Bool = false
@@ -26,6 +28,7 @@ struct ExperienceDefaultsDraft: Equatable {
 }
 extension ExperienceDefaultsDraft {
     init(model: ExperienceDefaults) {
+        summary = model.summary
         isWorkEnabled = model.isWorkEnabled
         isVolunteerEnabled = model.isVolunteerEnabled
         isEducationEnabled = model.isEducationEnabled
@@ -50,6 +53,7 @@ extension ExperienceDefaultsDraft {
         references = model.references.map(ReferenceExperienceDraft.init)
     }
     func apply(to model: ExperienceDefaults, in context: ModelContext) {
+        model.summary = summary
         model.isWorkEnabled = isWorkEnabled
         model.isVolunteerEnabled = isVolunteerEnabled
         model.isEducationEnabled = isEducationEnabled

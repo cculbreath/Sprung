@@ -102,6 +102,10 @@ struct ExperienceEditorView: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
+                        // Professional Summary section
+                        professionalSummarySection
+
+                        // Dynamic sections from section renderers
                         ForEach(activeSectionRenderers) { renderer in
                             renderer.render(in: $draft, callbacks: sectionCallbacks)
                         }
@@ -113,6 +117,38 @@ struct ExperienceEditorView: View {
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.82), value: showSectionBrowser)
     }
+
+    // MARK: - Professional Summary Section
+
+    private var professionalSummarySection: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Professional Summary")
+                    .font(.subheadline.weight(.medium))
+                Text("A 2-4 sentence summary highlighting your key strengths, experience level, and career focus. Used in resume headers and cover letter introductions.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextEditor(text: $draft.summary)
+                    .frame(minHeight: 100)
+                    .padding(6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.gray.opacity(0.15), lineWidth: 1)
+                    )
+                    .onChange(of: draft.summary) { _, _ in
+                        markDirty()
+                    }
+            }
+        } label: {
+            HStack {
+                Image(systemName: "text.quote")
+                    .foregroundStyle(.purple)
+                Text("Summary")
+                    .font(.headline)
+            }
+        }
+    }
+
     // MARK: - Actions
     private func markDirty() {
         hasChanges = true
