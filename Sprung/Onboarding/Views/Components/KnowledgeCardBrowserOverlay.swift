@@ -85,7 +85,7 @@ struct KnowledgeCardBrowserOverlay: View {
                 cardNavigationSection
             }
         }
-        .frame(width: 620, height: 680)
+        .frame(width: 720, height: 680)
         .background(Color(nsColor: .windowBackgroundColor))
         .focusable()
         .onAppear {
@@ -338,13 +338,17 @@ struct KnowledgeCardBrowserOverlay: View {
 
     @ViewBuilder
     private func coverflowCard(card: ResRef, index: Int, distanceFromCenter: CGFloat, isCenter: Bool) -> some View {
-        let rotation = min(max(distanceFromCenter * 45, -60), 60)
-        let scale = max(0.75, 1 - abs(distanceFromCenter) * 0.2)
-        let opacity = max(0.5, 1 - abs(distanceFromCenter) * 0.4)
+        // For the selected card, always face forward regardless of scroll position
+        let isSelected = index == currentIndex
+        let effectiveDistance = isSelected ? 0 : distanceFromCenter
+
+        let rotation = min(max(effectiveDistance * 50, -65), 65)
+        let scale = isSelected ? 1.0 : max(0.7, 1 - abs(distanceFromCenter) * 0.25)
+        let opacity = isSelected ? 1.0 : max(0.4, 1 - abs(distanceFromCenter) * 0.5)
 
         KnowledgeCardView(
             resRef: card,
-            isTopCard: isCenter,
+            isTopCard: isSelected,
             onEdit: {
                 currentIndex = index
                 editingCard = card
@@ -361,10 +365,10 @@ struct KnowledgeCardBrowserOverlay: View {
             axis: (x: 0, y: 1, z: 0),
             anchor: .center,
             anchorZ: 0,
-            perspective: 0.5
+            perspective: 0.4
         )
         .opacity(opacity)
-        .zIndex(Double(isCenter ? 100 : 50) - Double(abs(distanceFromCenter)) * 10)
+        .zIndex(isSelected ? 100.0 : 50.0 - Double(abs(distanceFromCenter)) * 10.0)
         .onTapGesture {
             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                 currentIndex = index
