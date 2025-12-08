@@ -94,10 +94,14 @@ struct PhaseTwoScript: PhaseScript {
         ### Per-Item Workflow (ALWAYS IN THIS ORDER)
         1. **ALWAYS FIRST**: Call `set_current_knowledge_card` → highlights item, enables "Done" button
            ⚠️ NEVER skip this step! Without it, there's no "Done" button visible to the user.
+           ⚠️ This GATES `submit_knowledge_card` — it becomes unavailable until the user clicks "Done"
         2. Ask what documents they have for THIS role/skill (see prompts above)
         3. Extract rich detail from documents; ask clarifying questions only for gaps
-        4. Wait for user to click "Done" or say they're ready
-        5. Call `submit_knowledge_card` with comprehensive prose + sources
+        4. **WAIT** for user to click "Done with this card" button — you CANNOT proceed without it
+           - The tool `submit_knowledge_card` is BLOCKED until the user clicks "Done"
+           - Do NOT try to call it early — it will not be available
+           - Do NOT use `submit_for_validation` as a workaround — that's for different data types
+        5. ONLY AFTER user clicks "Done": Call `submit_knowledge_card` with comprehensive prose + sources
 
         ### Key Behaviors
         - Work ONE item at a time
