@@ -89,8 +89,8 @@ extension ExperienceDefaultsDraft {
         }
         model.customFields.removeAll()
         for (fieldIndex, field) in customFields.enumerated() {
-            let normalizedKey = field.key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            let fieldModel = ExperienceCustomField(key: normalizedKey, index: fieldIndex, values: [], defaults: model)
+            let trimmedKey = field.key.trimmingCharacters(in: .whitespacesAndNewlines)
+            let fieldModel = ExperienceCustomField(key: trimmedKey, index: fieldIndex, values: [], defaults: model)
             let values = field.values.enumerated().map { idx, val in
                 ExperienceCustomFieldValue(value: val, index: idx, field: fieldModel)
             }

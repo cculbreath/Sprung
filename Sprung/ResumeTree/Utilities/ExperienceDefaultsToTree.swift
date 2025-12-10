@@ -46,8 +46,8 @@ final class ExperienceDefaultsToTree {
             buildSection(key: sectionKey, parent: root)
         }
 
-        // Build template utility fields (styling, sectionLabels) from manifest defaults
-        buildTemplateFields(parent: root)
+        // Note: Template fields (sectionLabels, fontSizes) are added to context at render time
+        // by ResumeContextBuilder, not stored in TreeNode. They come from manifest defaults.
 
         // Apply default AI fields from manifest
         if let defaultFields = manifest.defaultAIFields, !defaultFields.isEmpty {
@@ -592,56 +592,6 @@ final class ExperienceDefaultsToTree {
                 fieldNode.value = firstValue.value
                 fieldNode.status = .saved
             }
-        }
-    }
-
-    // MARK: - Template Fields (from manifest defaults, not user data)
-
-    /// Build template utility fields from manifest defaults.
-    /// All template fields go under "template." namespace (e.g., template.sectionLabels.work)
-    /// distinct from customFields which are user experience data.
-    private func buildTemplateFields(parent: TreeNode) {
-        let templateNode = parent.addChild(TreeNode(
-            name: "template",
-            value: "",
-            inEditor: true,
-            status: .isNotLeaf,
-            resume: resume
-        ))
-
-        // fontSizes from styling section defaults
-        if let stylingSection = manifest.section(for: "styling"),
-           let defaultContext = stylingSection.defaultContextValue() as? [String: Any],
-           let fontSizes = defaultContext["fontSizes"] as? [String: String] {
-            buildTemplateFieldGroup(name: "fontSizes", values: fontSizes, parent: templateNode)
-        }
-
-        // sectionLabels from manifest
-        if let sectionLabels = manifest.sectionVisibilityLabels {
-            buildTemplateFieldGroup(name: "sectionLabels", values: sectionLabels, parent: templateNode)
-        }
-    }
-
-    /// Generic builder for template field groups (dictionaries of string values)
-    private func buildTemplateFieldGroup(name: String, values: [String: String], parent: TreeNode) {
-        guard !values.isEmpty else { return }
-
-        let groupNode = parent.addChild(TreeNode(
-            name: name,
-            value: "",
-            inEditor: true,
-            status: .isNotLeaf,
-            resume: resume
-        ))
-
-        for (key, value) in values.sorted(by: { $0.key < $1.key }) {
-            _ = groupNode.addChild(TreeNode(
-                name: key,
-                value: value,
-                inEditor: true,
-                status: .saved,
-                resume: resume
-            ))
         }
     }
 

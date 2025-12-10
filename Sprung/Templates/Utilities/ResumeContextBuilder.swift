@@ -61,15 +61,41 @@ enum ResumeContextBuilder {
         var context = mergeApplicantProfile(profile, into: treeContext)
 
         // Step 3: Apply section visibility from manifest + resume overrides
+        // Step 4: Add template fields from manifest (sectionLabels, fontSizes)
         if let template = resume.template,
            let manifest = TemplateManifestLoader.manifest(for: template) {
             applySectionVisibility(to: &context, manifest: manifest, resume: resume)
+            addTemplateFields(to: &context, manifest: manifest)
         }
 
-        // Step 4: Augment with computed fields
+        // Step 5: Augment with computed fields
         context = HandlebarsContextAugmentor.augment(context)
 
         return context
+    }
+
+    // MARK: - Template Fields (from manifest, added at render time)
+
+    /// Add template fields from manifest defaults.
+    /// These are accessed as template.sectionLabels.work, template.fontSizes.name, etc.
+    private static func addTemplateFields(to context: inout [String: Any], manifest: TemplateManifest) {
+        var templateFields: [String: Any] = [:]
+
+        // sectionLabels from sectionVisibilityLabels
+        if let sectionLabels = manifest.sectionVisibilityLabels, !sectionLabels.isEmpty {
+            templateFields["sectionLabels"] = sectionLabels
+        }
+
+        // fontSizes from styling section defaults
+        if let stylingSection = manifest.section(for: "styling"),
+           let defaultContext = stylingSection.defaultContextValue() as? [String: Any],
+           let fontSizes = defaultContext["fontSizes"] {
+            templateFields["fontSizes"] = fontSizes
+        }
+
+        if !templateFields.isEmpty {
+            context["template"] = templateFields
+        }
     }
 
     // MARK: - ApplicantProfile Merge (Convention-based)
@@ -267,7 +293,6 @@ enum ResumeContextBuilder {
     /// Nest custom fields under a "custom" key for template compatibility.
     /// Custom fields are flattened in TreeNode (for editor display) but templates
     /// expect them under custom.fieldName (e.g., custom.jobTitles, custom.moreInfo).
-    /// Keys are lowercased for case-insensitive matching with templates.
     private static func nestCustomFields(in context: [String: Any]) -> [String: Any] {
         var result: [String: Any] = [:]
         var customFields: [String: Any] = context["custom"] as? [String: Any] ?? [:]
@@ -280,8 +305,8 @@ enum ResumeContextBuilder {
                 // Already a custom container - merge later
                 continue
             } else {
-                // Custom field - nest under "custom" with lowercased key
-                customFields[key.lowercased()] = value
+                // Custom field - nest under "custom", preserve original key case
+                customFields[key] = value
             }
         }
 
