@@ -299,6 +299,222 @@ extension TreeNode {
         schemaAllowsNodeDeletion || (parent?.schemaAllowsChildMutation ?? false)
     }
 }
+// MARK: - Hierarchical Review Export (Two-Phase Skills Review)
+extension TreeNode {
+    /// Export skill categories for Phase 1 review (category structure)
+    /// Returns category info without full keyword lists
+    static func exportSkillCategories(from rootNode: TreeNode) -> [(id: String, name: String, keywordCount: Int)] {
+        var categories: [(id: String, name: String, keywordCount: Int)] = []
+
+        // Find the skills section
+        guard let skillsNode = rootNode.findChildByName("skills") else {
+            Logger.debug("⚠️ exportSkillCategories: No 'skills' node found")
+            return categories
+        }
+
+        // Each direct child of skills is a category
+        for category in skillsNode.orderedChildren {
+            let categoryName = category.name.isEmpty ? category.value : category.name
+
+            // Count keywords - look for a "keywords" child node
+            var keywordCount = 0
+            if let keywordsNode = category.findChildByName("keywords") {
+                keywordCount = keywordsNode.children?.count ?? 0
+            }
+
+            categories.append((
+                id: category.id,
+                name: categoryName,
+                keywordCount: keywordCount
+            ))
+        }
+
+        Logger.debug("📊 Exported \(categories.count) skill categories for Phase 1 review")
+        return categories
+    }
+
+    /// Export keywords array for a specific category (Phase 2 review)
+    /// Returns the category info plus its full keywords list
+    static func exportCategoryKeywords(categoryId: String, from rootNode: TreeNode) -> (categoryName: String, keywords: [String])? {
+        guard let skillsNode = rootNode.findChildByName("skills") else {
+            Logger.debug("⚠️ exportCategoryKeywords: No 'skills' node found")
+            return nil
+        }
+
+        // Find the category by ID
+        guard let category = skillsNode.children?.first(where: { $0.id == categoryId }) else {
+            Logger.debug("⚠️ exportCategoryKeywords: Category with ID \(categoryId) not found")
+            return nil
+        }
+
+        let categoryName = category.name.isEmpty ? category.value : category.name
+
+        // Extract keywords from the "keywords" child
+        var keywords: [String] = []
+        if let keywordsNode = category.findChildByName("keywords") {
+            keywords = keywordsNode.orderedChildren.compactMap { keyword in
+                let value = keyword.value.isEmpty ? keyword.name : keyword.value
+                return value.isEmpty ? nil : value
+            }
+        }
+
+        Logger.debug("📊 Exported \(keywords.count) keywords for category '\(categoryName)'")
+        return (categoryName: categoryName, keywords: keywords)
+    }
+
+    /// Find a child node by name (case-insensitive)
+    func findChildByName(_ name: String) -> TreeNode? {
+        let lowercasedName = name.lowercased()
+        return children?.first { $0.name.lowercased() == lowercasedName }
+    }
+
+    /// Apply category structure changes from Phase 1 review
+    /// Handles rename, remove, merge operations
+    @MainActor
+    static func applyCategoryStructureChanges(
+        _ changes: [CategoryRevisionNode],
+        to rootNode: TreeNode,
+        context: ModelContext
+    ) {
+        guard let skillsNode = rootNode.findChildByName("skills") else {
+            Logger.warning("⚠️ applyCategoryStructureChanges: No 'skills' node found")
+            return
+        }
+
+        for change in changes {
+            guard change.userDecision == .accepted else { continue }
+
+            guard let category = skillsNode.children?.first(where: { $0.id == change.id }) else {
+                if change.action == .add {
+                    // Create new category
+                    let newCategory = TreeNode(
+                        name: change.newName ?? "New Category",
+                        value: "",
+                        children: nil,
+                        parent: skillsNode,
+                        inEditor: true,
+                        status: .saved,
+                        resume: rootNode.resume,
+                        isTitleNode: false
+                    )
+                    skillsNode.addChild(newCategory)
+
+                    // Add keywords container
+                    let keywordsNode = TreeNode(
+                        name: "keywords",
+                        value: "",
+                        children: nil,
+                        parent: newCategory,
+                        inEditor: true,
+                        status: .saved,
+                        resume: rootNode.resume,
+                        isTitleNode: false
+                    )
+                    newCategory.addChild(keywordsNode)
+
+                    Logger.info("✅ Added new category: \(change.newName ?? "New Category")")
+                }
+                continue
+            }
+
+            switch change.action {
+            case .keep:
+                break // No action needed
+
+            case .rename:
+                if let newName = change.newName {
+                    category.name = newName
+                    Logger.info("✅ Renamed category to: \(newName)")
+                }
+
+            case .remove:
+                deleteTreeNode(node: category, context: context)
+                Logger.info("✅ Removed category: \(change.name)")
+
+            case .merge:
+                if let targetId = change.mergeWith,
+                   let targetCategory = skillsNode.children?.first(where: { $0.id == targetId }) {
+                    // Move all keywords from source to target
+                    if let sourceKeywords = category.findChildByName("keywords"),
+                       let targetKeywords = targetCategory.findChildByName("keywords") {
+                        for keyword in sourceKeywords.orderedChildren {
+                            keyword.parent = targetKeywords
+                            targetKeywords.children?.append(keyword)
+                        }
+                    }
+                    // Delete the source category
+                    deleteTreeNode(node: category, context: context)
+                    Logger.info("✅ Merged category '\(change.name)' into '\(change.mergeWithName ?? targetId)'")
+                }
+
+            case .add:
+                break // Handled above when category not found
+            }
+        }
+
+        do {
+            try context.save()
+            Logger.debug("✅ Saved category structure changes")
+        } catch {
+            Logger.error("❌ Failed to save category structure changes: \(error)")
+        }
+    }
+
+    /// Apply keywords array changes from Phase 2 review
+    /// Syncs the keywords container with the approved array
+    @MainActor
+    static func applyKeywordsChanges(
+        categoryId: String,
+        newKeywords: [String],
+        to rootNode: TreeNode,
+        context: ModelContext
+    ) {
+        guard let skillsNode = rootNode.findChildByName("skills") else {
+            Logger.warning("⚠️ applyKeywordsChanges: No 'skills' node found")
+            return
+        }
+
+        guard let category = skillsNode.children?.first(where: { $0.id == categoryId }) else {
+            Logger.warning("⚠️ applyKeywordsChanges: Category with ID \(categoryId) not found")
+            return
+        }
+
+        guard let keywordsNode = category.findChildByName("keywords") else {
+            Logger.warning("⚠️ applyKeywordsChanges: No 'keywords' node in category")
+            return
+        }
+
+        // Remove all existing keywords
+        for keyword in keywordsNode.orderedChildren {
+            context.delete(keyword)
+        }
+        keywordsNode.children?.removeAll()
+
+        // Add new keywords
+        for (index, keywordValue) in newKeywords.enumerated() {
+            let keywordNode = TreeNode(
+                name: "",
+                value: keywordValue,
+                children: nil,
+                parent: keywordsNode,
+                inEditor: true,
+                status: .saved,
+                resume: rootNode.resume,
+                isTitleNode: false
+            )
+            keywordNode.myIndex = index
+            keywordsNode.addChild(keywordNode)
+        }
+
+        do {
+            try context.save()
+            Logger.info("✅ Applied \(newKeywords.count) keywords to category")
+        } catch {
+            Logger.error("❌ Failed to save keywords changes: \(error)")
+        }
+    }
+}
+
 // MARK: - JSON Conversion Extension
 extension TreeNode {
     /// Convert TreeNode to JSON string representation
