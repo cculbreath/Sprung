@@ -12,6 +12,7 @@
         "key": "moreInfo"
       },
       {
+        "behavior": "sectionLabels",
         "children": [
           {
             "input": "text",
@@ -40,7 +41,8 @@
     "projects",
     "education",
     "skills",
-    "custom",
+    "custom.jobTitles",
+    "custom.moreInfo",
     "styling"
   ],
   "section-visibility": {
@@ -66,24 +68,30 @@
   ],
   "styling": {
     "fontSizes": {
-      "boxTitles": "20pt",
-      "contact": "11pt",
+      "boxTitles": "16pt",
+      "contact": "10pt",
       "degreeNames": "12pt",
-      "employerName": "11pt",
+      "employerName": "12pt",
       "moreInfo": "11pt",
-      "name": "40pt",
-      "projectText": "10pt",
-      "schools": "11pt",
+      "name": "48pt",
+      "projectText": "10.5pt",
+      "schools": "10.5pt",
       "sectionTitle": "16pt",
-      "skillDescriptions": "10pt",
+      "skillDescriptions": "10.5pt",
       "skillNames": "11.5pt",
-      "summary": "12pt",
-      "workDates": "11pt",
+      "summary": "11pt",
+      "workDates": "10pt",
       "workHighlights": "10pt"
     }
   },
   "transparentKeys": [
     "basics",
     "custom"
-  ]
+  ],
+  "editorLabels": {
+    "basics": "Contact Info",
+    "basics.summary": "Professional Summary",
+    "custom.jobTitles": "Job Titles",
+    "custom.moreInfo": "Additional Info"
+  }
 }

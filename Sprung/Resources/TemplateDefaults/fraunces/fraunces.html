@@ -24,12 +24,10 @@
             a { text-decoration: none; color: black; }
             /* 3. Layout Containers */
             .page-wrapper {
-                margin-top: 0.180in;
-                padding-left: 0.3in;
-                padding-right: 0.3in;
+                margin-top: 0;
+                padding: 6pt 0;
                 width: 100%;
                 box-sizing: border-box;
-                min-height: 100vh;
             }
             .flex-container {
                 display: flex;
@@ -38,27 +36,24 @@
                 flex-direction: row;
                 flex-wrap: wrap;
                 justify-content: center;
-                margin-bottom: 3.75pt;
+                margin-bottom: 8pt;
                 border: var(--debug-border-width) solid var(--debug-border-color);
             }
             .main-content {
                 display: grid;
-                grid-template-columns: 2.0625in 1fr;
-                column-gap: 18pt;
+                grid-template-columns: 2.35in 1fr;
+                column-gap: 20pt;
                 width: 100%;
-                max-width: 7.7in;
-                margin: 0 auto;
-                padding: 0;
-                page-break-inside: avoid;
-                break-inside: avoid;
+                margin: 4pt 0 0 0;
+                padding: 0 4pt;
                 border: var(--debug-border-width) solid var(--debug-border-color);
             }
             .left-column, .right-column {
                 font-variant-numeric: lining-nums;
                 display: flex;
                 flex-direction: column;
-                justify-content: space-between;
-                height: 5.878in;
+                justify-content: flex-start;
+                /* Removed fixed height to allow multi-page flow */
                 border: var(--debug-border-width) solid var(--debug-border-color-secondary);
             }
             .right-column {
@@ -71,7 +66,8 @@
                 text-align: center;
                 margin-left: auto;
                 margin-right: auto;
-                margin-top: 14pt;
+                margin-top: -8pt;
+                letter-spacing: 0.3pt;
                 border: var(--debug-border-width) solid var(--debug-border-color);
             }
             .subheader {
@@ -94,7 +90,7 @@
             }
             h3 {
                 font-family: 'Fraunces';
-                font-weight: 600;
+                font-weight: 500;
                 margin: 0;
             }
             h4 {
@@ -128,7 +124,8 @@
             .section-title hr {
                 flex-grow: 1;
                 border: none;
-                border-top: 0.21825pt solid black;
+                border-top: 0.35pt solid #777;
+                opacity: 0.5;
                 margin: 0;
             }
             /* 6. Contact Info */
@@ -137,7 +134,7 @@
                 font-weight: 300;
                 width: 100%;
                 text-align: center;
-                margin: 5.75pt auto 3.75pt auto;
+                margin: 6pt auto 4pt auto;
                 font-variant-numeric: lining-nums;
                 display: flex;
                 flex-direction: row;
@@ -145,29 +142,24 @@
                 justify-content: center;
                 border: var(--debug-border-width) solid var(--debug-border-color);
             }
-            .contact .spacer { padding: 0 9.5pt; }
+            .contact .spacer { padding: 0 10pt; }
             .contact-icon {
-                width: 7pt;
-                height: 7pt;
+                width: 8pt;
+                height: 8pt;
                 display: inline-block;
                 vertical-align: middle;
-                margin-right: 6pt;
+                margin-right: 5pt;
                 fill: currentColor;
             }
             /* 7. Info and Education Boxes */
             .info-box {
                 font-family: 'Fraunces', serif;
                 font-weight: 200;
-                border: 0.375pt solid #444;
-                border-radius: 7px;
-                padding-top: 4pt;
-                padding-right: 3pt;
-                padding-bottom: 5pt;
-                padding-left: 7.5pt;
-                margin-bottom: 0pt;
-                page-break-inside: avoid;
-                break-inside: avoid;
-                
+                background-color: #fff;
+                border: 0.5pt solid #d6d2cc;
+                border-radius: 8px;
+                padding: 6pt 7pt;
+                margin-bottom: 9pt;
             }
             .info-box .light { font-family: 'Fraunces'; font-weight: 400; }
             .info-box .lightitalic {font-family: 'Fraunces'; font-weight: 300; font-style: italic; }
@@ -181,16 +173,19 @@
              .skill-div {
                 font-family: 'Fraunces';
                 font-weight: 300;
-                margin-top: 2pt;
+                margin-top: 4pt;
                 font-variant-numeric: lining-nums;
-                line-height: 1.2;
+                line-height: 1.25;
+            }
+            .skill-name {
+                margin-bottom: 2pt;
             }
             .skill-div strong {
                 font-family: 'Fraunces';
 				font-size: {{styling.fontSizes.skillNames}};
                 font-weight: 500;
-                line-height: 1.2;
-                text-indent: -9.75pt;
+                line-height: 1.1;
+                text-indent: -7pt;
             }
               .edu-head {
 				  display: block;
@@ -199,8 +194,23 @@
                 font-weight: 500;
             }
 			.edu-box {
-				margin-top: auto;
+				margin-top: 0;
 			}
+            .edu-list {
+                list-style: none;
+                padding: 0;
+                margin: 0;
+            }
+            .edu-item {
+                margin-bottom: 7pt;
+            }
+            .edu-item:last-child { margin-bottom: 0; }
+            .edu-meta {
+                font-family: 'Fraunces';
+                font-weight: 300;
+                color: #666;
+                margin-top: 1pt;
+            }
             .skill-name::before { content: '★ '; }
 		.skill-name {
 	margin-bottom: 0.3rem;
@@ -219,9 +229,9 @@
             .top-box ul li {
                 position: relative;
                 font-style: normal;
-                margin-bottom: 3.5px;
-                padding-left: 4px;
-                line-height: 1;
+                margin-bottom: 4pt;
+                padding-left: 10pt;
+                line-height: 1.2;
             }
             .top-box ul li::before {
                 content: "•";
@@ -232,7 +242,7 @@
             /* 10. Projects & Bottom Box */
             .projects {
                 border: var(--debug-border-width) solid var(--debug-border-color-secondary);
-                margin: 0;
+                margin: 3pt 0 0 0;
                 padding: 0;
             }
             .project-list {
@@ -240,9 +250,11 @@
                 padding-left: 10.5pt;
                 border: var(--debug-border-width) solid var(--debug-border-color);
                 margin: 0;
+                line-height: 1.22;
             }
+            .project-list li { margin-bottom: 4pt; }
             .bottom-box {
-				margin-top: auto;
+				margin-top: 10pt;
                 border: 0.375pt solid #444;
                 border-radius: 7px;
                 text-align: center;
@@ -254,36 +266,35 @@
             .right-column ul {
                 font-family: 'Fraunces';
                 font-weight: 300;
-                margin-top: 2.25pt;
-                padding-left: 7.875pt;
+                margin-top: 3pt;
+                padding-left: 9pt;
+                line-height: 1.22;
             }
-            .right-column li { margin-bottom: 0; }
+            .right-column li { margin-bottom: 3pt; line-height: 1.1; }
             .right-column strong { font-family: 'Fraunces'; font-weight: 400; }
             /* 12. Objective and Paragraphs */
             .objective {
                 font-family: 'Fraunces';
                 font-weight: 300;
                 width: 100%;
-                max-width: 5.25in;
-                margin: 0 auto;
-                padding: 5.5pt 6pt 5.25pt 6pt;
-                line-height: 1.1;
+                margin: 0 0 6pt 0;
+                padding: 7pt 9pt 7pt 9pt;
+                line-height: 1.25;
                 text-align: left;
-                border: 0.375pt #444 solid;
-                border-radius: 7px;
+                background: #fff;
+                border: 0.5pt #d9d7d0 solid;
+                border-radius: 9px;
             }
             p {
                 margin: 0 0 1rem;
                 line-height: 1.5;
             }
 			.skill-box {
-				margin-bottom: auto;
                 flex-direction: column;
-                justify-content: space-between;
-				
 			}
 			.edu-box {
 				padding-bottom: 0;
+				margin-top: 0;
 			}
             /* 13. Hidden/Visually Hidden */
             .visually-hidden {
@@ -304,9 +315,9 @@
                 left: -9999px;
                 white-space: nowrap;
             }
-			.edu-head::before { content: '★ '; }
+            .edu-head::before { content: '★ '; }
             /* 14. Print Styles */
-            @page { size: letter; margin: 0; }
+            @page { size: 8.5in 11in; margin: 0.375in; }
             @media print {
                 body { margin: 0; padding: 0; }
             }
@@ -375,13 +386,13 @@
                     </div>
                     <div class="info-box edu-box">
                         <h2>{{{custom.sectionLabels.education}}}</h2>
-                        <ul>
+                        <ul class="edu-list">
                             {{#education}}
-                            
-                                <span class="edu-head">{{{studyType}}} {{{area}}}
-                                <span class="light">{{endDate}}</span></span>
-                                <span class="edu-line">{{{institution}}}</span>
-								
+                            <li class="edu-item">
+                                <div class="edu-head">{{{studyType}}} {{{area}}}</div>
+                                <div class="edu-meta">{{ formatDate(endDate) }}</div>
+                                <div class="edu-line">{{{institution}}}</div>
+                            </li>
                             {{/education}}
                         </ul>
                     </div>

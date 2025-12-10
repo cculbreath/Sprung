@@ -1,6 +1,6 @@
 import SwiftUI
 struct SectionVisibilityPanelView: View {
-    @State private var isExpanded: Bool = true
+    @State private var isExpanded: Bool = false
     @Environment(ResumeDetailVM.self) private var vm: ResumeDetailVM
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -15,13 +15,22 @@ struct SectionVisibilityPanelView: View {
             }
             .padding(.vertical, 2)
             if isExpanded {
-                VStack(alignment: .leading, spacing: 8) {
+                Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
                     ForEach(vm.sectionVisibilityKeysOrdered(), id: \.self) { key in
-                        Toggle(vm.sectionVisibilityLabel(for: key), isOn: vm.sectionVisibilityBinding(for: key))
-                            .toggleStyle(.switch)
+                        GridRow {
+                            Text(vm.sectionVisibilityLabel(for: key))
+                                .font(.subheadline)
+                                .gridColumnAlignment(.leading)
+                            Toggle("", isOn: vm.sectionVisibilityBinding(for: key))
+                                .toggleStyle(.switch)
+                                .controlSize(.small)
+                                .labelsHidden()
+                                .gridColumnAlignment(.trailing)
+                        }
                     }
                 }
-                .padding(.leading, 4)
+                .padding(.leading, 8)
+                .padding(.top, 4)
             }
         }
         .padding(.trailing, 12)

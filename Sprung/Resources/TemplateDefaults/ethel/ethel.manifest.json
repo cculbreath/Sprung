@@ -2,6 +2,7 @@
   "custom": {
     "fields": [
       {
+        "behavior": "sectionLabels",
         "children": [
           {
             "input": "text",
@@ -30,7 +31,6 @@
     "projects",
     "education",
     "skills",
-    "custom",
     "styling"
   ],
   "section-visibility": {
@@ -116,21 +116,26 @@
   },
   "styling": {
     "fontSizes": {
-      "date": "8pt",
-      "decoratorLine": "0pt",
-      "detailHeading": "8pt",
-      "detailPlace": "7.5pt",
-      "email": "7pt",
-      "mainContent": "6.75pt",
-      "name": "20pt",
-      "sectionTitleMain": "10pt",
-      "sidebarContent": "7.5pt",
-      "sidebarHeading": "9pt",
-      "subtitle": "9pt"
+      "date": "10pt",
+      "decoratorLine": "10pt",
+      "detailHeading": "10pt",
+      "detailPlace": "10pt",
+      "email": "10pt",
+      "mainContent": "10pt",
+      "name": "24pt",
+      "sectionTitleMain": "12pt",
+      "sidebarContent": "10pt",
+      "sidebarHeading": "10pt",
+      "subtitle": "10pt"
     }
   },
   "transparentKeys": [
     "basics",
     "custom"
-  ]
+  ],
+  "editorLabels": {
+    "basics": "Contact Info",
+    "basics.label": "Job Title",
+    "basics.summary": "Professional Summary"
+  }
 }

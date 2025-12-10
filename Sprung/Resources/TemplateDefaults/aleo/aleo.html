@@ -24,12 +24,10 @@
             a { text-decoration: none; color: black; }
             /* 3. Layout Containers */
             .page-wrapper {
-                margin-top: 0.180in;
-                padding-left: 0.3in;
-                padding-right: 0.3in;
+                margin-top: 0;
+                padding: 6pt 0;
                 width: 100%;
                 box-sizing: border-box;
-                min-height: 100vh;
             }
             .flex-container {
                 display: flex;
@@ -38,27 +36,23 @@
                 flex-direction: row;
                 flex-wrap: wrap;
                 justify-content: center;
-                margin-bottom: 3.75pt;
+                margin-bottom: 8pt;
                 border: var(--debug-border-width) solid var(--debug-border-color);
             }
             .main-content {
                 display: grid;
-                grid-template-columns: 2.0625in 1fr;
-                column-gap: 18pt;
+                grid-template-columns: 2.35in 1fr;
+                column-gap: 20pt;
                 width: 100%;
-                max-width: 7.7in;
-                margin: 0 auto;
-                padding: 0;
-                page-break-inside: avoid;
-                break-inside: avoid;
+                margin: 4pt 0 0 0;
+                padding: 0 4pt;
                 border: var(--debug-border-width) solid var(--debug-border-color);
             }
             .left-column, .right-column {
                 font-variant-numeric: lining-nums;
                 display: flex;
                 flex-direction: column;
-                justify-content: space-between;
-                height: 5.878in;
+                justify-content: flex-start;
                 border: var(--debug-border-width) solid var(--debug-border-color-secondary);
             }
             .right-column {
@@ -71,7 +65,9 @@
                 text-align: center;
                 margin-left: auto;
                 margin-right: auto;
-                margin-top: 14pt;
+                margin-top: -8pt;
+                margin-bottom: 2pt;
+                letter-spacing: 0.25pt;
                 border: var(--debug-border-width) solid var(--debug-border-color);
             }
             .subheader {
@@ -82,14 +78,14 @@
                 text-align: center;
                 margin-left: auto;
                 margin-right: auto;
-                margin-top: -2.375pt;
-                margin-bottom: 4pt;
+                margin-top: 0pt;
+                margin-bottom: 3pt;
             }
             h2 {
                 font-family: 'Aleo';
                 font-weight: 300;
                 margin: 0;
-                margin-bottom: 3pt;
+                margin-bottom: 2pt;
                 border: var(--debug-border-width) solid var(--debug-border-color);
             }
             h3 {
@@ -98,10 +94,10 @@
                 margin: 0;
             }
             h4 {
-                margin-top: 3pt;
+                margin-top: 2pt;
                 font-family: 'Aleo';
                 font-weight: 300; /* Increased from 200 to fix rendering */
-                margin-bottom: 1.5pt;
+                margin-bottom: 1pt;
                 -webkit-font-smoothing: antialiased;
                 -moz-osx-font-smoothing: grayscale;
             }
@@ -115,7 +111,7 @@
                 align-items: center;
                 text-align: center;
                 margin: 0;
-                margin-bottom: 3pt;
+                margin-bottom: 2pt;
             }
             .section-title h2 {
                 margin: 0 10px;
@@ -128,7 +124,8 @@
             .section-title hr {
                 flex-grow: 1;
                 border: none;
-                border-top: 0.21825pt solid black;
+                border-top: 0.35pt solid #777;
+                opacity: 0.45;
                 margin: 0;
             }
             /* 6. Contact Info */
@@ -137,7 +134,7 @@
                 font-weight: 300;
                 width: 100%;
                 text-align: center;
-                margin: 5.75pt auto 3.75pt auto;
+                margin: 5pt auto 4pt auto;
                 font-variant-numeric: lining-nums;
                 display: flex;
                 flex-direction: row;
@@ -145,29 +142,27 @@
                 justify-content: center;
                 border: var(--debug-border-width) solid var(--debug-border-color);
             }
-            .contact .spacer { padding: 0 9.5pt; }
+            .contact .spacer { padding: 0 11pt; }
             .contact-icon {
-                width: 7pt;
-                height: 7pt;
+                width: 8pt;
+                height: 8pt;
                 display: inline-block;
                 vertical-align: middle;
-                margin-right: 10pt;
+                margin-right: 7pt;
                 fill: currentColor;
             }
             /* 7. Info and Education Boxes */
             .info-box {
                 font-family: 'Aleo', serif;
                 font-weight: 200;
-                border: 0.375pt solid #444;
-                border-radius: 7px;
-                padding-top: 4pt;
-                padding-right: 3pt;
-                padding-bottom: 5pt;
-                padding-left: 7.5pt;
-                margin-bottom: 0pt;
+                background-color: #fff;
+                border: 0.5pt solid #d6d2cc;
+                border-radius: 9px;
+                padding: 6pt 8pt;
+                margin-bottom: 9pt;
                 page-break-inside: avoid;
                 break-inside: avoid;
-                
+
             }
             .info-box .light { font-family: 'Aleo'; font-weight: 400; }
             .info-box .lightitalic {font-family: 'Aleo'; font-weight: 300; font-style: italic; }
@@ -181,16 +176,16 @@
              .skill-div {
                 font-family: 'Aleo';
                 font-weight: 300;
-                margin-top: 2pt;
+                margin-top: 4pt;
                 font-variant-numeric: lining-nums;
-                line-height: 1.2;
+                line-height: 1.22;
             }
             .skill-div strong {
                 font-family: 'Aleo';
 				font-size: {{styling.fontSizes.skillNames}};
                 font-weight: 500;
-                line-height: 1.2;
-                text-indent: -9.75pt;
+                line-height: 1.1;
+                text-indent: -10pt;
             }
               .edu-head {
 				  display: block;
@@ -201,6 +196,19 @@
 			.edu-box {
 				margin-top: auto;
 			}
+            .edu-list {
+                list-style: none;
+                padding: 0;
+                margin: 0;
+            }
+            .edu-item { margin-bottom: 7pt; }
+            .edu-item:last-child { margin-bottom: 0; }
+            .edu-meta {
+                font-family: 'Aleo';
+                font-weight: 300;
+                color: #666;
+                margin-top: 1pt;
+            }
             .skill-div::before { content: '★ '; }
             /* 9. Top Box (Work Experience Bullets) */
             .top-box {
@@ -209,14 +217,14 @@
             .top-box ul {
                 list-style: none;
                 padding-left: 10px;
-                margin: 0 0 4px 0;
+                margin: 0 0 3px 0;
             }
             .top-box ul li {
                 position: relative;
                 font-style: normal;
                 margin-bottom: 3.5px;
-                padding-left: 4px;
-                line-height: 1;
+                padding-left: 10pt;
+                line-height: 1.18;
             }
             .top-box ul li::before {
                 content: "•";
@@ -227,45 +235,48 @@
             /* 10. Projects & Bottom Box */
             .projects {
                 border: var(--debug-border-width) solid var(--debug-border-color-secondary);
-                margin: 0;
+                margin: 3pt 0 0 0;
                 padding: 0;
             }
             .project-list {
                 padding: 0;
-                padding-left: 10.5pt;
+                padding-left: 12pt;
                 border: var(--debug-border-width) solid var(--debug-border-color);
                 margin: 0;
+                line-height: 1.2;
             }
+            .project-list li { margin-bottom: 4pt; }
             .bottom-box {
-				margin-top: auto;
-                border: 0.375pt solid #444;
-                border-radius: 7px;
+				margin-top: 10pt;
+                border: 0.5pt solid #444;
+                border-radius: 9px;
                 text-align: center;
                 font-family: 'Aleo';
                 font-weight: 600;
-                padding: 3pt;
+                padding: 4pt;
             }
             /* 11. Right Column List Adjustments */
             .right-column ul {
                 font-family: 'Aleo';
                 font-weight: 300;
-                margin-top: 2.25pt;
-                padding-left: 7.875pt;
+                margin-top: 3pt;
+                padding-left: 10pt;
+                line-height: 1.2;
             }
-            .right-column li { margin-bottom: 0; }
+            .right-column li { margin-bottom: 3pt; line-height: 1.1; }
             .right-column strong { font-family: 'Aleo'; font-weight: 400; }
             /* 12. Objective and Paragraphs */
             .objective {
                 font-family: 'Aleo';
                 font-weight: 300;
                 width: 100%;
-                max-width: 5.25in;
-                margin: 0 auto;
-                padding: 5.5pt 6pt 5.25pt 6pt;
-                line-height: 1.1;
+                margin: 0 0 6pt 0;
+                padding: 7pt 9pt 7pt 9pt;
+                line-height: 1.24;
                 text-align: left;
-                border: 0.375pt #444 solid;
-                border-radius: 7px;
+                border: 0.5pt #d9d7d0 solid;
+                border-radius: 9px;
+                background: #fff;
             }
             p {
                 margin: 0 0 1rem;
@@ -300,7 +311,7 @@
                 white-space: nowrap;
             }
             /* 14. Print Styles */
-            @page { size: letter; margin: 0; }
+            @page { size: 8.5in 11in; margin: 0.375in; }
             @media print {
                 body { margin: 0; padding: 0; }
             }
@@ -370,12 +381,13 @@
                     </div>
                     <div class="info-box edu-box">
                         <h2>{{{custom.sectionLabels.education}}}</h2>
-                        <ul>
+                        <ul class="edu-list">
                             {{#education}}
-                            
-                                <span style="font-weight: 250; font-size: {{{styling.fontSizes.degreeNames}}};">
-                                {{endDate}} ★ <span style="font-weight: 400;">{{{studyType}}}<span class="edu-line">{{{institution}}}</span></span>
-								
+                            <li class="edu-item">
+                                <div class="edu-head">{{{studyType}}} {{{area}}}</div>
+                                <div class="edu-meta">{{ formatDate(endDate) }}</div>
+                                <div class="edu-line">{{{institution}}}</div>
+                            </li>
                             {{/education}}
                         </ul>
                     </div>
