@@ -286,7 +286,7 @@
           <div class="edu-card">
             <div class="edu-title">{{{institution}}}</div>
             <div class="edu-subtitle">
-              {{#hasContent(custom.degree)}}{{custom.degree}}{{/hasContent(custom.degree)}}{{^hasContent(custom.degree)}}{{#hasContent(studyType)}}{{studyType}}{{/hasContent(studyType)}}{{/hasContent(custom.degree)}}
+              {{#hasContent(studyType)}}{{studyType}}{{/hasContent(studyType)}}
               {{#hasContent(area)}} · {{area}}{{/hasContent(area)}}
             </div>
             <div class="edu-dates">{{ formatDate(startDate) }}{{#hasContent(endDate)}} – {{ formatDate(endDate) }}{{/hasContent(endDate)}}</div>

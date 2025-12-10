@@ -63,7 +63,7 @@
 {{{ sectionLine(custom.sectionLabels.education, 80) }}}
 {{#education}}
 {{ institution }}{{#hasContent(url)}} | {{{ url }}}{{/hasContent(url)}}
-{{#hasContent(custom.degree)}}{{ custom.degree }}{{/hasContent(custom.degree)}}{{^hasContent(custom.degree)}}{{#hasContent(studyType)}}{{ studyType }}{{/hasContent(studyType)}}{{/hasContent(custom.degree)}}
+{{#hasContent(studyType)}}{{ studyType }}{{/hasContent(studyType)}}
 {{#hasContent(area)}}{{ area }}{{#hasContent(endDate)}} – {{ formatDate(endDate) }}{{/hasContent(endDate)}}{{/hasContent(area)}}
 {{^hasContent(area)}}{{#hasContent(endDate)}}{{ formatDate(endDate) }}{{/hasContent(endDate)}}{{/hasContent(area)}}
 {{#hasContent(score)}}Score: {{ score }}{{/hasContent(score)}}
