@@ -91,6 +91,10 @@
   "editorLabels": {
     "basics": "Contact Info",
     "basics.summary": "Professional Summary",
+    "work": "Work Experience",
+    "projects": "Projects",
+    "education": "Education",
+    "skills": "Skills",
     "custom.jobTitles": "Job Titles",
     "custom.moreInfo": "Additional Info"
   }

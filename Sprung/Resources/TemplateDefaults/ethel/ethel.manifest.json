@@ -137,6 +137,10 @@
   "editorLabels": {
     "basics": "Contact Info",
     "basics.label": "Job Title",
-    "basics.summary": "Professional Summary"
+    "basics.summary": "Professional Summary",
+    "work": "Work Experience",
+    "projects": "Projects",
+    "education": "Education",
+    "skills": "Skills"
   }
 }
