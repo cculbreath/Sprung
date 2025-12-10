@@ -51,7 +51,7 @@ struct TemplateManifestOverrides: Codable {
 enum TemplateManifestDefaults {
     // MARK: - Public API
     static let defaultSectionOrder: [String] = [
-        "basics",
+        "summary",
         "work",
         "volunteer",
         "education",
@@ -180,6 +180,7 @@ enum TemplateManifestDefaults {
     private static let baseSections: [String: TemplateManifest.Section] = {
         var sections: [String: TemplateManifest.Section] = [:]
         sections["basics"] = basicsSection()
+        sections["summary"] = summarySection()
         sections["work"] = workSection()
         sections["volunteer"] = volunteerSection()
         sections["education"] = educationSection()
@@ -196,6 +197,14 @@ enum TemplateManifestDefaults {
         return sections
     }()
     // MARK: - Section Builders
+    private static func summarySection() -> TemplateManifest.Section {
+        // Summary is a single text value (professional summary / objective)
+        TemplateManifest.Section(
+            type: .string,
+            defaultValue: nil,
+            fields: [field("summary", input: .textarea)]
+        )
+    }
     private static func basicsSection() -> TemplateManifest.Section {
         let fields: [TemplateManifest.Section.FieldDescriptor] = [
             field("name", input: .text, required: true, binding: ["name"]),
