@@ -195,7 +195,6 @@ enum TemplateManifestDefaults {
             field("url", input: .url, binding: ["url"]),
             field("image", input: .text, binding: ["picture"]),
             field("website", input: .url, binding: ["websites"]),
-            locationField(),
             profilesField()
         ]
         return TemplateManifest.Section(

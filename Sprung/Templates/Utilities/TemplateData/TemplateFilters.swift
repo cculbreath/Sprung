@@ -12,6 +12,7 @@ enum TemplateFilters {
         template.register(wrapFilter, forKey: "wrap")
         template.register(sectionLineFilter, forKey: "sectionLine")
         template.register(joinFilter, forKey: "join")
+        template.register(joinBulletFilter, forKey: "joinBullet")
         template.register(concatPairFilter, forKey: "concatPair")
         template.register(htmlStripFilter, forKey: "htmlStrip")
         template.register(htmlDecodeFilter, forKey: "htmlDecode")
@@ -46,6 +47,13 @@ enum TemplateFilters {
         let separator = string(from: boxes[safe: 1]) ?? " \u{00B7} "
         let decodedItems = items.map { $0.decodingHTMLEntities() }
         let joined = TextFormatHelpers.joiner(decodedItems, separator: separator)
+        return joined.isEmpty ? nil : joined
+    }
+    private static let joinBulletFilter = VariadicFilter { boxes -> Any? in
+        guard let arrayBox = boxes.first else { return nil }
+        guard let items = arrayOfStrings(from: arrayBox) else { return nil }
+        let decodedItems = items.map { $0.decodingHTMLEntities() }
+        let joined = TextFormatHelpers.joiner(decodedItems, separator: " \u{00B7} ")
         return joined.isEmpty ? nil : joined
     }
     private static let concatPairFilter = VariadicFilter { boxes -> Any? in

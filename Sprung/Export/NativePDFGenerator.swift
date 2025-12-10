@@ -1,40 +1,211 @@
 import Foundation
 import Mustache
 import OrderedCollections
-import WebKit
+
 @MainActor
-class NativePDFGenerator: NSObject, ObservableObject {
+class NativePDFGenerator: ObservableObject {
     private let templateStore: TemplateStore
     private let profileProvider: ApplicantProfileProviding
-    private var webView: WKWebView?
-    private var currentCompletion: ((Result<Data, Error>) -> Void)?
+
     init(templateStore: TemplateStore, profileProvider: ApplicantProfileProviding) {
         self.templateStore = templateStore
         self.profileProvider = profileProvider
-        super.init()
-        setupWebView()
     }
-    private func setupWebView() {
-        let configuration = WKWebViewConfiguration()
-        // Full letter size - margins will be handled in CSS
-        let pageRect = CGRect(x: 0, y: 0, width: 612, height: 792)
-        webView = WKWebView(frame: pageRect, configuration: configuration)
-        webView?.navigationDelegate = self
+
+    /// Check if Chrome/Chromium is available (bundled first, then system)
+    private func findChrome() -> String? {
+        // First check for bundled Chromium in app Resources
+        if let bundledURL = Bundle.main.url(forResource: "Chromium", withExtension: "app", subdirectory: nil) {
+            let chromiumPath = bundledURL.appendingPathComponent("Contents/MacOS/Chromium").path
+            if FileManager.default.isExecutableFile(atPath: chromiumPath) {
+                Logger.debug("NativePDFGenerator: Using bundled Chromium")
+                return chromiumPath
+            }
+        }
+        // Also check Resources/chromium-headless-shell for minimal headless build
+        if let shellURL = Bundle.main.url(forResource: "chrome-headless-shell", withExtension: nil, subdirectory: "chromium-headless-shell") {
+            if FileManager.default.isExecutableFile(atPath: shellURL.path) {
+                Logger.debug("NativePDFGenerator: Using bundled chrome-headless-shell")
+                return shellURL.path
+            }
+        }
+        // Fall back to system installations
+        let chromePaths = [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Chromium.app/Contents/MacOS/Chromium",
+            "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
+            "/opt/homebrew/bin/chromium",
+            "/usr/local/bin/chromium"
+        ]
+        for path in chromePaths {
+            if FileManager.default.isExecutableFile(atPath: path) {
+                Logger.debug("NativePDFGenerator: Using system Chrome at \(path)")
+                return path
+            }
+        }
+        return nil
     }
-    func generatePDF(for resume: Resume, template: String, format: String = "html") async throws -> Data {
-        return try await withCheckedThrowingContinuation { continuation in
-            Task { @MainActor in
-                do {
-                    let htmlContent = try renderTemplate(for: resume, template: template, format: format)
-                    currentCompletion = { result in
-                        continuation.resume(with: result)
-                    }
-                    webView?.loadHTMLString(htmlContent, baseURL: nil)
-                } catch {
-                    continuation.resume(throwing: error)
+
+    /// Rewrite any paged.polyfill.js reference to a local file:// URL and copy the bundled script into tempDir.
+    private func rewriteHTMLForLocalPagedJS(_ html: String, tempDir: URL) -> String {
+        // Match src with paged.polyfill.js (relative or CDN)
+        let pattern = #"<script[^>]*src=['\"]([^\"']*paged\.polyfill\.js)[\"'][^>]*>\s*</script>"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return html
+        }
+        let nsrange = NSRange(location: 0, length: (html as NSString).length)
+        guard regex.firstMatch(in: html, options: [], range: nsrange) != nil else {
+            return html
+        }
+
+        // Try to find paged.polyfill.js from bundle
+        var sourceURL: URL?
+        Logger.info("NativePDFGenerator: Searching for paged.polyfill.js...")
+        Logger.info("NativePDFGenerator: Bundle.main.resourceURL = \(Bundle.main.resourceURL?.path ?? "nil")")
+
+        if let bundledURL = Bundle.main.url(forResource: "paged.polyfill", withExtension: "js") {
+            sourceURL = bundledURL
+            Logger.info("NativePDFGenerator: Found paged.polyfill.js via Bundle.main.url at \(bundledURL.path)")
+        } else if let bundledURL = Bundle.main.url(forResource: "paged.polyfill", withExtension: "js", subdirectory: "Resources") {
+            sourceURL = bundledURL
+            Logger.info("NativePDFGenerator: Found paged.polyfill.js in Resources subdirectory at \(bundledURL.path)")
+        } else if let resourcesURL = Bundle.main.resourceURL {
+            // Search for the file in the bundle
+            let possiblePaths = [
+                resourcesURL.appendingPathComponent("paged.polyfill.js"),
+                resourcesURL.appendingPathComponent("Resources/paged.polyfill.js")
+            ]
+            for path in possiblePaths {
+                Logger.info("NativePDFGenerator: Checking path: \(path.path)")
+                if FileManager.default.fileExists(atPath: path.path) {
+                    sourceURL = path
+                    Logger.info("NativePDFGenerator: Found paged.polyfill.js at \(path.path)")
+                    break
                 }
             }
         }
+
+        guard let pagedJSURL = sourceURL else {
+            Logger.error("NativePDFGenerator: paged.polyfill.js not found in bundle; PDF may render incorrectly")
+            return html
+        }
+
+        // Copy to tempDir so relative paths work
+        let destination = tempDir.appendingPathComponent("paged.polyfill.js")
+        do {
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
+            }
+            try FileManager.default.copyItem(at: pagedJSURL, to: destination)
+        } catch {
+            Logger.warning("NativePDFGenerator: Failed to copy paged.polyfill.js: \(error)")
+            return html
+        }
+
+        let fileURLString = "file://\(destination.path)"
+        let rewritten = regex.stringByReplacingMatches(
+            in: html,
+            options: [],
+            range: nsrange,
+            withTemplate: "<script src=\"\(fileURLString)\"></script>"
+        )
+        Logger.info("NativePDFGenerator: Rewrote paged.polyfill.js to local file URL")
+        return rewritten
+    }
+
+    /// Generate PDF using headless Chrome for proper CSS/font support
+    private func generatePDFWithChrome(html: String) async throws -> Data {
+        guard let chromePath = findChrome() else {
+            Logger.error("NativePDFGenerator: Chrome not found")
+            throw PDFGeneratorError.chromeNotFound
+        }
+
+        // Create temp files for input HTML and output PDF
+        let tempDir = FileManager.default.temporaryDirectory
+        let htmlFile = tempDir.appendingPathComponent(UUID().uuidString + ".html")
+        let pdfFile = tempDir.appendingPathComponent(UUID().uuidString + ".pdf")
+
+        defer {
+            try? FileManager.default.removeItem(at: htmlFile)
+            try? FileManager.default.removeItem(at: pdfFile)
+        }
+
+        // Inline external fonts (Google Fonts, etc.) for offline rendering
+        let htmlWithInlinedFonts = await inlineExternalFonts(in: html)
+
+        // Rewrite Paged.js references to bundled copy (for offline/headless rendering)
+        let htmlWithLocalPaged = rewriteHTMLForLocalPagedJS(htmlWithInlinedFonts, tempDir: tempDir)
+        try htmlWithLocalPaged.write(to: htmlFile, atomically: true, encoding: .utf8)
+
+        // Run headless Chrome
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: chromePath)
+
+        // Set library path for bundled chrome-headless-shell
+        let chromeDir = URL(fileURLWithPath: chromePath).deletingLastPathComponent()
+        let libDir = chromeDir.appendingPathComponent("lib").path
+        var environment = ProcessInfo.processInfo.environment
+        environment["DYLD_LIBRARY_PATH"] = libDir
+        process.environment = environment
+        process.currentDirectoryURL = chromeDir  // Run from chrome's directory
+
+        process.arguments = [
+            "--headless=new",
+            "--disable-gpu",
+            "--no-sandbox",
+            "--disable-software-rasterizer",
+            "--run-all-compositor-stages-before-draw",
+            "--print-to-pdf=\(pdfFile.path)",
+            "--no-pdf-header-footer",
+            "--print-to-pdf-no-header",
+            // Wait for Paged.js to complete DOM transformation
+            "--virtual-time-budget=10000",
+            "file://\(htmlFile.path)"
+        ]
+
+        let errorPipe = Pipe()
+        process.standardError = errorPipe
+
+        Logger.info("NativePDFGenerator: Running headless Chrome...")
+
+        return try await withCheckedThrowingContinuation { continuation in
+            process.terminationHandler = { _ in
+                let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+                let errorMessage = String(data: errorData, encoding: .utf8) ?? ""
+
+                // Log stderr (Chrome outputs info there)
+                if !errorMessage.isEmpty {
+                    Logger.debug("NativePDFGenerator: Chrome stderr: \(errorMessage)")
+                }
+
+                if process.terminationStatus == 0 {
+                    do {
+                        let pdfData = try Data(contentsOf: pdfFile)
+                        Logger.info("NativePDFGenerator: Chrome generated PDF (\(pdfData.count) bytes)")
+                        continuation.resume(returning: pdfData)
+                    } catch {
+                        Logger.error("NativePDFGenerator: Failed to read PDF output: \(error)")
+                        continuation.resume(throwing: PDFGeneratorError.pdfGenerationFailed)
+                    }
+                } else {
+                    Logger.error("NativePDFGenerator: Chrome failed (exit \(process.terminationStatus)): \(errorMessage)")
+                    continuation.resume(throwing: PDFGeneratorError.pdfGenerationFailed)
+                }
+            }
+
+            do {
+                try process.run()
+            } catch {
+                Logger.error("NativePDFGenerator: Failed to launch Chrome: \(error)")
+                continuation.resume(throwing: PDFGeneratorError.pdfGenerationFailed)
+            }
+        }
+    }
+    func generatePDF(for resume: Resume, template: String, format: String = "html") async throws -> Data {
+        let htmlContent = try await MainActor.run {
+            try renderTemplate(for: resume, template: template, format: format)
+        }
+        return try await generatePDFWithChrome(html: htmlContent)
     }
     // MARK: - Custom Template Rendering
     @MainActor
@@ -43,32 +214,23 @@ class NativePDFGenerator: NSObject, ObservableObject {
         customHTML: String,
         processedContext overrideContext: [String: Any]? = nil
     ) async throws -> Data {
-        return try await withCheckedThrowingContinuation { continuation in
-            Task { @MainActor in
-                do {
-                    let context = try overrideContext ?? renderingContext(for: resume)
-                    let fontsFixed = fixFontReferences(customHTML)
-                    let translation = HandlebarsTranslator.translate(fontsFixed)
-                    logTranslationWarnings(translation.warnings, slug: resume.template?.slug ?? "custom")
-                    let finalContent = preprocessTemplateForGRMustache(translation.template)
-                    let mustacheTemplate = try Mustache.Template(string: finalContent)
-                    TemplateFilters.register(on: mustacheTemplate)
-                    let htmlContent = try mustacheTemplate.render(context)
-                    // Mirror standard export path: persist debug HTML when enabled so preview output is inspectable.
-                    if let templateSlug = resume.template?.slug ?? resume.template?.name {
-                        saveDebugHTML(htmlContent, template: templateSlug, format: "html")
-                    } else {
-                        saveDebugHTML(htmlContent, template: "custom-preview", format: "html")
-                    }
-                    currentCompletion = { result in
-                        continuation.resume(with: result)
-                    }
-                    webView?.loadHTMLString(htmlContent, baseURL: nil)
-                } catch {
-                    continuation.resume(throwing: error)
-                }
-            }
+        let context = try overrideContext ?? renderingContext(for: resume)
+        let fontsFixed = fixFontReferences(customHTML)
+        let translation = HandlebarsTranslator.translate(fontsFixed)
+        logTranslationWarnings(translation.warnings, slug: resume.template?.slug ?? "custom")
+        let finalContent = preprocessTemplateForGRMustache(translation.template)
+        let mustacheTemplate = try Mustache.Template(string: finalContent)
+        TemplateFilters.register(on: mustacheTemplate)
+        let htmlContent = try mustacheTemplate.render(context)
+
+        // Save debug HTML if enabled
+        if let templateSlug = resume.template?.slug ?? resume.template?.name {
+            saveDebugHTML(htmlContent, template: templateSlug, format: "html")
+        } else {
+            saveDebugHTML(htmlContent, template: "custom-preview", format: "html")
         }
+
+        return try await generatePDFWithChrome(html: htmlContent)
     }
     @MainActor
     func renderingContext(for resume: Resume) throws -> [String: Any] {
@@ -334,104 +496,21 @@ class NativePDFGenerator: NSObject, ObservableObject {
             }
         }
     }
-    private func generatePDFFromWebView() async throws -> Data {
-        guard let webView = webView else {
-            throw PDFGeneratorError.webViewNotInitialized
-        }
-        #if DEBUG
-        if let metrics = try? await fetchDocumentHeightMetrics(from: webView) {
-            Logger.debug(
-                """
-NativePDFGenerator: scrollHeight=\(String(format: "%.2f", metrics.scrollHeight)), \
-viewportHeight=\(String(format: "%.2f", metrics.viewportHeight)), \
-heightRatio=\(String(format: "%.2f", metrics.scrollHeight / metrics.viewportHeight))
-"""
-            )
-        }
-        #endif
-        let configuration = WKPDFConfiguration()
-        configuration.rect = CGRect(x: 0, y: 0, width: 612, height: 792) // Letter size in points
-        do {
-            return try await webView.pdf(configuration: configuration)
-        } catch {
-            throw PDFGeneratorError.pdfGenerationFailed
-        }
-    }
-    @MainActor
-    private func fetchDocumentHeightMetrics(from webView: WKWebView) async throws -> (scrollHeight: CGFloat, viewportHeight: CGFloat) {
-        let script = """
-        (() => {
-            const doc = document.documentElement;
-            const body = document.body;
-            const scrollHeight = Math.max(
-                doc ? doc.scrollHeight : 0,
-                body ? body.scrollHeight : 0
-            );
-            const viewportHeight = window.innerHeight
-                || (doc ? doc.clientHeight : 0)
-                || (body ? body.clientHeight : 0)
-                || 0;
-            return { scrollHeight, viewportHeight };
-        })();
-        """
-        return try await withCheckedThrowingContinuation { continuation in
-            webView.evaluateJavaScript(script) { result, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-                guard let dict = result as? [String: Any],
-                      let scrollNumber = dict["scrollHeight"] as? NSNumber,
-                      let viewportNumber = dict["viewportHeight"] as? NSNumber else {
-                    continuation.resume(
-                        throwing: PDFGeneratorError.pdfGenerationFailed
-                    )
-                    return
-                }
-                continuation.resume(
-                    returning: (
-                        scrollHeight: CGFloat(truncating: scrollNumber),
-                        viewportHeight: max(CGFloat(truncating: viewportNumber), 1)
-                    )
-                )
-            }
-        }
-    }
-}
-extension NativePDFGenerator: WKNavigationDelegate {
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        // Wait a bit for any dynamic content to load
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            Task { @MainActor in
-                guard let strongSelf = self else { return }
-                do {
-                    let pdfData = try await strongSelf.generatePDFFromWebView()
-                    strongSelf.currentCompletion?(.success(pdfData))
-                } catch {
-                    strongSelf.currentCompletion?(.failure(error))
-                }
-                strongSelf.currentCompletion = nil
-            }
-        }
-    }
-    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        currentCompletion?(.failure(error))
-        currentCompletion = nil
-    }
 }
 enum PDFGeneratorError: Error, LocalizedError {
     case templateNotFound(String)
-    case webViewNotInitialized
+    case chromeNotFound
     case pdfGenerationFailed
     case invalidResumeData
+
     var errorDescription: String? {
         switch self {
         case .templateNotFound(let template):
             return "Template '\(template)' not found in bundle"
-        case .webViewNotInitialized:
-            return "WebView not properly initialized"
+        case .chromeNotFound:
+            return "Chrome or Chromium not found for PDF generation"
         case .pdfGenerationFailed:
-            return "Failed to generate PDF from WebView"
+            return "Failed to generate PDF"
         case .invalidResumeData:
             return "Invalid resume data format"
         }
