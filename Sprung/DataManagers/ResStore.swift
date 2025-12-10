@@ -121,7 +121,6 @@ final class ResStore: SwiftDataStore {
         )
         newNode.myIndex = original.myIndex
         newNode.depth = original.depth
-        newNode.editorLabel = original.editorLabel
         newNode.schemaKey = original.schemaKey
         newNode.schemaInputKindRaw = original.schemaInputKindRaw
         newNode.schemaRequired = original.schemaRequired
@@ -137,37 +136,13 @@ final class ResStore: SwiftDataStore {
         newNode.schemaSourceKey = original.schemaSourceKey
         newNode.schemaAllowsChildMutation = original.schemaAllowsChildMutation
         newNode.schemaAllowsNodeDeletion = original.schemaAllowsNodeDeletion
-        newNode.editorTransparent = original.editorTransparent
         // Recursively duplicate children
         if let originalChildren = original.children {
             newNode.children = originalChildren.map { child in
                 duplicateTreeNode(child, for: resume, parent: newNode)
             }
         }
-        // Recursively duplicate viewChildren (references to data nodes)
-        // Note: viewChildren are references to nodes in the children tree,
-        // so we need to map them to the corresponding new nodes
-        if let originalViewChildren = original.viewChildren {
-            newNode.viewChildren = originalViewChildren.map { viewChild in
-                // Find the corresponding new node by matching the original's id
-                findCorrespondingNode(in: newNode, matching: viewChild) ?? viewChild
-            }
-        }
         return newNode
-    }
-    private func findCorrespondingNode(in newTree: TreeNode, matching original: TreeNode) -> TreeNode? {
-        // Simple approach: find by name and path
-        // This assumes the structure is identical, which it should be for duplicates
-        if newTree.name == original.name && newTree.value == original.value {
-            return newTree
-        }
-        guard let children = newTree.children else { return nil }
-        for child in children {
-            if let found = findCorrespondingNode(in: child, matching: original) {
-                return found
-            }
-        }
-        return nil
     }
     private func duplicateFontSizeNode(_ original: FontSizeNode, for resume: Resume) -> FontSizeNode {
         return FontSizeNode(

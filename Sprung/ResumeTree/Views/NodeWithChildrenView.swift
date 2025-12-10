@@ -18,7 +18,7 @@ struct NodeWithChildrenView: View {
                 )
                 // Show child nodes when expanded.
                 if vm.isExpanded(node) {
-                    NodeChildrenListView(children: node.orderedViewChildren)
+                    NodeChildrenListView(children: node.orderedChildren)
                 }
             }
         }

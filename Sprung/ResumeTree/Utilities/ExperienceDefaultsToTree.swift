@@ -51,7 +51,6 @@ final class ExperienceDefaultsToTree {
             applyDefaultAIFields(to: root, patterns: defaultFields)
         }
 
-        root.rebuildViewHierarchy(manifest: manifest)
         return root
     }
 
@@ -542,19 +541,13 @@ final class ExperienceDefaultsToTree {
 
     // MARK: - Custom Section
 
+    /// Custom fields are added directly to root (flattened), not inside a "custom" container.
+    /// This eliminates the need for transparent keys.
     private func buildCustomSection(parent: TreeNode) {
         let section = manifest.section(for: "custom")
 
-        let container = parent.addChild(TreeNode(
-            name: "custom",
-            value: "",
-            inEditor: true,
-            status: .isNotLeaf,
-            resume: resume
-        ))
-
         for field in experienceDefaults.customFields.sorted(by: { $0.index < $1.index }) {
-            let fieldNode = container.addChild(TreeNode(
+            let fieldNode = parent.addChild(TreeNode(
                 name: field.key,
                 value: "",
                 inEditor: true,

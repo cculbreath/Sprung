@@ -65,7 +65,6 @@ final class ResumeDetailVM {
         if let template = parent.orderedChildren.first {
             let clone = template.makeTemplateClone(for: resume)
             parent.addChild(clone)
-            rebuildViewHierarchy()
             refreshPDF()
             return
         }
@@ -89,28 +88,12 @@ final class ResumeDetailVM {
             resume: resume
         )
         parent.addChild(newNode)
-        rebuildViewHierarchy()
         refreshPDF()
     }
-    /// Deletes a node from the tree and rebuilds the view hierarchy.
+    /// Deletes a node from the tree.
     func deleteNode(_ node: TreeNode, context: ModelContext) {
         TreeNode.deleteTreeNode(node: node, context: context)
-        rebuildViewHierarchy()
         refreshPDF()
-    }
-    /// Rebuilds the viewChildren hierarchy for v4+ manifests after mutations.
-    /// This ensures the presentation layer stays in sync with the data layer.
-    private func rebuildViewHierarchy() {
-        guard let rootNode = resume.rootNode else { return }
-        guard let template = resume.template else { return }
-        guard let manifest = TemplateManifestLoader.manifest(for: template) else { return }
-        // Delegate to TreeNode extension method
-        rootNode.rebuildViewHierarchy(manifest: manifest)
-    }
-    /// Ensures the view hierarchy is available when loading an existing resume
-    /// without forcing SwiftUI to mutate graph state during view init.
-    func ensureViewHierarchy() {
-        rebuildViewHierarchy()
     }
     /// Re‑exports the resume JSON → PDF via the debounce mechanism.
     func refreshPDF() {
