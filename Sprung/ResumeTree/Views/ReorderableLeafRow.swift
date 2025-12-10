@@ -17,7 +17,7 @@ struct ReorderableLeafRow: View {
                 .scaleEffect(dragInfo.draggedNode == node ? 1.05 : 1.0) // Slightly enlarge the dragged node
                 .animation(.easeInOut, value: dragInfo.draggedNode) // Smoothly animate the scale effect
                 .background(Color.clear) // Highlight on drop
-                .padding(.leading, CGFloat(node.viewDepth) * 20) // now O(1) stored Int
+                .padding(.leading, CGFloat(node.depth) * 20)
                 .onDrag {
                     guard canReorder else {
                         dragInfo.draggedNode = nil

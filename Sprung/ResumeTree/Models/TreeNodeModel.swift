@@ -15,19 +15,11 @@ enum LeafStatus: String, Codable, Hashable {
     var includeInEditor: Bool = false
     var myIndex: Int = -1 // Represents order within its parent's children array
     @Relationship(deleteRule: .cascade) var children: [TreeNode]?
-    @Relationship(deleteRule: .cascade) var viewChildren: [TreeNode]?
     weak var parent: TreeNode?
     var label: String { return resume.label(name) } // Assumes resume.label handles missing keys
-    var editorLabel: String?
-    /// Returns the effective display label: editorLabel if set, otherwise falls back to label
-    var displayLabel: String {
-        return editorLabel ?? label
-    }
     @Relationship(deleteRule: .noAction) var resume: Resume
     var status: LeafStatus
     var depth: Int = 0
-    /// Presentation depth derived from `viewChildren` hierarchy.
-    var viewDepth: Int = 0
     // Schema metadata (optional, derived from manifest descriptors)
     var schemaKey: String?
     var schemaInputKindRaw: String?
@@ -59,8 +51,6 @@ enum LeafStatus: String, Codable, Hashable {
     var schemaAllowsChildMutation: Bool = false
     /// Indicates whether this node can be deleted by the user per manifest metadata.
     var schemaAllowsNodeDeletion: Bool = false
-    /// When true, the node is hidden in the editor but its children should be surfaced as if they belonged to the parent.
-    var editorTransparent: Bool = false
     // This property should be explicitly set when a node is created or its role changes.
     // It's not reliably computable based on name/value alone.
     // For the "Fix Overflow" feature, we will pass this to the LLM and expect it back.
@@ -73,9 +63,6 @@ enum LeafStatus: String, Codable, Hashable {
     }
     var orderedChildren: [TreeNode] {
         (children ?? []).sorted { $0.myIndex < $1.myIndex }
-    }
-    var orderedViewChildren: [TreeNode] {
-        (viewChildren ?? []).sorted { $0.myIndex < $1.myIndex }
     }
     var aiStatusChildren: Int {
         var count = 0
@@ -145,29 +132,47 @@ enum LeafStatus: String, Codable, Hashable {
     // MARK: - Smart Badge Counts
 
     /// Returns a meaningful count for badge display
-    /// For list containers (skills, work highlights): counts parent containers, not individual items
-    /// For hierarchical review sections: counts at appropriate level
+    /// For section nodes (skills, work): counts direct children (categories, positions)
+    /// For other nodes: counts selected items
     var reviewOperationsCount: Int {
-        // If this node itself is selected, count it as 1 operation
+        // For section-level nodes that are selected, count their direct children
+        // This gives us "5 categories" for skills, "3 positions" for work
+        if status == .aiToReplace && isSectionNode {
+            return children?.count ?? 0
+        }
+
+        // If this node is selected but not a section, count as 1
         if status == .aiToReplace {
             return 1
         }
 
-        // Otherwise, count selected children intelligently
+        // Otherwise, count selected direct children only (don't recurse into grandchildren)
+        // This prevents counting 67 keywords when we want 5 categories
         guard let children = children else { return 0 }
 
         var count = 0
         for child in children {
             if child.status == .aiToReplace {
                 // Child is directly selected - count as 1 operation
-                // (even if it has many grandchildren, selecting a parent = 1 operation)
                 count += 1
             } else if child.aiStatusChildren > 0 {
-                // Child has selected descendants - recurse
-                count += child.reviewOperationsCount
+                // Child has selected descendants
+                // For section nodes, just count this child as having selections
+                // Don't recurse to avoid counting leaf nodes
+                if isSectionNode {
+                    count += 1
+                } else {
+                    count += child.reviewOperationsCount
+                }
             }
         }
         return count
+    }
+
+    /// Returns true if this is a top-level section node (skills, work, education, etc.)
+    private var isSectionNode: Bool {
+        let sectionNames = ["skills", "work", "education", "projects", "volunteer", "awards", "certificates", "publications", "languages", "interests"]
+        return sectionNames.contains(name.lowercased())
     }
 
     /// Returns a descriptive label for the badge count
@@ -203,7 +208,6 @@ enum LeafStatus: String, Codable, Hashable {
         self.status = status
         includeInEditor = inEditor
         depth = parent.map { $0.depth + 1 } ?? 0
-        viewDepth = parent.map { $0.viewDepth + 1 } ?? 0
         self.resume = resume
         self.isTitleNode = isTitleNode // Initialize isTitleNode
     }
@@ -215,11 +219,6 @@ enum LeafStatus: String, Codable, Hashable {
         child.parent = self
         child.myIndex = (children?.count ?? 0)
         child.depth = depth + 1
-        child.viewDepth = viewDepth + 1
-        if editorTransparent {
-            child.depth = depth
-            child.viewDepth = viewDepth
-        }
         children?.append(child)
         return child
     }
@@ -363,7 +362,6 @@ extension TreeNode {
             resume: resume,
             isTitleNode: isTitleNode
         )
-        clone.editorTransparent = editorTransparent
         clone.copySchemaMetadata(from: self)
         if !hasChildren {
             if let placeholder = schemaPlaceholder, placeholder.isEmpty == false {

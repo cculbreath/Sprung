@@ -373,7 +373,6 @@ struct TemplateManifest: Codable {
     private(set) var sections: [String: Section]
     private(set) var synthesizedSectionKeys: Set<String>
     let editorLabels: [String: String]?
-    let transparentKeys: [String]?
     let keysInEditor: [String]?
     let sectionVisibilityDefaults: [String: Bool]?
     let sectionVisibilityLabels: [String: String]?
@@ -404,7 +403,6 @@ struct TemplateManifest: Codable {
         sectionOrder: [String],
         sections: [String: Section],
         editorLabels: [String: String]? = nil,
-        transparentKeys: [String]? = nil,
         keysInEditor: [String]? = nil,
         sectionVisibilityDefaults: [String: Bool]? = nil,
         sectionVisibilityLabels: [String: String]? = nil,
@@ -416,7 +414,6 @@ struct TemplateManifest: Codable {
         self.schemaVersion = schemaVersion
         self.sectionOrder = sectionOrder
         self.editorLabels = editorLabels
-        self.transparentKeys = transparentKeys
         self.keysInEditor = keysInEditor
         self.sectionVisibilityDefaults = sectionVisibilityDefaults
         self.sectionVisibilityLabels = sectionVisibilityLabels
@@ -441,7 +438,6 @@ struct TemplateManifest: Codable {
         schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
         sectionOrder = try container.decodeIfPresent([String].self, forKey: .sectionOrder) ?? []
         editorLabels = try container.decodeIfPresent([String: String].self, forKey: .editorLabels)
-        transparentKeys = try container.decodeIfPresent([String].self, forKey: .transparentKeys)
         keysInEditor = try container.decodeIfPresent([String].self, forKey: .keysInEditor)
         sectionVisibilityDefaults = try container.decodeIfPresent([String: Bool].self, forKey: .sectionVisibilityDefaults)
         sectionVisibilityLabels = try container.decodeIfPresent([String: String].self, forKey: .sectionVisibilityLabels)
@@ -469,7 +465,6 @@ struct TemplateManifest: Codable {
             try container.encode(sectionOrder, forKey: .sectionOrder)
         }
         try container.encodeIfPresent(editorLabels, forKey: .editorLabels)
-        try container.encodeIfPresent(transparentKeys, forKey: .transparentKeys)
         try container.encodeIfPresent(keysInEditor, forKey: .keysInEditor)
         try container.encodeIfPresent(sectionVisibilityDefaults, forKey: .sectionVisibilityDefaults)
         try container.encodeIfPresent(sectionVisibilityLabels, forKey: .sectionVisibilityLabels)
@@ -564,7 +559,6 @@ struct TemplateManifest: Codable {
         case sectionOrder
         case sections
         case editorLabels
-        case transparentKeys
         case keysInEditor = "keys-in-editor"
         case sectionVisibilityDefaults = "section-visibility"
         case sectionVisibilityLabels = "section-visibility-labels"

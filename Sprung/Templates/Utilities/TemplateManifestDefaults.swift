@@ -35,7 +35,6 @@ struct TemplateManifestOverrides: Codable {
     var sections: [String: SectionOverride]?
     var sectionVisibility: [String: Bool]?
     var sectionVisibilityLabels: [String: String]?
-    var transparentKeys: [String]?
     var keysInEditor: [String]?
     var editorLabels: [String: String]?
     enum CodingKeys: String, CodingKey {
@@ -45,7 +44,6 @@ struct TemplateManifestOverrides: Codable {
         case sections
         case sectionVisibility = "section-visibility"
         case sectionVisibilityLabels = "section-visibility-labels"
-        case transparentKeys
         case keysInEditor = "keys-in-editor"
         case editorLabels
     }
@@ -127,7 +125,6 @@ enum TemplateManifestDefaults {
             sectionOrder: defaultSectionOrder,
             sections: baseSections,
             editorLabels: nil,
-            transparentKeys: ["basics", "custom"],
             keysInEditor: defaultSectionOrder,
             sectionVisibilityDefaults: defaultSectionVisibilityDefaults,
             sectionVisibilityLabels: defaultSectionVisibilityLabels
@@ -166,7 +163,6 @@ enum TemplateManifestDefaults {
         let sectionOrder = overrides.sectionOrder ?? base.sectionOrder
         let sectionVisibilityDefaults = overrides.sectionVisibility ?? base.sectionVisibilityDefaults
         let sectionVisibilityLabels = overrides.sectionVisibilityLabels ?? base.sectionVisibilityLabels
-        let transparentKeys = overrides.transparentKeys ?? base.transparentKeys
         let keysInEditor = overrides.keysInEditor ?? base.keysInEditor
         let editorLabels = overrides.editorLabels ?? base.editorLabels
         return TemplateManifest(
@@ -175,7 +171,6 @@ enum TemplateManifestDefaults {
             sectionOrder: sectionOrder,
             sections: sections,
             editorLabels: editorLabels,
-            transparentKeys: transparentKeys,
             keysInEditor: keysInEditor,
             sectionVisibilityDefaults: sectionVisibilityDefaults,
             sectionVisibilityLabels: sectionVisibilityLabels

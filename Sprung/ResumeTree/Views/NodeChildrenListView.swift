@@ -10,7 +10,7 @@ struct NodeChildrenListView: View {
         LazyVStack(alignment: .leading, spacing: 0) {
             ForEach(children, id: \.id) { child in
                 Divider()
-                let isContainer = child.allowsChildAddition || child.orderedViewChildren.isEmpty == false
+                let isContainer = child.allowsChildAddition || child.orderedChildren.isEmpty == false
                 if isContainer {
                     NodeWithChildrenView(node: child)
                 } else {
