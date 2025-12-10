@@ -252,9 +252,8 @@ struct TemplateManifest: Codable {
             )
             fields = synthesized
             fieldMetadataSource = .synthesized
-            Logger.info(
-                "TemplateManifest: synthesized field descriptors for legacy section \(sectionKey)",
-                category: .migration
+            Logger.debug(
+                "TemplateManifest: synthesized field descriptors for section \(sectionKey)"
             )
         }
         func defaultContextValue() -> Any? {
