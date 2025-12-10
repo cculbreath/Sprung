@@ -14,6 +14,7 @@ struct CategoryStructureReviewView: View {
     @Bindable var viewModel: ResumeReviseViewModel
     @Binding var resume: Resume?
     @Environment(\.modelContext) private var modelContext
+    @State private var showCancelConfirmation = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -40,6 +41,33 @@ struct CategoryStructureReviewView: View {
         }
         .frame(width: 600)
         .background(Color(NSColor.windowBackgroundColor))
+        .confirmationDialog(
+            "Cancel Review?",
+            isPresented: $showCancelConfirmation,
+            titleVisibility: .visible
+        ) {
+            if hasAnyAccepted {
+                Button("Apply Approved & Close") {
+                    guard let resume = resume else { return }
+                    viewModel.applyApprovedChangesAndClose(resume: resume, context: modelContext)
+                }
+                Button("Discard All", role: .destructive) {
+                    viewModel.discardAllAndClose()
+                }
+                Button("Continue Review", role: .cancel) { }
+            } else {
+                Button("Discard & Close", role: .destructive) {
+                    viewModel.discardAllAndClose()
+                }
+                Button("Continue Review", role: .cancel) { }
+            }
+        } message: {
+            if hasAnyAccepted {
+                Text("You have approved \(acceptedCount) category changes. Would you like to apply them before closing?")
+            } else {
+                Text("Are you sure you want to discard all pending changes?")
+            }
+        }
     }
 
     // MARK: - Header
@@ -76,7 +104,7 @@ struct CategoryStructureReviewView: View {
     private var actionButtons: some View {
         HStack(spacing: 16) {
             Button("Cancel") {
-                viewModel.discardAllAndClose()
+                showCancelConfirmation = true
             }
             .buttonStyle(.bordered)
 
@@ -100,6 +128,14 @@ struct CategoryStructureReviewView: View {
 
     private var hasAnyDecision: Bool {
         viewModel.categoryRevisions.contains { $0.userDecision != .pending }
+    }
+
+    private var hasAnyAccepted: Bool {
+        viewModel.categoryRevisions.contains { $0.userDecision == .accepted }
+    }
+
+    private var acceptedCount: Int {
+        viewModel.categoryRevisions.filter { $0.userDecision == .accepted }.count
     }
 
     // MARK: - Actions

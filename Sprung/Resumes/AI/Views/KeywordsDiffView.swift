@@ -14,6 +14,7 @@ struct KeywordsDiffView: View {
     @Bindable var viewModel: ResumeReviseViewModel
     @Binding var resume: Resume?
     @Environment(\.modelContext) private var modelContext
+    @State private var showCancelConfirmation = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -214,7 +215,11 @@ struct KeywordsDiffView: View {
     private var actionButtons: some View {
         HStack(spacing: 16) {
             Button("Cancel Review") {
-                viewModel.discardAllAndClose()
+                if viewModel.hasUnappliedApprovedChanges() {
+                    showCancelConfirmation = true
+                } else {
+                    viewModel.discardAllAndClose()
+                }
             }
             .buttonStyle(.bordered)
 
@@ -234,6 +239,22 @@ struct KeywordsDiffView: View {
             .disabled(viewModel.currentKeywordsRevision == nil)
         }
         .padding(20)
+        .confirmationDialog(
+            "Cancel Review?",
+            isPresented: $showCancelConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Apply Approved & Close") {
+                guard let resume = resume else { return }
+                viewModel.applyApprovedChangesAndClose(resume: resume, context: modelContext)
+            }
+            Button("Discard All", role: .destructive) {
+                viewModel.discardAllAndClose()
+            }
+            Button("Continue Review", role: .cancel) { }
+        } message: {
+            Text("You have approved changes that haven't been applied yet. Would you like to apply them before closing?")
+        }
     }
 }
 
