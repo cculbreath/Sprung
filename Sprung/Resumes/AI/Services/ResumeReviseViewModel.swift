@@ -124,6 +124,13 @@ class ResumeReviseViewModel {
         modelId: String,
         workflow: RevisionWorkflowKind
     ) async throws {
+        // Check if we should use hierarchical review for skills
+        if shouldUseHierarchicalReview(for: resume) {
+            Logger.info("🎯 Using hierarchical two-phase review for skills")
+            try await startCategoryStructureReview(resume: resume, modelId: modelId)
+            return
+        }
+
         markWorkflowStarted(workflow)
         // Reset UI state
         resumeRevisions = []
@@ -692,6 +699,41 @@ class ResumeReviseViewModel {
     }
 
     // MARK: - Two-Phase Hierarchical Review Workflow
+
+    /// Determine if hierarchical review should be used for this resume
+    /// Returns true if:
+    /// 1. The manifest has hierarchicalReview.skills.enabled = true
+    /// 2. The resume has skills nodes selected for AI revision
+    private func shouldUseHierarchicalReview(for resume: Resume) -> Bool {
+        // Check manifest configuration
+        guard let manifest = resume.template?.manifest,
+              let skillsConfig = manifest.hierarchicalReviewConfig(for: "skills") else {
+            Logger.debug("📋 No hierarchical review config found for skills")
+            return false
+        }
+
+        guard skillsConfig.enabled else {
+            Logger.debug("📋 Hierarchical review disabled for skills in manifest")
+            return false
+        }
+
+        // Check if skills section has nodes selected for AI revision
+        guard let rootNode = resume.rootNode else {
+            return false
+        }
+
+        // Find the skills section and check if it (or its children) are selected
+        guard let skillsNode = rootNode.children?.first(where: { $0.name.lowercased() == "skills" }) else {
+            Logger.debug("📋 No skills section found in resume")
+            return false
+        }
+
+        // Check if skills node itself is selected or has any children selected
+        let hasSkillsSelected = skillsNode.status == .aiToReplace || skillsNode.aiStatusChildren > 0
+        Logger.debug("📋 Skills section selection status: node=\(skillsNode.status), children=\(skillsNode.aiStatusChildren)")
+
+        return hasSkillsSelected
+    }
 
     /// Start Phase 1: Category Structure Review
     /// Sends category names and keyword counts to LLM for structural proposals

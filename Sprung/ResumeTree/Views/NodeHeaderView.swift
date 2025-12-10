@@ -21,6 +21,17 @@ struct NodeHeaderView: View {
     @State private var isHoveringAdd = false
     @State private var isHoveringAll = false
     @State private var isHoveringNone = false
+    @State private var isHoveringSparkle = false
+    @State private var isHoveringHeader = false
+
+    /// Binding wrapper to make TreeNode work with SparkleButton
+    private var nodeBinding: Binding<TreeNode> {
+        Binding(
+            get: { node },
+            set: { _ in }  // TreeNode is a class, mutations happen directly
+        )
+    }
+
     var body: some View {
         HStack {
             ToggleChevronView(isExpanded: isExpanded, )
@@ -34,6 +45,20 @@ struct NodeHeaderView: View {
                 )
             }
             Spacer()
+
+            // Parent sparkle button - show when hovering or when node/children are selected
+            if node.parent != nil && (isHoveringHeader || node.status == .aiToReplace || node.aiStatusChildren > 0) {
+                SparkleButton(
+                    node: nodeBinding,
+                    isHovering: $isHoveringSparkle,
+                    toggleNodeStatus: {
+                        // Toggle parent and propagate to all children
+                        node.toggleAISelection(propagateToChildren: true)
+                    }
+                )
+                .transition(.opacity)
+            }
+
             // Show controls when node is expanded and has children
             if vm.isExpanded(node) && node.parent != nil {
                 // All/None buttons for bulk operations if there are children
@@ -92,6 +117,11 @@ struct NodeHeaderView: View {
         .padding(.vertical, 5)
         .onTapGesture {
             vm.toggleExpansion(for: node)
+        }
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHoveringHeader = hovering
+            }
         }
     }
 }

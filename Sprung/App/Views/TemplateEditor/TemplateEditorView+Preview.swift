@@ -78,32 +78,23 @@ extension TemplateEditorView {
             createdAt: templateRecord?.createdAt ?? Date(),
             updatedAt: templateRecord?.updatedAt ?? Date()
         )
-        let contextBuilder = ResumeTemplateContextBuilder(
-            experienceDefaultsStore: appEnvironment.experienceDefaultsStore
-        )
-        let applicantProfile = appEnvironment.applicantProfileStore.currentProfile()
-        guard let context = contextBuilder.buildContext(
-            for: template,
-            applicantProfile: applicantProfile
-        ) else {
+        guard let manifest = TemplateManifestLoader.manifest(for: template) else {
             throw TemplatePreviewGeneratorError.contextGenerationFailed
         }
         if Logger.isVerboseEnabled {
-            Logger.verbose("TemplatePreview[\(slug)]: context keys => \(debugContextSummary(context))")
+            Logger.verbose("TemplatePreview[\(slug)]: manifest sections => \(manifest.sectionOrder)")
         }
         let jobApp = JobApp()
         let resume = Resume(jobApp: jobApp, enabledSources: [], template: template)
         resume.needToTree = true
         resume.importedEditorKeys = []
-        let manifest = TemplateManifestLoader.manifest(for: template)
-        if Logger.isVerboseEnabled {
-            if let manifest {
-                Logger.verbose("TemplatePreview[\(slug)]: manifest sections => \(manifest.sectionOrder)")
-            } else {
-                Logger.verbose("TemplatePreview[\(slug)]: manifest not found; relying on context order")
-            }
-        }
-        guard let rootNode = JsonToTree(resume: resume, context: context, manifest: manifest).buildTree() else {
+        let experienceDefaults = appEnvironment.experienceDefaultsStore.currentDefaults()
+        let treeBuilder = ExperienceDefaultsToTree(
+            resume: resume,
+            experienceDefaults: experienceDefaults,
+            manifest: manifest
+        )
+        guard let rootNode = treeBuilder.buildTree() else {
             throw TemplatePreviewGeneratorError.treeGenerationFailed
         }
         resume.rootNode = rootNode
