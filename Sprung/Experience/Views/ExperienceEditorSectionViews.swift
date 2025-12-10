@@ -582,101 +582,157 @@ struct CustomExperienceSectionView: View {
     @Binding var fields: [CustomFieldValue]
     @Binding var isEnabled: Bool
     let metadata: ExperienceSectionMetadata
-    let onChange: () -> Void
+    let callbacks: ExperienceSectionViewCallbacks
+    @State private var draggingID: UUID?
+
     var body: some View {
-        GroupBox {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Add any template-specific fields you want to seed into new resumes (e.g., job titles, taglines, custom blurbs).")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(fields.indices, id: \.self) { index in
-                        fieldEditor(for: index)
-                        Divider()
+        sectionContainer(title: metadata.title, subtitle: metadata.subtitle) {
+            ForEach($fields) { $field in
+                let fieldID = field.id
+                let editing = callbacks.isEditing(fieldID)
+                ExperienceCard(
+                    onDelete: { delete(fieldID) },
+                    onToggleEdit: { callbacks.toggleEditing(fieldID) },
+                    isEditing: editing
+                ) {
+                    ExperienceEntryHeader(
+                        title: field.key.isEmpty ? "New Field" : field.key,
+                        subtitle: fieldSummary(field)
+                    )
+                    if editing {
+                        fieldEditor(for: $field)
+                    } else {
+                        fieldSummaryView(field)
                     }
-                    Button {
-                        fields.append(CustomFieldValue(key: "", values: [""]))
-                        isEnabled = true
-                        onChange()
-                    } label: {
-                        Label("Add Custom Field", systemImage: "plus.circle.fill")
-                    }
-                    .buttonStyle(.bordered)
                 }
+                .onDrag {
+                    draggingID = fieldID
+                    return NSItemProvider(object: fieldID.uuidString as NSString)
+                }
+                .onDrop(
+                    of: [.plainText],
+                    delegate: ExperienceReorderDropDelegate(
+                        target: field,
+                        items: $fields,
+                        draggingID: $draggingID,
+                        onChange: callbacks.onChange
+                    )
+                )
             }
-        } label: {
-            HStack {
-                Image(systemName: "wand.and.stars")
-                    .foregroundStyle(.blue)
-                Text(metadata.title)
-                    .font(.headline)
+            if !fields.isEmpty {
+                ExperienceSectionTrailingDropArea(
+                    items: $fields,
+                    draggingID: $draggingID,
+                    onChange: callbacks.onChange
+                )
+            }
+            ExperienceAddButton(title: "Add Custom Field") {
+                addNewField()
             }
         }
     }
-    private func fieldEditor(for index: Int) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                TextField("Field key (e.g., jobTitles, tagline)", text: Binding(
-                    get: { fields[safe: index]?.key ?? "" },
-                    set: { newValue in
-                        if fields.indices.contains(index) {
-                            fields[index].key = newValue
-                            isEnabled = true
-                            onChange()
-                        }
-                    }
-                ))
-                Button {
-                    if fields.indices.contains(index) {
-                        fields.remove(at: index)
-                        if fields.isEmpty { isEnabled = false }
-                        onChange()
-                    }
-                } label: {
-                    Image(systemName: "trash")
+
+    private func fieldSummary(_ field: CustomFieldValue) -> String? {
+        let count = field.values.filter { !$0.isEmpty }.count
+        return count > 0 ? "\(count) value\(count == 1 ? "" : "s")" : nil
+    }
+
+    private func fieldSummaryView(_ field: CustomFieldValue) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            let nonEmptyValues = field.values.filter { !$0.isEmpty }
+            if nonEmptyValues.isEmpty {
+                Text("No values")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(nonEmptyValues.prefix(3), id: \.self) { value in
+                    Text("• \(value)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.red)
-                .help("Remove field")
+                if nonEmptyValues.count > 3 {
+                    Text("+ \(nonEmptyValues.count - 3) more")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
             }
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(fields[safe: index]?.values.indices ?? 0..<0, id: \.self) { valueIndex in
+        }
+    }
+
+    private func fieldEditor(for field: Binding<CustomFieldValue>) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Field Key")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextField("e.g., jobTitles, tagline, objective", text: field.key)
+                    .textFieldStyle(.roundedBorder)
+                    .onChange(of: field.wrappedValue.key) { _, _ in
+                        isEnabled = true
+                        callbacks.onChange()
+                    }
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Values")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                ForEach(field.values.indices, id: \.self) { valueIndex in
                     HStack {
                         TextField("Value", text: Binding(
-                            get: { fields[safe: index]?.values[safe: valueIndex] ?? "" },
+                            get: { field.wrappedValue.values[safe: valueIndex] ?? "" },
                             set: { newValue in
-                            guard fields.indices.contains(index),
-                                  fields[index].values.indices.contains(valueIndex) else { return }
-                            fields[index].values[valueIndex] = newValue
-                            isEnabled = true
-                            onChange()
+                                guard field.wrappedValue.values.indices.contains(valueIndex) else { return }
+                                field.wrappedValue.values[valueIndex] = newValue
+                                isEnabled = true
+                                callbacks.onChange()
+                            }
+                        ))
+                        .textFieldStyle(.roundedBorder)
+                        Button {
+                            guard field.wrappedValue.values.indices.contains(valueIndex) else { return }
+                            field.wrappedValue.values.remove(at: valueIndex)
+                            if field.wrappedValue.values.isEmpty {
+                                field.wrappedValue.values.append("")
+                            }
+                            callbacks.onChange()
+                        } label: {
+                            Image(systemName: "minus.circle")
                         }
-                    ))
-                    Button {
-                        guard fields.indices.contains(index),
-                              fields[index].values.indices.contains(valueIndex) else { return }
-                        fields[index].values.remove(at: valueIndex)
-                        if fields[index].values.isEmpty { fields[index].values.append("") }
-                        onChange()
-                    } label: {
-                        Image(systemName: "minus.circle")
-                    }
-                    .buttonStyle(.plain)
+                        .buttonStyle(.plain)
                         .foregroundStyle(.secondary)
                         .help("Remove value")
                     }
                 }
                 Button {
-                    guard fields.indices.contains(index) else { return }
-                    fields[index].values.append("")
+                    field.wrappedValue.values.append("")
                     isEnabled = true
-                    onChange()
+                    callbacks.onChange()
                 } label: {
                     Label("Add Value", systemImage: "plus")
                 }
                 .buttonStyle(.bordered)
+                .controlSize(.small)
             }
         }
+    }
+
+    private func delete(_ id: UUID) {
+        if let index = fields.firstIndex(where: { $0.id == id }) {
+            callbacks.endEditing(id)
+            fields.remove(at: index)
+            if fields.isEmpty { isEnabled = false }
+            callbacks.onChange()
+        }
+    }
+
+    private func addNewField() {
+        let field = CustomFieldValue(key: "", values: [""])
+        fields.append(field)
+        isEnabled = true
+        callbacks.beginEditing(field.id)
+        callbacks.onChange()
     }
 }
 extension CustomExperienceSectionView {
@@ -691,7 +747,7 @@ extension CustomExperienceSectionView {
                         fields: draft.customFieldsBinding,
                         isEnabled: draft.customEnabledBinding,
                         metadata: ExperienceSectionKey.custom.metadata,
-                        onChange: callbacks.onChange
+                        callbacks: callbacks
                     )
                 )
             }

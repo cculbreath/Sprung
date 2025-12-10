@@ -1,9 +1,11 @@
 import Foundation
 import SwiftData
-struct CustomFieldValue: Codable, Equatable {
+struct CustomFieldValue: Codable, Equatable, Identifiable {
+    var id: UUID
     var key: String
     var values: [String]
-    init(key: String = "", values: [String] = []) {
+    init(id: UUID = UUID(), key: String = "", values: [String] = []) {
+        self.id = id
         self.key = key
         self.values = values
     }
