@@ -67,6 +67,104 @@ import SwiftUI
             additionalProperties: false
         )
     }()
+    // MARK: - Phase 1: Category Structure Schema
+
+    /// JSON Schema for Phase 1 category structure review
+    /// LLM proposes add/remove/rename/merge actions for skill categories
+    static let categoryStructureSchema: JSONSchema = {
+        let categoryRevisionSchema = JSONSchema(
+            type: .object,
+            properties: [
+                "id": JSONSchema(
+                    type: .string,
+                    description: "The category node ID from the input, or a new UUID for 'add' actions"
+                ),
+                "name": JSONSchema(
+                    type: .string,
+                    description: "The current category name"
+                ),
+                "action": JSONSchema(
+                    type: .string,
+                    description: "The proposed action: keep (no change), remove (delete category), rename (change name), merge (combine with another), add (new category)",
+                    enum: ["keep", "remove", "rename", "merge", "add"]
+                ),
+                "newName": JSONSchema(
+                    type: .string,
+                    description: "For 'rename' or 'add' actions: the new category name"
+                ),
+                "mergeWith": JSONSchema(
+                    type: .string,
+                    description: "For 'merge' action: the ID of the target category to merge into"
+                ),
+                "mergeWithName": JSONSchema(
+                    type: .string,
+                    description: "For 'merge' action: the name of the target category (for display)"
+                ),
+                "keywordCount": JSONSchema(
+                    type: .integer,
+                    description: "Number of keywords in this category (from input)"
+                ),
+                "why": JSONSchema(
+                    type: .string,
+                    description: "Explanation for the proposed action"
+                )
+            ],
+            required: ["id", "name", "action", "why"],
+            additionalProperties: false
+        )
+
+        let categoriesArraySchema = JSONSchema(
+            type: .array,
+            description: "Array of category revision proposals",
+            items: categoryRevisionSchema
+        )
+
+        return JSONSchema(
+            type: .object,
+            properties: [
+                "categories": categoriesArraySchema
+            ],
+            required: ["categories"],
+            additionalProperties: false
+        )
+    }()
+
+    // MARK: - Phase 2: Keywords Array Schema
+
+    /// JSON Schema for Phase 2 keywords review within a category
+    /// LLM returns the full array of keywords (can add/remove/modify)
+    static let keywordsArraySchema: JSONSchema = {
+        return JSONSchema(
+            type: .object,
+            properties: [
+                "categoryId": JSONSchema(
+                    type: .string,
+                    description: "The category ID being revised"
+                ),
+                "categoryName": JSONSchema(
+                    type: .string,
+                    description: "The category name for display"
+                ),
+                "oldKeywords": JSONSchema(
+                    type: .array,
+                    description: "The original keywords (for reference)",
+                    items: JSONSchema(type: .string)
+                ),
+                "newKeywords": JSONSchema(
+                    type: .array,
+                    description: "The proposed keywords after revision (can add new, remove existing, or modify)",
+                    items: JSONSchema(type: .string)
+                ),
+                "why": JSONSchema(
+                    type: .string,
+                    description: "Overall explanation for the keyword changes in this category"
+                )
+            ],
+            required: ["categoryId", "categoryName", "oldKeywords", "newKeywords", "why"],
+            additionalProperties: false
+        )
+    }()
+
     // Native SwiftOpenAI JSON Schema for clarifying questions
     static let clarifyingQuestionsSchema: JSONSchema = {
         // Define the clarifying question schema
@@ -338,6 +436,133 @@ import SwiftUI
         }
         return prompt
     }
+    // MARK: - Phase 1: Category Structure Prompt
+
+    /// Generate prompt for Phase 1: category structure review
+    /// Sends category names with keyword counts, asks LLM to propose structural changes
+    @MainActor
+    func categoryStructurePrompt(categories: [(id: String, name: String, keywordCount: Int)]) async -> String {
+        try? await exportCoordinator.ensureFreshRenderedText(for: res)
+
+        let categoriesJson = categories.map { cat in
+            """
+            {
+              "id": "\(cat.id)",
+              "name": "\(cat.name)",
+              "keywordCount": \(cat.keywordCount)
+            }
+            """
+        }.joined(separator: ",\n")
+
+        let prompt = """
+        ================================================================================
+        SKILL CATEGORIES STRUCTURE REVIEW
+        ================================================================================
+
+        CONTEXT:
+        We are customizing \(applicant.name)'s resume for the following position:
+
+        JOB LISTING:
+        \(jobListing)
+
+        CURRENT SKILL CATEGORIES:
+        [
+        \(categoriesJson)
+        ]
+
+        TASK:
+        Review the skill category structure and propose changes to better align with the target job.
+        For each category, decide whether to:
+        - **keep**: No structural change needed (category name and grouping are appropriate)
+        - **remove**: Remove this category entirely (not relevant for this role)
+        - **rename**: Change the category name to better match job requirements
+        - **merge**: Combine this category with another one
+        - **add**: Suggest a new category that should be created
+
+        IMPORTANT GUIDELINES:
+        1. Focus on high-level categorization, not individual keywords (we'll review those in the next phase)
+        2. Consider which skill groupings will resonate with this particular job posting
+        3. Don't remove categories that showcase breadth unless truly irrelevant
+        4. Merging is appropriate when two categories significantly overlap for this role
+        5. New categories should only be suggested if there's a clear gap based on the job requirements
+
+        BACKGROUND DOCUMENTS:
+        \(backgroundDocs)
+
+        OUTPUT:
+        Return your proposals as JSON matching the categoryStructure schema.
+        Include a clear "why" explanation for any non-keep actions.
+        ================================================================================
+        """
+
+        if saveDebugPrompt {
+            savePromptToDownloads(content: prompt, fileName: "categoryStructurePrompt.txt")
+        }
+
+        return prompt
+    }
+
+    // MARK: - Phase 2: Keywords Array Prompt
+
+    /// Generate prompt for Phase 2: keywords review within a specific category
+    /// Sends the full keyword list for one category, asks LLM to customize
+    @MainActor
+    func categoryKeywordsPrompt(categoryId: String, categoryName: String, keywords: [String]) async -> String {
+        try? await exportCoordinator.ensureFreshRenderedText(for: res)
+
+        let keywordsJson = keywords.map { "\"\($0)\"" }.joined(separator: ", ")
+
+        let prompt = """
+        ================================================================================
+        KEYWORDS REVIEW: \(categoryName)
+        ================================================================================
+
+        CONTEXT:
+        We are customizing \(applicant.name)'s resume for the following position:
+
+        JOB LISTING:
+        \(jobListing)
+
+        CATEGORY BEING REVIEWED:
+        - ID: \(categoryId)
+        - Name: \(categoryName)
+        - Current Keywords: [\(keywordsJson)]
+
+        TASK:
+        Review and customize the keywords in this category to better align with the target job.
+        You may:
+        - **Keep** keywords that are relevant to this role
+        - **Remove** keywords that are less important for this specific job
+        - **Modify** keywords to better match job posting terminology (e.g., "REST APIs" → "RESTful microservices")
+        - **Add** new keywords that \(applicant.name) likely has based on the resume and background, and that would strengthen the application
+
+        IMPORTANT GUIDELINES:
+        1. Prioritize keywords that directly match job requirements
+        2. Don't remove skills that showcase relevant breadth
+        3. Modifications should align terminology with job posting language
+        4. Only add skills that are genuinely supported by the background documents
+        5. Consider ATS (Applicant Tracking System) keyword matching
+
+        BACKGROUND DOCUMENTS:
+        \(backgroundDocs)
+
+        OUTPUT:
+        Return your proposal as JSON matching the keywordsArray schema.
+        - categoryId: "\(categoryId)"
+        - categoryName: "\(categoryName)"
+        - oldKeywords: the original list (for reference)
+        - newKeywords: your proposed revised list
+        - why: explanation of your overall approach for this category
+        ================================================================================
+        """
+
+        if saveDebugPrompt {
+            savePromptToDownloads(content: prompt, fileName: "categoryKeywordsPrompt_\(categoryName).txt")
+        }
+
+        return prompt
+    }
+
     /// Helper method to truncate strings with ellipsis
     private func truncateString(_ string: String, maxLength: Int) -> String {
         if string.count <= maxLength {
