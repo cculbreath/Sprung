@@ -33,10 +33,46 @@ struct LLMMessageDTO: Codable, Sendable, Identifiable {
         self.createdAt = createdAt
     }
 }
+/// Represents a single reasoning detail extracted from streaming responses.
+/// Matches OpenRouter's reasoning_details structure.
+struct LLMReasoningDetailDTO: Sendable {
+    /// Type of reasoning: "reasoning.text", "reasoning.summary", or "reasoning.encrypted"
+    var type: String?
+    /// Raw reasoning text (for "reasoning.text" type)
+    var text: String?
+    /// High-level summary (for "reasoning.summary" type)
+    var summary: String?
+    /// Format identifier: "anthropic-claude-v1", "openai-responses-v1", "xai-responses-v1"
+    var format: String?
+
+    /// Extracts the displayable reasoning text from this detail.
+    /// Prefers text content, falls back to summary.
+    var displayText: String? {
+        text ?? summary
+    }
+}
+
 struct LLMStreamChunkDTO: Sendable {
     var content: String?
+    /// Legacy simple reasoning string (for backwards compatibility)
     var reasoning: String?
+    /// Structured reasoning details from OpenRouter's new format
+    var reasoningDetails: [LLMReasoningDetailDTO]?
     var isFinished: Bool
+
+    /// Extracts all reasoning text from this chunk, combining legacy and new formats.
+    /// Prioritizes structured reasoning_details, falls back to legacy reasoning string.
+    var allReasoningText: String? {
+        // First try structured reasoning details
+        if let details = reasoningDetails, !details.isEmpty {
+            let texts = details.compactMap { $0.displayText }
+            if !texts.isEmpty {
+                return texts.joined()
+            }
+        }
+        // Fall back to legacy simple string
+        return reasoning
+    }
 }
 // MARK: - Responses
 struct LLMResponseChoiceDTO: Codable, Sendable {

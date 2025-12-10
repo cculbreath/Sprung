@@ -234,13 +234,12 @@ class NativePDFGenerator: ObservableObject {
     }
     @MainActor
     func renderingContext(for resume: Resume) throws -> [String: Any] {
-        let rawContext = try createTemplateContext(from: resume)
-        var processed = preprocessContextForTemplate(rawContext, from: resume)
-        processed = HandlebarsContextAugmentor.augment(processed)
+        let profile = profileProvider.currentProfile()
+        let context = try ResumeContextBuilder.buildContext(for: resume, profile: profile)
 #if DEBUG
-        Logger.debug("NativePDFGenerator: context keys => \(processed.keys.sorted())")
+        Logger.debug("NativePDFGenerator: context keys => \(context.keys.sorted())")
 #endif
-        return processed
+        return context
     }
     /// Legacy helper retained for text exports. Text generation duties moved to
     /// `TextResumeGenerator`, but PDF rendering still relies on this pipeline.
@@ -257,9 +256,9 @@ class NativePDFGenerator: ObservableObject {
         guard let content = templateContent else {
             throw PDFGeneratorError.templateNotFound("\(resourceName).\(format)")
         }
-        // Convert Resume to template context
-        let rawContext = try createTemplateContext(from: resume)
-        let processedContext = preprocessContextForTemplate(rawContext, from: resume)
+        // Build unified context using ResumeContextBuilder
+        let profile = profileProvider.currentProfile()
+        let context = try ResumeContextBuilder.buildContext(for: resume, profile: profile)
         // Fix font URLs for macOS system fonts and preprocess helpers
         let fontsFixed = fixFontReferences(content)
         let translation = HandlebarsTranslator.translate(fontsFixed)
@@ -271,198 +270,12 @@ class NativePDFGenerator: ObservableObject {
         // Use GRMustache to render the template
         let mustacheTemplate = try Mustache.Template(string: finalContent)
         TemplateFilters.register(on: mustacheTemplate)
-        let renderedContent = try mustacheTemplate.render(processedContext)
+        let renderedContent = try mustacheTemplate.render(context)
         // For HTML format, save debug output
         if format == "html" {
             saveDebugHTML(renderedContent, template: template, format: format)
         }
         return renderedContent
-    }
-    @MainActor
-    private func createTemplateContext(from resume: Resume) throws -> [String: Any] {
-        try ResumeTemplateDataBuilder.buildContext(from: resume)
-    }
-    private func preprocessContextForTemplate(_ context: [String: Any], from resume: Resume) -> [String: Any] {
-        // Merge ApplicantProfile data back into context
-        guard let template = resume.template else {
-            Logger.warning("NativePDFGenerator: no template for resume, skipping profile merge")
-            return context
-        }
-        guard let manifest = TemplateManifestLoader.manifest(for: template) else {
-            Logger.warning("NativePDFGenerator: no manifest for template \(template.slug), skipping profile merge")
-            return context
-        }
-        let profile = profileProvider.currentProfile()
-        let profileContext = buildApplicantProfileContext(
-            profile: profile,
-            manifest: manifest
-        )
-        // Merge profile context into the template context
-        var merged = context
-        for (key, value) in profileContext {
-            if var existingDict = merged[key] as? [String: Any],
-               let newDict = value as? [String: Any] {
-                // Merge dictionaries
-                for (subKey, subValue) in newDict {
-                    existingDict[subKey] = subValue
-                }
-                merged[key] = existingDict
-            } else {
-                merged[key] = value
-            }
-        }
-#if DEBUG
-        if Logger.isVerboseEnabled, let basics = merged["basics"] as? [String: Any] {
-            var sanitized = basics
-            if sanitized["image"] != nil {
-                sanitized["image"] = "<omitted>"
-            }
-            Logger.debug("NativePDFGenerator: basics context => \(sanitized)")
-        }
-#endif
-        applySectionVisibility(overrides: &merged, manifest: manifest, resume: resume)
-        return merged
-    }
-    private func buildApplicantProfileContext(
-        profile: ApplicantProfile,
-        manifest: TemplateManifest
-    ) -> [String: Any] {
-        var payload: [String: Any] = [:]
-        let bindings = manifest.applicantProfileBindings()
-        Logger.debug("NativePDFGenerator: found \(bindings.count) profile bindings for manifest \(manifest.slug)")
-        if bindings.isEmpty {
-            Logger.warning("NativePDFGenerator: NO profile bindings found! Sections: \(manifest.sections.keys.sorted())")
-            if let basicsSection = manifest.sections["basics"] {
-                Logger.warning("NativePDFGenerator: basics section has \(basicsSection.fields.count) fields")
-                for field in basicsSection.fields {
-                    Logger.warning("  - field '\(field.key)' has binding: \(field.binding != nil)")
-                }
-            }
-        }
-        for binding in bindings {
-            guard let value = applicantProfileValue(for: binding.binding.path, profile: profile),
-                  !isEmptyValue(value) else {
-                Logger.debug("NativePDFGenerator: skipping binding \(binding.section).\(binding.path.joined(separator: ".")) - no value")
-                continue
-            }
-            Logger.debug("NativePDFGenerator: applying binding \(binding.section).\(binding.path.joined(separator: "."))")
-            let updatedSection = setProfileValue(
-                value,
-                for: binding.path,
-                existing: payload[binding.section]
-            )
-            payload[binding.section] = updatedSection
-        }
-        Logger.debug("NativePDFGenerator: profile context keys = \(payload.keys.sorted())")
-        return payload
-    }
-    private func applicantProfileValue(for path: [String], profile: ApplicantProfile) -> Any? {
-        guard let first = path.first else { return nil }
-        switch first {
-        case "name":
-            return profile.name.isEmpty ? nil : profile.name
-        case "email":
-            return profile.email.isEmpty ? nil : profile.email
-        case "phone":
-            return profile.phone.isEmpty ? nil : profile.phone
-        case "label":
-            return profile.label.isEmpty ? nil : profile.label
-        case "summary":
-            return profile.summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : profile.summary
-        case "url", "website":
-            return profile.websites.isEmpty ? nil : profile.websites
-        case "picture", "image":
-            return profile.pictureDataURL()
-        case "address":
-            return profile.address.isEmpty ? nil : profile.address
-        case "city":
-            return profile.city.isEmpty ? nil : profile.city
-        case "region", "state":
-            return profile.state.isEmpty ? nil : profile.state
-        case "postalCode", "zip", "code":
-            return profile.zip.isEmpty ? nil : profile.zip
-        case "countryCode":
-            return profile.countryCode.isEmpty ? nil : profile.countryCode
-        case "location":
-            let remainder = Array(path.dropFirst())
-            return remainder.isEmpty ? nil : applicantProfileValue(for: remainder, profile: profile)
-        default:
-            return nil
-        }
-    }
-    private func isEmptyValue(_ value: Any) -> Bool {
-        if let string = value as? String {
-            return string.isEmpty
-        }
-        if let dict = value as? [String: Any] {
-            return dict.isEmpty
-        }
-        return false
-    }
-    private func setProfileValue(
-        _ value: Any,
-        for path: [String],
-        existing: Any?
-    ) -> Any {
-        guard let first = path.first else { return value }
-        var dictionary = dictionaryValue(from: existing) ?? [:]
-        let remainder = Array(path.dropFirst())
-        if remainder.isEmpty {
-            dictionary[first] = value
-        } else {
-            let current = dictionary[first]
-            dictionary[first] = setProfileValue(value, for: remainder, existing: current)
-        }
-        return dictionary
-    }
-    private func applySectionVisibility(
-        overrides context: inout [String: Any],
-        manifest: TemplateManifest,
-        resume: Resume
-    ) {
-        var visibility = manifest.sectionVisibilityDefaults ?? [:]
-        let resumeOverrides = resume.sectionVisibilityOverrides
-        for (key, value) in resumeOverrides {
-            visibility[key] = value
-        }
-        guard visibility.isEmpty == false else { return }
-        for (sectionKey, shouldDisplay) in visibility {
-            let boolKey = "\(sectionKey)Bool"
-            let baseVisible: Bool
-            if let numeric = context[boolKey] as? NSNumber {
-                baseVisible = numeric.boolValue
-            } else if let flag = context[boolKey] as? Bool {
-                baseVisible = flag
-            } else if let value = context[sectionKey] {
-                baseVisible = truthy(value)
-            } else {
-                baseVisible = false
-            }
-            context[boolKey] = baseVisible && shouldDisplay
-        }
-    }
-    private func dictionaryValue(from value: Any?) -> [String: Any]? {
-        guard let value else { return nil }
-        if let dict = value as? [String: Any] {
-            return dict
-        }
-        return nil
-    }
-    private func truthy(_ value: Any) -> Bool {
-        switch value {
-        case let number as NSNumber:
-            return number.boolValue
-        case let string as String:
-            return string.isEmpty == false
-        case let array as [Any]:
-            return array.isEmpty == false
-        case let dict as [String: Any]:
-            return dict.isEmpty == false
-        case let ordered as OrderedDictionary<String, Any>:
-            return ordered.isEmpty == false
-        default:
-            return true
-        }
     }
     private func preprocessTemplateForGRMustache(_ template: String) -> String {
         var processed = template

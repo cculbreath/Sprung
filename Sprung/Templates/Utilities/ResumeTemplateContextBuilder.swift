@@ -18,6 +18,7 @@ struct ResumeTemplateContextBuilder {
         merge(into: &context, with: sanitizedExperience)
         merge(into: &context, with: profileContext(from: applicantProfile, manifest: manifest))
         addMissingKeys(from: sanitizedExperience, to: &context)
+        ensureCustomFields(in: &context, manifest: manifest)
         if let manifest {
             context = SeedContextNormalizer(manifest: manifest).normalize(context)
         }
@@ -335,6 +336,47 @@ struct ResumeTemplateContextBuilder {
         for (key, value) in source where context[key] == nil {
             context[key] = value
         }
+    }
+    private func ensureCustomFields(in context: inout [String: Any], manifest: TemplateManifest?) {
+        guard let manifest, let customSection = manifest.section(for: "custom") else { return }
+        var custom = context["custom"] as? [String: Any] ?? [:]
+        for descriptor in customSection.fields where descriptor.key != "*" {
+            guard custom[descriptor.key] == nil else { continue }
+            custom[descriptor.key] = defaultValue(for: descriptor)
+        }
+        if custom.isEmpty == false {
+            context["custom"] = custom
+        }
+    }
+    private func defaultValue(for descriptor: TemplateManifest.Section.FieldDescriptor) -> Any {
+        if let behavior = descriptor.behavior {
+            switch behavior {
+            case .fontSizes:
+                return [:]
+            case .includeFonts:
+                return false
+            case .editorKeys:
+                return []
+            case .sectionLabels:
+                return [:]
+            case .applicantProfile:
+                return ""
+            }
+        }
+        if descriptor.repeatable {
+            return []
+        }
+        if descriptor.input == .toggle {
+            return false
+        }
+        if let children = descriptor.children, children.isEmpty == false {
+            var nested: [String: Any] = [:]
+            for child in children where child.key != "*" {
+                nested[child.key] = defaultValue(for: child)
+            }
+            return nested
+        }
+        return ""
     }
     private func removeContactSection(from dictionary: [String: Any], manifest: TemplateManifest?) -> [String: Any] {
         var sanitized = dictionary

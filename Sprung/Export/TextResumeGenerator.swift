@@ -201,15 +201,29 @@ class TextResumeGenerator {
     ) -> [String: Any] {
         var payload: [String: Any] = [:]
         let bindings = manifest.applicantProfileBindings()
-        for binding in bindings {
-            guard let value = applicantProfileValue(for: binding.binding.path, profile: profile),
-                  !isEmptyValue(value) else { continue }
-            let updatedSection = setProfileValue(
-                value,
-                for: binding.path,
-                existing: payload[binding.section]
-            )
-            payload[binding.section] = updatedSection
+        if bindings.isEmpty {
+            // No explicit bindings in manifest - use default profile paths
+            for defaultPath in TemplateManifest.defaultApplicantProfilePaths {
+                guard let value = applicantProfileValue(for: defaultPath.path, profile: profile),
+                      !isEmptyValue(value) else { continue }
+                let updatedSection = setProfileValue(
+                    value,
+                    for: defaultPath.path,
+                    existing: payload[defaultPath.section]
+                )
+                payload[defaultPath.section] = updatedSection
+            }
+        } else {
+            for binding in bindings {
+                guard let value = applicantProfileValue(for: binding.binding.path, profile: profile),
+                      !isEmptyValue(value) else { continue }
+                let updatedSection = setProfileValue(
+                    value,
+                    for: binding.path,
+                    existing: payload[binding.section]
+                )
+                payload[binding.section] = updatedSection
+            }
         }
         return payload
     }

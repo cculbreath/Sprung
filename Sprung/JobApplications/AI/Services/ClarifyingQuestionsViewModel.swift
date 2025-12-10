@@ -99,8 +99,8 @@ class ClarifyingQuestionsViewModel {
                 var collectingJSON = false
                 var jsonResponse = ""
                 for try await chunk in handle.stream {
-                    // Handle reasoning content
-                    if let reasoningContent = chunk.reasoning {
+                    // Handle reasoning content (supports both legacy and new reasoning_details format)
+                    if let reasoningContent = chunk.allReasoningText {
                         Logger.debug("🧠 [ClarifyingQuestionsViewModel] Adding reasoning content: \(reasoningContent.prefix(100))...")
                         reasoningStreamManager.reasoningText += reasoningContent
                     }
@@ -200,8 +200,8 @@ class ClarifyingQuestionsViewModel {
             activeStreamingHandle = handle
             // Process the stream
             for try await chunk in handle.stream {
-                // Handle reasoning content
-                if let reasoningContent = chunk.reasoning {
+                // Handle reasoning content (supports both legacy and new reasoning_details format)
+                if let reasoningContent = chunk.allReasoningText {
                     reasoningStreamManager.reasoningText += reasoningContent
                 }
                 // Handle completion

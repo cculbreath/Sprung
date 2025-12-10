@@ -16,6 +16,9 @@ final class ExperienceDefaults {
     var isLanguagesEnabled: Bool
     var isInterestsEnabled: Bool
     var isReferencesEnabled: Bool
+    var isCustomEnabled: Bool = false
+    @Relationship(deleteRule: .cascade, inverse: \ExperienceCustomField.defaults)
+    var customFields: [ExperienceCustomField]
     @Relationship(deleteRule: .cascade, inverse: \WorkExperienceDefault.defaults)
     var workExperiences: [WorkExperienceDefault]
     @Relationship(deleteRule: .cascade, inverse: \VolunteerExperienceDefault.defaults)
@@ -52,6 +55,8 @@ final class ExperienceDefaults {
         isLanguagesEnabled: Bool = false,
         isInterestsEnabled: Bool = false,
         isReferencesEnabled: Bool = false,
+        isCustomEnabled: Bool = false,
+        customFields: [ExperienceCustomField] = [],
         workExperiences: [WorkExperienceDefault] = [],
         volunteerExperiences: [VolunteerExperienceDefault] = [],
         educationRecords: [EducationExperienceDefault] = [],
@@ -77,6 +82,8 @@ final class ExperienceDefaults {
         self.isLanguagesEnabled = isLanguagesEnabled
         self.isInterestsEnabled = isInterestsEnabled
         self.isReferencesEnabled = isReferencesEnabled
+        self.isCustomEnabled = isCustomEnabled
+        self.customFields = customFields
         self.workExperiences = workExperiences
         self.volunteerExperiences = volunteerExperiences
         self.educationRecords = educationRecords

@@ -22,6 +22,7 @@ extension ExperienceDefaultsDraft {
         case .languages: isLanguagesEnabled = isEnabled
         case .interests: isInterestsEnabled = isEnabled
         case .references: isReferencesEnabled = isEnabled
+        case .custom: isCustomEnabled = isEnabled
         }
     }
     private func isEnabled(for key: ExperienceSectionKey) -> Bool {
@@ -37,6 +38,7 @@ extension ExperienceDefaultsDraft {
         case .languages: return isLanguagesEnabled
         case .interests: return isInterestsEnabled
         case .references: return isReferencesEnabled
+        case .custom: return isCustomEnabled
         }
     }
 }

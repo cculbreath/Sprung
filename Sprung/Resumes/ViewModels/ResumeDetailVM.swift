@@ -107,6 +107,11 @@ final class ResumeDetailVM {
         // Delegate to TreeNode extension method
         rootNode.rebuildViewHierarchy(manifest: manifest)
     }
+    /// Ensures the view hierarchy is available when loading an existing resume
+    /// without forcing SwiftUI to mutate graph state during view init.
+    func ensureViewHierarchy() {
+        rebuildViewHierarchy()
+    }
     /// Re‑exports the resume JSON → PDF via the debounce mechanism.
     func refreshPDF() {
         exportCoordinator.debounceExport(resume: resume)
