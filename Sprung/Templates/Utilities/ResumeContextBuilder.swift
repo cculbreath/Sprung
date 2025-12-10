@@ -32,12 +32,24 @@ enum ResumeContextBuilder {
     ///   - profile: The applicant profile (merged into basics.* by convention)
     /// - Returns: Dictionary ready for Mustache template rendering
     /// - Throws: If TreeNode context cannot be built
+    /// Standard JSON Resume section keys (not custom)
+    private static let standardSectionKeys: Set<String> = [
+        "basics", "work", "volunteer", "education", "projects", "skills",
+        "awards", "certificates", "publications", "languages", "interests",
+        "references", "meta", "styling", "summary", "keys-in-editor"
+    ]
+
     static func buildContext(
         for resume: Resume,
         profile: ApplicantProfile
     ) throws -> [String: Any] {
         // Step 1: Build base context from TreeNode
-        let treeContext = try ResumeTemplateDataBuilder.buildContext(from: resume)
+        var treeContext = try ResumeTemplateDataBuilder.buildContext(from: resume)
+
+        // Step 1.5: Nest custom fields under "custom" key for template compatibility
+        // Custom fields are flattened in TreeNode (for editor display) but templates
+        // expect them under custom.fieldName
+        treeContext = nestCustomFields(in: treeContext)
 
         // Step 2: Overlay ApplicantProfile onto basics.* (by convention)
         var context = mergeApplicantProfile(profile, into: treeContext)
@@ -234,6 +246,35 @@ enum ResumeContextBuilder {
             // Final visibility = has content AND should display
             context[boolKey] = baseVisible && shouldDisplay
         }
+    }
+
+    // MARK: - Custom Fields
+
+    /// Nest custom fields under a "custom" key for template compatibility.
+    /// Custom fields are flattened in TreeNode (for editor display) but templates
+    /// expect them under custom.fieldName (e.g., custom.jobTitles, custom.moreInfo).
+    private static func nestCustomFields(in context: [String: Any]) -> [String: Any] {
+        var result: [String: Any] = [:]
+        var customFields: [String: Any] = context["custom"] as? [String: Any] ?? [:]
+
+        for (key, value) in context {
+            if standardSectionKeys.contains(key) || key.hasSuffix("Bool") {
+                // Standard section or visibility flag - keep at root
+                result[key] = value
+            } else if key == "custom" {
+                // Already a custom container - merge later
+                continue
+            } else {
+                // Custom field - nest under "custom"
+                customFields[key] = value
+            }
+        }
+
+        if !customFields.isEmpty {
+            result["custom"] = customFields
+        }
+
+        return result
     }
 
     // MARK: - Helpers
