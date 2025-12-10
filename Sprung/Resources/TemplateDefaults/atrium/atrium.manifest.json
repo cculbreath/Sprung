@@ -144,6 +144,16 @@
   "editorLabels": {
     "basics": "Contact Info",
     "basics.summary": "Professional Summary",
+    "work": "Work Experience",
+    "volunteer": "Volunteer",
+    "education": "Education",
+    "projects": "Projects",
+    "skills": "Skills",
+    "awards": "Awards",
+    "certificates": "Certificates",
+    "publications": "Publications",
+    "languages": "Languages",
+    "interests": "Interests",
     "custom.jobTitles": "Job Titles",
     "custom.moreInfo": "Additional Info"
   }
