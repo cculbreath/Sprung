@@ -22,14 +22,11 @@ struct ProposedRevisionNode: Codable, Equatable {
     /// Node type: scalar (single value) or list (array of values)
     var nodeType: NodeType = .scalar
 
-    /// Review mode for list nodes (batchOnly vs perItemReview)
-    var listReviewMode: ListReviewMode = .batchOnly
-
     /// Array values for list nodes (nil for scalar nodes)
     var oldValueArray: [String]?
     var newValueArray: [String]?
 
-    /// Per-item feedback for perItemReview mode
+    /// Per-item feedback for list nodes (populated when user rejects/comments on individual items)
     var itemFeedback: [ItemFeedback]?
 
     // MARK: - Convenience Accessors
@@ -117,7 +114,6 @@ struct ProposedRevisionNode: Codable, Equatable {
         case why
         case treePath
         case nodeType
-        case listReviewMode
         case oldValueArray
         case newValueArray
         case itemFeedback
@@ -137,7 +133,6 @@ struct ProposedRevisionNode: Codable, Equatable {
 
         // Array payload fields (default to scalar mode for backwards compatibility)
         nodeType = try container.decodeIfPresent(NodeType.self, forKey: .nodeType) ?? .scalar
-        listReviewMode = try container.decodeIfPresent(ListReviewMode.self, forKey: .listReviewMode) ?? .batchOnly
         oldValueArray = try container.decodeIfPresent([String].self, forKey: .oldValueArray)
         newValueArray = try container.decodeIfPresent([String].self, forKey: .newValueArray)
         itemFeedback = try container.decodeIfPresent([ItemFeedback].self, forKey: .itemFeedback)
@@ -198,12 +193,6 @@ enum RevisionPhase: String, Codable {
 enum NodeType: String, Codable {
     case scalar  // Single string value (existing behavior)
     case list    // Array of string values (keywords, highlights)
-}
-
-/// Review mode for list nodes - determines UI and resubmission behavior
-enum ListReviewMode: String, Codable {
-    case batchOnly      // Skills keywords: accept/reject whole array at once
-    case perItemReview  // Highlights: can accept/reject individual items
 }
 
 /// Actions the LLM can propose for skill categories in Phase 1
@@ -268,7 +257,7 @@ struct CategoryRevisionsContainer: Codable {
     }
 }
 
-/// Per-item feedback for list nodes with perItemReview mode (e.g., work highlights)
+/// Per-item feedback for list nodes (e.g., work highlights, skill keywords)
 struct ItemFeedback: Codable, Equatable, Identifiable {
     var id: Int { index }  // Use index as ID for Identifiable
     var index: Int
