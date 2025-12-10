@@ -31,7 +31,10 @@ struct RevisionReviewView: View {
     var body: some View {
         VStack(spacing: 0) {
             if let resume = resume {
-                if viewModel.aiResubmit && !isUsingReasoningModal {
+                // Check for hierarchical review first
+                if viewModel.isHierarchicalReviewActive {
+                    hierarchicalReviewContent(resume: resume)
+                } else if viewModel.aiResubmit && !isUsingReasoningModal {
                     // Loading state during AI resubmission (only for non-reasoning models)
                     VStack {
                         Text("Submitting Feedback to AI")
@@ -198,6 +201,31 @@ struct RevisionReviewView: View {
         Logger.debug("🔍 [RevisionReviewView] Setting showResumeRevisionSheet = false")
         viewModel.showResumeRevisionSheet = false
         Logger.debug("🔍 [RevisionReviewView] After setting - showResumeRevisionSheet = \(viewModel.showResumeRevisionSheet)")
+    }
+
+    // MARK: - Hierarchical Review Content
+
+    /// Routes to the appropriate phase view for two-phase hierarchical review
+    @ViewBuilder
+    private func hierarchicalReviewContent(resume: Resume) -> some View {
+        switch viewModel.currentRevisionPhase {
+        case .categoryStructure:
+            CategoryStructureReviewView(
+                viewModel: viewModel,
+                resume: Binding(
+                    get: { self.resume },
+                    set: { _ in }
+                )
+            )
+        case .categoryDetails:
+            KeywordsDiffView(
+                viewModel: viewModel,
+                resume: Binding(
+                    get: { self.resume },
+                    set: { _ in }
+                )
+            )
+        }
     }
 }
 // MARK: - Subviews
