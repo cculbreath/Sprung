@@ -23,7 +23,7 @@ struct ApplicantProfileView: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
-                        ApplicantProfileEditor(draft: $draft, showsSummary: false)
+                        ApplicantProfileEditor(draft: $draft, showsSummary: true)
                             .onChange(of: draft) { _, _ in
                                 hasChanges = true
                             }
