@@ -566,7 +566,11 @@ final class ExperienceDefaultsToTree {
                 status: .isNotLeaf,
                 resume: resume
             ))
+            // Try both direct key and custom-prefixed path for editor labels
             applyEditorLabel(to: fieldNode, for: field.key)
+            if fieldNode.editorLabel == nil {
+                applyEditorLabel(to: fieldNode, for: "custom.\(field.key)")
+            }
 
             // Check if this is an array field or single value
             if field.values.count > 1 || section?.fields.first(where: { $0.key == field.key })?.repeatable == true {
