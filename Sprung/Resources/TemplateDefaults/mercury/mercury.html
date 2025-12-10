@@ -204,6 +204,16 @@
       </header>
 
       <main class="content">
+        {{#hasContent(custom.objective)}}
+        <section class="section">
+          <div class="section-header">
+            <div class="section-title">Profile</div>
+            <div class="section-sub">Overview</div>
+          </div>
+          <div class="summary-text">{{{custom.objective}}}</div>
+        </section>
+        {{/hasContent(custom.objective)}}
+        {{^hasContent(custom.objective)}}
         {{#hasContent(basics.summary)}}
         <section class="section">
           <div class="section-header">
@@ -213,6 +223,7 @@
           <div class="summary-text">{{{basics.summary}}}</div>
         </section>
         {{/hasContent(basics.summary)}}
+        {{/hasContent(custom.objective)}}
 
         {{#hasContent(work)}}
         <section class="section">
