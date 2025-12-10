@@ -89,6 +89,58 @@ enum LeafStatus: String, Codable, Hashable {
         }
         return count
     }
+
+    // MARK: - AI Selection Inheritance
+
+    /// Returns true if this node's AI selection is inherited from an ancestor
+    /// (i.e., this node is NOT directly marked .aiToReplace, but an ancestor is)
+    var isInheritedAISelection: Bool {
+        guard status != .aiToReplace else { return false }
+        return hasAncestorWithAIStatus
+    }
+
+    /// Returns true if any ancestor has .aiToReplace status
+    var hasAncestorWithAIStatus: Bool {
+        var current = parent
+        while let ancestor = current {
+            if ancestor.status == .aiToReplace {
+                return true
+            }
+            current = ancestor.parent
+        }
+        return false
+    }
+
+    /// Returns true if this node should be included in AI revision
+    /// (either directly selected or inherited from parent)
+    var isSelectedForAIRevision: Bool {
+        status == .aiToReplace || isInheritedAISelection
+    }
+
+    /// Toggle AI selection on this node and optionally propagate to children
+    /// - Parameter propagateToChildren: If true, also sets all descendants to the new status
+    func toggleAISelection(propagateToChildren: Bool = false) {
+        if status == .aiToReplace {
+            status = .saved
+            if propagateToChildren {
+                setChildrenAIStatus(to: .saved)
+            }
+        } else {
+            status = .aiToReplace
+            if propagateToChildren {
+                setChildrenAIStatus(to: .aiToReplace)
+            }
+        }
+    }
+
+    /// Recursively set AI status on all descendants
+    private func setChildrenAIStatus(to newStatus: LeafStatus) {
+        guard let children = children else { return }
+        for child in children {
+            child.status = newStatus
+            child.setChildrenAIStatus(to: newStatus)
+        }
+    }
     init(
         name: String, value: String = "", children: [TreeNode]? = nil,
         parent: TreeNode? = nil, inEditor: Bool, status: LeafStatus = LeafStatus.disabled,

@@ -108,6 +108,11 @@
     "custom.jobTitles": "Job Titles",
     "custom.moreInfo": "Additional Info"
   },
+  "defaultAIFields": [
+    "basics.summary",
+    "work.*.highlights",
+    "skills.*.keywords"
+  ],
   "listContainers": [
     "skills.*.keywords",
     "work.*.highlights"
