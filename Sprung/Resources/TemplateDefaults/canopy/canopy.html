@@ -228,7 +228,7 @@
 
       {{#hasContent(skills)}}
       <section class="section">
-        <div class="section-title">{{{custom.sectionLabels.skills}}}</div>
+        <div class="section-title">{{{template.sectionLabels.skills}}}</div>
         <div class="skills-grid">
           {{#skills}}
           <div class="skill-item"><strong>{{{name}}}</strong>{{#hasContent(keywords)}} · {{ join(keywords, ", ") }}{{/hasContent(keywords)}}</div>
@@ -239,7 +239,7 @@
 
       {{#hasContent(work)}}
       <section class="section">
-        <div class="section-title">{{{custom.sectionLabels.work}}}</div>
+        <div class="section-title">{{{template.sectionLabels.work}}}</div>
         {{#work}}
         <div class="entry">
           <div class="entry-header">
@@ -262,7 +262,7 @@
 
       {{#hasContent(projects)}}
       <section class="section">
-        <div class="section-title">{{{custom.sectionLabels.projects}}}</div>
+        <div class="section-title">{{{template.sectionLabels.projects}}}</div>
         {{#projects}}
         <div class="project-entry">
           <div class="project-name">{{{name}}}{{#hasContent(url)}} · {{{url}}}{{/hasContent(url)}}</div>
@@ -280,7 +280,7 @@
 
       {{#hasContent(education)}}
       <section class="section">
-        <div class="section-title">{{{custom.sectionLabels.education}}}</div>
+        <div class="section-title">{{{template.sectionLabels.education}}}</div>
         <div class="edu-grid">
           {{#education}}
           <div class="edu-card">
@@ -299,7 +299,7 @@
 
       {{#hasContent(volunteer)}}
       <section class="section">
-        <div class="section-title">{{{custom.sectionLabels.volunteer}}}</div>
+        <div class="section-title">{{{template.sectionLabels.volunteer}}}</div>
         {{#volunteer}}
         <div class="entry">
           <div class="entry-header">
@@ -317,7 +317,7 @@
 
       {{#hasContent(awards, certificates, publications)}}
       <section class="section">
-        <div class="section-title">{{{custom.sectionLabels.awards}}}</div>
+        <div class="section-title">{{{template.sectionLabels.awards}}}</div>
         {{#awards}}
         <div class="entry">
           <div class="role">{{title}}</div>

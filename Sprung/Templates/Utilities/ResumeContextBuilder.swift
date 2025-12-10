@@ -32,11 +32,17 @@ enum ResumeContextBuilder {
     ///   - profile: The applicant profile (merged into basics.* by convention)
     /// - Returns: Dictionary ready for Mustache template rendering
     /// - Throws: If TreeNode context cannot be built
-    /// Standard JSON Resume section keys (not custom)
+    /// Standard section keys that stay at root level (not nested under "custom")
+    /// Includes JSON Resume sections plus template utility fields
     private static let standardSectionKeys: Set<String> = [
+        // JSON Resume sections
         "basics", "work", "volunteer", "education", "projects", "skills",
         "awards", "certificates", "publications", "languages", "interests",
-        "references", "meta", "styling", "summary", "keys-in-editor"
+        "references", "meta", "summary",
+        // Template utility fields (from manifest, not user data)
+        "template", "styling",
+        // Editor metadata
+        "keys-in-editor"
     ]
 
     static func buildContext(

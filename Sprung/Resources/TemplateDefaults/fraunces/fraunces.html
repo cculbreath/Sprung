@@ -377,7 +377,7 @@
             <div class="main-content">
                 <div class="left-column">
                     <div class="info-box skill-box">
-                        <div class="skill-head">{{{custom.sectionLabels.skills}}}</div>
+                        <div class="skill-head">{{{template.sectionLabels.skills}}}</div>
                         
                             {{#skills}}
                             <div class="skill-div"><div class="skill-name"><strong>{{{name}}}</strong></div><span class="lightitalic"> {{ join(keywords, ", ") }}</span></div>
@@ -385,7 +385,7 @@
                         
                     </div>
                     <div class="info-box edu-box">
-                        <h2>{{{custom.sectionLabels.education}}}</h2>
+                        <h2>{{{template.sectionLabels.education}}}</h2>
                         <ul class="edu-list">
                             {{#education}}
                             <li class="edu-item">
@@ -401,7 +401,7 @@
                     <div class="top-box">
                         <div class="section-title">
                             <hr />
-                            <h2>{{custom.sectionLabels.work}}</h2>
+                            <h2>{{template.sectionLabels.work}}</h2>
                             <hr />
                         </div>
                         {{#work}}
@@ -422,7 +422,7 @@
                     <div class="projects">
                         <div class="section-title">
                             <hr />
-                            <h2>{{custom.sectionLabels.projects}}</h2>
+                            <h2>{{template.sectionLabels.projects}}</h2>
                             <hr />
                         </div>
                         <ul class="project-list">

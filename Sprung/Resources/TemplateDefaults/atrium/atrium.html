@@ -192,7 +192,7 @@
 
           {{#hasContent(skills)}}
           <div class="panel" style="margin-top: 8pt;">
-            <div class="section-title">{{{custom.sectionLabels.skills}}}</div>
+            <div class="section-title">{{{template.sectionLabels.skills}}}</div>
             <div>
               {{#skills}}
               <span class="pill"><strong>{{{name}}}</strong>{{#hasContent(keywords)}} · {{ join(keywords, ', ') }}{{/hasContent(keywords)}}</span>
@@ -203,7 +203,7 @@
 
           {{#hasContent(education)}}
           <div class="panel" style="margin-top: 8pt;">
-            <div class="section-title">{{{custom.sectionLabels.education}}}</div>
+            <div class="section-title">{{{template.sectionLabels.education}}}</div>
             {{#education}}
             <div class="edu-card">
               <div class="edu-title">{{{institution}}}</div>
@@ -235,7 +235,7 @@
           {{#hasContent(work)}}
           <section class="block">
             <div class="block-head">
-              <div class="block-title">{{{custom.sectionLabels.work}}}</div>
+              <div class="block-title">{{{template.sectionLabels.work}}}</div>
               <div class="block-sub">Experience</div>
             </div>
             {{#work}}
@@ -263,7 +263,7 @@
           {{#hasContent(projects)}}
           <section class="block">
             <div class="block-head">
-              <div class="block-title">{{{custom.sectionLabels.projects}}}</div>
+              <div class="block-title">{{{template.sectionLabels.projects}}}</div>
               <div class="block-sub">Selected Work</div>
             </div>
             <div class="project-grid">
@@ -281,7 +281,7 @@
           {{#hasContent(volunteer)}}
           <section class="block">
             <div class="block-head">
-              <div class="block-title">{{{custom.sectionLabels.volunteer}}}</div>
+              <div class="block-title">{{{template.sectionLabels.volunteer}}}</div>
               <div class="block-sub">Community</div>
             </div>
             <div class="two-col">
@@ -339,7 +339,7 @@
           {{#hasContent(custom.moreInfo)}}
           <section class="block">
             <div class="block-head">
-              <div class="block-title">{{{custom.sectionLabels.moreInfo}}}</div>
+              <div class="block-title">{{{template.sectionLabels.moreInfo}}}</div>
               <div class="block-sub">Details</div>
             </div>
             <div class="summary-text">{{{custom.moreInfo}}}</div>

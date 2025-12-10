@@ -11,7 +11,7 @@
 {{{ wrap(custom.objective, 80, 0, 0) }}}
 {{/hasContent(custom.objective)}}
 {{#hasContent(skills)}}
-{{{ sectionLine(custom.sectionLabels.skills, 80) }}}
+{{{ sectionLine(template.sectionLabels.skills, 80) }}}
 {{#skills}}
 {{ name }}
 {{#hasContent(level)}}
@@ -23,7 +23,7 @@
 {{/skills}}
 {{/hasContent(skills)}}
 {{#hasContent(work)}}
-{{{ sectionLine(custom.sectionLabels.work, 80) }}}
+{{{ sectionLine(template.sectionLabels.work, 80) }}}
 {{#work}}
 {{ name }}{{#hasContent(location)}} | {{ location }}{{/hasContent(location)}}{{#hasContent(url)}} | {{{ url }}}{{/hasContent(url)}}
 {{#hasContent(position)}}
@@ -49,7 +49,7 @@
 {{/work}}
 {{/hasContent(work)}}
 {{#hasContent(volunteer)}}
-{{{ sectionLine(custom.sectionLabels.volunteer, 80) }}}
+{{{ sectionLine(template.sectionLabels.volunteer, 80) }}}
 {{#volunteer}}
 {{ organization }}{{#hasContent(url)}} | {{{ url }}}{{/hasContent(url)}}
 {{#hasContent(position)}}{{ position }}{{/hasContent(position)}}
@@ -60,7 +60,7 @@
 {{/volunteer}}
 {{/hasContent(volunteer)}}
 {{#hasContent(education)}}
-{{{ sectionLine(custom.sectionLabels.education, 80) }}}
+{{{ sectionLine(template.sectionLabels.education, 80) }}}
 {{#education}}
 {{ institution }}{{#hasContent(url)}} | {{{ url }}}{{/hasContent(url)}}
 {{#hasContent(studyType)}}{{ studyType }}{{/hasContent(studyType)}}
@@ -71,7 +71,7 @@
 {{/education}}
 {{/hasContent(education)}}
 {{#hasContent(projects)}}
-{{{ sectionLine(custom.sectionLabels.projects, 80) }}}
+{{{ sectionLine(template.sectionLabels.projects, 80) }}}
 {{#projects}}
 {{{ wrap(projectLine, 80, 0, 0) }}}
 {{#hasContent(highlights)}}
@@ -85,7 +85,7 @@
 {{/projects}}
 {{/hasContent(projects)}}
 {{#hasContent(awards)}}
-{{{ sectionLine(custom.sectionLabels.awards, 80) }}}
+{{{ sectionLine(template.sectionLabels.awards, 80) }}}
 {{#awards}}
 {{ title }}{{#hasContent(awarder)}} | {{ awarder }}{{/hasContent(awarder)}}
 {{#hasContent(date)}}{{ formatDate(date) }}{{/hasContent(date)}}
@@ -93,7 +93,7 @@
 {{/awards}}
 {{/hasContent(awards)}}
 {{#hasContent(certificates)}}
-{{{ sectionLine(custom.sectionLabels.certificates, 80) }}}
+{{{ sectionLine(template.sectionLabels.certificates, 80) }}}
 {{#certificates}}
 {{ name }}{{#hasContent(issuer)}} | {{ issuer }}{{/hasContent(issuer)}}
 {{#hasContent(date)}}{{ formatDate(date) }}{{/hasContent(date)}}
@@ -101,7 +101,7 @@
 {{/certificates}}
 {{/hasContent(certificates)}}
 {{#hasContent(publications)}}
-{{{ sectionLine(custom.sectionLabels.publications, 80) }}}
+{{{ sectionLine(template.sectionLabels.publications, 80) }}}
 {{#publications}}
 {{ name }}{{#hasContent(publisher)}} | {{ publisher }}{{/hasContent(publisher)}}
 {{#hasContent(releaseDate)}}{{ formatDate(releaseDate) }}{{/hasContent(releaseDate)}}
@@ -111,20 +111,20 @@
 {{/publications}}
 {{/hasContent(publications)}}
 {{#hasContent(languages)}}
-{{{ sectionLine(custom.sectionLabels.languages, 80) }}}
+{{{ sectionLine(template.sectionLabels.languages, 80) }}}
 {{#languages}}
 {{ language }}{{#hasContent(fluency)}} - {{ fluency }}{{/hasContent(fluency)}}
 {{/languages}}
 {{/hasContent(languages)}}
 {{#hasContent(interests)}}
-{{{ sectionLine(custom.sectionLabels.interests, 80) }}}
+{{{ sectionLine(template.sectionLabels.interests, 80) }}}
 {{#interests}}
 {{ name }}
 {{#hasContent(keywords)}}{{{ wrap(join(keywords), 80, 0, 0) }}}{{/hasContent(keywords)}}
 {{/interests}}
 {{/hasContent(interests)}}
 {{#hasContent(references)}}
-{{{ sectionLine(custom.sectionLabels.references, 80) }}}
+{{{ sectionLine(template.sectionLabels.references, 80) }}}
 {{#references}}
 {{ name }}
 {{#hasContent(reference)}}{{{ wrap(reference, 80, 0, 0) }}}{{/hasContent(reference)}}
@@ -132,13 +132,13 @@
 {{/references}}
 {{/hasContent(references)}}
 {{#hasContent(meta.version, meta.lastModified, meta.canonical)}}
-{{{ sectionLine(custom.sectionLabels.meta, 80) }}}
+{{{ sectionLine(template.sectionLabels.meta, 80) }}}
 {{#hasContent(meta.version)}}Version: {{ meta.version }}{{/hasContent(meta.version)}}
 {{#hasContent(meta.lastModified)}}Last Modified: {{ meta.lastModified }}{{/hasContent(meta.lastModified)}}
 {{#hasContent(meta.canonical)}}Canonical: {{{ meta.canonical }}}{{/hasContent(meta.canonical)}}
 {{/hasContent(meta.version, meta.lastModified, meta.canonical)}}
 {{#hasContent(custom.moreInfo)}}
-{{{ sectionLine(custom.sectionLabels.moreInfo, 80) }}}
+{{{ sectionLine(template.sectionLabels.moreInfo, 80) }}}
 {{{ wrap(htmlStrip(custom.moreInfo), 80, 6, 0) }}}
 {{/hasContent(custom.moreInfo)}}
 *------------------------------------------------------------------------------*
