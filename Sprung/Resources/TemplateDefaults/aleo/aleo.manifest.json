@@ -46,7 +46,7 @@
     ]
   },
   "keys-in-editor": [
-    "basics.summary",
+    "custom.objective",
     "work",
     "projects",
     "education",
@@ -68,7 +68,6 @@
     "work": "Work Experience"
   },
   "sectionOrder": [
-    "summary",
     "work",
     "projects",
     "education",
@@ -100,7 +99,7 @@
   ],
   "editorLabels": {
     "basics": "Contact Info",
-    "basics.summary": "Professional Summary",
+    "custom.objective": "Objective",
     "work": "Work Experience",
     "projects": "Projects",
     "education": "Education",

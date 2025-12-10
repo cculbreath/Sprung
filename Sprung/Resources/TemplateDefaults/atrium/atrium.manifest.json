@@ -74,7 +74,7 @@
     ]
   },
   "keys-in-editor": [
-    "basics.summary",
+    "custom.objective",
     "work",
     "volunteer",
     "education",
@@ -114,7 +114,6 @@
     "interests": "Interests"
   },
   "sectionOrder": [
-    "summary",
     "work",
     "volunteer",
     "education",
@@ -153,7 +152,7 @@
   ],
   "editorLabels": {
     "basics": "Contact Info",
-    "basics.summary": "Professional Summary",
+    "custom.objective": "Objective",
     "work": "Work Experience",
     "volunteer": "Volunteer",
     "education": "Education",
