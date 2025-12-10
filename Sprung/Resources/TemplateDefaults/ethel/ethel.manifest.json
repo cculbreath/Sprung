@@ -152,5 +152,21 @@
     "projects": "Projects",
     "education": "Education",
     "skills": "Skills"
+  },
+  "listContainers": {
+    "skills.*.keywords": {
+      "isListContainer": true,
+      "listReviewMode": "batchOnly"
+    },
+    "work.*.highlights": {
+      "isListContainer": true,
+      "listReviewMode": "perItemReview"
+    }
+  },
+  "hierarchicalReview": {
+    "skills": {
+      "enabled": true,
+      "phases": ["categoryStructure", "categoryDetails"]
+    }
   }
 }

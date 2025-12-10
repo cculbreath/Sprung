@@ -107,5 +107,21 @@
     "skills": "Skills",
     "custom.jobTitles": "Job Titles",
     "custom.moreInfo": "Additional Info"
+  },
+  "listContainers": {
+    "skills.*.keywords": {
+      "isListContainer": true,
+      "listReviewMode": "batchOnly"
+    },
+    "work.*.highlights": {
+      "isListContainer": true,
+      "listReviewMode": "perItemReview"
+    }
+  },
+  "hierarchicalReview": {
+    "skills": {
+      "enabled": true,
+      "phases": ["categoryStructure", "categoryDetails"]
+    }
   }
 }
