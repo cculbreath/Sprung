@@ -153,16 +153,10 @@
     "education": "Education",
     "skills": "Skills"
   },
-  "listContainers": {
-    "skills.*.keywords": {
-      "isListContainer": true,
-      "listReviewMode": "batchOnly"
-    },
-    "work.*.highlights": {
-      "isListContainer": true,
-      "listReviewMode": "perItemReview"
-    }
-  },
+  "listContainers": [
+    "skills.*.keywords",
+    "work.*.highlights"
+  ],
   "hierarchicalReview": {
     "skills": {
       "enabled": true,
