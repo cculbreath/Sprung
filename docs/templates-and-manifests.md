@@ -44,15 +44,18 @@ The manifest controls how the template appears in the resume editor.
     "education": "Education",
     "skills": "Skills"
   },
-  "transparentKeys": [
-    "basics",
-    "custom"
-  ],
   "editorLabels": {
     "basics.summary": "Professional Summary",
     "custom.jobTitles": "Job Titles",
     "custom.moreInfo": "Additional Info"
   },
+  "listContainers": [
+    "skills.*.keywords",
+    "work.*.highlights"
+  ],
+  "hierarchicalReview": [
+    "skills"
+  ],
   "styling": {
     "fontSizes": {
       "name": "24pt",
@@ -82,18 +85,26 @@ Controls which sections appear in the resume tree editor and their order.
 - Sections listed here appear in the Content tree
 - `styling` enables the Font Sizes panel
 
-#### `transparentKeys`
+#### `listContainers`
 
-Keys listed here are "invisible containers" - their children are promoted to the parent level.
+Defines review behavior for list items (like skills or highlights).
 
 ```json
-"transparentKeys": [
-  "basics",   // basics.summary appears without "basics" container
-  "custom"    // custom.jobTitles appears without "custom" container
+"listContainers": [
+  "skills.*.keywords", // batchOnly (accept/reject category)
+  "work.*.highlights"  // perItemReview (review individual bullets)
 ]
 ```
 
-**Important**: If a key is in `transparentKeys`, don't list it directly in `keys-in-editor`. Instead, list the specific child paths you want to show.
+#### `hierarchicalReview`
+
+Enables multi-phase review for complex sections (like skills).
+
+```json
+"hierarchicalReview": [
+  "skills" // Phase 1: Structure, Phase 2: Details
+]
+```
 
 #### `section-visibility`
 
@@ -335,13 +346,11 @@ Wrap sections in conditionals that check visibility:
 
 1. **Always include `styling` in `keys-in-editor`** - Users expect font size controls
 
-2. **Use `transparentKeys` for containers** - Promotes a cleaner tree structure
+2. **Provide meaningful `editorLabels`** - "Professional Summary" is better than "summary"
 
-3. **Provide meaningful `editorLabels`** - "Professional Summary" is better than "summary"
+3. **Define section labels in manifest** - Use `custom.sectionLabels` for template-specific headings
 
-4. **Define section labels in seed data** - Allows per-template customization of headings
-
-5. **Match `section-visibility` keys to actual sections** - Only include sections your template renders
+4. **Match `section-visibility` keys to actual sections** - Only include sections your template renders
 
 6. **Use `hiddenFields` to declutter the editor** - Hide fields your template doesn't render (e.g., hide `description` if you only use `highlights`)
 
