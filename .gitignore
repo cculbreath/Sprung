@@ -4,6 +4,7 @@
 .AppleDouble
 .LSOverride
 
+
 # Ignore vendored and generated artifacts
 weasy-dist/
 weasy/
@@ -14,6 +15,10 @@ test_*
 # Local tooling databases
 .opencode/
 .opencode.json
+.ignore
+.gitignore
+.geminiignore
+plans.md
 
 # Private assets and notes (relocated outside the repo)
 debug/

@@ -169,7 +169,10 @@
   "defaultAIFields": [
     "basics.summary",
     "work.*.highlights",
-    "skills.*.keywords"
+    "projects.*.description",
+    "skills.*",
+    "skills.*.*",
+    "custom.jobTitles.*"
   ],
   "listContainers": [
     "skills.*.keywords",
