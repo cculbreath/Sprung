@@ -1,259 +1,65 @@
+//
+//  ResumeTemplateContextBuilder.swift
+//  Sprung
+//
+//  Builds initial seed context for NEW resumes from ExperienceDefaults.
+//  Profile data is NOT included here - it's merged at render time by ResumeContextBuilder.
+//
 import Foundation
 import OrderedCollections
+
 struct ResumeTemplateContextBuilder {
     private let experienceDefaultsStore: ExperienceDefaultsStore
+
     init(experienceDefaultsStore: ExperienceDefaultsStore) {
         self.experienceDefaultsStore = experienceDefaultsStore
     }
+
+    /// Build seed context for a new resume from ExperienceDefaults.
+    /// Profile data is NOT included - use ResumeContextBuilder for rendering.
+    @MainActor
+    func buildSeedContext(for template: Template) -> [String: Any]? {
+        let manifest = TemplateManifestLoader.manifest(for: template)
+        let experienceDefaults = experienceDefaultsStore.currentDefaults()
+        let experienceSeed = ExperienceDefaultsEncoder.makeSeedDictionary(from: experienceDefaults)
+
+        // Start with manifest defaults
+        var context = manifest?.makeDefaultContext() ?? [:]
+
+        // Merge experience data (work, education, skills, etc.)
+        merge(into: &context, with: experienceSeed)
+
+        // Ensure custom fields exist per manifest
+        ensureCustomFields(in: &context, manifest: manifest)
+
+        // Normalize for manifest schema
+        if let manifest {
+            context = SeedContextNormalizer(manifest: manifest).normalize(context)
+        }
+
+        return context
+    }
+
+    /// Legacy method for backwards compatibility - calls buildSeedContext
     @MainActor
     func buildContext(
         for template: Template,
         applicantProfile: ApplicantProfile
     ) -> [String: Any]? {
-        let manifest = TemplateManifestLoader.manifest(for: template)
-        let experienceDefaults = experienceDefaultsStore.currentDefaults()
-        let experienceSeed = ExperienceDefaultsEncoder.makeSeedDictionary(from: experienceDefaults)
-        let sanitizedExperience = removeContactSection(from: experienceSeed, manifest: manifest)
-        var context = manifest?.makeDefaultContext() ?? [:]
-        merge(into: &context, with: sanitizedExperience)
-        merge(into: &context, with: profileContext(from: applicantProfile, manifest: manifest))
-        addMissingKeys(from: sanitizedExperience, to: &context)
-        ensureCustomFields(in: &context, manifest: manifest)
-        if let manifest {
-            context = SeedContextNormalizer(manifest: manifest).normalize(context)
-        }
-        if Logger.isVerboseEnabled {
-            if let basics = context["basics"] as? [String: Any] {
-                Logger.verbose("ResumeTemplateContextBuilder: basics keys = \(Array(basics.keys))", category: .general)
-                if let summary = basics["summary"] {
-                    Logger.verbose("ResumeTemplateContextBuilder: basics.summary = \(summary)", category: .general)
-                } else {
-                    Logger.verbose("ResumeTemplateContextBuilder: basics.summary missing", category: .general)
-                }
-            } else {
-                Logger.verbose("ResumeTemplateContextBuilder: basics section missing", category: .general)
-            }
-        }
-        return context
+        // Profile is now merged at render time by ResumeContextBuilder
+        // This just builds the seed context
+        buildSeedContext(for: template)
     }
+
     // MARK: - Private helpers
-    private func profileContext(from profile: ApplicantProfile, manifest: TemplateManifest?) -> [String: Any] {
-        let fallbackContext = modernProfileContext(from: profile)
-        guard let manifest else {
-            return fallbackContext
-        }
-        let payload = buildProfilePayload(using: manifest, profile: profile)
-        guard payload.isEmpty == false else {
-            return fallbackContext
-        }
-        return mergeProfilePayload(payload, fallback: fallbackContext)
-    }
-    private func modernProfileContext(from profile: ApplicantProfile) -> [String: Any] {
-        var location: [String: Any] = [:]
-        if let value = sanitizedString(profile.address) { location["address"] = value }
-        if let value = sanitizedString(profile.city) { location["city"] = value }
-        if let value = sanitizedString(profile.state) {
-            location["state"] = value
-            location["region"] = value
-        }
-        if let value = sanitizedString(profile.zip) { location["postalCode"] = value }
-        if let value = sanitizedString(profile.countryCode) { location["countryCode"] = value }
-        var basics: [String: Any] = [:]
-        if let value = sanitizedString(profile.name) { basics["name"] = value }
-        if let value = sanitizedString(profile.label) { basics["label"] = value }
-        if let value = sanitizedString(profile.summary) { basics["summary"] = value }
-        if let value = sanitizedString(profile.email) { basics["email"] = value }
-        if let value = sanitizedString(profile.phone) { basics["phone"] = value }
-        if let value = sanitizedString(profile.websites) { basics["website"] = value }
-        if let picture = profile.pictureDataURL() {
-            basics["picture"] = picture
-        }
-        if !location.isEmpty { basics["location"] = location }
-        let profiles = makeProfilesPayload(from: profile)
-        if profiles.isEmpty == false {
-            basics["profiles"] = profiles
-        }
-        var context: [String: Any] = [:]
-        if !basics.isEmpty {
-            context["basics"] = basics
-        }
-        return context
-    }
-    private func buildProfilePayload(using manifest: TemplateManifest, profile: ApplicantProfile) -> [String: Any] {
-        var payload: [String: Any] = [:]
-        let bindings = manifest.applicantProfileBindings()
-        for binding in bindings {
-            guard let value = applicantProfileValue(for: binding.binding, profile: profile),
-                  isEmptyProfileContribution(value) == false else { continue }
-            let updatedSection = settingProfileValue(
-                value,
-                for: binding.path,
-                existing: payload[binding.section]
-            )
-            payload[binding.section] = updatedSection
-        }
-        return payload
-    }
-    private func mergeProfilePayload(_ payload: [String: Any], fallback: [String: Any]) -> [String: Any] {
-        var merged = payload
-        for (key, fallbackValue) in fallback {
-            guard let existing = merged[key] else {
-                merged[key] = fallbackValue
-                continue
-            }
-            if let existingDict = existing as? [String: Any],
-               let fallbackDict = fallbackValue as? [String: Any] {
-                merged[key] = mergeDictionaries(existingDict, fallback: fallbackDict)
-                continue
-            }
-            if let existingArray = existing as? [Any],
-               existingArray.isEmpty,
-               let fallbackArray = fallbackValue as? [Any] {
-                merged[key] = fallbackArray
-            }
-        }
-        return merged
-    }
-    private func mergeDictionaries(_ existing: [String: Any], fallback: [String: Any]) -> [String: Any] {
-        var merged = existing
-        for (key, fallbackValue) in fallback where merged[key] == nil {
-            merged[key] = fallbackValue
-        }
-        return merged
-    }
-    private func applicantProfileValue(
-        for binding: TemplateManifest.Section.FieldDescriptor.Binding,
-        profile: ApplicantProfile
-    ) -> Any? {
-        guard binding.source == .applicantProfile else { return nil }
-        return profileValue(for: binding.path, profile: profile)
-    }
-    private func sanitizedString(_ value: String) -> String? {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
-    }
-    private func makeProfilesPayload(from profile: ApplicantProfile) -> [[String: String]] {
-        profile.profiles.compactMap { social -> [String: String]? in
-            var entry: [String: String] = [:]
-            if let value = sanitizedString(social.network) { entry["network"] = value }
-            if let value = sanitizedString(social.username) { entry["username"] = value }
-            if let value = sanitizedString(social.url) { entry["url"] = value }
-            return entry.isEmpty ? nil : entry
-        }
-    }
-    private func profileValue(for path: [String], profile: ApplicantProfile) -> Any? {
-        guard let first = path.first else { return nil }
-        switch first {
-        case "name":
-            return profile.name
-        case "label":
-            return sanitizedString(profile.label)
-        case "summary":
-            return sanitizedString(profile.summary)
-        case "email":
-            return profile.email
-        case "phone":
-            return profile.phone
-        case "url", "website":
-            return profile.websites
-        case "picture", "image":
-            return profile.pictureDataURL()
-        case "address":
-            return profile.address
-        case "city":
-            return profile.city
-        case "region", "state":
-            return profile.state
-        case "postalCode", "zip", "code":
-            return profile.zip
-        case "countryCode":
-            return profile.countryCode
-        case "profiles":
-            let payload = makeProfilesPayload(from: profile)
-            guard payload.isEmpty == false else { return nil }
-            let remainder = Array(path.dropFirst())
-            guard let next = remainder.first else { return payload }
-            if next == "*" {
-                let finalKey = remainder.dropFirst().first
-                guard let key = finalKey else { return payload }
-                return payload.compactMap { $0[key] }
-            }
-            return payload.compactMap { $0[next] }
-        case "location":
-            let remainder = Array(path.dropFirst())
-            if remainder.isEmpty { return nil }
-            return profileValue(for: remainder, profile: profile)
-        default:
-            return nil
-        }
-    }
-    private func isEmptyProfileContribution(_ value: Any) -> Bool {
-        if let dict = value as? [String: Any] {
-            return dict.isEmpty
-        }
-        if let dict = value as? [String: String] {
-            return dict.isEmpty
-        }
-        if let array = value as? [Any] {
-            return array.isEmpty
-        }
-        if let string = value as? String {
-            return string.isEmpty
-        }
-        return false
-    }
-    private func settingProfileValue(
-        _ value: Any,
-        for path: [String],
-        existing: Any?
-    ) -> Any {
-        guard let first = path.first else { return value }
-        var dictionary = dictionaryValue(from: existing as Any) ?? [:]
-        let remainder = Array(path.dropFirst())
-        if remainder.isEmpty {
-            dictionary[first] = value
-        } else {
-            let current = dictionary[first]
-            dictionary[first] = settingProfileValue(value, for: remainder, existing: current)
-        }
-        return dictionary
-    }
-    private static func parseJSON(from string: String) -> [String: Any] {
-        guard let data = string.data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data),
-              let dict = object as? [String: Any] else {
-            return [:]
-        }
-        return (normalize(dict) as? [String: Any]) ?? [:]
-    }
-    private static func normalize(_ value: Any) -> Any {
-        switch value {
-        case is NSNull:
-            return NSNull()
-        case let ordered as OrderedDictionary<String, Any>:
-            var dict: [String: Any] = [:]
-            for (key, inner) in ordered {
-                dict[key] = normalize(inner)
-            }
-            return dict
-        case let dict as [String: Any]:
-            var normalized: [String: Any] = [:]
-            for (key, inner) in dict {
-                normalized[key] = normalize(inner)
-            }
-            return normalized
-        case let array as [Any]:
-            return array.map { normalize($0) }
-        default:
-            return value
-        }
-    }
+
     private func merge(into base: inout [String: Any], with overlay: [String: Any]) {
         for (key, value) in overlay {
-            let normalized = ResumeTemplateContextBuilder.normalize(value)
+            let normalized = Self.normalize(value)
             base[key] = mergeValue(base[key], with: normalized)
         }
     }
+
     private func mergeValue(_ base: Any?, with overlay: Any) -> Any {
         if overlay is NSNull {
             return base ?? NSNull()
@@ -282,6 +88,7 @@ struct ResumeTemplateContextBuilder {
             return overlay
         }
     }
+
     private func mergeCustomOverlay(baseArray: [Any], overlayArray: [Any]) -> [Any]? {
         var result = baseArray
         var didMerge = false
@@ -317,6 +124,7 @@ struct ResumeTemplateContextBuilder {
         }
         return didMerge ? result : nil
     }
+
     private func shouldReplaceDictionary(base: [String: Any], with overlay: [String: Any]) -> Bool {
         guard overlay.isEmpty == false else { return true }
         if overlay.values.allSatisfy(isScalarValue) && base.values.allSatisfy(isScalarValue) {
@@ -324,6 +132,7 @@ struct ResumeTemplateContextBuilder {
         }
         return false
     }
+
     private func isScalarValue(_ value: Any) -> Bool {
         switch value {
         case is String, is NSString, is NSNumber, is NSNull:
@@ -332,11 +141,7 @@ struct ResumeTemplateContextBuilder {
             return false
         }
     }
-    private func addMissingKeys(from source: [String: Any], to context: inout [String: Any]) {
-        for (key, value) in source where context[key] == nil {
-            context[key] = value
-        }
-    }
+
     private func ensureCustomFields(in context: inout [String: Any], manifest: TemplateManifest?) {
         guard let manifest, let customSection = manifest.section(for: "custom") else { return }
         var custom = context["custom"] as? [String: Any] ?? [:]
@@ -348,6 +153,7 @@ struct ResumeTemplateContextBuilder {
             context["custom"] = custom
         }
     }
+
     private func defaultValue(for descriptor: TemplateManifest.Section.FieldDescriptor) -> Any {
         if let behavior = descriptor.behavior {
             switch behavior {
@@ -378,57 +184,7 @@ struct ResumeTemplateContextBuilder {
         }
         return ""
     }
-    private func removeContactSection(from dictionary: [String: Any], manifest: TemplateManifest?) -> [String: Any] {
-        var sanitized = dictionary
-        var processedKeys: Set<String> = []
-        if let manifest {
-            let targets = manifest.applicantProfileBindings()
-            for target in targets {
-                sanitized = removeProfileValue(
-                    at: target.path,
-                    inSection: target.section,
-                    from: sanitized
-                )
-                processedKeys.insert(makeBindingKey(section: target.section, path: target.path))
-            }
-        }
-        sanitized = removeDefaultContactFields(from: sanitized, skipping: processedKeys)
-        sanitized.removeValue(forKey: "contact")
-        return sanitized
-    }
-    private func removeProfileValue(
-        at path: [String],
-        inSection section: String,
-        from dictionary: [String: Any]
-    ) -> [String: Any] {
-        guard let sectionValue = dictionary[section] else { return dictionary }
-        let updatedSection = removeValue(at: path, from: sectionValue)
-        var sanitized = dictionary
-        if let updatedSection {
-            sanitized[section] = updatedSection
-        } else {
-            sanitized.removeValue(forKey: section)
-        }
-        return sanitized
-    }
-    private func removeValue(at path: [String], from value: Any) -> Any? {
-        guard let first = path.first else { return value }
-        if path.count == 1 {
-            if var dict = dictionaryValue(from: value) {
-                dict.removeValue(forKey: first)
-                return dict.isEmpty ? nil : dict
-            }
-            return nil
-        }
-        guard var dict = dictionaryValue(from: value) else { return value }
-        let remainder = Array(path.dropFirst())
-        if let child = dict[first], let updated = removeValue(at: remainder, from: child) {
-            dict[first] = updated
-        } else {
-            dict.removeValue(forKey: first)
-        }
-        return dict.isEmpty ? nil : dict
-    }
+
     private func dictionaryValue(from value: Any) -> [String: Any]? {
         if let dict = value as? [String: Any] {
             return dict
@@ -438,23 +194,36 @@ struct ResumeTemplateContextBuilder {
         }
         return nil
     }
-    private func removeDefaultContactFields(
-        from dictionary: [String: Any],
-        skipping processed: Set<String>
-    ) -> [String: Any] {
-        TemplateManifest.defaultApplicantProfilePaths.reduce(dictionary) { partial, path in
-            let key = makeBindingKey(section: path.section, path: path.path)
-            guard processed.contains(key) == false else { return partial }
-            return removeProfileValue(at: path.path, inSection: path.section, from: partial)
+
+    private static func normalize(_ value: Any) -> Any {
+        switch value {
+        case is NSNull:
+            return NSNull()
+        case let ordered as OrderedDictionary<String, Any>:
+            var dict: [String: Any] = [:]
+            for (key, inner) in ordered {
+                dict[key] = normalize(inner)
+            }
+            return dict
+        case let dict as [String: Any]:
+            var normalized: [String: Any] = [:]
+            for (key, inner) in dict {
+                normalized[key] = normalize(inner)
+            }
+            return normalized
+        case let array as [Any]:
+            return array.map { normalize($0) }
+        default:
+            return value
         }
     }
-    private func makeBindingKey(section: String, path: [String]) -> String {
-        ([section] + path).joined(separator: ".")
-    }
 }
+
 // MARK: - Seed normalization
+
 private struct SeedContextNormalizer {
     let manifest: TemplateManifest
+
     func normalize(_ context: [String: Any]) -> [String: Any] {
         var normalized = context
         for key in manifest.sectionOrder {
@@ -472,6 +241,7 @@ private struct SeedContextNormalizer {
         }
         return normalized
     }
+
     private func normalizeValue(
         _ value: Any,
         for section: TemplateManifest.Section
@@ -493,7 +263,9 @@ private struct SeedContextNormalizer {
             return value
         }
     }
+
     // MARK: - Section handlers
+
     private func normalizeArraySection(_ value: Any) -> Any {
         if let array = value as? [Any] {
             return array
@@ -502,7 +274,6 @@ private struct SeedContextNormalizer {
             return ordered.values.map { $0 }
         }
         if let dictionary = value as? [String: Any] {
-            // Preserve deterministic order by sorting keys
             return dictionary.keys.sorted().compactMap { dictionary[$0] }
         }
         if let string = value as? String {
@@ -510,6 +281,7 @@ private struct SeedContextNormalizer {
         }
         return value
     }
+
     private func normalizeStringSection(_ value: Any) -> Any {
         if let string = value as? String {
             return string
@@ -525,6 +297,7 @@ private struct SeedContextNormalizer {
         }
         return value
     }
+
     private func normalizeArrayOfObjectsSection(
         _ value: Any,
         descriptor: TemplateManifest.Section.FieldDescriptor?
@@ -532,6 +305,7 @@ private struct SeedContextNormalizer {
         let entries = arrayEntries(from: value, descriptor: descriptor)
         return entries.isEmpty ? value : entries
     }
+
     private func normalizeObjectOfObjectsSection(
         _ value: Any,
         descriptor: TemplateManifest.Section.FieldDescriptor?
@@ -568,10 +342,10 @@ private struct SeedContextNormalizer {
         }
         return value
     }
+
     private func normalizeMapOfStringsSection(_ value: Any) -> Any {
         if let ordered = value as? OrderedDictionary<String, Any> {
-            return ordered
-                .compactMapValues { $0 as? String }
+            return ordered.compactMapValues { $0 as? String }
         }
         if let dictionary = value as? [String: Any] {
             var result: [String: String] = [:]
@@ -584,12 +358,15 @@ private struct SeedContextNormalizer {
         }
         return value
     }
+
     // MARK: - Entry helpers
+
     private func arrayEntries(
         from raw: Any,
         descriptor: TemplateManifest.Section.FieldDescriptor?
     ) -> [[String: Any]] {
         var entries: [[String: Any]] = []
+
         func appendEntry(sourceKey: String?, payload: [String: Any]) {
             var entry = payload
             if let sourceKey, entry["__key"] == nil {
@@ -602,6 +379,7 @@ private struct SeedContextNormalizer {
             }
             entries.append(entry)
         }
+
         if let ordered = raw as? OrderedDictionary<String, Any> {
             for key in ordered.keys {
                 let value = ordered[key]
@@ -624,6 +402,7 @@ private struct SeedContextNormalizer {
             }
             return entries
         }
+
         if let dictionary = raw as? [String: Any] {
             for key in dictionary.keys.sorted() {
                 guard let value = dictionary[key] else { continue }
@@ -644,6 +423,7 @@ private struct SeedContextNormalizer {
             }
             return entries
         }
+
         if let array = raw as? [Any] {
             for element in array {
                 if let dict = element as? [String: Any] {
@@ -669,8 +449,10 @@ private struct SeedContextNormalizer {
             }
             return entries
         }
+
         return entries
     }
+
     private func dictionaryFromPrimitive(
         _ value: String,
         descriptor: TemplateManifest.Section.FieldDescriptor?,
@@ -691,6 +473,7 @@ private struct SeedContextNormalizer {
         }
         return entry
     }
+
     private func normalizeDictionaryEntry(
         _ raw: Any?,
         key: String,
@@ -750,6 +533,7 @@ private struct SeedContextNormalizer {
         }
         return raw
     }
+
     private func ensureDescriptorDefaults(
         for entry: inout [String: Any],
         descriptor: TemplateManifest.Section.FieldDescriptor,
@@ -779,6 +563,7 @@ private struct SeedContextNormalizer {
         }
     }
 }
+
 private extension OrderedDictionary where Key == String, Value == Any {
     func asDictionary() -> [String: Any] {
         var result: [String: Any] = [:]
