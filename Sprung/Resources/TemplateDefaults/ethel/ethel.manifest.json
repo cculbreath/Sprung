@@ -1,69 +1,5 @@
 {
   "sections": {
-    "work": {
-      "type": "arrayOfObjects",
-      "hiddenFields": ["description", "summary", "url"]
-    },
-    "projects": {
-      "type": "arrayOfObjects",
-      "hiddenFields": ["url", "startDate", "endDate", "keywords", "roles", "entity", "type"]
-    }
-  },
-  "custom": {
-    "fields": [
-      {
-        "behavior": "sectionLabels",
-        "children": [
-          {
-            "input": "text",
-            "key": "work"
-          },
-          {
-            "input": "text",
-            "key": "projects"
-          },
-          {
-            "input": "text",
-            "key": "education"
-          },
-          {
-            "input": "text",
-            "key": "skills"
-          }
-        ],
-        "key": "sectionLabels"
-      }
-    ]
-  },
-  "keys-in-editor": [
-    "basics.label",
-    "work",
-    "projects",
-    "education",
-    "skills",
-    "styling"
-  ],
-  "section-visibility": {
-    "education": true,
-    "projects": true,
-    "skills": true,
-    "work": true
-  },
-  "section-visibility-labels": {
-    "education": "Education",
-    "projects": "Projects",
-    "skills": "Skills",
-    "work": "Work Experience"
-  },
-  "sectionOrder": [
-    "work",
-    "projects",
-    "education",
-    "skills",
-    "custom",
-    "styling"
-  ],
-  "sections": {
     "education": {
       "default": [
         {
@@ -123,6 +59,37 @@
       "type": "arrayOfObjects"
     }
   },
+  "custom": {
+    "fields": []
+  },
+  "keys-in-editor": [
+    "basics.label",
+    "work",
+    "projects",
+    "education",
+    "skills",
+    "styling"
+  ],
+  "section-visibility": {
+    "education": true,
+    "projects": true,
+    "skills": true,
+    "work": true
+  },
+  "section-visibility-labels": {
+    "education": "Education",
+    "projects": "Projects",
+    "skills": "Skills",
+    "work": "Work Experience"
+  },
+  "sectionOrder": [
+    "work",
+    "projects",
+    "education",
+    "skills",
+    "custom",
+    "styling"
+  ],
   "styling": {
     "fontSizes": {
       "date": "10pt",
@@ -166,7 +133,10 @@
   "hierarchicalReview": {
     "skills": {
       "enabled": true,
-      "phases": ["categoryStructure", "categoryDetails"]
+      "phases": [
+        "categoryStructure",
+        "categoryDetails"
+      ]
     }
   }
 }

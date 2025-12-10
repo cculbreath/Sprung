@@ -2,11 +2,21 @@
   "sections": {
     "work": {
       "type": "arrayOfObjects",
-      "hiddenFields": ["description", "url"]
+      "hiddenFields": [
+        "description",
+        "url"
+      ]
     },
     "projects": {
       "type": "arrayOfObjects",
-      "hiddenFields": ["highlights", "startDate", "endDate", "roles", "entity", "type"]
+      "hiddenFields": [
+        "highlights",
+        "startDate",
+        "endDate",
+        "roles",
+        "entity",
+        "type"
+      ]
     }
   },
   "custom": {
@@ -20,56 +30,6 @@
       {
         "input": "textarea",
         "key": "moreInfo"
-      },
-      {
-        "behavior": "sectionLabels",
-        "children": [
-          {
-            "input": "text",
-            "key": "work"
-          },
-          {
-            "input": "text",
-            "key": "projects"
-          },
-          {
-            "input": "text",
-            "key": "education"
-          },
-          {
-            "input": "text",
-            "key": "skills"
-          },
-          {
-            "input": "text",
-            "key": "volunteer"
-          },
-          {
-            "input": "text",
-            "key": "awards"
-          },
-          {
-            "input": "text",
-            "key": "certificates"
-          },
-          {
-            "input": "text",
-            "key": "publications"
-          },
-          {
-            "input": "text",
-            "key": "languages"
-          },
-          {
-            "input": "text",
-            "key": "interests"
-          },
-          {
-            "input": "text",
-            "key": "moreInfo"
-          }
-        ],
-        "key": "sectionLabels"
       }
     ]
   },
@@ -127,7 +87,7 @@
     "styling"
   ],
   "styling": {
-      "fontSizes": {
+    "fontSizes": {
       "boxTitles": "12pt",
       "contact": "10pt",
       "degreeNames": "11pt",
@@ -179,7 +139,10 @@
   "hierarchicalReview": {
     "skills": {
       "enabled": true,
-      "phases": ["categoryStructure", "categoryDetails"]
+      "phases": [
+        "categoryStructure",
+        "categoryDetails"
+      ]
     }
   }
 }

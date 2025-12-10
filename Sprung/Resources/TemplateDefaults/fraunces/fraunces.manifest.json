@@ -2,11 +2,25 @@
   "sections": {
     "work": {
       "type": "arrayOfObjects",
-      "hiddenFields": ["description", "summary", "url", "location"]
+      "hiddenFields": [
+        "description",
+        "summary",
+        "url",
+        "location"
+      ]
     },
     "projects": {
       "type": "arrayOfObjects",
-      "hiddenFields": ["highlights", "url", "startDate", "endDate", "keywords", "roles", "entity", "type"]
+      "hiddenFields": [
+        "highlights",
+        "url",
+        "startDate",
+        "endDate",
+        "keywords",
+        "roles",
+        "entity",
+        "type"
+      ]
     }
   },
   "custom": {
@@ -20,28 +34,6 @@
       {
         "input": "textarea",
         "key": "moreInfo"
-      },
-      {
-        "behavior": "sectionLabels",
-        "children": [
-          {
-            "input": "text",
-            "key": "work"
-          },
-          {
-            "input": "text",
-            "key": "projects"
-          },
-          {
-            "input": "text",
-            "key": "education"
-          },
-          {
-            "input": "text",
-            "key": "skills"
-          }
-        ],
-        "key": "sectionLabels"
       }
     ]
   },
@@ -122,7 +114,10 @@
   "hierarchicalReview": {
     "skills": {
       "enabled": true,
-      "phases": ["categoryStructure", "categoryDetails"]
+      "phases": [
+        "categoryStructure",
+        "categoryDetails"
+      ]
     }
   }
 }
