@@ -23,16 +23,17 @@ class TextResumeGenerator {
     private func renderTemplate(for resume: Resume, template: String) throws -> String {
         // Load template
         let templateContent = try loadTextTemplate(named: template)
-        // Create and process context
-        let context = try createTemplateContext(from: resume)
-        var processedContext = preprocessContextForText(context, from: resume)
-        processedContext = HandlebarsContextAugmentor.augment(processedContext)
+        // Build unified context using ResumeContextBuilder
+        let profile = profileProvider.currentProfile()
+        var context = try ResumeContextBuilder.buildContext(for: resume, profile: profile)
+        // Apply text-specific transformations
+        applyTextTransformations(to: &context, resume: resume)
         let translation = HandlebarsTranslator.translate(templateContent)
         logTranslationWarnings(translation.warnings, template: template)
         // Render with Mustache
         let mustacheTemplate = try Mustache.Template(string: translation.template)
         TemplateFilters.register(on: mustacheTemplate)
-        return try mustacheTemplate.render(processedContext)
+        return try mustacheTemplate.render(context)
     }
     private func loadTextTemplate(named template: String) throws -> String {
         var templateContent: String?
@@ -45,21 +46,17 @@ class TextResumeGenerator {
         }
         return content
     }
-    private func createTemplateContext(from resume: Resume) throws -> [String: Any] {
-        // Use the shared template processor for consistency
-        return try ResumeTemplateProcessor.createTemplateContext(from: resume)
-    }
-    private func preprocessContextForText(_ context: [String: Any], from resume: Resume) -> [String: Any] {
-        // First merge ApplicantProfile data into context
-        var processed = mergeApplicantProfile(into: context, for: resume)
+    /// Apply text-specific transformations to the context.
+    /// These are formatting changes needed for plain text output.
+    private func applyTextTransformations(to context: inout [String: Any], resume: Resume) {
         // Normalize contact values and build contactItems
         var contactItems: [String] = []
-        if var contact = processed["contact"] as? [String: Any],
+        if var contact = context["contact"] as? [String: Any],
            let name = contact["name"] as? String {
             contact["name"] = name.decodingHTMLEntities()
-            processed["contact"] = contact
+            context["contact"] = contact
         }
-        if let contact = processed["contact"] as? [String: Any] {
+        if let contact = context["contact"] as? [String: Any] {
             if let location = contact["location"] as? [String: Any] {
                 let city = (location["city"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 let state = (location["state"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -72,16 +69,16 @@ class TextResumeGenerator {
             appendIfPresent(contact["website"], to: &contactItems)
         }
         if !contactItems.isEmpty {
-            processed["contactItems"] = contactItems
-            processed["contactLine"] = contactItems.joined(separator: " • ")
+            context["contactItems"] = contactItems
+            context["contactLine"] = contactItems.joined(separator: " • ")
         }
         // Convert employment data to array preserving order
-        if let employment = processed["employment"] as? [String: Any] {
+        if let employment = context["employment"] as? [String: Any] {
             let employmentArray = convertEmploymentToArray(employment, from: resume)
-            processed["employment"] = employmentArray
+            context["employment"] = employmentArray
         }
         // Ensure skills are represented as an array of dictionaries
-        if let skillsDict = processed["skills-and-expertise"] as? [String: Any] {
+        if let skillsDict = context["skills-and-expertise"] as? [String: Any] {
             var skillsArray: [[String: Any]] = []
             for (title, description) in skillsDict {
                 skillsArray.append([
@@ -89,10 +86,10 @@ class TextResumeGenerator {
                     "description": description
                 ])
             }
-            processed["skills-and-expertise"] = skillsArray
+            context["skills-and-expertise"] = skillsArray
         }
         // Convert education object to array format
-        if let educationDict = processed["education"] as? [String: Any] {
+        if let educationDict = context["education"] as? [String: Any] {
             var educationArray: [[String: Any]] = []
             for (institution, details) in educationDict {
                 if var detailsDict = details as? [String: Any] {
@@ -101,15 +98,14 @@ class TextResumeGenerator {
                     educationArray.append(detailsDict)
                 }
             }
-            processed["education"] = educationArray
+            context["education"] = educationArray
         }
-        if let moreInfo = processed["more-info"] as? String {
+        if let moreInfo = context["more-info"] as? String {
             let cleaned = moreInfo
                 .replacingOccurrences(of: #"<\/?[^>]+(>|$)|↪︎"#, with: "", options: .regularExpression)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            processed["more-info"] = cleaned
+            context["more-info"] = cleaned
         }
-        return processed
     }
     /// Decode HTML entities that may appear in rendered plain-text output
     private func sanitizeRenderedText(_ text: String) -> String {
@@ -172,125 +168,5 @@ class TextResumeGenerator {
         for warning in warnings {
             Logger.warning("Handlebars compatibility (\(template)): \(warning)")
         }
-    }
-    // MARK: - Applicant Profile Merging
-    private func mergeApplicantProfile(into context: [String: Any], for resume: Resume) -> [String: Any] {
-        guard let template = resume.template,
-              let manifest = TemplateManifestLoader.manifest(for: template) else {
-            return context
-        }
-        let profile = profileProvider.currentProfile()
-        let profileContext = buildApplicantProfileContext(profile: profile, manifest: manifest)
-        var merged = context
-        for (key, value) in profileContext {
-            if var existingDict = merged[key] as? [String: Any],
-               let newDict = value as? [String: Any] {
-                for (subKey, subValue) in newDict {
-                    existingDict[subKey] = subValue
-                }
-                merged[key] = existingDict
-            } else {
-                merged[key] = value
-            }
-        }
-        return merged
-    }
-    private func buildApplicantProfileContext(
-        profile: ApplicantProfile,
-        manifest: TemplateManifest
-    ) -> [String: Any] {
-        var payload: [String: Any] = [:]
-        let bindings = manifest.applicantProfileBindings()
-        if bindings.isEmpty {
-            // No explicit bindings in manifest - use default profile paths
-            for defaultPath in TemplateManifest.defaultApplicantProfilePaths {
-                guard let value = applicantProfileValue(for: defaultPath.path, profile: profile),
-                      !isEmptyValue(value) else { continue }
-                let updatedSection = setProfileValue(
-                    value,
-                    for: defaultPath.path,
-                    existing: payload[defaultPath.section]
-                )
-                payload[defaultPath.section] = updatedSection
-            }
-        } else {
-            for binding in bindings {
-                guard let value = applicantProfileValue(for: binding.binding.path, profile: profile),
-                      !isEmptyValue(value) else { continue }
-                let updatedSection = setProfileValue(
-                    value,
-                    for: binding.path,
-                    existing: payload[binding.section]
-                )
-                payload[binding.section] = updatedSection
-            }
-        }
-        return payload
-    }
-    private func applicantProfileValue(for path: [String], profile: ApplicantProfile) -> Any? {
-        guard let first = path.first else { return nil }
-        switch first {
-        case "name":
-            return profile.name.isEmpty ? nil : profile.name
-        case "email":
-            return profile.email.isEmpty ? nil : profile.email
-        case "phone":
-            return profile.phone.isEmpty ? nil : profile.phone
-        case "label":
-            return profile.label.isEmpty ? nil : profile.label
-        case "summary":
-            return profile.summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : profile.summary
-        case "url", "website", "websites":
-            return profile.websites.isEmpty ? nil : profile.websites
-        case "picture", "image":
-            return profile.pictureDataURL()
-        case "address":
-            return profile.address.isEmpty ? nil : profile.address
-        case "city":
-            return profile.city.isEmpty ? nil : profile.city
-        case "region", "state":
-            return profile.state.isEmpty ? nil : profile.state
-        case "postalCode", "zip", "code":
-            return profile.zip.isEmpty ? nil : profile.zip
-        case "countryCode":
-            return profile.countryCode.isEmpty ? nil : profile.countryCode
-        case "location":
-            let remainder = Array(path.dropFirst())
-            return remainder.isEmpty ? nil : applicantProfileValue(for: remainder, profile: profile)
-        default:
-            return nil
-        }
-    }
-    private func isEmptyValue(_ value: Any) -> Bool {
-        if let string = value as? String {
-            return string.isEmpty
-        }
-        if let dict = value as? [String: Any] {
-            return dict.isEmpty
-        }
-        return false
-    }
-    private func setProfileValue(
-        _ value: Any,
-        for path: [String],
-        existing: Any?
-    ) -> Any {
-        guard let first = path.first else { return value }
-        var dictionary = dictionaryValue(from: existing) ?? [:]
-        let remainder = Array(path.dropFirst())
-        if remainder.isEmpty {
-            dictionary[first] = value
-        } else {
-            let current = dictionary[first]
-            dictionary[first] = setProfileValue(value, for: remainder, existing: current)
-        }
-        return dictionary
-    }
-    private func dictionaryValue(from value: Any?) -> [String: Any]? {
-        guard let value else { return nil }
-        if let dict = value as? [String: Any] {
-            return dict
-        }
-        return nil
     }
 }
