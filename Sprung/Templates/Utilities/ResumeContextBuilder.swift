@@ -58,24 +58,32 @@ enum ResumeContextBuilder {
 
     /// Merge ApplicantProfile data into context using convention.
     ///
-    /// By convention, these fields ALWAYS come from ApplicantProfile:
-    /// - basics.name
-    /// - basics.email
-    /// - basics.phone
-    /// - basics.label
-    /// - basics.summary
+    /// By convention, identity fields ALWAYS come from ApplicantProfile:
+    /// - basics.name, basics.email, basics.phone, basics.label
     /// - basics.website / basics.url
     /// - basics.picture / basics.image
     /// - basics.location.* (city, state/region, address, postalCode, countryCode)
     /// - basics.profiles (social links)
+    ///
+    /// Exception: basics.summary is job-specific and comes from TreeNode.
+    /// Profile.summary is only used as fallback if TreeNode has no summary.
     private static func mergeApplicantProfile(
         _ profile: ApplicantProfile,
         into context: [String: Any]
     ) -> [String: Any] {
         var result = context
 
+        // Check for job-specific summary from TreeNode (takes precedence over profile)
+        let treeSummary = (context["summary"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
         // Build profile-sourced basics
-        let profileBasics = buildBasicsFromProfile(profile)
+        var profileBasics = buildBasicsFromProfile(profile, excludeSummary: treeSummary != nil && !treeSummary!.isEmpty)
+
+        // If TreeNode has summary, use that for basics.summary
+        if let summary = treeSummary, !summary.isEmpty {
+            profileBasics["summary"] = summary
+        }
 
         // Merge into existing basics (profile values take precedence)
         if var existingBasics = result["basics"] as? [String: Any] {
@@ -101,7 +109,8 @@ enum ResumeContextBuilder {
     }
 
     /// Build the basics dictionary from ApplicantProfile.
-    private static func buildBasicsFromProfile(_ profile: ApplicantProfile) -> [String: Any] {
+    /// - Parameter excludeSummary: If true, skip summary (use TreeNode summary instead)
+    private static func buildBasicsFromProfile(_ profile: ApplicantProfile, excludeSummary: Bool = false) -> [String: Any] {
         var basics: [String: Any] = [:]
 
         // Name
@@ -114,8 +123,8 @@ enum ResumeContextBuilder {
             basics["label"] = label
         }
 
-        // Summary
-        if let summary = sanitized(profile.summary) {
+        // Summary (only if not excluded - TreeNode summary takes precedence)
+        if !excludeSummary, let summary = sanitized(profile.summary) {
             basics["summary"] = summary
         }
 

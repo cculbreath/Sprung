@@ -73,6 +73,7 @@ final class ExperienceDefaultsToTree {
 
     private func isSectionEnabled(_ key: String) -> Bool {
         switch key {
+        case "summary": return !experienceDefaults.summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case "work": return experienceDefaults.isWorkEnabled && !experienceDefaults.workExperiences.isEmpty
         case "volunteer": return experienceDefaults.isVolunteerEnabled && !experienceDefaults.volunteerExperiences.isEmpty
         case "education": return experienceDefaults.isEducationEnabled && !experienceDefaults.educationRecords.isEmpty
@@ -91,6 +92,8 @@ final class ExperienceDefaultsToTree {
 
     private func buildSection(key: String, parent: TreeNode) {
         switch key {
+        case "summary":
+            buildSummarySection(parent: parent)
         case "work":
             buildWorkSection(parent: parent)
         case "volunteer":
@@ -117,6 +120,25 @@ final class ExperienceDefaultsToTree {
             buildCustomSection(parent: parent)
         default:
             break // Unknown section
+        }
+    }
+
+    // MARK: - Summary Section
+
+    private func buildSummarySection(parent: TreeNode) {
+        let summary = experienceDefaults.summary.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !summary.isEmpty else { return }
+
+        let section = manifest.section(for: "summary")
+        let node = parent.addChild(TreeNode(
+            name: "summary",
+            value: summary,
+            inEditor: true,
+            status: .saved,
+            resume: resume
+        ))
+        if let descriptor = section?.fields.first {
+            node.applyDescriptor(descriptor)
         }
     }
 
