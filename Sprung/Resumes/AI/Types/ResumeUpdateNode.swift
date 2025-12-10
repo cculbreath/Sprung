@@ -16,6 +16,47 @@ struct ProposedRevisionNode: Codable, Equatable {
     var isTitleNode: Bool = false
     var why: String = ""
     var treePath: String = ""
+
+    // MARK: - Array Payload Support (for list nodes like keywords, highlights)
+
+    /// Node type: scalar (single value) or list (array of values)
+    var nodeType: NodeType = .scalar
+
+    /// Review mode for list nodes (batchOnly vs perItemReview)
+    var listReviewMode: ListReviewMode = .batchOnly
+
+    /// Array values for list nodes (nil for scalar nodes)
+    var oldValueArray: [String]?
+    var newValueArray: [String]?
+
+    /// Per-item feedback for perItemReview mode
+    var itemFeedback: [ItemFeedback]?
+
+    // MARK: - Convenience Accessors
+
+    /// Get all old values (works for both scalar and list nodes)
+    var oldValues: [String] {
+        if nodeType == .list {
+            return oldValueArray ?? []
+        } else {
+            return oldValue.isEmpty ? [] : [oldValue]
+        }
+    }
+
+    /// Get all new values (works for both scalar and list nodes)
+    var newValues: [String] {
+        if nodeType == .list {
+            return newValueArray ?? []
+        } else {
+            return newValue.isEmpty ? [] : [newValue]
+        }
+    }
+
+    /// Check if this is a list node
+    var isList: Bool {
+        nodeType == .list
+    }
+
     // `value` has been removed. `treePath` is retained so the model can
     // provide a hierarchical hint when an ID match is ambiguous.
     // Default initializer
@@ -75,9 +116,15 @@ struct ProposedRevisionNode: Codable, Equatable {
         case isTitleNode
         case why
         case treePath
+        case nodeType
+        case listReviewMode
+        case oldValueArray
+        case newValueArray
+        case itemFeedback
     }
+
     // Custom decoder so that the struct stays compatible with older
-    // responses that may *not* include `treePath`.
+    // responses that may *not* include `treePath` or array fields.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(String.self, forKey: .id) ?? ""
@@ -87,7 +134,15 @@ struct ProposedRevisionNode: Codable, Equatable {
         isTitleNode = try container.decodeIfPresent(Bool.self, forKey: .isTitleNode) ?? false
         why = try container.decodeIfPresent(String.self, forKey: .why) ?? ""
         treePath = try container.decodeIfPresent(String.self, forKey: .treePath) ?? ""
+
+        // Array payload fields (default to scalar mode for backwards compatibility)
+        nodeType = try container.decodeIfPresent(NodeType.self, forKey: .nodeType) ?? .scalar
+        listReviewMode = try container.decodeIfPresent(ListReviewMode.self, forKey: .listReviewMode) ?? .batchOnly
+        oldValueArray = try container.decodeIfPresent([String].self, forKey: .oldValueArray)
+        newValueArray = try container.decodeIfPresent([String].self, forKey: .newValueArray)
+        itemFeedback = try container.decodeIfPresent([ItemFeedback].self, forKey: .itemFeedback)
     }
+
     // Encodable synthesis is fine.
 }
 struct RevisionsContainer: Codable {
@@ -129,6 +184,120 @@ enum PostReviewAction: String, Codable {
     case mandatedChange =
         "Action Required: Proposal to maintain original value rejected. Please propose a  revised value for this field and incorporate reviewer comments"
     case unevaluated = "Unevaluated"
+}
+
+// MARK: - Two-Phase Hierarchical Review Types
+
+/// Tracks which phase of the hierarchical review workflow is active
+enum RevisionPhase: String, Codable {
+    case categoryStructure  // Phase 1: Review skill category structure (add/remove/rename/merge)
+    case categoryDetails    // Phase 2: Review keywords within each category
+}
+
+/// Node type distinguishes scalar (single value) from list (array of values) nodes
+enum NodeType: String, Codable {
+    case scalar  // Single string value (existing behavior)
+    case list    // Array of string values (keywords, highlights)
+}
+
+/// Review mode for list nodes - determines UI and resubmission behavior
+enum ListReviewMode: String, Codable {
+    case batchOnly      // Skills keywords: accept/reject whole array at once
+    case perItemReview  // Highlights: can accept/reject individual items
+}
+
+/// Actions the LLM can propose for skill categories in Phase 1
+enum CategoryAction: String, Codable {
+    case keep       // No changes to this category
+    case remove     // Remove this category entirely
+    case rename     // Rename the category
+    case merge      // Merge with another category
+    case add        // Add a new category (LLM suggestion)
+}
+
+/// Phase 1 revision node for category-level structure changes
+struct CategoryRevisionNode: Codable, Equatable, Identifiable {
+    var id: String = UUID().uuidString  // Category node ID (or new UUID for additions)
+    var name: String = ""               // Current category name
+    var action: CategoryAction = .keep
+    var newName: String?                // If renamed, the new name
+    var mergeWith: String?              // If merging, the ID of target category
+    var mergeWithName: String?          // If merging, the name of target category (for display)
+    var keywordCount: Int = 0           // Number of keywords (for context display)
+    var why: String = ""                // Explanation for the proposed action
+
+    /// User's decision about this category revision
+    var userDecision: CategoryUserDecision = .pending
+
+    enum CategoryUserDecision: String, Codable {
+        case pending
+        case accepted
+        case rejected
+    }
+}
+
+/// Container for Phase 1 category structure revisions from LLM
+struct CategoryRevisionsContainer: Codable {
+    var categories: [CategoryRevisionNode]
+
+    enum CodingKeys: String, CodingKey {
+        case categories
+        case categoriesUppercase = "Categories"
+    }
+
+    init(categories: [CategoryRevisionNode] = []) {
+        self.categories = categories
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let array = try? container.decode([CategoryRevisionNode].self, forKey: .categories) {
+            self.categories = array
+        } else if let array = try? container.decode([CategoryRevisionNode].self, forKey: .categoriesUppercase) {
+            self.categories = array
+        } else {
+            throw DecodingError.keyNotFound(CodingKeys.categories,
+                DecodingError.Context(codingPath: decoder.codingPath,
+                                    debugDescription: "Neither 'categories' nor 'Categories' found"))
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(categories, forKey: .categories)
+    }
+}
+
+/// Per-item feedback for list nodes with perItemReview mode (e.g., work highlights)
+struct ItemFeedback: Codable, Equatable, Identifiable {
+    var id: Int { index }  // Use index as ID for Identifiable
+    var index: Int
+    var status: ItemStatus = .pending
+    var comment: String = ""
+
+    enum ItemStatus: String, Codable {
+        case pending
+        case accepted
+        case rejected
+        case rejectedWithComment
+    }
+}
+
+/// Container for Phase 2 keyword array revisions from LLM
+struct KeywordsRevisionContainer: Codable {
+    var categoryId: String              // ID of the category being revised
+    var categoryName: String            // Name for display
+    var oldKeywords: [String]           // Original keywords
+    var newKeywords: [String]           // Proposed keywords (may add/remove/modify)
+    var why: String = ""                // Overall explanation for changes
+
+    enum CodingKeys: String, CodingKey {
+        case categoryId
+        case categoryName
+        case oldKeywords
+        case newKeywords
+        case why
+    }
 }
 @Observable class FeedbackNode {
     var id: String
