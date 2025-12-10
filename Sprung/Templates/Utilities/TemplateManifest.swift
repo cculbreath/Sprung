@@ -377,6 +377,27 @@ struct TemplateManifest: Codable {
     let keysInEditor: [String]?
     let sectionVisibilityDefaults: [String: Bool]?
     let sectionVisibilityLabels: [String: String]?
+
+    // MARK: - AI Revision Configuration
+
+    /// Field paths to pre-select for AI revision when creating new resumes
+    /// Uses glob patterns: "work.*.highlights", "skills.*.keywords", "basics.summary"
+    let defaultAIFields: [String]?
+
+    /// Paths that contain array data reviewed as batches (not individual nodes)
+    /// Uses glob patterns: "skills.*.keywords", "work.*.highlights"
+    let listContainers: [String]?
+
+    /// Sections that use two-phase hierarchical review
+    /// Key is section name (e.g., "skills"), value is review configuration
+    let hierarchicalReview: [String: HierarchicalReviewConfig]?
+
+    /// Configuration for two-phase hierarchical review
+    struct HierarchicalReviewConfig: Codable {
+        let enabled: Bool
+        let phases: [String]  // e.g., ["categoryStructure", "categoryDetails"]
+    }
+
     init(
         slug: String,
         schemaVersion: Int = 1,
@@ -386,7 +407,10 @@ struct TemplateManifest: Codable {
         transparentKeys: [String]? = nil,
         keysInEditor: [String]? = nil,
         sectionVisibilityDefaults: [String: Bool]? = nil,
-        sectionVisibilityLabels: [String: String]? = nil
+        sectionVisibilityLabels: [String: String]? = nil,
+        defaultAIFields: [String]? = nil,
+        listContainers: [String]? = nil,
+        hierarchicalReview: [String: HierarchicalReviewConfig]? = nil
     ) {
         self.slug = slug
         self.schemaVersion = schemaVersion
@@ -396,6 +420,9 @@ struct TemplateManifest: Codable {
         self.keysInEditor = keysInEditor
         self.sectionVisibilityDefaults = sectionVisibilityDefaults
         self.sectionVisibilityLabels = sectionVisibilityLabels
+        self.defaultAIFields = defaultAIFields
+        self.listContainers = listContainers
+        self.hierarchicalReview = hierarchicalReview
         var normalized: [String: Section] = [:]
         var synthesized: Set<String> = []
         for (key, var section) in sections {
@@ -418,6 +445,9 @@ struct TemplateManifest: Codable {
         keysInEditor = try container.decodeIfPresent([String].self, forKey: .keysInEditor)
         sectionVisibilityDefaults = try container.decodeIfPresent([String: Bool].self, forKey: .sectionVisibilityDefaults)
         sectionVisibilityLabels = try container.decodeIfPresent([String: String].self, forKey: .sectionVisibilityLabels)
+        defaultAIFields = try container.decodeIfPresent([String].self, forKey: .defaultAIFields)
+        listContainers = try container.decodeIfPresent([String].self, forKey: .listContainers)
+        hierarchicalReview = try container.decodeIfPresent([String: HierarchicalReviewConfig].self, forKey: .hierarchicalReview)
         let decodedSections = try container.decode([String: Section].self, forKey: .sections)
         var normalized: [String: Section] = [:]
         var synthesized: Set<String> = []
@@ -443,6 +473,9 @@ struct TemplateManifest: Codable {
         try container.encodeIfPresent(keysInEditor, forKey: .keysInEditor)
         try container.encodeIfPresent(sectionVisibilityDefaults, forKey: .sectionVisibilityDefaults)
         try container.encodeIfPresent(sectionVisibilityLabels, forKey: .sectionVisibilityLabels)
+        try container.encodeIfPresent(defaultAIFields, forKey: .defaultAIFields)
+        try container.encodeIfPresent(listContainers, forKey: .listContainers)
+        try container.encodeIfPresent(hierarchicalReview, forKey: .hierarchicalReview)
         try container.encode(sections, forKey: .sections)
     }
     func section(for key: String) -> Section? {
@@ -535,6 +568,9 @@ struct TemplateManifest: Codable {
         case keysInEditor = "keys-in-editor"
         case sectionVisibilityDefaults = "section-visibility"
         case sectionVisibilityLabels = "section-visibility-labels"
+        case defaultAIFields
+        case listContainers
+        case hierarchicalReview
     }
 }
 // MARK: - Encoding helpers
@@ -542,6 +578,65 @@ extension TemplateManifest {
     func sectionVisibilityKeys() -> [String] {
         guard let defaultKeys = sectionVisibilityDefaults?.keys else { return [] }
         return Array(defaultKeys).sorted()
+    }
+}
+
+// MARK: - AI Revision Configuration Helpers
+extension TemplateManifest {
+    /// Check if a tree path matches any of the defaultAIFields patterns
+    /// - Parameter path: Tree path like "skills.0.keywords.2" or "work.1.highlights"
+    /// - Returns: true if this path should be pre-selected for AI revision
+    func isDefaultAIField(path: String) -> Bool {
+        guard let patterns = defaultAIFields else { return false }
+        return patterns.contains { pattern in
+            pathMatchesPattern(path: path, pattern: pattern)
+        }
+    }
+
+    /// Check if a tree path is a list container (should be reviewed as batch)
+    /// - Parameter path: Tree path like "skills.0.keywords" or "work.1.highlights"
+    /// - Returns: true if this path should use batch review
+    func isListContainer(path: String) -> Bool {
+        guard let patterns = listContainers else { return false }
+        return patterns.contains { pattern in
+            pathMatchesPattern(path: path, pattern: pattern)
+        }
+    }
+
+    /// Check if a section uses hierarchical review
+    /// - Parameter section: Section name like "skills"
+    /// - Returns: HierarchicalReviewConfig if enabled, nil otherwise
+    func hierarchicalReviewConfig(for section: String) -> HierarchicalReviewConfig? {
+        guard let config = hierarchicalReview?[section], config.enabled else {
+            return nil
+        }
+        return config
+    }
+
+    /// Match a concrete path against a glob pattern
+    /// Pattern "work.*.highlights" matches "work.0.highlights", "work.1.highlights", etc.
+    /// - Parameters:
+    ///   - path: Concrete path with numeric indices
+    ///   - pattern: Glob pattern with * wildcards
+    /// - Returns: true if path matches pattern
+    private func pathMatchesPattern(path: String, pattern: String) -> Bool {
+        let pathComponents = path.split(separator: ".").map(String.init)
+        let patternComponents = pattern.split(separator: ".").map(String.init)
+
+        guard pathComponents.count == patternComponents.count else {
+            return false
+        }
+
+        for (pathPart, patternPart) in zip(pathComponents, patternComponents) {
+            if patternPart == "*" {
+                // Wildcard matches any single component (typically a numeric index)
+                continue
+            }
+            if pathPart != patternPart {
+                return false
+            }
+        }
+        return true
     }
 }
 // MARK: - Field Descriptor Synthesis

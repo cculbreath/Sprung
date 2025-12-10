@@ -153,6 +153,11 @@
     "education": "Education",
     "skills": "Skills"
   },
+  "defaultAIFields": [
+    "basics.summary",
+    "work.*.highlights",
+    "skills.*.keywords"
+  ],
   "listContainers": [
     "skills.*.keywords",
     "work.*.highlights"

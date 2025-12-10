@@ -311,6 +311,10 @@ private final class ManifestRenderer {
         return root
     }
     private func shouldIncludeSection(_ key: String) -> Bool {
+        // Skip basics - profile data comes fresh from ApplicantProfile at render time
+        if key == "basics" {
+            return false
+        }
         if let behavior = manifest.behavior(forSection: key),
            [.styling, .includeFonts, .editorKeys, .metadata].contains(behavior) {
             return false
