@@ -70,3 +70,12 @@ swiftlint-report-after-fix.txt
 onboarding_audit.md
 onboarding_audit_global.md
 onboarding_code_quality.md
+
+# Downloaded binaries (fetched by scripts/download-chromium.sh)
+Sprung/Resources/chromium-headless-shell/
+
+# Temporary files
+.gemini-clipboard/
+.gemini/
+pdfs/
+tmp_pdf_imgs/

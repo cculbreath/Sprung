@@ -4,8 +4,8 @@
 //
 //  Maintains the canonical list of SwiftData models used by the app.
 //  We rely on SwiftData's built-in lightweight migration when the model
-//  set changes (e.g. adding TemplateSeed). No custom migration plan is
-//  required while we're only adding new entities.
+//  set changes. No custom migration plan is required while we're only
+//  adding new entities.
 //
 import Foundation
 import SwiftData
@@ -25,7 +25,6 @@ enum SprungSchema {
         ConversationMessage.self,
         EnabledLLM.self,
         Template.self,
-        TemplateSeed.self,
         ExperienceDefaults.self,
         WorkExperienceDefault.self,
         WorkHighlightDefault.self,

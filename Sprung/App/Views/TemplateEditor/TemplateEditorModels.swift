@@ -7,7 +7,6 @@ enum TemplateEditorTab: String, CaseIterable, Identifiable {
     case pdfTemplate = "PDF Template"
     case manifest = "Data Manifest"
     case txtTemplate = "Text Template"
-    case seed = "Default Values"
     var id: String { rawValue }
 }
 struct TextFilterInfo: Identifiable {

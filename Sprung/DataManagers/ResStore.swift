@@ -13,20 +13,17 @@ final class ResStore: SwiftDataStore {
     unowned let modelContext: ModelContext
     private let exportCoordinator: ResumeExportCoordinator
     private let applicantProfileStore: ApplicantProfileStore
-    private let templateSeedStore: TemplateSeedStore
     private let experienceDefaultsStore: ExperienceDefaultsStore
     // MARK: - Initialiser
     init(
         context: ModelContext,
         exportCoordinator: ResumeExportCoordinator,
         applicantProfileStore: ApplicantProfileStore,
-        templateSeedStore: TemplateSeedStore,
         experienceDefaultsStore: ExperienceDefaultsStore
     ) {
         modelContext = context
         self.exportCoordinator = exportCoordinator
         self.applicantProfileStore = applicantProfileStore
-        self.templateSeedStore = templateSeedStore
         self.experienceDefaultsStore = experienceDefaultsStore
     }
     @discardableResult
@@ -42,7 +39,6 @@ final class ResStore: SwiftDataStore {
             jobApp.status = .inProgress
         }
         let contextBuilder = ResumeTemplateContextBuilder(
-            templateSeedStore: templateSeedStore,
             experienceDefaultsStore: experienceDefaultsStore
         )
         let applicantProfile = applicantProfileStore.currentProfile()

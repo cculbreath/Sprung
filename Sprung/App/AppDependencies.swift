@@ -23,7 +23,6 @@ final class AppDependencies {
     let navigationState: NavigationStateService
     let resumeExportCoordinator: ResumeExportCoordinator
     let templateStore: TemplateStore
-    let templateSeedStore: TemplateSeedStore
     let experienceDefaultsStore: ExperienceDefaultsStore
     let careerKeywordStore: CareerKeywordStore
     let applicantProfileStore: ApplicantProfileStore
@@ -46,16 +45,11 @@ final class AppDependencies {
         // Base stores
         let templateStore = TemplateStore(context: modelContext)
         self.templateStore = templateStore
-        let templateSeedStore = TemplateSeedStore(context: modelContext)
-        self.templateSeedStore = templateSeedStore
         let experienceDefaultsStore = ExperienceDefaultsStore(context: modelContext)
         self.experienceDefaultsStore = experienceDefaultsStore
         let careerKeywordStore = CareerKeywordStore()
         self.careerKeywordStore = careerKeywordStore
-        TemplateDefaultsImporter(
-            templateStore: templateStore,
-            templateSeedStore: templateSeedStore
-        ).installDefaultsIfNeeded()
+        TemplateDefaultsImporter(templateStore: templateStore).installDefaultsIfNeeded()
         let applicantProfileStore = ApplicantProfileStore(context: modelContext)
         self.applicantProfileStore = applicantProfileStore
         self.onboardingSessionStore = OnboardingSessionStore(context: modelContext)
@@ -72,7 +66,6 @@ final class AppDependencies {
             context: modelContext,
             exportCoordinator: resumeExportCoordinator,
             applicantProfileStore: applicantProfileStore,
-            templateSeedStore: templateSeedStore,
             experienceDefaultsStore: experienceDefaultsStore
         )
         self.resRefStore = ResRefStore(context: modelContext)
@@ -155,7 +148,6 @@ final class AppDependencies {
             llmFacade: llmFacade,
             debugSettingsStore: debugSettingsStore,
             templateStore: templateStore,
-            templateSeedStore: templateSeedStore,
             experienceDefaultsStore: experienceDefaultsStore,
             careerKeywordStore: careerKeywordStore,
             resumeExportCoordinator: resumeExportCoordinator,

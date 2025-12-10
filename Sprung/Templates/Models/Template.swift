@@ -13,8 +13,6 @@ final class Template {
     var updatedAt: Date
     var isCustom: Bool
     var isDefault: Bool
-    @Relationship(deleteRule: .cascade)
-    var seeds: [TemplateSeed]
     @Relationship(deleteRule: .nullify)
     var resumes: [Resume]
     init(
@@ -28,8 +26,7 @@ final class Template {
         isCustom: Bool = false,
         isDefault: Bool = false,
         createdAt: Date = Date(),
-        updatedAt: Date = Date(),
-        seeds: [TemplateSeed] = []
+        updatedAt: Date = Date()
     ) {
         self.id = id
         self.name = name
@@ -43,6 +40,5 @@ final class Template {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.resumes = []
-        self.seeds = seeds
     }
 }

@@ -36,11 +36,7 @@ struct TemplateEditorView: View {
     @State var manifestContent: String = ""
     @State var manifestHasChanges: Bool = false
     @State var manifestValidationMessage: String?
-    @State var seedContent: String = ""
-    @State var seedHasChanges: Bool = false
-    @State var seedValidationMessage: String?
     @State var customFieldWarningMessage: String?
-    @State var pendingProfileUpdate: ProfileUpdatePrompt?
     // Template renaming state
     @State var renamingTemplate: String?
     @State var tempTemplateName: String = ""
@@ -149,7 +145,7 @@ struct TemplateEditorView: View {
         return nil
     }
     private var hasAnyUnsavedChanges: Bool {
-        htmlHasChanges || textHasChanges || manifestHasChanges || seedHasChanges
+        htmlHasChanges || textHasChanges || manifestHasChanges
     }
     private var templateSelectionBinding: Binding<String?> {
         Binding<String?>(
@@ -175,9 +171,7 @@ struct TemplateEditorView: View {
             loadAvailableTemplates()
             loadTemplateAssets()
             loadManifest()
-            loadSeed()
             manifestHasChanges = false
-            seedHasChanges = false
             refreshTemplatePreview()
             refreshCustomFieldWarnings()
         }
@@ -191,9 +185,6 @@ struct TemplateEditorView: View {
             refreshCustomFieldWarnings()
         }
         .onChange(of: manifestContent) { _, _ in
-            refreshCustomFieldWarnings()
-        }
-        .onChange(of: seedContent) { _, _ in
             refreshCustomFieldWarnings()
         }
         .alert("Add New Template", isPresented: $showingAddTemplate) {
@@ -259,24 +250,7 @@ struct TemplateEditorView: View {
             }
             Button("Cancel", role: .cancel) { }
         } message: {
-            Text("Reloads the template, manifest, and default values from the last saved state.")
-        }
-        .alert(
-            "Update Applicant Profile?",
-            isPresented: Binding(
-                get: { pendingProfileUpdate != nil },
-                set: { if !$0 { pendingProfileUpdate = nil } }
-            ),
-            presenting: pendingProfileUpdate
-        ) { prompt in
-            Button("Update Profile") {
-                applyProfileUpdate(prompt)
-            }
-            Button("Cancel", role: .cancel) {
-                pendingProfileUpdate = nil
-            }
-        } message: { prompt in
-            Text(prompt.message)
+            Text("Reloads the template and manifest from the last saved state.")
         }
         .toolbar(id: "templateEditorToolbar") {
             TemplateEditorToolbar(
@@ -329,13 +303,10 @@ struct TemplateEditorView: View {
             htmlContent: $htmlContent,
             textContent: $textContent,
             manifestContent: $manifestContent,
-            seedContent: $seedContent,
             htmlHasChanges: $htmlHasChanges,
             textHasChanges: $textHasChanges,
             manifestHasChanges: $manifestHasChanges,
-            seedHasChanges: $seedHasChanges,
             manifestValidationMessage: $manifestValidationMessage,
-            seedValidationMessage: $seedValidationMessage,
             customFieldWarningMessage: $customFieldWarningMessage,
             textEditorInsertion: $textEditorInsertion,
             selectedResume: selectedResume,
@@ -344,9 +315,7 @@ struct TemplateEditorView: View {
             },
             hasUnsavedChanges: hasAnyUnsavedChanges,
             onSaveAndRefresh: performRefresh,
-            onValidateManifest: validateManifest,
-            onPromoteSeed: promoteCurrentResumeToSeed,
-            onValidateSeed: validateSeedFormat
+            onValidateManifest: validateManifest
         )
     }
     private var previewColumn: some View {

@@ -1,13 +1,8 @@
 import Foundation
 import OrderedCollections
 struct ResumeTemplateContextBuilder {
-    private let templateSeedStore: TemplateSeedStore
     private let experienceDefaultsStore: ExperienceDefaultsStore
-    init(
-        templateSeedStore: TemplateSeedStore,
-        experienceDefaultsStore: ExperienceDefaultsStore
-    ) {
-        self.templateSeedStore = templateSeedStore
+    init(experienceDefaultsStore: ExperienceDefaultsStore) {
         self.experienceDefaultsStore = experienceDefaultsStore
     }
     @MainActor
@@ -16,18 +11,13 @@ struct ResumeTemplateContextBuilder {
         applicantProfile: ApplicantProfile
     ) -> [String: Any]? {
         let manifest = TemplateManifestLoader.manifest(for: template)
-        let seedJSON = templateSeedStore.seed(for: template)?.jsonString ?? ""
-        let seed = Self.parseJSON(from: seedJSON)
-        let sanitizedSeed = removeContactSection(from: seed, manifest: manifest)
         let experienceDefaults = experienceDefaultsStore.currentDefaults()
         let experienceSeed = ExperienceDefaultsEncoder.makeSeedDictionary(from: experienceDefaults)
         let sanitizedExperience = removeContactSection(from: experienceSeed, manifest: manifest)
         var context = manifest?.makeDefaultContext() ?? [:]
         merge(into: &context, with: sanitizedExperience)
-        merge(into: &context, with: sanitizedSeed)
         merge(into: &context, with: profileContext(from: applicantProfile, manifest: manifest))
         addMissingKeys(from: sanitizedExperience, to: &context)
-        addMissingKeys(from: sanitizedSeed, to: &context)
         if let manifest {
             context = SeedContextNormalizer(manifest: manifest).normalize(context)
         }

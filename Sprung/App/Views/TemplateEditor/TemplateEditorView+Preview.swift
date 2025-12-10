@@ -79,7 +79,6 @@ extension TemplateEditorView {
             updatedAt: templateRecord?.updatedAt ?? Date()
         )
         let contextBuilder = ResumeTemplateContextBuilder(
-            templateSeedStore: appEnvironment.templateSeedStore,
             experienceDefaultsStore: appEnvironment.experienceDefaultsStore
         )
         let applicantProfile = appEnvironment.applicantProfileStore.currentProfile()

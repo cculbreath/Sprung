@@ -167,19 +167,23 @@ Sprung/
 git clone https://github.com/cculbreath/Sprung.git
 cd Sprung
 ```
-2) Open the project:
+2) Download Chrome Headless Shell (required for PDF generation):
+```bash
+./scripts/download-chromium.sh
+```
+3) Open the project:
 ```bash
 open Sprung.xcodeproj
 ```
-3) Resolve packages if Xcode does not auto-resolve: `File → Packages → Resolve Package Versions`.
-4) Build:
+4) Resolve packages if Xcode does not auto-resolve: `File → Packages → Resolve Package Versions`.
+5) Build:
 ```bash
 xcodebuild -project Sprung.xcodeproj -scheme Sprung build 2>&1 | grep -Ei "(error:|warning:|failed|succeeded)" | head -20
 ```
-5) Launch and open **Settings** (`Cmd + ,`):
+6) Launch and open **Settings** (`Cmd + ,`):
    - Enter OpenAI, OpenRouter, and Gemini keys (stored in macOS Keychain).
    - Pick default onboarding, PDF extraction, and Git ingest models; adjust reasoning effort and overflow-fix attempts.
-6) If prompted, open the Template Editor to create/import a Mustache template (templates are required for exports).
+7) If prompted, open the Template Editor to create/import a Mustache template (templates are required for exports).
 
 ### Common Build Commands
 - Quick check:

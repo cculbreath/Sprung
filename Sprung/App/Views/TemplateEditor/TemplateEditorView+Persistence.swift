@@ -121,7 +121,6 @@ extension TemplateEditorView {
         newTemplateName = ""
         loadTemplateAssets()
         loadManifest()
-        loadSeed()
     }
     func duplicateTemplate(slug: String) {
         guard let source = appEnvironment.templateStore.template(slug: slug) else { return }
@@ -143,21 +142,15 @@ extension TemplateEditorView {
         if let manifest = source.manifestData {
             try? appEnvironment.templateStore.updateManifest(slug: candidateSlug, manifestData: manifest)
         }
-        if let seed = appEnvironment.templateSeedStore.seed(forSlug: slug),
-           let jsonString = String(data: seed.seedData, encoding: .utf8) {
-            appEnvironment.templateSeedStore.upsertSeed(slug: candidateSlug, jsonString: jsonString)
-        }
         loadAvailableTemplates()
         selectedTemplate = candidateSlug
         defaultTemplateSlug = appEnvironment.templateStore.defaultTemplate()?.slug
         loadTemplateAssets()
         loadManifest()
-        loadSeed()
     }
     func deleteTemplate(slug: String) {
         guard availableTemplates.count > 1 else { return }
         appEnvironment.templateStore.deleteTemplate(slug: slug.lowercased())
-        appEnvironment.templateSeedStore.deleteSeed(forSlug: slug.lowercased())
         loadAvailableTemplates()
         defaultTemplateSlug = appEnvironment.templateStore.defaultTemplate()?.slug
         if selectedTemplate == slug {
@@ -172,7 +165,6 @@ extension TemplateEditorView {
         templatePendingDeletion = nil
         loadTemplateAssets()
         loadManifest()
-        loadSeed()
     }
     func renameTemplate(slug: String, newName: String) {
         let trimmedName = newName.trimmingCharacters(in: .whitespacesAndNewlines)
