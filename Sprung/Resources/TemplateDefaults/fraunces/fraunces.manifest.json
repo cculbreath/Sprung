@@ -108,7 +108,7 @@
     "custom.moreInfo": "Additional Info"
   },
   "defaultAIFields": [
-    "basics.summary",
+    "custom.objective",
     "work.*.highlights",
     "projects.*.description",
     "skills.*",

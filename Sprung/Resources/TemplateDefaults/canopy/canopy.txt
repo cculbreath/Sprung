@@ -10,11 +10,6 @@
 {{#hasContent(custom.objective)}}
 {{{ wrap(custom.objective, 80, 0, 0) }}}
 {{/hasContent(custom.objective)}}
-{{^hasContent(custom.objective)}}
-{{#hasContent(basics.summary)}}
-{{{ wrap(basics.summary, 80, 0, 0) }}}
-{{/hasContent(basics.summary)}}
-{{/hasContent(custom.objective)}}
 {{#hasContent(skills)}}
 {{{ sectionLine(custom.sectionLabels.skills, 80) }}}
 {{#skills}}

@@ -152,7 +152,7 @@
     "skills": "Skills"
   },
   "defaultAIFields": [
-    "basics.summary",
+    "custom.objective",
     "work.*.highlights",
     "projects.*.description",
     "skills.*",

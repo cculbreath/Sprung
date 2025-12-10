@@ -85,14 +85,22 @@ enum ResumeContextBuilder {
     ) -> [String: Any] {
         var result = context
 
-        // Check for job-specific summary from TreeNode (takes precedence over profile)
+        // Check for job-specific objective/summary from TreeNode (takes precedence over profile)
+        // First check custom.objective (preferred), then legacy summary section
+        let customDict = context["custom"] as? [String: Any]
+        let customObjective = (customDict?["objective"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         let treeSummary = (context["summary"] as? String)?
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // Build profile-sourced basics
-        var profileBasics = buildBasicsFromProfile(profile, excludeSummary: treeSummary != nil && !treeSummary!.isEmpty)
+        // Exclude profile.summary if we have custom.objective or tree summary
+        let hasJobSpecificSummary = (customObjective != nil && !customObjective!.isEmpty) ||
+                                    (treeSummary != nil && !treeSummary!.isEmpty)
 
-        // If TreeNode has summary, use that for basics.summary
+        // Build profile-sourced basics
+        var profileBasics = buildBasicsFromProfile(profile, excludeSummary: hasJobSpecificSummary)
+
+        // If TreeNode has summary (legacy), use that for basics.summary
         if let summary = treeSummary, !summary.isEmpty {
             profileBasics["summary"] = summary
         }
