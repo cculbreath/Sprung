@@ -121,6 +121,7 @@ final class ResStore: SwiftDataStore {
         )
         newNode.myIndex = original.myIndex
         newNode.depth = original.depth
+        newNode.editorLabel = original.editorLabel
         newNode.schemaKey = original.schemaKey
         newNode.schemaInputKindRaw = original.schemaInputKindRaw
         newNode.schemaRequired = original.schemaRequired

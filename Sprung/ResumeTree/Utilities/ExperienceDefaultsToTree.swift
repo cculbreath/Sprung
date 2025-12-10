@@ -136,6 +136,7 @@ final class ExperienceDefaultsToTree {
             status: .saved,
             resume: resume
         ))
+        applyEditorLabel(to: node, for: "summary")
         if let descriptor = section?.fields.first {
             node.applyDescriptor(descriptor)
         }
@@ -154,6 +155,7 @@ final class ExperienceDefaultsToTree {
             status: .isNotLeaf,
             resume: resume
         ))
+        applyEditorLabel(to: container, for: "work")
         container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
         container.schemaAllowsNodeDeletion = entryDescriptor?.allowsManualMutations ?? false
 
@@ -194,6 +196,7 @@ final class ExperienceDefaultsToTree {
             status: .isNotLeaf,
             resume: resume
         ))
+        applyEditorLabel(to: container, for: "volunteer")
         container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
 
         for (index, volunteer) in experienceDefaults.volunteerExperiences.enumerated() {
@@ -232,6 +235,7 @@ final class ExperienceDefaultsToTree {
             status: .isNotLeaf,
             resume: resume
         ))
+        applyEditorLabel(to: container, for: "education")
         container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
 
         for (index, education) in experienceDefaults.educationRecords.enumerated() {
@@ -271,6 +275,7 @@ final class ExperienceDefaultsToTree {
             status: .isNotLeaf,
             resume: resume
         ))
+        applyEditorLabel(to: container, for: "projects")
         container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
 
         for (index, project) in experienceDefaults.projects.enumerated() {
@@ -312,6 +317,7 @@ final class ExperienceDefaultsToTree {
             status: .isNotLeaf,
             resume: resume
         ))
+        applyEditorLabel(to: container, for: "skills")
         container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
 
         for (index, skill) in experienceDefaults.skills.enumerated() {
@@ -346,6 +352,7 @@ final class ExperienceDefaultsToTree {
             status: .isNotLeaf,
             resume: resume
         ))
+        applyEditorLabel(to: container, for: "awards")
         container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
 
         for (index, award) in experienceDefaults.awards.enumerated() {
@@ -381,6 +388,7 @@ final class ExperienceDefaultsToTree {
             status: .isNotLeaf,
             resume: resume
         ))
+        applyEditorLabel(to: container, for: "certificates")
         container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
 
         for (index, cert) in experienceDefaults.certificates.enumerated() {
@@ -416,6 +424,7 @@ final class ExperienceDefaultsToTree {
             status: .isNotLeaf,
             resume: resume
         ))
+        applyEditorLabel(to: container, for: "publications")
         container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
 
         for (index, pub) in experienceDefaults.publications.enumerated() {
@@ -452,6 +461,7 @@ final class ExperienceDefaultsToTree {
             status: .isNotLeaf,
             resume: resume
         ))
+        applyEditorLabel(to: container, for: "languages")
         container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
 
         for (index, language) in experienceDefaults.languages.enumerated() {
@@ -485,6 +495,7 @@ final class ExperienceDefaultsToTree {
             status: .isNotLeaf,
             resume: resume
         ))
+        applyEditorLabel(to: container, for: "interests")
         container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
 
         for (index, interest) in experienceDefaults.interests.enumerated() {
@@ -518,6 +529,7 @@ final class ExperienceDefaultsToTree {
             status: .isNotLeaf,
             resume: resume
         ))
+        applyEditorLabel(to: container, for: "references")
         container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
 
         for (index, ref) in experienceDefaults.references.enumerated() {
@@ -554,6 +566,7 @@ final class ExperienceDefaultsToTree {
                 status: .isNotLeaf,
                 resume: resume
             ))
+            applyEditorLabel(to: fieldNode, for: field.key)
 
             // Check if this is an array field or single value
             if field.values.count > 1 || section?.fields.first(where: { $0.key == field.key })?.repeatable == true {
@@ -572,6 +585,15 @@ final class ExperienceDefaultsToTree {
                 fieldNode.value = firstValue.value
                 fieldNode.status = .saved
             }
+        }
+    }
+
+    // MARK: - Editor Label Helper
+
+    /// Apply editor label from manifest if available
+    private func applyEditorLabel(to node: TreeNode, for key: String) {
+        if let label = manifest.editorLabels?[key] {
+            node.editorLabel = label
         }
     }
 

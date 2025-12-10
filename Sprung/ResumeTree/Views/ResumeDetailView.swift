@@ -96,7 +96,7 @@ private struct RootLeafDisclosureView: View {
             HStack {
                 ToggleChevronView(isExpanded: expansionBinding)
                 AlignedTextRow(
-                    leadingText: node.label,
+                    leadingText: node.displayLabel,
                     trailingText: nil,
                     nodeStatus: node.status
                 )

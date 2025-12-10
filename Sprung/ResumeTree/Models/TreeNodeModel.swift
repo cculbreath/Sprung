@@ -17,6 +17,10 @@ enum LeafStatus: String, Codable, Hashable {
     @Relationship(deleteRule: .cascade) var children: [TreeNode]?
     weak var parent: TreeNode?
     var label: String { return resume.label(name) } // Assumes resume.label handles missing keys
+    /// Custom display label from manifest editorLabels (overrides label if set)
+    var editorLabel: String?
+    /// Returns the effective display label: editorLabel if set, otherwise falls back to label
+    var displayLabel: String { editorLabel ?? label }
     @Relationship(deleteRule: .noAction) var resume: Resume
     var status: LeafStatus
     var depth: Int = 0
