@@ -24,9 +24,15 @@ struct TemplateManifestOverrides: Codable {
             case fields
         }
     }
+    /// Section-specific overrides (e.g., hiddenFields)
+    struct SectionOverride: Codable {
+        var type: String?
+        var hiddenFields: [String]?
+    }
     var sectionOrder: [String]?
     var styling: Styling?
     var custom: Custom?
+    var sections: [String: SectionOverride]?
     var sectionVisibility: [String: Bool]?
     var sectionVisibilityLabels: [String: String]?
     var transparentKeys: [String]?
@@ -36,6 +42,7 @@ struct TemplateManifestOverrides: Codable {
         case sectionOrder
         case styling
         case custom
+        case sections
         case sectionVisibility = "section-visibility"
         case sectionVisibilityLabels = "section-visibility-labels"
         case transparentKeys
@@ -146,6 +153,15 @@ enum TemplateManifestDefaults {
         }
         if let customOverride = overrides.custom {
             sections["custom"] = sections["custom"]?.applyingCustomOverride(customOverride)
+        }
+        // Apply section-specific overrides (hiddenFields, etc.)
+        if let sectionOverrides = overrides.sections {
+            for (sectionKey, sectionOverride) in sectionOverrides {
+                if var existingSection = sections[sectionKey] {
+                    existingSection = existingSection.applyingSectionOverride(sectionOverride)
+                    sections[sectionKey] = existingSection
+                }
+            }
         }
         let sectionOrder = overrides.sectionOrder ?? base.sectionOrder
         let sectionVisibilityDefaults = overrides.sectionVisibility ?? base.sectionVisibilityDefaults
@@ -543,7 +559,18 @@ private extension TemplateManifest.Section {
             defaultValue: TemplateManifest.JSONValue(value: dictionary),
             fields: fields,
             fieldMetadataSource: fieldMetadataSource,
-            behavior: behavior
+            behavior: behavior,
+            hiddenFields: hiddenFields
+        )
+    }
+    func applyingSectionOverride(_ override: TemplateManifestOverrides.SectionOverride) -> TemplateManifest.Section {
+        TemplateManifest.Section(
+            type: type,
+            defaultValue: defaultValue,
+            fields: fields,
+            fieldMetadataSource: fieldMetadataSource,
+            behavior: behavior,
+            hiddenFields: override.hiddenFields ?? hiddenFields
         )
     }
     private func jsonValueToDictionary(_ value: Any?) -> [String: Any] {
