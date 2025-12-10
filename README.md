@@ -17,8 +17,6 @@
 
 Sprung is a native macOS copilot for job hunting. It keeps your data local, builds a structured knowledge base about your experience, and uses multiple AI backends to tailor resumes, cover letters, and application packets without generic templates.
 
-![Sprung Main Interface](docs/images/main-interface.png)
-
 ## Highlights
 
 ### AI Onboarding Interview (OpenAI Responses API)
@@ -35,22 +33,16 @@ Sprung is a native macOS copilot for job hunting. It keeps your data local, buil
 - **Versioning + overflow fixes**: Create role-specific variants and auto-fix length overflows.
 
 ### Templates & Export
-- **Mustache templates**: HTML/CSS-based themes with live preview and quick actions; seed templates auto-imported if none exist.
+- **Mustache templates**: HTML/CSS-based themes with live preview and quick actions; default templates auto-imported if none exist.
 - **Output options**: Native PDF generation, plain text, structured JSON, and text rendering for LLM prompts.
 - **Template editor**: Built-in code editor and preview; templates stored locally for full control.
 - **Template editor UI**: Manage manifests, duplicate/import/export themes, and tweak HTML/CSS live before exporting resumes and cover letters.
-
-![Template Editor](docs/images/template-editor.png)
-
-![Resume Editor](docs/images/resume-editor.png)
 
 ### Cover Letters
 - **Job-aware drafting**: Uses the selected job app + resume + knowledge cards (ResRefs) and cover references (CoverRefs).
 - **Multi-model committee**: Generate across models, tally votes/scores, and summarize model reasoning to pick a winner.
 - **Inspector & revisions**: View sources, models, and committee feedback; iterate revisions on the same conversation.
 - **Batch + export + TTS**: Batch generation, PDF rendering, and streaming text-to-speech via OpenAI + chunked audio playback.
-
-![Cover Letter Writer](docs/images/cover-letter.png)
 
 ### Job Applications
 - **Kanban-style tracker**: Status groups for New, In Progress, Unsubmitted, Submitted, Interview Pending, Follow Up Required, Offer/Closed/Rejected.
@@ -60,7 +52,7 @@ Sprung is a native macOS copilot for job hunting. It keeps your data local, buil
 - **Context linking**: Attach specific resume and cover-letter versions plus notes and interview feedback to each job.
 
 ### Knowledge Cards & References
-- **ResRefs**: Knowledge cards with metadata (type, organization, time period, sources) created during onboarding or manually. Toggle inclusion per resume or use globally from the sliding source list.
+- **ResRefs**: Knowledge cards with metadata (type, organization, time period, sources) created during onboarding or manually. Toggle inclusion per resume or use globally from the interactive card deck browser.
 - **CoverRefs**: Writing samples and background facts for cover letters, including dossier entries from onboarding.
 - **Artifact pipeline**: Document and repo ingestion feed artifacts → knowledge cards → resumes and covers.
 
@@ -138,7 +130,7 @@ Sprung/
 ├── CoverLetters/       # Generation, committee voting, inspector, PDF/TTS, references
 ├── JobApplications/    # Kanban list, scraping, application review, clarifying questions
 ├── Experience/         # Experience defaults editor and section renderers
-├── Templates/          # Mustache templates, seeds, manifests, template editor
+├── Templates/          # Mustache templates, manifests, template editor
 ├── ResRefs/            # Knowledge card models and sliding source list
 ├── DataManagers/       # SwiftData stores (resumes, covers, jobs, profiles, refs)
 ├── Export/             # PDF/text generators and export UI
@@ -169,7 +161,7 @@ cd Sprung
 ```
 2) Download Chrome Headless Shell (required for PDF generation):
 ```bash
-./scripts/download-chromium.sh
+./Scripts/download-chromium.sh
 ```
 3) Open the project:
 ```bash
