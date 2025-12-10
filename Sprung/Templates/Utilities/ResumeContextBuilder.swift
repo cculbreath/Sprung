@@ -261,6 +261,7 @@ enum ResumeContextBuilder {
     /// Nest custom fields under a "custom" key for template compatibility.
     /// Custom fields are flattened in TreeNode (for editor display) but templates
     /// expect them under custom.fieldName (e.g., custom.jobTitles, custom.moreInfo).
+    /// Keys are lowercased for case-insensitive matching with templates.
     private static func nestCustomFields(in context: [String: Any]) -> [String: Any] {
         var result: [String: Any] = [:]
         var customFields: [String: Any] = context["custom"] as? [String: Any] ?? [:]
@@ -273,8 +274,8 @@ enum ResumeContextBuilder {
                 // Already a custom container - merge later
                 continue
             } else {
-                // Custom field - nest under "custom"
-                customFields[key] = value
+                // Custom field - nest under "custom" with lowercased key
+                customFields[key.lowercased()] = value
             }
         }
 
