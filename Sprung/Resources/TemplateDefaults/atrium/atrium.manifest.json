@@ -166,5 +166,24 @@
     "interests": "Interests",
     "custom.jobTitles": "Job Titles",
     "custom.moreInfo": "Additional Info"
+  },
+  "listContainers": {
+    "skills.*.keywords": {
+      "isListContainer": true,
+      "listReviewMode": "batchOnly",
+      "description": "Skill keywords within a category - reviewed as batch per category"
+    },
+    "work.*.highlights": {
+      "isListContainer": true,
+      "listReviewMode": "perItemReview",
+      "description": "Work experience bullet points - can accept/reject individual items"
+    }
+  },
+  "hierarchicalReview": {
+    "skills": {
+      "enabled": true,
+      "phases": ["categoryStructure", "categoryDetails"],
+      "description": "Two-phase review: category structure first, then keywords within each category"
+    }
   }
 }
