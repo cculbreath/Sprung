@@ -61,10 +61,15 @@ private extension JsonToTree {
         manifest: TemplateManifest?
     ) -> (OrderedDictionary<String, Any>, [String]) {
         var ordered: OrderedDictionary<String, Any> = [:]
-        let preferredOrder = orderedKeys(from: Array(context.keys), manifest: manifest)
+        // Include manifest-declared editor keys so sections like `custom` appear even
+        // when the source context omits them.
+        let manifestRootKeys = editorRootKeys(from: manifest)
+        let preferredOrder = orderedKeys(from: Array(context.keys) + manifestRootKeys, manifest: manifest)
         for key in preferredOrder {
             if let value = context[key] {
                 ordered[key] = convertToOrderedStructure(value)
+            } else if let placeholder = placeholderValue(for: key, manifest: manifest) {
+                ordered[key] = placeholder
             }
         }
         let extraKeys = context.keys.filter { ordered[$0] == nil }.sorted()
@@ -97,6 +102,63 @@ private extension JsonToTree {
             ordered.append(key)
         }
         return ordered
+    }
+    static func editorRootKeys(from manifest: TemplateManifest?) -> [String] {
+        guard let keys = manifest?.keysInEditor else { return [] }
+        return keys.compactMap { $0.split(separator: ".").first }.map(String.init)
+    }
+    static func placeholderValue(for key: String, manifest: TemplateManifest?) -> Any? {
+        guard let manifest, let section = manifest.section(for: key) else { return nil }
+        if let defaultValue = section.defaultContextValue() {
+            return defaultValue
+        }
+        switch section.type {
+        case .array, .arrayOfObjects:
+            return []
+        case .mapOfStrings, .objectOfObjects, .fontSizes:
+            return [:]
+        case .string:
+            return ""
+        case .object:
+            return placeholderObject(for: section)
+        }
+    }
+    static func placeholderObject(for section: TemplateManifest.Section) -> OrderedDictionary<String, Any> {
+        var placeholder: OrderedDictionary<String, Any> = [:]
+        for field in section.fields where field.key != "*" {
+            placeholder[field.key] = placeholderValue(for: field)
+        }
+        return placeholder
+    }
+    static func placeholderValue(for field: TemplateManifest.Section.FieldDescriptor) -> Any {
+        if let behavior = field.behavior {
+            switch behavior {
+            case .fontSizes:
+                return [:]
+            case .includeFonts:
+                return false
+            case .editorKeys:
+                return []
+            case .sectionLabels:
+                return [:]
+            case .applicantProfile:
+                return ""
+            }
+        }
+        if let children = field.children, children.isEmpty == false {
+            var nested: OrderedDictionary<String, Any> = [:]
+            for child in children where child.key != "*" {
+                nested[child.key] = placeholderValue(for: child)
+            }
+            return nested
+        }
+        if field.repeatable {
+            return []
+        }
+        if field.input == .toggle {
+            return false
+        }
+        return ""
     }
     func value(for key: String) -> Any? {
         if let stored = orderedContext[key] { return stored }
@@ -358,16 +420,20 @@ private final class ManifestRenderer {
         if elements.allSatisfy({ $0 is String }) {
             for (index, stringValue) in elements.enumerated() {
                 guard let stringValue = stringValue as? String else { continue }
+                let trimmed = stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard trimmed.isEmpty == false else { continue }
                 let child = container.addChild(
                     TreeNode(
                         name: "",
-                        value: stringValue,
+                        value: trimmed,
                         inEditor: true,
                         status: .saved,
                         resume: host.resume
                     )
                 )
                 child.applyDescriptor(descriptor)
+                // Leaf entries for simple arrays should not be treated as containers.
+                child.schemaAllowsChildMutation = false
                 applyEditorLabel(path: path + ["\(index)"], to: child)
             }
             return

@@ -10,14 +10,15 @@ struct NodeChildrenListView: View {
         LazyVStack(alignment: .leading, spacing: 0) {
             ForEach(children, id: \.id) { child in
                 Divider()
-                if child.orderedViewChildren.isEmpty {
+                let isContainer = child.allowsChildAddition || child.orderedViewChildren.isEmpty == false
+                if isContainer {
+                    NodeWithChildrenView(node: child)
+                } else {
                     ReorderableLeafRow(
                         node: child,
                         siblings: child.parent?.orderedChildren ?? []
                     )
                     .padding(.vertical, 4)
-                } else {
-                    NodeWithChildrenView(node: child)
                 }
             }
         }

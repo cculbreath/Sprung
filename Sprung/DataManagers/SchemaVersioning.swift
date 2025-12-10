@@ -26,6 +26,8 @@ enum SprungSchema {
         EnabledLLM.self,
         Template.self,
         ExperienceDefaults.self,
+        ExperienceCustomField.self,
+        ExperienceCustomFieldValue.self,
         WorkExperienceDefault.self,
         WorkHighlightDefault.self,
         VolunteerExperienceDefault.self,

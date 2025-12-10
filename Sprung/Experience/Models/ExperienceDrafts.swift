@@ -1,5 +1,13 @@
 import Foundation
 import SwiftData
+struct CustomFieldValue: Codable, Equatable {
+    var key: String
+    var values: [String]
+    init(key: String = "", values: [String] = []) {
+        self.key = key
+        self.values = values
+    }
+}
 struct ExperienceDefaultsDraft: Equatable {
     /// Professional summary for resume headers and cover letter introductions
     var summary: String = ""
@@ -14,6 +22,8 @@ struct ExperienceDefaultsDraft: Equatable {
     var isLanguagesEnabled: Bool = false
     var isInterestsEnabled: Bool = false
     var isReferencesEnabled: Bool = false
+    var isCustomEnabled: Bool = false
+    var customFields: [CustomFieldValue] = []
     var work: [WorkExperienceDraft] = []
     var volunteer: [VolunteerExperienceDraft] = []
     var education: [EducationExperienceDraft] = []
@@ -40,6 +50,11 @@ extension ExperienceDefaultsDraft {
         isLanguagesEnabled = model.isLanguagesEnabled
         isInterestsEnabled = model.isInterestsEnabled
         isReferencesEnabled = model.isReferencesEnabled
+        isCustomEnabled = model.isCustomEnabled || model.customFields.isEmpty == false
+        customFields = model.customFields.sorted { $0.index < $1.index }.map { field in
+            let sortedValues = field.values.sorted { $0.index < $1.index }.map { $0.value }
+            return CustomFieldValue(key: field.key, values: sortedValues)
+        }
         work = model.workExperiences.map(WorkExperienceDraft.init)
         volunteer = model.volunteerExperiences.map(VolunteerExperienceDraft.init)
         education = model.educationRecords.map(EducationExperienceDraft.init)
@@ -65,6 +80,20 @@ extension ExperienceDefaultsDraft {
         model.isLanguagesEnabled = isLanguagesEnabled
         model.isInterestsEnabled = isInterestsEnabled
         model.isReferencesEnabled = isReferencesEnabled
+        model.isCustomEnabled = isCustomEnabled || customFields.isEmpty == false
+        // Rebuild custom fields relationship
+        model.customFields.forEach { field in
+            field.values.forEach { value in value.field = nil }
+        }
+        model.customFields.removeAll()
+        for (fieldIndex, field) in customFields.enumerated() {
+            let fieldModel = ExperienceCustomField(key: field.key, index: fieldIndex, values: [], defaults: model)
+            let values = field.values.enumerated().map { idx, val in
+                ExperienceCustomFieldValue(value: val, index: idx, field: fieldModel)
+            }
+            fieldModel.values = values
+            model.customFields.append(fieldModel)
+        }
         model.workExperiences = rebuildWorkExperiences(in: context, owner: model)
         model.volunteerExperiences = rebuildVolunteerExperiences(in: context, owner: model)
         model.educationRecords = rebuildEducation(in: context, owner: model)

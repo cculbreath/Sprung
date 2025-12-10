@@ -67,6 +67,7 @@ struct ResumeDetailView: View {
             if let ext = externalIsWide {
                 vm.isWide = ext.wrappedValue
             }
+            vm.ensureViewHierarchy()
         }
         .onChange(of: externalIsWide?.wrappedValue) { _, newVal in
             if let newVal { vm.isWide = newVal }
@@ -74,10 +75,10 @@ struct ResumeDetailView: View {
     }
     @ViewBuilder
     private func topLevelNodeView(_ node: TreeNode) -> some View {
-        if node.orderedViewChildren.isEmpty {
-            RootLeafDisclosureView(node: node)
-        } else {
+        if node.orderedViewChildren.isEmpty == false {
             NodeWithChildrenView(node: node)
+        } else {
+            RootLeafDisclosureView(node: node)
         }
     }
 }

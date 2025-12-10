@@ -347,6 +347,16 @@ struct AnyExperienceSectionRenderer: Identifiable {
             )
         }
     }
+    init(
+        key: ExperienceSectionKey,
+        metadata: ExperienceSectionMetadata,
+        isEnabled: @escaping (ExperienceDefaultsDraft) -> Bool,
+        render: @escaping (Binding<ExperienceDefaultsDraft>, ExperienceSectionViewCallbacks) -> AnyView
+    ) {
+        self.key = key
+        isEnabledClosure = isEnabled
+        renderClosure = render
+    }
     func isEnabled(in draft: ExperienceDefaultsDraft) -> Bool {
         isEnabledClosure(draft)
     }
@@ -366,7 +376,8 @@ enum ExperienceSectionRenderers {
         PublicationExperienceSectionView.renderer(),
         LanguageExperienceSectionView.renderer(),
         InterestExperienceSectionView.renderer(),
-        ReferenceExperienceSectionView.renderer()
+        ReferenceExperienceSectionView.renderer(),
+        CustomExperienceSectionView.renderer()
     ]
 }
 extension WorkExperienceSectionView {
@@ -565,5 +576,144 @@ extension ReferenceExperienceSectionView {
                 ReferenceExperienceSummaryView(entry: entry)
             }
         )
+    }
+}
+struct CustomExperienceSectionView: View {
+    @Binding var fields: [CustomFieldValue]
+    @Binding var isEnabled: Bool
+    let metadata: ExperienceSectionMetadata
+    let onChange: () -> Void
+    var body: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Add any template-specific fields you want to seed into new resumes (e.g., job titles, taglines, custom blurbs).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(fields.indices, id: \.self) { index in
+                        fieldEditor(for: index)
+                        Divider()
+                    }
+                    Button {
+                        fields.append(CustomFieldValue(key: "", values: [""]))
+                        isEnabled = true
+                        onChange()
+                    } label: {
+                        Label("Add Custom Field", systemImage: "plus.circle.fill")
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+        } label: {
+            HStack {
+                Image(systemName: "wand.and.stars")
+                    .foregroundStyle(.blue)
+                Text(metadata.title)
+                    .font(.headline)
+            }
+        }
+    }
+    private func fieldEditor(for index: Int) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                TextField("Field key (e.g., jobTitles, tagline)", text: Binding(
+                    get: { fields[safe: index]?.key ?? "" },
+                    set: { newValue in
+                        if fields.indices.contains(index) {
+                            fields[index].key = newValue
+                            isEnabled = true
+                            onChange()
+                        }
+                    }
+                ))
+                Button {
+                    if fields.indices.contains(index) {
+                        fields.remove(at: index)
+                        if fields.isEmpty { isEnabled = false }
+                        onChange()
+                    }
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.red)
+                .help("Remove field")
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(fields[safe: index]?.values.indices ?? 0..<0, id: \.self) { valueIndex in
+                    HStack {
+                        TextField("Value", text: Binding(
+                            get: { fields[safe: index]?.values[safe: valueIndex] ?? "" },
+                            set: { newValue in
+                            guard fields.indices.contains(index),
+                                  fields[index].values.indices.contains(valueIndex) else { return }
+                            fields[index].values[valueIndex] = newValue
+                            isEnabled = true
+                            onChange()
+                        }
+                    ))
+                    Button {
+                        guard fields.indices.contains(index),
+                              fields[index].values.indices.contains(valueIndex) else { return }
+                        fields[index].values.remove(at: valueIndex)
+                        if fields[index].values.isEmpty { fields[index].values.append("") }
+                        onChange()
+                    } label: {
+                        Image(systemName: "minus.circle")
+                    }
+                    .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                        .help("Remove value")
+                    }
+                }
+                Button {
+                    guard fields.indices.contains(index) else { return }
+                    fields[index].values.append("")
+                    isEnabled = true
+                    onChange()
+                } label: {
+                    Label("Add Value", systemImage: "plus")
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+    }
+}
+extension CustomExperienceSectionView {
+    static func renderer() -> AnyExperienceSectionRenderer {
+        AnyExperienceSectionRenderer(
+            key: .custom,
+            metadata: ExperienceSectionKey.custom.metadata,
+            isEnabled: { $0.isCustomEnabled },
+            render: { draft, callbacks in
+                AnyView(
+                    CustomExperienceSectionView(
+                        fields: draft.customFieldsBinding,
+                        isEnabled: draft.customEnabledBinding,
+                        metadata: ExperienceSectionKey.custom.metadata,
+                        onChange: callbacks.onChange
+                    )
+                )
+            }
+        )
+    }
+}
+private extension Binding where Value == ExperienceDefaultsDraft {
+    var customFieldsBinding: Binding<[CustomFieldValue]> {
+        Binding<[CustomFieldValue]>(
+            get: { self.wrappedValue.customFields },
+            set: { self.wrappedValue.customFields = $0 }
+        )
+    }
+    var customEnabledBinding: Binding<Bool> {
+        Binding<Bool>(
+            get: { self.wrappedValue.isCustomEnabled },
+            set: { self.wrappedValue.isCustomEnabled = $0 }
+        )
+    }
+}
+private extension Array {
+    subscript(safe index: Index) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }

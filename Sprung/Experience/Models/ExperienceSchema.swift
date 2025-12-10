@@ -12,6 +12,7 @@ enum ExperienceSectionKey: String, CaseIterable, Identifiable {
     case languages
     case interests
     case references
+    case custom
     var id: String { rawValue }
     var displayName: String {
         metadata.title
@@ -149,6 +150,13 @@ enum ExperienceSchema {
                 field("reference"),
                 field("url")
             ]
+        ),
+        ExperienceSchemaSection(
+            key: .custom,
+            nodes: [
+                field("key"),
+                field("values")
+            ]
         )
     ]
     static let sectionsByKey: [ExperienceSectionKey: ExperienceSchemaSection] = {
@@ -273,6 +281,14 @@ extension ExperienceSectionMetadata {
                 subtitle: nil,
                 addButtonTitle: "⊕ Add Reference",
                 isEnabledKeyPath: \ExperienceDefaultsDraft.isReferencesEnabled
+            )
+        case .custom:
+            return ExperienceSectionMetadata(
+                key: key,
+                title: "Custom Fields",
+                subtitle: "Defaults for custom template fields (e.g., job titles)",
+                addButtonTitle: "⊕ Add Custom Field",
+                isEnabledKeyPath: \ExperienceDefaultsDraft.isCustomEnabled
             )
         }
     }

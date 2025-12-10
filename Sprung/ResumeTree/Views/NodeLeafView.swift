@@ -62,6 +62,13 @@ struct NodeLeafView: View {
                             nodeStatus: node.status
                         )
                         Spacer()
+                    } else if node.name.isEmpty && !node.value.isEmpty {
+                        AlignedTextRow(
+                            leadingText: node.value,
+                            trailingText: nil,
+                            nodeStatus: node.status
+                        )
+                        Spacer()
                     } else {
                         AlignedTextRow(
                             leadingText: node.name,

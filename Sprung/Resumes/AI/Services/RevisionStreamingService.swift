@@ -106,8 +106,8 @@ class RevisionStreamingService {
         var collectingJSON = false
         var jsonResponse = ""
         for try await chunk in handle.stream {
-            // Handle reasoning content
-            if let reasoningContent = chunk.reasoning {
+            // Handle reasoning content (supports both legacy and new reasoning_details format)
+            if let reasoningContent = chunk.allReasoningText {
                 reasoningStreamManager.reasoningText += reasoningContent
             }
             // Collect regular content

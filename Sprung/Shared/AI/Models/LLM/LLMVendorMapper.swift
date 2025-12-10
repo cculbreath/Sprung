@@ -59,11 +59,23 @@ enum _LLMVendorMapper {
     }
     static func streamChunkDTO(from chunk: ChatCompletionChunkObject) -> LLMStreamChunkDTO {
         guard let firstChoice = chunk.choices?.first else {
-            return LLMStreamChunkDTO(content: nil, reasoning: nil, isFinished: false)
+            return LLMStreamChunkDTO(content: nil, reasoning: nil, reasoningDetails: nil, isFinished: false)
         }
+
+        // Map structured reasoning details from new OpenRouter format
+        let reasoningDetails: [LLMReasoningDetailDTO]? = firstChoice.delta?.reasoningDetails?.map { detail in
+            LLMReasoningDetailDTO(
+                type: detail.type,
+                text: detail.text,
+                summary: detail.summary,
+                format: detail.format
+            )
+        }
+
         return LLMStreamChunkDTO(
             content: firstChoice.delta?.content,
             reasoning: firstChoice.delta?.reasoningContent,
+            reasoningDetails: reasoningDetails,
             isFinished: firstChoice.finishReason != nil
         )
     }
