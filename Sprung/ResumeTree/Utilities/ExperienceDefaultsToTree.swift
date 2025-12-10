@@ -46,8 +46,8 @@ final class ExperienceDefaultsToTree {
             buildSection(key: sectionKey, parent: root)
         }
 
-        // Note: Template fields (sectionLabels, fontSizes) are added to context at render time
-        // by ResumeContextBuilder, not stored in TreeNode. They come from manifest defaults.
+        // Build editable template fields (fontSizes under styling, sectionLabels)
+        buildEditableTemplateFields(parent: root)
 
         // Apply default AI fields from manifest
         if let defaultFields = manifest.defaultAIFields, !defaultFields.isEmpty {
@@ -591,6 +591,75 @@ final class ExperienceDefaultsToTree {
                 // Single value - make the field node itself the leaf
                 fieldNode.value = firstValue.value
                 fieldNode.status = .saved
+            }
+        }
+    }
+
+    // MARK: - Editable Template Fields
+
+    /// Build editable template fields (fontSizes, sectionLabels) from manifest defaults.
+    /// These are stored in TreeNode for editing but also added to context at render time.
+    private func buildEditableTemplateFields(parent: TreeNode) {
+        // Find or create styling node
+        var stylingNode = parent.children?.first(where: { $0.name == "styling" })
+        if stylingNode == nil {
+            stylingNode = parent.addChild(TreeNode(
+                name: "styling",
+                value: "",
+                inEditor: true,
+                status: .isNotLeaf,
+                resume: resume
+            ))
+            stylingNode?.editorLabel = "Style"
+        }
+
+        // Build fontSizes under styling
+        if let styling = stylingNode,
+           let stylingSection = manifest.section(for: "styling"),
+           let defaultContext = stylingSection.defaultContextValue() as? [String: Any],
+           let fontSizes = defaultContext["fontSizes"] as? [String: String] {
+
+            let fontSizesNode = styling.addChild(TreeNode(
+                name: "fontSizes",
+                value: "",
+                inEditor: true,
+                status: .isNotLeaf,
+                resume: resume
+            ))
+            fontSizesNode.editorLabel = "Font Sizes"
+
+            for (key, value) in fontSizes.sorted(by: { $0.key < $1.key }) {
+                _ = fontSizesNode.addChild(TreeNode(
+                    name: key,
+                    value: value,
+                    inEditor: true,
+                    status: .saved,
+                    resume: resume
+                ))
+            }
+        }
+
+        // Build sectionLabels under styling
+        if let styling = stylingNode,
+           let labels = manifest.sectionVisibilityLabels, !labels.isEmpty {
+
+            let sectionLabelsNode = styling.addChild(TreeNode(
+                name: "sectionLabels",
+                value: "",
+                inEditor: true,
+                status: .isNotLeaf,
+                resume: resume
+            ))
+            sectionLabelsNode.editorLabel = "Section Labels"
+
+            for (key, value) in labels.sorted(by: { $0.key < $1.key }) {
+                _ = sectionLabelsNode.addChild(TreeNode(
+                    name: key,
+                    value: value,
+                    inEditor: true,
+                    status: .saved,
+                    resume: resume
+                ))
             }
         }
     }

@@ -74,20 +74,27 @@ enum ResumeContextBuilder {
         return context
     }
 
-    // MARK: - Template Fields (from manifest, added at render time)
+    // MARK: - Template Fields (from TreeNode or manifest defaults)
 
-    /// Add template fields from manifest defaults.
+    /// Add template fields, preferring TreeNode values (user edits) over manifest defaults.
     /// These are accessed as template.sectionLabels.work, template.fontSizes.name, etc.
     private static func addTemplateFields(to context: inout [String: Any], manifest: TemplateManifest) {
         var templateFields: [String: Any] = [:]
 
-        // sectionLabels from sectionVisibilityLabels
-        if let sectionLabels = manifest.sectionVisibilityLabels, !sectionLabels.isEmpty {
+        // Get styling from context (built from TreeNode)
+        let styling = context["styling"] as? [String: Any]
+
+        // sectionLabels: prefer TreeNode, fallback to manifest
+        if let treeSectionLabels = styling?["sectionLabels"] as? [String: Any], !treeSectionLabels.isEmpty {
+            templateFields["sectionLabels"] = treeSectionLabels
+        } else if let sectionLabels = manifest.sectionVisibilityLabels, !sectionLabels.isEmpty {
             templateFields["sectionLabels"] = sectionLabels
         }
 
-        // fontSizes from styling section defaults
-        if let stylingSection = manifest.section(for: "styling"),
+        // fontSizes: prefer TreeNode, fallback to manifest
+        if let treeFontSizes = styling?["fontSizes"] as? [String: Any], !treeFontSizes.isEmpty {
+            templateFields["fontSizes"] = treeFontSizes
+        } else if let stylingSection = manifest.section(for: "styling"),
            let defaultContext = stylingSection.defaultContextValue() as? [String: Any],
            let fontSizes = defaultContext["fontSizes"] {
             templateFields["fontSizes"] = fontSizes
