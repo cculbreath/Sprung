@@ -199,10 +199,33 @@ private final class ManifestRenderer {
     private unowned let host: JsonToTree
     private let manifest: TemplateManifest
     private let editorLabels: [String: String]
+    /// Pre-computed set of hidden field paths for quick lookup.
+    /// Includes both direct keys and full paths from each section's hiddenFields.
+    private var hiddenFieldPaths: Set<String> = []
     init(host: JsonToTree, manifest: TemplateManifest) {
         self.host = host
         self.manifest = manifest
         editorLabels = manifest.editorLabels ?? [:]
+        buildHiddenFieldPaths()
+    }
+    private func buildHiddenFieldPaths() {
+        for (sectionKey, section) in manifest.sections {
+            guard let hidden = section.hiddenFields else { continue }
+            for field in hidden {
+                // Store the full path (e.g., "work.description") for lookup
+                hiddenFieldPaths.insert("\(sectionKey).\(field)")
+            }
+        }
+    }
+    /// Checks if a field at the given path should be hidden from the editor.
+    private func isFieldHidden(path: [String]) -> Bool {
+        guard path.count >= 2 else { return false }
+        // For paths like ["work", "0", "description"], extract section and field
+        let sectionKey = path[0]
+        // Get the last component as the field name
+        guard let fieldName = path.last else { return false }
+        // Check if this specific field is hidden for this section
+        return hiddenFieldPaths.contains("\(sectionKey).\(fieldName)")
     }
     func build() -> TreeNode? {
         host.applyManifestBehaviors(using: manifest)
@@ -534,6 +557,10 @@ private final class ManifestRenderer {
         for key in orderedKeys {
             guard let rawValue = dictionary[key] else { continue }
             let fieldPath = path + [key]
+            // Skip hidden fields (template doesn't use this field)
+            if isFieldHidden(path: fieldPath) {
+                continue
+            }
             guard let descriptor = descriptorField(for: key, in: descriptors) else { continue }
             if descriptor.binding?.source == .applicantProfile {
                 continue

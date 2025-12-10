@@ -207,24 +207,31 @@ struct TemplateManifest: Codable {
             case defaultValue = "default"
             case fields
             case behavior
+            case hiddenFields
         }
         let type: Kind
         let defaultValue: JSONValue?
         var fields: [FieldDescriptor]
         var fieldMetadataSource: FieldMetadataSource
         let behavior: Behavior?
+        /// Keys to hide from the tree editor. Use for fields the template doesn't render.
+        /// For example, if a template uses `highlights` but not `description`, add `"description"`
+        /// to hide it from the editor. Supports nested paths like `"custom.location"`.
+        let hiddenFields: [String]?
         init(
             type: Kind,
             defaultValue: JSONValue?,
             fields: [FieldDescriptor] = [],
             fieldMetadataSource: FieldMetadataSource = .declared,
-            behavior: Behavior? = nil
+            behavior: Behavior? = nil,
+            hiddenFields: [String]? = nil
         ) {
             self.type = type
             self.defaultValue = defaultValue
             self.fields = fields
             self.fieldMetadataSource = fieldMetadataSource
             self.behavior = behavior
+            self.hiddenFields = hiddenFields
         }
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -233,6 +240,7 @@ struct TemplateManifest: Codable {
             fields = try container.decodeIfPresent([FieldDescriptor].self, forKey: .fields) ?? []
             fieldMetadataSource = fields.isEmpty ? .synthesized : .declared
             behavior = try container.decodeIfPresent(Behavior.self, forKey: .behavior)
+            hiddenFields = try container.decodeIfPresent([String].self, forKey: .hiddenFields)
         }
         func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
@@ -242,6 +250,7 @@ struct TemplateManifest: Codable {
                 try container.encode(fields, forKey: .fields)
             }
             try container.encodeIfPresent(behavior, forKey: .behavior)
+            try container.encodeIfPresent(hiddenFields, forKey: .hiddenFields)
         }
         mutating func ensureFieldDescriptors(for sectionKey: String) {
             guard fields.isEmpty else { return }

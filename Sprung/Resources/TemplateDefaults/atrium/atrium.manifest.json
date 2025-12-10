@@ -1,4 +1,14 @@
 {
+  "sections": {
+    "work": {
+      "type": "arrayOfObjects",
+      "hiddenFields": ["description", "url"]
+    },
+    "projects": {
+      "type": "arrayOfObjects",
+      "hiddenFields": ["highlights", "startDate", "endDate", "roles", "entity", "type"]
+    }
+  },
   "custom": {
     "fields": [
       {

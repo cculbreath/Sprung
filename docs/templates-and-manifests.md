@@ -148,6 +148,37 @@ Default font sizes for the template. These appear in the Font Sizes panel.
 }
 ```
 
+#### `sections.{sectionName}.hiddenFields`
+
+Hide specific fields from the tree editor that your template doesn't use. This declutters the editor by only showing fields the template actually renders.
+
+```json
+"sections": {
+  "work": {
+    "type": "arrayOfObjects",
+    "hiddenFields": ["description", "url", "location"]
+  },
+  "projects": {
+    "type": "arrayOfObjects",
+    "hiddenFields": ["highlights", "startDate", "endDate", "roles", "entity", "type"]
+  }
+}
+```
+
+**Common fields to consider hiding:**
+
+| Section | Often Unused Fields |
+|---------|---------------------|
+| `work` | `description` (if using `highlights`), `summary` (if using `highlights`), `url`, `location` |
+| `projects` | `highlights` (if using `description`), `startDate`, `endDate`, `roles`, `entity`, `type`, `keywords` |
+| `education` | `url`, `score`, `courses` |
+| `skills` | `level` |
+
+**Why use `hiddenFields`:**
+- Simplifies the editor UI for end users
+- Prevents confusion when users edit fields that don't appear in their resume
+- Template authors know exactly which fields their design uses
+
 ### Custom Section Fields
 
 Define custom fields that aren't part of the standard JSON Resume schema.
@@ -312,7 +343,9 @@ Wrap sections in conditionals that check visibility:
 
 5. **Match `section-visibility` keys to actual sections** - Only include sections your template renders
 
-6. **Test with real data** - Use a complete resume to verify all sections render correctly
+6. **Use `hiddenFields` to declutter the editor** - Hide fields your template doesn't render (e.g., hide `description` if you only use `highlights`)
+
+7. **Test with real data** - Use a complete resume to verify all sections render correctly
 
 ## File Checklist
 
