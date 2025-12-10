@@ -8,8 +8,10 @@ import Mustache
 @MainActor
 class TextResumeGenerator {
     private let templateStore: TemplateStore
-    init(templateStore: TemplateStore) {
+    private let profileProvider: ApplicantProfileProviding
+    init(templateStore: TemplateStore, profileProvider: ApplicantProfileProviding) {
         self.templateStore = templateStore
+        self.profileProvider = profileProvider
     }
     // MARK: - Public Methods
     /// Generate a text resume using the specified template
@@ -48,7 +50,8 @@ class TextResumeGenerator {
         return try ResumeTemplateProcessor.createTemplateContext(from: resume)
     }
     private func preprocessContextForText(_ context: [String: Any], from resume: Resume) -> [String: Any] {
-        var processed = context
+        // First merge ApplicantProfile data into context
+        var processed = mergeApplicantProfile(into: context, for: resume)
         // Normalize contact values and build contactItems
         var contactItems: [String] = []
         if var contact = processed["contact"] as? [String: Any],
@@ -169,5 +172,111 @@ class TextResumeGenerator {
         for warning in warnings {
             Logger.warning("Handlebars compatibility (\(template)): \(warning)")
         }
+    }
+    // MARK: - Applicant Profile Merging
+    private func mergeApplicantProfile(into context: [String: Any], for resume: Resume) -> [String: Any] {
+        guard let template = resume.template,
+              let manifest = TemplateManifestLoader.manifest(for: template) else {
+            return context
+        }
+        let profile = profileProvider.currentProfile()
+        let profileContext = buildApplicantProfileContext(profile: profile, manifest: manifest)
+        var merged = context
+        for (key, value) in profileContext {
+            if var existingDict = merged[key] as? [String: Any],
+               let newDict = value as? [String: Any] {
+                for (subKey, subValue) in newDict {
+                    existingDict[subKey] = subValue
+                }
+                merged[key] = existingDict
+            } else {
+                merged[key] = value
+            }
+        }
+        return merged
+    }
+    private func buildApplicantProfileContext(
+        profile: ApplicantProfile,
+        manifest: TemplateManifest
+    ) -> [String: Any] {
+        var payload: [String: Any] = [:]
+        let bindings = manifest.applicantProfileBindings()
+        for binding in bindings {
+            guard let value = applicantProfileValue(for: binding.binding.path, profile: profile),
+                  !isEmptyValue(value) else { continue }
+            let updatedSection = setProfileValue(
+                value,
+                for: binding.path,
+                existing: payload[binding.section]
+            )
+            payload[binding.section] = updatedSection
+        }
+        return payload
+    }
+    private func applicantProfileValue(for path: [String], profile: ApplicantProfile) -> Any? {
+        guard let first = path.first else { return nil }
+        switch first {
+        case "name":
+            return profile.name.isEmpty ? nil : profile.name
+        case "email":
+            return profile.email.isEmpty ? nil : profile.email
+        case "phone":
+            return profile.phone.isEmpty ? nil : profile.phone
+        case "label":
+            return profile.label.isEmpty ? nil : profile.label
+        case "summary":
+            return profile.summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : profile.summary
+        case "url", "website", "websites":
+            return profile.websites.isEmpty ? nil : profile.websites
+        case "picture", "image":
+            return profile.pictureDataURL()
+        case "address":
+            return profile.address.isEmpty ? nil : profile.address
+        case "city":
+            return profile.city.isEmpty ? nil : profile.city
+        case "region", "state":
+            return profile.state.isEmpty ? nil : profile.state
+        case "postalCode", "zip", "code":
+            return profile.zip.isEmpty ? nil : profile.zip
+        case "countryCode":
+            return profile.countryCode.isEmpty ? nil : profile.countryCode
+        case "location":
+            let remainder = Array(path.dropFirst())
+            return remainder.isEmpty ? nil : applicantProfileValue(for: remainder, profile: profile)
+        default:
+            return nil
+        }
+    }
+    private func isEmptyValue(_ value: Any) -> Bool {
+        if let string = value as? String {
+            return string.isEmpty
+        }
+        if let dict = value as? [String: Any] {
+            return dict.isEmpty
+        }
+        return false
+    }
+    private func setProfileValue(
+        _ value: Any,
+        for path: [String],
+        existing: Any?
+    ) -> Any {
+        guard let first = path.first else { return value }
+        var dictionary = dictionaryValue(from: existing) ?? [:]
+        let remainder = Array(path.dropFirst())
+        if remainder.isEmpty {
+            dictionary[first] = value
+        } else {
+            let current = dictionary[first]
+            dictionary[first] = setProfileValue(value, for: remainder, existing: current)
+        }
+        return dictionary
+    }
+    private func dictionaryValue(from value: Any?) -> [String: Any]? {
+        guard let value else { return nil }
+        if let dict = value as? [String: Any] {
+            return dict
+        }
+        return nil
     }
 }
