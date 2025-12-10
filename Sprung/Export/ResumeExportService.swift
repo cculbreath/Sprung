@@ -17,7 +17,7 @@ class ResumeExportService: ObservableObject {
             templateStore: templateStore,
             profileProvider: applicantProfileStore
         )
-        self.textGenerator = TextResumeGenerator(templateStore: templateStore)
+        self.textGenerator = TextResumeGenerator(templateStore: templateStore, profileProvider: applicantProfileStore)
     }
     func export(for resume: Resume) async throws {
         try await exportNatively(for: resume)

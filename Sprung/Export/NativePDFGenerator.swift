@@ -284,8 +284,12 @@ class NativePDFGenerator: ObservableObject {
     }
     private func preprocessContextForTemplate(_ context: [String: Any], from resume: Resume) -> [String: Any] {
         // Merge ApplicantProfile data back into context
-        guard let template = resume.template,
-              let manifest = TemplateManifestLoader.manifest(for: template) else {
+        guard let template = resume.template else {
+            Logger.warning("NativePDFGenerator: no template for resume, skipping profile merge")
+            return context
+        }
+        guard let manifest = TemplateManifestLoader.manifest(for: template) else {
+            Logger.warning("NativePDFGenerator: no manifest for template \(template.slug), skipping profile merge")
             return context
         }
         let profile = profileProvider.currentProfile()
@@ -325,9 +329,23 @@ class NativePDFGenerator: ObservableObject {
     ) -> [String: Any] {
         var payload: [String: Any] = [:]
         let bindings = manifest.applicantProfileBindings()
+        Logger.debug("NativePDFGenerator: found \(bindings.count) profile bindings for manifest \(manifest.slug)")
+        if bindings.isEmpty {
+            Logger.warning("NativePDFGenerator: NO profile bindings found! Sections: \(manifest.sections.keys.sorted())")
+            if let basicsSection = manifest.sections["basics"] {
+                Logger.warning("NativePDFGenerator: basics section has \(basicsSection.fields.count) fields")
+                for field in basicsSection.fields {
+                    Logger.warning("  - field '\(field.key)' has binding: \(field.binding != nil)")
+                }
+            }
+        }
         for binding in bindings {
             guard let value = applicantProfileValue(for: binding.binding.path, profile: profile),
-                  !isEmptyValue(value) else { continue }
+                  !isEmptyValue(value) else {
+                Logger.debug("NativePDFGenerator: skipping binding \(binding.section).\(binding.path.joined(separator: ".")) - no value")
+                continue
+            }
+            Logger.debug("NativePDFGenerator: applying binding \(binding.section).\(binding.path.joined(separator: "."))")
             let updatedSection = setProfileValue(
                 value,
                 for: binding.path,
@@ -335,6 +353,7 @@ class NativePDFGenerator: ObservableObject {
             )
             payload[binding.section] = updatedSection
         }
+        Logger.debug("NativePDFGenerator: profile context keys = \(payload.keys.sorted())")
         return payload
     }
     private func applicantProfileValue(for path: [String], profile: ApplicantProfile) -> Any? {
