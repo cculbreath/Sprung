@@ -141,6 +141,56 @@ enum LeafStatus: String, Codable, Hashable {
             child.setChildrenAIStatus(to: newStatus)
         }
     }
+
+    // MARK: - Smart Badge Counts
+
+    /// Returns a meaningful count for badge display
+    /// For list containers (skills, work highlights): counts parent containers, not individual items
+    /// For hierarchical review sections: counts at appropriate level
+    var reviewOperationsCount: Int {
+        // If this node itself is selected, count it as 1 operation
+        if status == .aiToReplace {
+            return 1
+        }
+
+        // Otherwise, count selected children intelligently
+        guard let children = children else { return 0 }
+
+        var count = 0
+        for child in children {
+            if child.status == .aiToReplace {
+                // Child is directly selected - count as 1 operation
+                // (even if it has many grandchildren, selecting a parent = 1 operation)
+                count += 1
+            } else if child.aiStatusChildren > 0 {
+                // Child has selected descendants - recurse
+                count += child.reviewOperationsCount
+            }
+        }
+        return count
+    }
+
+    /// Returns a descriptive label for the badge count
+    /// e.g., "3 categories" for skills, "2 positions" for work
+    var reviewOperationsLabel: String? {
+        let count = reviewOperationsCount
+        guard count > 0 else { return nil }
+
+        // Determine appropriate label based on node type
+        switch name.lowercased() {
+        case "skills":
+            return count == 1 ? "1 category" : "\(count) categories"
+        case "work":
+            return count == 1 ? "1 position" : "\(count) positions"
+        case "education":
+            return count == 1 ? "1 school" : "\(count) schools"
+        case "projects":
+            return count == 1 ? "1 project" : "\(count) projects"
+        default:
+            return "\(count)"
+        }
+    }
+
     init(
         name: String, value: String = "", children: [TreeNode]? = nil,
         parent: TreeNode? = nil, inEditor: Bool, status: LeafStatus = LeafStatus.disabled,
@@ -177,11 +227,9 @@ enum LeafStatus: String, Codable, Hashable {
         -> [[String: Any]] {
         var result: [[String: Any]] = []
         let newPath = node.buildTreePath() // Use the instance method
-        // Export node if it's marked for AI replacement OR if it's a title node (even if not for replacement, LLM might need context)
-        // For "Fix Overflow", we are specifically interested in nodes from the "Skills & Expertise" section,
-        // which will be filtered by the caller (extractSkillsForLLM in ResumeReviewService).
-        // This function is more general for AI updates.
-        if node.status == .aiToReplace {
+        // Export node if it's selected for AI revision (directly or via inheritance)
+        // This includes nodes marked .aiToReplace AND nodes whose ancestors are marked
+        if node.isSelectedForAIRevision {
             // First, handle title node content if present (name field)
             if !node.name.isEmpty { // Always export name field as a title node if it's not empty
                 let titleNodeData: [String: Any] = [

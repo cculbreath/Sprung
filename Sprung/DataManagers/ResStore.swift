@@ -38,23 +38,17 @@ final class ResStore: SwiftDataStore {
         if jobApp.status == .new {
             jobApp.status = .inProgress
         }
-        let contextBuilder = ResumeTemplateContextBuilder(
-            experienceDefaultsStore: experienceDefaultsStore
-        )
-        let applicantProfile = applicantProfileStore.currentProfile()
-        guard let context = contextBuilder.buildContext(
-            for: template,
-            applicantProfile: applicantProfile
-        ) else {
-            Logger.error("ResStore.create: Failed to build resume context dictionary for template \(template.slug)")
+        guard let manifest = TemplateManifestLoader.manifest(for: template) else {
+            Logger.error("ResStore.create: No manifest found for template \(template.slug)")
             return nil
         }
-        let manifest = TemplateManifestLoader.manifest(for: template)
-        guard let rootNode = buildTree(
-            for: resume,
-            context: context,
+        let experienceDefaults = experienceDefaultsStore.currentDefaults()
+        let treeBuilder = ExperienceDefaultsToTree(
+            resume: resume,
+            experienceDefaults: experienceDefaults,
             manifest: manifest
-        ) else {
+        )
+        guard let rootNode = treeBuilder.buildTree() else {
             Logger.error("ResStore.create: Failed to build resume tree for template \(template.slug)")
             return nil
         }
@@ -73,21 +67,6 @@ final class ResStore: SwiftDataStore {
             }
         }
         return resume
-    }
-    private func buildTree(
-        for resume: Resume,
-        context: [String: Any],
-        manifest: TemplateManifest?
-    ) -> TreeNode? {
-        let builder = JsonToTree(
-            resume: resume,
-            context: context,
-            manifest: manifest
-        )
-        guard let root = builder.buildTree() else {
-            return nil
-        }
-        return root
     }
     @discardableResult
     func duplicate(_ originalResume: Resume) -> Resume? {
