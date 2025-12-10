@@ -66,7 +66,6 @@ struct SprungApp: App {
                 .environment(appDependencies.navigationState)
                 .environment(appDependencies.resumeExportCoordinator)
                 .environment(appDependencies.templateStore)
-                .environment(appDependencies.templateSeedStore)
                 .environment(appDependencies.experienceDefaultsStore)
                 .environment(appDependencies.careerKeywordStore)
                 .onAppear {

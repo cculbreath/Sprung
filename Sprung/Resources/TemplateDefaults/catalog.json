@@ -7,7 +7,6 @@
       "paths": {
         "html": "aleo/aleo.html",
         "manifest": "aleo/aleo.manifest.json",
-        "seed": "aleo/aleo.seed.json",
         "text": "aleo/aleo.txt"
       },
       "slug": "aleo"
@@ -18,7 +17,6 @@
       "paths": {
         "html": "ethel/ethel.html",
         "manifest": "ethel/ethel.manifest.json",
-        "seed": "ethel/ethel.seed.json",
         "text": "ethel/ethel.txt"
       },
       "slug": "ethel"
@@ -29,7 +27,6 @@
       "paths": {
         "html": "fraunces/fraunces.html",
         "manifest": "fraunces/fraunces.manifest.json",
-        "seed": "fraunces/fraunces.seed.json",
         "text": "fraunces/fraunces.txt"
       },
       "slug": "fraunces"
@@ -40,7 +37,6 @@
       "paths": {
         "html": "atrium/atrium.html",
         "manifest": "atrium/atrium.manifest.json",
-        "seed": "atrium/atrium.seed.json",
         "text": "atrium/atrium.txt"
       },
       "slug": "atrium"
@@ -51,7 +47,6 @@
       "paths": {
         "html": "canopy/canopy.html",
         "manifest": "canopy/canopy.manifest.json",
-        "seed": "canopy/canopy.seed.json",
         "text": "canopy/canopy.txt"
       },
       "slug": "canopy"
@@ -62,7 +57,6 @@
       "paths": {
         "html": "mercury/mercury.html",
         "manifest": "mercury/mercury.manifest.json",
-        "seed": "mercury/mercury.seed.json",
         "text": "mercury/mercury.txt"
       },
       "slug": "mercury"

@@ -8,13 +8,10 @@ struct TemplateEditorEditorColumn: View {
     @Binding var htmlContent: String
     @Binding var textContent: String
     @Binding var manifestContent: String
-    @Binding var seedContent: String
     @Binding var htmlHasChanges: Bool
     @Binding var textHasChanges: Bool
     @Binding var manifestHasChanges: Bool
-    @Binding var seedHasChanges: Bool
     @Binding var manifestValidationMessage: String?
-    @Binding var seedValidationMessage: String?
     @Binding var customFieldWarningMessage: String?
     @Binding var textEditorInsertion: TextEditorInsertionRequest?
     let selectedResume: Resume?
@@ -22,8 +19,6 @@ struct TemplateEditorEditorColumn: View {
     let hasUnsavedChanges: Bool
     let onSaveAndRefresh: () -> Void
     let onValidateManifest: () -> Void
-    let onPromoteSeed: () -> Void
-    let onValidateSeed: () -> Void
     var body: some View {
         VStack(spacing: 0) {
             header()
@@ -72,8 +67,6 @@ struct TemplateEditorEditorColumn: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .manifest:
             manifestEditor()
-        case .seed:
-            seedEditor()
         }
     }
     private func saveButton() -> some View {
@@ -92,21 +85,6 @@ struct TemplateEditorEditorColumn: View {
         .buttonStyle(.borderless)
         .help("Validate manifest JSON")
     }
-    private func promoteSeedButton() -> some View {
-        Button(action: onPromoteSeed) {
-            Image(systemName: "tray.and.arrow.up.fill")
-        }
-        .buttonStyle(.borderless)
-        .disabled(selectedResume == nil)
-        .help("Promote current resume to default values")
-    }
-    private func validateSeedButton() -> some View {
-        Button(action: onValidateSeed) {
-            Image(systemName: "questionmark.diamond")
-        }
-        .buttonStyle(.borderless)
-        .help("Validate default values format")
-    }
     @ViewBuilder
     private func controlsRow() -> some View {
         HStack(spacing: 12) {
@@ -118,10 +96,6 @@ struct TemplateEditorEditorColumn: View {
             case .manifest:
                 validateManifestButton()
                 saveButton()
-            case .seed:
-                saveButton()
-                promoteSeedButton()
-                validateSeedButton()
             }
             Spacer()
         }
@@ -139,29 +113,6 @@ struct TemplateEditorEditorColumn: View {
             TemplateTextEditor(text: $manifestContent) {
                 manifestHasChanges = true
                 manifestValidationMessage = nil
-            }
-            .frame(
-                minWidth: 300,
-                idealWidth: 600,
-                maxWidth: .infinity,
-                minHeight: 400,
-                maxHeight: .infinity
-            )
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-    @ViewBuilder
-    private func seedEditor() -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let message = seedValidationMessage {
-                Text(message)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding([.top, .horizontal])
-            }
-            TemplateTextEditor(text: $seedContent) {
-                seedHasChanges = true
-                seedValidationMessage = nil
             }
             .frame(
                 minWidth: 300,

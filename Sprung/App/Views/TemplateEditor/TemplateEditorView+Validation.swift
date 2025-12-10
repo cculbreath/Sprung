@@ -31,18 +31,7 @@ extension TemplateEditorView {
             return
         }
         let manifestKeys = resolvedManifest.customFieldKeyPaths()
-        let trimmedSeed = seedContent.trimmingCharacters(in: .whitespacesAndNewlines)
-        let seedKeys: Set<String>
-        if trimmedSeed.isEmpty {
-            seedKeys = []
-        } else if let data = seedContent.data(using: .utf8),
-                  let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            seedKeys = TemplateEditorView.collectCustomFieldKeys(from: jsonObject)
-        } else {
-            customFieldWarningMessage = "Fix default values JSON to verify custom fields coverage."
-            return
-        }
-        let definedKeys = manifestKeys.union(seedKeys)
+        let definedKeys = manifestKeys
         guard definedKeys.isEmpty == false else {
             customFieldWarningMessage = nil
             return
@@ -103,9 +92,6 @@ extension TemplateEditorView {
         if manifestHasChanges {
             success = saveManifest() && success
         }
-        if seedHasChanges {
-            success = saveSeed() && success
-        }
         return success
     }
     func performRefresh() {
@@ -126,20 +112,17 @@ extension TemplateEditorView {
         htmlHasChanges = false
         textHasChanges = false
         manifestHasChanges = false
-        seedHasChanges = false
         manifestValidationMessage = nil
-        seedValidationMessage = nil
     }
     func revertAllChanges() {
         discardPendingChanges()
         loadTemplateAssets()
         loadManifest()
-       loadSeed()
-       showOverlay = false
-       overlayPDFDocument = nil
-       overlayFilename = nil
-       overlayPageCount = 0
-       refreshTemplatePreview()
+        showOverlay = false
+        overlayPDFDocument = nil
+        overlayFilename = nil
+        overlayPageCount = 0
+        refreshTemplatePreview()
         refreshCustomFieldWarnings()
     }
     // MARK: - Change Handlers
@@ -151,9 +134,8 @@ extension TemplateEditorView {
             return
         }
         loadTemplateAssets()
-       loadManifest()
-       loadSeed()
-       refreshTemplatePreview()
+        loadManifest()
+        refreshTemplatePreview()
         refreshCustomFieldWarnings()
     }
     func handleTabSelectionChange(newValue: TemplateEditorTab) {
@@ -170,10 +152,6 @@ extension TemplateEditorView {
         case .manifest:
             if manifestContent.isEmpty {
                 loadManifest()
-            }
-        case .seed:
-            if seedContent.isEmpty {
-                loadSeed()
             }
         }
     }

@@ -17,7 +17,6 @@ final class AppEnvironment {
     let llmFacade: LLMFacade
     let debugSettingsStore: DebugSettingsStore
     let templateStore: TemplateStore
-    let templateSeedStore: TemplateSeedStore
     let experienceDefaultsStore: ExperienceDefaultsStore
     let careerKeywordStore: CareerKeywordStore
     let resumeExportCoordinator: ResumeExportCoordinator
@@ -33,7 +32,6 @@ final class AppEnvironment {
         llmFacade: LLMFacade,
         debugSettingsStore: DebugSettingsStore,
         templateStore: TemplateStore,
-        templateSeedStore: TemplateSeedStore,
         experienceDefaultsStore: ExperienceDefaultsStore,
         careerKeywordStore: CareerKeywordStore,
         resumeExportCoordinator: ResumeExportCoordinator,
@@ -48,7 +46,6 @@ final class AppEnvironment {
         self.llmFacade = llmFacade
         self.debugSettingsStore = debugSettingsStore
         self.templateStore = templateStore
-        self.templateSeedStore = templateSeedStore
         self.experienceDefaultsStore = experienceDefaultsStore
         self.careerKeywordStore = careerKeywordStore
         self.resumeExportCoordinator = resumeExportCoordinator

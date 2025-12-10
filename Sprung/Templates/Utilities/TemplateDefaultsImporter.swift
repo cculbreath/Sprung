@@ -5,7 +5,6 @@ struct TemplateDefaultsCatalog: Decodable {
             let html: String
             let text: String
             let manifest: String
-            let seed: String
         }
         let slug: String
         let name: String
@@ -22,15 +21,12 @@ enum TemplateDefaultsImporterError: Error {
 @MainActor
 struct TemplateDefaultsImporter {
     private let templateStore: TemplateStore
-    private let templateSeedStore: TemplateSeedStore
     private let bundle: Bundle
     init(
         templateStore: TemplateStore,
-        templateSeedStore: TemplateSeedStore,
         bundle: Bundle = .main
     ) {
         self.templateStore = templateStore
-        self.templateSeedStore = templateSeedStore
         self.bundle = bundle
     }
     func installDefaultsIfNeeded() {
@@ -56,11 +52,10 @@ struct TemplateDefaultsImporter {
             let html = try readText(relativePath: entry.paths.html, baseDirectory: baseDirectory)
             let text = try readText(relativePath: entry.paths.text, baseDirectory: baseDirectory)
             let manifestString = try readText(relativePath: entry.paths.manifest, baseDirectory: baseDirectory)
-            let seedString = try readText(relativePath: entry.paths.seed, baseDirectory: baseDirectory)
             guard let manifestData = manifestString.data(using: .utf8) else {
                 throw TemplateDefaultsImporterError.manifestEncodingFailed(entry.slug)
             }
-            let template = templateStore.upsertTemplate(
+            templateStore.upsertTemplate(
                 slug: entry.slug,
                 name: entry.name,
                 htmlContent: html,
@@ -69,11 +64,6 @@ struct TemplateDefaultsImporter {
                 markAsDefault: entry.isDefault
             )
             try templateStore.updateManifest(slug: entry.slug, manifestData: manifestData)
-            templateSeedStore.upsertSeed(
-                slug: entry.slug,
-                jsonString: seedString,
-                attachTo: template
-            )
         }
         return missing.count
     }
