@@ -88,29 +88,30 @@ enum TemplateManifestDefaults {
         "references": "References",
         "meta": "Metadata"
     ]
+    // Font sizes scaled by 4/3 for Chrome headless (WKWebView had 4/3 px→pt conversion)
     static let recommendedFontSizes: [String: String] = [
-        "boxTitles": "16pt",
-        "contact": "8pt",
-        "degreeNames": "10pt",
-        "employerName": "8pt",
-        "graduationDate": "9pt",
-        "jobTitles": "11pt",
-        "moreInfo": "8pt",
-        "name": "30pt",
-        "projectText": "7.5pt",
-        "schools": "8pt",
-        "sectionTitle": "12pt",
-        "skillDescriptions": "7.5pt",
-        "skillNames": "8.5pt",
-        "summary": "9pt",
-        "workDates": "8pt",
-        "workHighlights": "7.5pt"
+        "boxTitles": "21pt",       // was 16pt
+        "contact": "11pt",         // was 8pt
+        "degreeNames": "13pt",     // was 10pt
+        "employerName": "11pt",    // was 8pt
+        "graduationDate": "12pt",  // was 9pt
+        "jobTitles": "15pt",       // was 11pt
+        "moreInfo": "11pt",        // was 8pt
+        "name": "40pt",            // was 30pt
+        "projectText": "10pt",     // was 7.5pt
+        "schools": "11pt",         // was 8pt
+        "sectionTitle": "16pt",    // was 12pt
+        "skillDescriptions": "10pt", // was 7.5pt
+        "skillNames": "11pt",      // was 8.5pt
+        "summary": "12pt",         // was 9pt
+        "workDates": "11pt",       // was 8pt
+        "workHighlights": "10pt"   // was 7.5pt
     ]
     static let recommendedPageMargins: [String: String] = [
-        "top": "0.5in",
-        "right": "0.5in",
-        "bottom": "0.5in",
-        "left": "0.5in"
+        "top": "0.375in",
+        "right": "0.375in",
+        "bottom": "0.375in",
+        "left": "0.375in"
     ]
     static func baseManifest(for slug: String) -> TemplateManifest {
         TemplateManifest(
@@ -188,7 +189,7 @@ enum TemplateManifestDefaults {
         let fields: [TemplateManifest.Section.FieldDescriptor] = [
             field("name", input: .text, required: true, binding: ["name"]),
             field("label", input: .text, binding: ["label"]),
-            field("summary", input: .textarea, binding: ["summary"]),
+            field("summary", input: .textarea),
             field("email", input: .email, binding: ["email"]),
             field("phone", input: .phone, binding: ["phone"]),
             field("url", input: .url, binding: ["url"]),
@@ -335,9 +336,14 @@ enum TemplateManifestDefaults {
             ),
             field("includeFonts", input: .toggle, behavior: .includeFonts)
         ]
+        let defaultStyling: [String: Any] = [
+            "fontSizes": recommendedFontSizes,
+            "pageMargins": recommendedPageMargins,
+            "includeFonts": true
+        ]
         return TemplateManifest.Section(
             type: .object,
-            defaultValue: nil,
+            defaultValue: TemplateManifest.JSONValue(value: defaultStyling),
             fields: fields,
             behavior: .styling
         )

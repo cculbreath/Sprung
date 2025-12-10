@@ -11,357 +11,362 @@
         --muted: #4b5d52;
         --paper: #f8f6f0;
         --text: #1b1b1b;
-        --sidebar-width: 32%;
-        --page-width: 8.5in;
-        --page-height: 11in;
-        --content-margin: 0.65in;
-        --content-padding: 0.35in;
       }
       @page {
-        margin: 0;
+        size: 8.5in 11in;
+        margin: 0.6in 0.6in 0.8in 0.65in;
       }
       * { box-sizing: border-box; }
-      body {
+      html, body {
         margin: 0;
         padding: 0;
-        font-family: 'Source Sans 3', 'Helvetica Neue', sans-serif;
-        line-height: 1.3;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
-        background: var(--paper);
+      }
+      body {
+        font-family: 'Source Sans 3', 'Helvetica Neue', sans-serif;
+        line-height: 1.35;
         color: var(--text);
-      }
-      .page {
-        width: var(--page-width);
-        min-height: var(--page-height);
-        margin: 0 auto 12pt;
         background: var(--paper);
-        box-shadow: 0 8pt 20pt rgba(0, 0, 0, 0.08);
-        position: relative;
-        overflow: hidden;
       }
-      /* Full-bleed sidebar background repeated per page */
-      .page::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: var(--sidebar-width);
-        height: var(--page-height);
-        background: #f0ede5;
-        z-index: 0;
+      .pagedjs_page {
+        background: var(--paper) !important;
       }
-      .page-content {
-        position: relative;
-        z-index: 1;
-        padding: var(--content-padding);
-        padding-left: calc(var(--content-padding) + var(--content-margin));
-        padding-right: calc(var(--content-padding) + var(--content-margin));
-        padding-top: calc(var(--content-padding) + var(--content-margin));
-        padding-bottom: calc(var(--content-padding) + var(--content-margin));
+      .resume {
         display: flex;
         flex-direction: column;
-        gap: 10pt;
+        gap: 8pt;
       }
-      .layout {
+      .masthead {
+        border-bottom: 2pt solid var(--accent);
+        padding-bottom: 8pt;
+        margin-bottom: 4pt;
+      }
+      .name {
+        font-family: 'Playfair Display', serif;
+        font-size: 26pt;
+        font-weight: 600;
+        letter-spacing: 0.2pt;
+        color: var(--accent);
+      }
+      .tagline {
+        margin-top: 2pt;
+        font-size: 10pt;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 1.6pt;
+      }
+      .contact-row {
+        margin-top: 6pt;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6pt 14pt;
+        font-size: 9pt;
+        color: var(--muted);
+      }
+      .contact-item {
+        display: flex;
+        align-items: center;
+        gap: 5pt;
+      }
+      .contact-dot {
+        width: 5pt;
+        height: 5pt;
+        background: var(--accent);
+        border-radius: 50%;
+      }
+      .contact-item a {
+        color: var(--muted);
+        text-decoration: none;
+      }
+      .section {
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 6pt;
+      }
+      .section:last-child {
+        border-bottom: none;
+      }
+      .section-title {
+        font-family: 'Playfair Display', serif;
+        font-size: 12pt;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-bottom: 4pt;
+        letter-spacing: 0.5pt;
+        break-after: avoid;
+      }
+      .summary-text {
+        font-size: 10pt;
+        line-height: 1.4;
+      }
+      .entry {
+        margin-top: 6pt;
+        padding-left: 6pt;
+        border-left: 2pt solid var(--accent);
+        break-inside: avoid;
+      }
+      .entry-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 8pt;
+      }
+      .role {
+        font-weight: 700;
+        font-size: 11pt;
+      }
+      .org {
+        font-size: 10pt;
+        color: var(--muted);
+      }
+      .dates {
+        font-size: 9pt;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+      .entry-summary {
+        margin: 3pt 0;
+        font-size: 10pt;
+      }
+      .bullets {
+        margin: 3pt 0 0 0;
+        padding-left: 14pt;
+      }
+      .bullets li {
+        margin-bottom: 2pt;
+        font-size: 10pt;
+        line-height: 1.35;
+      }
+      .skills-grid {
         display: grid;
-        grid-template-columns: var(--sidebar-width) 1fr;
-        gap: 14pt;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6pt 16pt;
       }
-      .masthead { border-bottom: 2pt solid var(--accent); padding-bottom: 8pt; margin-bottom: 8pt; }
-      .name { font-family: 'Playfair Display', serif; font-size: 24pt; font-weight: 600; letter-spacing: 0.2pt; }
-      .tagline { margin-top: 2pt; font-size: 10pt; color: var(--muted); text-transform: uppercase; letter-spacing: 1.6pt; }
-      .contact-row { margin-top: 6pt; display: flex; flex-wrap: wrap; gap: 6pt 14pt; font-size: 9pt; color: var(--muted); }
-      .contact-item { display: flex; align-items: center; gap: 5pt; }
-      .contact-dot { width: 5pt; height: 5pt; background: var(--accent); border-radius: 50%; }
-      .section-title { font-family: 'Playfair Display', serif; font-size: 10.5pt; text-transform: uppercase; color: var(--accent); margin-bottom: 4pt; }
-      .pill-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4pt; }
-      .pill { background: none; border: none; padding: 0; font-size: 9pt; color: var(--text); margin-right: 5pt; }
-      .pill strong { font-weight: 600; }
-      .card { background: #ffffff; border: 1px solid var(--border); border-radius: 6pt; padding: 6pt 8pt; margin-bottom: 6pt; }
-      .card-title { font-weight: 600; font-size: 10.5pt; }
-      .card-subtitle { color: var(--muted); font-size: 9.5pt; margin-top: 1pt; }
-      .meta-line { font-size: 9pt; color: var(--muted); margin-top: 1.5pt; }
-      .block { padding-bottom: 2pt; border-bottom: 1px solid #e6e2d9; }
-      .block:last-child { border-bottom: none; }
-      .block-header { display: flex; justify-content: space-between; align-items: baseline; gap: 8pt; }
-      .block-title { font-family: 'Playfair Display', serif; font-size: 13pt; color: var(--accent); }
-      .entry { margin-top: 5pt; padding-left: 4pt; border-left: 2pt solid var(--accent); }
-      .entry-header { display: flex; justify-content: space-between; align-items: baseline; gap: 8pt; }
-      .role { font-weight: 700; font-size: 11pt; }
-      .org { font-size: 10pt; color: var(--muted); }
-      .dates { font-size: 9pt; color: var(--muted); white-space: nowrap; }
-      .summary-text { margin: 4pt 0 3pt; font-size: 10pt; }
-      .bullets { margin: 3pt 0 3pt 0; padding-left: 12pt; }
-      .bullets li { margin-bottom: 2pt; font-size: 10pt; }
-      .tagline-sm { font-size: 9pt; letter-spacing: 1pt; text-transform: uppercase; color: var(--muted); }
-      /* Avoid splitting individual entries */
-      .main-item, .sidebar-section { break-inside: avoid; }
+      .skill-item {
+        font-size: 9.5pt;
+        break-inside: avoid;
+      }
+      .skill-item strong {
+        font-weight: 600;
+        color: var(--accent);
+      }
+      .edu-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8pt;
+      }
+      .edu-card {
+        background: #ffffff;
+        border: 1px solid var(--border);
+        border-radius: 4pt;
+        padding: 6pt 8pt;
+        break-inside: avoid;
+      }
+      .edu-title {
+        font-weight: 600;
+        font-size: 10pt;
+      }
+      .edu-subtitle {
+        color: var(--muted);
+        font-size: 9pt;
+        margin-top: 1pt;
+      }
+      .edu-dates {
+        font-size: 8.5pt;
+        color: var(--muted);
+        margin-top: 2pt;
+      }
+      .project-entry {
+        margin-top: 6pt;
+        padding-left: 6pt;
+        border-left: 2pt solid var(--accent);
+        break-inside: avoid;
+      }
+      .project-name {
+        font-weight: 700;
+        font-size: 10.5pt;
+      }
+      .project-desc {
+        font-size: 10pt;
+        margin-top: 2pt;
+      }
+      .meta-line {
+        font-size: 9pt;
+        color: var(--muted);
+        margin-top: 2pt;
+      }
+      .highlights-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4pt 12pt;
+        font-size: 9pt;
+      }
+      .highlight-item strong {
+        font-weight: 600;
+      }
     </style>
   </head>
   <body>
-    <!-- Templates for pagination -->
-    <div id="template-root" style="display:none">
-      <div id="header-block" class="masthead">
+    <div class="resume">
+      <header class="masthead">
         {{#hasContent(basics.name)}}<div class="name">{{{basics.name}}}</div>{{/hasContent(basics.name)}}
-        {{#hasContent(custom.jobTitles)}}<div class="tagline">{{ join(custom.jobTitles, ", ") }}</div>{{/hasContent(custom.jobTitles)}}
+        {{#hasContent(custom.jobTitles)}}<div class="tagline">{{ joinBullet(custom.jobTitles) }}</div>{{/hasContent(custom.jobTitles)}}
         <div class="contact-row">
           {{#hasContent(basics.location.city, basics.location.region)}}<div class="contact-item"><span class="contact-dot"></span>{{basics.location.city}}{{#hasContent(basics.location.region)}}, {{basics.location.region}}{{/hasContent(basics.location.region)}}</div>{{/hasContent(basics.location.city, basics.location.region)}}
           {{#hasContent(basics.email)}}<div class="contact-item"><span class="contact-dot"></span><a href="mailto:{{{basics.email}}}">{{{basics.email}}}</a></div>{{/hasContent(basics.email)}}
           {{#hasContent(basics.phone)}}<div class="contact-item"><span class="contact-dot"></span>{{basics.phone}}</div>{{/hasContent(basics.phone)}}
           {{#hasContent(basics.url)}}<div class="contact-item"><span class="contact-dot"></span><a href="https://{{{basics.url}}}">{{{basics.url}}}</a></div>{{/hasContent(basics.url)}}
         </div>
-      </div>
-      <div id="sidebar-block">
-        {{#hasContent(basics.summary)}}
-        <div class="sidebar-section">
-          <div class="section-title">Profile</div>
-          <div class="summary-text">{{{basics.summary}}}</div>
-        </div>
-        {{/hasContent(basics.summary)}}
+      </header>
 
-        {{#hasContent(skills)}}
-        <div class="sidebar-section">
-          <div class="section-title">{{{custom.sectionLabels.skills}}}</div>
-          <ul class="pill-list">
-            {{#skills}}
-            <li class="pill"><strong>{{{name}}}</strong>{{#hasContent(keywords)}} · {{ join(keywords, ", ") }}{{/hasContent(keywords)}}</li>
-            {{/skills}}
+      {{#hasContent(basics.summary)}}
+      <section class="section">
+        <div class="section-title">Profile</div>
+        <div class="summary-text">{{{basics.summary}}}</div>
+      </section>
+      {{/hasContent(basics.summary)}}
+
+      {{#hasContent(skills)}}
+      <section class="section">
+        <div class="section-title">{{{custom.sectionLabels.skills}}}</div>
+        <div class="skills-grid">
+          {{#skills}}
+          <div class="skill-item"><strong>{{{name}}}</strong>{{#hasContent(keywords)}} · {{ join(keywords, ", ") }}{{/hasContent(keywords)}}</div>
+          {{/skills}}
+        </div>
+      </section>
+      {{/hasContent(skills)}}
+
+      {{#hasContent(work)}}
+      <section class="section">
+        <div class="section-title">{{{custom.sectionLabels.work}}}</div>
+        {{#work}}
+        <div class="entry">
+          <div class="entry-header">
+            <div>
+              <div class="role">{{{position}}}</div>
+              <div class="org">{{{name}}}{{#hasContent(location)}} · {{location}}{{/hasContent(location)}}</div>
+            </div>
+            <div class="dates">{{ formatDate(startDate) }}{{#hasContent(endDate)}} – {{ formatDate(endDate) }}{{/hasContent(endDate)}}</div>
+          </div>
+          {{#hasContent(summary)}}<div class="entry-summary">{{{summary}}}</div>{{/hasContent(summary)}}
+          {{#hasContent(highlights)}}
+          <ul class="bullets">
+            {{#highlights}}<li>{{.}}</li>{{/highlights}}
           </ul>
+          {{/hasContent(highlights)}}
         </div>
-        {{/hasContent(skills)}}
+        {{/work}}
+      </section>
+      {{/hasContent(work)}}
 
-        {{#hasContent(education)}}
-        <div class="sidebar-section">
-          <div class="section-title">{{{custom.sectionLabels.education}}}</div>
+      {{#hasContent(projects)}}
+      <section class="section">
+        <div class="section-title">{{{custom.sectionLabels.projects}}}</div>
+        {{#projects}}
+        <div class="project-entry">
+          <div class="project-name">{{{name}}}{{#hasContent(url)}} · {{{url}}}{{/hasContent(url)}}</div>
+          {{#hasContent(description)}}<div class="project-desc">{{{description}}}</div>{{/hasContent(description)}}
+          {{#hasContent(highlights)}}
+          <ul class="bullets">
+            {{#highlights}}<li>{{.}}</li>{{/highlights}}
+          </ul>
+          {{/hasContent(highlights)}}
+          {{#hasContent(keywords)}}<div class="meta-line">{{ join(keywords, ", ") }}</div>{{/hasContent(keywords)}}
+        </div>
+        {{/projects}}
+      </section>
+      {{/hasContent(projects)}}
+
+      {{#hasContent(education)}}
+      <section class="section">
+        <div class="section-title">{{{custom.sectionLabels.education}}}</div>
+        <div class="edu-grid">
           {{#education}}
-          <div class="card">
-            <div class="card-title">{{{institution}}}</div>
-            <div class="card-subtitle">
+          <div class="edu-card">
+            <div class="edu-title">{{{institution}}}</div>
+            <div class="edu-subtitle">
               {{#hasContent(custom.degree)}}{{custom.degree}}{{/hasContent(custom.degree)}}{{^hasContent(custom.degree)}}{{#hasContent(studyType)}}{{studyType}}{{/hasContent(studyType)}}{{/hasContent(custom.degree)}}
               {{#hasContent(area)}} · {{area}}{{/hasContent(area)}}
             </div>
-            <div class="meta-line">{{ formatDate(startDate) }}{{#hasContent(endDate)}} – {{ formatDate(endDate) }}{{/hasContent(endDate)}}</div>
-            {{#hasContent(courses)}}
-            <div class="meta-line">{{ join(courses, ", ") }}</div>
-            {{/hasContent(courses)}}
+            <div class="edu-dates">{{ formatDate(startDate) }}{{#hasContent(endDate)}} – {{ formatDate(endDate) }}{{/hasContent(endDate)}}</div>
+            {{#hasContent(courses)}}<div class="meta-line">{{ join(courses, ", ") }}</div>{{/hasContent(courses)}}
           </div>
           {{/education}}
         </div>
-        {{/hasContent(education)}}
+      </section>
+      {{/hasContent(education)}}
 
-        {{#hasContent(languages, interests)}}
-        <div class="sidebar-section">
-          <div class="section-title">Highlights</div>
+      {{#hasContent(volunteer)}}
+      <section class="section">
+        <div class="section-title">{{{custom.sectionLabels.volunteer}}}</div>
+        {{#volunteer}}
+        <div class="entry">
+          <div class="entry-header">
+            <div>
+              <div class="role">{{{organization}}}</div>
+              {{#hasContent(position)}}<div class="org">{{{position}}}</div>{{/hasContent(position)}}
+            </div>
+            <div class="dates">{{ formatDate(startDate) }}{{#hasContent(endDate)}} – {{ formatDate(endDate) }}{{/hasContent(endDate)}}</div>
+          </div>
+          {{#hasContent(summary)}}<div class="entry-summary">{{{summary}}}</div>{{/hasContent(summary)}}
+        </div>
+        {{/volunteer}}
+      </section>
+      {{/hasContent(volunteer)}}
+
+      {{#hasContent(awards, certificates, publications)}}
+      <section class="section">
+        <div class="section-title">{{{custom.sectionLabels.awards}}}</div>
+        {{#awards}}
+        <div class="entry">
+          <div class="role">{{title}}</div>
+          <div class="org">{{awarder}}</div>
+          <div class="dates">{{ formatDate(date) }}</div>
+          {{#hasContent(summary)}}<div class="entry-summary">{{{summary}}}</div>{{/hasContent(summary)}}
+        </div>
+        {{/awards}}
+        {{#certificates}}
+        <div class="entry">
+          <div class="role">{{name}}</div>
+          <div class="org">{{issuer}}</div>
+          <div class="dates">{{ formatDate(date) }}</div>
+        </div>
+        {{/certificates}}
+        {{#publications}}
+        <div class="entry">
+          <div class="role">{{name}}</div>
+          <div class="org">{{publisher}}</div>
+          <div class="dates">{{ formatDate(releaseDate) }}</div>
+          {{#hasContent(summary)}}<div class="entry-summary">{{{summary}}}</div>{{/hasContent(summary)}}
+          {{#hasContent(url)}}<div class="meta-line">{{{url}}}</div>{{/hasContent(url)}}
+        </div>
+        {{/publications}}
+      </section>
+      {{/hasContent(awards, certificates, publications)}}
+
+      {{#hasContent(languages, interests)}}
+      <section class="section">
+        <div class="section-title">Additional</div>
+        <div class="highlights-row">
           {{#hasContent(languages)}}
-          <div class="meta-line"><strong>Languages:</strong> {{#languages}}<span class="pill">{{language}}{{#hasContent(fluency)}} · {{fluency}}{{/hasContent(fluency)}}</span>{{/languages}}</div>
+          <div class="highlight-item"><strong>Languages:</strong> {{#languages}}{{language}}{{#hasContent(fluency)}} ({{fluency}}){{/hasContent(fluency)}}{{^last}}, {{/last}}{{/languages}}</div>
           {{/hasContent(languages)}}
           {{#hasContent(interests)}}
-          <div class="meta-line"><strong>Interests:</strong> {{#interests}}<span class="pill">{{name}}{{#hasContent(keywords)}} · {{ join(keywords, ", ") }}{{/hasContent(keywords)}}</span>{{/interests}}</div>
+          <div class="highlight-item"><strong>Interests:</strong> {{#interests}}{{name}}{{^last}}, {{/last}}{{/interests}}</div>
           {{/hasContent(interests)}}
         </div>
-        {{/hasContent(languages, interests)}}
-      </div>
-
-      <div id="main-items">
-        {{#hasContent(work)}}
-        <div class="main-item block">
-          <div class="block-header">
-            <div class="block-title">{{{custom.sectionLabels.work}}}</div>
-            <div class="tagline-sm">Experience</div>
-          </div>
-          {{#work}}
-          <div class="entry">
-            <div class="entry-header">
-              <div>
-                <div class="role">{{{position}}}</div>
-                <div class="org">{{{name}}}{{#hasContent(location)}} · {{location}}{{/hasContent(location)}}</div>
-              </div>
-              <div class="dates">{{ formatDate(startDate) }}{{#hasContent(endDate)}} – {{ formatDate(endDate) }}{{/hasContent(endDate)}}</div>
-            </div>
-            {{#hasContent(summary)}}<div class="summary-text">{{{summary}}}</div>{{/hasContent(summary)}}
-            {{#hasContent(highlights)}}
-            <ul class="bullets">
-              {{#highlights}}<li>{{.}}</li>{{/highlights}}
-            </ul>
-            {{/hasContent(highlights)}}
-          </div>
-          {{/work}}
-        </div>
-        {{/hasContent(work)}}
-
-        {{#hasContent(projects)}}
-        <div class="main-item block">
-          <div class="block-header">
-            <div class="block-title">{{{custom.sectionLabels.projects}}}</div>
-            <div class="tagline-sm">Selected Work</div>
-          </div>
-          {{#projects}}
-          <div class="entry">
-            <div class="role">{{{name}}}{{#hasContent(url)}} · {{{url}}}{{/hasContent(url)}}</div>
-            {{#hasContent(description)}}<div class="summary-text">{{{description}}}</div>{{/hasContent(description)}}
-            {{#hasContent(highlights)}}
-            <ul class="bullets">
-              {{#highlights}}<li>{{.}}</li>{{/highlights}}
-            </ul>
-            {{/hasContent(highlights)}}
-            {{#hasContent(keywords)}}<div class="meta-line">{{ join(keywords, ", ") }}</div>{{/hasContent(keywords)}}
-          </div>
-          {{/projects}}
-        </div>
-        {{/hasContent(projects)}}
-
-        {{#hasContent(volunteer)}}
-        <div class="main-item block">
-          <div class="block-header">
-            <div class="block-title">{{{custom.sectionLabels.volunteer}}}</div>
-            <div class="tagline-sm">Community</div>
-          </div>
-          {{#volunteer}}
-          <div class="entry">
-            <div class="entry-header">
-              <div class="role">{{{organization}}}</div>
-              <div class="dates">{{ formatDate(startDate) }}{{#hasContent(endDate)}} – {{ formatDate(endDate) }}{{/hasContent(endDate)}}</div>
-            </div>
-            {{#hasContent(position)}}<div class="org">{{{position}}}</div>{{/hasContent(position)}}
-            {{#hasContent(summary)}}<div class="summary-text">{{{summary}}}</div>{{/hasContent(summary)}}
-          </div>
-          {{/volunteer}}
-        </div>
-        {{/hasContent(volunteer)}}
-
-        {{#hasContent(awards, certificates, publications)}}
-        <div class="main-item block">
-          <div class="block-header">
-            <div class="block-title">Credentials</div>
-            <div class="tagline-sm">Recognition</div>
-          </div>
-          {{#awards}}
-          <div class="entry">
-            <div class="role">{{title}}</div>
-            <div class="org">{{awarder}}</div>
-            <div class="dates">{{ formatDate(date) }}</div>
-            {{#hasContent(summary)}}<div class="summary-text">{{{summary}}}</div>{{/hasContent(summary)}}
-          </div>
-          {{/awards}}
-          {{#certificates}}
-          <div class="entry">
-            <div class="role">{{name}}</div>
-            <div class="org">{{issuer}}</div>
-            <div class="dates">{{ formatDate(date) }}</div>
-          </div>
-          {{/certificates}}
-          {{#publications}}
-          <div class="entry">
-            <div class="role">{{name}}</div>
-            <div class="org">{{publisher}}</div>
-            <div class="dates">{{ formatDate(releaseDate) }}</div>
-            {{#hasContent(summary)}}<div class="summary-text">{{{summary}}}</div>{{/hasContent(summary)}}
-            {{#hasContent(url)}}<div class="meta-line">{{{url}}}</div>{{/hasContent(url)}}
-          </div>
-          {{/publications}}
-        </div>
-        {{/hasContent(awards, certificates, publications)}}
-      </div>
+      </section>
+      {{/hasContent(languages, interests)}}
     </div>
-
-    <div id="pages"></div>
-
+    <script>window.PagedConfig = { auto: false };</script>
+    <script src="paged.polyfill.js"></script>
     <script>
-      document.addEventListener('DOMContentLoaded', paginateCanopy);
-
-      function toPx(value) {
-        const temp = document.createElement('div');
-        temp.style.position = 'absolute';
-        temp.style.width = value;
-        document.body.appendChild(temp);
-        const px = temp.getBoundingClientRect().width;
-        document.body.removeChild(temp);
-        return px;
-      }
-
-      function paginateCanopy() {
-        const pagesContainer = document.getElementById('pages');
-        pagesContainer.innerHTML = '';
-
-        const root = document.getElementById('template-root');
-        const headerTemplate = root.querySelector('#header-block');
-        const sidebarItems = Array.from(root.querySelectorAll('#sidebar-block > .sidebar-section'));
-        const mainItems = Array.from(root.querySelectorAll('#main-items > .main-item'));
-
-        const pageHeight = toPx(getComputedStyle(document.documentElement).getPropertyValue('--page-height'));
-        const contentMargin = toPx(getComputedStyle(document.documentElement).getPropertyValue('--content-margin'));
-        const contentPadding = toPx(getComputedStyle(document.documentElement).getPropertyValue('--content-padding'));
-
-        const availableHeight = pageHeight - (2 * contentMargin) - (2 * contentPadding);
-
-        const sidebarQueue = [...sidebarItems];
-        const mainQueue = [...mainItems];
-
-        while (sidebarQueue.length || mainQueue.length) {
-          const page = createPage(headerTemplate);
-          const pageContent = page.querySelector('.page-content');
-          const sidebar = page.querySelector('.sidebar');
-          const main = page.querySelector('.content-main');
-
-          // Fill sidebar
-          while (sidebarQueue.length) {
-            const item = sidebarQueue[0].cloneNode(true);
-            sidebar.appendChild(item);
-            if (pageContent.scrollHeight > availableHeight) {
-              sidebar.removeChild(item);
-              break;
-            } else {
-              sidebarQueue.shift();
-            }
-          }
-
-          // Fill main items
-          while (mainQueue.length) {
-            const item = mainQueue[0].cloneNode(true);
-            main.appendChild(item);
-            if (pageContent.scrollHeight > availableHeight) {
-              main.removeChild(item);
-              break;
-            } else {
-              mainQueue.shift();
-            }
-          }
-
-          pagesContainer.appendChild(page);
-
-          // Guard against infinite loop if a single item is too tall
-          if (mainQueue.length && main.childElementCount === 0) {
-            // Force add the large item and continue
-            main.appendChild(mainQueue.shift().cloneNode(true));
-            pagesContainer.appendChild(page);
-          }
-        }
-      }
-
-      function createPage(headerTemplate) {
-        const page = document.createElement('div');
-        page.className = 'page';
-        const pageContent = document.createElement('div');
-        pageContent.className = 'page-content';
-
-        pageContent.appendChild(headerTemplate.cloneNode(true));
-
-        const layout = document.createElement('div');
-        layout.className = 'layout';
-
-        const sidebar = document.createElement('aside');
-        sidebar.className = 'sidebar';
-
-        const main = document.createElement('main');
-        main.className = 'content-main';
-
-        layout.appendChild(sidebar);
-        layout.appendChild(main);
-        pageContent.appendChild(layout);
-        page.appendChild(pageContent);
-        return page;
-      }
+      window.addEventListener('load', async function() {
+        const paged = new Paged.Previewer();
+        await paged.preview();
+        document.body.setAttribute('data-paged-ready', 'true');
+      });
     </script>
   </body>
 </html>

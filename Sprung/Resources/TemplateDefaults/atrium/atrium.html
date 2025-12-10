@@ -15,12 +15,13 @@
         --panel: #f8f8f8;
       }
       @page {
-        size: letter portrait;
-        margin: 0.65in;
+        size: 8.5in 11in;
+        margin: 0.5in;
       }
       * { box-sizing: border-box; }
       body {
         margin: 0;
+        padding: 0;
         background: var(--paper);
         color: var(--text);
         font-family: 'Crimson Pro', Georgia, serif;
@@ -29,17 +30,17 @@
         print-color-adjust: exact;
       }
       .page {
-        max-width: 6.9in;
-        margin: 0 auto;
-        padding: 0.25in 0.35in;
+        width: 100%;
+        margin: 0;
+        padding: 0;
       }
       .header {
         display: grid;
         grid-template-columns: 1.6fr 1fr;
-        gap: 12pt;
+        gap: 7pt;
         align-items: end;
-        padding-bottom: 12pt;
-        border-bottom: 2px solid var(--accent);
+        padding-bottom: 7pt;
+        border-bottom: 2pt solid var(--accent);
       }
       .name {
         font-family: 'Space Grotesk', 'Helvetica Neue', sans-serif;
@@ -50,79 +51,80 @@
       .tagline {
         font-family: 'Space Grotesk', sans-serif;
         text-transform: uppercase;
-        letter-spacing: 1.4pt;
-        font-size: 9.8pt;
+        letter-spacing: 1.5pt;
+        font-size: 10.0pt;
         color: var(--muted);
-        margin-top: 4pt;
+        margin-top: 2pt;
       }
       .contact {
         display: flex;
         flex-wrap: wrap;
-        gap: 6pt 12pt;
+        gap: 3pt 8pt;
         justify-content: flex-end;
         font-family: 'Space Grotesk', sans-serif;
         font-size: 9pt;
         color: var(--muted);
       }
-      .contact span { display: inline-flex; align-items: center; gap: 5pt; }
-      .dot { width: 6pt; height: 6pt; border-radius: 50%; background: var(--accent); display: inline-block; }
+      .contact span { display: inline-flex; align-items: center; gap: 5.5pt; }
+      .dot { width: 5.5pt; height: 5.5pt; border-radius: 50%; background: var(--accent); display: inline-block; }
       .body {
         display: grid;
-        grid-template-columns: 2.4in 1fr;
-        gap: 12pt;
-        margin-top: 12pt;
+        grid-template-columns: 1.85in 1fr;
+        gap: 9pt;
+        margin-top: 8pt;
       }
       .panel {
         background: var(--panel);
         border: 1px solid var(--border);
-        border-radius: 10pt;
-        padding: 10pt 12pt;
+        border-radius: 8pt;
+        padding: 7pt 9pt;
+        break-inside: avoid;
       }
       .section-title {
         font-family: 'Space Grotesk', sans-serif;
         text-transform: uppercase;
-        letter-spacing: 1.1pt;
-        font-size: 10.8pt;
+        letter-spacing: 1.0pt;
+        font-size: 12pt;
         color: var(--accent-dark);
-        margin-bottom: 6pt;
+        margin-bottom: 4pt;
       }
       .summary-text { font-size: 10pt; }
       .list-plain { list-style: none; padding: 0; margin: 0; }
       .pill {
         display: inline-block;
-        padding: 5pt 9pt;
-        border-radius: 999pt;
-        border: 1px solid var(--border);
-        background: #fff;
+        padding: 0;
+        border: none;
+        background: none;
         font-family: 'Space Grotesk', sans-serif;
-        font-size: 8.8pt;
-        margin: 2pt 3pt 0 0;
+        font-size: 9pt;
+        margin: 0 4pt 0 0;
       }
       .edu-card {
-        border-left: 3pt solid var(--accent);
-        padding-left: 10pt;
-        margin-bottom: 10pt;
+        border-left: 2.5pt solid var(--accent);
+        padding-left: 8pt;
+        margin-bottom: 6pt;
+        break-inside: avoid;
       }
-      .edu-title { font-weight: 700; font-size: 10.5pt; }
-      .edu-meta { color: var(--muted); font-size: 9.5pt; margin-top: 2pt; }
+      .edu-title { font-weight: 700; font-size: 10pt; }
+      .edu-meta { color: var(--muted); font-size: 9pt; margin-top: 1pt; }
       .main {
         display: flex;
         flex-direction: column;
-        gap: 10pt;
+        gap: 7pt;
       }
       .block {
-        border-left: 3pt solid var(--accent);
-        padding-left: 12pt;
+        border-left: 2.5pt solid var(--accent);
+        padding-left: 10pt;
       }
-      .block + .block { margin-top: 10pt; }
+      .block + .block { margin-top: 6pt; }
       .block-head {
         display: flex;
         justify-content: space-between;
         align-items: baseline;
-        gap: 10pt;
-        padding-bottom: 4pt;
+        gap: 8pt;
+        padding-bottom: 3pt;
         border-bottom: 1px solid var(--border);
-        margin-bottom: 6pt;
+        margin-bottom: 4pt;
       }
       .block-title {
         font-family: 'Space Grotesk', sans-serif;
@@ -130,37 +132,37 @@
         font-weight: 700;
         letter-spacing: 0.4pt;
       }
-      .block-sub { font-family: 'Space Grotesk', sans-serif; font-size: 8.6pt; color: var(--muted); letter-spacing: 0.8pt; }
-      .entry { margin-bottom: 10pt; }
+      .block-sub { font-family: 'Space Grotesk', sans-serif; font-size: 8.5pt; color: var(--muted); letter-spacing: 0.8pt; }
+      .entry { margin-bottom: 5pt; break-inside: avoid-page; }
       .entry-head {
         display: flex;
         justify-content: space-between;
         align-items: baseline;
-        gap: 10pt;
+        gap: 8pt;
       }
       .role { font-weight: 700; font-size: 11pt; }
       .org { color: var(--muted); font-size: 10pt; }
       .dates { font-size: 9pt; color: var(--muted); white-space: nowrap; }
-      .bullets { margin: 6pt 0 0 0; padding-left: 14pt; }
-      .bullets li { margin-bottom: 3pt; font-size: 10pt; }
+      .bullets { margin: 3pt 0 0 0; padding-left: 12pt; }
+      .bullets li { margin-bottom: 1.25pt; font-size: 10pt; }
       .project-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(2.5in, 1fr));
-        gap: 10pt;
+        grid-template-columns: repeat(auto-fit, minmax(1.9in, 1fr));
+        gap: 6pt;
       }
       .project-card {
         border: 1px solid var(--border);
-        border-radius: 8pt;
-        padding: 8pt 10pt;
+        border-radius: 6pt;
+        padding: 6pt 8pt;
         background: #fff;
       }
-      .project-name { font-weight: 700; font-size: 10.5pt; }
-      .project-desc { font-size: 9.5pt; margin-top: 4pt; }
+      .project-name { font-weight: 700; font-size: 10pt; }
+      .project-desc { font-size: 10pt; margin-top: 3pt; }
       .meta { color: var(--muted); font-size: 9pt; }
       .two-col {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(2.3in, 1fr));
-        gap: 8pt;
+        grid-template-columns: repeat(auto-fit, minmax(1.7in, 1fr));
+        gap: 6pt;
       }
     </style>
   </head>
@@ -189,7 +191,7 @@
           {{/hasContent(basics.summary)}}
 
           {{#hasContent(skills)}}
-          <div class="panel" style="margin-top: 10pt;">
+          <div class="panel" style="margin-top: 8pt;">
             <div class="section-title">{{{custom.sectionLabels.skills}}}</div>
             <div>
               {{#skills}}
@@ -200,14 +202,14 @@
           {{/hasContent(skills)}}
 
           {{#hasContent(education)}}
-          <div class="panel" style="margin-top: 10pt;">
+          <div class="panel" style="margin-top: 8pt;">
             <div class="section-title">{{{custom.sectionLabels.education}}}</div>
             {{#education}}
             <div class="edu-card">
               <div class="edu-title">{{{institution}}}</div>
               <div class="edu-meta">{{studyType}}{{#hasContent(area)}} · {{area}}{{/hasContent(area)}} · {{ formatDate(startDate) }}{{#hasContent(endDate)}} – {{ formatDate(endDate) }}{{/hasContent(endDate)}}</div>
               {{#hasContent(courses)}}
-              <div style="margin-top:4pt;">
+              <div style="margin-top:3pt;">
                 {{#courses}}<span class="pill">{{.}}</span>{{/courses}}
               </div>
               {{/hasContent(courses)}}
@@ -217,10 +219,10 @@
           {{/hasContent(education)}}
 
           {{#hasContent(languages, interests)}}
-          <div class="panel" style="margin-top: 10pt;">
+          <div class="panel" style="margin-top: 8pt;">
             <div class="section-title">Highlights</div>
             {{#hasContent(languages)}}
-            <div style="margin-bottom:6pt;"><strong>Languages:</strong> {{#languages}}<span class="pill">{{language}}{{#hasContent(fluency)}} · {{fluency}}{{/hasContent(fluency)}}</span>{{/languages}}</div>
+            <div style="margin-bottom:5pt;"><strong>Languages:</strong> {{#languages}}<span class="pill">{{language}}{{#hasContent(fluency)}} · {{fluency}}{{/hasContent(fluency)}}</span>{{/languages}}</div>
             {{/hasContent(languages)}}
             {{#hasContent(interests)}}
             <div><strong>Interests:</strong> {{#interests}}<span class="pill">{{name}}{{#hasContent(keywords)}} · {{ join(keywords, ', ') }}{{/hasContent(keywords)}}</span>{{/interests}}</div>
@@ -245,7 +247,7 @@
                 </div>
                 <div class="dates">{{ formatDate(startDate) }}{{#hasContent(endDate)}} – {{ formatDate(endDate) }}{{/hasContent(endDate)}}</div>
               </div>
-              {{#hasContent(summary)}}<div class="summary-text" style="margin-top:4pt;">{{{summary}}}</div>{{/hasContent(summary)}}
+              {{#hasContent(summary)}}<div class="summary-text" style="margin-top:3pt;">{{{summary}}}</div>{{/hasContent(summary)}}
               {{#hasContent(highlights)}}
               <ul class="bullets">
                 {{#highlights}}
@@ -292,7 +294,7 @@
                   </div>
                   <div class="dates">{{ formatDate(startDate) }}{{#hasContent(endDate)}} – {{ formatDate(endDate) }}{{/hasContent(endDate)}}</div>
                 </div>
-                {{#hasContent(summary)}}<div class="summary-text" style="margin-top:4pt;">{{{summary}}}</div>{{/hasContent(summary)}}
+                {{#hasContent(summary)}}<div class="summary-text" style="margin-top:3pt;">{{{summary}}}</div>{{/hasContent(summary)}}
               </div>
               {{/volunteer}}
             </div>
@@ -311,7 +313,7 @@
                 <div class="role">{{title}}</div>
                 <div class="org">{{awarder}}</div>
                 <div class="dates">{{ formatDate(date) }}</div>
-                {{#hasContent(summary)}}<div class="summary-text" style="margin-top:4pt;">{{{summary}}}</div>{{/hasContent(summary)}}
+                {{#hasContent(summary)}}<div class="summary-text" style="margin-top:3pt;">{{{summary}}}</div>{{/hasContent(summary)}}
               </div>
               {{/awards}}
               {{#certificates}}
@@ -327,7 +329,7 @@
                 <div class="role">{{name}}</div>
                 <div class="org">{{publisher}}</div>
                 <div class="dates">{{ formatDate(releaseDate) }}</div>
-                {{#hasContent(summary)}}<div class="summary-text" style="margin-top:4pt;">{{{summary}}}</div>{{/hasContent(summary)}}
+                {{#hasContent(summary)}}<div class="summary-text" style="margin-top:3pt;">{{{summary}}}</div>{{/hasContent(summary)}}
               </div>
               {{/publications}}
             </div>

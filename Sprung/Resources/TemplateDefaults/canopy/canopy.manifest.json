@@ -12,6 +12,7 @@
         "key": "moreInfo"
       },
       {
+        "behavior": "sectionLabels",
         "children": [
           {
             "input": "text",
@@ -74,7 +75,8 @@
     "publications",
     "languages",
     "interests",
-    "custom",
+    "custom.jobTitles",
+    "custom.moreInfo",
     "styling"
   ],
   "section-visibility": {
@@ -117,25 +119,31 @@
     "styling"
   ],
   "styling": {
-    "fontSizes": {
-      "boxTitles": "16pt",
-      "contact": "9pt",
+      "fontSizes": {
+      "boxTitles": "13pt",
+      "contact": "10pt",
       "degreeNames": "11pt",
       "employerName": "11pt",
       "moreInfo": "10pt",
-      "name": "28pt",
+      "name": "24pt",
       "projectText": "10pt",
       "schools": "10pt",
       "sectionTitle": "13pt",
-      "skillDescriptions": "9pt",
+      "skillDescriptions": "10pt",
       "skillNames": "10pt",
       "summary": "10pt",
-      "workDates": "9pt",
+      "workDates": "10pt",
       "workHighlights": "10pt"
     }
   },
   "transparentKeys": [
     "basics",
     "custom"
-  ]
+  ],
+  "editorLabels": {
+    "basics": "Contact Info",
+    "basics.summary": "Professional Summary",
+    "custom.jobTitles": "Job Titles",
+    "custom.moreInfo": "Additional Info"
+  }
 }

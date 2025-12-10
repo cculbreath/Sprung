@@ -166,7 +166,12 @@ final class ResumeDetailVM {
         )
     }
     func sectionVisibilityLabel(for key: String) -> String {
-        sectionVisibilityLabels[key] ?? key.replacingOccurrences(of: "-", with: " ").capitalized
+        // Prefer custom section labels from resume data (custom.sectionLabels)
+        if let customLabel = resume.keyLabels[key], !customLabel.isEmpty {
+            return customLabel
+        }
+        // Fall back to manifest-defined labels
+        return sectionVisibilityLabels[key] ?? key.replacingOccurrences(of: "-", with: " ").capitalized
     }
     func sectionVisibilityKeysOrdered() -> [String] {
         sectionVisibilityKeys

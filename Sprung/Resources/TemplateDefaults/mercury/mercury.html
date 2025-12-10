@@ -15,72 +15,71 @@
         --text: #1f2430;
       }
       @page {
-        size: letter portrait;
-        margin: 0.65in;
+        size: 8.5in 11in;
+        margin: 0.5in;
       }
       * { box-sizing: border-box; }
       body {
         margin: 0;
-        background: var(--bg);
+        padding: 0;
+        background: var(--paper);
         color: var(--text);
         font-family: 'DM Sans', 'Helvetica Neue', sans-serif;
-        line-height: 1.4;
+        line-height: 1.3;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }
       .page {
-        max-width: 6.9in;
-        margin: 0 auto;
+        width: 100%;
+        margin: 0;
         background: var(--paper);
-        border: 1px solid var(--border);
-        box-shadow: 0 10pt 30pt rgba(0,0,0,0.06);
-        overflow: hidden;
-        padding: 0.25in 0.35in;
+        padding: 0;
       }
       .banner {
         background: linear-gradient(120deg, var(--accent) 0%, #0b2545 55%, #0a1f3d 100%);
         color: #f7f9ff;
-        padding: 20pt 24pt 16pt;
+        padding: 48pt 52pt 18pt;
+        margin: -0.5in -0.5in 0 -0.5in;
       }
       .name {
         font-family: 'DM Serif Display', serif;
-        font-size: 26pt;
-        letter-spacing: 0.3pt;
+        font-size: 20pt;
+        letter-spacing: 0.5pt;
         margin: 0;
       }
       .tagline {
-        margin-top: 4pt;
-        font-size: 11pt;
+        margin-top: 3pt;
+        font-size: 9pt;
         text-transform: uppercase;
-        letter-spacing: 1.4pt;
+        letter-spacing: 1.5pt;
         color: #c5d5f0;
       }
       .contact-line {
-        margin-top: 10pt;
+        margin-top: 6pt;
         display: flex;
         flex-wrap: wrap;
-        gap: 10pt 16pt;
-        font-size: 9.5pt;
+        gap: 5pt 10pt;
+        font-size: 9pt;
       }
       .contact-item {
         display: inline-flex;
         align-items: center;
-        gap: 6pt;
+        gap: 4pt;
       }
       .contact-chip {
         background: rgba(255, 255, 255, 0.12);
-        padding: 4pt 8pt;
+        padding: 3pt 7pt;
         border-radius: 999pt;
       }
       .content {
-        padding: 16pt 22pt 18pt;
+        padding: 10pt 14pt 16pt;
         display: flex;
         flex-direction: column;
-        gap: 14pt;
+        gap: 8pt;
       }
       .section {
-        border-bottom: 1px solid var(--border);
-        padding-bottom: 10pt;
+        border-bottom: 1px solid #e6eaf2;
+        padding-bottom: 7pt;
       }
       .section:last-child {
         border-bottom: none;
@@ -89,8 +88,9 @@
       .section-header {
         display: flex;
         align-items: baseline;
-        gap: 8pt;
-        margin-bottom: 6pt;
+        gap: 6pt;
+        margin-bottom: 4pt;
+        break-after: avoid;
       }
       .section-title {
         font-family: 'DM Serif Display', serif;
@@ -98,29 +98,31 @@
         color: var(--accent);
         text-transform: uppercase;
         letter-spacing: 0.5pt;
+        font-weight: 600;
       }
       .section-sub {
-        font-size: 9.5pt;
+        font-size: 8pt;
         color: var(--muted);
         text-transform: uppercase;
         letter-spacing: 1pt;
       }
       .summary-text {
-        font-size: 10.5pt;
+        font-size: 10pt;
       }
       .entry {
-        margin-top: 8pt;
-        padding: 8pt 10pt;
+        margin-top: 5pt;
+        padding: 5pt 7pt;
         border: 1px solid var(--border);
-        border-radius: 8pt;
+        border-radius: 6pt;
         background: #fafbff;
+        break-inside: avoid;
       }
-      .entry + .entry { margin-top: 8pt; }
+      .entry + .entry { margin-top: 5pt; }
       .entry-head {
         display: flex;
         justify-content: space-between;
         align-items: baseline;
-        gap: 10pt;
+        gap: 6pt;
       }
       .role {
         font-weight: 700;
@@ -136,18 +138,18 @@
         white-space: nowrap;
       }
       .bullets {
-        margin: 6pt 0 0;
-        padding-left: 14pt;
+        margin: 3pt 0 0;
+        padding-left: 12pt;
       }
-      .bullets li { margin-bottom: 2pt; font-size: 10pt; }
+      .bullets li { margin-bottom: 1pt; font-size: 10pt; line-height: 1.32; }
       .pill-row {
         display: flex;
         flex-wrap: wrap;
-        gap: 6pt;
-        margin-top: 6pt;
+        gap: 4pt;
+        margin-top: 4pt;
       }
       .pill {
-        padding: 5pt 8pt;
+        padding: 3pt 6pt;
         border-radius: 999pt;
         background: #eef1f8;
         color: var(--text);
@@ -156,23 +158,24 @@
       }
       .columns-2 {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(2.5in, 1fr));
-        gap: 10pt;
+        grid-template-columns: repeat(auto-fit, minmax(1.9in, 1fr));
+        gap: 6pt;
       }
       .project-card {
         border: 1px solid var(--border);
-        border-radius: 8pt;
-        padding: 8pt 10pt;
+        border-radius: 6pt;
+        padding: 5pt 7pt;
         background: #ffffff;
+        break-inside: avoid;
       }
       .project-name {
         font-weight: 700;
-        font-size: 10.5pt;
+        font-size: 10pt;
       }
       .meta {
         color: var(--muted);
         font-size: 9pt;
-        margin-top: 2pt;
+        margin-top: 1pt;
       }
     </style>
   </head>
@@ -180,7 +183,7 @@
     <div class="page">
       <header class="banner">
         {{#hasContent(basics.name)}}<div class="name">{{{basics.name}}}</div>{{/hasContent(basics.name)}}
-        {{#hasContent(custom.jobTitles)}}<div class="tagline">{{ join(custom.jobTitles, ", ") }}</div>{{/hasContent(custom.jobTitles)}}
+        {{#hasContent(custom.jobTitles)}}<div class="tagline">{{ joinBullet(custom.jobTitles) }}</div>{{/hasContent(custom.jobTitles)}}
         <div class="contact-line">
           {{#hasContent(basics.location.city, basics.location.region)}}
           <div class="contact-item contact-chip">{{basics.location.city}}{{#hasContent(basics.location.region)}}, {{basics.location.region}}{{/hasContent(basics.location.region)}}</div>
@@ -226,7 +229,7 @@
               </div>
               <div class="dates">{{ formatDate(startDate) }}{{#hasContent(endDate)}} – {{ formatDate(endDate) }}{{/hasContent(endDate)}}</div>
             </div>
-            {{#hasContent(summary)}}<div class="summary-text" style="margin-top:4pt;">{{{summary}}}</div>{{/hasContent(summary)}}
+            {{#hasContent(summary)}}<div class="summary-text" style="margin-top:3pt;">{{{summary}}}</div>{{/hasContent(summary)}}
             {{#hasContent(highlights)}}
             <ul class="bullets">
               {{#highlights}}
@@ -249,7 +252,7 @@
             {{#projects}}
             <div class="project-card">
               <div class="project-name">{{{name}}}{{#hasContent(url)}} · {{{url}}}{{/hasContent(url)}}</div>
-              {{#hasContent(description)}}<div class="summary-text" style="font-size:10pt; margin-top:4pt;">{{{description}}}</div>{{/hasContent(description)}}
+              {{#hasContent(description)}}<div class="summary-text" style="margin-top:3pt;">{{{description}}}</div>{{/hasContent(description)}}
               {{#hasContent(keywords)}}
               <div class="pill-row">
                 {{#keywords}}
@@ -317,7 +320,7 @@
               </div>
               <div class="dates">{{ formatDate(startDate) }}{{#hasContent(endDate)}} – {{ formatDate(endDate) }}{{/hasContent(endDate)}}</div>
             </div>
-            {{#hasContent(summary)}}<div class="summary-text" style="margin-top:4pt;">{{{summary}}}</div>{{/hasContent(summary)}}
+            {{#hasContent(summary)}}<div class="summary-text" style="margin-top:3pt;">{{{summary}}}</div>{{/hasContent(summary)}}
           </div>
           {{/volunteer}}
         </section>
@@ -335,7 +338,7 @@
               <div class="role">{{title}}</div>
               <div class="org">{{awarder}}</div>
               <div class="dates">{{ formatDate(date) }}</div>
-              {{#hasContent(summary)}}<div class="summary-text" style="margin-top:4pt;">{{{summary}}}</div>{{/hasContent(summary)}}
+              {{#hasContent(summary)}}<div class="summary-text" style="margin-top:3pt;">{{{summary}}}</div>{{/hasContent(summary)}}
             </div>
             {{/awards}}
             {{#certificates}}
@@ -351,7 +354,7 @@
               <div class="role">{{name}}</div>
               <div class="org">{{publisher}}</div>
               <div class="dates">{{ formatDate(releaseDate) }}</div>
-              {{#hasContent(summary)}}<div class="summary-text" style="margin-top:4pt;">{{{summary}}}</div>{{/hasContent(summary)}}
+              {{#hasContent(summary)}}<div class="summary-text" style="margin-top:3pt;">{{{summary}}}</div>{{/hasContent(summary)}}
             </div>
             {{/publications}}
           </div>
@@ -392,5 +395,14 @@
         {{/hasContent(custom.moreInfo)}}
       </main>
     </div>
+    <script>window.PagedConfig = { auto: false };</script>
+    <script src="paged.polyfill.js"></script>
+    <script>
+      window.addEventListener('load', async function() {
+        const paged = new Paged.Previewer();
+        await paged.preview();
+        document.body.setAttribute('data-paged-ready', 'true');
+      });
+    </script>
   </body>
 </html>
