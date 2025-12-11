@@ -229,40 +229,90 @@ enum LeafStatus: String, Codable, Hashable {
     static func traverseAndExportNodes(node: TreeNode, currentPath _: String = "")
         -> [[String: Any]] {
         var result: [[String: Any]] = []
-        let newPath = node.buildTreePath() // Use the instance method
-        // Export node if it's selected for AI revision (directly or via inheritance)
-        // This includes nodes marked .aiToReplace AND nodes whose ancestors are marked
-        if node.isSelectedForAIRevision {
-            // First, handle title node content if present (name field)
-            if !node.name.isEmpty { // Always export name field as a title node if it's not empty
-                let titleNodeData: [String: Any] = [
+        let treePath = node.buildTreePath()
+
+        // Check if this node is DIRECTLY toggled (not just inherited from ancestor)
+        if node.status == .aiToReplace {
+            let hasChildren = node.children != nil && !node.orderedChildren.isEmpty
+
+            if hasChildren {
+                // PARENT TOGGLE: Concatenate all descendant values into ONE grouped node
+                let childValues = collectDescendantValues(from: node)
+                let concatenatedValue = childValues.joined(separator: ", ")
+
+                let groupedNodeData: [String: Any] = [
                     "id": node.id,
-                    "value": node.name, // Exporting node.name as "value" for the LLM
-                    "name": node.name, // Also include the actual name field for context
-                    "tree_path": newPath, // Path to this node
-                    "isTitleNode": true // Explicitly mark as title node
+                    "name": node.name,
+                    "value": concatenatedValue,
+                    "tree_path": treePath,
+                    "isGrouped": true,
+                    "childValues": childValues,
+                    "childCount": childValues.count,
+                    "isTitleNode": false
                 ]
-                result.append(titleNodeData)
-            }
-            // Then, handle value node content if present
-            if !node.value.isEmpty { // Always export value field as a content node if it's not empty
-                let valueNodeData: [String: Any] = [
-                    "id": node.id,
-                    "value": node.value, // Exporting node.value
-                    "name": node.name, // Include name for context/reference
-                    "tree_path": newPath,
-                    "isTitleNode": false // Explicitly mark as not a title node
-                ]
-                result.append(valueNodeData)
+                result.append(groupedNodeData)
+
+                // DON'T recurse - children are handled via grouping
+                return result
+            } else {
+                // LEAF TOGGLE: Export individually
+                // Export name if present (title node)
+                if !node.name.isEmpty {
+                    let titleNodeData: [String: Any] = [
+                        "id": node.id,
+                        "value": node.name,
+                        "name": node.name,
+                        "tree_path": treePath,
+                        "isTitleNode": true,
+                        "isGrouped": false
+                    ]
+                    result.append(titleNodeData)
+                }
+                // Export value if present (content node)
+                if !node.value.isEmpty {
+                    let valueNodeData: [String: Any] = [
+                        "id": node.id,
+                        "value": node.value,
+                        "name": node.name,
+                        "tree_path": treePath,
+                        "isTitleNode": false,
+                        "isGrouped": false
+                    ]
+                    result.append(valueNodeData)
+                }
             }
         }
-        // Force load children to ensure SwiftData loads the relationship
-        let childNodes = node.children ?? []
-        for child in childNodes {
-            // Pass the child's full path for its children's context
-            result.append(contentsOf: traverseAndExportNodes(node: child, currentPath: newPath))
+        // If this node has inherited selection (ancestor is toggled), skip - ancestor handles it
+        // Otherwise, recurse into children to find other toggled nodes
+        else if !node.isInheritedAISelection {
+            let childNodes = node.children ?? []
+            for child in childNodes {
+                result.append(contentsOf: traverseAndExportNodes(node: child, currentPath: treePath))
+            }
         }
+        // If isInheritedAISelection is true, we skip - the ancestor that's directly toggled handles this node
+
         return result
+    }
+
+    /// Collect all descendant values from a node (for grouped export)
+    private static func collectDescendantValues(from node: TreeNode) -> [String] {
+        var values: [String] = []
+
+        for child in node.orderedChildren {
+            // If child has a value, add it
+            if !child.value.isEmpty {
+                values.append(child.value)
+            } else if !child.name.isEmpty && child.orderedChildren.isEmpty {
+                // Leaf with only name (no value, no children)
+                values.append(child.name)
+            }
+
+            // Recurse into grandchildren
+            values.append(contentsOf: collectDescendantValues(from: child))
+        }
+
+        return values
     }
     static func deleteTreeNode(node: TreeNode, context: ModelContext) {
         guard node.allowsDeletion else {

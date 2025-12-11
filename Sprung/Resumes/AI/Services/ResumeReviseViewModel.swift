@@ -697,14 +697,21 @@ class ResumeReviseViewModel {
         Logger.debug("🔍 [sectionsWithActiveReviewPhases] Starting check...")
         Logger.debug("🔍 [sectionsWithActiveReviewPhases] template: \(resume.template != nil ? "exists" : "nil")")
         Logger.debug("🔍 [sectionsWithActiveReviewPhases] manifestData: \(resume.template?.manifestData != nil ? "\(resume.template!.manifestData!.count) bytes" : "nil")")
-        Logger.debug("🔍 [sectionsWithActiveReviewPhases] manifest: \(resume.template?.manifest != nil ? "decoded" : "nil")")
         Logger.debug("🔍 [sectionsWithActiveReviewPhases] rootNode: \(resume.rootNode != nil ? "exists" : "nil")")
 
-        guard let manifest = resume.template?.manifest,
+        // Use TemplateManifestLoader to properly merge base manifest with overrides
+        // (resume.template?.manifest fails because manifestData only contains overrides, not full manifest)
+        guard let template = resume.template,
               let rootNode = resume.rootNode else {
-            Logger.warning("⚠️ [sectionsWithActiveReviewPhases] Bailing - manifest or rootNode nil")
+            Logger.warning("⚠️ [sectionsWithActiveReviewPhases] Bailing - template or rootNode nil")
             return []
         }
+
+        guard let manifest = TemplateManifestLoader.manifest(for: template) else {
+            Logger.warning("⚠️ [sectionsWithActiveReviewPhases] Failed to load manifest via TemplateManifestLoader")
+            return []
+        }
+        Logger.debug("🔍 [sectionsWithActiveReviewPhases] manifest loaded via TemplateManifestLoader")
 
         Logger.debug("🔍 [sectionsWithActiveReviewPhases] reviewPhases: \(manifest.reviewPhases != nil ? "\(manifest.reviewPhases!.keys.joined(separator: ", "))" : "nil")")
 
