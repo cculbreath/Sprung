@@ -33,7 +33,7 @@ final class ExperienceDefaultsStore: SwiftDataStore {
     }
     func save(draft: ExperienceDefaultsDraft) {
         let defaults = currentDefaults()
-        draft.apply(to: defaults, in: modelContext)
+        draft.apply(to: defaults)
         cachedDefaults = defaults
         saveContext()
     }

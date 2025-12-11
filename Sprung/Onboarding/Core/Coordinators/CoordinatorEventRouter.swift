@@ -123,8 +123,11 @@ final class CoordinatorEventRouter {
                 Logger.info("📊 CoordinatorEventRouter: UI phase updated to \(phase.rawValue)", category: .ai)
                 // Persist data when transitioning to complete
                 if phase == .complete {
+                    Logger.info("🏁 CoordinatorEventRouter: Phase is COMPLETE - calling persistWritingCorpusOnComplete()", category: .ai)
                     await persistWritingCorpusOnComplete()
+                    Logger.info("🏁 CoordinatorEventRouter: persistWritingCorpusOnComplete() finished, calling propagateExperienceDefaults()", category: .ai)
                     await propagateExperienceDefaults()
+                    Logger.info("🏁 CoordinatorEventRouter: propagateExperienceDefaults() finished", category: .ai)
                 }
             } else {
                 Logger.warning("📊 CoordinatorEventRouter: Could not convert phaseName '\(phaseName)' to InterviewPhase", category: .ai)
@@ -331,10 +334,20 @@ final class CoordinatorEventRouter {
 
     /// Persist writing samples to CoverRefStore and candidate dossier to ResRefStore when interview completes
     private func persistWritingCorpusOnComplete() async {
-        Logger.info("💾 Persisting writing corpus and dossier on interview completion", category: .ai)
+        Logger.info("💾 [persistWritingCorpus] START - Persisting writing corpus and dossier on interview completion", category: .ai)
 
         // Get artifact records from UI state (synced from StateCoordinator)
         let artifacts = ui.artifactRecords
+        Logger.info("💾 [persistWritingCorpus] Found \(artifacts.count) total artifact records in UI state", category: .ai)
+
+        // Debug: Log all artifact source_type and document_type fields
+        for (index, artifact) in artifacts.enumerated() {
+            let sourceType = artifact["source_type"].stringValue
+            let docType = artifact["document_type"].stringValue
+            let hasWritingType = artifact["metadata"]["writing_type"].exists()
+            let filename = artifact["filename"].stringValue
+            Logger.debug("💾 [persistWritingCorpus] Artifact[\(index)]: filename='\(filename)' source_type='\(sourceType)' document_type='\(docType)' has_writing_type=\(hasWritingType)", category: .ai)
+        }
 
         // Persist writing samples to CoverRefStore
         // Check multiple fields since writing samples can come from different sources:
@@ -345,25 +358,31 @@ final class CoordinatorEventRouter {
             artifact["document_type"].stringValue == "writingSample" ||
             artifact["metadata"]["writing_type"].exists()
         }
+        Logger.info("💾 [persistWritingCorpus] Filtered to \(writingSamples.count) writing samples", category: .ai)
 
         for sample in writingSamples {
             persistWritingSampleToCoverRef(sample: sample)
         }
 
-        Logger.info("✅ Persisted \(writingSamples.count) writing samples to CoverRefStore", category: .ai)
+        Logger.info("✅ [persistWritingCorpus] Persisted \(writingSamples.count) writing samples to CoverRefStore", category: .ai)
 
         // Persist candidate dossier if present (to CoverRefStore for cover letter generation)
         // Fetch from InterviewDataStore where SubmitCandidateDossierTool persists it
+        Logger.info("💾 [persistWritingCorpus] Checking InterviewDataStore for candidate_dossier...", category: .ai)
         let dossiers = await dataStore.list(dataType: "candidate_dossier")
+        Logger.info("💾 [persistWritingCorpus] Found \(dossiers.count) dossier(s) in data store", category: .ai)
+
         if let dossier = dossiers.first {
+            Logger.info("💾 [persistWritingCorpus] Dossier found with keys: \(dossier.dictionaryValue.keys.sorted())", category: .ai)
             persistDossierToCoverRef(dossier: dossier)
-            Logger.info("✅ Persisted candidate dossier to CoverRefStore", category: .ai)
+            Logger.info("✅ [persistWritingCorpus] Persisted candidate dossier to CoverRefStore", category: .ai)
         } else {
-            Logger.warning("⚠️ No candidate dossier found in data store", category: .ai)
+            Logger.warning("⚠️ [persistWritingCorpus] No candidate dossier found in data store - was submit_candidate_dossier tool called?", category: .ai)
         }
 
         // Emit events for persistence completion
         await eventBus.publish(.writingSamplePersisted(sample: JSON(["count": writingSamples.count])))
+        Logger.info("💾 [persistWritingCorpus] END - Persistence complete", category: .ai)
     }
 
     /// Convert a writing sample artifact to CoverRef and persist

@@ -51,7 +51,10 @@ final class ExperienceDefaultsToTree {
 
         // Apply default AI fields from manifest
         if let defaultFields = manifest.defaultAIFields, !defaultFields.isEmpty {
+            Logger.info("🎯 [buildTree] Applying \(defaultFields.count) defaultAIFields patterns")
             applyDefaultAIFields(to: root, patterns: defaultFields)
+        } else {
+            Logger.warning("🎯 [buildTree] No defaultAIFields in manifest (defaultAIFields: \(manifest.defaultAIFields?.description ?? "nil"))")
         }
 
         return root
@@ -76,9 +79,9 @@ final class ExperienceDefaultsToTree {
     private func isSectionEnabled(_ key: String) -> Bool {
         switch key {
         case "summary": return !experienceDefaults.summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        case "work": return experienceDefaults.isWorkEnabled && !experienceDefaults.workExperiences.isEmpty
-        case "volunteer": return experienceDefaults.isVolunteerEnabled && !experienceDefaults.volunteerExperiences.isEmpty
-        case "education": return experienceDefaults.isEducationEnabled && !experienceDefaults.educationRecords.isEmpty
+        case "work": return experienceDefaults.isWorkEnabled && !experienceDefaults.work.isEmpty
+        case "volunteer": return experienceDefaults.isVolunteerEnabled && !experienceDefaults.volunteer.isEmpty
+        case "education": return experienceDefaults.isEducationEnabled && !experienceDefaults.education.isEmpty
         case "projects": return experienceDefaults.isProjectsEnabled && !experienceDefaults.projects.isEmpty
         case "skills": return experienceDefaults.isSkillsEnabled && !experienceDefaults.skills.isEmpty
         case "awards": return experienceDefaults.isAwardsEnabled && !experienceDefaults.awards.isEmpty
@@ -162,7 +165,7 @@ final class ExperienceDefaultsToTree {
         container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
         container.schemaAllowsNodeDeletion = entryDescriptor?.allowsManualMutations ?? false
 
-        for (index, work) in experienceDefaults.workExperiences.enumerated() {
+        for (index, work) in experienceDefaults.work.enumerated() {
             let title = work.name.isEmpty ? "Work \(index + 1)" : work.name
             let entry = container.addChild(TreeNode(
                 name: title,
@@ -182,7 +185,7 @@ final class ExperienceDefaultsToTree {
             addFieldIfNotHidden("startDate", value: work.startDate, parent: entry, path: path, descriptor: entryDescriptor)
             addFieldIfNotHidden("endDate", value: work.endDate, parent: entry, path: path, descriptor: entryDescriptor)
             addFieldIfNotHidden("summary", value: work.summary, parent: entry, path: path, descriptor: entryDescriptor)
-            addHighlightsIfNotHidden(work.highlights.map(\.text), parent: entry, path: path, descriptor: entryDescriptor)
+            addHighlightsIfNotHidden(work.highlights.map { $0.text }, parent: entry, path: path, descriptor: entryDescriptor)
         }
     }
 
@@ -202,7 +205,7 @@ final class ExperienceDefaultsToTree {
         applyEditorLabel(to: container, for: "volunteer")
         container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
 
-        for (index, volunteer) in experienceDefaults.volunteerExperiences.enumerated() {
+        for (index, volunteer) in experienceDefaults.volunteer.enumerated() {
             let title = volunteer.organization.isEmpty ? "Volunteer \(index + 1)" : volunteer.organization
             let entry = container.addChild(TreeNode(
                 name: title,
@@ -221,7 +224,7 @@ final class ExperienceDefaultsToTree {
             addFieldIfNotHidden("startDate", value: volunteer.startDate, parent: entry, path: path, descriptor: entryDescriptor)
             addFieldIfNotHidden("endDate", value: volunteer.endDate, parent: entry, path: path, descriptor: entryDescriptor)
             addFieldIfNotHidden("summary", value: volunteer.summary, parent: entry, path: path, descriptor: entryDescriptor)
-            addHighlightsIfNotHidden(volunteer.highlights.map(\.text), parent: entry, path: path, descriptor: entryDescriptor)
+            addHighlightsIfNotHidden(volunteer.highlights.map { $0.text }, parent: entry, path: path, descriptor: entryDescriptor)
         }
     }
 
@@ -241,7 +244,7 @@ final class ExperienceDefaultsToTree {
         applyEditorLabel(to: container, for: "education")
         container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
 
-        for (index, education) in experienceDefaults.educationRecords.enumerated() {
+        for (index, education) in experienceDefaults.education.enumerated() {
             let title = education.institution.isEmpty ? "Education \(index + 1)" : education.institution
             let entry = container.addChild(TreeNode(
                 name: title,
@@ -261,7 +264,7 @@ final class ExperienceDefaultsToTree {
             addFieldIfNotHidden("startDate", value: education.startDate, parent: entry, path: path, descriptor: entryDescriptor)
             addFieldIfNotHidden("endDate", value: education.endDate, parent: entry, path: path, descriptor: entryDescriptor)
             addFieldIfNotHidden("score", value: education.score, parent: entry, path: path, descriptor: entryDescriptor)
-            addCoursesIfNotHidden(education.courses.map(\.name), parent: entry, path: path, descriptor: entryDescriptor)
+            addCoursesIfNotHidden(education.courses.map { $0.name }, parent: entry, path: path, descriptor: entryDescriptor)
         }
     }
 
@@ -295,15 +298,15 @@ final class ExperienceDefaultsToTree {
 
             let path = ["projects", "\(index)"]
             addFieldIfNotHidden("name", value: project.name, parent: entry, path: path, descriptor: entryDescriptor)
-            addFieldIfNotHidden("description", value: project.descriptionText, parent: entry, path: path, descriptor: entryDescriptor)
+            addFieldIfNotHidden("description", value: project.description, parent: entry, path: path, descriptor: entryDescriptor)
             addFieldIfNotHidden("startDate", value: project.startDate, parent: entry, path: path, descriptor: entryDescriptor)
             addFieldIfNotHidden("endDate", value: project.endDate, parent: entry, path: path, descriptor: entryDescriptor)
             addFieldIfNotHidden("url", value: project.url, parent: entry, path: path, descriptor: entryDescriptor)
             addFieldIfNotHidden("entity", value: project.organization, parent: entry, path: path, descriptor: entryDescriptor)
             addFieldIfNotHidden("type", value: project.type, parent: entry, path: path, descriptor: entryDescriptor)
-            addHighlightsIfNotHidden(project.highlights.map(\.text), parent: entry, path: path, descriptor: entryDescriptor)
-            addKeywordsIfNotHidden(project.keywords.map(\.keyword), parent: entry, path: path, descriptor: entryDescriptor)
-            addRolesIfNotHidden(project.roles.map(\.role), parent: entry, path: path, descriptor: entryDescriptor)
+            addHighlightsIfNotHidden(project.highlights.map { $0.text }, parent: entry, path: path, descriptor: entryDescriptor)
+            addKeywordsIfNotHidden(project.keywords.map { $0.keyword }, parent: entry, path: path, descriptor: entryDescriptor)
+            addRolesIfNotHidden(project.roles.map { $0.role }, parent: entry, path: path, descriptor: entryDescriptor)
         }
     }
 
@@ -338,7 +341,7 @@ final class ExperienceDefaultsToTree {
             let path = ["skills", "\(index)"]
             addFieldIfNotHidden("name", value: skill.name, parent: entry, path: path, descriptor: entryDescriptor)
             addFieldIfNotHidden("level", value: skill.level, parent: entry, path: path, descriptor: entryDescriptor)
-            addKeywordsIfNotHidden(skill.keywords.map(\.keyword), parent: entry, path: path, descriptor: entryDescriptor)
+            addKeywordsIfNotHidden(skill.keywords.map { $0.keyword }, parent: entry, path: path, descriptor: entryDescriptor)
         }
     }
 
@@ -515,7 +518,7 @@ final class ExperienceDefaultsToTree {
 
             let path = ["interests", "\(index)"]
             addFieldIfNotHidden("name", value: interest.name, parent: entry, path: path, descriptor: entryDescriptor)
-            addKeywordsIfNotHidden(interest.keywords.map(\.keyword), parent: entry, path: path, descriptor: entryDescriptor)
+            addKeywordsIfNotHidden(interest.keywords.map { $0.keyword }, parent: entry, path: path, descriptor: entryDescriptor)
         }
     }
 
@@ -570,7 +573,7 @@ final class ExperienceDefaultsToTree {
             resume: resume
         ))
 
-        for field in experienceDefaults.customFields.sorted(by: { $0.index < $1.index }) {
+        for field in experienceDefaults.customFields {
             let fieldNode = customContainer.addChild(TreeNode(
                 name: field.key,
                 value: "",
@@ -587,10 +590,10 @@ final class ExperienceDefaultsToTree {
             // Check if this is an array field or single value
             if field.values.count > 1 || section?.fields.first(where: { $0.key == field.key })?.repeatable == true {
                 // Array of values
-                for value in field.values.sorted(by: { $0.index < $1.index }) {
+                for value in field.values {
                     _ = fieldNode.addChild(TreeNode(
                         name: "",
-                        value: value.value,
+                        value: value,
                         inEditor: true,
                         status: .saved,
                         resume: resume
@@ -598,7 +601,7 @@ final class ExperienceDefaultsToTree {
                 }
             } else if let firstValue = field.values.first {
                 // Single value - make the field node itself the leaf
-                fieldNode.value = firstValue.value
+                fieldNode.value = firstValue
                 fieldNode.status = .saved
             }
         }
@@ -892,6 +895,7 @@ final class ExperienceDefaultsToTree {
     // MARK: - Default AI Fields
 
     private func applyDefaultAIFields(to root: TreeNode, patterns: [String]) {
+        Logger.debug("🎯 [applyDefaultAIFields] Starting with \(patterns.count) patterns: \(patterns)")
         applyDefaultAIFieldsRecursive(node: root, currentPath: [], patterns: patterns)
     }
 
@@ -930,23 +934,35 @@ final class ExperienceDefaultsToTree {
     private func applyDefaultAIFieldsRecursive(node: TreeNode, currentPath: [String], patterns: [String]) {
         let pathString = currentPath.joined(separator: ".")
 
-        if !pathString.isEmpty && pathMatchesAnyPattern(path: pathString, patterns: patterns) {
-            node.status = .aiToReplace
+        if !pathString.isEmpty {
+            let matches = pathMatchesAnyPattern(path: pathString, patterns: patterns)
+            if matches {
+                Logger.debug("🎯 [applyDefaultAIFields] ✅ MATCH: '\(pathString)' -> setting aiToReplace on '\(node.name)'")
+                node.status = .aiToReplace
+            } else {
+                Logger.verbose("🎯 [applyDefaultAIFields] No match: '\(pathString)' (node: '\(node.name)')")
+            }
         }
 
         guard let children = node.children else { return }
         for child in children {
             var childPath = currentPath
 
-            if isObjectEntry(child) {
+            let isObj = isObjectEntry(child)
+            let isArr = isArrayLeafItem(child)
+
+            if isObj {
                 // Object entry (e.g., job "Acme Corp", skill category "Programming")
                 childPath.append("*")
-            } else if isArrayLeafItem(child) {
+                Logger.verbose("🎯 [applyDefaultAIFields] Object entry '\(child.name)' -> path component '*'")
+            } else if isArr {
                 // Array leaf item (e.g., individual keyword, highlight bullet)
                 childPath.append("[]")
+                Logger.verbose("🎯 [applyDefaultAIFields] Array item '\(child.name)' -> path component '[]'")
             } else {
                 // Schema field name (e.g., "highlights", "name", "keywords")
                 childPath.append(child.name)
+                Logger.verbose("🎯 [applyDefaultAIFields] Schema field '\(child.name)' -> path component '\(child.name)'")
             }
             applyDefaultAIFieldsRecursive(node: child, currentPath: childPath, patterns: patterns)
         }

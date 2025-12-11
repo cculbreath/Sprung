@@ -178,8 +178,8 @@ final class OnboardingInterviewCoordinator {
         }
         // Check for ExperienceDefaults with actual data
         let defaults = experienceDefaultsStore.currentDefaults()
-        let hasExperienceData = !defaults.workExperiences.isEmpty ||
-            !defaults.educationRecords.isEmpty ||
+        let hasExperienceData = !defaults.work.isEmpty ||
+            !defaults.education.isEmpty ||
             !defaults.projects.isEmpty ||
             !defaults.skills.isEmpty
         if hasExperienceData {
@@ -211,9 +211,9 @@ final class OnboardingInterviewCoordinator {
         Logger.info("🗑️ Deleted all CoverRefs", category: .ai)
         // Clear ExperienceDefaults
         let defaults = experienceDefaultsStore.currentDefaults()
-        defaults.workExperiences.removeAll()
-        defaults.educationRecords.removeAll()
-        defaults.volunteerExperiences.removeAll()
+        defaults.work.removeAll()
+        defaults.education.removeAll()
+        defaults.volunteer.removeAll()
         defaults.projects.removeAll()
         defaults.skills.removeAll()
         defaults.awards.removeAll()
