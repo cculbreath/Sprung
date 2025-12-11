@@ -27,23 +27,26 @@ struct ResumeDetailView: View {
     }
     // MARK: – Body ---------------------------------------------------------
 
-    /// Node names that are not user content (handled separately)
-    private static let nonContentNodes: Set<String> = ["styling", "template"]
+    /// Node names that are not user content (handled separately or flattened)
+    private static let nonContentNodes: Set<String> = ["styling", "template", "custom"]
 
     var body: some View {
         @Bindable var vm = vm // enable Observation bindings
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 if let root = vm.rootNode {
-                    // Content section - user data nodes only
+                    // Content section - user data nodes + custom fields (flattened)
                     let contentNodes = root.orderedChildren.filter { !Self.nonContentNodes.contains($0.name) }
-                    if !contentNodes.isEmpty {
+                    let customNodes = root.orderedChildren.first(where: { $0.name == "custom" })?.orderedChildren ?? []
+                    let allContentNodes = contentNodes + customNodes
+
+                    if !allContentNodes.isEmpty {
                         Text("Content")
                             .font(.headline)
                             .fontWeight(.semibold)
                             .padding(.horizontal, 10)
                             .padding(.top, 12)
-                        ForEach(contentNodes, id: \.id) { viewNode in
+                        ForEach(allContentNodes, id: \.id) { viewNode in
                             topLevelNodeView(viewNode)
                         }
                     }

@@ -556,13 +556,22 @@ final class ExperienceDefaultsToTree {
 
     // MARK: - Custom Section
 
-    /// Custom fields are added directly to root (flattened), not inside a "custom" container.
-    /// This eliminates the need for transparent keys.
+    /// Custom fields are wrapped in a "custom" container for path matching (e.g., custom.objective).
+    /// The view flattens this container - children appear at the same level as other content nodes.
     private func buildCustomSection(parent: TreeNode) {
         let section = manifest.section(for: "custom")
 
+        // Create custom container for path matching (view flattens it for display)
+        let customContainer = parent.addChild(TreeNode(
+            name: "custom",
+            value: "",
+            inEditor: true,
+            status: .isNotLeaf,
+            resume: resume
+        ))
+
         for field in experienceDefaults.customFields.sorted(by: { $0.index < $1.index }) {
-            let fieldNode = parent.addChild(TreeNode(
+            let fieldNode = customContainer.addChild(TreeNode(
                 name: field.key,
                 value: "",
                 inEditor: true,

@@ -12,7 +12,7 @@ struct FontSizePanelView: View {
         HStack {
             ToggleChevronView(isExpanded: $isExpanded)
             Text("Font Sizes")
-                .font(.headline)
+                .font(.body)
         }
         .onTapGesture {
             withAnimation { isExpanded.toggle() }

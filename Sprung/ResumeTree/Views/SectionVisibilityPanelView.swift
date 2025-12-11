@@ -7,7 +7,7 @@ struct SectionVisibilityPanelView: View {
             HStack {
                 ToggleChevronView(isExpanded: $isExpanded)
                 Text("Show Sections")
-                    .font(.headline)
+                    .font(.body)
             }
             .contentShape(Rectangle())
             .onTapGesture {

@@ -46,8 +46,10 @@ struct NodeHeaderView: View {
             }
             Spacer()
 
-            // Parent sparkle button - show when hovering or when node/children are selected
-            if node.parent != nil && (isHoveringHeader || node.status == .aiToReplace || node.aiStatusChildren > 0) {
+            // Parent sparkle button - always rendered to prevent layout shifts
+            // Opacity controlled by hover/selection state
+            if node.parent != nil {
+                let showSparkle = isHoveringHeader || node.status == .aiToReplace || node.aiStatusChildren > 0
                 SparkleButton(
                     node: nodeBinding,
                     isHovering: $isHoveringSparkle,
@@ -56,7 +58,7 @@ struct NodeHeaderView: View {
                         node.toggleAISelection(propagateToChildren: true)
                     }
                 )
-                .transition(.opacity)
+                .opacity(showSparkle ? 1.0 : 0.0)
             }
 
             // Show controls when node is expanded and has children
