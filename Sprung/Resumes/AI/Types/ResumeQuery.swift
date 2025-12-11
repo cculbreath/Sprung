@@ -29,7 +29,21 @@ import SwiftUI
                 ),
                 "newValue": JSONSchema(
                     type: .string,
-                    description: "The proposed new value after revision"
+                    description: "The proposed new value after revision (for scalar nodes or concatenated grouped content)"
+                ),
+                "oldValueArray": JSONSchema(
+                    type: .array,
+                    description: "For grouped nodes: the original child values as an array (optional, for reference)",
+                    items: JSONSchema(type: .string)
+                ),
+                "newValueArray": JSONSchema(
+                    type: .array,
+                    description: "For grouped nodes: proposed new values as an array if adding/removing/reordering items",
+                    items: JSONSchema(type: .string)
+                ),
+                "isGrouped": JSONSchema(
+                    type: .boolean,
+                    description: "Indicates if this node contains grouped content from multiple children"
                 ),
                 "valueChanged": JSONSchema(
                     type: .boolean,
@@ -306,9 +320,14 @@ import SwiftUI
         ================================================================================
         OUTPUT INSTRUCTIONS:
         - Return your proposed revisions as JSON matching the RevNode array schema provided.
-        - For each original EditableNode, include exactly one RevNode in the RevArray. The array indices should match the order of EditableNodes in the updatableFieldsString.
-        - If no change is required for a given node, set “newValue” to "" and “valueChanged” to false.
-        - The “why” field can be an empty string if the reason is self-explanatory.
+        - For each original EditableNode, include exactly one RevNode in the RevArray.
+        - GROUPED NODES: Some EditableNodes contain grouped content (isGrouped=true) with multiple child values.
+          For grouped nodes, you may return EITHER:
+          - A single "newValue" string with all items (separated by newlines or commas as appropriate)
+          - A "newValueArray" array of strings if you want to add/remove/reorder items
+        - SCALAR NODES: For regular (non-grouped) nodes, use the standard "newValue" string.
+        - If no change is required for a given node, set "newValue" to "" and "valueChanged" to false.
+        - The "why" field can be an empty string if the reason is self-explanatory.
         - Do **not** modify the "id" or "treePath" fields. Always return the exact same values you received for those fields for each node.
         SUMMARY:
         Make the resume as compelling and accurate as possible for the target job. \
