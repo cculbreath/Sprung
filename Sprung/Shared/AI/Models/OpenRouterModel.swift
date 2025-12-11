@@ -102,6 +102,24 @@ extension OpenRouterModel {
         }
         return false
     }
+
+    var supportsTools: Bool {
+        // Check supported parameters from endpoints (primary source)
+        if let endpoints = endpoints {
+            for endpoint in endpoints {
+                if let params = endpoint.supportedParameters,
+                   params.contains("tools") {
+                    return true
+                }
+            }
+        }
+        // Fallback to legacy top-level supported parameters
+        if let params = supportedParameters,
+           params.contains("tools") {
+            return true
+        }
+        return false
+    }
     var isTextToText: Bool {
         architecture?.modality == "text->text"
     }

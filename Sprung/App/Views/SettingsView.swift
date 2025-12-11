@@ -4,6 +4,7 @@ import SwiftData
 struct SettingsView: View {
     @AppStorage("fixOverflowMaxIterations") private var fixOverflowMaxIterations: Int = 3
     @AppStorage("reasoningEffort") private var reasoningEffort: String = "medium"
+    @AppStorage("enableResumeCustomizationTools") private var enableResumeCustomizationTools: Bool = true
     @AppStorage("onboardingInterviewDefaultModelId") private var onboardingModelId: String = "gpt-5"
     @AppStorage("onboardingPDFExtractionModelId") private var pdfExtractionModelId: String = "google/gemini-2.0-flash-001"
     @AppStorage("onboardingGitIngestModelId") private var gitIngestModelId: String = "anthropic/claude-haiku-4.5"
@@ -99,6 +100,12 @@ struct SettingsView: View {
                         }
                     }
                     Text("How many times AI will attempt to correct overflowing resume sections.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Enable AI Tools", isOn: $enableResumeCustomizationTools)
+                    Text("Allow AI to query you about skills during resume customization. Requires model with tool support.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

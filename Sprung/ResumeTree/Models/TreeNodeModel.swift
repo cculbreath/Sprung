@@ -247,8 +247,8 @@ enum LeafStatus: String, Codable, Hashable {
 
             if hasChildren {
                 // PARENT TOGGLE: Concatenate all descendant values into ONE grouped node
-                let childValues = collectDescendantValues(from: node)
-                let concatenatedValue = childValues.joined(separator: ", ")
+                let oldValueArray = collectDescendantValues(from: node)
+                let concatenatedValue = oldValueArray.joined(separator: "\n")
 
                 let groupedNodeData: [String: Any] = [
                     "id": node.id,
@@ -256,8 +256,8 @@ enum LeafStatus: String, Codable, Hashable {
                     "value": concatenatedValue,
                     "tree_path": treePath,
                     "isGrouped": true,
-                    "childValues": childValues,
-                    "childCount": childValues.count,
+                    "oldValueArray": oldValueArray,
+                    "itemCount": oldValueArray.count,
                     "isTitleNode": false
                 ]
                 result.append(groupedNodeData)

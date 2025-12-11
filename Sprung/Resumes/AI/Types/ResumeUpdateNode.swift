@@ -142,6 +142,12 @@ struct ProposedRevisionNode: Codable, Equatable {
 }
 struct RevisionsContainer: Codable {
     var revArray: [ProposedRevisionNode]
+
+    /// Memberwise initializer for direct construction
+    init(revArray: [ProposedRevisionNode]) {
+        self.revArray = revArray
+    }
+
     /// Custom coding keys to handle case variations from different LLM responses
     enum CodingKeys: String, CodingKey {
         case revArray = "revArray"

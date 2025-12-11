@@ -6,6 +6,8 @@
 import Foundation
 import SwiftUI
 import SwiftData
+import SwiftOpenAI
+import SwiftyJSON
 /// ViewModel responsible for managing the complex resume revision workflow
 /// Extracts business logic from AiCommsView to provide clean separation of concerns
 @MainActor
@@ -62,6 +64,12 @@ class ResumeReviseViewModel {
     var currentModelId: String? // Make currentModelId accessible to views
     private(set) var isProcessingRevisions: Bool = false
     private var isCompletingReview: Bool = false
+
+    // MARK: - Tool Calling State
+    private let toolRegistry: ResumeToolRegistry
+    var showSkillExperiencePicker: Bool = false
+    var pendingSkillQueries: [SkillQuery] = []
+    private var skillUIResponseContinuation: CheckedContinuation<ResumeToolUIResponse, Never>?
     init(
         llmFacade: LLMFacade,
         openRouterService: OpenRouterService,
@@ -70,7 +78,8 @@ class ResumeReviseViewModel {
         applicantProfileStore: ApplicantProfileStore,
         validationService: RevisionValidationService? = nil,
         streamingService: RevisionStreamingService? = nil,
-        completionService: RevisionCompletionService? = nil
+        completionService: RevisionCompletionService? = nil,
+        toolRegistry: ResumeToolRegistry? = nil
     ) {
         self.llm = llmFacade
         self.openRouterService = openRouterService
@@ -83,6 +92,7 @@ class ResumeReviseViewModel {
         )
         self.completionService = completionService ?? RevisionCompletionService()
         self.applicantProfileStore = applicantProfileStore
+        self.toolRegistry = toolRegistry ?? ResumeToolRegistry()
     }
     func isWorkflowBusy(_ kind: RevisionWorkflowKind) -> Bool {
         guard activeWorkflow == kind else { return false }
@@ -148,12 +158,56 @@ class ResumeReviseViewModel {
             Logger.debug("🤖 [startFreshRevisionWorkflow] Model found: \(model != nil)")
             Logger.debug("🤖 [startFreshRevisionWorkflow] Model supportedParameters: \(model?.supportedParameters ?? [])")
             Logger.debug("🤖 [startFreshRevisionWorkflow] Supports reasoning: \(supportsReasoning)")
+
+            // Check if tools should be used
+            let useTools = shouldUseTools(modelId: modelId)
+            Logger.debug("🤖 [startFreshRevisionWorkflow] Use tools: \(useTools)")
+
             // Defensive check: ensure reasoning modal is hidden for non-reasoning models
             if !supportsReasoning {
                 reasoningStreamManager.hideAndClear()
             }
             let revisions: RevisionsContainer
-            if supportsReasoning {
+
+            // Tool-enabled workflow (takes precedence when available)
+            if useTools && !supportsReasoning {
+                // Use tool-enabled conversation for models that support tools but not reasoning
+                // (Reasoning models use a different path that doesn't support tools yet)
+                Logger.info("🔧 [Tools] Using tool-enabled conversation for revision generation: \(modelId)")
+                self.currentModelId = modelId
+
+                // Get the job app for context (not directly available from Resume, so nil for now)
+                let jobApp: JobApp? = nil
+
+                // Enhance system prompt with tool instructions
+                let toolSystemPrompt = systemPrompt + """
+
+                    You have access to the `query_user_experience_level` tool.
+                    Use this tool when you encounter skills in the job description that are adjacent to
+                    the user's background but not explicitly mentioned in their resume. For example,
+                    if the user has React experience and the job mentions React Native, query their
+                    React Native experience level before making assumptions.
+
+                    If the tool returns an error indicating the user skipped the query, proceed with
+                    your best judgment based on available information.
+
+                    After gathering any needed information via tools, provide your revision suggestions
+                    in the specified JSON format.
+                    """
+
+                // Run tool-enabled conversation
+                let finalResponse = try await runToolEnabledConversation(
+                    systemPrompt: toolSystemPrompt,
+                    userPrompt: userPrompt + "\n\nPlease provide the revision suggestions in the specified JSON format.",
+                    modelId: modelId,
+                    resume: resume,
+                    jobApp: jobApp
+                )
+
+                // Parse the response as revisions
+                revisions = try parseRevisionsFromResponse(finalResponse)
+
+            } else if supportsReasoning {
                 // Use streaming with reasoning for supported models from the start
                 Logger.info("🧠 Using streaming with reasoning for revision generation: \(modelId)")
                 // Configure reasoning parameters for revision generation using user setting
@@ -308,6 +362,209 @@ class ResumeReviseViewModel {
         markWorkflowCompleted(reset: false)
         Logger.debug("🔍 [ResumeReviseViewModel] After setting - showResumeRevisionSheet = \(showResumeRevisionSheet)")
     }
+
+    // MARK: - Tool Calling Support
+
+    /// Check if tool calling should be used for this model
+    private func shouldUseTools(modelId: String) -> Bool {
+        let toolsEnabled = UserDefaults.standard.bool(forKey: "enableResumeCustomizationTools")
+        guard toolsEnabled else {
+            Logger.debug("🔧 [Tools] Feature flag disabled")
+            return false
+        }
+
+        let model = openRouterService.findModel(id: modelId)
+        let supportsTools = model?.supportsTools ?? false
+        Logger.debug("🔧 [Tools] Model \(modelId) supportsTools: \(supportsTools)")
+        return supportsTools
+    }
+
+    /// Run a tool-enabled conversation with the LLM.
+    /// Executes a loop: LLM response → tool calls → tool execution → tool results → repeat until no more tool calls.
+    /// - Returns: The final text response from the LLM after all tool calls are resolved.
+    private func runToolEnabledConversation(
+        systemPrompt: String,
+        userPrompt: String,
+        modelId: String,
+        resume: Resume,
+        jobApp: JobApp?
+    ) async throws -> String {
+        Logger.info("🔧 [Tools] Starting tool-enabled conversation with \(toolRegistry.toolNames.count) tools")
+
+        // Build initial messages
+        var messages: [SwiftOpenAI.ChatCompletionParameters.Message] = [
+            .init(role: .system, content: .text(systemPrompt)),
+            .init(role: .user, content: .text(userPrompt))
+        ]
+
+        // Build tools
+        let tools = toolRegistry.buildChatTools()
+
+        // Tool execution loop
+        var maxIterations = 10
+        while maxIterations > 0 {
+            maxIterations -= 1
+
+            let response = try await llm.executeWithTools(
+                messages: messages,
+                tools: tools,
+                toolChoice: .auto,
+                modelId: modelId,
+                temperature: 0.7
+            )
+
+            guard let choice = response.choices?.first,
+                  let message = choice.message else {
+                throw LLMError.clientError("No response from model")
+            }
+
+            // Check for tool calls
+            if let toolCalls = message.toolCalls, !toolCalls.isEmpty {
+                Logger.info("🔧 [Tools] Model requested \(toolCalls.count) tool call(s)")
+
+                // Add assistant message with tool calls to history
+                let assistantContent: ChatCompletionParameters.Message.ContentType = message.content.map { .text($0) } ?? .text("")
+                messages.append(ChatCompletionParameters.Message(
+                    role: .assistant,
+                    content: assistantContent,
+                    toolCalls: toolCalls
+                ))
+
+                // Execute each tool and collect results
+                for toolCall in toolCalls {
+                    let toolCallId = toolCall.id ?? UUID().uuidString
+                    let toolName = toolCall.function.name ?? "unknown"
+                    let toolArguments = toolCall.function.arguments
+
+                    Logger.debug("🔧 [Tools] Executing tool: \(toolName)")
+
+                    let context = ResumeToolContext(
+                        resume: resume,
+                        jobApp: jobApp,
+                        presentUI: { [weak self] request in
+                            await self?.handleToolUIRequest(request) ?? .cancelled
+                        }
+                    )
+
+                    let result = try await toolRegistry.executeTool(
+                        name: toolName,
+                        arguments: toolArguments,
+                        context: context
+                    )
+
+                    // Handle the result
+                    let resultString: String
+                    switch result {
+                    case .immediate(let json):
+                        resultString = json.rawString() ?? "{}"
+
+                    case .pendingUserAction(let uiRequest):
+                        // Present UI and wait for user response
+                        let uiResponse = await handleToolUIRequest(uiRequest)
+                        switch uiResponse {
+                        case .skillExperienceResults(let results):
+                            resultString = QueryUserExperienceLevelTool.formatResults(results)
+                        case .cancelled:
+                            resultString = QueryUserExperienceLevelTool.formatCancellation()
+                        }
+
+                    case .error(let errorMessage):
+                        resultString = """
+                        {"error": "\(errorMessage)"}
+                        """
+                    }
+
+                    // Add tool result message
+                    messages.append(ChatCompletionParameters.Message(
+                        role: .tool,
+                        content: .text(resultString),
+                        toolCallID: toolCallId
+                    ))
+                }
+            } else {
+                // No tool calls - return the final response
+                let finalContent = message.content ?? ""
+                Logger.info("🔧 [Tools] Conversation complete, returning final response")
+                return finalContent
+            }
+        }
+
+        throw LLMError.clientError("Tool execution exceeded maximum iterations")
+    }
+
+    /// Handle UI request from a tool by presenting the appropriate UI and waiting for response
+    @MainActor
+    private func handleToolUIRequest(_ request: ResumeToolUIRequest) async -> ResumeToolUIResponse {
+        switch request {
+        case .skillExperiencePicker(let skills):
+            return await presentSkillExperiencePicker(skills)
+        }
+    }
+
+    /// Present the skill experience picker and wait for user response
+    @MainActor
+    private func presentSkillExperiencePicker(_ skills: [SkillQuery]) async -> ResumeToolUIResponse {
+        return await withCheckedContinuation { continuation in
+            self.skillUIResponseContinuation = continuation
+            self.pendingSkillQueries = skills
+            self.showSkillExperiencePicker = true
+            // The continuation will be resumed by submitSkillExperienceResults or cancelSkillExperienceQuery
+        }
+    }
+
+    /// Submit skill experience results from the UI
+    func submitSkillExperienceResults(_ results: [SkillExperienceResult]) {
+        showSkillExperiencePicker = false
+        pendingSkillQueries = []
+        skillUIResponseContinuation?.resume(returning: .skillExperienceResults(results))
+        skillUIResponseContinuation = nil
+    }
+
+    /// Cancel the skill experience query
+    func cancelSkillExperienceQuery() {
+        showSkillExperiencePicker = false
+        pendingSkillQueries = []
+        skillUIResponseContinuation?.resume(returning: .cancelled)
+        skillUIResponseContinuation = nil
+    }
+
+    /// Parse revisions from a raw LLM response string
+    private func parseRevisionsFromResponse(_ response: String) throws -> RevisionsContainer {
+        // Try to extract JSON from the response
+        // The response may contain markdown code blocks or just raw JSON
+        let jsonString: String
+        if let jsonStart = response.range(of: "["),
+           let jsonEnd = response.range(of: "]", options: .backwards) {
+            // Extract the JSON array portion
+            jsonString = String(response[jsonStart.lowerBound...jsonEnd.upperBound])
+        } else if let jsonStart = response.range(of: "{"),
+                  let jsonEnd = response.range(of: "}", options: .backwards) {
+            // Try object format (the container might be an object with revArray)
+            jsonString = String(response[jsonStart.lowerBound...jsonEnd.upperBound])
+        } else {
+            jsonString = response
+        }
+
+        guard let data = jsonString.data(using: .utf8) else {
+            throw LLMError.clientError("Failed to convert response to data")
+        }
+
+        // Try to decode as RevisionsContainer first
+        do {
+            return try JSONDecoder().decode(RevisionsContainer.self, from: data)
+        } catch {
+            // Try to decode as an array of revisions directly
+            do {
+                let revisions = try JSONDecoder().decode([ProposedRevisionNode].self, from: data)
+                return RevisionsContainer(revArray: revisions)
+            } catch {
+                Logger.error("Failed to parse revisions from response: \(error.localizedDescription)")
+                Logger.debug("Response was: \(response.prefix(500))...")
+                throw LLMError.clientError("Failed to parse revision response: \(error.localizedDescription)")
+            }
+        }
+    }
+
     // MARK: - Review Workflow Navigation (Moved from ReviewView)
     /// Save the current feedback and move to next node
     /// Clean interface that delegates to node logic

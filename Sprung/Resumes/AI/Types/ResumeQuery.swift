@@ -321,14 +321,24 @@ import SwiftUI
         OUTPUT INSTRUCTIONS:
         - Return your proposed revisions as JSON matching the RevNode array schema provided.
         - For each original EditableNode, include exactly one RevNode in the RevArray.
-        - GROUPED NODES: Some EditableNodes contain grouped content (isGrouped=true) with multiple child values.
-          For grouped nodes, you may return EITHER:
-          - A single "newValue" string with all items (separated by newlines or commas as appropriate)
-          - A "newValueArray" array of strings if you want to add/remove/reorder items
-        - SCALAR NODES: For regular (non-grouped) nodes, use the standard "newValue" string.
-        - If no change is required for a given node, set "newValue" to "" and "valueChanged" to false.
-        - The "why" field can be an empty string if the reason is self-explanatory.
-        - Do **not** modify the "id" or "treePath" fields. Always return the exact same values you received for those fields for each node.
+
+        GROUPED NODES (isGrouped=true):
+        - These nodes represent multiple items (e.g., bullet points for a job, keywords for a skill category).
+        - Input provides: "oldValueArray" (array of current items) and "value" (items joined by newlines).
+        - Your response MUST include "newValueArray" with your proposed items as an array.
+        - You MAY add new items, remove items, reorder items, or modify individual items.
+        - Set "newValue" to the items joined by newlines (for display purposes).
+        - Set "isGrouped": true in your response.
+
+        SCALAR NODES (isGrouped=false or not present):
+        - These are single-value fields (e.g., job title, company name).
+        - Use standard "oldValue" and "newValue" strings.
+        - Do NOT include array fields for scalar nodes.
+
+        FOR ALL NODES:
+        - If no change is required, set "newValue" to "" and "valueChanged" to false.
+        - The "why" field can be empty if the reason is self-explanatory.
+        - Do NOT modify "id" or "treePath" - return them exactly as received.
         SUMMARY:
         Make the resume as compelling and accurate as possible for the target job. \
         Keep it honest, relevant, and ensure that any additions or modifications support \(applicant.name)’s candidacy for the role. \

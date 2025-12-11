@@ -39,6 +39,15 @@ struct AppSheetsModifier: ViewModifier {
             }
         )
     }
+
+    private var skillExperiencePickerBinding: Binding<Bool> {
+        Binding(
+            get: { resumeReviseViewModel.showSkillExperiencePicker },
+            set: { newValue in
+                resumeReviseViewModel.showSkillExperiencePicker = newValue
+            }
+        )
+    }
     func body(content: Content) -> some View {
         content
             .sheet(isPresented: $sheets.showNewJobApp) {
@@ -122,6 +131,17 @@ struct AppSheetsModifier: ViewModifier {
                     },
                     onCardAdded: { card in
                         resRefStore.addResRef(card)
+                    }
+                )
+            }
+            .sheet(isPresented: skillExperiencePickerBinding) {
+                SkillExperiencePickerSheet(
+                    skills: resumeReviseViewModel.pendingSkillQueries,
+                    onComplete: { results in
+                        resumeReviseViewModel.submitSkillExperienceResults(results)
+                    },
+                    onCancel: {
+                        resumeReviseViewModel.cancelSkillExperienceQuery()
                     }
                 )
             }
