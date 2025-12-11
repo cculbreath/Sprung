@@ -26,34 +26,57 @@ struct ResumeDetailView: View {
         externalIsWide = isWide
     }
     // MARK: – Body ---------------------------------------------------------
+
+    /// Node names that are not user content (handled separately)
+    private static let nonContentNodes: Set<String> = ["styling", "template"]
+
     var body: some View {
         @Bindable var vm = vm // enable Observation bindings
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 if let root = vm.rootNode {
-                    Text("Content")
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                        .padding(.horizontal, 10)
-                        .padding(.top, 12)
-                    ForEach(root.orderedChildren, id: \.id) { viewNode in
-                        topLevelNodeView(viewNode)
+                    // Content section - user data nodes only
+                    let contentNodes = root.orderedChildren.filter { !Self.nonContentNodes.contains($0.name) }
+                    if !contentNodes.isEmpty {
+                        Text("Content")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .padding(.horizontal, 10)
+                            .padding(.top, 12)
+                        ForEach(contentNodes, id: \.id) { viewNode in
+                            topLevelNodeView(viewNode)
+                        }
+                    }
+
+                    // Template section - manifest-defined fields (rendered generically)
+                    if let templateNode = root.orderedChildren.first(where: { $0.name == "template" }),
+                       !templateNode.orderedChildren.isEmpty {
+                        Text("Template")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .padding(.horizontal, 10)
+                            .padding(.top, 16)
+                        ForEach(templateNode.orderedChildren, id: \.id) { childNode in
+                            topLevelNodeView(childNode)
+                        }
                     }
                 }
+
+                // Styling section - special-cased panels
                 let hasStylePanels = vm.hasFontSizeNodes || vm.hasSectionVisibilityOptions
                 if hasStylePanels {
-                    Text("Style")
+                    Text("Styling")
                         .font(.headline)
                         .fontWeight(.semibold)
                         .padding(.horizontal, 10)
                         .padding(.top, 16)
                     VStack(alignment: .leading, spacing: 8) {
-                        if vm.hasSectionVisibilityOptions {
-                            SectionVisibilityPanelView()
-                                .padding(.horizontal, 10)
-                        }
                         if vm.hasFontSizeNodes {
                             FontSizePanelView()
+                                .padding(.horizontal, 10)
+                        }
+                        if vm.hasSectionVisibilityOptions {
+                            SectionVisibilityPanelView()
                                 .padding(.horizontal, 10)
                         }
                     }

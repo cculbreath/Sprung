@@ -78,20 +78,25 @@ enum ResumeContextBuilder {
 
     /// Add template fields, preferring TreeNode values (user edits) over manifest defaults.
     /// These are accessed as template.sectionLabels.work, template.fontSizes.name, etc.
+    ///
+    /// TreeNode structure:
+    /// - "template" node contains sectionLabels (manifest-defined fields)
+    /// - "styling" node contains fontSizes (special-cased)
     private static func addTemplateFields(to context: inout [String: Any], manifest: TemplateManifest) {
         var templateFields: [String: Any] = [:]
 
-        // Get styling from context (built from TreeNode)
+        // Get template and styling from context (built from TreeNode)
+        let templateNode = context["template"] as? [String: Any]
         let styling = context["styling"] as? [String: Any]
 
-        // sectionLabels: prefer TreeNode, fallback to manifest
-        if let treeSectionLabels = styling?["sectionLabels"] as? [String: Any], !treeSectionLabels.isEmpty {
+        // sectionLabels: prefer TreeNode (under template), fallback to manifest
+        if let treeSectionLabels = templateNode?["sectionLabels"] as? [String: Any], !treeSectionLabels.isEmpty {
             templateFields["sectionLabels"] = treeSectionLabels
         } else if let sectionLabels = manifest.sectionVisibilityLabels, !sectionLabels.isEmpty {
             templateFields["sectionLabels"] = sectionLabels
         }
 
-        // fontSizes: prefer TreeNode, fallback to manifest
+        // fontSizes: prefer TreeNode (under styling), fallback to manifest
         if let treeFontSizes = styling?["fontSizes"] as? [String: Any], !treeFontSizes.isEmpty {
             templateFields["fontSizes"] = treeFontSizes
         } else if let stylingSection = manifest.section(for: "styling"),

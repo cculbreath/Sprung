@@ -597,9 +597,29 @@ final class ExperienceDefaultsToTree {
 
     // MARK: - Editable Template Fields
 
-    /// Build editable template fields (fontSizes, sectionLabels) from manifest defaults.
-    /// These are stored in TreeNode for editing but also added to context at render time.
+    /// Build editable template fields from manifest defaults.
+    ///
+    /// Creates two top-level nodes:
+    /// - "styling": Contains fontSizes (special-cased, used by FontSizePanelView)
+    /// - "template": Contains manifest-defined fields like sectionLabels (rendered generically)
+    ///
+    /// These are stored in TreeNode for editing and merged into context at render time.
     private func buildEditableTemplateFields(parent: TreeNode) {
+        // Build styling node with fontSizes (special-cased for FontSizePanelView)
+        buildStylingNode(parent: parent)
+
+        // Build template node with manifest-defined fields (rendered generically)
+        buildTemplateNode(parent: parent)
+    }
+
+    /// Build the styling node containing fontSizes.
+    /// FontSizes is special-cased because it has a dedicated panel (FontSizePanelView).
+    private func buildStylingNode(parent: TreeNode) {
+        guard let stylingSection = manifest.section(for: "styling"),
+              let defaultContext = stylingSection.defaultContextValue() as? [String: Any],
+              let fontSizes = defaultContext["fontSizes"] as? [String: String],
+              !fontSizes.isEmpty else { return }
+
         // Find or create styling node
         var stylingNode = parent.children?.first(where: { $0.name == "styling" })
         if stylingNode == nil {
@@ -610,15 +630,10 @@ final class ExperienceDefaultsToTree {
                 status: .isNotLeaf,
                 resume: resume
             ))
-            stylingNode?.editorLabel = "Style"
         }
 
         // Build fontSizes under styling
-        if let styling = stylingNode,
-           let stylingSection = manifest.section(for: "styling"),
-           let defaultContext = stylingSection.defaultContextValue() as? [String: Any],
-           let fontSizes = defaultContext["fontSizes"] as? [String: String] {
-
+        if let styling = stylingNode {
             let fontSizesNode = styling.addChild(TreeNode(
                 name: "fontSizes",
                 value: "",
@@ -638,12 +653,28 @@ final class ExperienceDefaultsToTree {
                 ))
             }
         }
+    }
 
-        // Build sectionLabels under styling
-        if let styling = stylingNode,
-           let labels = manifest.sectionVisibilityLabels, !labels.isEmpty {
+    /// Build the template node containing manifest-defined fields.
+    /// These are rendered generically in the view (no hardcoded field names).
+    private func buildTemplateNode(parent: TreeNode) {
+        var templateNode: TreeNode?
 
-            let sectionLabelsNode = styling.addChild(TreeNode(
+        // Add sectionLabels if available
+        if let labels = manifest.sectionVisibilityLabels, !labels.isEmpty {
+            // Create template node on demand
+            if templateNode == nil {
+                templateNode = parent.addChild(TreeNode(
+                    name: "template",
+                    value: "",
+                    inEditor: true,
+                    status: .isNotLeaf,
+                    resume: resume
+                ))
+                templateNode?.editorLabel = "Template"
+            }
+
+            let sectionLabelsNode = templateNode!.addChild(TreeNode(
                 name: "sectionLabels",
                 value: "",
                 inEditor: true,
@@ -662,6 +693,8 @@ final class ExperienceDefaultsToTree {
                 ))
             }
         }
+
+        // Future manifest-defined fields can be added here
     }
 
     // MARK: - Editor Label Helper
