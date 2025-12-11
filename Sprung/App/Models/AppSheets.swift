@@ -60,31 +60,10 @@ struct AppSheetsModifier: ViewModifier {
                 }
             }
             .sheet(isPresented: revisionSheetBinding) {
-                if let selectedResume = jobAppStore.selectedApp?.selectedRes {
-                    RevisionReviewView(
-                        viewModel: resumeReviseViewModel,
-                        resume: .constant(selectedResume)
-                    )
-                    .frame(minWidth: 650)
-                    .onAppear {
-                        Logger.debug(
-                            "🔍 [AppSheets] Creating RevisionReviewView with resume: \(selectedResume.id.uuidString)",
-                            category: .ui
-                        )
-                        Logger.debug(
-                            "🔍 [AppSheets] ViewModel has \(resumeReviseViewModel.resumeRevisions.count) revisions",
-                            category: .ui
-                        )
-                    }
-                } else {
-                    Text("Error: Missing resume")
-                        .frame(width: 400, height: 300)
-                        .onAppear {
-                            Logger.debug("🔍 [AppSheets] Failed to get selectedResume", category: .ui)
-                            Logger.debug("🔍 [AppSheets] jobAppStore.selectedApp: \(jobAppStore.selectedApp?.id.uuidString ?? "nil")", category: .ui)
-                            Logger.debug("🔍 [AppSheets] jobAppStore.selectedApp?.selectedRes: \(jobAppStore.selectedApp?.selectedRes?.id.uuidString ?? "nil")", category: .ui)
-                        }
-                }
+                RevisionReviewSheetContent(
+                    resumeReviseViewModel: resumeReviseViewModel,
+                    selectedResume: jobAppStore.selectedApp?.selectedRes
+                )
             }
             .sheet(isPresented: $sheets.showMultiModelChooseBest) {
                 if jobAppStore.selectedApp != nil,
@@ -147,6 +126,66 @@ struct AppSheetsModifier: ViewModifier {
             }
     }
 }
+// MARK: - Revision Review Sheet Content
+/// Wrapper view that includes the reasoning stream overlay inside the sheet
+private struct RevisionReviewSheetContent: View {
+    @Bindable var resumeReviseViewModel: ResumeReviseViewModel
+    let selectedResume: Resume?
+    @Environment(ReasoningStreamManager.self) private var reasoningStreamManager
+
+    var body: some View {
+        ZStack {
+            if let resume = selectedResume {
+                RevisionReviewView(
+                    viewModel: resumeReviseViewModel,
+                    resume: .constant(resume)
+                )
+                .frame(minWidth: 850)
+                .onAppear {
+                    Logger.debug(
+                        "🔍 [AppSheets] Creating RevisionReviewView with resume: \(resume.id.uuidString)",
+                        category: .ui
+                    )
+                    Logger.debug(
+                        "🔍 [AppSheets] ViewModel has \(resumeReviseViewModel.resumeRevisions.count) revisions",
+                        category: .ui
+                    )
+                }
+            } else {
+                Text("Error: Missing resume")
+                    .frame(width: 400, height: 300)
+                    .onAppear {
+                        Logger.debug("🔍 [AppSheets] Failed to get selectedResume", category: .ui)
+                    }
+            }
+        }
+        // Reasoning stream as sheet-level overlay so it appears on top
+        .overlay {
+            if reasoningStreamManager.isVisible {
+                ReasoningStreamView(
+                    isVisible: Binding(
+                        get: { reasoningStreamManager.isVisible },
+                        set: { reasoningStreamManager.isVisible = $0 }
+                    ),
+                    reasoningText: Binding(
+                        get: { reasoningStreamManager.reasoningText },
+                        set: { reasoningStreamManager.reasoningText = $0 }
+                    ),
+                    isStreaming: Binding(
+                        get: { reasoningStreamManager.isStreaming },
+                        set: { reasoningStreamManager.isStreaming = $0 }
+                    ),
+                    errorMessage: Binding(
+                        get: { reasoningStreamManager.errorMessage },
+                        set: { reasoningStreamManager.errorMessage = $0 }
+                    ),
+                    modelName: reasoningStreamManager.modelName
+                )
+            }
+        }
+    }
+}
+
 // MARK: - Helper View Extension
 extension View {
     func appSheets(sheets: Binding<AppSheets>, clarifyingQuestions: Binding<[ClarifyingQuestion]>, refPopup: Binding<Bool>) -> some View {

@@ -37,6 +37,7 @@ class PhaseReviewManager {
     private let streamingService: RevisionStreamingService
     private let applicantProfileStore: ApplicantProfileStore
     private let resRefStore: ResRefStore
+    private let toolRunner: ToolConversationRunner
     weak var delegate: PhaseReviewDelegate?
 
     // MARK: - Phase Review State
@@ -54,7 +55,8 @@ class PhaseReviewManager {
         exportCoordinator: ResumeExportCoordinator,
         streamingService: RevisionStreamingService,
         applicantProfileStore: ApplicantProfileStore,
-        resRefStore: ResRefStore
+        resRefStore: ResRefStore,
+        toolRunner: ToolConversationRunner
     ) {
         self.llm = llm
         self.openRouterService = openRouterService
@@ -63,6 +65,72 @@ class PhaseReviewManager {
         self.streamingService = streamingService
         self.applicantProfileStore = applicantProfileStore
         self.resRefStore = resRefStore
+        self.toolRunner = toolRunner
+    }
+
+    // MARK: - Tool UI State Forwarding
+
+    var showSkillExperiencePicker: Bool {
+        get { toolRunner.showSkillExperiencePicker }
+        set { toolRunner.showSkillExperiencePicker = newValue }
+    }
+
+    var pendingSkillQueries: [SkillQuery] {
+        get { toolRunner.pendingSkillQueries }
+        set { toolRunner.pendingSkillQueries = newValue }
+    }
+
+    func submitSkillExperienceResults(_ results: [SkillExperienceResult]) {
+        toolRunner.submitSkillExperienceResults(results)
+    }
+
+    func cancelSkillExperienceQuery() {
+        toolRunner.cancelSkillExperienceQuery()
+    }
+
+    // MARK: - Tool Response Parsing
+
+    /// Parse PhaseReviewContainer from a raw LLM response string (used with tool-enabled conversations)
+    private func parsePhaseReviewFromResponse(_ response: String) throws -> PhaseReviewContainer {
+        // Try to extract JSON from the response
+        // The response may contain markdown code blocks or just raw JSON
+        let jsonString: String
+        if let jsonStart = response.range(of: "{"),
+           let jsonEnd = response.range(of: "}", options: .backwards) {
+            jsonString = String(response[jsonStart.lowerBound...jsonEnd.upperBound])
+        } else {
+            jsonString = response
+        }
+
+        guard let data = jsonString.data(using: .utf8) else {
+            throw LLMError.clientError("Failed to convert response to data")
+        }
+
+        do {
+            return try JSONDecoder().decode(PhaseReviewContainer.self, from: data)
+        } catch {
+            Logger.error("Failed to parse phase review from response: \(error.localizedDescription)")
+            Logger.debug("Response was: \(response.prefix(500))...")
+            throw LLMError.clientError("Failed to parse phase review response: \(error.localizedDescription)")
+        }
+    }
+
+    /// Build system prompt augmentation for tool-enabled phase review
+    private func buildToolSystemPromptAddendum() -> String {
+        return """
+
+            You have access to the `query_user_experience_level` tool.
+            Use this tool when you suspect the applicant has a skill that strongly aligns with
+            job requirements, but direct evidence is not in the background documents. For example,
+            a physicist likely has familiarity with electricity and magnetism even if their docs
+            only mention particle physics, or a React developer may have React Native experience.
+
+            If the tool returns an error indicating the user skipped the query, proceed with
+            your best judgment based on available information.
+
+            After gathering any needed information via tools, provide your review proposals
+            in the specified JSON format.
+            """
     }
 
     // MARK: - Phase Detection
@@ -113,51 +181,161 @@ class PhaseReviewManager {
         return result
     }
 
-    // MARK: - Phase Workflow
+    /// Build the two-round review structure:
+    /// - Round 1: Phase 1 items from explicitly configured sections
+    /// - Round 2: Everything else (phase 2+ from configured sections + all other AI-selected nodes)
+    func buildReviewRounds(for resume: Resume) -> (phase1: [ExportedReviewNode], phase2: [ExportedReviewNode]) {
+        guard let rootNode = resume.rootNode else { return ([], []) }
 
-    /// Start the multi-phase review workflow for a section.
-    func startPhaseReview(
-        resume: Resume,
-        section: String,
-        phases: [TemplateManifest.ReviewPhaseConfig],
-        modelId: String
-    ) async throws {
+        let explicitPhases = sectionsWithActiveReviewPhases(for: resume)
+        let explicitSectionNames = Set(explicitPhases.map { $0.section.lowercased() })
+
+        var phase1Nodes: [ExportedReviewNode] = []
+        var phase2Nodes: [ExportedReviewNode] = []
+
+        // Process explicitly configured sections
+        for (_, phases) in explicitPhases {
+            let sortedPhases = phases.sorted { $0.phase < $1.phase }
+
+            for phaseConfig in sortedPhases {
+                let nodes = TreeNode.exportNodesMatchingPath(phaseConfig.field, from: rootNode)
+                if phaseConfig.phase == 1 {
+                    phase1Nodes.append(contentsOf: nodes)
+                } else {
+                    // Phase 2+ goes into the combined round
+                    phase2Nodes.append(contentsOf: nodes)
+                }
+            }
+        }
+
+        // Add all other AI-selected nodes to phase 2
+        if let children = rootNode.children {
+            for sectionNode in children {
+                let sectionName = sectionNode.name.lowercased()
+
+                // Skip sections with explicit phases (already processed above)
+                if explicitSectionNames.contains(sectionName) { continue }
+
+                // Export all AI-selected nodes from this section
+                let sectionNodes = exportAllAISelectedNodes(from: sectionNode)
+                phase2Nodes.append(contentsOf: sectionNodes)
+            }
+        }
+
+        Logger.info("📋 Review rounds: Phase 1 has \(phase1Nodes.count) nodes, Phase 2 has \(phase2Nodes.count) nodes")
+        return (phase1Nodes, phase2Nodes)
+    }
+
+    /// Export all AI-selected nodes from a section node (recursively)
+    private func exportAllAISelectedNodes(from sectionNode: TreeNode) -> [ExportedReviewNode] {
+        var result: [ExportedReviewNode] = []
+
+        func traverse(_ node: TreeNode, path: String) {
+            let currentPath = path.isEmpty ? node.name : "\(path).\(node.name)"
+
+            // Check if this node is selected for AI
+            if node.status == .aiToReplace {
+                let hasChildren = node.children?.isEmpty == false
+                let childValues = hasChildren ? node.children?.map { $0.value }.filter { !$0.isEmpty } : nil
+
+                let exportedNode = ExportedReviewNode(
+                    id: node.id,
+                    path: currentPath,
+                    displayName: node.displayLabel,
+                    value: node.value,
+                    childValues: childValues,
+                    childCount: childValues?.count ?? 0
+                )
+                result.append(exportedNode)
+            }
+
+            // Recurse into children
+            if let children = node.children {
+                for child in children {
+                    traverse(child, path: currentPath)
+                }
+            }
+        }
+
+        traverse(sectionNode, path: "")
+        return result
+    }
+
+    /// Tracks whether phase 1 has been completed
+    private var phase1Completed = false
+
+    /// Cached phase 2 nodes (populated after phase 1 completes)
+    private var cachedPhase2Nodes: [ExportedReviewNode] = []
+
+    // MARK: - Two-Round Workflow
+
+    /// Start the two-round review workflow.
+    /// Round 1: Phase 1 items from configured sections
+    /// Round 2: Everything else (phase 2+ items + all other AI-selected nodes)
+    func startTwoRoundReview(resume: Resume, modelId: String) async throws {
         delegate?.markWorkflowStarted()
         delegate?.setProcessingRevisions(true)
 
-        // Initialize phase review state
+        // Reset state
+        phase1Completed = false
+        cachedPhase2Nodes = []
         phaseReviewState.reset()
-        phaseReviewState.isActive = true
-        phaseReviewState.currentSection = section
-        phaseReviewState.phases = phases
-        phaseReviewState.currentPhaseIndex = 0
 
-        guard let rootNode = resume.rootNode else {
-            Logger.error("❌ No root node found for phase review")
+        guard resume.rootNode != nil else {
+            Logger.error("❌ No root node found")
             delegate?.setProcessingRevisions(false)
-            phaseReviewState.reset()
             delegate?.setWorkflowCompleted()
             throw NSError(domain: "PhaseReviewManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "No root node found"])
         }
 
-        guard let currentPhase = phaseReviewState.currentPhase else {
-            Logger.error("❌ No phases configured")
+        // Build both rounds upfront
+        let (phase1Nodes, phase2Nodes) = buildReviewRounds(for: resume)
+        cachedPhase2Nodes = phase2Nodes
+
+        // Determine which round to start with
+        let nodesToReview: [ExportedReviewNode]
+        let roundNumber: Int
+
+        if !phase1Nodes.isEmpty {
+            nodesToReview = phase1Nodes
+            roundNumber = 1
+            Logger.info("🚀 Starting Round 1 with \(phase1Nodes.count) nodes")
+        } else if !phase2Nodes.isEmpty {
+            nodesToReview = phase2Nodes
+            roundNumber = 2
+            phase1Completed = true  // Skip phase 1 if empty
+            Logger.info("🚀 No Phase 1 nodes, starting Round 2 with \(phase2Nodes.count) nodes")
+        } else {
+            Logger.warning("⚠️ No nodes to review")
             delegate?.setProcessingRevisions(false)
-            phaseReviewState.reset()
             delegate?.setWorkflowCompleted()
             return
         }
 
+        try await startRound(
+            nodes: nodesToReview,
+            roundNumber: roundNumber,
+            resume: resume,
+            modelId: modelId
+        )
+    }
+
+    /// Start a review round with the given nodes
+    private func startRound(
+        nodes: [ExportedReviewNode],
+        roundNumber: Int,
+        resume: Resume,
+        modelId: String
+    ) async throws {
+        // Initialize phase review state for this round
+        phaseReviewState.isActive = true
+        phaseReviewState.currentSection = roundNumber == 1 ? "Phase 1" : "All Fields"
+        phaseReviewState.phases = [TemplateManifest.ReviewPhaseConfig(phase: roundNumber, field: "*", bundle: false)]
+        phaseReviewState.currentPhaseIndex = 0
+
+        Logger.info("🚀 Starting Round \(roundNumber) - \(nodes.count) nodes")
+
         do {
-            let exportedNodes = TreeNode.exportNodesMatchingPath(currentPhase.field, from: rootNode)
-            guard !exportedNodes.isEmpty else {
-                Logger.warning("⚠️ No nodes found matching path '\(currentPhase.field)'")
-                await advanceToNextPhase(resume: resume)
-                return
-            }
-
-            Logger.info("🚀 Starting Phase \(currentPhase.phase) for '\(section)' - \(exportedNodes.count) nodes matching '\(currentPhase.field)'")
-
             let query = ResumeApiQuery(
                 resume: resume,
                 exportCoordinator: exportCoordinator,
@@ -166,17 +344,21 @@ class PhaseReviewManager {
                 saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
             )
 
+            let sectionName = roundNumber == 1 ? "Phase 1" : "All Fields"
             let systemPrompt = query.genericSystemMessage.textContent
             let userPrompt = await query.phaseReviewPrompt(
-                section: section,
-                phaseNumber: currentPhase.phase,
-                fieldPath: currentPhase.field,
-                nodes: exportedNodes,
-                isBundled: currentPhase.bundle
+                section: sectionName,
+                phaseNumber: roundNumber,
+                fieldPath: "*",
+                nodes: nodes,
+                isBundled: false
             )
 
             let model = openRouterService.findModel(id: modelId)
             let supportsReasoning = model?.supportsReasoning ?? false
+            let useTools = toolRunner.shouldUseTools(modelId: modelId, openRouterService: openRouterService)
+
+            Logger.debug("🤖 [startRound] Model: \(modelId), supportsReasoning: \(supportsReasoning), useTools: \(useTools)")
 
             if !supportsReasoning {
                 reasoningStreamManager.hideAndClear()
@@ -185,7 +367,7 @@ class PhaseReviewManager {
             let reviewContainer: PhaseReviewContainer
 
             if supportsReasoning {
-                Logger.info("🧠 Using streaming with reasoning for phase review: \(modelId)")
+                Logger.info("🧠 Using streaming with reasoning for round \(roundNumber): \(modelId)")
                 let userEffort = UserDefaults.standard.string(forKey: "reasoningEffort") ?? "medium"
                 let reasoning = OpenRouterReasoning(effort: userEffort, includeReasoning: true)
 
@@ -201,8 +383,23 @@ class PhaseReviewManager {
                 delegate?.setConversationContext(conversationId: result.conversationId, modelId: modelId)
                 reviewContainer = result.response
 
+            } else if useTools {
+                Logger.info("🔧 [Tools] Using tool-enabled conversation for round \(roundNumber): \(modelId)")
+
+                let toolSystemPrompt = systemPrompt + buildToolSystemPromptAddendum()
+
+                let finalResponse = try await toolRunner.runConversation(
+                    systemPrompt: toolSystemPrompt,
+                    userPrompt: userPrompt + "\n\nPlease provide your review proposals in the specified JSON format.",
+                    modelId: modelId,
+                    resume: resume,
+                    jobApp: nil
+                )
+
+                reviewContainer = try parsePhaseReviewFromResponse(finalResponse)
+
             } else {
-                Logger.info("📝 Using non-streaming for phase review: \(modelId)")
+                Logger.info("📝 Using non-streaming for round \(roundNumber): \(modelId)")
 
                 let (conversationId, _) = try await llm.startConversation(
                     systemPrompt: systemPrompt,
@@ -222,19 +419,18 @@ class PhaseReviewManager {
             }
 
             phaseReviewState.currentReview = reviewContainer
-            Logger.info("✅ Phase \(currentPhase.phase) received \(reviewContainer.items.count) review proposals")
+            Logger.info("✅ Round \(roundNumber) received \(reviewContainer.items.count) review proposals")
 
-            if !currentPhase.bundle {
-                phaseReviewState.pendingItemIds = reviewContainer.items.map { $0.id }
-                phaseReviewState.currentItemIndex = 0
-            }
+            // Always unbundled - individual item review
+            phaseReviewState.pendingItemIds = reviewContainer.items.map { $0.id }
+            phaseReviewState.currentItemIndex = 0
 
             reasoningStreamManager.hideAndClear()
             delegate?.showReviewSheet()
             delegate?.setProcessingRevisions(false)
 
         } catch {
-            Logger.error("❌ Phase review failed: \(error.localizedDescription)")
+            Logger.error("❌ Round \(roundNumber) failed: \(error.localizedDescription)")
             delegate?.setProcessingRevisions(false)
             phaseReviewState.reset()
             delegate?.setWorkflowCompleted()
@@ -243,18 +439,70 @@ class PhaseReviewManager {
     }
 
     /// Complete the current phase and move to the next one.
+    /// If there are rejected items, applies accepted changes first, then triggers resubmission.
     func completeCurrentPhase(resume: Resume, context: ModelContext) {
         guard let currentReview = phaseReviewState.currentReview,
               let rootNode = resume.rootNode else { return }
 
+        // Check if there are rejected items that need resubmission
+        if hasItemsNeedingResubmission {
+            let rejectedCount = itemsNeedingResubmission.count
+            let acceptedItems = currentReview.items.filter {
+                $0.userDecision == .accepted || $0.userDecision == .acceptedOriginal
+            }
+
+            // Apply accepted changes NOW before resubmission
+            if !acceptedItems.isEmpty {
+                let acceptedReview = PhaseReviewContainer(
+                    section: currentReview.section,
+                    phaseNumber: currentReview.phaseNumber,
+                    fieldPath: currentReview.fieldPath,
+                    isBundled: currentReview.isBundled,
+                    items: acceptedItems
+                )
+                TreeNode.applyPhaseReviewChanges(acceptedReview, to: rootNode, context: context)
+                Logger.info("✅ Applied \(acceptedItems.count) accepted items before resubmission")
+            }
+
+            Logger.info("🔄 Resubmitting \(rejectedCount) rejected items")
+
+            // Capture review before clearing for UI
+            let reviewForResubmission = currentReview
+
+            // Show loading state IMMEDIATELY before async work
+            delegate?.setProcessingRevisions(true)
+            phaseReviewState.currentReview = nil  // Clear so UI shows loading, not "no items"
+
+            Task {
+                do {
+                    try await performPhaseResubmission(resume: resume, originalReview: reviewForResubmission)
+                } catch {
+                    Logger.error("❌ Resubmission failed: \(error.localizedDescription)")
+                    // On failure, advance anyway
+                    advanceToNextRound(resume: resume)
+                }
+            }
+            return
+        }
+
+        // No rejected items - apply all changes and advance
+        applyAllChangesAndAdvance(currentReview: currentReview, rootNode: rootNode, context: context, resume: resume)
+    }
+
+    /// Apply all accepted changes from current review and advance to next round.
+    private func applyAllChangesAndAdvance(currentReview: PhaseReviewContainer, rootNode: TreeNode, context: ModelContext, resume: Resume) {
         TreeNode.applyPhaseReviewChanges(currentReview, to: rootNode, context: context)
         phaseReviewState.approvedReviews.append(currentReview)
 
-        Logger.info("🔄 Phase \(phaseReviewState.currentPhaseIndex + 1) complete")
+        let roundNumber = phaseReviewState.phases.first?.phase ?? 1
+        Logger.info("✅ Round \(roundNumber) complete - all items accepted")
 
-        Task {
-            await advanceToNextPhase(resume: resume)
-        }
+        advanceToNextRound(resume: resume)
+    }
+
+    /// Advance to the next round (called after changes applied).
+    private func advanceToNextRound(resume: Resume) {
+        finishPhaseReview(resume: resume)
     }
 
     /// Advance to the next phase or finish the workflow.
@@ -296,6 +544,7 @@ class PhaseReviewManager {
                 saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
             )
 
+            let systemPrompt = query.genericSystemMessage.textContent
             let userPrompt = await query.phaseReviewPrompt(
                 section: phaseReviewState.currentSection,
                 phaseNumber: nextPhase.phase,
@@ -304,18 +553,21 @@ class PhaseReviewManager {
                 isBundled: nextPhase.bundle
             )
 
-            guard let conversationId = delegate?.currentConversationId else {
-                Logger.error("❌ No conversation context for next phase")
-                finishPhaseReview(resume: resume)
-                return
-            }
-
             let model = openRouterService.findModel(id: modelId)
             let supportsReasoning = model?.supportsReasoning ?? false
+            let useTools = toolRunner.shouldUseTools(modelId: modelId, openRouterService: openRouterService)
+
+            Logger.debug("🤖 [advanceToNextPhase] Model: \(modelId), supportsReasoning: \(supportsReasoning), useTools: \(useTools)")
 
             let reviewContainer: PhaseReviewContainer
 
             if supportsReasoning {
+                guard let conversationId = delegate?.currentConversationId else {
+                    Logger.error("❌ No conversation context for next phase (reasoning)")
+                    finishPhaseReview(resume: resume)
+                    return
+                }
+
                 let userEffort = UserDefaults.standard.string(forKey: "reasoningEffort") ?? "medium"
                 let reasoning = OpenRouterReasoning(effort: userEffort, includeReasoning: true)
 
@@ -327,7 +579,30 @@ class PhaseReviewManager {
                     jsonSchema: ResumeApiQuery.phaseReviewSchema,
                     as: PhaseReviewContainer.self
                 )
+
+            } else if useTools {
+                // Tool conversations start fresh for each phase (tool runner manages its own context)
+                Logger.info("🔧 [Tools] Using tool-enabled conversation for phase \(nextPhase.phase): \(modelId)")
+
+                let toolSystemPrompt = systemPrompt + buildToolSystemPromptAddendum()
+
+                let finalResponse = try await toolRunner.runConversation(
+                    systemPrompt: toolSystemPrompt,
+                    userPrompt: userPrompt + "\n\nPlease provide your review proposals in the specified JSON format.",
+                    modelId: modelId,
+                    resume: resume,
+                    jobApp: nil
+                )
+
+                reviewContainer = try parsePhaseReviewFromResponse(finalResponse)
+
             } else {
+                guard let conversationId = delegate?.currentConversationId else {
+                    Logger.error("❌ No conversation context for next phase (non-reasoning)")
+                    finishPhaseReview(resume: resume)
+                    return
+                }
+
                 reviewContainer = try await llm.continueConversationStructured(
                     userMessage: userPrompt,
                     modelId: modelId,
@@ -372,6 +647,7 @@ class PhaseReviewManager {
     }
 
     /// Reject current review item and move to next (for unbundled phases).
+    /// This marks for LLM resubmission without feedback.
     func rejectCurrentItemAndMoveNext() {
         guard var currentReview = phaseReviewState.currentReview,
               phaseReviewState.currentItemIndex < currentReview.items.count else { return }
@@ -382,15 +658,304 @@ class PhaseReviewManager {
         phaseReviewState.currentItemIndex += 1
     }
 
+    /// Reject current review item with feedback and move to next.
+    /// This marks for LLM resubmission with user feedback.
+    func rejectCurrentItemWithFeedback(_ feedback: String) {
+        guard var currentReview = phaseReviewState.currentReview,
+              phaseReviewState.currentItemIndex < currentReview.items.count else { return }
+
+        currentReview.items[phaseReviewState.currentItemIndex].userDecision = .rejectedWithFeedback
+        currentReview.items[phaseReviewState.currentItemIndex].userComment = feedback
+        phaseReviewState.currentReview = currentReview
+
+        phaseReviewState.currentItemIndex += 1
+    }
+
+    /// Accept current item with user edits and move to next.
+    func acceptCurrentItemWithEdits(_ editedValue: String?, editedChildren: [String]?, resume: Resume, context: ModelContext) {
+        guard var currentReview = phaseReviewState.currentReview,
+              phaseReviewState.currentItemIndex < currentReview.items.count else { return }
+
+        currentReview.items[phaseReviewState.currentItemIndex].userDecision = .accepted
+        currentReview.items[phaseReviewState.currentItemIndex].editedValue = editedValue
+        currentReview.items[phaseReviewState.currentItemIndex].editedChildren = editedChildren
+        phaseReviewState.currentReview = currentReview
+
+        phaseReviewState.currentItemIndex += 1
+
+        if phaseReviewState.currentItemIndex >= currentReview.items.count {
+            completeCurrentPhase(resume: resume, context: context)
+        }
+    }
+
+    /// Revert to original value and accept (no change applied).
+    func acceptOriginalAndMoveNext(resume: Resume, context: ModelContext) {
+        guard var currentReview = phaseReviewState.currentReview,
+              phaseReviewState.currentItemIndex < currentReview.items.count else { return }
+
+        currentReview.items[phaseReviewState.currentItemIndex].userDecision = .acceptedOriginal
+        phaseReviewState.currentReview = currentReview
+
+        phaseReviewState.currentItemIndex += 1
+
+        if phaseReviewState.currentItemIndex >= currentReview.items.count {
+            completeCurrentPhase(resume: resume, context: context)
+        }
+    }
+
+    // MARK: - Navigation
+
+    /// Navigate to previous item (for unbundled phases).
+    func goToPreviousItem() {
+        guard phaseReviewState.currentItemIndex > 0 else { return }
+        phaseReviewState.currentItemIndex -= 1
+    }
+
+    /// Navigate to next item (for unbundled phases).
+    func goToNextItem() {
+        guard let currentReview = phaseReviewState.currentReview,
+              phaseReviewState.currentItemIndex < currentReview.items.count - 1 else { return }
+        phaseReviewState.currentItemIndex += 1
+    }
+
+    /// Navigate to specific item index.
+    func goToItem(at index: Int) {
+        guard let currentReview = phaseReviewState.currentReview,
+              index >= 0 && index < currentReview.items.count else { return }
+        phaseReviewState.currentItemIndex = index
+    }
+
+    /// Check if can navigate to previous item.
+    var canGoToPrevious: Bool {
+        phaseReviewState.currentItemIndex > 0
+    }
+
+    /// Check if can navigate to next item.
+    var canGoToNext: Bool {
+        guard let currentReview = phaseReviewState.currentReview else { return false }
+        return phaseReviewState.currentItemIndex < currentReview.items.count - 1
+    }
+
+    /// Check if any items need LLM resubmission.
+    var hasItemsNeedingResubmission: Bool {
+        guard let currentReview = phaseReviewState.currentReview else { return false }
+        return currentReview.items.contains { $0.userDecision == .rejected || $0.userDecision == .rejectedWithFeedback }
+    }
+
+    /// Get items that need resubmission.
+    var itemsNeedingResubmission: [PhaseReviewItem] {
+        guard let currentReview = phaseReviewState.currentReview else { return [] }
+        return currentReview.items.filter { $0.userDecision == .rejected || $0.userDecision == .rejectedWithFeedback }
+    }
+
+    // MARK: - Resubmission
+
+    /// Perform LLM resubmission for rejected items in current phase.
+    /// After receiving new proposals, merges them back and resets for re-review.
+    func performPhaseResubmission(resume: Resume, originalReview: PhaseReviewContainer) async throws {
+        guard let currentPhase = phaseReviewState.currentPhase,
+              let modelId = delegate?.currentModelId else {
+            Logger.error("❌ Cannot perform resubmission: missing phase or model")
+            return
+        }
+
+        let rejectedItems = originalReview.items.filter {
+            $0.userDecision == .rejected || $0.userDecision == .rejectedWithFeedback
+        }
+        guard !rejectedItems.isEmpty else {
+            Logger.warning("⚠️ performPhaseResubmission called but no rejected items")
+            return
+        }
+
+        Logger.info("🔄 Starting phase resubmission for \(rejectedItems.count) rejected items")
+        // Processing state already set by caller
+
+        do {
+            let query = ResumeApiQuery(
+                resume: resume,
+                exportCoordinator: exportCoordinator,
+                applicantProfile: applicantProfileStore.currentProfile(),
+                allResRefs: resRefStore.resRefs,
+                saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
+            )
+
+            let systemPrompt = query.genericSystemMessage.textContent
+            let userPrompt = await query.phaseResubmissionPrompt(
+                section: phaseReviewState.currentSection,
+                phaseNumber: currentPhase.phase,
+                fieldPath: currentPhase.field,
+                rejectedItems: rejectedItems,
+                isBundled: currentPhase.bundle
+            )
+
+            let model = openRouterService.findModel(id: modelId)
+            let supportsReasoning = model?.supportsReasoning ?? false
+            let useTools = toolRunner.shouldUseTools(modelId: modelId, openRouterService: openRouterService)
+
+            Logger.debug("🤖 [performPhaseResubmission] Model: \(modelId), supportsReasoning: \(supportsReasoning), useTools: \(useTools)")
+
+            let resubmissionResponse: PhaseReviewContainer
+
+            if supportsReasoning {
+                guard let conversationId = delegate?.currentConversationId else {
+                    Logger.error("❌ No conversation context for resubmission (reasoning)")
+                    delegate?.setProcessingRevisions(false)
+                    return
+                }
+
+                let userEffort = UserDefaults.standard.string(forKey: "reasoningEffort") ?? "medium"
+                let reasoning = OpenRouterReasoning(effort: userEffort, includeReasoning: true)
+
+                resubmissionResponse = try await streamingService.continueConversationStreaming(
+                    userMessage: userPrompt,
+                    modelId: modelId,
+                    conversationId: conversationId,
+                    reasoning: reasoning,
+                    jsonSchema: ResumeApiQuery.phaseReviewSchema,
+                    as: PhaseReviewContainer.self
+                )
+
+            } else if useTools {
+                Logger.info("🔧 [Tools] Using tool-enabled conversation for resubmission: \(modelId)")
+
+                let toolSystemPrompt = systemPrompt + buildToolSystemPromptAddendum()
+
+                let finalResponse = try await toolRunner.runConversation(
+                    systemPrompt: toolSystemPrompt,
+                    userPrompt: userPrompt + "\n\nPlease provide your revised proposals in the specified JSON format.",
+                    modelId: modelId,
+                    resume: resume,
+                    jobApp: nil
+                )
+
+                resubmissionResponse = try parsePhaseReviewFromResponse(finalResponse)
+
+            } else {
+                guard let conversationId = delegate?.currentConversationId else {
+                    Logger.error("❌ No conversation context for resubmission (non-reasoning)")
+                    delegate?.setProcessingRevisions(false)
+                    return
+                }
+
+                resubmissionResponse = try await llm.continueConversationStructured(
+                    userMessage: userPrompt,
+                    modelId: modelId,
+                    conversationId: conversationId,
+                    as: PhaseReviewContainer.self,
+                    jsonSchema: ResumeApiQuery.phaseReviewSchema
+                )
+            }
+
+            // Merge resubmission results back into review
+            mergeResubmissionResults(resubmissionResponse, into: originalReview)
+
+            Logger.info("✅ Phase resubmission complete: \(resubmissionResponse.items.count) revised proposals received")
+
+            // Reset to beginning for re-review
+            phaseReviewState.currentItemIndex = 0
+            reasoningStreamManager.hideAndClear()
+            delegate?.setProcessingRevisions(false)
+
+        } catch {
+            Logger.error("❌ Phase resubmission failed: \(error.localizedDescription)")
+            delegate?.setProcessingRevisions(false)
+            throw error
+        }
+    }
+
+    /// Replace the current review with ONLY the resubmitted items.
+    /// Accepted items have already been applied, so we only need to track the rejected ones.
+    private func mergeResubmissionResults(_ resubmission: PhaseReviewContainer, into original: PhaseReviewContainer) {
+        // Get the original rejected items to preserve their originalValue
+        let originalRejectedById = Dictionary(
+            uniqueKeysWithValues: original.items
+                .filter { $0.userDecision == .rejected || $0.userDecision == .rejectedWithFeedback }
+                .map { ($0.id, $0) }
+        )
+
+        // Create new items from resubmission, preserving original values
+        var newItems: [PhaseReviewItem] = []
+        for newProposal in resubmission.items {
+            let originalItem = originalRejectedById[newProposal.id]
+            let item = PhaseReviewItem(
+                id: newProposal.id,
+                displayName: newProposal.displayName,
+                originalValue: originalItem?.originalValue ?? newProposal.originalValue,
+                proposedValue: newProposal.proposedValue,
+                action: newProposal.action,
+                reason: newProposal.reason,
+                userDecision: .pending,
+                userComment: "",
+                editedValue: nil,
+                editedChildren: nil,
+                originalChildren: originalItem?.originalChildren ?? newProposal.originalChildren,
+                proposedChildren: newProposal.proposedChildren
+            )
+            newItems.append(item)
+            Logger.debug("🔄 Resubmitted item '\(item.displayName)' ready for re-review")
+        }
+
+        // Create fresh review container with only the resubmitted items
+        let freshReview = PhaseReviewContainer(
+            section: original.section,
+            phaseNumber: original.phaseNumber,
+            fieldPath: original.fieldPath,
+            isBundled: original.isBundled,
+            items: newItems
+        )
+
+        phaseReviewState.currentReview = freshReview
+        Logger.info("📋 Review now contains \(newItems.count) resubmitted items for re-review")
+    }
+
     // MARK: - Workflow Completion
 
-    /// Finish the phase review workflow.
+    /// Finish the current round and check for more rounds.
     func finishPhaseReview(resume: Resume) {
-        Logger.info("🏁 Phase review complete for '\(phaseReviewState.currentSection)'")
-        Logger.info("  - Phases completed: \(phaseReviewState.approvedReviews.count)")
+        let completedRound = phaseReviewState.phases.first?.phase ?? 1
+        Logger.info("🏁 Round \(completedRound) complete")
+        Logger.info("  - Items reviewed: \(phaseReviewState.approvedReviews.count)")
 
         exportCoordinator.debounceExport(resume: resume)
 
+        // Check if round 1 just completed and there's a round 2
+        if !phase1Completed && !cachedPhase2Nodes.isEmpty {
+            Logger.info("📋 Moving to Round 2 with \(cachedPhase2Nodes.count) nodes")
+            phase1Completed = true
+
+            // Reset phase state for round 2
+            phaseReviewState.reset()
+
+            guard let modelId = delegate?.currentModelId else {
+                Logger.error("❌ No model ID for round 2")
+                finalizeWorkflow()
+                return
+            }
+
+            Task {
+                do {
+                    try await startRound(
+                        nodes: cachedPhase2Nodes,
+                        roundNumber: 2,
+                        resume: resume,
+                        modelId: modelId
+                    )
+                } catch {
+                    Logger.error("❌ Failed to start round 2: \(error.localizedDescription)")
+                    finalizeWorkflow()
+                }
+            }
+        } else {
+            // All rounds complete - finalize the workflow
+            Logger.info("✅ All rounds reviewed - workflow complete")
+            finalizeWorkflow()
+        }
+    }
+
+    /// Finalize the entire review workflow.
+    private func finalizeWorkflow() {
+        phase1Completed = false
+        cachedPhase2Nodes = []
         phaseReviewState.reset()
         delegate?.hideReviewSheet()
         delegate?.setWorkflowCompleted()

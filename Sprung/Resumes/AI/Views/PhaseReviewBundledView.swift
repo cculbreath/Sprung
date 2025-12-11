@@ -56,7 +56,7 @@ struct PhaseReviewBundledView: View {
             // Action buttons
             actionButtons
         }
-        .frame(width: 900)
+        .frame(minWidth: 600, idealWidth: 850, maxWidth: 900)
         .background(Color(NSColor.windowBackgroundColor))
         .confirmationDialog(
             "Cancel Review?",
@@ -530,16 +530,16 @@ struct PhaseReviewItemRow: View {
     private var backgroundColor: Color {
         switch item.userDecision {
         case .pending: return Color(NSColor.controlBackgroundColor)
-        case .accepted: return Color.green.opacity(0.05)
-        case .rejected: return Color.red.opacity(0.05)
+        case .accepted, .acceptedOriginal: return Color.green.opacity(0.05)
+        case .rejected, .rejectedWithFeedback: return Color.red.opacity(0.05)
         }
     }
 
     private var borderColor: Color {
         switch item.userDecision {
         case .pending: return Color.gray.opacity(0.2)
-        case .accepted: return Color.green.opacity(0.3)
-        case .rejected: return Color.red.opacity(0.3)
+        case .accepted, .acceptedOriginal: return Color.green.opacity(0.3)
+        case .rejected, .rejectedWithFeedback: return Color.red.opacity(0.3)
         }
     }
 }

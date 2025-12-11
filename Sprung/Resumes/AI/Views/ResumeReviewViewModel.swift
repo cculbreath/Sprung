@@ -26,7 +26,6 @@ class ResumeReviewViewModel {
         self.reasoningStreamManager = reasoningStreamManager
         self.openRouterService = openRouterService
         reviewService = ResumeReviewService(llmFacade: llmFacade)
-        reviewService?.initialize()
         if let svc = reviewService {
             fixOverflowService = FixOverflowService(reviewService: svc, exportCoordinator: exportCoordinator)
             reorderSkillsService = ReorderSkillsService(reviewService: svc, exportCoordinator: exportCoordinator)

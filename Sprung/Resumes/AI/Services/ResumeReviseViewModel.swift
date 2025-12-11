@@ -174,7 +174,8 @@ class ResumeReviseViewModel {
             exportCoordinator: exportCoordinator,
             streamingService: streaming,
             applicantProfileStore: applicantProfileStore,
-            resRefStore: resRefStore
+            resRefStore: resRefStore,
+            toolRunner: self.toolRunner
         )
 
         // Set up delegates
@@ -209,16 +210,15 @@ class ResumeReviseViewModel {
         modelId: String,
         workflow: RevisionWorkflowKind
     ) async throws {
-        // Check if any sections have multi-phase review configured
-        let sectionsWithPhases = phaseReviewManager.sectionsWithActiveReviewPhases(for: resume)
-        if let firstSection = sectionsWithPhases.first {
-            Logger.info("🎯 Using multi-phase review for '\(firstSection.section)' with \(firstSection.phases.count) phases")
-            try await phaseReviewManager.startPhaseReview(
-                resume: resume,
-                section: firstSection.section,
-                phases: firstSection.phases,
-                modelId: modelId
-            )
+        // Use two-round review workflow:
+        // Round 1: Phase 1 items from configured sections (e.g., skill category names)
+        // Round 2: Everything else (phase 2+ items + all other AI-selected nodes)
+        let (phase1Nodes, phase2Nodes) = phaseReviewManager.buildReviewRounds(for: resume)
+
+        if !phase1Nodes.isEmpty || !phase2Nodes.isEmpty {
+            Logger.info("🎯 Starting two-round review workflow")
+            Logger.info("📋 Round 1: \(phase1Nodes.count) nodes, Round 2: \(phase2Nodes.count) nodes")
+            try await phaseReviewManager.startTwoRoundReview(resume: resume, modelId: modelId)
             return
         }
 
@@ -485,18 +485,8 @@ class ResumeReviseViewModel {
         phaseReviewManager.sectionsWithActiveReviewPhases(for: resume)
     }
 
-    func startPhaseReview(
-        resume: Resume,
-        section: String,
-        phases: [TemplateManifest.ReviewPhaseConfig],
-        modelId: String
-    ) async throws {
-        try await phaseReviewManager.startPhaseReview(
-            resume: resume,
-            section: section,
-            phases: phases,
-            modelId: modelId
-        )
+    func startTwoRoundReview(resume: Resume, modelId: String) async throws {
+        try await phaseReviewManager.startTwoRoundReview(resume: resume, modelId: modelId)
     }
 
     func completeCurrentPhase(resume: Resume, context: ModelContext) {
@@ -509,6 +499,48 @@ class ResumeReviseViewModel {
 
     func rejectCurrentItemAndMoveNext() {
         phaseReviewManager.rejectCurrentItemAndMoveNext()
+    }
+
+    func rejectCurrentItemWithFeedback(_ feedback: String) {
+        phaseReviewManager.rejectCurrentItemWithFeedback(feedback)
+    }
+
+    func acceptCurrentItemWithEdits(_ editedValue: String?, editedChildren: [String]?, resume: Resume, context: ModelContext) {
+        phaseReviewManager.acceptCurrentItemWithEdits(editedValue, editedChildren: editedChildren, resume: resume, context: context)
+    }
+
+    func acceptOriginalAndMoveNext(resume: Resume, context: ModelContext) {
+        phaseReviewManager.acceptOriginalAndMoveNext(resume: resume, context: context)
+    }
+
+    // MARK: - Navigation
+
+    func goToPreviousItem() {
+        phaseReviewManager.goToPreviousItem()
+    }
+
+    func goToNextItem() {
+        phaseReviewManager.goToNextItem()
+    }
+
+    func goToItem(at index: Int) {
+        phaseReviewManager.goToItem(at: index)
+    }
+
+    var canGoToPrevious: Bool {
+        phaseReviewManager.canGoToPrevious
+    }
+
+    var canGoToNext: Bool {
+        phaseReviewManager.canGoToNext
+    }
+
+    var hasItemsNeedingResubmission: Bool {
+        phaseReviewManager.hasItemsNeedingResubmission
+    }
+
+    var itemsNeedingResubmission: [PhaseReviewItem] {
+        phaseReviewManager.itemsNeedingResubmission
     }
 
     func finishPhaseReview(resume: Resume) {

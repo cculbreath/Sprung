@@ -23,7 +23,3 @@ struct QuestionAnswer: Codable {
     let questionId: String
     let answer: String?  // nil if user declined to answer
 }
-/// Mode for resume query workflow
-enum ResumeQueryMode {
-    case normal
-}

@@ -16,10 +16,12 @@ struct QueryUserExperienceLevelTool: ResumeTool {
 
     static let description = """
         Query the user about their experience level with specific skills. \
-        Use this tool when you encounter skills in the job description that are adjacent to \
-        the user's background but not explicitly mentioned in their resume. \
-        For example, if the user has React experience and the job mentions React Native, \
-        query their React Native experience level before making assumptions. \
+        Use this tool when you suspect the applicant has a skill that strongly aligns with \
+        job requirements, but direct evidence is not in the background documents. \
+        Examples: \
+        (1) A physicist likely has familiarity with electricity and magnetism even if their docs only mention particle physics. \
+        (2) A React developer may have React Native experience even if not explicitly listed. \
+        (3) Someone with extensive Python experience might know specific frameworks the job requires. \
         The user will select their proficiency level (none, novice, competent, advanced, expert) \
         and optionally add comments for context.
         """

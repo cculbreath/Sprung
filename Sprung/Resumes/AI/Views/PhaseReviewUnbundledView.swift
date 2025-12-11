@@ -16,6 +16,15 @@ struct PhaseReviewUnbundledView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var showCancelConfirmation = false
 
+    // Edit sheet state
+    @State private var showEditSheet = false
+    @State private var editedValue: String = ""
+    @State private var editedChildren: [String] = []
+
+    // Feedback sheet state
+    @State private var showFeedbackSheet = false
+    @State private var feedbackText: String = ""
+
     private var phaseState: PhaseReviewState {
         viewModel.phaseReviewState
     }
@@ -28,6 +37,11 @@ struct PhaseReviewUnbundledView: View {
         guard let review = currentReview,
               phaseState.currentItemIndex < review.items.count else { return nil }
         return review.items[phaseState.currentItemIndex]
+    }
+
+    /// Check if current item has children (is a container like keywords)
+    private var isContainerItem: Bool {
+        currentItem?.originalChildren != nil || currentItem?.proposedChildren != nil
     }
 
     var body: some View {
@@ -74,7 +88,7 @@ struct PhaseReviewUnbundledView: View {
             // Action buttons
             actionButtons
         }
-        .frame(width: 900)
+        .frame(minWidth: 600, idealWidth: 850, maxWidth: 900)
         .background(Color(NSColor.windowBackgroundColor))
         .confirmationDialog(
             "Cancel Review?",
@@ -122,7 +136,8 @@ struct PhaseReviewUnbundledView: View {
                 .font(.system(.subheadline, design: .rounded))
                 .foregroundStyle(.secondary)
 
-            HStack(spacing: 8) {
+            // Phase and item info with navigation
+            HStack(spacing: 12) {
                 Text("Phase \(phaseState.currentPhaseIndex + 1) of \(phaseState.phases.count)")
                     .font(.system(.caption, design: .rounded, weight: .medium))
                     .foregroundStyle(.blue)
@@ -132,14 +147,61 @@ struct PhaseReviewUnbundledView: View {
                     .clipShape(Capsule())
 
                 if let review = currentReview {
-                    Text("Item \(phaseState.currentItemIndex + 1) of \(review.items.count)")
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(.secondary)
+                    // Navigation controls
+                    HStack(spacing: 4) {
+                        Button {
+                            viewModel.goToPreviousItem()
+                        } label: {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(viewModel.canGoToPrevious ? .blue : .gray.opacity(0.4))
+                        .disabled(!viewModel.canGoToPrevious)
+
+                        Text("Item \(phaseState.currentItemIndex + 1) of \(review.items.count)")
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(.secondary)
+
+                        Button {
+                            viewModel.goToNextItem()
+                        } label: {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(viewModel.canGoToNext ? .blue : .gray.opacity(0.4))
+                        .disabled(!viewModel.canGoToNext)
+                    }
                 }
+            }
+
+            // Show decision status for current item if already decided
+            if let item = currentItem, item.userDecision != .pending {
+                decisionStatusBadge(for: item)
             }
         }
         .padding(.vertical, 20)
         .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private func decisionStatusBadge(for item: PhaseReviewItem) -> some View {
+        let (text, color): (String, Color) = switch item.userDecision {
+        case .pending: ("Pending", .gray)
+        case .accepted: ("Accepted", .green)
+        case .acceptedOriginal: ("Kept Original", .blue)
+        case .rejected: ("Rejected", .orange)
+        case .rejectedWithFeedback: ("Rejected w/ Feedback", .orange)
+        }
+
+        Text(text)
+            .font(.system(.caption2, design: .rounded, weight: .medium))
+            .foregroundStyle(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(color.opacity(0.15))
+            .clipShape(Capsule())
     }
 
     // MARK: - Reasoning Section
@@ -218,8 +280,8 @@ struct PhaseReviewUnbundledView: View {
             // Stats
             DiffStatsView(original: original, proposed: proposed)
 
-            // Side by side diff
-            HStack(alignment: .top, spacing: 20) {
+            // Side by side diff - use flexible layout with clipping
+            HStack(alignment: .top, spacing: 16) {
                 // Original values
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Original")
@@ -233,6 +295,7 @@ struct PhaseReviewUnbundledView: View {
                     )
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .clipped()
 
                 Divider()
 
@@ -249,7 +312,10 @@ struct PhaseReviewUnbundledView: View {
                     )
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .clipped()
             }
+            .frame(maxWidth: .infinity)
+            .clipped()
         }
     }
 
@@ -258,14 +324,13 @@ struct PhaseReviewUnbundledView: View {
         VStack(alignment: .leading, spacing: 6) {
             ForEach(items, id: \.self) { item in
                 HStack(alignment: .top, spacing: 8) {
-                    // Status indicator
+                    // Status indicator - fixed size to prevent compression
                     childStatusIcon(item: item, comparison: comparison, isOriginal: isOriginal)
-                        .padding(.top, 2)
+                        .frame(width: 16, height: 16)
 
                     Text(item)
                         .font(.system(.body, design: .rounded))
                         .foregroundStyle(childTextColor(item: item, comparison: comparison, isOriginal: isOriginal))
-                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.vertical, 6)
                 .padding(.horizontal, 10)
@@ -376,32 +441,190 @@ struct PhaseReviewUnbundledView: View {
     // MARK: - Action Buttons
 
     private var actionButtons: some View {
-        HStack(spacing: 16) {
-            Button("Cancel Review") {
-                if viewModel.hasUnappliedApprovedChanges() {
-                    showCancelConfirmation = true
-                } else {
-                    viewModel.discardAllAndClose()
+        VStack(spacing: 12) {
+            // Primary action row
+            HStack(spacing: 12) {
+                // Cancel button
+                Button("Cancel Review") {
+                    if viewModel.hasUnappliedApprovedChanges() {
+                        showCancelConfirmation = true
+                    } else {
+                        viewModel.discardAllAndClose()
+                    }
                 }
-            }
-            .buttonStyle(.bordered)
+                .buttonStyle(.bordered)
 
-            Spacer()
+                Spacer()
 
-            Button("Skip") {
-                viewModel.rejectCurrentItemAndMoveNext()
-                checkPhaseComplete()
-            }
-            .buttonStyle(.bordered)
+                // Reject actions (send back to LLM)
+                Menu {
+                    Button {
+                        viewModel.rejectCurrentItemAndMoveNext()
+                        checkPhaseComplete()
+                    } label: {
+                        Label("Reject (No Comment)", systemImage: "xmark")
+                    }
 
-            Button("Accept Changes") {
-                guard let resume = resume else { return }
-                viewModel.acceptCurrentItemAndMoveNext(resume: resume, context: modelContext)
+                    Button {
+                        feedbackText = ""
+                        showFeedbackSheet = true
+                    } label: {
+                        Label("Reject with Feedback...", systemImage: "bubble.left")
+                    }
+                } label: {
+                    Label("Reject", systemImage: "arrow.uturn.backward")
+                }
+                .buttonStyle(.bordered)
+                .foregroundStyle(.orange)
+
+                // Keep original
+                Button {
+                    guard let resume = resume else { return }
+                    viewModel.acceptOriginalAndMoveNext(resume: resume, context: modelContext)
+                } label: {
+                    Label("Keep Original", systemImage: "arrow.counterclockwise")
+                }
+                .buttonStyle(.bordered)
+                .help("Revert to original value, no change applied")
+
+                // Edit and accept
+                Button {
+                    prepareEditSheet()
+                    showEditSheet = true
+                } label: {
+                    Label("Edit", systemImage: "pencil")
+                }
+                .buttonStyle(.bordered)
+                .help("Edit the proposed value before accepting")
+
+                // Accept proposed
+                Button {
+                    guard let resume = resume else { return }
+                    viewModel.acceptCurrentItemAndMoveNext(resume: resume, context: modelContext)
+                } label: {
+                    Label("Accept", systemImage: "checkmark")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(currentItem == nil)
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(currentItem == nil)
         }
         .padding(20)
+        .sheet(isPresented: $showEditSheet) {
+            editSheet
+        }
+        .sheet(isPresented: $showFeedbackSheet) {
+            feedbackSheet
+        }
+    }
+
+    // MARK: - Edit Sheet
+
+    private var editSheet: some View {
+        VStack(spacing: 20) {
+            Text("Edit Value")
+                .font(.system(.title3, design: .rounded, weight: .semibold))
+
+            if isContainerItem {
+                // Edit children (keywords, etc.)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Items (one per line)")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(.secondary)
+
+                    TextEditor(text: Binding(
+                        get: { editedChildren.joined(separator: "\n") },
+                        set: { editedChildren = $0.split(separator: "\n").map(String.init) }
+                    ))
+                    .font(.system(.body, design: .rounded))
+                    .frame(height: 200)
+                    .padding(8)
+                    .background(Color(NSColor.textBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                    )
+                }
+            } else {
+                // Edit scalar value
+                TextField("Value", text: $editedValue)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(.body, design: .rounded))
+            }
+
+            HStack(spacing: 16) {
+                Button("Cancel") {
+                    showEditSheet = false
+                }
+                .buttonStyle(.bordered)
+
+                Button("Save & Accept") {
+                    guard let resume = resume else { return }
+                    if isContainerItem {
+                        viewModel.acceptCurrentItemWithEdits(nil, editedChildren: editedChildren, resume: resume, context: modelContext)
+                    } else {
+                        viewModel.acceptCurrentItemWithEdits(editedValue, editedChildren: nil, resume: resume, context: modelContext)
+                    }
+                    showEditSheet = false
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(24)
+        .frame(width: 500)
+    }
+
+    // MARK: - Feedback Sheet
+
+    private var feedbackSheet: some View {
+        VStack(spacing: 20) {
+            Text("Provide Feedback")
+                .font(.system(.title3, design: .rounded, weight: .semibold))
+
+            Text("Your feedback will be sent to the AI for a revised suggestion")
+                .font(.system(.subheadline, design: .rounded))
+                .foregroundStyle(.secondary)
+
+            TextEditor(text: $feedbackText)
+                .font(.system(.body, design: .rounded))
+                .frame(height: 120)
+                .padding(8)
+                .background(Color(NSColor.textBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                )
+
+            HStack(spacing: 16) {
+                Button("Cancel") {
+                    showFeedbackSheet = false
+                }
+                .buttonStyle(.bordered)
+
+                Button("Submit Feedback") {
+                    viewModel.rejectCurrentItemWithFeedback(feedbackText)
+                    showFeedbackSheet = false
+                    checkPhaseComplete()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(feedbackText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(24)
+        .frame(width: 450)
+    }
+
+    // MARK: - Helpers
+
+    private func prepareEditSheet() {
+        if let item = currentItem {
+            if isContainerItem {
+                editedChildren = item.proposedChildren ?? item.originalChildren ?? []
+            } else {
+                editedValue = item.proposedValue
+            }
+        }
     }
 
     private func checkPhaseComplete() {

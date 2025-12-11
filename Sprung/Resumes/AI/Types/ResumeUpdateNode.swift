@@ -199,9 +199,11 @@ enum ReviewItemAction: String, Codable {
 
 /// User's decision about a review item
 enum ReviewUserDecision: String, Codable {
-    case pending
-    case accepted
-    case rejected
+    case pending              // No decision yet
+    case accepted             // Accept proposed value (or edited value if editedValue is set)
+    case acceptedOriginal     // Revert to original value, mark as done
+    case rejected             // Reject without comment, skip this item
+    case rejectedWithFeedback // Reject with comment, triggers LLM resubmission
 }
 
 /// A node exported for LLM review - generic for any path pattern
@@ -248,14 +250,33 @@ struct PhaseReviewItem: Codable, Equatable, Identifiable {
     var reason: String                      // Why this change
     var userDecision: ReviewUserDecision    // User's response (not set by LLM)
     var userComment: String                 // User's comment when rejecting (not set by LLM)
+    var editedValue: String?                // User's edited value (when editing before accepting)
+    var editedChildren: [String]?           // User's edited children (for container items)
 
     // For containers with children
     var originalChildren: [String]?         // Original child values
     var proposedChildren: [String]?         // Proposed child values
 
+    /// The effective value to apply - considers user edits and decision
+    var effectiveValue: String {
+        if userDecision == .acceptedOriginal {
+            return originalValue
+        }
+        return editedValue ?? proposedValue
+    }
+
+    /// The effective children to apply - considers user edits and decision
+    var effectiveChildren: [String]? {
+        if userDecision == .acceptedOriginal {
+            return originalChildren
+        }
+        return editedChildren ?? proposedChildren
+    }
+
     enum CodingKeys: String, CodingKey {
         case id, displayName, originalValue, proposedValue, action, reason
-        case userDecision, userComment, originalChildren, proposedChildren
+        case userDecision, userComment, editedValue, editedChildren
+        case originalChildren, proposedChildren
     }
 
     init(
@@ -267,6 +288,8 @@ struct PhaseReviewItem: Codable, Equatable, Identifiable {
         reason: String = "",
         userDecision: ReviewUserDecision = .pending,
         userComment: String = "",
+        editedValue: String? = nil,
+        editedChildren: [String]? = nil,
         originalChildren: [String]? = nil,
         proposedChildren: [String]? = nil
     ) {
@@ -278,6 +301,8 @@ struct PhaseReviewItem: Codable, Equatable, Identifiable {
         self.reason = reason
         self.userDecision = userDecision
         self.userComment = userComment
+        self.editedValue = editedValue
+        self.editedChildren = editedChildren
         self.originalChildren = originalChildren
         self.proposedChildren = proposedChildren
     }
@@ -290,9 +315,11 @@ struct PhaseReviewItem: Codable, Equatable, Identifiable {
         proposedValue = try container.decode(String.self, forKey: .proposedValue)
         action = try container.decode(ReviewItemAction.self, forKey: .action)
         reason = try container.decode(String.self, forKey: .reason)
-        // userDecision and userComment default - not set by LLM
+        // User fields default - not set by LLM
         userDecision = try container.decodeIfPresent(ReviewUserDecision.self, forKey: .userDecision) ?? .pending
         userComment = try container.decodeIfPresent(String.self, forKey: .userComment) ?? ""
+        editedValue = try container.decodeIfPresent(String.self, forKey: .editedValue)
+        editedChildren = try container.decodeIfPresent([String].self, forKey: .editedChildren)
         originalChildren = try container.decodeIfPresent([String].self, forKey: .originalChildren)
         proposedChildren = try container.decodeIfPresent([String].self, forKey: .proposedChildren)
     }

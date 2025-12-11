@@ -11,6 +11,7 @@ struct ContentView: View {
     @Environment(NavigationStateService.self) private var navigationState
     @Environment(ReasoningStreamManager.self) private var reasoningStreamManager
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
+    @Environment(ResumeReviseViewModel.self) private var resumeReviseViewModel
     // DragInfo is inherited from ContentViewLaunch
     // States managed by ContentView
     @State var tabRefresh: Bool = false
@@ -84,8 +85,9 @@ struct ContentView: View {
             }
         }
         // Add reasoning stream view as overlay modal for AI thinking display
+        // Skip when revision sheet is open - it has its own reasoning stream overlay
         .overlay {
-            if reasoningStreamManager.isVisible {
+            if reasoningStreamManager.isVisible && !resumeReviseViewModel.showResumeRevisionSheet {
                 ReasoningStreamView(
                     isVisible: Binding(
                         get: { reasoningStreamManager.isVisible },

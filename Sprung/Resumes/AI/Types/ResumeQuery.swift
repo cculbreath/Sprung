@@ -11,8 +11,7 @@ import SwiftUI
     // MARK: - Properties
     /// Set this to `true` if you want to save a debug file containing the prompt text.
     var saveDebugPrompt: Bool = false
-    /// The mode for this query (normal or with clarifying questions)
-    var queryMode: ResumeQueryMode = .normal
+
     // Native SwiftOpenAI JSON Schema for revisions
     static let revNodeArraySchema: JSONSchema = {
         // Define the revision node schema
@@ -572,6 +571,114 @@ import SwiftUI
         }
 
         return prompt
+    }
+
+    // MARK: - Phase Review Resubmission Prompt
+
+    /// Generate a prompt for resubmitting rejected items in a phase review.
+    /// Only includes items that were rejected, along with any user feedback.
+    ///
+    /// - Parameters:
+    ///   - section: The section being reviewed
+    ///   - phaseNumber: The phase number
+    ///   - fieldPath: The field path pattern
+    ///   - rejectedItems: Items that were rejected by the user
+    ///   - isBundled: Whether items are bundled for review
+    /// - Returns: The resubmission prompt string
+    @MainActor
+    func phaseResubmissionPrompt(
+        section: String,
+        phaseNumber: Int,
+        fieldPath: String,
+        rejectedItems: [PhaseReviewItem],
+        isBundled: Bool
+    ) async -> String {
+        try? await exportCoordinator.ensureFreshRenderedText(for: res)
+
+        // Build JSON representation of rejected items with feedback
+        let itemsJson = rejectedItems.map { item in
+            var json = """
+            {
+              "id": "\(item.id)",
+              "displayName": "\(item.displayName)",
+              "originalValue": "\(escapeJsonString(item.originalValue))",
+              "previousProposal": "\(escapeJsonString(item.proposedValue))",
+              "rejectionType": "\(item.userDecision == .rejectedWithFeedback ? "with_feedback" : "without_feedback")"
+            """
+            if item.userDecision == .rejectedWithFeedback && !item.userComment.isEmpty {
+                json += ",\n      \"userFeedback\": \"\(escapeJsonString(item.userComment))\""
+            }
+            if let originalChildren = item.originalChildren {
+                let childrenJson = originalChildren.map { "\"\(escapeJsonString($0))\"" }.joined(separator: ", ")
+                json += ",\n      \"originalChildren\": [\(childrenJson)]"
+            }
+            if let proposedChildren = item.proposedChildren {
+                let childrenJson = proposedChildren.map { "\"\(escapeJsonString($0))\"" }.joined(separator: ", ")
+                json += ",\n      \"previousProposedChildren\": [\(childrenJson)]"
+            }
+            json += "\n    }"
+            return json
+        }.joined(separator: ",\n    ")
+
+        let prompt = """
+        ================================================================================
+        PHASE \(phaseNumber) RESUBMISSION: \(section.uppercased()) - \(fieldPath)
+        ================================================================================
+
+        CONTEXT:
+        The user has rejected some of your previous proposals. Please provide revised suggestions
+        for the items below. Pay close attention to any user feedback provided.
+
+        TARGET POSITION:
+        \(jobListing)
+
+        REJECTED ITEMS REQUIRING NEW PROPOSALS:
+        [
+            \(itemsJson)
+        ]
+
+        INSTRUCTIONS:
+        1. For items rejected WITH feedback: Carefully incorporate the user's feedback into your new proposal
+        2. For items rejected WITHOUT feedback: The user disagreed with your approach - try a different strategy
+        3. Consider alternative phrasings, different emphasis, or modified content
+        4. Maintain consistency with items the user already accepted in this phase
+        5. Keep formatting consistent (capitalization, punctuation style)
+
+        For container items (those with children):
+        - proposedChildren should contain the revised list of child values
+        - Consider the user's feedback when adding, removing, or modifying children
+
+        BACKGROUND DOCUMENTS:
+        \(backgroundDocs)
+
+        OUTPUT:
+        Return your revised proposals as JSON matching the phaseReview schema.
+        Only include the items listed above - do not re-propose items that were already accepted.
+
+        Required fields:
+        - section: "\(section)"
+        - phase: \(phaseNumber)
+        - field: "\(fieldPath)"
+        - bundled: \(isBundled)
+        - items: array of revised proposals (only for the rejected items above)
+        ================================================================================
+        """
+
+        if saveDebugPrompt {
+            savePromptToDownloads(content: prompt, fileName: "phaseResubmissionPrompt_\(section)_phase\(phaseNumber).txt")
+        }
+
+        return prompt
+    }
+
+    /// Escape special characters for JSON string embedding
+    private func escapeJsonString(_ string: String) -> String {
+        string
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: "\r", with: "\\r")
+            .replacingOccurrences(of: "\t", with: "\\t")
     }
 
     /// Helper method to truncate strings with ellipsis

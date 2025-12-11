@@ -250,24 +250,35 @@ struct ReasoningStreamView: View {
         return attributedString
     }
 
-    /// Normalize markdown headings by ensuring bold text has proper newlines before it
+    /// Normalize markdown headings by ensuring proper spacing before and after
     private func normalizeMarkdownHeadings(_ text: String) -> String {
-        // Simple pattern: any non-whitespace character immediately before **
-        // Add double newline before ** when preceded directly by text
-        // e.g., "ATS!**Heading" -> "ATS!\n\n**Heading"
+        var result = text
+
         do {
-            let pattern = "([^\\s\\n])(\\*\\*)"
-            let regex = try NSRegularExpression(pattern: pattern)
-            let result = regex.stringByReplacingMatches(
-                in: text,
-                range: NSRange(location: 0, length: text.utf16.count),
+            // Step 1: Add double newline BEFORE ** when preceded directly by non-whitespace
+            // e.g., "ATS!**Heading" -> "ATS!\n\n**Heading"
+            let beforePattern = "([^\\s\\n])(\\*\\*)"
+            let beforeRegex = try NSRegularExpression(pattern: beforePattern)
+            result = beforeRegex.stringByReplacingMatches(
+                in: result,
+                range: NSRange(location: 0, length: result.utf16.count),
                 withTemplate: "$1\n\n$2"
             )
-            return result
+
+            // Step 2: Reduce multiple newlines AFTER **...** to single newline
+            // e.g., "**Heading**\n\n\nText" -> "**Heading**\nText"
+            let afterPattern = "(\\*\\*[^*]+\\*\\*)(\\n{2,})"
+            let afterRegex = try NSRegularExpression(pattern: afterPattern)
+            result = afterRegex.stringByReplacingMatches(
+                in: result,
+                range: NSRange(location: 0, length: result.utf16.count),
+                withTemplate: "$1\n"
+            )
         } catch {
             Logger.debug("Failed to normalize markdown headings: \(error)", category: .ui)
-            return text
         }
+
+        return result
     }
 }
 // MARK: - Reasoning Stream Manager

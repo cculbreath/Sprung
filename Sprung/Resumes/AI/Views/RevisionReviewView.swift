@@ -156,7 +156,7 @@ struct RevisionReviewView: View {
                     .padding()
             }
         }
-        .frame(maxWidth: 860)
+        .frame(maxWidth: 950)
     }
     // MARK: - View Setup and Cleanup
     private func setupView(for resume: Resume) {

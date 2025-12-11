@@ -17,13 +17,6 @@ class ResumeReviewService: @unchecked Sendable {
     init(llmFacade: LLMFacade) {
         self.llm = llmFacade
     }
-    // MARK: - Initialization
-    /// Initialize the LLM client
-    @MainActor
-    func initialize() {
-        // No longer needed - LLMService manages its own initialization
-        Logger.debug("ResumeReviewService: Initialization delegated to LLMService")
-    }
     // MARK: - Public Methods
     /// Sends a review request to the LLM
     /// - Parameters:
