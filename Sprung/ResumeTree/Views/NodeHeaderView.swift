@@ -25,6 +25,7 @@ struct NodeHeaderView: View {
     @State private var isHoveringNone = false
     @State private var isHoveringSparkle = false
     @State private var isHoveringHeader = false
+    @State private var showAttributePicker = false
 
     /// Binding wrapper to make TreeNode work with SparkleButton
     private var nodeBinding: Binding<TreeNode> {
@@ -51,17 +52,35 @@ struct NodeHeaderView: View {
             // Parent sparkle button - always rendered to prevent layout shifts
             // Opacity controlled by hover/selection state
             if node.parent != nil {
-                let showSparkle = isHoveringHeader || isHoveringSparkle || node.status == .aiToReplace || node.aiStatusChildren > 0
+                let showSparkle = isHoveringHeader || isHoveringSparkle || node.status == .aiToReplace || node.aiStatusChildren > 0 || node.isGroupInheritedSelection
                 SparkleButton(
                     node: nodeBinding,
                     isHovering: $isHoveringSparkle,
                     toggleNodeStatus: {
                         // Toggle parent and propagate to all children
                         node.toggleAISelection(propagateToChildren: true)
+                    },
+                    onShowAttributePicker: {
+                        showAttributePicker = true
                     }
                 )
                 .opacity(showSparkle ? 1.0 : 0.0)
                 .allowsHitTesting(true)  // Ensure button is always clickable even when faded
+                .popover(isPresented: $showAttributePicker) {
+                    AttributePickerView(
+                        collectionNode: node,
+                        onApply: { selectedAttributes in
+                            // Clear previous group selection from this node
+                            node.clearGroupSelection()
+                            // Apply new group selection
+                            node.applyGroupSelection(attributes: selectedAttributes, sourceId: node.id)
+                            showAttributePicker = false
+                        },
+                        onCancel: {
+                            showAttributePicker = false
+                        }
+                    )
+                }
             }
 
             // Show controls when node is expanded and has children

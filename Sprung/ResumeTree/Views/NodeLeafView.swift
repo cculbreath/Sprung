@@ -26,7 +26,8 @@ struct NodeLeafView: View {
                     SparkleButton(
                         node: $node,
                         isHovering: $isHoveringSparkles,
-                        toggleNodeStatus: toggleNodeStatus
+                        toggleNodeStatus: toggleNodeStatus,
+                        onShowAttributePicker: nil  // Leaf nodes don't show attribute picker
                     )
                 }
                 if node.status == LeafStatus.disabled {
@@ -101,9 +102,11 @@ struct NodeLeafView: View {
         .padding(.vertical, 4)
         .padding(.trailing, 12) // ← new: 24-pt right margin
         .background(
-            node.status == .aiToReplace
-                ? Color.accentColor.opacity(0.3)
-                : Color.clear
+            node.isGroupInheritedSelection
+                ? Color.orange.opacity(0.2)  // Group-inherited: orange background
+                : (node.status == .aiToReplace
+                    ? Color.accentColor.opacity(0.3)
+                    : Color.clear)
         )
         .cornerRadius(5)
     }

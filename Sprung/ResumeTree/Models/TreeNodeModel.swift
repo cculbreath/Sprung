@@ -83,6 +83,16 @@ enum LeafStatus: String, Codable, Hashable {
 
     // MARK: - AI Selection Inheritance
 
+    /// ID of the collection node whose attribute picker caused this node to be group-selected.
+    /// When non-nil, this node was selected via parent's attribute picker (not direct toggle).
+    var groupSelectionSourceId: String?
+
+    /// Returns true if this node was selected via a parent's attribute picker
+    /// (group-inherited selection, shown in different color, can only toggle as a group)
+    var isGroupInheritedSelection: Bool {
+        groupSelectionSourceId != nil
+    }
+
     /// Returns true if this node's AI selection is inherited from an ancestor
     /// (i.e., this node is NOT directly marked .aiToReplace, but an ancestor is)
     var isInheritedAISelection: Bool {
