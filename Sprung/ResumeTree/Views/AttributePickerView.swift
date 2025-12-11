@@ -3,31 +3,73 @@
 //  Sprung
 //
 //  Popup for selecting which attributes to include when toggling a collection node.
-//  Shows available attributes from uniform child structure with checkboxes.
+//  Shows available attributes with bundle/enumerate mode selection.
+//
+//  Path pattern semantics:
+//  - `*` (bundle) = combine all matches into ONE revnode for holistic review
+//  - `[]` (enumerate) = one revnode per item for individual review
 //
 
 import SwiftUI
 import SwiftData
 
+/// Grouping mode for attribute selection
+enum AttributeGroupingMode: String, CaseIterable {
+    case bundle = "*"       // Combine all into 1 revnode
+    case enumerate = "[]"   // One revnode per item
+
+    var displayName: String {
+        switch self {
+        case .bundle: return "Bundle"
+        case .enumerate: return "Per-item"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .bundle: return "Review all together"
+        case .enumerate: return "Review each separately"
+        }
+    }
+}
+
+/// Selection info for an attribute including its grouping mode
+struct AttributeSelection: Equatable {
+    let name: String
+    var mode: AttributeGroupingMode
+}
+
 struct AttributePickerView: View {
     let collectionNode: TreeNode
-    let onApply: ([String]) -> Void
+    let onApply: ([AttributeSelection]) -> Void
     let onCancel: () -> Void
 
-    @State private var selectedAttributes: Set<String> = []
+    @State private var selections: [String: AttributeGroupingMode]
+
+    init(collectionNode: TreeNode, onApply: @escaping ([AttributeSelection]) -> Void, onCancel: @escaping () -> Void) {
+        self.collectionNode = collectionNode
+        self.onApply = onApply
+        self.onCancel = onCancel
+
+        // Initialize with current selections
+        var initial: [String: AttributeGroupingMode] = [:]
+        for attr in collectionNode.selectedGroupAttributes {
+            initial[attr.name] = attr.mode
+        }
+        _selections = State(initialValue: initial)
+    }
 
     /// Get available attributes from child nodes (assumes uniform structure)
-    private var availableAttributes: [(name: String, count: Int, hasGrandchildren: Bool)] {
+    private var availableAttributes: [(name: String, count: Int, hasGrandchildren: Bool, entryCount: Int)] {
         guard let firstChild = collectionNode.orderedChildren.first else { return [] }
 
-        // Get attribute names from first child's children
-        var attributes: [(name: String, count: Int, hasGrandchildren: Bool)] = []
+        var attributes: [(name: String, count: Int, hasGrandchildren: Bool, entryCount: Int)] = []
+        let entryCount = collectionNode.orderedChildren.count
 
         for attr in firstChild.orderedChildren {
             let attrName = attr.name.isEmpty ? attr.value : attr.name
             guard !attrName.isEmpty else { continue }
 
-            // Count total items across all children for this attribute
             var totalCount = 0
             var hasGrandchildren = false
 
@@ -44,13 +86,13 @@ struct AttributePickerView: View {
                 }
             }
 
-            attributes.append((name: attrName, count: totalCount, hasGrandchildren: hasGrandchildren))
+            attributes.append((name: attrName, count: totalCount, hasGrandchildren: hasGrandchildren, entryCount: entryCount))
         }
 
         return attributes
     }
 
-    /// Check if children have uniform structure (same attribute names)
+    /// Check if children have uniform structure
     private var hasUniformStructure: Bool {
         let children = collectionNode.orderedChildren
         guard children.count > 1, let first = children.first else { return true }
@@ -78,36 +120,24 @@ struct AttributePickerView: View {
                     .foregroundColor(.orange)
             }
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
                 ForEach(availableAttributes, id: \.name) { attr in
-                    HStack {
-                        Toggle(isOn: Binding(
-                            get: { selectedAttributes.contains(attr.name) },
-                            set: { isSelected in
-                                if isSelected {
-                                    selectedAttributes.insert(attr.name)
-                                } else {
-                                    selectedAttributes.remove(attr.name)
-                                }
+                    AttributeRow(
+                        attr: attr,
+                        isSelected: selections[attr.name] != nil,
+                        mode: selections[attr.name] ?? .enumerate,
+                        onToggle: { isSelected in
+                            if isSelected {
+                                // Default: bundle for scalars, enumerate for containers
+                                selections[attr.name] = attr.hasGrandchildren ? .enumerate : .bundle
+                            } else {
+                                selections.removeValue(forKey: attr.name)
                             }
-                        )) {
-                            HStack {
-                                Text(attr.name)
-                                    .font(.body)
-                                Spacer()
-                                if attr.hasGrandchildren {
-                                    Text("(\(attr.count) items across \(collectionNode.orderedChildren.count) entries)")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                } else {
-                                    Text("(\(collectionNode.orderedChildren.count) entries)")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
+                        },
+                        onModeChange: { newMode in
+                            selections[attr.name] = newMode
                         }
-                        .toggleStyle(.checkbox)
-                    }
+                    )
                 }
             }
             .padding(.vertical, 4)
@@ -120,14 +150,68 @@ struct AttributePickerView: View {
                 .keyboardShortcut(.cancelAction)
 
                 Button("Apply") {
-                    onApply(Array(selectedAttributes))
+                    let result = selections.map { AttributeSelection(name: $0.key, mode: $0.value) }
+                    onApply(result)
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(selectedAttributes.isEmpty)
+                .disabled(selections.isEmpty)
             }
         }
         .padding()
-        .frame(minWidth: 300)
+        .frame(minWidth: 380)
+    }
+}
+
+/// Row for a single attribute with checkbox and mode picker
+private struct AttributeRow: View {
+    let attr: (name: String, count: Int, hasGrandchildren: Bool, entryCount: Int)
+    let isSelected: Bool
+    let mode: AttributeGroupingMode
+    let onToggle: (Bool) -> Void
+    let onModeChange: (AttributeGroupingMode) -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Checkbox
+            Toggle(isOn: Binding(
+                get: { isSelected },
+                set: { onToggle($0) }
+            )) {
+                Text(attr.name)
+                    .font(.body)
+            }
+            .toggleStyle(.checkbox)
+            .frame(minWidth: 100, alignment: .leading)
+
+            // Count info
+            Group {
+                if attr.hasGrandchildren {
+                    Text("\(attr.count) items / \(attr.entryCount) entries")
+                } else {
+                    Text("\(attr.entryCount) entries")
+                }
+            }
+            .font(.caption)
+            .foregroundColor(.secondary)
+            .frame(minWidth: 100, alignment: .leading)
+
+            Spacer()
+
+            // Mode picker (only show when selected)
+            if isSelected {
+                Picker("", selection: Binding(
+                    get: { mode },
+                    set: { onModeChange($0) }
+                )) {
+                    ForEach(AttributeGroupingMode.allCases, id: \.self) { m in
+                        Text(m.displayName).tag(m)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 120)
+                .help(mode.description)
+            }
+        }
     }
 }
 
@@ -163,15 +247,18 @@ extension TreeNode {
 
     /// Apply group selection for specified attributes across all child entries
     /// - Parameters:
-    ///   - attributes: Names of attributes to select
+    ///   - selections: Attributes to select with their grouping modes
     ///   - sourceId: ID of the collection node triggering the selection
-    func applyGroupSelection(attributes: [String], sourceId: String) {
+    func applyGroupSelection(selections: [AttributeSelection], sourceId: String) {
+        let selectionMap = Dictionary(uniqueKeysWithValues: selections.map { ($0.name, $0.mode) })
+
         for child in orderedChildren {
             for attr in child.orderedChildren {
                 let attrName = attr.name.isEmpty ? attr.value : attr.name
-                if attributes.contains(attrName) {
+                if let mode = selectionMap[attrName] {
                     attr.status = .aiToReplace
                     attr.groupSelectionSourceId = sourceId
+                    attr.groupSelectionModeRaw = mode.rawValue
                 }
             }
         }
@@ -184,22 +271,34 @@ extension TreeNode {
                 if attr.groupSelectionSourceId == id {
                     attr.status = .saved
                     attr.groupSelectionSourceId = nil
+                    attr.groupSelectionModeRaw = nil
                 }
             }
         }
     }
 
-    /// Get currently selected attributes for this collection node
-    var selectedGroupAttributes: [String] {
-        var selected: Set<String> = []
+    /// Get currently selected attributes with their modes for this collection node
+    var selectedGroupAttributes: [AttributeSelection] {
+        var selections: [String: AttributeGroupingMode] = [:]
         for child in orderedChildren {
             for attr in child.orderedChildren {
                 if attr.groupSelectionSourceId == id {
                     let attrName = attr.name.isEmpty ? attr.value : attr.name
-                    selected.insert(attrName)
+                    let mode = AttributeGroupingMode(rawValue: attr.groupSelectionModeRaw ?? "[]") ?? .enumerate
+                    selections[attrName] = mode
                 }
             }
         }
-        return Array(selected)
+        return selections.map { AttributeSelection(name: $0.key, mode: $0.value) }
+    }
+
+    /// Build path patterns for all group selections on this collection node
+    /// Returns patterns like "skills.*.name" (bundle) or "skills[].keywords" (enumerate)
+    func buildGroupSelectionPatterns() -> [String] {
+        let sectionName = name.isEmpty ? value : name
+        return selectedGroupAttributes.map { selection in
+            let wildcard = selection.mode.rawValue  // "*" or "[]"
+            return "\(sectionName)\(wildcard).\(selection.name)"
+        }
     }
 }

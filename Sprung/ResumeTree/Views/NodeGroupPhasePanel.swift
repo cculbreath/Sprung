@@ -88,10 +88,10 @@ struct NodeGroupPhasePanel: View {
                 // This section has group selections
                 for attr in selectedAttrs {
                     let group = NodeGroup(
-                        id: "\(sectionNode.id)-\(attr)",
+                        id: "\(sectionNode.id)-\(attr.name)",
                         sectionName: sectionNode.name.isEmpty ? sectionNode.value : sectionNode.name,
-                        attributeName: attr,
-                        phase: getPhase(for: sectionNode.id, attribute: attr) ?? 2
+                        attributeName: attr.name,
+                        phase: getPhase(for: sectionNode.id, attribute: attr.name) ?? (attr.mode == .bundle ? 1 : 2)
                     )
                     groups.append(group)
                 }
@@ -103,10 +103,10 @@ struct NodeGroupPhasePanel: View {
                 if !childAttrs.isEmpty {
                     for attr in childAttrs {
                         let group = NodeGroup(
-                            id: "\(childNode.id)-\(attr)",
+                            id: "\(childNode.id)-\(attr.name)",
                             sectionName: sectionNode.name.isEmpty ? sectionNode.value : sectionNode.name,
-                            attributeName: attr,
-                            phase: getPhase(for: childNode.id, attribute: attr) ?? 2
+                            attributeName: attr.name,
+                            phase: getPhase(for: childNode.id, attribute: attr.name) ?? (attr.mode == .bundle ? 1 : 2)
                         )
                         groups.append(group)
                     }

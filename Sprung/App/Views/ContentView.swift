@@ -99,6 +99,10 @@ struct ContentView: View {
                         get: { reasoningStreamManager.isStreaming },
                         set: { reasoningStreamManager.isStreaming = $0 }
                     ),
+                    errorMessage: Binding(
+                        get: { reasoningStreamManager.errorMessage },
+                        set: { reasoningStreamManager.errorMessage = $0 }
+                    ),
                     modelName: reasoningStreamManager.modelName
                 )
                 .zIndex(1000) // Ensure it's above all other content

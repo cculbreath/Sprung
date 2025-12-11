@@ -66,7 +66,31 @@ struct ResumeCustomizeButton: View {
             isGeneratingResume = false
         } catch {
             Logger.error("Error in customize workflow: \(error.localizedDescription)")
+            // Show error to user in the reasoning window
+            let userMessage = parseUserFriendlyError(error)
+            reasoningStreamManager.showError(userMessage)
             isGeneratingResume = false
         }
+    }
+
+    private func parseUserFriendlyError(_ error: Error) -> String {
+        let errorString = String(describing: error)
+        // Check for common API errors
+        if errorString.contains("401") || errorString.lowercased().contains("unauthorized") ||
+           errorString.lowercased().contains("api key") {
+            return "API key error: Please check your OpenRouter API key in Settings."
+        } else if errorString.contains("429") || errorString.lowercased().contains("rate limit") {
+            return "Rate limit exceeded. Please wait a moment and try again."
+        } else if errorString.contains("500") || errorString.contains("502") || errorString.contains("503") {
+            return "The AI service is temporarily unavailable. Please try again later."
+        } else if errorString.lowercased().contains("network") || errorString.lowercased().contains("connection") {
+            return "Network error. Please check your internet connection."
+        } else if errorString.lowercased().contains("invalid_json_schema") || errorString.lowercased().contains("invalid schema") {
+            return "Schema configuration error. This model may not support structured output properly. Try a different model."
+        } else if errorString.contains("400") {
+            return "Invalid request. The selected model may not support this operation. Try a different model."
+        }
+        // Default: show the localized description
+        return error.localizedDescription
     }
 }

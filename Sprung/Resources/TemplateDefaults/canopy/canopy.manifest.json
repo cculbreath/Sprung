@@ -125,20 +125,16 @@
   },
   "defaultAIFields": [
     "custom.objective",
-    "work.*.highlights",
-    "projects.*.description",
+    "work[].highlights",
+    "projects[].description",
     "skills.*.name",
-    "skills.*.keywords",
+    "skills[].keywords",
     "custom.jobTitles[]"
-  ],
-  "listContainers": [
-    "skills.*.keywords",
-    "work.*.highlights"
   ],
   "reviewPhases": {
     "skills": [
-      { "phase": 1, "field": "skills.*.name", "bundle": true },
-      { "phase": 2, "field": "skills.*.keywords", "bundle": false }
+      { "phase": 1, "field": "skills.*.name" },
+      { "phase": 2, "field": "skills[].keywords" }
     ]
   }
 }

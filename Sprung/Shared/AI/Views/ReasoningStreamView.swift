@@ -9,6 +9,7 @@ struct ReasoningStreamView: View {
     @Binding var isVisible: Bool
     @Binding var reasoningText: String
     @Binding var isStreaming: Bool
+    @Binding var errorMessage: String?
     let modelName: String
     // Modal appearance
     var modalWidth: CGFloat = 700
@@ -54,21 +55,31 @@ struct ReasoningStreamView: View {
                                 Text(modelName)
                                     .font(.system(size: 16, weight: .semibold, design: .rounded))
                                     .foregroundColor(.primary)
-                                HStack(spacing: 6) {
-                                    Circle()
-                                        .fill(Color.green)
-                                        .frame(width: 8, height: 8)
-                                        .overlay(
-                                            Circle()
-                                                .fill(Color.green.opacity(0.3))
-                                                .frame(width: 16, height: 16)
-                                                .scaleEffect(isStreaming ? 1.5 : 1)
-                                                .opacity(isStreaming ? 0 : 1)
-                                                .animation(.easeInOut(duration: 1).repeatForever(autoreverses: false), value: isStreaming)
-                                        )
-                                    Text("Reasoning in progress...")
-                                        .font(.system(size: 14, weight: .medium))
-                                        .foregroundColor(.secondary)
+                                if errorMessage != nil {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .foregroundColor(.red)
+                                        Text("Error occurred")
+                                            .font(.system(size: 14, weight: .medium))
+                                            .foregroundColor(.red)
+                                    }
+                                } else {
+                                    HStack(spacing: 6) {
+                                        Circle()
+                                            .fill(Color.green)
+                                            .frame(width: 8, height: 8)
+                                            .overlay(
+                                                Circle()
+                                                    .fill(Color.green.opacity(0.3))
+                                                    .frame(width: 16, height: 16)
+                                                    .scaleEffect(isStreaming ? 1.5 : 1)
+                                                    .opacity(isStreaming ? 0 : 1)
+                                                    .animation(.easeInOut(duration: 1).repeatForever(autoreverses: false), value: isStreaming)
+                                            )
+                                        Text("Reasoning in progress...")
+                                            .font(.system(size: 14, weight: .medium))
+                                            .foregroundColor(.secondary)
+                                    }
                                 }
                             }
                             .padding(.leading, 12)
@@ -114,7 +125,24 @@ struct ReasoningStreamView: View {
                     ScrollViewReader { proxy in
                         ScrollView {
                             VStack(alignment: .leading, spacing: 12) {
-                                if reasoningText.isEmpty {
+                                if let error = errorMessage {
+                                    // Error display
+                                    VStack(spacing: 16) {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .font(.system(size: 40))
+                                            .foregroundColor(.red)
+                                        Text("An error occurred")
+                                            .font(.system(.headline, design: .rounded))
+                                            .foregroundColor(.primary)
+                                        Text(error)
+                                            .font(.system(.body, design: .default))
+                                            .foregroundColor(.secondary)
+                                            .multilineTextAlignment(.center)
+                                            .padding(.horizontal, 24)
+                                    }
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .padding(.vertical, 40)
+                                } else if reasoningText.isEmpty {
                                     VStack(spacing: 16) {
                                         Image(systemName: "brain")
                                             .font(.system(size: 40))
@@ -189,20 +217,23 @@ struct ReasoningStreamView: View {
     // MARK: - Markdown Parsing
     /// Parse basic markdown for bold text (**text**)
     private func parseBasicMarkdown(_ text: String) -> AttributedString {
-        var attributedString = AttributedString(text)
+        // Normalize: ensure headings (bold text at start of line or after punctuation) have newlines
+        let normalizedText = normalizeMarkdownHeadings(text)
+
+        var attributedString = AttributedString(normalizedText)
         // Find all **bold** patterns
         let pattern = "\\*\\*([^*]+)\\*\\*"
         do {
             let regex = try NSRegularExpression(pattern: pattern)
-            let nsString = text as NSString
-            let matches = regex.matches(in: text, range: NSRange(location: 0, length: nsString.length))
+            let nsString = normalizedText as NSString
+            let matches = regex.matches(in: normalizedText, range: NSRange(location: 0, length: nsString.length))
             // Process matches in reverse order to maintain correct ranges
             for match in matches.reversed() {
-                if let range = Range(match.range, in: text),
+                if let range = Range(match.range, in: normalizedText),
                    let attributedRange = Range(range, in: attributedString) {
                     // Get the text without asterisks (capture group 1)
-                    if let contentRange = Range(match.range(at: 1), in: text) {
-                        let boldText = String(text[contentRange])
+                    if let contentRange = Range(match.range(at: 1), in: normalizedText) {
+                        let boldText = String(normalizedText[contentRange])
                         // Replace the entire match with just the bold text
                         attributedString.replaceSubrange(attributedRange, with: AttributedString(boldText))
                         // Apply bold formatting to the replacement
@@ -218,6 +249,26 @@ struct ReasoningStreamView: View {
         }
         return attributedString
     }
+
+    /// Normalize markdown headings by ensuring bold text has proper newlines before it
+    private func normalizeMarkdownHeadings(_ text: String) -> String {
+        // Simple pattern: any non-whitespace character immediately before **
+        // Add double newline before ** when preceded directly by text
+        // e.g., "ATS!**Heading" -> "ATS!\n\n**Heading"
+        do {
+            let pattern = "([^\\s\\n])(\\*\\*)"
+            let regex = try NSRegularExpression(pattern: pattern)
+            let result = regex.stringByReplacingMatches(
+                in: text,
+                range: NSRange(location: 0, length: text.utf16.count),
+                withTemplate: "$1\n\n$2"
+            )
+            return result
+        } catch {
+            Logger.debug("Failed to normalize markdown headings: \(error)", category: .ui)
+            return text
+        }
+    }
 }
 // MARK: - Reasoning Stream Manager
 /// Manages the reasoning stream state and text accumulation
@@ -228,6 +279,8 @@ class ReasoningStreamManager {
     var reasoningText: String = ""
     var modelName: String = ""
     var isStreaming: Bool = false
+    var errorMessage: String? = nil
+
     /// Stop the current stream
     func stopStream() {
         isStreaming = false
@@ -237,6 +290,7 @@ class ReasoningStreamManager {
         reasoningText = ""
         modelName = ""
         isStreaming = false
+        errorMessage = nil
     }
     /// Hides the reasoning interface and clears any accumulated state.
     func hideAndClear() {
@@ -247,7 +301,14 @@ class ReasoningStreamManager {
     func startReasoning(modelName: String) {
         self.modelName = modelName
         self.reasoningText = ""
+        self.errorMessage = nil
         self.isVisible = true
         self.isStreaming = true
+    }
+    /// Show an error message in the reasoning window
+    func showError(_ message: String) {
+        self.errorMessage = message
+        self.isStreaming = false
+        self.isVisible = true
     }
 }

@@ -122,7 +122,8 @@ final class AppDependencies {
             openRouterService: openRouterService,
             reasoningStreamManager: reasoningStreamManager,
             exportCoordinator: resumeExportCoordinator,
-            applicantProfileStore: applicantProfileStore
+            applicantProfileStore: applicantProfileStore,
+            resRefStore: resRefStore
         )
         self.resumeReviseViewModel = resumeReviseViewModel
         let interviewDataStore = InterviewDataStore()

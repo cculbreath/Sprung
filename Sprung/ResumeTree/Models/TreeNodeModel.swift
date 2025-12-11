@@ -87,10 +87,24 @@ enum LeafStatus: String, Codable, Hashable {
     /// When non-nil, this node was selected via parent's attribute picker (not direct toggle).
     var groupSelectionSourceId: String?
 
+    /// Grouping mode for this node's AI selection: "*" (bundle) or "[]" (enumerate).
+    /// Only relevant when groupSelectionSourceId is set.
+    var groupSelectionModeRaw: String?
+
     /// Returns true if this node was selected via a parent's attribute picker
     /// (group-inherited selection, shown in different color, can only toggle as a group)
     var isGroupInheritedSelection: Bool {
         groupSelectionSourceId != nil
+    }
+
+    /// Returns true if this node uses bundle mode (* = combine all matches into 1 revnode)
+    var isBundleMode: Bool {
+        groupSelectionModeRaw == "*"
+    }
+
+    /// Returns true if this node uses enumerate mode ([] = one revnode per item)
+    var isEnumerateMode: Bool {
+        groupSelectionModeRaw == "[]" || groupSelectionModeRaw == nil
     }
 
     /// Returns true if this node's AI selection is inherited from an ancestor
@@ -473,22 +487,43 @@ extension TreeNode {
     /// Export nodes matching a path pattern for LLM review.
     ///
     /// # Path Syntax
-    /// - `*` = enumerate objects/entries (e.g., job objects, skill categories)
-    /// - `[]` = iterate array values (simple leaf items)
+    /// - `*` = enumerate AND BUNDLE into one revnode (holistic review)
+    /// - `[]` = enumerate with one revnode per item (individual review)
     /// - Plain names = schema field names
     ///
     /// # Examples
-    /// - `skills.*.name` → exports the name field of each skill category
-    /// - `skills.*.keywords` → exports the keywords container for each category
-    /// - `work.*.highlights` → exports the highlights container for each job
+    /// - `skills.*.name` → 1 revnode with all 5 category names bundled
+    /// - `skills[].name` → 5 revnodes, one per category name
+    /// - `skills[].keywords` → 5 revnodes, each with that category's keywords
+    /// - `work[].highlights` → 4 revnodes, each with that job's highlights
+    /// - `work.*.highlights` → 1 revnode with all highlights bundled
     ///
     /// - Parameters:
     ///   - path: Path pattern to match (e.g., "skills.*.name")
     ///   - rootNode: The tree root to search from
     /// - Returns: Array of ExportedReviewNode for nodes matching the pattern
     static func exportNodesMatchingPath(_ path: String, from rootNode: TreeNode) -> [ExportedReviewNode] {
-        let components = path.split(separator: ".").map(String.init)
+        // Parse path, separating [] from field names
+        // "skills[].keywords" -> ["skills", "[]", "keywords"]
+        // "skills.*.name" -> ["skills", "*", "name"]
+        var components: [String] = []
+        for part in path.split(separator: ".") {
+            let partStr = String(part)
+            if partStr.hasSuffix("[]") {
+                // Split "skills[]" into "skills" and "[]"
+                let fieldName = String(partStr.dropLast(2))
+                if !fieldName.isEmpty {
+                    components.append(fieldName)
+                }
+                components.append("[]")
+            } else {
+                components.append(partStr)
+            }
+        }
         var results: [ExportedReviewNode] = []
+
+        // Check if pattern uses * (bundle) vs [] (enumerate)
+        let usesBundling = components.contains("*")
 
         exportNodesRecursive(
             node: rootNode,
@@ -498,8 +533,64 @@ extension TreeNode {
             results: &results
         )
 
+        // If bundling mode, combine all results into one revnode
+        if usesBundling && results.count > 1 {
+            let bundled = bundleExportedNodes(results, pattern: path)
+            Logger.debug("📊 Bundled \(results.count) nodes into 1 revnode for pattern '\(path)'")
+            return [bundled]
+        }
+
         Logger.debug("📊 Exported \(results.count) nodes matching path '\(path)'")
         return results
+    }
+
+    /// Bundle multiple exported nodes into a single revnode with combined values.
+    private static func bundleExportedNodes(_ nodes: [ExportedReviewNode], pattern: String) -> ExportedReviewNode {
+        // Collect all values (either from childValues or direct value)
+        var allValues: [String] = []
+        var allIds: [String] = []
+
+        for node in nodes {
+            allIds.append(node.id)
+            if let childValues = node.childValues, !childValues.isEmpty {
+                // Container node - add all its children
+                allValues.append(contentsOf: childValues)
+            } else if !node.value.isEmpty {
+                // Scalar node - add its value
+                allValues.append(node.value)
+            }
+        }
+
+        // Generate a bundled ID from the pattern
+        let bundledId = "bundled-\(pattern.replacingOccurrences(of: ".", with: "-").replacingOccurrences(of: "*", with: "star"))"
+
+        // Create display name from pattern (e.g., "skills.*.name" -> "Skill Names")
+        let displayName = bundleDisplayName(from: pattern)
+
+        return ExportedReviewNode(
+            id: bundledId,
+            path: pattern,
+            displayName: displayName,
+            value: allValues.joined(separator: "\n"),
+            childValues: allValues,
+            childCount: allValues.count,
+            isBundled: true,
+            sourceNodeIds: allIds
+        )
+    }
+
+    /// Generate a human-readable display name from a bundle pattern.
+    private static func bundleDisplayName(from pattern: String) -> String {
+        // Extract meaningful parts: "skills.*.name" -> "Skill Names"
+        let parts = pattern.split(separator: ".").filter { $0 != "*" && $0 != "[]" }
+        if parts.count >= 2 {
+            let section = parts[0].capitalized
+            let field = parts[parts.count - 1].capitalized
+            return "\(section) \(field)s"
+        } else if let lastPart = parts.last {
+            return String(lastPart).capitalized + "s"
+        }
+        return "Bundled Items"
     }
 
     private static func exportNodesRecursive(

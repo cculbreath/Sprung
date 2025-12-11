@@ -125,7 +125,7 @@ import SwiftUI
                     items: JSONSchema(type: .string)
                 )
             ],
-            required: ["id", "displayName", "originalValue", "proposedValue", "action", "reason"],
+            required: ["id", "displayName", "originalValue", "proposedValue", "action", "reason", "originalChildren", "proposedChildren"],
             additionalProperties: false
         )
 
@@ -218,13 +218,15 @@ import SwiftUI
     var queryString: String = ""
     let res: Resume
     private let exportCoordinator: ResumeExportCoordinator
+    private let allResRefs: [ResRef]
     // MARK: - Derived Properties
     var backgroundDocs: String {
-        let bgrefs = res.enabledSources
-        if bgrefs.isEmpty {
-            return ""
+        if allResRefs.isEmpty {
+            Logger.debug("⚠️ [ResumeQuery] No knowledge cards available")
+            return "(No background documents/knowledge cards available)"
         } else {
-            return bgrefs.map { $0.name + ":\n" + $0.content + "\n\n" }.joined()
+            Logger.debug("📚 [ResumeQuery] Including \(allResRefs.count) knowledge cards in prompt")
+            return allResRefs.map { $0.name + ":\n" + $0.content + "\n\n" }.joined()
         }
     }
     var resumeText: String {
@@ -266,11 +268,13 @@ import SwiftUI
         resume: Resume,
         exportCoordinator: ResumeExportCoordinator,
         applicantProfile: ApplicantProfile,
+        allResRefs: [ResRef],
         saveDebugPrompt: Bool = true
     ) {
         // Optionally let users pass in the debug flag during initialization
         res = resume
         self.exportCoordinator = exportCoordinator
+        self.allResRefs = allResRefs
         applicant = Applicant(profile: applicantProfile)
         self.saveDebugPrompt = saveDebugPrompt
     }

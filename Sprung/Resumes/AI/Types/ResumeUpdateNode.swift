@@ -206,14 +206,36 @@ enum ReviewUserDecision: String, Codable {
 
 /// A node exported for LLM review - generic for any path pattern
 struct ExportedReviewNode: Codable, Equatable, Identifiable {
-    let id: String              // Node ID from tree (for applying changes)
-    let path: String            // Full path (e.g., "skills.0.name")
+    let id: String              // Node ID from tree (for applying changes), or "bundled-{pattern}" for bundles
+    let path: String            // Full path (e.g., "skills.0.name") or pattern (e.g., "skills.*.name")
     let displayName: String     // Human-readable name (e.g., "Programming Languages")
     let value: String           // Current value (for scalar) or concatenated (for container)
     let childValues: [String]?  // For containers, the individual child values
     let childCount: Int         // Count of children (0 for scalars)
+    let isBundled: Bool         // True if this is a bundled node from * pattern
+    let sourceNodeIds: [String]? // Original node IDs when bundled (for applying changes back)
 
     var isContainer: Bool { childCount > 0 }
+
+    init(
+        id: String,
+        path: String,
+        displayName: String,
+        value: String,
+        childValues: [String]? = nil,
+        childCount: Int = 0,
+        isBundled: Bool = false,
+        sourceNodeIds: [String]? = nil
+    ) {
+        self.id = id
+        self.path = path
+        self.displayName = displayName
+        self.value = value
+        self.childValues = childValues
+        self.childCount = childCount
+        self.isBundled = isBundled
+        self.sourceNodeIds = sourceNodeIds
+    }
 }
 
 /// A single review item from the LLM response - generic for any phase
@@ -224,11 +246,17 @@ struct PhaseReviewItem: Codable, Equatable, Identifiable {
     var proposedValue: String               // Proposed new value (same as original if keep)
     var action: ReviewItemAction            // What the LLM proposes
     var reason: String                      // Why this change
-    var userDecision: ReviewUserDecision    // User's response
+    var userDecision: ReviewUserDecision    // User's response (not set by LLM)
+    var userComment: String                 // User's comment when rejecting (not set by LLM)
 
     // For containers with children
     var originalChildren: [String]?         // Original child values
     var proposedChildren: [String]?         // Proposed child values
+
+    enum CodingKeys: String, CodingKey {
+        case id, displayName, originalValue, proposedValue, action, reason
+        case userDecision, userComment, originalChildren, proposedChildren
+    }
 
     init(
         id: String,
@@ -238,6 +266,7 @@ struct PhaseReviewItem: Codable, Equatable, Identifiable {
         action: ReviewItemAction = .keep,
         reason: String = "",
         userDecision: ReviewUserDecision = .pending,
+        userComment: String = "",
         originalChildren: [String]? = nil,
         proposedChildren: [String]? = nil
     ) {
@@ -248,8 +277,24 @@ struct PhaseReviewItem: Codable, Equatable, Identifiable {
         self.action = action
         self.reason = reason
         self.userDecision = userDecision
+        self.userComment = userComment
         self.originalChildren = originalChildren
         self.proposedChildren = proposedChildren
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        displayName = try container.decode(String.self, forKey: .displayName)
+        originalValue = try container.decode(String.self, forKey: .originalValue)
+        proposedValue = try container.decode(String.self, forKey: .proposedValue)
+        action = try container.decode(ReviewItemAction.self, forKey: .action)
+        reason = try container.decode(String.self, forKey: .reason)
+        // userDecision and userComment default - not set by LLM
+        userDecision = try container.decodeIfPresent(ReviewUserDecision.self, forKey: .userDecision) ?? .pending
+        userComment = try container.decodeIfPresent(String.self, forKey: .userComment) ?? ""
+        originalChildren = try container.decodeIfPresent([String].self, forKey: .originalChildren)
+        proposedChildren = try container.decodeIfPresent([String].self, forKey: .proposedChildren)
     }
 }
 

@@ -89,6 +89,11 @@ struct ResumeDetailView: View {
                         }
                     }
                 }
+
+                // AI Review section - node group phase configuration
+                NodeGroupPhasePanel(resume: vm.resume)
+                    .padding(.horizontal, 10)
+                    .padding(.top, 8)
             }
         }
         // Provide the view-model to the subtree via environment so that

@@ -69,11 +69,11 @@ struct NodeHeaderView: View {
                 .popover(isPresented: $showAttributePicker) {
                     AttributePickerView(
                         collectionNode: node,
-                        onApply: { selectedAttributes in
+                        onApply: { selections in
                             // Clear previous group selection from this node
                             node.clearGroupSelection()
-                            // Apply new group selection
-                            node.applyGroupSelection(attributes: selectedAttributes, sourceId: node.id)
+                            // Apply new group selection with modes
+                            node.applyGroupSelection(selections: selections, sourceId: node.id)
                             showAttributePicker = false
                         },
                         onCancel: {

@@ -88,14 +88,18 @@ Controls which sections appear in the resume tree editor and their order.
 - Sections listed here appear in the Content tree
 - `styling` enables the Font Sizes panel
 
-#### `listContainers`
+#### `listContainers` (Deprecated)
 
-Defines review behavior for list items (like skills or highlights).
+> **Note:** This field is deprecated. Use `*` vs `[]` notation in path patterns instead.
+> - `skills.*.keywords` (bundle) → batch review
+> - `skills[].keywords` (enumerate) → per-item review
+
+Previously defined review behavior for list items:
 
 ```json
 "listContainers": [
-  "skills.*.keywords", // batchOnly (accept/reject category)
-  "work.*.highlights"  // perItemReview (review individual bullets)
+  "skills.*.keywords",
+  "work.*.highlights"
 ]
 ```
 
@@ -114,27 +118,48 @@ Configures multi-phase AI review for complex sections. Each phase targets a spec
 
 **Path Pattern Syntax:**
 
-| Symbol | Meaning | Example |
-|--------|---------|---------|
-| `*` | Enumerate object entries (child nodes) | `skills.*` matches each skill category |
-| `[]` | Iterate array values | `skills.*.keywords[]` matches each keyword string |
-| `fieldName` | Match exact field name | `skills.*.name` matches the "name" field |
+The wildcard notation controls both traversal AND grouping behavior:
+
+| Symbol | Meaning | Result |
+|--------|---------|--------|
+| `*` | Enumerate AND **bundle** into ONE revnode | Holistic review of all matches together |
+| `[]` | Enumerate with **one revnode per item** | Individual review of each match |
+| `fieldName` | Match exact field name | Navigates to specific field |
+
+**Key Insight:** The wildcard determines how many revnodes are created:
+- `skills.*.name` → **1 revnode** containing all 5 category names (bundled for holistic review)
+- `skills[].name` → **5 revnodes**, one per category name (individual review)
+- `skills[].keywords` → **5 revnodes**, each with that category's keywords
+- `work.*.highlights` → **1 revnode** with all highlights across all jobs (bundled)
+- `work[].highlights` → **4 revnodes**, each with one job's highlights
 
 **Phase Properties:**
 
 | Property | Type | Description |
 |----------|------|-------------|
 | `phase` | int | Phase order (1-indexed) |
-| `field` | string | Path pattern to match nodes |
-| `bundle` | bool | `true` for batch review, `false` for item-by-item (default: `false`) |
+| `field` | string | Path pattern (use `*` for bundle, `[]` for per-item) |
+| `bundle` | bool | (Legacy) Prefer using `*` vs `[]` in path pattern instead |
+
+**Typical Configuration:**
+
+```json
+"defaultAIFields": [
+  "skills.*.name",       // 1 revnode: review all category names together
+  "skills[].keywords",   // 5 revnodes: review each category's keywords separately
+  "work[].highlights"    // 4 revnodes: review each job's bullets separately
+]
+```
 
 **Example Patterns:**
 
-| Pattern | Description |
-|---------|-------------|
-| `skills.*.name` | Category names for each skill |
-| `skills.*.keywords` | Keywords container under each skill |
-| `work.*.highlights` | Highlights for each work entry |
+| Pattern | Revnodes | Description |
+|---------|----------|-------------|
+| `skills.*.name` | 1 | All category names bundled (e.g., 5 names in 1 revnode) |
+| `skills[].name` | N | One revnode per category name |
+| `skills[].keywords` | N | Each category's keywords as separate revnode |
+| `work[].highlights` | N | Each job's highlights as separate revnode |
+| `work.*.highlights` | 1 | All highlights from all jobs bundled |
 
 #### `section-visibility`
 

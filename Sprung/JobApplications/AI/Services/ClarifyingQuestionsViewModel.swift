@@ -17,6 +17,7 @@ class ClarifyingQuestionsViewModel {
     private let defaultResumeReviseViewModel: ResumeReviseViewModel
     private let exportCoordinator: ResumeExportCoordinator
     private let applicantProfileStore: ApplicantProfileStore
+    private let resRefStore: ResRefStore
     private var activeStreamingHandle: LLMStreamingHandle?
     // MARK: - UI State
     var isGeneratingQuestions: Bool = false
@@ -32,7 +33,8 @@ class ClarifyingQuestionsViewModel {
         reasoningStreamManager: ReasoningStreamManager,
         defaultResumeReviseViewModel: ResumeReviseViewModel,
         exportCoordinator: ResumeExportCoordinator,
-        applicantProfileStore: ApplicantProfileStore
+        applicantProfileStore: ApplicantProfileStore,
+        resRefStore: ResRefStore
     ) {
         self.llm = llmFacade
         self.openRouterService = openRouterService
@@ -40,6 +42,7 @@ class ClarifyingQuestionsViewModel {
         self.defaultResumeReviseViewModel = defaultResumeReviseViewModel
         self.exportCoordinator = exportCoordinator
         self.applicantProfileStore = applicantProfileStore
+        self.resRefStore = resRefStore
     }
     // MARK: - Public Interface
     /// Start the clarifying questions workflow
@@ -63,6 +66,7 @@ class ClarifyingQuestionsViewModel {
                 resume: resume,
                 exportCoordinator: exportCoordinator,
                 applicantProfile: applicantProfileStore.currentProfile(),
+                allResRefs: resRefStore.resRefs,
                 saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
             )
             // Start a new conversation with background docs and clarifying questions request
