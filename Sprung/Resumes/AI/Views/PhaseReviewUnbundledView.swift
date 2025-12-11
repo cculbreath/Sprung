@@ -2,8 +2,8 @@
 //  PhaseReviewUnbundledView.swift
 //  Sprung
 //
-//  Generic unbundled review view for manifest-driven multi-phase review.
-//  Shows one item at a time when phase.bundle = false.
+//  Unbundled review view for manifest-driven multi-phase review.
+//  Shows one item at a time for individual review when phase.bundle = false.
 //
 
 import SwiftUI
@@ -60,9 +60,9 @@ struct PhaseReviewUnbundledView: View {
                             scalarDiffView(item: item)
                         }
                     }
-                    .padding(20)
+                    .padding(24)
                 }
-                .frame(maxHeight: 450)
+                .frame(minHeight: 300, maxHeight: 500)
             } else if viewModel.isProcessingRevisions {
                 loadingView
             } else {
@@ -74,7 +74,7 @@ struct PhaseReviewUnbundledView: View {
             // Action buttons
             actionButtons
         }
-        .frame(width: 700)
+        .frame(width: 900)
         .background(Color(NSColor.windowBackgroundColor))
         .confirmationDialog(
             "Cancel Review?",
@@ -138,19 +138,21 @@ struct PhaseReviewUnbundledView: View {
                 }
             }
         }
-        .padding(.vertical, 16)
+        .padding(.vertical, 20)
         .frame(maxWidth: .infinity)
     }
 
     // MARK: - Reasoning Section
 
     private func reasoningSection(_ reason: String) -> some View {
-        HStack {
+        HStack(alignment: .top, spacing: 8) {
             Image(systemName: "lightbulb")
                 .foregroundStyle(.yellow)
+                .padding(.top, 2)
             Text(reason)
                 .font(.system(.callout, design: .rounded))
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -180,6 +182,7 @@ struct PhaseReviewUnbundledView: View {
 
                     Text(item.originalValue)
                         .font(.system(.body, design: .rounded))
+                        .fixedSize(horizontal: false, vertical: true)
                         .padding(12)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Color.red.opacity(0.05))
@@ -197,6 +200,7 @@ struct PhaseReviewUnbundledView: View {
 
                     Text(item.proposedValue)
                         .font(.system(.body, design: .rounded))
+                        .fixedSize(horizontal: false, vertical: true)
                         .padding(12)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Color.green.opacity(0.05))
@@ -253,16 +257,19 @@ struct PhaseReviewUnbundledView: View {
     private func childrenList(items: [String], comparison: [String], isOriginal: Bool) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             ForEach(items, id: \.self) { item in
-                HStack(spacing: 8) {
+                HStack(alignment: .top, spacing: 8) {
                     // Status indicator
                     childStatusIcon(item: item, comparison: comparison, isOriginal: isOriginal)
+                        .padding(.top, 2)
 
                     Text(item)
                         .font(.system(.body, design: .rounded))
                         .foregroundStyle(childTextColor(item: item, comparison: comparison, isOriginal: isOriginal))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.vertical, 4)
-                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .padding(.horizontal, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(childBackground(item: item, comparison: comparison, isOriginal: isOriginal))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             }
@@ -351,7 +358,7 @@ struct PhaseReviewUnbundledView: View {
                 .font(.system(.body, design: .rounded))
                 .foregroundStyle(.secondary)
         }
-        .frame(maxWidth: .infinity, maxHeight: 200)
+        .frame(maxWidth: .infinity, minHeight: 300)
     }
 
     private var emptyView: some View {
@@ -363,7 +370,7 @@ struct PhaseReviewUnbundledView: View {
                 .font(.system(.body, design: .rounded))
                 .foregroundStyle(.secondary)
         }
-        .frame(maxWidth: .infinity, maxHeight: 200)
+        .frame(maxWidth: .infinity, minHeight: 300)
     }
 
     // MARK: - Action Buttons
