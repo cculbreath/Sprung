@@ -53,6 +53,10 @@ final class ResStore: SwiftDataStore {
             return nil
         }
         resume.rootNode = rootNode
+
+        // Create FontSizeNodes from manifest styling section
+        buildFontSizeNodes(for: resume, from: manifest)
+
         // Persist new resume (and trigger observers)
         withAnimation(.spring(response: 0.45, dampingFraction: 0.82, blendDuration: 0.1)) {
             jobApp.addResume(resume)
@@ -152,6 +156,36 @@ final class ResStore: SwiftDataStore {
             fontString: original.fontString,
             resume: resume
         )
+    }
+
+    /// Creates FontSizeNode objects from the manifest's styling section.
+    private func buildFontSizeNodes(for resume: Resume, from manifest: TemplateManifest) {
+        guard let stylingSection = manifest.section(for: "styling"),
+              let defaultContext = stylingSection.defaultContextValue() as? [String: Any] else {
+            return
+        }
+
+        // Check if fonts should be included
+        let includeFonts = defaultContext["includeFonts"] as? Bool ?? false
+        guard includeFonts,
+              let fontSizes = defaultContext["fontSizes"] as? [String: String],
+              !fontSizes.isEmpty else {
+            return
+        }
+
+        resume.includeFonts = true
+
+        // Create FontSizeNode for each font size, sorted alphabetically for consistent indexing
+        let sortedFontSizes = fontSizes.sorted { $0.key < $1.key }
+        for (index, (key, value)) in sortedFontSizes.enumerated() {
+            let node = FontSizeNode(
+                key: key,
+                index: index,
+                fontString: value,
+                resume: resume
+            )
+            resume.fontSizeNodes.append(node)
+        }
     }
     func deleteRes(_ res: Resume) {
         // Handle jobApp relationship updates and remove the resume from the jobApp

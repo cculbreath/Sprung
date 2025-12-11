@@ -1,20 +1,34 @@
 //
-//  KeywordsDiffView.swift
+//  PhaseReviewUnbundledView.swift
 //  Sprung
 //
-//  Phase 2 UI for two-phase hierarchical skills review
-//  Shows keyword-level changes within a category (add/remove/modify)
+//  Generic unbundled review view for manifest-driven multi-phase review.
+//  Shows one item at a time when phase.bundle = false.
 //
 
 import SwiftUI
 import SwiftData
 
-/// Phase 2 UI: Review keywords within a specific skill category
-struct KeywordsDiffView: View {
+/// Generic unbundled review: Shows one item at a time for individual review
+struct PhaseReviewUnbundledView: View {
     @Bindable var viewModel: ResumeReviseViewModel
     @Binding var resume: Resume?
     @Environment(\.modelContext) private var modelContext
     @State private var showCancelConfirmation = false
+
+    private var phaseState: PhaseReviewState {
+        viewModel.phaseReviewState
+    }
+
+    private var currentReview: PhaseReviewContainer? {
+        phaseState.currentReview
+    }
+
+    private var currentItem: PhaseReviewItem? {
+        guard let review = currentReview,
+              phaseState.currentItemIndex < review.items.count else { return nil }
+        return review.items[phaseState.currentItemIndex]
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,82 +37,36 @@ struct KeywordsDiffView: View {
 
             Divider()
 
-            if let keywordsRevision = viewModel.currentKeywordsRevision {
-                // Keywords diff content
+            if let item = currentItem {
+                // Current item diff content
                 ScrollView {
                     VStack(spacing: 16) {
-                        // Explanation
-                        if !keywordsRevision.why.isEmpty {
-                            HStack {
-                                Image(systemName: "lightbulb")
-                                    .foregroundStyle(.yellow)
-                                Text(keywordsRevision.why)
-                                    .font(.system(.callout, design: .rounded))
-                                    .foregroundStyle(.secondary)
-                            }
-                            .padding(12)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.yellow.opacity(0.1))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        // Reason/explanation
+                        if !item.reason.isEmpty {
+                            reasoningSection(item.reason)
                         }
 
-                        // Side by side diff
-                        HStack(alignment: .top, spacing: 20) {
-                            // Original keywords
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Original")
-                                    .font(.system(.headline, design: .rounded, weight: .semibold))
-                                    .foregroundStyle(.secondary)
-
-                                keywordsList(
-                                    keywords: keywordsRevision.oldKeywords,
-                                    comparison: keywordsRevision.newKeywords,
-                                    isOriginal: true
-                                )
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-
-                            Divider()
-
-                            // Suggested keywords
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Suggested")
-                                    .font(.system(.headline, design: .rounded, weight: .semibold))
-                                    .foregroundStyle(.blue)
-
-                                keywordsList(
-                                    keywords: keywordsRevision.newKeywords,
-                                    comparison: keywordsRevision.oldKeywords,
-                                    isOriginal: false
-                                )
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        // Diff view based on item type
+                        if let originalChildren = item.originalChildren,
+                           let proposedChildren = item.proposedChildren {
+                            // Show children diff (like keywords)
+                            childrenDiffView(
+                                original: originalChildren,
+                                proposed: proposedChildren,
+                                itemName: item.displayName
+                            )
+                        } else {
+                            // Show scalar diff
+                            scalarDiffView(item: item)
                         }
                     }
                     .padding(20)
                 }
-                .frame(maxHeight: 400)
+                .frame(maxHeight: 450)
             } else if viewModel.isProcessingRevisions {
-                // Loading state
-                VStack(spacing: 16) {
-                    ProgressView()
-                        .scaleEffect(1.2)
-                    Text("Analyzing keywords...")
-                        .font(.system(.body, design: .rounded))
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: 200)
+                loadingView
             } else {
-                // No content
-                VStack(spacing: 16) {
-                    Image(systemName: "tray")
-                        .font(.system(size: 36))
-                        .foregroundStyle(.secondary)
-                    Text("No keywords to review")
-                        .font(.system(.body, design: .rounded))
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: 200)
+                emptyView
             }
 
             Divider()
@@ -108,6 +76,33 @@ struct KeywordsDiffView: View {
         }
         .frame(width: 700)
         .background(Color(NSColor.windowBackgroundColor))
+        .confirmationDialog(
+            "Cancel Review?",
+            isPresented: $showCancelConfirmation,
+            titleVisibility: .visible
+        ) {
+            if viewModel.hasUnappliedApprovedChanges() {
+                Button("Apply Approved & Close") {
+                    guard let resume = resume else { return }
+                    viewModel.applyApprovedChangesAndClose(resume: resume, context: modelContext)
+                }
+                Button("Discard All", role: .destructive) {
+                    viewModel.discardAllAndClose()
+                }
+                Button("Continue Review", role: .cancel) { }
+            } else {
+                Button("Discard & Close", role: .destructive) {
+                    viewModel.discardAllAndClose()
+                }
+                Button("Continue Review", role: .cancel) { }
+            }
+        } message: {
+            if viewModel.hasUnappliedApprovedChanges() {
+                Text("You have approved changes that haven't been applied yet. Would you like to apply them before closing?")
+            } else {
+                Text("Are you sure you want to discard all pending changes?")
+            }
+        }
     }
 
     // MARK: - Header
@@ -119,16 +114,16 @@ struct KeywordsDiffView: View {
                     .font(.system(size: 24))
                     .foregroundStyle(.blue)
 
-                Text(viewModel.currentKeywordsRevision?.categoryName ?? "Keywords Review")
+                Text(currentItem?.displayName ?? "Review")
                     .font(.system(.title2, design: .rounded, weight: .semibold))
             }
 
-            Text("Review suggested keyword changes for this category")
+            Text("Review suggested changes")
                 .font(.system(.subheadline, design: .rounded))
                 .foregroundStyle(.secondary)
 
             HStack(spacing: 8) {
-                Text("Phase 2 of 2: Keywords")
+                Text("Phase \(phaseState.currentPhaseIndex + 1) of \(phaseState.phases.count)")
                     .font(.system(.caption, design: .rounded, weight: .medium))
                     .foregroundStyle(.blue)
                     .padding(.horizontal, 12)
@@ -136,42 +131,148 @@ struct KeywordsDiffView: View {
                     .background(Color.blue.opacity(0.1))
                     .clipShape(Capsule())
 
-                Text("Category \(viewModel.currentCategoryIndex + 1) of \(viewModel.pendingCategoryIds.count)")
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(.secondary)
+                if let review = currentReview {
+                    Text("Item \(phaseState.currentItemIndex + 1) of \(review.items.count)")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .padding(.vertical, 16)
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: - Keywords List
+    // MARK: - Reasoning Section
+
+    private func reasoningSection(_ reason: String) -> some View {
+        HStack {
+            Image(systemName: "lightbulb")
+                .foregroundStyle(.yellow)
+            Text(reason)
+                .font(.system(.callout, design: .rounded))
+                .foregroundStyle(.secondary)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.yellow.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    // MARK: - Scalar Diff View
+
+    private func scalarDiffView(item: PhaseReviewItem) -> some View {
+        VStack(spacing: 16) {
+            // Action indicator
+            HStack {
+                actionIcon(for: item.action)
+                Text(actionDescription(for: item.action))
+                    .font(.system(.headline, design: .rounded, weight: .medium))
+                Spacer()
+            }
+            .padding(.bottom, 8)
+
+            HStack(alignment: .top, spacing: 20) {
+                // Original value
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Original")
+                        .font(.system(.headline, design: .rounded, weight: .semibold))
+                        .foregroundStyle(.secondary)
+
+                    Text(item.originalValue)
+                        .font(.system(.body, design: .rounded))
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.red.opacity(0.05))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .frame(maxWidth: .infinity)
+
+                Divider()
+
+                // Proposed value
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Proposed")
+                        .font(.system(.headline, design: .rounded, weight: .semibold))
+                        .foregroundStyle(.blue)
+
+                    Text(item.proposedValue)
+                        .font(.system(.body, design: .rounded))
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.green.opacity(0.05))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    // MARK: - Children Diff View
+
+    private func childrenDiffView(original: [String], proposed: [String], itemName: String) -> some View {
+        VStack(spacing: 16) {
+            // Stats
+            DiffStatsView(original: original, proposed: proposed)
+
+            // Side by side diff
+            HStack(alignment: .top, spacing: 20) {
+                // Original values
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Original")
+                        .font(.system(.headline, design: .rounded, weight: .semibold))
+                        .foregroundStyle(.secondary)
+
+                    childrenList(
+                        items: original,
+                        comparison: proposed,
+                        isOriginal: true
+                    )
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Divider()
+
+                // Proposed values
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Proposed")
+                        .font(.system(.headline, design: .rounded, weight: .semibold))
+                        .foregroundStyle(.blue)
+
+                    childrenList(
+                        items: proposed,
+                        comparison: original,
+                        isOriginal: false
+                    )
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
 
     @ViewBuilder
-    private func keywordsList(keywords: [String], comparison: [String], isOriginal: Bool) -> some View {
+    private func childrenList(items: [String], comparison: [String], isOriginal: Bool) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            ForEach(keywords, id: \.self) { keyword in
+            ForEach(items, id: \.self) { item in
                 HStack(spacing: 8) {
                     // Status indicator
-                    keywordStatusIcon(keyword: keyword, comparison: comparison, isOriginal: isOriginal)
+                    childStatusIcon(item: item, comparison: comparison, isOriginal: isOriginal)
 
-                    Text(keyword)
+                    Text(item)
                         .font(.system(.body, design: .rounded))
-                        .foregroundStyle(keywordTextColor(keyword: keyword, comparison: comparison, isOriginal: isOriginal))
+                        .foregroundStyle(childTextColor(item: item, comparison: comparison, isOriginal: isOriginal))
                 }
                 .padding(.vertical, 4)
                 .padding(.horizontal, 8)
-                .background(keywordBackground(keyword: keyword, comparison: comparison, isOriginal: isOriginal))
+                .background(childBackground(item: item, comparison: comparison, isOriginal: isOriginal))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             }
         }
     }
 
-    private func keywordStatusIcon(keyword: String, comparison: [String], isOriginal: Bool) -> some View {
+    private func childStatusIcon(item: String, comparison: [String], isOriginal: Bool) -> some View {
         Group {
             if isOriginal {
-                // In original list: check if removed
-                if !comparison.contains(keyword) {
+                if !comparison.contains(item) {
                     Image(systemName: "minus.circle.fill")
                         .foregroundStyle(.red)
                 } else {
@@ -179,8 +280,7 @@ struct KeywordsDiffView: View {
                         .foregroundStyle(.gray.opacity(0.3))
                 }
             } else {
-                // In new list: check if added
-                if !comparison.contains(keyword) {
+                if !comparison.contains(item) {
                     Image(systemName: "plus.circle.fill")
                         .foregroundStyle(.green)
                 } else {
@@ -192,22 +292,78 @@ struct KeywordsDiffView: View {
         .font(.system(size: 14))
     }
 
-    private func keywordTextColor(keyword: String, comparison: [String], isOriginal: Bool) -> Color {
-        if isOriginal && !comparison.contains(keyword) {
+    private func childTextColor(item: String, comparison: [String], isOriginal: Bool) -> Color {
+        if isOriginal && !comparison.contains(item) {
             return .red
-        } else if !isOriginal && !comparison.contains(keyword) {
+        } else if !isOriginal && !comparison.contains(item) {
             return .green
         }
         return .primary
     }
 
-    private func keywordBackground(keyword: String, comparison: [String], isOriginal: Bool) -> Color {
-        if isOriginal && !comparison.contains(keyword) {
+    private func childBackground(item: String, comparison: [String], isOriginal: Bool) -> Color {
+        if isOriginal && !comparison.contains(item) {
             return Color.red.opacity(0.1)
-        } else if !isOriginal && !comparison.contains(keyword) {
+        } else if !isOriginal && !comparison.contains(item) {
             return Color.green.opacity(0.1)
         }
         return Color.clear
+    }
+
+    // MARK: - Action Helpers
+
+    private func actionIcon(for action: ReviewItemAction) -> some View {
+        Group {
+            switch action {
+            case .keep:
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+            case .remove:
+                Image(systemName: "trash.circle.fill")
+                    .foregroundStyle(.red)
+            case .modify:
+                Image(systemName: "pencil.circle.fill")
+                    .foregroundStyle(.orange)
+            case .add:
+                Image(systemName: "plus.circle.fill")
+                    .foregroundStyle(.blue)
+            }
+        }
+        .font(.system(size: 20))
+    }
+
+    private func actionDescription(for action: ReviewItemAction) -> String {
+        switch action {
+        case .keep: return "No Changes Needed"
+        case .remove: return "Remove This Item"
+        case .modify: return "Modify This Item"
+        case .add: return "Add New Item"
+        }
+    }
+
+    // MARK: - Loading/Empty Views
+
+    private var loadingView: some View {
+        VStack(spacing: 16) {
+            ProgressView()
+                .scaleEffect(1.2)
+            Text("Analyzing...")
+                .font(.system(.body, design: .rounded))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: 200)
+    }
+
+    private var emptyView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "tray")
+                .font(.system(size: 36))
+                .foregroundStyle(.secondary)
+            Text("No items to review")
+                .font(.system(.body, design: .rounded))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: 200)
     }
 
     // MARK: - Action Buttons
@@ -225,55 +381,47 @@ struct KeywordsDiffView: View {
 
             Spacer()
 
-            Button("Skip Category") {
-                guard let resume = resume else { return }
-                viewModel.rejectCurrentKeywordsAndMoveNext(resume: resume)
+            Button("Skip") {
+                viewModel.rejectCurrentItemAndMoveNext()
+                checkPhaseComplete()
             }
             .buttonStyle(.bordered)
 
             Button("Accept Changes") {
                 guard let resume = resume else { return }
-                viewModel.acceptCurrentKeywordsAndMoveNext(resume: resume, context: modelContext)
+                viewModel.acceptCurrentItemAndMoveNext(resume: resume, context: modelContext)
             }
             .buttonStyle(.borderedProminent)
-            .disabled(viewModel.currentKeywordsRevision == nil)
+            .disabled(currentItem == nil)
         }
         .padding(20)
-        .confirmationDialog(
-            "Cancel Review?",
-            isPresented: $showCancelConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Apply Approved & Close") {
-                guard let resume = resume else { return }
-                viewModel.applyApprovedChangesAndClose(resume: resume, context: modelContext)
-            }
-            Button("Discard All", role: .destructive) {
-                viewModel.discardAllAndClose()
-            }
-            Button("Continue Review", role: .cancel) { }
-        } message: {
-            Text("You have approved changes that haven't been applied yet. Would you like to apply them before closing?")
+    }
+
+    private func checkPhaseComplete() {
+        guard let review = currentReview else { return }
+        if phaseState.currentItemIndex >= review.items.count {
+            guard let resume = resume else { return }
+            viewModel.completeCurrentPhase(resume: resume, context: modelContext)
         }
     }
 }
 
-// MARK: - Summary Stats View
+// MARK: - Diff Stats View
 
-struct KeywordsDiffStats: View {
-    let oldKeywords: [String]
-    let newKeywords: [String]
+struct DiffStatsView: View {
+    let original: [String]
+    let proposed: [String]
 
     private var added: Int {
-        newKeywords.filter { !oldKeywords.contains($0) }.count
+        proposed.filter { !original.contains($0) }.count
     }
 
     private var removed: Int {
-        oldKeywords.filter { !newKeywords.contains($0) }.count
+        original.filter { !proposed.contains($0) }.count
     }
 
     private var kept: Int {
-        oldKeywords.filter { newKeywords.contains($0) }.count
+        original.filter { proposed.contains($0) }.count
     }
 
     var body: some View {

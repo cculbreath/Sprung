@@ -205,26 +205,38 @@ struct RevisionReviewView: View {
 
     // MARK: - Hierarchical Review Content
 
-    /// Routes to the appropriate phase view for two-phase hierarchical review
+    /// Routes to the appropriate phase view based on bundled/unbundled mode
     @ViewBuilder
     private func hierarchicalReviewContent(resume: Resume) -> some View {
-        switch viewModel.currentRevisionPhase {
-        case .categoryStructure:
-            CategoryStructureReviewView(
-                viewModel: viewModel,
-                resume: Binding(
-                    get: { self.resume },
-                    set: { _ in }
+        if let currentPhase = viewModel.phaseReviewState.currentPhase {
+            if currentPhase.bundle {
+                PhaseReviewBundledView(
+                    viewModel: viewModel,
+                    resume: Binding(
+                        get: { self.resume },
+                        set: { _ in }
+                    )
                 )
-            )
-        case .categoryDetails:
-            KeywordsDiffView(
-                viewModel: viewModel,
-                resume: Binding(
-                    get: { self.resume },
-                    set: { _ in }
+            } else {
+                PhaseReviewUnbundledView(
+                    viewModel: viewModel,
+                    resume: Binding(
+                        get: { self.resume },
+                        set: { _ in }
+                    )
                 )
-            )
+            }
+        } else {
+            // Fallback for no current phase
+            VStack(spacing: 16) {
+                Image(systemName: "questionmark.circle")
+                    .font(.system(size: 48))
+                    .foregroundStyle(.secondary)
+                Text("No review phase active")
+                    .font(.system(.title3, design: .rounded, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(40)
         }
     }
 }

@@ -401,218 +401,231 @@ extension TreeNode {
         schemaAllowsNodeDeletion || (parent?.schemaAllowsChildMutation ?? false)
     }
 }
-// MARK: - Hierarchical Review Export (Two-Phase Skills Review)
+// MARK: - Generic Path-Based Export for Review Phases
+
 extension TreeNode {
-    /// Export skill categories for Phase 1 review (category structure)
-    /// Returns category info without full keyword lists
-    static func exportSkillCategories(from rootNode: TreeNode) -> [(id: String, name: String, keywordCount: Int)] {
-        var categories: [(id: String, name: String, keywordCount: Int)] = []
-
-        // Find the skills section
-        guard let skillsNode = rootNode.findChildByName("skills") else {
-            Logger.debug("⚠️ exportSkillCategories: No 'skills' node found")
-            return categories
-        }
-
-        // Each direct child of skills is a category
-        for category in skillsNode.orderedChildren {
-            let categoryName = category.name.isEmpty ? category.value : category.name
-
-            // Count keywords - look for a "keywords" child node
-            var keywordCount = 0
-            if let keywordsNode = category.findChildByName("keywords") {
-                keywordCount = keywordsNode.children?.count ?? 0
-            }
-
-            categories.append((
-                id: category.id,
-                name: categoryName,
-                keywordCount: keywordCount
-            ))
-        }
-
-        Logger.debug("📊 Exported \(categories.count) skill categories for Phase 1 review")
-        return categories
-    }
-
-    /// Export keywords array for a specific category (Phase 2 review)
-    /// Returns the category info plus its full keywords list
-    static func exportCategoryKeywords(categoryId: String, from rootNode: TreeNode) -> (categoryName: String, keywords: [String])? {
-        guard let skillsNode = rootNode.findChildByName("skills") else {
-            Logger.debug("⚠️ exportCategoryKeywords: No 'skills' node found")
-            return nil
-        }
-
-        // Find the category by ID
-        guard let category = skillsNode.children?.first(where: { $0.id == categoryId }) else {
-            Logger.debug("⚠️ exportCategoryKeywords: Category with ID \(categoryId) not found")
-            return nil
-        }
-
-        let categoryName = category.name.isEmpty ? category.value : category.name
-
-        // Extract keywords from the "keywords" child
-        var keywords: [String] = []
-        if let keywordsNode = category.findChildByName("keywords") {
-            keywords = keywordsNode.orderedChildren.compactMap { keyword in
-                let value = keyword.value.isEmpty ? keyword.name : keyword.value
-                return value.isEmpty ? nil : value
-            }
-        }
-
-        Logger.debug("📊 Exported \(keywords.count) keywords for category '\(categoryName)'")
-        return (categoryName: categoryName, keywords: keywords)
-    }
-
     /// Find a child node by name (case-insensitive)
     func findChildByName(_ name: String) -> TreeNode? {
         let lowercasedName = name.lowercased()
         return children?.first { $0.name.lowercased() == lowercasedName }
     }
 
-    /// Apply category structure changes from Phase 1 review
-    /// Handles rename, remove, merge operations
-    @MainActor
-    static func applyCategoryStructureChanges(
-        _ changes: [CategoryRevisionNode],
-        to rootNode: TreeNode,
-        context: ModelContext
+    /// Export nodes matching a path pattern for LLM review.
+    ///
+    /// # Path Syntax
+    /// - `*` = enumerate objects/entries (e.g., job objects, skill categories)
+    /// - `[]` = iterate array values (simple leaf items)
+    /// - Plain names = schema field names
+    ///
+    /// # Examples
+    /// - `skills.*.name` → exports the name field of each skill category
+    /// - `skills.*.keywords` → exports the keywords container for each category
+    /// - `work.*.highlights` → exports the highlights container for each job
+    ///
+    /// - Parameters:
+    ///   - path: Path pattern to match (e.g., "skills.*.name")
+    ///   - rootNode: The tree root to search from
+    /// - Returns: Array of ExportedReviewNode for nodes matching the pattern
+    static func exportNodesMatchingPath(_ path: String, from rootNode: TreeNode) -> [ExportedReviewNode] {
+        let components = path.split(separator: ".").map(String.init)
+        var results: [ExportedReviewNode] = []
+
+        exportNodesRecursive(
+            node: rootNode,
+            pathComponents: components,
+            componentIndex: 0,
+            currentPath: [],
+            results: &results
+        )
+
+        Logger.debug("📊 Exported \(results.count) nodes matching path '\(path)'")
+        return results
+    }
+
+    private static func exportNodesRecursive(
+        node: TreeNode,
+        pathComponents: [String],
+        componentIndex: Int,
+        currentPath: [String],
+        results: inout [ExportedReviewNode]
     ) {
-        guard let skillsNode = rootNode.findChildByName("skills") else {
-            Logger.warning("⚠️ applyCategoryStructureChanges: No 'skills' node found")
+        // Base case: we've matched all components
+        guard componentIndex < pathComponents.count else {
+            // This node matches - export it
+            let exported = exportNode(node, path: currentPath.joined(separator: "."))
+            results.append(exported)
             return
         }
 
-        for change in changes {
-            guard change.userDecision == .accepted else { continue }
+        let component = pathComponents[componentIndex]
 
-            guard let category = skillsNode.children?.first(where: { $0.id == change.id }) else {
-                if change.action == .add {
-                    // Create new category
-                    let newCategory = TreeNode(
-                        name: change.newName ?? "New Category",
-                        value: "",
-                        children: nil,
-                        parent: skillsNode,
-                        inEditor: true,
-                        status: .saved,
-                        resume: rootNode.resume,
-                        isTitleNode: false
-                    )
-                    skillsNode.addChild(newCategory)
+        // Handle wildcards
+        if component == "*" {
+            // Enumerate all object children (children with display names that have sub-fields)
+            for child in node.orderedChildren {
+                let childPath = currentPath + [child.name.isEmpty ? child.value : child.name]
+                exportNodesRecursive(
+                    node: child,
+                    pathComponents: pathComponents,
+                    componentIndex: componentIndex + 1,
+                    currentPath: childPath,
+                    results: &results
+                )
+            }
+        } else if component == "[]" {
+            // Enumerate all array item children (leaf values)
+            for child in node.orderedChildren {
+                let childPath = currentPath + [child.name.isEmpty ? child.value : child.name]
+                exportNodesRecursive(
+                    node: child,
+                    pathComponents: pathComponents,
+                    componentIndex: componentIndex + 1,
+                    currentPath: childPath,
+                    results: &results
+                )
+            }
+        } else {
+            // Exact field name match
+            if let child = node.findChildByName(component) {
+                let childPath = currentPath + [component]
+                exportNodesRecursive(
+                    node: child,
+                    pathComponents: pathComponents,
+                    componentIndex: componentIndex + 1,
+                    currentPath: childPath,
+                    results: &results
+                )
+            }
+        }
+    }
 
-                    // Add keywords container
-                    let keywordsNode = TreeNode(
-                        name: "keywords",
-                        value: "",
-                        children: nil,
-                        parent: newCategory,
-                        inEditor: true,
-                        status: .saved,
-                        resume: rootNode.resume,
-                        isTitleNode: false
-                    )
-                    newCategory.addChild(keywordsNode)
+    /// Export a single node to ExportedReviewNode
+    private static func exportNode(_ node: TreeNode, path: String) -> ExportedReviewNode {
+        let displayName = node.name.isEmpty ? node.value : node.name
+        let hasChildren = node.children != nil && !node.orderedChildren.isEmpty
 
-                    Logger.info("✅ Added new category: \(change.newName ?? "New Category")")
+        if hasChildren {
+            // Container node - collect child values
+            let childValues = node.orderedChildren.compactMap { child -> String? in
+                let value = child.value.isEmpty ? child.name : child.value
+                return value.isEmpty ? nil : value
+            }
+            let concatenatedValue = childValues.joined(separator: ", ")
+
+            return ExportedReviewNode(
+                id: node.id,
+                path: path,
+                displayName: displayName,
+                value: concatenatedValue,
+                childValues: childValues,
+                childCount: childValues.count
+            )
+        } else {
+            // Scalar node
+            let value = node.value.isEmpty ? node.name : node.value
+            return ExportedReviewNode(
+                id: node.id,
+                path: path,
+                displayName: displayName,
+                value: value,
+                childValues: nil,
+                childCount: 0
+            )
+        }
+    }
+
+    /// Apply review changes from a PhaseReviewContainer to the tree.
+    ///
+    /// - Parameters:
+    ///   - review: The review container with approved changes
+    ///   - rootNode: The tree root to apply changes to
+    ///   - context: SwiftData model context for persistence
+    @MainActor
+    static func applyPhaseReviewChanges(
+        _ review: PhaseReviewContainer,
+        to rootNode: TreeNode,
+        context: ModelContext
+    ) {
+        for item in review.items {
+            guard item.userDecision == .accepted else { continue }
+
+            // Find the node by ID
+            guard let node = findNodeById(item.id, in: rootNode) else {
+                if item.action == .add {
+                    // Handle adding new nodes - need parent context from path
+                    Logger.warning("⚠️ Add action not yet implemented for new nodes")
                 }
                 continue
             }
 
-            switch change.action {
+            switch item.action {
             case .keep:
                 break // No action needed
 
-            case .rename:
-                if let newName = change.newName {
-                    category.name = newName
-                    Logger.info("✅ Renamed category to: \(newName)")
+            case .modify:
+                if let proposedChildren = item.proposedChildren {
+                    // Container modification - replace children
+                    replaceChildValues(in: node, with: proposedChildren, context: context)
+                } else {
+                    // Scalar modification
+                    node.value = item.proposedValue
                 }
+                Logger.info("✅ Modified node: \(item.displayName)")
 
             case .remove:
-                deleteTreeNode(node: category, context: context)
-                Logger.info("✅ Removed category: \(change.name)")
-
-            case .merge:
-                if let targetId = change.mergeWith,
-                   let targetCategory = skillsNode.children?.first(where: { $0.id == targetId }) {
-                    // Move all keywords from source to target
-                    if let sourceKeywords = category.findChildByName("keywords"),
-                       let targetKeywords = targetCategory.findChildByName("keywords") {
-                        for keyword in sourceKeywords.orderedChildren {
-                            keyword.parent = targetKeywords
-                            targetKeywords.children?.append(keyword)
-                        }
-                    }
-                    // Delete the source category
-                    deleteTreeNode(node: category, context: context)
-                    Logger.info("✅ Merged category '\(change.name)' into '\(change.mergeWithName ?? targetId)'")
-                }
+                deleteTreeNode(node: node, context: context)
+                Logger.info("✅ Removed node: \(item.displayName)")
 
             case .add:
-                break // Handled above when category not found
+                Logger.warning("⚠️ Add action for existing node - unexpected")
             }
         }
 
         do {
             try context.save()
-            Logger.debug("✅ Saved category structure changes")
+            Logger.debug("✅ Saved phase review changes")
         } catch {
-            Logger.error("❌ Failed to save category structure changes: \(error)")
+            Logger.error("❌ Failed to save phase review changes: \(error)")
         }
     }
 
-    /// Apply keywords array changes from Phase 2 review
-    /// Syncs the keywords container with the approved array
-    @MainActor
-    static func applyKeywordsChanges(
-        categoryId: String,
-        newKeywords: [String],
-        to rootNode: TreeNode,
+    /// Find a node by ID anywhere in the tree
+    private static func findNodeById(_ id: String, in node: TreeNode) -> TreeNode? {
+        if node.id == id { return node }
+        for child in node.orderedChildren {
+            if let found = findNodeById(id, in: child) {
+                return found
+            }
+        }
+        return nil
+    }
+
+    /// Replace all child values in a container node
+    private static func replaceChildValues(
+        in containerNode: TreeNode,
+        with newValues: [String],
         context: ModelContext
     ) {
-        guard let skillsNode = rootNode.findChildByName("skills") else {
-            Logger.warning("⚠️ applyKeywordsChanges: No 'skills' node found")
-            return
+        // Remove existing children
+        for child in containerNode.orderedChildren {
+            context.delete(child)
         }
+        containerNode.children?.removeAll()
 
-        guard let category = skillsNode.children?.first(where: { $0.id == categoryId }) else {
-            Logger.warning("⚠️ applyKeywordsChanges: Category with ID \(categoryId) not found")
-            return
-        }
-
-        guard let keywordsNode = category.findChildByName("keywords") else {
-            Logger.warning("⚠️ applyKeywordsChanges: No 'keywords' node in category")
-            return
-        }
-
-        // Remove all existing keywords
-        for keyword in keywordsNode.orderedChildren {
-            context.delete(keyword)
-        }
-        keywordsNode.children?.removeAll()
-
-        // Add new keywords
-        for (index, keywordValue) in newKeywords.enumerated() {
-            let keywordNode = TreeNode(
+        // Add new children
+        for (index, value) in newValues.enumerated() {
+            let childNode = TreeNode(
                 name: "",
-                value: keywordValue,
+                value: value,
                 children: nil,
-                parent: keywordsNode,
+                parent: containerNode,
                 inEditor: true,
                 status: .saved,
-                resume: rootNode.resume,
+                resume: containerNode.resume,
                 isTitleNode: false
             )
-            keywordNode.myIndex = index
-            keywordsNode.addChild(keywordNode)
-        }
-
-        do {
-            try context.save()
-            Logger.info("✅ Applied \(newKeywords.count) keywords to category")
-        } catch {
-            Logger.error("❌ Failed to save keywords changes: \(error)")
+            childNode.myIndex = index
+            containerNode.addChild(childNode)
         }
     }
 }

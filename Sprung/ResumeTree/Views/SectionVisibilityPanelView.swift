@@ -7,13 +7,15 @@ struct SectionVisibilityPanelView: View {
             HStack {
                 ToggleChevronView(isExpanded: $isExpanded)
                 Text("Show Sections")
-                    .font(.body)
+                    .foregroundColor(.secondary)
+                    .fontWeight(.regular)
             }
             .contentShape(Rectangle())
             .onTapGesture {
                 withAnimation { isExpanded.toggle() }
             }
-            .padding(.vertical, 2)
+            .padding(.leading, 20)
+            .padding(.vertical, 5)
             if isExpanded {
                 Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
                     ForEach(vm.sectionVisibilityKeysOrdered(), id: \.self) { key in
@@ -29,7 +31,7 @@ struct SectionVisibilityPanelView: View {
                         }
                     }
                 }
-                .padding(.leading, 8)
+                .padding(.leading, 28)
                 .padding(.top, 4)
             }
         }

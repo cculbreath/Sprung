@@ -181,80 +181,127 @@ enum PostReviewAction: String, Codable {
     case unevaluated = "Unevaluated"
 }
 
-// MARK: - Two-Phase Hierarchical Review Types
+// MARK: - Generic Manifest-Driven Review Phase Types
 
-/// Tracks which phase of the hierarchical review workflow is active
-enum RevisionPhase: String, Codable {
-    case categoryStructure  // Phase 1: Review skill category structure (add/remove/rename/merge)
-    case categoryDetails    // Phase 2: Review keywords within each category
+/// Actions the LLM can propose for any review item
+enum ReviewItemAction: String, Codable {
+    case keep       // No changes to this item
+    case modify     // Modify the value
+    case remove     // Remove this item entirely
+    case add        // Add a new item (LLM suggestion)
+}
+
+/// User's decision about a review item
+enum ReviewUserDecision: String, Codable {
+    case pending
+    case accepted
+    case rejected
+}
+
+/// A node exported for LLM review - generic for any path pattern
+struct ExportedReviewNode: Codable, Equatable, Identifiable {
+    let id: String              // Node ID from tree (for applying changes)
+    let path: String            // Full path (e.g., "skills.0.name")
+    let displayName: String     // Human-readable name (e.g., "Programming Languages")
+    let value: String           // Current value (for scalar) or concatenated (for container)
+    let childValues: [String]?  // For containers, the individual child values
+    let childCount: Int         // Count of children (0 for scalars)
+
+    var isContainer: Bool { childCount > 0 }
+}
+
+/// A single review item from the LLM response - generic for any phase
+struct PhaseReviewItem: Codable, Equatable, Identifiable {
+    var id: String                          // Maps back to ExportedReviewNode.id
+    var displayName: String                 // Human-readable name
+    var originalValue: String               // Original value
+    var proposedValue: String               // Proposed new value (same as original if keep)
+    var action: ReviewItemAction            // What the LLM proposes
+    var reason: String                      // Why this change
+    var userDecision: ReviewUserDecision    // User's response
+
+    // For containers with children
+    var originalChildren: [String]?         // Original child values
+    var proposedChildren: [String]?         // Proposed child values
+
+    init(
+        id: String,
+        displayName: String,
+        originalValue: String,
+        proposedValue: String,
+        action: ReviewItemAction = .keep,
+        reason: String = "",
+        userDecision: ReviewUserDecision = .pending,
+        originalChildren: [String]? = nil,
+        proposedChildren: [String]? = nil
+    ) {
+        self.id = id
+        self.displayName = displayName
+        self.originalValue = originalValue
+        self.proposedValue = proposedValue
+        self.action = action
+        self.reason = reason
+        self.userDecision = userDecision
+        self.originalChildren = originalChildren
+        self.proposedChildren = proposedChildren
+    }
+}
+
+/// Container for a phase's review results from the LLM
+struct PhaseReviewContainer: Codable {
+    var section: String              // Section name (e.g., "skills")
+    var phaseNumber: Int             // Phase number (1-indexed)
+    var fieldPath: String            // Field path pattern (e.g., "skills.*.name")
+    var isBundled: Bool              // Whether items were bundled for review
+    var items: [PhaseReviewItem]     // Review items
+
+    enum CodingKeys: String, CodingKey {
+        case section
+        case phaseNumber = "phase"
+        case fieldPath = "field"
+        case isBundled = "bundled"
+        case items
+    }
+}
+
+/// State for tracking multi-phase review workflow
+struct PhaseReviewState {
+    var isActive: Bool = false
+    var currentSection: String = ""
+    var phases: [TemplateManifest.ReviewPhaseConfig] = []
+    var currentPhaseIndex: Int = 0
+    var currentReview: PhaseReviewContainer?
+    var approvedReviews: [PhaseReviewContainer] = []
+
+    // For unbundled phases: track pending items
+    var pendingItemIds: [String] = []
+    var currentItemIndex: Int = 0
+
+    var currentPhase: TemplateManifest.ReviewPhaseConfig? {
+        guard currentPhaseIndex < phases.count else { return nil }
+        return phases[currentPhaseIndex]
+    }
+
+    var isLastPhase: Bool {
+        currentPhaseIndex >= phases.count - 1
+    }
+
+    mutating func reset() {
+        isActive = false
+        currentSection = ""
+        phases = []
+        currentPhaseIndex = 0
+        currentReview = nil
+        approvedReviews = []
+        pendingItemIds = []
+        currentItemIndex = 0
+    }
 }
 
 /// Node type distinguishes scalar (single value) from list (array of values) nodes
 enum NodeType: String, Codable {
     case scalar  // Single string value (existing behavior)
     case list    // Array of string values (keywords, highlights)
-}
-
-/// Actions the LLM can propose for skill categories in Phase 1
-enum CategoryAction: String, Codable {
-    case keep       // No changes to this category
-    case remove     // Remove this category entirely
-    case rename     // Rename the category
-    case merge      // Merge with another category
-    case add        // Add a new category (LLM suggestion)
-}
-
-/// Phase 1 revision node for category-level structure changes
-struct CategoryRevisionNode: Codable, Equatable, Identifiable {
-    var id: String = UUID().uuidString  // Category node ID (or new UUID for additions)
-    var name: String = ""               // Current category name
-    var action: CategoryAction = .keep
-    var newName: String?                // If renamed, the new name
-    var mergeWith: String?              // If merging, the ID of target category
-    var mergeWithName: String?          // If merging, the name of target category (for display)
-    var keywordCount: Int = 0           // Number of keywords (for context display)
-    var why: String = ""                // Explanation for the proposed action
-
-    /// User's decision about this category revision
-    var userDecision: CategoryUserDecision = .pending
-
-    enum CategoryUserDecision: String, Codable {
-        case pending
-        case accepted
-        case rejected
-    }
-}
-
-/// Container for Phase 1 category structure revisions from LLM
-struct CategoryRevisionsContainer: Codable {
-    var categories: [CategoryRevisionNode]
-
-    enum CodingKeys: String, CodingKey {
-        case categories
-        case categoriesUppercase = "Categories"
-    }
-
-    init(categories: [CategoryRevisionNode] = []) {
-        self.categories = categories
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        if let array = try? container.decode([CategoryRevisionNode].self, forKey: .categories) {
-            self.categories = array
-        } else if let array = try? container.decode([CategoryRevisionNode].self, forKey: .categoriesUppercase) {
-            self.categories = array
-        } else {
-            throw DecodingError.keyNotFound(CodingKeys.categories,
-                DecodingError.Context(codingPath: decoder.codingPath,
-                                    debugDescription: "Neither 'categories' nor 'Categories' found"))
-        }
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(categories, forKey: .categories)
-    }
 }
 
 /// Per-item feedback for list nodes (e.g., work highlights, skill keywords)
@@ -269,23 +316,6 @@ struct ItemFeedback: Codable, Equatable, Identifiable {
         case accepted
         case rejected
         case rejectedWithComment
-    }
-}
-
-/// Container for Phase 2 keyword array revisions from LLM
-struct KeywordsRevisionContainer: Codable {
-    var categoryId: String              // ID of the category being revised
-    var categoryName: String            // Name for display
-    var oldKeywords: [String]           // Original keywords
-    var newKeywords: [String]           // Proposed keywords (may add/remove/modify)
-    var why: String = ""                // Overall explanation for changes
-
-    enum CodingKeys: String, CodingKey {
-        case categoryId
-        case categoryName
-        case oldKeywords
-        case newKeywords
-        case why
     }
 }
 @Observable class FeedbackNode {

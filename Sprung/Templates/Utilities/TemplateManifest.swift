@@ -379,22 +379,64 @@ struct TemplateManifest: Codable {
 
     // MARK: - AI Revision Configuration
 
-    /// Field paths to pre-select for AI revision when creating new resumes
-    /// Uses glob patterns: "work.*.highlights", "skills.*.keywords", "basics.summary"
+    /// Field paths to pre-select for AI revision when creating new resumes.
+    ///
+    /// # Path Syntax
+    ///
+    /// - `*` = enumerate objects/entries (e.g., job objects, skill categories)
+    /// - `[]` = iterate array values (simple leaf items)
+    /// - Plain names = schema field names
+    ///
+    /// ## Examples
+    /// - `work.*.highlights` - highlights container for each job (bundled)
+    /// - `skills.*.name` - name field of each skill category
+    /// - `custom.jobTitles[]` - each individual job title
     let defaultAIFields: [String]?
 
-    /// Paths that contain array data reviewed as batches (not individual nodes)
-    /// Uses glob patterns: "skills.*.keywords", "work.*.highlights"
+    /// Paths that contain array data reviewed as batches (not individual nodes).
+    /// Uses the same path syntax as defaultAIFields.
     let listContainers: [String]?
 
-    /// Sections that use two-phase hierarchical review
-    /// Key is section name (e.g., "skills"), value is review configuration
-    let hierarchicalReview: [String: HierarchicalReviewConfig]?
+    /// Multi-phase review configuration for sections requiring structured review workflows.
+    /// Key is section name (e.g., "skills"), value is array of phase configs.
+    ///
+    /// ## Example
+    /// ```json
+    /// "reviewPhases": {
+    ///   "skills": [
+    ///     { "phase": 1, "field": "skills.*.name", "bundle": true },
+    ///     { "phase": 2, "field": "skills.*.keywords", "bundle": false }
+    ///   ]
+    /// }
+    /// ```
+    let reviewPhases: [String: [ReviewPhaseConfig]]?
 
-    /// Configuration for two-phase hierarchical review
-    struct HierarchicalReviewConfig: Codable {
-        let enabled: Bool
-        let phases: [String]  // e.g., ["categoryStructure", "categoryDetails"]
+    /// Configuration for a single review phase
+    struct ReviewPhaseConfig: Codable {
+        /// Phase number (1-indexed, executed in order)
+        let phase: Int
+        /// Field path to review in this phase (uses path syntax)
+        let field: String
+        /// If true, all matching nodes are bundled into a single review unit.
+        /// If false (default), each matching node is reviewed separately.
+        let bundle: Bool
+
+        init(phase: Int, field: String, bundle: Bool = false) {
+            self.phase = phase
+            self.field = field
+            self.bundle = bundle
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case phase, field, bundle
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            phase = try container.decode(Int.self, forKey: .phase)
+            field = try container.decode(String.self, forKey: .field)
+            bundle = try container.decodeIfPresent(Bool.self, forKey: .bundle) ?? false
+        }
     }
 
     init(
@@ -408,7 +450,7 @@ struct TemplateManifest: Codable {
         sectionVisibilityLabels: [String: String]? = nil,
         defaultAIFields: [String]? = nil,
         listContainers: [String]? = nil,
-        hierarchicalReview: [String: HierarchicalReviewConfig]? = nil
+        reviewPhases: [String: [ReviewPhaseConfig]]? = nil
     ) {
         self.slug = slug
         self.schemaVersion = schemaVersion
@@ -419,7 +461,7 @@ struct TemplateManifest: Codable {
         self.sectionVisibilityLabels = sectionVisibilityLabels
         self.defaultAIFields = defaultAIFields
         self.listContainers = listContainers
-        self.hierarchicalReview = hierarchicalReview
+        self.reviewPhases = reviewPhases
         var normalized: [String: Section] = [:]
         var synthesized: Set<String> = []
         for (key, var section) in sections {
@@ -443,7 +485,7 @@ struct TemplateManifest: Codable {
         sectionVisibilityLabels = try container.decodeIfPresent([String: String].self, forKey: .sectionVisibilityLabels)
         defaultAIFields = try container.decodeIfPresent([String].self, forKey: .defaultAIFields)
         listContainers = try container.decodeIfPresent([String].self, forKey: .listContainers)
-        hierarchicalReview = try container.decodeIfPresent([String: HierarchicalReviewConfig].self, forKey: .hierarchicalReview)
+        reviewPhases = try container.decodeIfPresent([String: [ReviewPhaseConfig]].self, forKey: .reviewPhases)
         let decodedSections = try container.decode([String: Section].self, forKey: .sections)
         var normalized: [String: Section] = [:]
         var synthesized: Set<String> = []
@@ -470,7 +512,7 @@ struct TemplateManifest: Codable {
         try container.encodeIfPresent(sectionVisibilityLabels, forKey: .sectionVisibilityLabels)
         try container.encodeIfPresent(defaultAIFields, forKey: .defaultAIFields)
         try container.encodeIfPresent(listContainers, forKey: .listContainers)
-        try container.encodeIfPresent(hierarchicalReview, forKey: .hierarchicalReview)
+        try container.encodeIfPresent(reviewPhases, forKey: .reviewPhases)
         try container.encode(sections, forKey: .sections)
     }
     func section(for key: String) -> Section? {
@@ -564,7 +606,7 @@ struct TemplateManifest: Codable {
         case sectionVisibilityLabels = "section-visibility-labels"
         case defaultAIFields
         case listContainers
-        case hierarchicalReview
+        case reviewPhases
     }
 }
 // MARK: - Encoding helpers
@@ -597,14 +639,14 @@ extension TemplateManifest {
         }
     }
 
-    /// Check if a section uses hierarchical review
+    /// Get review phases for a section
     /// - Parameter section: Section name like "skills"
-    /// - Returns: HierarchicalReviewConfig if enabled, nil otherwise
-    func hierarchicalReviewConfig(for section: String) -> HierarchicalReviewConfig? {
-        guard let config = hierarchicalReview?[section], config.enabled else {
+    /// - Returns: Array of ReviewPhaseConfig sorted by phase number, or nil if no phases defined
+    func reviewPhasesConfig(for section: String) -> [ReviewPhaseConfig]? {
+        guard let phases = reviewPhases?[section], !phases.isEmpty else {
             return nil
         }
-        return config
+        return phases.sorted { $0.phase < $1.phase }
     }
 
     /// Match a concrete path against a glob pattern

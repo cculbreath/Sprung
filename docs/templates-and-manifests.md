@@ -53,9 +53,12 @@ The manifest controls how the template appears in the resume editor.
     "skills.*.keywords",
     "work.*.highlights"
   ],
-  "hierarchicalReview": [
-    "skills"
-  ],
+  "reviewPhases": {
+    "skills": [
+      { "phase": 1, "field": "skills.*.name", "bundle": true },
+      { "phase": 2, "field": "skills.*.keywords", "bundle": false }
+    ]
+  },
   "styling": {
     "fontSizes": {
       "name": "24pt",
@@ -96,15 +99,42 @@ Defines review behavior for list items (like skills or highlights).
 ]
 ```
 
-#### `hierarchicalReview`
+#### `reviewPhases`
 
-Enables multi-phase review for complex sections (like skills).
+Configures multi-phase AI review for complex sections. Each phase targets a specific field path and can be bundled (batch review) or unbundled (item-by-item review).
 
 ```json
-"hierarchicalReview": [
-  "skills" // Phase 1: Structure, Phase 2: Details
-]
+"reviewPhases": {
+  "skills": [
+    { "phase": 1, "field": "skills.*.name", "bundle": true },
+    { "phase": 2, "field": "skills.*.keywords", "bundle": false }
+  ]
+}
 ```
+
+**Path Pattern Syntax:**
+
+| Symbol | Meaning | Example |
+|--------|---------|---------|
+| `*` | Enumerate object entries (child nodes) | `skills.*` matches each skill category |
+| `[]` | Iterate array values | `skills.*.keywords[]` matches each keyword string |
+| `fieldName` | Match exact field name | `skills.*.name` matches the "name" field |
+
+**Phase Properties:**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `phase` | int | Phase order (1-indexed) |
+| `field` | string | Path pattern to match nodes |
+| `bundle` | bool | `true` for batch review, `false` for item-by-item (default: `false`) |
+
+**Example Patterns:**
+
+| Pattern | Description |
+|---------|-------------|
+| `skills.*.name` | Category names for each skill |
+| `skills.*.keywords` | Keywords container under each skill |
+| `work.*.highlights` | Highlights for each work entry |
 
 #### `section-visibility`
 

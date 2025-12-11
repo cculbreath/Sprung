@@ -48,31 +48,15 @@ class ResumeReviseViewModel {
     var isCommenting: Bool = false
     var isMoreCommenting: Bool = false
 
-    // MARK: - Two-Phase Hierarchical Review State
+    // MARK: - Generic Multi-Phase Review State
 
-    /// Current phase in the hierarchical skills review workflow
-    var currentRevisionPhase: RevisionPhase = .categoryStructure
+    /// State for tracking multi-phase review workflow (manifest-driven)
+    var phaseReviewState = PhaseReviewState()
 
-    /// Category-level revisions from Phase 1 (structure review)
-    var categoryRevisions: [CategoryRevisionNode] = []
-
-    /// Categories pending Phase 2 keyword review (populated after Phase 1 completion)
-    var pendingCategoryIds: [String] = []
-
-    /// Index of the current category being reviewed in Phase 2
-    var currentCategoryIndex: Int = 0
-
-    /// Current keywords revision container for Phase 2
-    var currentKeywordsRevision: KeywordsRevisionContainer?
-
-    /// Approved category structure changes (Phase 1)
-    var approvedCategoryChanges: [CategoryRevisionNode] = []
-
-    /// Approved keywords changes (Phase 2) - keyed by category ID
-    var approvedKeywordsChanges: [String: KeywordsRevisionContainer] = [:]
-
-    /// Flag indicating if we're in the hierarchical review workflow
-    var isHierarchicalReviewActive: Bool = false
+    /// Computed property for view compatibility
+    var isHierarchicalReviewActive: Bool {
+        phaseReviewState.isActive
+    }
     // MARK: - Business Logic State
     private var currentConversationId: UUID?
     var currentModelId: String? // Make currentModelId accessible to views
@@ -124,10 +108,16 @@ class ResumeReviseViewModel {
         modelId: String,
         workflow: RevisionWorkflowKind
     ) async throws {
-        // Check if we should use hierarchical review for skills
-        if shouldUseHierarchicalReview(for: resume) {
-            Logger.info("🎯 Using hierarchical two-phase review for skills")
-            try await startCategoryStructureReview(resume: resume, modelId: modelId)
+        // Check if any sections have multi-phase review configured
+        let sectionsWithPhases = sectionsWithActiveReviewPhases(for: resume)
+        if let firstSection = sectionsWithPhases.first {
+            Logger.info("🎯 Using multi-phase review for '\(firstSection.section)' with \(firstSection.phases.count) phases")
+            try await startPhaseReview(
+                resume: resume,
+                section: firstSection.section,
+                phases: firstSection.phases,
+                modelId: modelId
+            )
             return
         }
 
@@ -698,81 +688,83 @@ class ResumeReviseViewModel {
         isEditingResponse = false
     }
 
-    // MARK: - Two-Phase Hierarchical Review Workflow
+    // MARK: - Generic Manifest-Driven Multi-Phase Review Workflow
 
-    /// Determine if hierarchical review should be used for this resume
-    /// Returns true if:
-    /// 1. The manifest has hierarchicalReview.skills.enabled = true
-    /// 2. The resume has skills nodes selected for AI revision
-    private func shouldUseHierarchicalReview(for resume: Resume) -> Bool {
-        // Check manifest configuration
+    /// Find sections with review phases defined that have nodes selected for AI revision.
+    /// Returns array of (section, phases) tuples for sections that should use phased review.
+    func sectionsWithActiveReviewPhases(for resume: Resume) -> [(section: String, phases: [TemplateManifest.ReviewPhaseConfig])] {
         guard let manifest = resume.template?.manifest,
-              let skillsConfig = manifest.hierarchicalReviewConfig(for: "skills") else {
-            Logger.debug("📋 No hierarchical review config found for skills")
-            return false
+              let rootNode = resume.rootNode else {
+            return []
         }
 
-        guard skillsConfig.enabled else {
-            Logger.debug("📋 Hierarchical review disabled for skills in manifest")
-            return false
+        var result: [(section: String, phases: [TemplateManifest.ReviewPhaseConfig])] = []
+
+        // Check all sections that have reviewPhases defined
+        if let reviewPhases = manifest.reviewPhases {
+            for (section, phases) in reviewPhases {
+                // Find the section node and check if it has AI-selected nodes
+                if let sectionNode = rootNode.children?.first(where: { $0.name.lowercased() == section.lowercased() }) {
+                    let hasSelected = sectionNode.status == .aiToReplace || sectionNode.aiStatusChildren > 0
+                    if hasSelected && !phases.isEmpty {
+                        let sortedPhases = phases.sorted { $0.phase < $1.phase }
+                        result.append((section: section, phases: sortedPhases))
+                        Logger.debug("📋 Section '\(section)' has \(sortedPhases.count) review phases configured")
+                    }
+                }
+            }
         }
 
-        // Check if skills section has nodes selected for AI revision
-        guard let rootNode = resume.rootNode else {
-            return false
-        }
-
-        // Find the skills section and check if it (or its children) are selected
-        guard let skillsNode = rootNode.children?.first(where: { $0.name.lowercased() == "skills" }) else {
-            Logger.debug("📋 No skills section found in resume")
-            return false
-        }
-
-        // Check if skills node itself is selected or has any children selected
-        let hasSkillsSelected = skillsNode.status == .aiToReplace || skillsNode.aiStatusChildren > 0
-        Logger.debug("📋 Skills section selection status: node=\(skillsNode.status), children=\(skillsNode.aiStatusChildren)")
-
-        return hasSkillsSelected
+        return result
     }
 
-    /// Start Phase 1: Category Structure Review
-    /// Sends category names and keyword counts to LLM for structural proposals
-    func startCategoryStructureReview(
+    /// Start the multi-phase review workflow for a section.
+    /// Reads phases from manifest and processes them in order.
+    func startPhaseReview(
         resume: Resume,
+        section: String,
+        phases: [TemplateManifest.ReviewPhaseConfig],
         modelId: String
     ) async throws {
         markWorkflowStarted(.customize)
         isProcessingRevisions = true
-        isHierarchicalReviewActive = true
-        currentRevisionPhase = .categoryStructure
 
-        // Reset hierarchical review state
-        categoryRevisions = []
-        pendingCategoryIds = []
-        approvedCategoryChanges = []
-        approvedKeywordsChanges = [:]
-        currentCategoryIndex = 0
+        // Initialize phase review state
+        phaseReviewState.reset()
+        phaseReviewState.isActive = true
+        phaseReviewState.currentSection = section
+        phaseReviewState.phases = phases
+        phaseReviewState.currentPhaseIndex = 0
 
         guard let rootNode = resume.rootNode else {
-            Logger.error("❌ No root node found for hierarchical review")
+            Logger.error("❌ No root node found for phase review")
             isProcessingRevisions = false
+            phaseReviewState.reset()
             markWorkflowCompleted(reset: true)
             throw NSError(domain: "ResumeReviseViewModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "No root node found"])
         }
 
+        guard let currentPhase = phaseReviewState.currentPhase else {
+            Logger.error("❌ No phases configured")
+            isProcessingRevisions = false
+            phaseReviewState.reset()
+            markWorkflowCompleted(reset: true)
+            return
+        }
+
         do {
-            // Export skill categories for Phase 1
-            let categories = TreeNode.exportSkillCategories(from: rootNode)
-            guard !categories.isEmpty else {
-                Logger.warning("⚠️ No skill categories found for hierarchical review")
-                isProcessingRevisions = false
-                markWorkflowCompleted(reset: true)
+            // Export nodes matching the phase's field path
+            let exportedNodes = TreeNode.exportNodesMatchingPath(currentPhase.field, from: rootNode)
+            guard !exportedNodes.isEmpty else {
+                Logger.warning("⚠️ No nodes found matching path '\(currentPhase.field)'")
+                // Try next phase or finish
+                await advanceToNextPhase(resume: resume)
                 return
             }
 
-            Logger.info("🚀 Starting Phase 1: Category Structure Review with \(categories.count) categories")
+            Logger.info("🚀 Starting Phase \(currentPhase.phase) for '\(section)' - \(exportedNodes.count) nodes matching '\(currentPhase.field)'")
 
-            // Create query for Phase 1
+            // Create query
             let query = ResumeApiQuery(
                 resume: resume,
                 exportCoordinator: exportCoordinator,
@@ -780,9 +772,15 @@ class ResumeReviseViewModel {
                 saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
             )
 
-            // Generate Phase 1 prompt
+            // Generate prompt
             let systemPrompt = query.genericSystemMessage.textContent
-            let userPrompt = await query.categoryStructurePrompt(categories: categories)
+            let userPrompt = await query.phaseReviewPrompt(
+                section: section,
+                phaseNumber: currentPhase.phase,
+                fieldPath: currentPhase.field,
+                nodes: exportedNodes,
+                isBundled: currentPhase.bundle
+            )
 
             // Check if model supports reasoning
             let model = openRouterService.findModel(id: modelId)
@@ -792,10 +790,10 @@ class ResumeReviseViewModel {
                 reasoningStreamManager.hideAndClear()
             }
 
-            let container: CategoryRevisionsContainer
+            let reviewContainer: PhaseReviewContainer
 
             if supportsReasoning {
-                Logger.info("🧠 Using streaming with reasoning for Phase 1: \(modelId)")
+                Logger.info("🧠 Using streaming with reasoning for phase review: \(modelId)")
                 let userEffort = UserDefaults.standard.string(forKey: "reasoningEffort") ?? "medium"
                 let reasoning = OpenRouterReasoning(effort: userEffort, includeReasoning: true)
 
@@ -804,18 +802,18 @@ class ResumeReviseViewModel {
                     userMessage: userPrompt,
                     modelId: modelId,
                     reasoning: reasoning,
-                    jsonSchema: ResumeApiQuery.categoryStructureSchema
+                    jsonSchema: ResumeApiQuery.phaseReviewSchema
                 )
 
                 self.currentConversationId = result.conversationId
                 self.currentModelId = modelId
 
-                // Parse the response as CategoryRevisionsContainer
+                // Parse the response
                 let jsonData = try JSONEncoder().encode(result.revisions)
-                container = try JSONDecoder().decode(CategoryRevisionsContainer.self, from: jsonData)
+                reviewContainer = try JSONDecoder().decode(PhaseReviewContainer.self, from: jsonData)
 
             } else {
-                Logger.info("📝 Using non-streaming for Phase 1: \(modelId)")
+                Logger.info("📝 Using non-streaming for phase review: \(modelId)")
 
                 let (conversationId, _) = try await llm.startConversation(
                     systemPrompt: systemPrompt,
@@ -826,18 +824,24 @@ class ResumeReviseViewModel {
                 self.currentConversationId = conversationId
                 self.currentModelId = modelId
 
-                container = try await llm.continueConversationStructured(
-                    userMessage: "Please provide your category structure proposals in the specified JSON format.",
+                reviewContainer = try await llm.continueConversationStructured(
+                    userMessage: "Please provide your review proposals in the specified JSON format.",
                     modelId: modelId,
                     conversationId: conversationId,
-                    as: CategoryRevisionsContainer.self,
-                    jsonSchema: ResumeApiQuery.categoryStructureSchema
+                    as: PhaseReviewContainer.self,
+                    jsonSchema: ResumeApiQuery.phaseReviewSchema
                 )
             }
 
-            // Store category revisions for review
-            categoryRevisions = container.categories
-            Logger.info("✅ Phase 1 received \(categoryRevisions.count) category proposals")
+            // Store review for user interaction
+            phaseReviewState.currentReview = reviewContainer
+            Logger.info("✅ Phase \(currentPhase.phase) received \(reviewContainer.items.count) review proposals")
+
+            // If not bundled, set up item-by-item review
+            if !currentPhase.bundle {
+                phaseReviewState.pendingItemIds = reviewContainer.items.map { $0.id }
+                phaseReviewState.currentItemIndex = 0
+            }
 
             // Hide reasoning modal and show review UI
             reasoningStreamManager.hideAndClear()
@@ -846,85 +850,65 @@ class ResumeReviseViewModel {
             markWorkflowCompleted(reset: false)
 
         } catch {
-            Logger.error("❌ Phase 1 failed: \(error.localizedDescription)")
+            Logger.error("❌ Phase review failed: \(error.localizedDescription)")
             isProcessingRevisions = false
-            isHierarchicalReviewActive = false
+            phaseReviewState.reset()
             markWorkflowCompleted(reset: true)
             throw error
         }
     }
 
-    /// Complete Phase 1 and transition to Phase 2
-    /// Applies approved category structure changes and queues categories for keyword review
-    func completeCategoryStructurePhase(resume: Resume, context: ModelContext) {
-        // Store approved changes
-        approvedCategoryChanges = categoryRevisions.filter { $0.userDecision == .accepted }
+    /// Complete the current phase and move to the next one.
+    func completeCurrentPhase(resume: Resume, context: ModelContext) {
+        guard let currentReview = phaseReviewState.currentReview,
+              let rootNode = resume.rootNode else { return }
 
-        // Apply category structure changes immediately
-        guard let rootNode = resume.rootNode else { return }
-        TreeNode.applyCategoryStructureChanges(approvedCategoryChanges, to: rootNode, context: context)
+        // Apply approved changes
+        TreeNode.applyPhaseReviewChanges(currentReview, to: rootNode, context: context)
 
-        // Queue remaining categories for Phase 2 keyword review
-        // Only categories that weren't removed need keyword review
-        let removedCategoryIds = Set(approvedCategoryChanges.filter { $0.action == .remove }.map { $0.id })
-        pendingCategoryIds = categoryRevisions
-            .filter { $0.action != .add && !removedCategoryIds.contains($0.id) }
-            .map { $0.id }
+        // Store in approved reviews
+        phaseReviewState.approvedReviews.append(currentReview)
 
-        // Include new categories that need keywords
-        let newCategories = approvedCategoryChanges.filter { $0.action == .add }
-        pendingCategoryIds.append(contentsOf: newCategories.map { $0.id })
+        Logger.info("🔄 Phase \(phaseReviewState.currentPhaseIndex + 1) complete")
 
-        Logger.info("🔄 Phase 1 complete. \(pendingCategoryIds.count) categories queued for Phase 2")
-
-        // Transition to Phase 2
-        currentRevisionPhase = .categoryDetails
-        currentCategoryIndex = 0
-
-        // Start Phase 2 for first category if any
-        if !pendingCategoryIds.isEmpty {
-            Task {
-                await startKeywordsReviewForCurrentCategory(resume: resume)
-            }
-        } else {
-            // No categories need keyword review - finish workflow
-            finishHierarchicalReview(resume: resume)
+        // Move to next phase
+        Task {
+            await advanceToNextPhase(resume: resume)
         }
     }
 
-    /// Start Phase 2: Keywords review for the current category
-    func startKeywordsReviewForCurrentCategory(resume: Resume) async {
-        guard currentCategoryIndex < pendingCategoryIds.count else {
-            Logger.debug("✅ All categories reviewed in Phase 2")
-            finishHierarchicalReview(resume: resume)
+    /// Advance to the next phase or finish the workflow.
+    private func advanceToNextPhase(resume: Resume) async {
+        phaseReviewState.currentPhaseIndex += 1
+        phaseReviewState.currentReview = nil
+        phaseReviewState.pendingItemIds = []
+        phaseReviewState.currentItemIndex = 0
+
+        if phaseReviewState.isLastPhase || phaseReviewState.currentPhaseIndex >= phaseReviewState.phases.count {
+            finishPhaseReview(resume: resume)
             return
         }
 
-        let categoryId = pendingCategoryIds[currentCategoryIndex]
+        // Start next phase
+        guard let nextPhase = phaseReviewState.currentPhase,
+              let rootNode = resume.rootNode,
+              let modelId = currentModelId else {
+            finishPhaseReview(resume: resume)
+            return
+        }
+
         isProcessingRevisions = true
 
-        guard let rootNode = resume.rootNode else {
-            Logger.error("❌ No root node for Phase 2")
-            isProcessingRevisions = false
-            return
-        }
-
-        guard let categoryData = TreeNode.exportCategoryKeywords(categoryId: categoryId, from: rootNode) else {
-            Logger.warning("⚠️ Category \(categoryId) not found, skipping")
-            currentCategoryIndex += 1
-            await startKeywordsReviewForCurrentCategory(resume: resume)
-            return
-        }
-
-        Logger.info("🚀 Starting Phase 2 for '\(categoryData.categoryName)' (\(categoryData.keywords.count) keywords)")
-
-        guard let conversationId = currentConversationId, let modelId = currentModelId else {
-            Logger.error("❌ No conversation context for Phase 2")
-            isProcessingRevisions = false
-            return
-        }
-
         do {
+            let exportedNodes = TreeNode.exportNodesMatchingPath(nextPhase.field, from: rootNode)
+            guard !exportedNodes.isEmpty else {
+                Logger.warning("⚠️ No nodes found for phase \(nextPhase.phase)")
+                await advanceToNextPhase(resume: resume)
+                return
+            }
+
+            Logger.info("🚀 Starting Phase \(nextPhase.phase) - \(exportedNodes.count) nodes")
+
             let query = ResumeApiQuery(
                 resume: resume,
                 exportCoordinator: exportCoordinator,
@@ -932,19 +916,26 @@ class ResumeReviseViewModel {
                 saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
             )
 
-            let userPrompt = await query.categoryKeywordsPrompt(
-                categoryId: categoryId,
-                categoryName: categoryData.categoryName,
-                keywords: categoryData.keywords
+            let userPrompt = await query.phaseReviewPrompt(
+                section: phaseReviewState.currentSection,
+                phaseNumber: nextPhase.phase,
+                fieldPath: nextPhase.field,
+                nodes: exportedNodes,
+                isBundled: nextPhase.bundle
             )
+
+            guard let conversationId = currentConversationId else {
+                Logger.error("❌ No conversation context for next phase")
+                finishPhaseReview(resume: resume)
+                return
+            }
 
             let model = openRouterService.findModel(id: modelId)
             let supportsReasoning = model?.supportsReasoning ?? false
 
-            let keywordsRevision: KeywordsRevisionContainer
+            let reviewContainer: PhaseReviewContainer
 
             if supportsReasoning {
-                Logger.info("🧠 Using streaming for Phase 2 keywords")
                 let userEffort = UserDefaults.standard.string(forKey: "reasoningEffort") ?? "medium"
                 let reasoning = OpenRouterReasoning(effort: userEffort, includeReasoning: true)
 
@@ -953,139 +944,115 @@ class ResumeReviseViewModel {
                     modelId: modelId,
                     conversationId: conversationId,
                     reasoning: reasoning,
-                    jsonSchema: ResumeApiQuery.keywordsArraySchema
+                    jsonSchema: ResumeApiQuery.phaseReviewSchema
                 )
 
-                // Parse response
                 let jsonData = try JSONEncoder().encode(result)
-                keywordsRevision = try JSONDecoder().decode(KeywordsRevisionContainer.self, from: jsonData)
-
+                reviewContainer = try JSONDecoder().decode(PhaseReviewContainer.self, from: jsonData)
             } else {
-                keywordsRevision = try await llm.continueConversationStructured(
+                reviewContainer = try await llm.continueConversationStructured(
                     userMessage: userPrompt,
                     modelId: modelId,
                     conversationId: conversationId,
-                    as: KeywordsRevisionContainer.self,
-                    jsonSchema: ResumeApiQuery.keywordsArraySchema
+                    as: PhaseReviewContainer.self,
+                    jsonSchema: ResumeApiQuery.phaseReviewSchema
                 )
             }
 
-            currentKeywordsRevision = keywordsRevision
-            Logger.info("✅ Received keywords revision: \(keywordsRevision.oldKeywords.count) → \(keywordsRevision.newKeywords.count)")
+            phaseReviewState.currentReview = reviewContainer
+
+            if !nextPhase.bundle {
+                phaseReviewState.pendingItemIds = reviewContainer.items.map { $0.id }
+                phaseReviewState.currentItemIndex = 0
+            }
 
             reasoningStreamManager.hideAndClear()
             isProcessingRevisions = false
 
         } catch {
-            Logger.error("❌ Phase 2 failed for category \(categoryId): \(error.localizedDescription)")
+            Logger.error("❌ Phase \(nextPhase.phase) failed: \(error.localizedDescription)")
             isProcessingRevisions = false
-            // Skip this category and continue with next
-            currentCategoryIndex += 1
-            await startKeywordsReviewForCurrentCategory(resume: resume)
+            await advanceToNextPhase(resume: resume)
         }
     }
 
-    /// Accept keywords revision for current category and move to next
-    func acceptCurrentKeywordsAndMoveNext(resume: Resume, context: ModelContext) {
-        guard let keywordsRevision = currentKeywordsRevision else { return }
-        guard let rootNode = resume.rootNode else { return }
+    /// Accept current review item and move to next (for unbundled phases).
+    func acceptCurrentItemAndMoveNext(resume: Resume, context: ModelContext) {
+        guard var currentReview = phaseReviewState.currentReview,
+              phaseReviewState.currentItemIndex < currentReview.items.count else { return }
 
-        // Store approved change
-        approvedKeywordsChanges[keywordsRevision.categoryId] = keywordsRevision
+        // Mark current item as accepted
+        currentReview.items[phaseReviewState.currentItemIndex].userDecision = .accepted
+        phaseReviewState.currentReview = currentReview
 
-        // Apply the keywords change
-        TreeNode.applyKeywordsChanges(
-            categoryId: keywordsRevision.categoryId,
-            newKeywords: keywordsRevision.newKeywords,
-            to: rootNode,
-            context: context
-        )
+        // Move to next item
+        phaseReviewState.currentItemIndex += 1
 
-        Logger.info("✅ Applied keywords for '\(keywordsRevision.categoryName)'")
-
-        // Move to next category
-        currentCategoryIndex += 1
-        currentKeywordsRevision = nil
-
-        Task {
-            await startKeywordsReviewForCurrentCategory(resume: resume)
+        if phaseReviewState.currentItemIndex >= currentReview.items.count {
+            // All items reviewed - complete phase
+            completeCurrentPhase(resume: resume, context: context)
         }
     }
 
-    /// Reject keywords revision for current category and move to next
-    func rejectCurrentKeywordsAndMoveNext(resume: Resume) {
-        Logger.info("⏭️ Skipped keywords revision for current category")
+    /// Reject current review item and move to next (for unbundled phases).
+    func rejectCurrentItemAndMoveNext() {
+        guard var currentReview = phaseReviewState.currentReview,
+              phaseReviewState.currentItemIndex < currentReview.items.count else { return }
 
-        currentCategoryIndex += 1
-        currentKeywordsRevision = nil
+        // Mark current item as rejected
+        currentReview.items[phaseReviewState.currentItemIndex].userDecision = .rejected
+        phaseReviewState.currentReview = currentReview
 
-        Task {
-            await startKeywordsReviewForCurrentCategory(resume: resume)
-        }
+        // Move to next item
+        phaseReviewState.currentItemIndex += 1
     }
 
-    /// Finish the hierarchical review workflow
-    func finishHierarchicalReview(resume: Resume) {
-        Logger.info("🏁 Hierarchical review complete")
-        Logger.info("  - Category changes: \(approvedCategoryChanges.count)")
-        Logger.info("  - Keywords changes: \(approvedKeywordsChanges.count)")
+    /// Finish the phase review workflow.
+    func finishPhaseReview(resume: Resume) {
+        Logger.info("🏁 Phase review complete for '\(phaseReviewState.currentSection)'")
+        Logger.info("  - Phases completed: \(phaseReviewState.approvedReviews.count)")
 
         // Trigger PDF refresh
         exportCoordinator.debounceExport(resume: resume)
 
         // Clear state and dismiss
-        clearHierarchicalReviewState()
+        phaseReviewState.reset()
         showResumeRevisionSheet = false
         markWorkflowCompleted(reset: true)
     }
 
-    /// Check if there are unapplied approved changes (for cancel confirmation)
+    /// Check if there are unapplied approved changes.
     func hasUnappliedApprovedChanges() -> Bool {
-        !approvedCategoryChanges.isEmpty || !approvedKeywordsChanges.isEmpty
+        !phaseReviewState.approvedReviews.isEmpty || phaseReviewState.currentReview != nil
     }
 
-    /// Apply all approved changes and close (for cancel with partial approval)
+    /// Apply all approved changes and close.
     func applyApprovedChangesAndClose(resume: Resume, context: ModelContext) {
         guard let rootNode = resume.rootNode else { return }
 
-        // Apply any remaining category changes
-        TreeNode.applyCategoryStructureChanges(approvedCategoryChanges, to: rootNode, context: context)
+        // Apply any pending current review
+        if let currentReview = phaseReviewState.currentReview {
+            TreeNode.applyPhaseReviewChanges(currentReview, to: rootNode, context: context)
+        }
 
-        // Apply any remaining keywords changes
-        for (categoryId, keywordsRevision) in approvedKeywordsChanges {
-            TreeNode.applyKeywordsChanges(
-                categoryId: categoryId,
-                newKeywords: keywordsRevision.newKeywords,
-                to: rootNode,
-                context: context
-            )
+        // Apply all approved reviews
+        for review in phaseReviewState.approvedReviews {
+            TreeNode.applyPhaseReviewChanges(review, to: rootNode, context: context)
         }
 
         // Trigger PDF refresh
         exportCoordinator.debounceExport(resume: resume)
 
-        clearHierarchicalReviewState()
+        phaseReviewState.reset()
         showResumeRevisionSheet = false
         markWorkflowCompleted(reset: true)
     }
 
-    /// Discard all changes and close
+    /// Discard all changes and close.
     func discardAllAndClose() {
-        clearHierarchicalReviewState()
+        phaseReviewState.reset()
         showResumeRevisionSheet = false
         markWorkflowCompleted(reset: true)
-    }
-
-    /// Clear all hierarchical review state
-    private func clearHierarchicalReviewState() {
-        isHierarchicalReviewActive = false
-        currentRevisionPhase = .categoryStructure
-        categoryRevisions = []
-        pendingCategoryIds = []
-        currentCategoryIndex = 0
-        currentKeywordsRevision = nil
-        approvedCategoryChanges = []
-        approvedKeywordsChanges = [:]
     }
 }
 // MARK: - Supporting Types

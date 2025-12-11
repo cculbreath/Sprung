@@ -8,6 +8,8 @@ import SwiftUI
 /// expansion state through `ResumeDetailVM`.
 struct NodeHeaderView: View {
     let node: TreeNode
+    /// Depth offset to subtract when calculating indentation (for flattened container children)
+    var depthOffset: Int = 0
     let addChildAction: () -> Void
     @Environment(ResumeDetailVM.self) private var vm: ResumeDetailVM
     // Bindings that forward to the view‑model properties.
@@ -115,7 +117,7 @@ struct NodeHeaderView: View {
             StatusBadgeView(node: node, isExpanded: vm.isExpanded(node))
         }
         .padding(.horizontal, 10)
-        .padding(.leading, CGFloat(node.depth * 20))
+        .padding(.leading, CGFloat(max(0, node.depth - depthOffset) * 20))
         .padding(.vertical, 5)
         .onTapGesture {
             vm.toggleExpansion(for: node)

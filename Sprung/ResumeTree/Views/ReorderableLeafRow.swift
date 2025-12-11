@@ -9,6 +9,8 @@ struct ReorderableLeafRow: View {
     @Environment(AppEnvironment.self) private var appEnvironment: AppEnvironment
     let node: TreeNode
     var siblings: [TreeNode]
+    /// Depth offset to subtract when calculating indentation (for flattened container children)
+    var depthOffset: Int = 0
     @State private var isDropTargeted: Bool = false // Manage state locally
     var body: some View {
         let canReorder = node.parent?.schemaAllowsChildMutation ?? false
@@ -17,7 +19,7 @@ struct ReorderableLeafRow: View {
                 .scaleEffect(dragInfo.draggedNode == node ? 1.05 : 1.0) // Slightly enlarge the dragged node
                 .animation(.easeInOut, value: dragInfo.draggedNode) // Smoothly animate the scale effect
                 .background(Color.clear) // Highlight on drop
-                .padding(.leading, CGFloat(node.depth) * 20)
+                .padding(.leading, CGFloat(max(0, node.depth - depthOffset)) * 20)
                 .onDrag {
                     guard canReorder else {
                         dragInfo.draggedNode = nil

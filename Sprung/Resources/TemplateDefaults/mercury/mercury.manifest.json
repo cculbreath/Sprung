@@ -128,21 +128,18 @@
     "custom.objective",
     "work.*.highlights",
     "projects.*.description",
-    "skills.*",
-    "skills.*.*",
-    "custom.jobTitles.*"
+    "skills.*.name",
+    "skills.*.keywords",
+    "custom.jobTitles[]"
   ],
   "listContainers": [
     "skills.*.keywords",
     "work.*.highlights"
   ],
-  "hierarchicalReview": {
-    "skills": {
-      "enabled": true,
-      "phases": [
-        "categoryStructure",
-        "categoryDetails"
-      ]
-    }
+  "reviewPhases": {
+    "skills": [
+      { "phase": 1, "field": "skills.*.name", "bundle": true },
+      { "phase": 2, "field": "skills.*.keywords", "bundle": false }
+    ]
   }
 }

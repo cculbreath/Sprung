@@ -67,100 +67,82 @@ import SwiftUI
             additionalProperties: false
         )
     }()
-    // MARK: - Phase 1: Category Structure Schema
+    // MARK: - Generic Phase Review Schema
 
-    /// JSON Schema for Phase 1 category structure review
-    /// LLM proposes add/remove/rename/merge actions for skill categories
-    static let categoryStructureSchema: JSONSchema = {
-        let categoryRevisionSchema = JSONSchema(
+    /// JSON Schema for generic phase review response.
+    /// Works for any section/field type - LLM proposes keep/modify/remove/add actions.
+    static let phaseReviewSchema: JSONSchema = {
+        let reviewItemSchema = JSONSchema(
             type: .object,
             properties: [
                 "id": JSONSchema(
                     type: .string,
-                    description: "The category node ID from the input, or a new UUID for 'add' actions"
+                    description: "The node ID from the input, or a new UUID for 'add' actions"
                 ),
-                "name": JSONSchema(
+                "displayName": JSONSchema(
                     type: .string,
-                    description: "The current category name"
+                    description: "Human-readable name for this item"
+                ),
+                "originalValue": JSONSchema(
+                    type: .string,
+                    description: "The original value (for reference)"
+                ),
+                "proposedValue": JSONSchema(
+                    type: .string,
+                    description: "The proposed new value (same as original for 'keep', new value for 'modify'/'add')"
                 ),
                 "action": JSONSchema(
                     type: .string,
-                    description: "The proposed action: keep (no change), remove (delete category), rename (change name), merge (combine with another), add (new category)",
-                    enum: ["keep", "remove", "rename", "merge", "add"]
+                    description: "The proposed action: keep (no change), modify (change value), remove (delete), add (new item)",
+                    enum: ["keep", "modify", "remove", "add"]
                 ),
-                "newName": JSONSchema(
-                    type: .string,
-                    description: "For 'rename' or 'add' actions: the new category name"
-                ),
-                "mergeWith": JSONSchema(
-                    type: .string,
-                    description: "For 'merge' action: the ID of the target category to merge into"
-                ),
-                "mergeWithName": JSONSchema(
-                    type: .string,
-                    description: "For 'merge' action: the name of the target category (for display)"
-                ),
-                "keywordCount": JSONSchema(
-                    type: .integer,
-                    description: "Number of keywords in this category (from input)"
-                ),
-                "why": JSONSchema(
+                "reason": JSONSchema(
                     type: .string,
                     description: "Explanation for the proposed action"
+                ),
+                "originalChildren": JSONSchema(
+                    type: .array,
+                    description: "For containers: original child values",
+                    items: JSONSchema(type: .string)
+                ),
+                "proposedChildren": JSONSchema(
+                    type: .array,
+                    description: "For containers: proposed child values after revision",
+                    items: JSONSchema(type: .string)
                 )
             ],
-            required: ["id", "name", "action", "why"],
+            required: ["id", "displayName", "originalValue", "proposedValue", "action", "reason"],
             additionalProperties: false
         )
 
-        let categoriesArraySchema = JSONSchema(
+        let itemsArraySchema = JSONSchema(
             type: .array,
-            description: "Array of category revision proposals",
-            items: categoryRevisionSchema
+            description: "Array of review item proposals",
+            items: reviewItemSchema
         )
 
         return JSONSchema(
             type: .object,
             properties: [
-                "categories": categoriesArraySchema
+                "section": JSONSchema(
+                    type: .string,
+                    description: "The section being reviewed (e.g., 'skills', 'work')"
+                ),
+                "phase": JSONSchema(
+                    type: .integer,
+                    description: "The phase number (1-indexed)"
+                ),
+                "field": JSONSchema(
+                    type: .string,
+                    description: "The field path pattern being reviewed"
+                ),
+                "bundled": JSONSchema(
+                    type: .boolean,
+                    description: "Whether items were bundled together for review"
+                ),
+                "items": itemsArraySchema
             ],
-            required: ["categories"],
-            additionalProperties: false
-        )
-    }()
-
-    // MARK: - Phase 2: Keywords Array Schema
-
-    /// JSON Schema for Phase 2 keywords review within a category
-    /// LLM returns the full array of keywords (can add/remove/modify)
-    static let keywordsArraySchema: JSONSchema = {
-        return JSONSchema(
-            type: .object,
-            properties: [
-                "categoryId": JSONSchema(
-                    type: .string,
-                    description: "The category ID being revised"
-                ),
-                "categoryName": JSONSchema(
-                    type: .string,
-                    description: "The category name for display"
-                ),
-                "oldKeywords": JSONSchema(
-                    type: .array,
-                    description: "The original keywords (for reference)",
-                    items: JSONSchema(type: .string)
-                ),
-                "newKeywords": JSONSchema(
-                    type: .array,
-                    description: "The proposed keywords after revision (can add new, remove existing, or modify)",
-                    items: JSONSchema(type: .string)
-                ),
-                "why": JSONSchema(
-                    type: .string,
-                    description: "Overall explanation for the keyword changes in this category"
-                )
-            ],
-            required: ["categoryId", "categoryName", "oldKeywords", "newKeywords", "why"],
+            required: ["section", "phase", "field", "bundled", "items"],
             additionalProperties: false
         )
     }()
@@ -436,27 +418,57 @@ import SwiftUI
         }
         return prompt
     }
-    // MARK: - Phase 1: Category Structure Prompt
+    // MARK: - Generic Phase Review Prompt
 
-    /// Generate prompt for Phase 1: category structure review
-    /// Sends category names with keyword counts, asks LLM to propose structural changes
+    /// Generate a prompt for any phase review.
+    /// Works with any section/field type based on manifest configuration.
+    ///
+    /// - Parameters:
+    ///   - section: The section being reviewed (e.g., "skills", "work")
+    ///   - phaseNumber: The phase number (1-indexed)
+    ///   - fieldPath: The field path pattern (e.g., "skills.*.name")
+    ///   - nodes: The exported nodes to review
+    ///   - isBundled: Whether all nodes are bundled into one review
+    /// - Returns: The prompt string for the LLM
     @MainActor
-    func categoryStructurePrompt(categories: [(id: String, name: String, keywordCount: Int)]) async -> String {
+    func phaseReviewPrompt(
+        section: String,
+        phaseNumber: Int,
+        fieldPath: String,
+        nodes: [ExportedReviewNode],
+        isBundled: Bool
+    ) async -> String {
         try? await exportCoordinator.ensureFreshRenderedText(for: res)
 
-        let categoriesJson = categories.map { cat in
-            """
+        // Build JSON representation of nodes
+        let nodesJson = nodes.map { node in
+            var json = """
             {
-              "id": "\(cat.id)",
-              "name": "\(cat.name)",
-              "keywordCount": \(cat.keywordCount)
-            }
+              "id": "\(node.id)",
+              "displayName": "\(node.displayName)",
+              "value": "\(node.value)"
             """
-        }.joined(separator: ",\n")
+            if let childValues = node.childValues, !childValues.isEmpty {
+                let childrenJson = childValues.map { "\"\($0)\"" }.joined(separator: ", ")
+                json += ",\n      \"childValues\": [\(childrenJson)]"
+            }
+            json += "\n    }"
+            return json
+        }.joined(separator: ",\n    ")
+
+        // Determine review type description based on whether items are containers
+        let hasContainers = nodes.contains { $0.isContainer }
+        let itemTypeDescription = hasContainers
+            ? "These items contain child values that can be modified, reordered, added to, or reduced."
+            : "These are scalar values that can be kept as-is, modified, or removed."
+
+        let bundleDescription = isBundled
+            ? "All items are presented together for holistic review. Consider relationships between items."
+            : "Each item should be reviewed individually based on relevance to the target job."
 
         let prompt = """
         ================================================================================
-        SKILL CATEGORIES STRUCTURE REVIEW
+        PHASE \(phaseNumber) REVIEW: \(section.uppercased()) - \(fieldPath)
         ================================================================================
 
         CONTEXT:
@@ -465,99 +477,54 @@ import SwiftUI
         JOB LISTING:
         \(jobListing)
 
-        CURRENT SKILL CATEGORIES:
+        ITEMS TO REVIEW:
         [
-        \(categoriesJson)
+            \(nodesJson)
         ]
 
-        TASK:
-        Review the skill category structure and propose changes to better align with the target job.
-        For each category, decide whether to:
-        - **keep**: No structural change needed (category name and grouping are appropriate)
-        - **remove**: Remove this category entirely (not relevant for this role)
-        - **rename**: Change the category name to better match job requirements
-        - **merge**: Combine this category with another one
-        - **add**: Suggest a new category that should be created
+        REVIEW MODE:
+        \(bundleDescription)
 
-        IMPORTANT GUIDELINES:
-        1. Focus on high-level categorization, not individual keywords (we'll review those in the next phase)
-        2. Consider which skill groupings will resonate with this particular job posting
-        3. Don't remove categories that showcase breadth unless truly irrelevant
-        4. Merging is appropriate when two categories significantly overlap for this role
-        5. New categories should only be suggested if there's a clear gap based on the job requirements
-
-        BACKGROUND DOCUMENTS:
-        \(backgroundDocs)
-
-        OUTPUT:
-        Return your proposals as JSON matching the categoryStructure schema.
-        Include a clear "why" explanation for any non-keep actions.
-        ================================================================================
-        """
-
-        if saveDebugPrompt {
-            savePromptToDownloads(content: prompt, fileName: "categoryStructurePrompt.txt")
-        }
-
-        return prompt
-    }
-
-    // MARK: - Phase 2: Keywords Array Prompt
-
-    /// Generate prompt for Phase 2: keywords review within a specific category
-    /// Sends the full keyword list for one category, asks LLM to customize
-    @MainActor
-    func categoryKeywordsPrompt(categoryId: String, categoryName: String, keywords: [String]) async -> String {
-        try? await exportCoordinator.ensureFreshRenderedText(for: res)
-
-        let keywordsJson = keywords.map { "\"\($0)\"" }.joined(separator: ", ")
-
-        let prompt = """
-        ================================================================================
-        KEYWORDS REVIEW: \(categoryName)
-        ================================================================================
-
-        CONTEXT:
-        We are customizing \(applicant.name)'s resume for the following position:
-
-        JOB LISTING:
-        \(jobListing)
-
-        CATEGORY BEING REVIEWED:
-        - ID: \(categoryId)
-        - Name: \(categoryName)
-        - Current Keywords: [\(keywordsJson)]
+        ITEM TYPE:
+        \(itemTypeDescription)
 
         TASK:
-        Review and customize the keywords in this category to better align with the target job.
-        You may:
-        - **Keep** keywords that are relevant to this role
-        - **Remove** keywords that are less important for this specific job
-        - **Modify** keywords to better match job posting terminology (e.g., "REST APIs" → "RESTful microservices")
-        - **Add** new keywords that \(applicant.name) likely has based on the resume and background, and that would strengthen the application
+        Review each item and propose changes to better align with the target job.
+        For each item, decide whether to:
+        - **keep**: No change needed (value is appropriate for this role)
+        - **modify**: Change the value to better match job requirements
+        - **remove**: Remove this item (not relevant for this role)
+        - **add**: Suggest a new item that should be added
+
+        For container items (those with childValues):
+        - proposedChildren should contain the final list of child values
+        - You can add, remove, or reorder children as needed
 
         IMPORTANT GUIDELINES:
-        1. Prioritize keywords that directly match job requirements
-        2. Don't remove skills that showcase relevant breadth
+        1. Prioritize content that directly matches job requirements
+        2. Don't remove content that showcases relevant breadth
         3. Modifications should align terminology with job posting language
-        4. Only add skills that are genuinely supported by the background documents
+        4. Only add content genuinely supported by the background documents
         5. Consider ATS (Applicant Tracking System) keyword matching
 
         BACKGROUND DOCUMENTS:
         \(backgroundDocs)
 
         OUTPUT:
-        Return your proposal as JSON matching the keywordsArray schema.
-        - categoryId: "\(categoryId)"
-        - categoryName: "\(categoryName)"
-        - oldKeywords: the original list (for reference)
-        - newKeywords: your proposed revised list
-        - why: explanation of your overall approach for this category
+        Return your proposals as JSON matching the phaseReview schema.
+        Required fields in response:
+        - section: "\(section)"
+        - phase: \(phaseNumber)
+        - field: "\(fieldPath)"
+        - bundled: \(isBundled)
+        - items: array of review proposals
+
+        Include a clear "reason" explanation for any non-keep actions.
         ================================================================================
         """
 
         if saveDebugPrompt {
-            savePromptToDownloads(content: prompt, fileName: "categoryKeywordsPrompt_\(categoryName).txt")
+            savePromptToDownloads(content: prompt, fileName: "phaseReviewPrompt_\(section)_phase\(phaseNumber).txt")
         }
 
         return prompt

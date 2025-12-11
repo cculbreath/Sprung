@@ -46,12 +46,17 @@ struct ResumeDetailView: View {
                             .fontWeight(.semibold)
                             .padding(.horizontal, 10)
                             .padding(.top, 12)
-                        ForEach(allContentNodes, id: \.id) { viewNode in
-                            topLevelNodeView(viewNode)
+                        ForEach(contentNodes, id: \.id) { viewNode in
+                            topLevelNodeView(viewNode, depthOffset: 0)
+                        }
+                        // Custom fields are flattened (depth=2 displayed as depth=1)
+                        ForEach(customNodes, id: \.id) { viewNode in
+                            topLevelNodeView(viewNode, depthOffset: 1)
                         }
                     }
 
                     // Template section - manifest-defined fields (rendered generically)
+                    // Template children are depth=2 but displayed as depth=1
                     if let templateNode = root.orderedChildren.first(where: { $0.name == "template" }),
                        !templateNode.orderedChildren.isEmpty {
                         Text("Template")
@@ -60,7 +65,7 @@ struct ResumeDetailView: View {
                             .padding(.horizontal, 10)
                             .padding(.top, 16)
                         ForEach(templateNode.orderedChildren, id: \.id) { childNode in
-                            topLevelNodeView(childNode)
+                            topLevelNodeView(childNode, depthOffset: 1)
                         }
                     }
                 }
@@ -99,23 +104,28 @@ struct ResumeDetailView: View {
         }
     }
     @ViewBuilder
-    private func topLevelNodeView(_ node: TreeNode) -> some View {
+    private func topLevelNodeView(_ node: TreeNode, depthOffset: Int = 0) -> some View {
         if node.orderedChildren.isEmpty == false {
-            NodeWithChildrenView(node: node)
+            NodeWithChildrenView(node: node, depthOffset: depthOffset)
         } else {
-            RootLeafDisclosureView(node: node)
+            RootLeafDisclosureView(node: node, depthOffset: depthOffset)
         }
     }
 }
 // MARK: - Root-Level Leaf Disclosure ---------------------------------------
 private struct RootLeafDisclosureView: View {
     let node: TreeNode
+    /// Depth offset to subtract when calculating indentation (for flattened container children)
+    var depthOffset: Int = 0
     @Environment(ResumeDetailVM.self) private var vm: ResumeDetailVM
     private var expansionBinding: Binding<Bool> {
         Binding(
             get: { vm.isExpanded(node) },
             set: { _ in vm.toggleExpansion(for: node) }
         )
+    }
+    private var effectiveDepth: Int {
+        max(0, node.depth - depthOffset)
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -130,7 +140,7 @@ private struct RootLeafDisclosureView: View {
                 StatusBadgeView(node: node, isExpanded: vm.isExpanded(node))
             }
             .padding(.horizontal, 10)
-            .padding(.leading, CGFloat(node.depth * 20))
+            .padding(.leading, CGFloat(effectiveDepth * 20))
             .padding(.vertical, 5)
             .contentShape(Rectangle())
             .onTapGesture {
@@ -139,7 +149,7 @@ private struct RootLeafDisclosureView: View {
             if vm.isExpanded(node) {
                 Divider()
                 NodeLeafView(node: node)
-                    .padding(.leading, CGFloat(node.depth) * 20)
+                    .padding(.leading, CGFloat(effectiveDepth) * 20)
                     .padding(.vertical, 4)
            }
         }

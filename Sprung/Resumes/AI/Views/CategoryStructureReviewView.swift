@@ -1,20 +1,28 @@
 //
-//  CategoryStructureReviewView.swift
+//  PhaseReviewBundledView.swift
 //  Sprung
 //
-//  Phase 1 UI for two-phase hierarchical skills review
-//  Shows category-level proposals (keep/remove/rename/merge/add)
+//  Generic bundled review view for manifest-driven multi-phase review.
+//  Shows all items at once for accept/reject when phase.bundle = true.
 //
 
 import SwiftUI
 import SwiftData
 
-/// Phase 1 UI: Review skill category structure before diving into keywords
-struct CategoryStructureReviewView: View {
+/// Generic bundled review: Shows all phase items at once for batch review
+struct PhaseReviewBundledView: View {
     @Bindable var viewModel: ResumeReviseViewModel
     @Binding var resume: Resume?
     @Environment(\.modelContext) private var modelContext
     @State private var showCancelConfirmation = false
+
+    private var phaseState: PhaseReviewState {
+        viewModel.phaseReviewState
+    }
+
+    private var currentReview: PhaseReviewContainer? {
+        phaseState.currentReview
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,23 +31,32 @@ struct CategoryStructureReviewView: View {
 
             Divider()
 
-            // Category list
-            ScrollView {
-                VStack(spacing: 12) {
-                    ForEach($viewModel.categoryRevisions) { $category in
-                        CategoryRevisionRow(category: $category)
+            // Items list
+            if let review = currentReview {
+                ScrollView {
+                    VStack(spacing: 12) {
+                        ForEach(review.items.indices, id: \.self) { index in
+                            PhaseReviewItemRow(
+                                item: bindingForItem(at: index),
+                                showChildren: review.items[index].originalChildren != nil
+                            )
+                        }
                     }
+                    .padding(20)
                 }
-                .padding(20)
+                .frame(maxHeight: 500)
+            } else if viewModel.isProcessingRevisions {
+                loadingView
+            } else {
+                emptyView
             }
-            .frame(maxHeight: 500)
 
             Divider()
 
             // Action buttons
             actionButtons
         }
-        .frame(width: 600)
+        .frame(width: 650)
         .background(Color(NSColor.windowBackgroundColor))
         .confirmationDialog(
             "Cancel Review?",
@@ -63,11 +80,31 @@ struct CategoryStructureReviewView: View {
             }
         } message: {
             if hasAnyAccepted {
-                Text("You have approved \(acceptedCount) category changes. Would you like to apply them before closing?")
+                Text("You have approved \(acceptedCount) changes. Would you like to apply them before closing?")
             } else {
                 Text("Are you sure you want to discard all pending changes?")
             }
         }
+    }
+
+    // MARK: - Binding Helper
+
+    private func bindingForItem(at index: Int) -> Binding<PhaseReviewItem> {
+        Binding(
+            get: {
+                guard let review = viewModel.phaseReviewState.currentReview,
+                      index < review.items.count else {
+                    return PhaseReviewItem(id: "", displayName: "", originalValue: "", proposedValue: "")
+                }
+                return review.items[index]
+            },
+            set: { newValue in
+                guard var review = viewModel.phaseReviewState.currentReview,
+                      index < review.items.count else { return }
+                review.items[index] = newValue
+                viewModel.phaseReviewState.currentReview = review
+            }
+        )
     }
 
     // MARK: - Header
@@ -75,28 +112,88 @@ struct CategoryStructureReviewView: View {
     private var headerSection: some View {
         VStack(spacing: 8) {
             HStack {
-                Image(systemName: "folder.badge.gearshape")
+                Image(systemName: phaseIcon)
                     .font(.system(size: 24))
                     .foregroundStyle(.blue)
 
-                Text("Skill Categories Review")
+                Text(headerTitle)
                     .font(.system(.title2, design: .rounded, weight: .semibold))
             }
 
-            Text("Review suggested changes to your skill category structure")
+            Text(headerSubtitle)
                 .font(.system(.subheadline, design: .rounded))
                 .foregroundStyle(.secondary)
 
-            Text("Phase 1 of 2: Category Structure")
-                .font(.system(.caption, design: .rounded, weight: .medium))
-                .foregroundStyle(.blue)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 4)
-                .background(Color.blue.opacity(0.1))
-                .clipShape(Capsule())
+            HStack(spacing: 8) {
+                Text("Phase \(phaseState.currentPhaseIndex + 1) of \(phaseState.phases.count)")
+                    .font(.system(.caption, design: .rounded, weight: .medium))
+                    .foregroundStyle(.blue)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4)
+                    .background(Color.blue.opacity(0.1))
+                    .clipShape(Capsule())
+
+                if let review = currentReview {
+                    Text("\(review.items.count) items")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
         .padding(.vertical, 16)
         .frame(maxWidth: .infinity)
+    }
+
+    private var phaseIcon: String {
+        guard let phase = phaseState.currentPhase else { return "folder.badge.gearshape" }
+        // Use different icons based on field path pattern
+        if phase.field.contains("name") {
+            return "folder.badge.gearshape"
+        } else if phase.field.contains("keywords") || phase.field.contains("highlights") {
+            return "tag"
+        }
+        return "doc.text.magnifyingglass"
+    }
+
+    private var headerTitle: String {
+        let section = phaseState.currentSection.capitalized
+        guard let phase = phaseState.currentPhase else { return "\(section) Review" }
+
+        // Extract meaningful name from field path
+        let components = phase.field.split(separator: ".")
+        if let lastComponent = components.last, lastComponent != "*" && lastComponent != "[]" {
+            return "\(section) \(String(lastComponent).capitalized) Review"
+        }
+        return "\(section) Review"
+    }
+
+    private var headerSubtitle: String {
+        "Review suggested changes for this phase"
+    }
+
+    // MARK: - Loading/Empty Views
+
+    private var loadingView: some View {
+        VStack(spacing: 16) {
+            ProgressView()
+                .scaleEffect(1.2)
+            Text("Analyzing...")
+                .font(.system(.body, design: .rounded))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: 200)
+    }
+
+    private var emptyView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "tray")
+                .font(.system(size: 36))
+                .foregroundStyle(.secondary)
+            Text("No items to review")
+                .font(.system(.body, design: .rounded))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: 200)
     }
 
     // MARK: - Action Buttons
@@ -115,8 +212,8 @@ struct CategoryStructureReviewView: View {
             }
             .buttonStyle(.bordered)
 
-            Button("Continue to Keywords") {
-                continueToPhase2()
+            Button(phaseState.isLastPhase ? "Finish Review" : "Continue to Next Phase") {
+                continueToNextPhase()
             }
             .buttonStyle(.borderedProminent)
             .disabled(!hasAnyDecision)
@@ -127,35 +224,41 @@ struct CategoryStructureReviewView: View {
     // MARK: - Computed Properties
 
     private var hasAnyDecision: Bool {
-        viewModel.categoryRevisions.contains { $0.userDecision != .pending }
+        guard let review = currentReview else { return false }
+        return review.items.contains { $0.userDecision != .pending }
     }
 
     private var hasAnyAccepted: Bool {
-        viewModel.categoryRevisions.contains { $0.userDecision == .accepted }
+        guard let review = currentReview else { return false }
+        return review.items.contains { $0.userDecision == .accepted }
     }
 
     private var acceptedCount: Int {
-        viewModel.categoryRevisions.filter { $0.userDecision == .accepted }.count
+        guard let review = currentReview else { return 0 }
+        return review.items.filter { $0.userDecision == .accepted }.count
     }
 
     // MARK: - Actions
 
     private func acceptAll() {
-        for index in viewModel.categoryRevisions.indices {
-            viewModel.categoryRevisions[index].userDecision = .accepted
+        guard var review = viewModel.phaseReviewState.currentReview else { return }
+        for index in review.items.indices {
+            review.items[index].userDecision = .accepted
         }
+        viewModel.phaseReviewState.currentReview = review
     }
 
-    private func continueToPhase2() {
+    private func continueToNextPhase() {
         guard let resume = resume else { return }
-        viewModel.completeCategoryStructurePhase(resume: resume, context: modelContext)
+        viewModel.completeCurrentPhase(resume: resume, context: modelContext)
     }
 }
 
-// MARK: - Category Revision Row
+// MARK: - Phase Review Item Row
 
-struct CategoryRevisionRow: View {
-    @Binding var category: CategoryRevisionNode
+struct PhaseReviewItemRow: View {
+    @Binding var item: PhaseReviewItem
+    let showChildren: Bool
 
     var body: some View {
         HStack(spacing: 12) {
@@ -163,25 +266,43 @@ struct CategoryRevisionRow: View {
             actionIcon
                 .frame(width: 32)
 
-            // Category info
+            // Item info
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(displayName)
                         .font(.system(.body, design: .rounded, weight: .medium))
 
-                    if category.action != .keep {
+                    if item.action != .keep {
                         actionBadge
                     }
 
                     Spacer()
 
-                    Text("\(category.keywordCount) keywords")
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(.secondary)
+                    if showChildren, let children = item.originalChildren {
+                        Text("\(children.count) items")
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
-                if !category.why.isEmpty {
-                    Text(category.why)
+                // Show value change if applicable
+                if item.action == .modify {
+                    HStack(spacing: 4) {
+                        Text(item.originalValue)
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .strikethrough()
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                        Text(item.proposedValue)
+                            .font(.system(.caption, design: .rounded, weight: .medium))
+                            .foregroundStyle(.blue)
+                    }
+                }
+
+                if !item.reason.isEmpty {
+                    Text(item.reason)
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
@@ -206,19 +327,16 @@ struct CategoryRevisionRow: View {
 
     private var actionIcon: some View {
         Group {
-            switch category.action {
+            switch item.action {
             case .keep:
                 Image(systemName: "checkmark.circle")
                     .foregroundStyle(.green)
             case .remove:
                 Image(systemName: "trash.circle")
                     .foregroundStyle(.red)
-            case .rename:
+            case .modify:
                 Image(systemName: "pencil.circle")
                     .foregroundStyle(.orange)
-            case .merge:
-                Image(systemName: "arrow.triangle.merge")
-                    .foregroundStyle(.purple)
             case .add:
                 Image(systemName: "plus.circle")
                     .foregroundStyle(.blue)
@@ -240,27 +358,27 @@ struct CategoryRevisionRow: View {
     private var decisionButtons: some View {
         HStack(spacing: 8) {
             Button {
-                category.userDecision = .rejected
+                item.userDecision = .rejected
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 14, weight: .medium))
             }
             .buttonStyle(.plain)
-            .foregroundStyle(category.userDecision == .rejected ? .red : .secondary)
+            .foregroundStyle(item.userDecision == .rejected ? .red : .secondary)
             .padding(6)
-            .background(category.userDecision == .rejected ? Color.red.opacity(0.15) : Color.clear)
+            .background(item.userDecision == .rejected ? Color.red.opacity(0.15) : Color.clear)
             .clipShape(Circle())
 
             Button {
-                category.userDecision = .accepted
+                item.userDecision = .accepted
             } label: {
                 Image(systemName: "checkmark")
                     .font(.system(size: 14, weight: .medium))
             }
             .buttonStyle(.plain)
-            .foregroundStyle(category.userDecision == .accepted ? .green : .secondary)
+            .foregroundStyle(item.userDecision == .accepted ? .green : .secondary)
             .padding(6)
-            .background(category.userDecision == .accepted ? Color.green.opacity(0.15) : Color.clear)
+            .background(item.userDecision == .accepted ? Color.green.opacity(0.15) : Color.clear)
             .clipShape(Circle())
         }
     }
@@ -268,40 +386,32 @@ struct CategoryRevisionRow: View {
     // MARK: - Computed Properties
 
     private var displayName: String {
-        switch category.action {
-        case .rename:
-            return "\(category.name) → \(category.newName ?? category.name)"
-        case .merge:
-            return "\(category.name) → merge into \(category.mergeWithName ?? "other")"
-        case .add:
-            return category.newName ?? "New Category"
-        default:
-            return category.name
+        if item.action == .add {
+            return item.proposedValue.isEmpty ? "New Item" : item.proposedValue
         }
+        return item.displayName.isEmpty ? item.originalValue : item.displayName
     }
 
     private var actionText: String {
-        switch category.action {
+        switch item.action {
         case .keep: return "Keep"
         case .remove: return "Remove"
-        case .rename: return "Rename"
-        case .merge: return "Merge"
+        case .modify: return "Modify"
         case .add: return "Add"
         }
     }
 
     private var actionColor: Color {
-        switch category.action {
+        switch item.action {
         case .keep: return .green
         case .remove: return .red
-        case .rename: return .orange
-        case .merge: return .purple
+        case .modify: return .orange
         case .add: return .blue
         }
     }
 
     private var backgroundColor: Color {
-        switch category.userDecision {
+        switch item.userDecision {
         case .pending: return Color(NSColor.controlBackgroundColor)
         case .accepted: return Color.green.opacity(0.05)
         case .rejected: return Color.red.opacity(0.05)
@@ -309,7 +419,7 @@ struct CategoryRevisionRow: View {
     }
 
     private var borderColor: Color {
-        switch category.userDecision {
+        switch item.userDecision {
         case .pending: return Color.gray.opacity(0.2)
         case .accepted: return Color.green.opacity(0.3)
         case .rejected: return Color.red.opacity(0.3)

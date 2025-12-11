@@ -895,6 +895,38 @@ final class ExperienceDefaultsToTree {
         applyDefaultAIFieldsRecursive(node: root, currentPath: [], patterns: patterns)
     }
 
+    /// Recursively apply AI status to nodes matching defaultAIFields patterns.
+    ///
+    /// # Path Syntax
+    ///
+    /// The path syntax distinguishes between objects (entries with fields) and arrays (simple values):
+    ///
+    /// - `*` = enumerate objects/entries at this level (e.g., job objects, skill categories)
+    /// - `[]` = iterate array values (simple leaf items)
+    /// - Plain names = schema field names (e.g., `highlights`, `name`, `keywords`)
+    ///
+    /// ## Examples
+    ///
+    /// | Pattern | Meaning |
+    /// |---------|---------|
+    /// | `work.*` | Each job object |
+    /// | `work.*.highlights` | The highlights container for each job |
+    /// | `work.*.highlights[]` | Each individual highlight bullet |
+    /// | `skills.*` | Each skill category object |
+    /// | `skills.*.name` | The name field of each skill category |
+    /// | `skills.*.keywords` | Keywords container for each category |
+    /// | `skills.*.keywords[]` | Each individual keyword |
+    /// | `custom.jobTitles` | Job titles container (all values bundled) |
+    /// | `custom.jobTitles[]` | Each job title separately |
+    ///
+    /// ## Path Building Rules
+    ///
+    /// When traversing the tree, paths are built as follows:
+    /// - Section containers use their name: `work`, `skills`, `custom`
+    /// - Object entries (display names like "Acme Corp") use `*`
+    /// - Field nodes use their schema name: `highlights`, `keywords`, `name`
+    /// - Array leaf items use `[]`
+    ///
     private func applyDefaultAIFieldsRecursive(node: TreeNode, currentPath: [String], patterns: [String]) {
         let pathString = currentPath.joined(separator: ".")
 
@@ -905,15 +937,48 @@ final class ExperienceDefaultsToTree {
         guard let children = node.children else { return }
         for child in children {
             var childPath = currentPath
-            if child.name.isEmpty {
-                if let index = children.firstIndex(of: child) {
-                    childPath.append("\(index)")
-                }
+
+            if isObjectEntry(child) {
+                // Object entry (e.g., job "Acme Corp", skill category "Programming")
+                childPath.append("*")
+            } else if isArrayLeafItem(child) {
+                // Array leaf item (e.g., individual keyword, highlight bullet)
+                childPath.append("[]")
             } else {
+                // Schema field name (e.g., "highlights", "name", "keywords")
                 childPath.append(child.name)
             }
             applyDefaultAIFieldsRecursive(node: child, currentPath: childPath, patterns: patterns)
         }
+    }
+
+    /// Check if a node is an object entry (has display name, contains fields)
+    /// Object entries are things like job objects ("Acme Corp") or skill categories ("Programming")
+    private func isObjectEntry(_ node: TreeNode) -> Bool {
+        // Object entries have display names (not lowercase schema names)
+        // AND have children (they contain fields)
+        guard !isSchemaFieldName(node.name) else { return false }
+        return node.children != nil && !node.orderedChildren.isEmpty
+    }
+
+    /// Check if a node is an array leaf item (simple value, no children)
+    /// Array items are things like individual keywords or highlight bullets
+    private func isArrayLeafItem(_ node: TreeNode) -> Bool {
+        // Array items have display names (not lowercase schema names)
+        // AND are leaf nodes (no children with fields)
+        guard !isSchemaFieldName(node.name) else { return false }
+        return node.children == nil || node.orderedChildren.isEmpty
+    }
+
+    /// Check if a name is a schema field name (lowercase identifier without spaces)
+    /// vs a display name like "Acme Corp" or "Work 1"
+    private func isSchemaFieldName(_ name: String) -> Bool {
+        guard !name.isEmpty else { return false }
+        // Schema field names: lowercase, no spaces (e.g., "highlights", "name", "keywords")
+        // Display names: uppercase start or contain spaces (e.g., "Acme Corp", "Work 1")
+        let startsLowercase = name.first?.isLowercase ?? false
+        let hasNoSpaces = !name.contains(" ")
+        return startsLowercase && hasNoSpaces
     }
 
     private func pathMatchesAnyPattern(path: String, patterns: [String]) -> Bool {
@@ -922,6 +987,13 @@ final class ExperienceDefaultsToTree {
         }
     }
 
+    /// Match path against pattern.
+    ///
+    /// Supports:
+    /// - `*` matches any object entry (e.g., `work.*` matches `work.*`)
+    /// - `[]` matches any array item (e.g., `keywords[]` matches `keywords.[]`)
+    ///
+    /// Example: pattern `work.*.highlights` matches path `work.*.highlights`
     private func pathMatchesPattern(path: String, pattern: String) -> Bool {
         let pathComponents = path.split(separator: ".").map(String.init)
         let patternComponents = pattern.split(separator: ".").map(String.init)
@@ -929,7 +1001,10 @@ final class ExperienceDefaultsToTree {
         guard pathComponents.count == patternComponents.count else { return false }
 
         for (pathPart, patternPart) in zip(pathComponents, patternComponents) {
-            if patternPart == "*" { continue }
+            // * matches object entries (which will be * in the path)
+            if patternPart == "*" && pathPart == "*" { continue }
+            // [] matches array items (which will be [] in the path)
+            if patternPart == "[]" && pathPart == "[]" { continue }
             if pathPart != patternPart { return false }
         }
         return true
