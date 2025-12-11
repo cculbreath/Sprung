@@ -86,7 +86,7 @@ struct ContentViewLaunch: View {
             do {
                 try SwiftDataBackupManager.destroyCurrentStore()
                 await MainActor.run {
-                    restoreStatus = .success("Data store removed. Quit and relaunch Sprung to start fresh.")
+                    restoreStatus = .success("Data store will be removed on next launch. Quit and relaunch Sprung to start fresh.")
                 }
             } catch {
                 await MainActor.run {

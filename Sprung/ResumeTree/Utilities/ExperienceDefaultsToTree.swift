@@ -1008,11 +1008,16 @@ final class ExperienceDefaultsToTree {
     /// Supports:
     /// - `*` matches any object entry (e.g., `work.*` matches `work.*`)
     /// - `[]` matches any array item (e.g., `keywords[]` matches `keywords.[]`)
+    /// - `field[]` is normalized to `field.[]` for matching
     ///
     /// Example: pattern `work.*.highlights` matches path `work.*.highlights`
+    /// Example: pattern `custom.jobTitles[]` matches path `custom.jobTitles.[]`
     private func pathMatchesPattern(path: String, pattern: String) -> Bool {
         let pathComponents = path.split(separator: ".").map(String.init)
-        let patternComponents = pattern.split(separator: ".").map(String.init)
+
+        // Normalize pattern: expand "field[]" to "field.[]"
+        let normalizedPattern = pattern.replacingOccurrences(of: "[]", with: ".[]")
+        let patternComponents = normalizedPattern.split(separator: ".").map(String.init)
 
         guard pathComponents.count == patternComponents.count else { return false }
 

@@ -37,6 +37,9 @@ struct TemplateManifestOverrides: Codable {
     var sectionVisibilityLabels: [String: String]?
     var keysInEditor: [String]?
     var editorLabels: [String: String]?
+    var defaultAIFields: [String]?
+    var listContainers: [String]?
+    var reviewPhases: [String: [TemplateManifest.ReviewPhaseConfig]]?
     enum CodingKeys: String, CodingKey {
         case sectionOrder
         case styling
@@ -46,6 +49,9 @@ struct TemplateManifestOverrides: Codable {
         case sectionVisibilityLabels = "section-visibility-labels"
         case keysInEditor = "keys-in-editor"
         case editorLabels
+        case defaultAIFields
+        case listContainers
+        case reviewPhases
     }
 }
 enum TemplateManifestDefaults {
@@ -136,12 +142,14 @@ enum TemplateManifestDefaults {
             Logger.debug("TemplateManifestDefaults: no overrides for slug \(template.slug), using base manifest")
             return base
         }
-        if let overrides = try? JSONDecoder().decode(TemplateManifestOverrides.self, from: data) {
-            Logger.debug("TemplateManifestDefaults: applying overrides for slug \(template.slug)")
+        do {
+            let overrides = try JSONDecoder().decode(TemplateManifestOverrides.self, from: data)
+            Logger.info("🎯 [TemplateManifestDefaults] Decoded overrides for '\(template.slug)': defaultAIFields=\(overrides.defaultAIFields?.description ?? "nil"), listContainers=\(overrides.listContainers?.description ?? "nil"), reviewPhases=\(overrides.reviewPhases?.keys.joined(separator: ",") ?? "nil")")
             return apply(overrides: overrides, to: base, slug: template.slug)
+        } catch {
+            Logger.warning("TemplateManifestDefaults: Unable to decode manifest overrides for slug \(template.slug): \(error); falling back to defaults.")
+            return base
         }
-        Logger.warning("TemplateManifestDefaults: Unable to decode manifest overrides for slug \(template.slug); falling back to defaults.")
-        return base
     }
     static func apply(overrides: TemplateManifestOverrides, to base: TemplateManifest, slug: String) -> TemplateManifest {
         var sections = base.sections
@@ -165,6 +173,12 @@ enum TemplateManifestDefaults {
         let sectionVisibilityLabels = overrides.sectionVisibilityLabels ?? base.sectionVisibilityLabels
         let keysInEditor = overrides.keysInEditor ?? base.keysInEditor
         let editorLabels = overrides.editorLabels ?? base.editorLabels
+        let defaultAIFields = overrides.defaultAIFields ?? base.defaultAIFields
+        let listContainers = overrides.listContainers ?? base.listContainers
+        let reviewPhases = overrides.reviewPhases ?? base.reviewPhases
+
+        Logger.debug("🎯 [TemplateManifestDefaults.apply] Building manifest with defaultAIFields=\(defaultAIFields?.description ?? "nil")")
+
         return TemplateManifest(
             slug: slug,
             schemaVersion: TemplateManifest.currentSchemaVersion,
@@ -173,7 +187,10 @@ enum TemplateManifestDefaults {
             editorLabels: editorLabels,
             keysInEditor: keysInEditor,
             sectionVisibilityDefaults: sectionVisibilityDefaults,
-            sectionVisibilityLabels: sectionVisibilityLabels
+            sectionVisibilityLabels: sectionVisibilityLabels,
+            defaultAIFields: defaultAIFields,
+            listContainers: listContainers,
+            reviewPhases: reviewPhases
         )
     }
     // MARK: - Base Manifest Construction

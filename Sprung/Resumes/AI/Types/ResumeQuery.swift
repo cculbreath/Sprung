@@ -445,6 +445,7 @@ import SwiftUI
             var json = """
             {
               "id": "\(node.id)",
+              "path": "\(node.path)",
               "displayName": "\(node.displayName)",
               "value": "\(node.value)"
             """
@@ -488,6 +489,11 @@ import SwiftUI
         ITEM TYPE:
         \(itemTypeDescription)
 
+        PATH CONTEXT:
+        The "path" field shows the hierarchical location of each item (e.g., "Acme Corp.highlights" means
+        these are highlights for the job at Acme Corp). Use this context to ensure changes are relevant
+        to that specific parent item.
+
         TASK:
         Review each item and propose changes to better align with the target job.
         For each item, decide whether to:
@@ -506,6 +512,11 @@ import SwiftUI
         3. Modifications should align terminology with job posting language
         4. Only add content genuinely supported by the background documents
         5. Consider ATS (Applicant Tracking System) keyword matching
+        6. Ensure consistent formatting within lists:
+           - Use consistent capitalization (e.g., all sentence case or all title case)
+           - Use consistent punctuation (e.g., all items end with periods, or none do)
+           - Bullet points/highlights typically start with action verbs and no trailing periods
+           - Skills/keywords typically use title case without punctuation
 
         BACKGROUND DOCUMENTS:
         \(backgroundDocs)

@@ -19,6 +19,9 @@ struct SprungApp: App {
             "onboardingInterviewDefaultModelId": "gpt-5"
         ])
 
+        // Perform any pending store reset from previous session (must happen before opening)
+        SwiftDataBackupManager.performPendingResetIfNeeded()
+
         // Preflight backup before opening/migrating the store
         SwiftDataBackupManager.performPreflightBackupIfNeeded()
         var resolvedContainer: ModelContainer
@@ -233,40 +236,29 @@ struct SprungApp: App {
 }
 private extension SprungApp {
     static func makeDirectModelContainer(configuration: ModelConfiguration? = nil) throws -> ModelContainer {
+        let config: ModelConfiguration
         if let configuration {
-            return try ModelContainer(
-                for:
-                    JobApp.self,
-                    Resume.self,
-                    ResRef.self,
-                    TreeNode.self,
-                    FontSizeNode.self,
-                    CoverLetter.self,
-                    MessageParams.self,
-                    CoverRef.self,
-                    ApplicantProfile.self,
-                    ConversationContext.self,
-                    ConversationMessage.self,
-                    EnabledLLM.self,
-                configurations: configuration
-            )
+            config = configuration
         } else {
-            return try ModelContainer(
-                for:
-                    JobApp.self,
-                    Resume.self,
-                    ResRef.self,
-                    TreeNode.self,
-                    FontSizeNode.self,
-                    CoverLetter.self,
-                    MessageParams.self,
-                    CoverRef.self,
-                    ApplicantProfile.self,
-                    ConversationContext.self,
-                    ConversationMessage.self,
-                    EnabledLLM.self
-            )
+            // Use same store location as createWithMigration for consistency
+            config = ModelConfiguration(url: ModelContainer.storeURL, allowsSave: true)
         }
+        return try ModelContainer(
+            for:
+                JobApp.self,
+                Resume.self,
+                ResRef.self,
+                TreeNode.self,
+                FontSizeNode.self,
+                CoverLetter.self,
+                MessageParams.self,
+                CoverRef.self,
+                ApplicantProfile.self,
+                ConversationContext.self,
+                ConversationMessage.self,
+                EnabledLLM.self,
+            configurations: config
+        )
     }
     static func migrationFailureMessage(from error: Error) -> String {
         """

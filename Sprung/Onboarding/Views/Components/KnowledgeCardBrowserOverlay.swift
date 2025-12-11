@@ -164,6 +164,14 @@ struct KnowledgeCardBrowserOverlay: View {
 
             Spacer()
 
+            // Import button
+            Button(action: importCardsFromJSON) {
+                Label("Import", systemImage: "square.and.arrow.down")
+                    .font(.subheadline.weight(.medium))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.regular)
+
             // Export button
             Button(action: exportCardsAsJSON) {
                 Label("Export", systemImage: "square.and.arrow.up")
@@ -499,6 +507,28 @@ struct KnowledgeCardBrowserOverlay: View {
                     Logger.info("Exported \(cards.count) knowledge cards to \(url.path)", category: .general)
                 } catch {
                     Logger.error("Failed to export knowledge cards: \(error)", category: .general)
+                }
+            }
+        }
+    }
+
+    private func importCardsFromJSON() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.title = "Import Knowledge Cards"
+        panel.message = "Select a JSON file containing knowledge cards to import."
+
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+
+            Task { @MainActor in
+                do {
+                    let count = try resRefStore.importFromJSON(url: url)
+                    Logger.info("Imported \(count) knowledge cards from \(url.path)", category: .general)
+                } catch {
+                    Logger.error("Failed to import knowledge cards: \(error)", category: .general)
                 }
             }
         }

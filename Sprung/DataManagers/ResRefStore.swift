@@ -44,5 +44,57 @@ final class ResRefStore: SwiftDataStore {
         saveContext()
         Logger.info("🗑️ Deleted \(onboardingRefs.count) onboarding ResRefs", category: .ai)
     }
+
+    /// Imports ResRefs (knowledge cards) from a JSON file URL
+    /// - Parameter url: File URL pointing to a JSON array of ResRef objects
+    /// - Returns: Number of cards imported
+    @discardableResult
+    func importFromJSON(url: URL) throws -> Int {
+        let data = try Data(contentsOf: url)
+        let decoder = JSONDecoder()
+        let importedCards = try decoder.decode([ResRef].self, from: data)
+
+        // Check for existing IDs to avoid duplicates
+        let existingIDs = Set(resRefs.map { $0.id })
+        var importedCount = 0
+
+        for card in importedCards {
+            if existingIDs.contains(card.id) {
+                Logger.info("⏭️ Skipping duplicate ResRef: \(card.name)", category: .data)
+                continue
+            }
+            modelContext.insert(card)
+            importedCount += 1
+        }
+
+        saveContext()
+        Logger.info("📥 Imported \(importedCount) ResRefs from JSON", category: .data)
+        return importedCount
+    }
+
+    /// Imports ResRefs from JSON data directly
+    /// - Parameter data: JSON data containing an array of ResRef objects
+    /// - Returns: Number of cards imported
+    @discardableResult
+    func importFromJSON(data: Data) throws -> Int {
+        let decoder = JSONDecoder()
+        let importedCards = try decoder.decode([ResRef].self, from: data)
+
+        let existingIDs = Set(resRefs.map { $0.id })
+        var importedCount = 0
+
+        for card in importedCards {
+            if existingIDs.contains(card.id) {
+                Logger.info("⏭️ Skipping duplicate ResRef: \(card.name)", category: .data)
+                continue
+            }
+            modelContext.insert(card)
+            importedCount += 1
+        }
+
+        saveContext()
+        Logger.info("📥 Imported \(importedCount) ResRefs from JSON data", category: .data)
+        return importedCount
+    }
     // `saveContext()` now from `SwiftDataStore`.
 }

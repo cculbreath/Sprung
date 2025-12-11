@@ -112,8 +112,9 @@ struct LinkedInLoginView: NSViewRepresentable {
                 window.contentView = popupWebView
                 window.center()
                 window.makeKeyAndOrderFront(nil)
-                // Store weak reference to avoid retain cycles
-                objc_setAssociatedObject(popupWebView, "popupWindow", window, .OBJC_ASSOCIATION_ASSIGN)
+                // Store strong reference to keep window alive while webview exists
+                // Using RETAIN to prevent use-after-free during window animations
+                objc_setAssociatedObject(popupWebView, "popupWindow", window, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
                 return popupWebView
             }
             // For other popups, create a standard webview
@@ -129,10 +130,13 @@ struct LinkedInLoginView: NSViewRepresentable {
                window.isVisible {
                 DispatchQueue.main.async {
                     window.close()
+                    // Clean up association AFTER close to prevent use-after-free during animations
+                    objc_setAssociatedObject(webView, "popupWindow", nil, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
                 }
+            } else {
+                // No visible window, safe to clean up immediately
+                objc_setAssociatedObject(webView, "popupWindow", nil, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
             }
-            // Clean up the association
-            objc_setAssociatedObject(webView, "popupWindow", nil, .OBJC_ASSOCIATION_ASSIGN)
         }
         private func checkForOAuthCompletion(_ webView: WKWebView, window: NSWindow) {
             // Check if window is still valid before proceeding
@@ -153,8 +157,10 @@ struct LinkedInLoginView: NSViewRepresentable {
                             if window.isVisible {
                                 window.close()
                             }
-                            // Clean up association
-                            objc_setAssociatedObject(webView, "popupWindow", nil, .OBJC_ASSOCIATION_ASSIGN)
+                            // Clean up association AFTER close with delay to allow animations to complete
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                objc_setAssociatedObject(webView, "popupWindow", nil, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+                            }
                             // Check login status in main window after a brief delay
                             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                                 if let mainWebView = self.parent.sessionManager.getAuthenticatedWebView() {

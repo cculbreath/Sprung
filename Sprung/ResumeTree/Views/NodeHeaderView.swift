@@ -51,7 +51,7 @@ struct NodeHeaderView: View {
             // Parent sparkle button - always rendered to prevent layout shifts
             // Opacity controlled by hover/selection state
             if node.parent != nil {
-                let showSparkle = isHoveringHeader || node.status == .aiToReplace || node.aiStatusChildren > 0
+                let showSparkle = isHoveringHeader || isHoveringSparkle || node.status == .aiToReplace || node.aiStatusChildren > 0
                 SparkleButton(
                     node: nodeBinding,
                     isHovering: $isHoveringSparkle,
@@ -61,6 +61,7 @@ struct NodeHeaderView: View {
                     }
                 )
                 .opacity(showSparkle ? 1.0 : 0.0)
+                .allowsHitTesting(true)  // Ensure button is always clickable even when faded
             }
 
             // Show controls when node is expanded and has children
@@ -119,6 +120,7 @@ struct NodeHeaderView: View {
         .padding(.horizontal, 10)
         .padding(.leading, CGFloat(max(0, node.depth - depthOffset) * 20))
         .padding(.vertical, 5)
+        .contentShape(Rectangle())  // Make entire row respond to hover/tap
         .onTapGesture {
             vm.toggleExpansion(for: node)
         }

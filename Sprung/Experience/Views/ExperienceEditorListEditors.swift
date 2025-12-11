@@ -7,16 +7,16 @@ struct SingleLineHighlightListEditor: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Highlights")
                 .font(.headline)
-            ForEach($items) { item in
-                let entryID = item.wrappedValue.id
+            ForEach(items) { item in
+                let itemID = item.id
                 ExperienceCard(onDelete: {
-                    if let index = items.firstIndex(where: { $0.id == entryID }) {
-                        items.remove(at: index)
-                        onChange()
-                    }
+                    items.removeAll { $0.id == itemID }
+                    onChange()
                 }, content: {
                     ExperienceFieldRow {
-                        ExperienceTextField("Highlight", text: item.text, onChange: onChange)
+                        if let index = items.firstIndex(where: { $0.id == itemID }) {
+                            ExperienceTextField("Highlight", text: $items[index].text, onChange: onChange)
+                        }
                     }
                 })
             }
@@ -35,15 +35,15 @@ struct VolunteerHighlightListEditor: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Highlights")
                 .font(.headline)
-            ForEach($items) { item in
-                let entryID = item.wrappedValue.id
+            ForEach(items) { item in
+                let itemID = item.id
                 ExperienceCard(onDelete: {
-                    if let index = items.firstIndex(where: { $0.id == entryID }) {
-                        items.remove(at: index)
-                        onChange()
-                    }
+                    items.removeAll { $0.id == itemID }
+                    onChange()
                 }, content: {
-                    ExperienceTextEditor("Highlight", text: item.text, onChange: onChange)
+                    if let index = items.firstIndex(where: { $0.id == itemID }) {
+                        ExperienceTextEditor("Highlight", text: $items[index].text, onChange: onChange)
+                    }
                 })
             }
             Button("Add Highlight") {
@@ -61,15 +61,15 @@ struct ProjectHighlightListEditor: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Highlights")
                 .font(.headline)
-            ForEach($items) { item in
-                let entryID = item.wrappedValue.id
+            ForEach(items) { item in
+                let itemID = item.id
                 ExperienceCard(onDelete: {
-                    if let index = items.firstIndex(where: { $0.id == entryID }) {
-                        items.remove(at: index)
-                        onChange()
-                    }
+                    items.removeAll { $0.id == itemID }
+                    onChange()
                 }, content: {
-                    ExperienceTextEditor("Highlight", text: item.text, onChange: onChange)
+                    if let index = items.firstIndex(where: { $0.id == itemID }) {
+                        ExperienceTextEditor("Highlight", text: $items[index].text, onChange: onChange)
+                    }
                 })
             }
             Button("Add Highlight") {
@@ -87,15 +87,15 @@ struct CourseListEditor: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Courses")
                 .font(.headline)
-            ForEach($items) { item in
-                let entryID = item.wrappedValue.id
+            ForEach(items) { item in
+                let itemID = item.id
                 ExperienceCard(onDelete: {
-                    if let index = items.firstIndex(where: { $0.id == entryID }) {
-                        items.remove(at: index)
-                        onChange()
-                    }
+                    items.removeAll { $0.id == itemID }
+                    onChange()
                 }, content: {
-                    ExperienceTextField("Course", text: item.name, onChange: onChange)
+                    if let index = items.firstIndex(where: { $0.id == itemID }) {
+                        ExperienceTextField("Course", text: $items[index].name, onChange: onChange)
+                    }
                 })
             }
             Button("Add Course") {
@@ -289,15 +289,15 @@ struct RoleListEditor: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.headline)
-            ForEach($items) { item in
-                let entryID = item.wrappedValue.id
+            ForEach(items) { item in
+                let itemID = item.id
                 ExperienceCard(onDelete: {
-                    if let index = items.firstIndex(where: { $0.id == entryID }) {
-                        items.remove(at: index)
-                        onChange()
-                    }
+                    items.removeAll { $0.id == itemID }
+                    onChange()
                 }, content: {
-                    ExperienceTextField("Role", text: item.role, onChange: onChange)
+                    if let index = items.firstIndex(where: { $0.id == itemID }) {
+                        ExperienceTextField("Role", text: $items[index].role, onChange: onChange)
+                    }
                 })
             }
             Button("Add Role") {

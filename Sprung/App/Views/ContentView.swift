@@ -193,6 +193,9 @@ struct ContentView: View {
     // MARK: - Helper Methods
     private func shouldShowSetupWizard() -> Bool {
         guard !hasCompletedSetupWizard else { return false }
+        // Don't show wizard in read-only mode - the underlying content is disabled
+        // which would make all wizard buttons non-interactive
+        guard !appEnvironment.launchState.isReadOnly else { return false }
         let hasOpenRouterKey = !(APIKeyManager.get(.openRouter)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
         let hasOpenAIKey = !(APIKeyManager.get(.openAI)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
         let hasGeminiKey = !(APIKeyManager.get(.gemini)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
