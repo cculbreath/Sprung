@@ -693,28 +693,45 @@ class ResumeReviseViewModel {
     /// Find sections with review phases defined that have nodes selected for AI revision.
     /// Returns array of (section, phases) tuples for sections that should use phased review.
     func sectionsWithActiveReviewPhases(for resume: Resume) -> [(section: String, phases: [TemplateManifest.ReviewPhaseConfig])] {
+        // Diagnostic logging
+        Logger.debug("🔍 [sectionsWithActiveReviewPhases] Starting check...")
+        Logger.debug("🔍 [sectionsWithActiveReviewPhases] template: \(resume.template != nil ? "exists" : "nil")")
+        Logger.debug("🔍 [sectionsWithActiveReviewPhases] manifestData: \(resume.template?.manifestData != nil ? "\(resume.template!.manifestData!.count) bytes" : "nil")")
+        Logger.debug("🔍 [sectionsWithActiveReviewPhases] manifest: \(resume.template?.manifest != nil ? "decoded" : "nil")")
+        Logger.debug("🔍 [sectionsWithActiveReviewPhases] rootNode: \(resume.rootNode != nil ? "exists" : "nil")")
+
         guard let manifest = resume.template?.manifest,
               let rootNode = resume.rootNode else {
+            Logger.warning("⚠️ [sectionsWithActiveReviewPhases] Bailing - manifest or rootNode nil")
             return []
         }
+
+        Logger.debug("🔍 [sectionsWithActiveReviewPhases] reviewPhases: \(manifest.reviewPhases != nil ? "\(manifest.reviewPhases!.keys.joined(separator: ", "))" : "nil")")
 
         var result: [(section: String, phases: [TemplateManifest.ReviewPhaseConfig])] = []
 
         // Check all sections that have reviewPhases defined
         if let reviewPhases = manifest.reviewPhases {
             for (section, phases) in reviewPhases {
+                Logger.debug("🔍 [sectionsWithActiveReviewPhases] Checking section '\(section)' with \(phases.count) phases")
                 // Find the section node and check if it has AI-selected nodes
                 if let sectionNode = rootNode.children?.first(where: { $0.name.lowercased() == section.lowercased() }) {
                     let hasSelected = sectionNode.status == .aiToReplace || sectionNode.aiStatusChildren > 0
+                    Logger.debug("🔍 [sectionsWithActiveReviewPhases] Section '\(section)' found - status=\(sectionNode.status), aiStatusChildren=\(sectionNode.aiStatusChildren), hasSelected=\(hasSelected)")
                     if hasSelected && !phases.isEmpty {
                         let sortedPhases = phases.sorted { $0.phase < $1.phase }
                         result.append((section: section, phases: sortedPhases))
-                        Logger.debug("📋 Section '\(section)' has \(sortedPhases.count) review phases configured")
+                        Logger.info("📋 Section '\(section)' has \(sortedPhases.count) review phases configured - USING PHASED REVIEW")
                     }
+                } else {
+                    Logger.debug("🔍 [sectionsWithActiveReviewPhases] Section '\(section)' NOT found in rootNode.children")
                 }
             }
+        } else {
+            Logger.debug("🔍 [sectionsWithActiveReviewPhases] manifest.reviewPhases is nil")
         }
 
+        Logger.debug("🔍 [sectionsWithActiveReviewPhases] Returning \(result.count) sections with active phases")
         return result
     }
 
