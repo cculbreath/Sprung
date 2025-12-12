@@ -91,6 +91,50 @@ enum LeafStatus: String, Codable, Hashable {
     /// Only relevant when groupSelectionSourceId is set.
     var groupSelectionModeRaw: String?
 
+    // MARK: - Per-Attribute Review Mode (Collection Nodes)
+
+    /// Attributes in "Together" mode - bundled into 1 revnode (pattern: section.*.attr)
+    /// Stored as JSON-encoded array on collection nodes (e.g., skills, work)
+    @Attribute(.externalStorage)
+    private var bundledAttributesData: Data?
+
+    var bundledAttributes: [String]? {
+        get {
+            guard let data = bundledAttributesData else { return nil }
+            return try? JSONDecoder().decode([String].self, from: data)
+        }
+        set {
+            bundledAttributesData = newValue.flatMap { try? JSONEncoder().encode($0) }
+        }
+    }
+
+    /// Attributes in "Separately" mode - one revnode per entry (pattern: section[].attr)
+    /// Stored as JSON-encoded array on collection nodes
+    @Attribute(.externalStorage)
+    private var enumeratedAttributesData: Data?
+
+    var enumeratedAttributes: [String]? {
+        get {
+            guard let data = enumeratedAttributesData else { return nil }
+            return try? JSONDecoder().decode([String].self, from: data)
+        }
+        set {
+            enumeratedAttributesData = newValue.flatMap { try? JSONEncoder().encode($0) }
+        }
+    }
+
+    /// Returns true if this collection node has any attributes set for AI review
+    var hasAttributeReviewModes: Bool {
+        let hasBundled = !(bundledAttributes?.isEmpty ?? true)
+        let hasEnumerated = !(enumeratedAttributes?.isEmpty ?? true)
+        return hasBundled || hasEnumerated
+    }
+
+    /// Returns true if any attribute is in "Separately" mode (entries can be toggled)
+    var hasEnumeratedAttributes: Bool {
+        !(enumeratedAttributes?.isEmpty ?? true)
+    }
+
     /// Returns true if this node was selected via a parent's attribute picker
     /// (group-inherited selection, shown in different color, can only toggle as a group)
     var isGroupInheritedSelection: Bool {

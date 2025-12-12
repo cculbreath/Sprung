@@ -100,69 +100,51 @@ struct NodeGroupPhasePanelPopover: View {
         Logger.debug("📋 Saved phase assignment: \(groupId) → Phase \(phase)")
     }
 
-    /// Load node groups from the resume tree based on actual AI-enabled status.
-    /// Only shows collection-type nodes (arrays/objects with children).
-    /// Scalar nodes are fixed to Phase 2 and don't appear in this panel.
+    /// Load node groups from the resume tree based on configured AI attributes.
+    /// Uses the new `bundledAttributes` and `enumeratedAttributes` properties on collection nodes.
     private func loadNodeGroups() {
         guard let rootNode = resume.rootNode else { return }
 
         var groups: [NodeGroup] = []
-        var seenGroupKeys = Set<String>()  // Dedupe by section+attribute
-
-        // Get phase assignments (defaults applied at tree creation from manifest)
         let savedAssignments = resume.phaseAssignments
 
-        // Traverse sections to find AI-enabled collection attributes
+        // Traverse sections to find collections with AI attributes configured
         for sectionNode in rootNode.orderedChildren {
             let sectionName = sectionNode.name.isEmpty ? sectionNode.value : sectionNode.name
             guard !sectionName.isEmpty else { continue }
 
-            let entries = sectionNode.orderedChildren
-            guard !entries.isEmpty else { continue }
-
-            // Find collection-type attributes that are AI-enabled
-            // (Only show attributes with children - scalars are fixed to Phase 2)
-            var collectionAttributes: Set<String> = []
-
-            for entry in entries {
-                for attr in entry.orderedChildren {
-                    let attrName = attr.name.isEmpty ? attr.value : attr.name
-                    guard !attrName.isEmpty else { continue }
-
-                    // Only include if this is a collection (has children)
-                    let isCollection = !attr.orderedChildren.isEmpty
-
-                    // Check if this attribute or its children are AI-enabled
-                    let isAttrEnabled = attr.status == .aiToReplace
-                    let hasEnabledChildren = attr.orderedChildren.contains { $0.status == .aiToReplace }
-
-                    // Only add collection-type attributes (scalars are fixed to Phase 2)
-                    if isCollection && (isAttrEnabled || hasEnabledChildren) {
-                        collectionAttributes.insert(attrName)
-                    }
+            // Check for bundled attributes (Together mode)
+            if let bundled = sectionNode.bundledAttributes {
+                for attrName in bundled {
+                    let groupKey = "\(sectionName)-\(attrName)"
+                    let phase = savedAssignments[groupKey] ?? 2
+                    groups.append(NodeGroup(
+                        id: groupKey,
+                        sectionName: sectionName,
+                        attributeName: attrName,
+                        phase: phase
+                    ))
                 }
             }
 
-            // Create groups for each AI-enabled collection attribute
-            for attrName in collectionAttributes {
-                let groupKey = "\(sectionName)-\(attrName)"
-                guard !seenGroupKeys.contains(groupKey) else { continue }
-                seenGroupKeys.insert(groupKey)
-
-                // Phase assignment from resume (defaults applied at tree creation)
-                let phase = savedAssignments[groupKey] ?? 2
-
-                let group = NodeGroup(
-                    id: groupKey,
-                    sectionName: sectionName,
-                    attributeName: attrName,
-                    phase: phase
-                )
-                groups.append(group)
+            // Check for enumerated attributes (Separately mode)
+            if let enumerated = sectionNode.enumeratedAttributes {
+                for attrName in enumerated {
+                    let groupKey = "\(sectionName)-\(attrName)"
+                    // Skip if already added from bundled (shouldn't happen but safety check)
+                    guard !groups.contains(where: { $0.id == groupKey }) else { continue }
+                    let phase = savedAssignments[groupKey] ?? 2
+                    groups.append(NodeGroup(
+                        id: groupKey,
+                        sectionName: sectionName,
+                        attributeName: attrName,
+                        phase: phase
+                    ))
+                }
             }
         }
 
-        // Sort groups by section name, then attribute
+        // Sort by section, then attribute
         nodeGroups = groups.sorted { ($0.sectionName, $0.attributeName) < ($1.sectionName, $1.attributeName) }
     }
 }

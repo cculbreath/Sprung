@@ -903,31 +903,27 @@ final class ExperienceDefaultsToTree {
     ///
     /// # Path Syntax
     ///
-    /// The path syntax distinguishes between objects (entries with fields) and arrays (simple values):
+    /// The path syntax distinguishes between enumerate mode and bundle mode:
     ///
-    /// - `*` = enumerate objects/entries at this level (e.g., job objects, skill categories)
-    /// - `[]` = iterate array values (simple leaf items)
+    /// - `[]` = enumerate mode - each entry reviewed separately (N rev nodes)
+    /// - `*` = bundle mode - all entries reviewed together (1 rev node)
     /// - Plain names = schema field names (e.g., `highlights`, `name`, `keywords`)
     ///
     /// ## Examples
     ///
-    /// | Pattern | Meaning |
-    /// |---------|---------|
-    /// | `work.*` | Each job object |
-    /// | `work.*.highlights` | The highlights container for each job |
-    /// | `work.*.highlights[]` | Each individual highlight bullet |
-    /// | `skills.*` | Each skill category object |
-    /// | `skills.*.name` | The name field of each skill category |
-    /// | `skills.*.keywords` | Keywords container for each category |
-    /// | `skills.*.keywords[]` | Each individual keyword |
-    /// | `custom.jobTitles` | Job titles container (all values bundled) |
-    /// | `custom.jobTitles[]` | Each job title separately |
+    /// | Pattern | Mode | Meaning |
+    /// |---------|------|---------|
+    /// | `work[].highlights` | enumerate | Each job's highlights reviewed separately |
+    /// | `work.*.highlights` | bundle | All jobs' highlights bundled together |
+    /// | `skills[].keywords` | enumerate | Each skill's keywords reviewed separately |
+    /// | `skills.*.name` | bundle | All skill names bundled together |
+    /// | `custom.jobTitles[]` | enumerate | Each job title reviewed separately |
     ///
     /// ## Path Building Rules
     ///
     /// When traversing the tree, paths are built as follows:
     /// - Section containers use their name: `work`, `skills`, `custom`
-    /// - Object entries (display names like "Acme Corp") use `*`
+    /// - Object entries (display names like "Acme Corp") use `[]`
     /// - Field nodes use their schema name: `highlights`, `keywords`, `name`
     /// - Array leaf items use `[]`
     ///
@@ -953,8 +949,9 @@ final class ExperienceDefaultsToTree {
 
             if isObj {
                 // Object entry (e.g., job "Acme Corp", skill category "Programming")
-                childPath.append("*")
-                Logger.verbose("🎯 [applyDefaultAIFields] Object entry '\(child.name)' -> path component '*'")
+                // Use [] for enumerate mode (each entry reviewed separately)
+                childPath.append("[]")
+                Logger.verbose("🎯 [applyDefaultAIFields] Object entry '\(child.name)' -> path component '[]'")
             } else if isArr {
                 // Array leaf item (e.g., individual keyword, highlight bullet)
                 childPath.append("[]")
@@ -1006,12 +1003,12 @@ final class ExperienceDefaultsToTree {
     /// Match path against pattern.
     ///
     /// Supports:
-    /// - `*` matches any object entry (e.g., `work.*` matches `work.*`)
-    /// - `[]` matches any array item (e.g., `keywords[]` matches `keywords.[]`)
+    /// - `[]` matches entries in enumerate mode (each entry separately)
+    /// - `*` matches entries in bundle mode (all entries together)
     /// - `field[]` is normalized to `field.[]` for matching
     ///
-    /// Example: pattern `work.*.highlights` matches path `work.*.highlights`
-    /// Example: pattern `custom.jobTitles[]` matches path `custom.jobTitles.[]`
+    /// Example: pattern `work[].highlights` matches path `work.[].highlights`
+    /// Example: pattern `skills.*.name` matches path `skills.*.name`
     private func pathMatchesPattern(path: String, pattern: String) -> Bool {
         let pathComponents = path.split(separator: ".").map(String.init)
 
@@ -1022,10 +1019,10 @@ final class ExperienceDefaultsToTree {
         guard pathComponents.count == patternComponents.count else { return false }
 
         for (pathPart, patternPart) in zip(pathComponents, patternComponents) {
-            // * matches object entries (which will be * in the path)
-            if patternPart == "*" && pathPart == "*" { continue }
-            // [] matches array items (which will be [] in the path)
+            // [] matches enumerate entries
             if patternPart == "[]" && pathPart == "[]" { continue }
+            // * matches bundle entries
+            if patternPart == "*" && pathPart == "*" { continue }
             if pathPart != patternPart { return false }
         }
         return true

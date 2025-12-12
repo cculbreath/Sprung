@@ -2,109 +2,99 @@
 //  AttributePickerView.swift
 //  Sprung
 //
-//  Popup for selecting which attributes to include when toggling a collection node.
-//  Shows available attributes with bundle/enumerate mode selection.
+//  Popup for selecting AI review mode per attribute on a collection node.
 //
 //  Path pattern semantics:
-//  - `*` (bundle) = combine all matches into ONE revnode for holistic review
-//  - `[]` (enumerate) = one revnode per item for individual review
+//  - `*` (together/bundle) = combine all matches into ONE revnode for holistic review
+//  - `[]` (separately/enumerate) = one revnode per entry for individual review
+//
+//  UI hierarchy:
+//  1. Collection level: set mode per attribute (Off/Together/Separately)
+//  2. Entry level: filter which entries to include (for Separately mode) - shown conditionally
+//  3. Attribute level: filter which children within that attribute
 //
 
 import SwiftUI
 import SwiftData
 
-/// Grouping mode for attribute selection
-enum AttributeGroupingMode: String, CaseIterable {
-    case bundle = "*"       // Combine all into 1 revnode
-    case enumerate = "[]"   // One revnode per item
+/// Review mode for an attribute within a collection
+enum AttributeReviewMode: String, CaseIterable, Codable {
+    case off         // Not AI-reviewed
+    case together    // Bundle: 1 revnode with all entries' values (pattern: section.*.attr)
+    case separately  // Enumerate: N revnodes, one per entry (pattern: section[].attr)
 
     var displayName: String {
         switch self {
-        case .bundle: return "Bundle"
-        case .enumerate: return "Per-item"
+        case .off: return "Off"
+        case .together: return "Together"
+        case .separately: return "Separately"
         }
     }
 
-    var description: String {
+    var pathSymbol: String? {
         switch self {
-        case .bundle: return "Review all together"
-        case .enumerate: return "Review each separately"
+        case .off: return nil
+        case .together: return "*"
+        case .separately: return "[]"
         }
     }
 }
 
-/// Selection info for an attribute including its grouping mode
-struct AttributeSelection: Equatable {
-    let name: String
-    var mode: AttributeGroupingMode
+/// Selection result from attribute picker - maps attribute names to their review modes
+struct AttributePickerResult: Equatable {
+    let attributeModes: [String: AttributeReviewMode]
 }
 
 struct AttributePickerView: View {
     let collectionNode: TreeNode
-    let onApply: ([AttributeSelection]) -> Void
+    let onApply: (AttributePickerResult) -> Void
     let onCancel: () -> Void
 
-    @State private var selections: [String: AttributeGroupingMode]
+    @State private var attributeModes: [String: AttributeReviewMode]
 
-    init(collectionNode: TreeNode, onApply: @escaping ([AttributeSelection]) -> Void, onCancel: @escaping () -> Void) {
+    init(collectionNode: TreeNode, onApply: @escaping (AttributePickerResult) -> Void, onCancel: @escaping () -> Void) {
         self.collectionNode = collectionNode
         self.onApply = onApply
         self.onCancel = onCancel
 
-        // Initialize with current selections from multiple sources:
-        // 1. Explicit group selections (groupSelectionSourceId)
-        // 2. AI-enabled status from defaultAIFields or manual toggles
-        var initial: [String: AttributeGroupingMode] = [:]
+        // Initialize from current state on the collection node
+        var initial: [String: AttributeReviewMode] = [:]
 
-        // First, check explicit group selections
-        for attr in collectionNode.selectedGroupAttributes {
-            initial[attr.name] = attr.mode
-        }
-
-        // Then, check for AI-enabled attributes across entries
-        for entry in collectionNode.orderedChildren {
-            for attr in entry.orderedChildren {
-                let attrName = attr.name.isEmpty ? attr.value : attr.name
-                guard !attrName.isEmpty else { continue }
-
-                // Skip if already captured via group selection
-                if initial[attrName] != nil { continue }
-
-                // Check if this attribute or its children are AI-enabled
-                let isAttrEnabled = attr.status == .aiToReplace
-                let hasEnabledChildren = attr.orderedChildren.contains { $0.status == .aiToReplace }
-
-                if isAttrEnabled || hasEnabledChildren {
-                    // Determine mode: if attr itself is enabled, it's bundle; if children are enabled, it's enumerate
-                    let mode: AttributeGroupingMode = isAttrEnabled ? .bundle : .enumerate
-                    initial[attrName] = mode
-                }
+        // Check bundled attributes (Together mode)
+        if let bundled = collectionNode.bundledAttributes {
+            for attr in bundled {
+                initial[attr] = .together
             }
         }
 
-        _selections = State(initialValue: initial)
+        // Check enumerated attributes (Separately mode)
+        if let enumerated = collectionNode.enumeratedAttributes {
+            for attr in enumerated {
+                initial[attr] = .separately
+            }
+        }
+
+        _attributeModes = State(initialValue: initial)
     }
 
-    /// Get available attributes from child nodes (assumes uniform structure)
-    private var availableAttributes: [(name: String, count: Int, hasGrandchildren: Bool, entryCount: Int)] {
+    /// Get shared attributes across all entries
+    private var sharedAttributes: [(name: String, itemCount: Int, entryCount: Int)] {
         guard let firstChild = collectionNode.orderedChildren.first else { return [] }
 
-        var attributes: [(name: String, count: Int, hasGrandchildren: Bool, entryCount: Int)] = []
+        var attributes: [(name: String, itemCount: Int, entryCount: Int)] = []
         let entryCount = collectionNode.orderedChildren.count
 
         for attr in firstChild.orderedChildren {
             let attrName = attr.name.isEmpty ? attr.value : attr.name
             guard !attrName.isEmpty else { continue }
 
+            // Count total items across all entries for this attribute
             var totalCount = 0
-            var hasGrandchildren = false
-
-            for child in collectionNode.orderedChildren {
-                if let matchingAttr = child.orderedChildren.first(where: {
+            for entry in collectionNode.orderedChildren {
+                if let matchingAttr = entry.orderedChildren.first(where: {
                     ($0.name.isEmpty ? $0.value : $0.name) == attrName
                 }) {
                     if !matchingAttr.orderedChildren.isEmpty {
-                        hasGrandchildren = true
                         totalCount += matchingAttr.orderedChildren.count
                     } else {
                         totalCount += 1
@@ -112,7 +102,7 @@ struct AttributePickerView: View {
                 }
             }
 
-            attributes.append((name: attrName, count: totalCount, hasGrandchildren: hasGrandchildren, entryCount: entryCount))
+            attributes.append((name: attrName, itemCount: totalCount, entryCount: entryCount))
         }
 
         return attributes
@@ -134,110 +124,128 @@ struct AttributePickerView: View {
         return true
     }
 
+    /// Whether any attribute is set to Separately mode
+    private var hasSeparatelyMode: Bool {
+        attributeModes.values.contains(.separately)
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Select attributes to customize:")
+        VStack(alignment: .leading, spacing: 16) {
+            // Header
+            Text("AI Review Settings")
                 .font(.headline)
                 .foregroundColor(.primary)
 
             if !hasUniformStructure {
-                Text("Children have different structures")
+                Text("Entries have different structures - some attributes may not exist in all entries")
                     .font(.caption)
                     .foregroundColor(.orange)
             }
 
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(availableAttributes, id: \.name) { attr in
-                    AttributeRow(
-                        attr: attr,
-                        isSelected: selections[attr.name] != nil,
-                        mode: selections[attr.name] ?? .enumerate,
-                        onToggle: { isSelected in
-                            if isSelected {
-                                // Default: bundle for scalars, enumerate for containers
-                                selections[attr.name] = attr.hasGrandchildren ? .enumerate : .bundle
-                            } else {
-                                selections.removeValue(forKey: attr.name)
-                            }
-                        },
-                        onModeChange: { newMode in
-                            selections[attr.name] = newMode
-                        }
+            // Per-attribute mode selection
+            VStack(alignment: .leading, spacing: 4) {
+                // Header row
+                HStack(spacing: 0) {
+                    Text("Attribute")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .frame(width: 120, alignment: .leading)
+
+                    Spacer()
+
+                    Text("Review Mode")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.bottom, 4)
+
+                Divider()
+
+                // Attribute rows
+                ForEach(sharedAttributes, id: \.name) { attr in
+                    AttributeModeRow(
+                        attrName: attr.name,
+                        itemCount: attr.itemCount,
+                        entryCount: attr.entryCount,
+                        mode: Binding(
+                            get: { attributeModes[attr.name] ?? .off },
+                            set: { attributeModes[attr.name] = $0 }
+                        )
                     )
                 }
             }
             .padding(.vertical, 4)
 
+            // Help text
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Together: All entries bundled into one review")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text("Separately: Each entry reviewed individually")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Divider()
+
+            // Buttons
             HStack {
+                Button("Clear All") {
+                    attributeModes.removeAll()
+                }
+                .buttonStyle(.link)
+                .font(.caption)
+
                 Spacer()
+
                 Button("Cancel") {
                     onCancel()
                 }
                 .keyboardShortcut(.cancelAction)
 
                 Button("Apply") {
-                    let result = selections.map { AttributeSelection(name: $0.key, mode: $0.value) }
+                    let result = AttributePickerResult(attributeModes: attributeModes)
                     onApply(result)
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(selections.isEmpty)
             }
         }
         .padding()
-        .frame(minWidth: 380)
+        .frame(minWidth: 400)
     }
 }
 
-/// Row for a single attribute with checkbox and mode picker
-private struct AttributeRow: View {
-    let attr: (name: String, count: Int, hasGrandchildren: Bool, entryCount: Int)
-    let isSelected: Bool
-    let mode: AttributeGroupingMode
-    let onToggle: (Bool) -> Void
-    let onModeChange: (AttributeGroupingMode) -> Void
+/// Row for a single attribute with tri-state mode picker
+private struct AttributeModeRow: View {
+    let attrName: String
+    let itemCount: Int
+    let entryCount: Int
+    @Binding var mode: AttributeReviewMode
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Checkbox
-            Toggle(isOn: Binding(
-                get: { isSelected },
-                set: { onToggle($0) }
-            )) {
-                Text(attr.name)
+        HStack(spacing: 8) {
+            // Attribute name and count
+            VStack(alignment: .leading, spacing: 2) {
+                Text(attrName)
                     .font(.body)
+                Text(itemCount > entryCount ? "\(itemCount) items" : "\(entryCount) values")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
-            .toggleStyle(.checkbox)
-            .frame(minWidth: 100, alignment: .leading)
-
-            // Count info
-            Group {
-                if attr.hasGrandchildren {
-                    Text("\(attr.count) items / \(attr.entryCount) entries")
-                } else {
-                    Text("\(attr.entryCount) entries")
-                }
-            }
-            .font(.caption)
-            .foregroundColor(.secondary)
-            .frame(minWidth: 100, alignment: .leading)
+            .frame(width: 120, alignment: .leading)
 
             Spacer()
 
-            // Mode picker (only show when selected)
-            if isSelected {
-                Picker("", selection: Binding(
-                    get: { mode },
-                    set: { onModeChange($0) }
-                )) {
-                    ForEach(AttributeGroupingMode.allCases, id: \.self) { m in
-                        Text(m.displayName).tag(m)
-                    }
+            // Tri-state picker
+            Picker("", selection: $mode) {
+                ForEach(AttributeReviewMode.allCases, id: \.self) { m in
+                    Text(m.displayName).tag(m)
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 120)
-                .help(mode.description)
             }
+            .pickerStyle(.segmented)
+            .frame(width: 200)
         }
+        .padding(.vertical, 4)
     }
 }
 
@@ -271,96 +279,85 @@ extension TreeNode {
         return true
     }
 
-    /// Apply group selection for specified attributes across all child entries
-    /// - Parameters:
-    ///   - selections: Attributes to select with their grouping modes
-    ///   - sourceId: ID of the collection node triggering the selection
-    func applyGroupSelection(selections: [AttributeSelection], sourceId: String) {
-        let selectionMap = Dictionary(uniqueKeysWithValues: selections.map { ($0.name, $0.mode) })
+    /// Apply attribute picker result to this collection node.
+    /// Stores per-attribute modes and updates AI state accordingly.
+    func applyPickerResult(_ result: AttributePickerResult) {
+        // Separate attributes by mode
+        var bundled: [String] = []
+        var enumerated: [String] = []
 
-        // First, clear all attributes that are NOT in the new selection
-        for child in orderedChildren {
-            for attr in child.orderedChildren {
-                let attrName = attr.name.isEmpty ? attr.value : attr.name
-                if selectionMap[attrName] == nil {
-                    // This attribute is not selected, clear it
-                    attr.status = .saved
-                    attr.groupSelectionSourceId = nil
-                    attr.groupSelectionModeRaw = nil
-                    // Also clear children if any
-                    for grandchild in attr.orderedChildren {
-                        grandchild.status = .saved
-                    }
-                }
+        for (attrName, mode) in result.attributeModes {
+            switch mode {
+            case .off:
+                break // Not included
+            case .together:
+                bundled.append(attrName)
+            case .separately:
+                enumerated.append(attrName)
             }
         }
 
-        // Then, apply the new selections
-        for child in orderedChildren {
-            for attr in child.orderedChildren {
-                let attrName = attr.name.isEmpty ? attr.value : attr.name
-                if let mode = selectionMap[attrName] {
-                    attr.groupSelectionSourceId = sourceId
-                    attr.groupSelectionModeRaw = mode.rawValue
+        // Store the attribute lists
+        bundledAttributes = bundled.isEmpty ? nil : bundled
+        enumeratedAttributes = enumerated.isEmpty ? nil : enumerated
 
-                    switch mode {
-                    case .bundle:
-                        // Bundle mode: mark the container itself for AI replacement
-                        attr.status = .aiToReplace
-                        // Clear children status (they're bundled with parent)
-                        for grandchild in attr.orderedChildren {
-                            grandchild.status = .saved
-                        }
-                    case .enumerate:
-                        // Enumerate mode: mark each child individually
-                        attr.status = .saved  // Container not marked
-                        for grandchild in attr.orderedChildren {
-                            grandchild.status = .aiToReplace
-                        }
-                    }
-                }
+        // Update AI status on collection node:
+        // If any bundled attributes, collection itself is aiEnabled
+        if !bundled.isEmpty {
+            status = .aiToReplace
+        } else {
+            status = .saved
+        }
+
+        // For enumerated attributes, entries need to be enabled separately
+        // (entry-level sparkle becomes visible when hasEnumeratedAttributes is true)
+        // Default: enable all entries when first setting up enumerated mode
+        if !enumerated.isEmpty {
+            for entry in orderedChildren {
+                entry.status = .aiToReplace
             }
         }
     }
 
-    /// Clear all group selections from this collection node (regardless of source)
-    func clearGroupSelection() {
-        for child in orderedChildren {
-            for attr in child.orderedChildren {
-                // Clear attribute status
-                attr.status = .saved
-                attr.groupSelectionSourceId = nil
-                attr.groupSelectionModeRaw = nil
-                // Also clear children
-                for grandchild in attr.orderedChildren {
-                    grandchild.status = .saved
-                }
-            }
+    /// Clear all AI state from this collection and its entries
+    func clearCollectionAIState() {
+        status = .saved
+        bundledAttributes = nil
+        enumeratedAttributes = nil
+        for entry in orderedChildren {
+            entry.status = .saved
         }
     }
 
-    /// Get currently selected attributes with their modes for this collection node
-    var selectedGroupAttributes: [AttributeSelection] {
-        var selections: [String: AttributeGroupingMode] = [:]
-        for child in orderedChildren {
-            for attr in child.orderedChildren {
-                if attr.groupSelectionSourceId == id {
-                    let attrName = attr.name.isEmpty ? attr.value : attr.name
-                    let mode = AttributeGroupingMode(rawValue: attr.groupSelectionModeRaw ?? "[]") ?? .enumerate
-                    selections[attrName] = mode
-                }
-            }
-        }
-        return selections.map { AttributeSelection(name: $0.key, mode: $0.value) }
-    }
-
-    /// Build path patterns for all group selections on this collection node
+    /// Build path patterns for this collection's AI selections.
     /// Returns patterns like "skills.*.name" (bundle) or "skills[].keywords" (enumerate)
-    func buildGroupSelectionPatterns() -> [String] {
+    func buildCollectionPatterns() -> [String] {
         let sectionName = name.isEmpty ? value : name
-        return selectedGroupAttributes.map { selection in
-            let wildcard = selection.mode.rawValue  // "*" or "[]"
-            return "\(sectionName)\(wildcard).\(selection.name)"
+        var patterns: [String] = []
+
+        // Bundle patterns: section.*.attr
+        if let bundled = bundledAttributes {
+            for attr in bundled {
+                patterns.append("\(sectionName).*.\(attr)")
+            }
         }
+
+        // Enumerate patterns: section[].attr (only for enabled entries)
+        if let enumerated = enumeratedAttributes {
+            // Only include patterns if at least one entry is enabled
+            let hasEnabledEntries = orderedChildren.contains { $0.status == .aiToReplace }
+            if hasEnabledEntries {
+                for attr in enumerated {
+                    patterns.append("\(sectionName)[].\(attr)")
+                }
+            }
+        }
+
+        return patterns
+    }
+
+    /// Get enabled entry IDs (for enumerate mode)
+    var enabledEntryIds: [String] {
+        orderedChildren.filter { $0.status == .aiToReplace }.map { $0.id }
     }
 }

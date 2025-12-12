@@ -49,31 +49,47 @@ struct NodeHeaderView: View {
             }
             Spacer()
 
-            // Parent sparkle button - always rendered to prevent layout shifts
-            // Opacity controlled by hover/selection state
+            // Sparkle button visibility logic:
+            // - Collection nodes (skills, work): always show, opens attribute picker
+            // - Entry nodes (child of collection with enumerated attrs): show when parent has "Separately" mode
+            // - Other nodes: show based on hover/selection state
             if node.parent != nil {
-                let showSparkle = isHoveringHeader || isHoveringSparkle || node.status == .aiToReplace || node.aiStatusChildren > 0 || node.isGroupInheritedSelection
+                let isEntryNode = node.parent?.isCollectionNode ?? false
+                let parentHasEnumeratedAttrs = node.parent?.hasEnumeratedAttributes ?? false
+
+                // Entry nodes only visible when parent has Separately mode attrs
+                let entrySparkleEnabled = !isEntryNode || parentHasEnumeratedAttrs
+
+                let showSparkle = entrySparkleEnabled && (
+                    isHoveringHeader || isHoveringSparkle ||
+                    node.status == .aiToReplace || node.aiStatusChildren > 0 ||
+                    node.isGroupInheritedSelection || node.hasAttributeReviewModes
+                )
+
                 SparkleButton(
                     node: nodeBinding,
                     isHovering: $isHoveringSparkle,
                     toggleNodeStatus: {
-                        // Toggle parent and propagate to all children
-                        node.toggleAISelection(propagateToChildren: true)
+                        if isEntryNode {
+                            // Entry toggle: simple enable/disable for enumerate mode
+                            node.status = node.status == .aiToReplace ? .saved : .aiToReplace
+                        } else {
+                            // Collection/other: toggle and propagate to children
+                            node.toggleAISelection(propagateToChildren: true)
+                        }
                     },
                     onShowAttributePicker: {
                         showAttributePicker = true
                     }
                 )
                 .opacity(showSparkle ? 1.0 : 0.0)
-                .allowsHitTesting(true)  // Ensure button is always clickable even when faded
+                .allowsHitTesting(entrySparkleEnabled)
                 .popover(isPresented: $showAttributePicker) {
                     AttributePickerView(
                         collectionNode: node,
-                        onApply: { selections in
-                            // Clear previous group selection from this node
-                            node.clearGroupSelection()
-                            // Apply new group selection with modes
-                            node.applyGroupSelection(selections: selections, sourceId: node.id)
+                        onApply: { result in
+                            // Apply the per-attribute mode settings
+                            node.applyPickerResult(result)
                             showAttributePicker = false
                         },
                         onCancel: {
