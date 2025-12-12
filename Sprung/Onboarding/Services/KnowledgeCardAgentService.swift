@@ -46,24 +46,68 @@ struct GeneratedCard {
     let cardType: String
     let title: String
     let prose: String
-    let sources: [String]
+    let sources: [String]  // Artifact IDs
     let highlights: [String]
     let skills: [String]
     let metrics: [String]
     let success: Bool
     let error: String?
+    // Optional fields that may be extracted from timeline
+    var timePeriod: String?
+    var organization: String?
+    var location: String?
 
-    /// Convert to JSON for persistence
+    /// Convert to JSON format matching submit_knowledge_card schema.
+    /// Output format:
+    /// ```
+    /// {
+    ///   "card": { id, title, type, content, sources: [{type, artifact_id}], ... },
+    ///   "summary": "Brief summary for UI"
+    /// }
+    /// ```
     func toJSON() -> JSON {
         var json = JSON()
-        json["id"].string = cardId
-        json["card_type"].string = cardType
-        json["title"].string = title
-        json["prose"].string = prose
-        json["sources"].arrayObject = sources
+
+        // Build the card object with submit_knowledge_card schema
+        var card = JSON()
+        card["id"].string = cardId
+        card["title"].string = title
+        card["type"].string = cardType  // "type" not "card_type"
+        card["content"].string = prose   // "content" not "prose"
+
+        // Transform sources from [String] to [{type: "artifact", artifact_id: String}]
+        var sourcesArray: [[String: String]] = []
+        for artifactId in sources {
+            sourcesArray.append([
+                "type": "artifact",
+                "artifact_id": artifactId
+            ])
+        }
+        card["sources"].arrayObject = sourcesArray
+
+        // Add optional fields
+        if let timePeriod = timePeriod {
+            card["time_period"].string = timePeriod
+        }
+        if let organization = organization {
+            card["organization"].string = organization
+        }
+        if let location = location {
+            card["location"].string = location
+        }
+
+        json["card"] = card
+
+        // Generate summary from card data
+        let achievementCount = highlights.count + metrics.count
+        let summary = "Knowledge card for \(title) with \(achievementCount) key achievements"
+        json["summary"].string = summary
+
+        // Include extra data that may be useful (not required by submit_knowledge_card)
         json["highlights"].arrayObject = highlights
         json["skills"].arrayObject = skills
         json["metrics"].arrayObject = metrics
+
         return json
     }
 
@@ -79,7 +123,10 @@ struct GeneratedCard {
             skills: output["skills"].arrayValue.map { $0.stringValue },
             metrics: output["metrics"].arrayValue.map { $0.stringValue },
             success: true,
-            error: nil
+            error: nil,
+            timePeriod: output["time_period"].string,
+            organization: output["organization"].string,
+            location: output["location"].string
         )
     }
 
@@ -95,7 +142,10 @@ struct GeneratedCard {
             skills: [],
             metrics: [],
             success: false,
-            error: error
+            error: error,
+            timePeriod: nil,
+            organization: nil,
+            location: nil
         )
     }
 }

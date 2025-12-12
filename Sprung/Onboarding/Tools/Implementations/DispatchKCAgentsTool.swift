@@ -178,9 +178,18 @@ struct DispatchKCAgentsTool: InterviewTool {
 
                 ⚠️ REQUIRED ACTION: You MUST now persist each card.
 
+                Each card in the 'cards' array is PRE-FORMATTED for submit_knowledge_card.
+                Pass the card data DIRECTLY - it already contains the 'card' and 'summary' fields.
+
                 For EACH card in the 'cards' array (all \(result.successCount) of them):
-                1. Call `submit_knowledge_card` with the card data
-                2. Wait for confirmation
+                1. Call `submit_knowledge_card` passing the card object directly:
+                   ```
+                   submit_knowledge_card({
+                     "card": cards[i].card,
+                     "summary": cards[i].summary
+                   })
+                   ```
+                2. Wait for user confirmation
                 3. Repeat for the next card
 
                 DO NOT skip any cards. DO NOT call next_phase until ALL cards are persisted.
@@ -193,9 +202,18 @@ struct DispatchKCAgentsTool: InterviewTool {
 
                 ⚠️ REQUIRED ACTION: You MUST persist all successful cards.
 
+                Each card in the 'cards' array is PRE-FORMATTED for submit_knowledge_card.
+                Pass the card data DIRECTLY - it already contains the 'card' and 'summary' fields.
+
                 For EACH successful card in the 'cards' array:
-                1. Call `submit_knowledge_card` with the card data
-                2. Wait for confirmation
+                1. Call `submit_knowledge_card` passing the card object directly:
+                   ```
+                   submit_knowledge_card({
+                     "card": cards[i].card,
+                     "summary": cards[i].summary
+                   })
+                   ```
+                2. Wait for user confirmation
                 3. Repeat for the next card
 
                 For failed cards (see 'failures' array):

@@ -77,6 +77,16 @@ final class UIStateUpdateHandler {
         case .extractionStateChanged(let inProgress, let statusMessage):
             ui.updateExtraction(inProgress: inProgress, statusMessage: statusMessage)
             Logger.info("📄 Extraction state: \(inProgress ? "started" : "completed") - \(statusMessage ?? "no message")", category: .ai)
+
+        // MARK: KC Agent Dispatch Events (categorized as .processing)
+        case .kcAgentsDispatchStarted(let count, _):
+            ui.isGeneratingCards = true
+            Logger.info("🤖 UI: KC agents dispatch started (\(count) agents)", category: .ai)
+
+        case .kcAgentsDispatchCompleted(let successCount, let failureCount):
+            ui.isGeneratingCards = false
+            Logger.info("✅ UI: KC agents dispatch completed (\(successCount) success, \(failureCount) failed)", category: .ai)
+
         default:
             break
         }
@@ -90,7 +100,7 @@ final class UIStateUpdateHandler {
             await syncArtifactRecordsFromState()
             await syncWizardProgressFromState()
 
-        // MARK: Multi-Agent Workflow State
+        // MARK: Multi-Agent Workflow State (categorized as .artifact)
         case .cardAssignmentsProposed(let assignmentCount, let gapCount):
             ui.cardAssignmentsReadyForApproval = true
             ui.proposedAssignmentCount = assignmentCount
@@ -101,14 +111,6 @@ final class UIStateUpdateHandler {
             ui.cardAssignmentsReadyForApproval = false
             ui.isGeneratingCards = true
             Logger.info("🚀 UI: Generate Cards initiated - starting KC agents", category: .ai)
-
-        case .kcAgentsDispatchStarted(let count, _):
-            ui.isGeneratingCards = true
-            Logger.info("🤖 UI: KC agents dispatch started (\(count) agents)", category: .ai)
-
-        case .kcAgentsDispatchCompleted(let successCount, let failureCount):
-            ui.isGeneratingCards = false
-            Logger.info("✅ UI: KC agents dispatch completed (\(successCount) success, \(failureCount) failed)", category: .ai)
 
         default:
             break
