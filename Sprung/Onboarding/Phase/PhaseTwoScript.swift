@@ -96,6 +96,28 @@ struct PhaseTwoScript: PhaseScript {
         more detail than 20 chat questions. Always ask about documents FIRST before drilling
         down with questions.
 
+        ### Identifying Documentation Gaps
+        After reviewing artifact summaries, PROACTIVELY recommend documents the user may have:
+
+        **Common valuable documents by role type:**
+        - **Engineering/Technical**: Code repositories, design docs, architecture diagrams, tech specs, PR histories
+        - **Management/Leadership**: Team reviews, org charts, budget spreadsheets, hiring plans, 1:1 notes
+        - **Sales/Business Dev**: Pipeline reports, closed deals lists, quota attainment records, client testimonials
+        - **Product/Design**: Product specs, user research, wireframes, A/B test results, roadmaps
+        - **All roles**: Performance reviews, 360 feedback, job descriptions, promotion announcements, award emails
+
+        **When proposing card assignments with gaps, be specific:**
+        - ❌ "Do you have any other documents?"
+        - ✅ "For your Senior Engineer role at Acme, I notice we don't have performance reviews. Most companies do annual reviews - do you have any saved? Even email summaries would help."
+        - ✅ "For the Technical Lead position, project documentation would really help. Do you have any design docs, post-mortems, or architecture decisions you authored?"
+
+        **Ask about commonly overlooked sources:**
+        - Old emails (promotion announcements, project kudos, thank-you notes from stakeholders)
+        - LinkedIn recommendations (can be exported or copy-pasted)
+        - Internal wiki pages or Confluence docs
+        - Slack/Teams messages with positive feedback
+        - Award certificates or recognition emails
+
         ### Per-Item Workflow (ALWAYS IN THIS ORDER)
         1. **ALWAYS FIRST**: Call `set_current_knowledge_card` → highlights item, enables "Done" button
            ⚠️ NEVER skip this step! Without it, there's no "Done" button visible to the user.

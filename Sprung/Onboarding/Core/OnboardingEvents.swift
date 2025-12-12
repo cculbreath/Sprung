@@ -104,6 +104,26 @@ enum OnboardingEvent {
     case gitAgentTurnStarted(turn: Int, maxTurns: Int)
     case gitAgentToolExecuting(toolName: String, turn: Int)
     case gitAgentProgressUpdated(message: String, turn: Int)
+
+    // MARK: - KC Agent Dispatch (parallel knowledge card generation)
+    /// Emitted when dispatch_kc_agents is called to start parallel generation
+    case kcAgentsDispatchStarted(count: Int, cardIds: [String])
+    /// Emitted when all KC agents have completed (success or failure)
+    case kcAgentsDispatchCompleted(successCount: Int, failureCount: Int)
+    /// Emitted when a single KC agent starts processing
+    case kcAgentStarted(agentId: String, cardId: String, cardTitle: String)
+    /// Emitted when a single KC agent completes successfully
+    case kcAgentCompleted(agentId: String, cardId: String, cardTitle: String)
+    /// Emitted when a single KC agent fails
+    case kcAgentFailed(agentId: String, cardId: String, error: String)
+    /// Emitted when a KC agent is manually killed
+    case kcAgentKilled(agentId: String, cardId: String)
+    /// Emitted for KC agent turn progress (similar to git agent)
+    case kcAgentTurnStarted(agentId: String, turn: Int, maxTurns: Int)
+    /// Emitted when KC agent executes a tool
+    case kcAgentToolExecuting(agentId: String, toolName: String, turn: Int)
+    /// Emitted for general KC agent progress updates
+    case kcAgentProgressUpdated(agentId: String, message: String)
     // MARK: - Timeline Operations
     case timelineCardCreated(card: JSON)
     case timelineCardUpdated(id: String, fields: JSON)
@@ -364,6 +384,12 @@ actor EventCoordinator {
         case .gitRepoAnalysisStarted, .gitRepoAnalysisCompleted, .gitRepoAnalysisFailed,
              .gitAgentTurnStarted, .gitAgentToolExecuting, .gitAgentProgressUpdated:
             return .processing
+
+        // KC Agent Dispatch (treated as processing)
+        case .kcAgentsDispatchStarted, .kcAgentsDispatchCompleted,
+             .kcAgentStarted, .kcAgentCompleted, .kcAgentFailed, .kcAgentKilled,
+             .kcAgentTurnStarted, .kcAgentToolExecuting, .kcAgentProgressUpdated:
+            return .processing
         // Toolpane events
         case .choicePromptRequested, .choicePromptCleared, .uploadRequestPresented,
              .uploadRequestCancelled, .validationPromptRequested, .validationPromptCleared,
@@ -527,6 +553,24 @@ actor EventCoordinator {
             description = "Git agent executing \(toolName) (turn \(turn))"
         case .gitAgentProgressUpdated(let message, let turn):
             description = "Git agent (turn \(turn)): \(message)"
+        case .kcAgentsDispatchStarted(let count, _):
+            description = "KC agents dispatch started (\(count) agents)"
+        case .kcAgentsDispatchCompleted(let successCount, let failureCount):
+            description = "KC agents dispatch completed (\(successCount) succeeded, \(failureCount) failed)"
+        case .kcAgentStarted(_, let cardId, let cardTitle):
+            description = "KC agent started: \(cardTitle) (\(cardId.prefix(8))...)"
+        case .kcAgentCompleted(_, let cardId, let cardTitle):
+            description = "KC agent completed: \(cardTitle) (\(cardId.prefix(8))...)"
+        case .kcAgentFailed(_, let cardId, let error):
+            description = "KC agent failed: \(cardId.prefix(8))... - \(error.prefix(50))"
+        case .kcAgentKilled(_, let cardId):
+            description = "KC agent killed: \(cardId.prefix(8))..."
+        case .kcAgentTurnStarted(_, let turn, let maxTurns):
+            description = "KC agent turn \(turn)/\(maxTurns) started"
+        case .kcAgentToolExecuting(_, let toolName, let turn):
+            description = "KC agent executing \(toolName) (turn \(turn))"
+        case .kcAgentProgressUpdated(_, let message):
+            description = "KC agent progress: \(message.prefix(50))"
         case .timelineCardCreated:
             description = "Timeline card created"
         case .timelineCardUpdated(let id, _):

@@ -105,9 +105,14 @@ struct StartPhaseTwoTool: InterviewTool {
           - Identify documentation gaps (cards without sufficient artifacts)
 
         ### STEP 3: Handle Gaps (if any)
-        If there are documentation gaps:
-        - Present the gaps to the user
-        - Ask if they have additional documents (performance reviews, project docs, etc.)
+        If there are documentation gaps, be SPECIFIC about what's missing and likely exists:
+        - Don't just say "do you have more documents?" — recommend specific document types
+        - Consider what documents TYPICALLY exist for each role type:
+          * Engineering: performance reviews, design docs, code repos, tech specs
+          * Management: team reviews, budget docs, hiring plans, org charts
+          * Sales: quota attainment, deal lists, client testimonials
+          * All roles: job descriptions, promotion emails, award announcements, LinkedIn recommendations
+        - Example: "For your Senior Engineer role at Acme, we're missing performance reviews. Most companies do annual reviews — do you have any saved? Even email summaries would help."
         - Wait for user uploads or confirmation they have no more docs
 
         ### STEP 4: Generate Knowledge Cards
@@ -120,7 +125,7 @@ struct StartPhaseTwoTool: InterviewTool {
         ## KEY POINTS
         - Artifact summaries let you see all docs WITHOUT reading full text
         - Sub-agents handle the detailed artifact reading and card generation
-        - After cards are generated and persisted, call `next_phase` to advance
+        - After all cards are generated and persisted, OR if the user instructs you to advance through a chat message, call `next_phase` to proceed to Phase 3
 
         DO NOT skip calling display_knowledge_card_plan. This is required to show the UI.
         """
