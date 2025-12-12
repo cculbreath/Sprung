@@ -26,6 +26,9 @@ struct SetupWizardView: View {
     @State private var showModelPicker = false
     @State private var showExitAlert = false
 
+    // Curated model selection
+    @State private var selectedModelIds: Set<String> = []
+
     // Gemini models (lazy-loaded)
     @State private var geminiModels: [GoogleAIService.GeminiModel] = []
     @State private var isLoadingGeminiModels = false
@@ -183,34 +186,114 @@ private extension SetupWizardView {
         VStack(alignment: .leading, spacing: 16) {
             Text("Enable OpenRouter Models")
                 .font(.headline)
-            GroupBox {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 12) {
-                        Label("\(openRouterService.availableModels.count) available", systemImage: "tray.full")
-                            .foregroundStyle(.secondary)
-                        Label("\(enabledLLMStore.enabledModelIds.count) selected", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    HStack(spacing: 12) {
-                        Button("Fetch models") {
-                            Task { await openRouterService.fetchModels() }
-                        }
-                        .disabled(openRouterApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        Button("Choose models…") {
-                            showModelPicker = true
-                        }
-                        .disabled(enabledLLMStore.enabledModels.isEmpty && openRouterService.availableModels.isEmpty)
-                    }
-                    if enabledLLMStore.enabledModels.isEmpty {
-                        Label("Select at least one OpenRouter model to continue.", systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
+            Text("Select the models you want to use for resume and cover letter generation. You can change these later in Settings.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(CuratedModelProvider.allCases, id: \.self) { provider in
+                        curatedProviderSection(provider)
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .frame(maxHeight: 340)
+
+            HStack {
+                Text("\(selectedModelIds.count) models selected")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Select All") {
+                    for provider in CuratedModelProvider.allCases {
+                        for model in provider.models {
+                            selectedModelIds.insert(model.id)
+                        }
+                    }
+                }
+                .buttonStyle(.link)
+                Button("Clear All") {
+                    selectedModelIds.removeAll()
+                }
+                .buttonStyle(.link)
+            }
+
+            if selectedModelIds.isEmpty {
+                Label("Select at least one model to continue.", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+            }
+
             Spacer()
         }
         .padding(24)
+        .onAppear {
+            // Pre-select recommended models if nothing selected yet
+            if selectedModelIds.isEmpty {
+                for provider in CuratedModelProvider.allCases {
+                    for model in provider.models where model.isRecommended {
+                        selectedModelIds.insert(model.id)
+                    }
+                }
+            }
+        }
+    }
+
+    func curatedProviderSection(_ provider: CuratedModelProvider) -> some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text(provider.displayName)
+                        .font(.subheadline.weight(.semibold))
+                    Spacer()
+                    Button(action: {
+                        let providerIds = Set(provider.models.map(\.id))
+                        if providerIds.isSubset(of: selectedModelIds) {
+                            selectedModelIds.subtract(providerIds)
+                        } else {
+                            selectedModelIds.formUnion(providerIds)
+                        }
+                    }) {
+                        Text(Set(provider.models.map(\.id)).isSubset(of: selectedModelIds) ? "Deselect All" : "Select All")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.link)
+                }
+
+                ForEach(provider.models, id: \.id) { model in
+                    HStack {
+                        Toggle(isOn: Binding(
+                            get: { selectedModelIds.contains(model.id) },
+                            set: { isSelected in
+                                if isSelected {
+                                    selectedModelIds.insert(model.id)
+                                } else {
+                                    selectedModelIds.remove(model.id)
+                                }
+                            }
+                        )) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 6) {
+                                    Text(model.displayName)
+                                        .font(.body)
+                                    if model.isRecommended {
+                                        Text("Recommended")
+                                            .font(.caption2)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(Color.accentColor.opacity(0.2))
+                                            .cornerRadius(4)
+                                    }
+                                }
+                                Text(model.description)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .toggleStyle(.checkbox)
+                    }
+                }
+            }
+        }
     }
 
     var defaultsStep: some View {
@@ -359,14 +442,30 @@ private extension SetupWizardView {
             saveKeys()
             withAnimation { currentStep += 1 }
         case .models:
-            if enabledLLMStore.enabledModels.isEmpty {
+            if selectedModelIds.isEmpty {
                 return
             }
+            saveSelectedModels()
             withAnimation { currentStep += 1 }
         case .defaults:
             finalizeDefaults()
             completeAndDismiss(markCompleted: true)
         }
+    }
+
+    func saveSelectedModels() {
+        // Enable all selected models in EnabledLLMStore
+        let allCuratedModels = CuratedModelProvider.allCases.flatMap(\.models)
+        for model in allCuratedModels where selectedModelIds.contains(model.id) {
+            let enabledModel = enabledLLMStore.getOrCreateModel(
+                id: model.id,
+                displayName: model.displayName,
+                provider: model.provider
+            )
+            enabledModel.isEnabled = true
+        }
+        enabledLLMStore.refreshEnabledModels()
+        Logger.info("✅ Enabled \(selectedModelIds.count) OpenRouter models from setup wizard")
     }
 
     func saveKeys() {
@@ -464,5 +563,78 @@ private extension SetupWizardView {
             ("gpt-5-pro", "GPT-5 Pro"),
             ("gpt-5-codex", "GPT-5 Codex")
         ]
+    }
+}
+
+// MARK: - Curated Model Definitions
+
+struct CuratedModel {
+    let id: String
+    let displayName: String
+    let description: String
+    let provider: String
+    let isRecommended: Bool
+
+    init(_ id: String, _ displayName: String, _ description: String, provider: String, recommended: Bool = false) {
+        self.id = id
+        self.displayName = displayName
+        self.description = description
+        self.provider = provider
+        self.isRecommended = recommended
+    }
+}
+
+enum CuratedModelProvider: CaseIterable {
+    case google
+    case openai
+    case anthropic
+    case xai
+
+    var displayName: String {
+        switch self {
+        case .google: return "Google"
+        case .openai: return "OpenAI"
+        case .anthropic: return "Anthropic"
+        case .xai: return "xAI"
+        }
+    }
+
+    var models: [CuratedModel] {
+        switch self {
+        case .google:
+            return [
+                CuratedModel("google/gemini-2.5-flash-preview", "Gemini 2.5 Flash Preview", "Fast, efficient model with 1M context", provider: "Google", recommended: true),
+                CuratedModel("google/gemini-2.5-pro-preview", "Gemini 2.5 Pro Preview", "Most capable Gemini model", provider: "Google"),
+                CuratedModel("google/gemini-2.0-flash-001", "Gemini 2.0 Flash", "Production-ready fast model", provider: "Google", recommended: true),
+                CuratedModel("google/gemini-2.0-flash-lite-001", "Gemini 2.0 Flash Lite", "Lightweight and cost-effective", provider: "Google"),
+                CuratedModel("google/gemini-2.0-flash-thinking-exp", "Gemini 2.0 Flash Thinking", "Enhanced reasoning capabilities", provider: "Google"),
+            ]
+        case .openai:
+            return [
+                CuratedModel("openai/gpt-4.1", "GPT-4.1", "Latest GPT-4 series model", provider: "OpenAI", recommended: true),
+                CuratedModel("openai/gpt-4.1-mini", "GPT-4.1 Mini", "Efficient GPT-4.1 variant", provider: "OpenAI", recommended: true),
+                CuratedModel("openai/gpt-4.1-nano", "GPT-4.1 Nano", "Ultra-efficient for simple tasks", provider: "OpenAI"),
+                CuratedModel("openai/gpt-4o", "GPT-4o", "Multimodal flagship model", provider: "OpenAI"),
+                CuratedModel("openai/gpt-4o-mini", "GPT-4o Mini", "Cost-effective multimodal", provider: "OpenAI"),
+                CuratedModel("openai/o1", "o1", "Advanced reasoning model", provider: "OpenAI"),
+                CuratedModel("openai/o1-mini", "o1 Mini", "Efficient reasoning model", provider: "OpenAI"),
+                CuratedModel("openai/o3-mini", "o3 Mini", "Latest reasoning model", provider: "OpenAI"),
+            ]
+        case .anthropic:
+            return [
+                CuratedModel("anthropic/claude-sonnet-4", "Claude Sonnet 4", "Balanced performance and cost", provider: "Anthropic", recommended: true),
+                CuratedModel("anthropic/claude-opus-4", "Claude Opus 4", "Most capable Claude model", provider: "Anthropic"),
+                CuratedModel("anthropic/claude-haiku-4", "Claude Haiku 4", "Fast and affordable", provider: "Anthropic", recommended: true),
+                CuratedModel("anthropic/claude-3.5-sonnet", "Claude 3.5 Sonnet", "Previous generation balanced", provider: "Anthropic"),
+                CuratedModel("anthropic/claude-3.5-haiku", "Claude 3.5 Haiku", "Previous generation fast", provider: "Anthropic"),
+            ]
+        case .xai:
+            return [
+                CuratedModel("x-ai/grok-3", "Grok 3", "Latest Grok model with 131K context", provider: "xAI", recommended: true),
+                CuratedModel("x-ai/grok-3-mini", "Grok 3 Mini", "Efficient Grok variant", provider: "xAI"),
+                CuratedModel("x-ai/grok-2-1212", "Grok 2", "Previous generation Grok", provider: "xAI"),
+                CuratedModel("x-ai/grok-2-vision-1212", "Grok 2 Vision", "Multimodal Grok model", provider: "xAI"),
+            ]
+        }
     }
 }
