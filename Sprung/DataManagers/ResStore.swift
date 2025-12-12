@@ -54,6 +54,9 @@ final class ResStore: SwiftDataStore {
         }
         resume.rootNode = rootNode
 
+        // Apply manifest's reviewPhases defaults to resume.phaseAssignments
+        applyManifestPhaseDefaults(to: resume, from: manifest)
+
         // Create FontSizeNodes from manifest styling section
         buildFontSizeNodes(for: resume, from: manifest)
 
@@ -207,4 +210,23 @@ final class ResStore: SwiftDataStore {
         saveContext()
     }
     // `saveContext()` now lives in `SwiftDataStore`.
+
+    /// Apply manifest's reviewPhases defaults to resume.phaseAssignments (only if not already set)
+    private func applyManifestPhaseDefaults(to resume: Resume, from manifest: TemplateManifest) {
+        guard let reviewPhases = manifest.reviewPhases else { return }
+
+        var assignments = resume.phaseAssignments
+        for (section, phases) in reviewPhases {
+            for phaseConfig in phases {
+                // Extract attribute name from field pattern (e.g., "skills.*.name" -> "name")
+                let attrName = phaseConfig.field.split(separator: ".").last.map(String.init) ?? phaseConfig.field
+                let key = "\(section.capitalized)-\(attrName)"
+                // Only set if not already assigned by user
+                if assignments[key] == nil {
+                    assignments[key] = phaseConfig.phase
+                }
+            }
+        }
+        resume.phaseAssignments = assignments
+    }
 }
