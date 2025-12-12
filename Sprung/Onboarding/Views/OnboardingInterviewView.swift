@@ -14,6 +14,12 @@ struct OnboardingInterviewView: View {
     @AppStorage("onboardingInterviewDefaultModelId") private var defaultModelId = "gpt-5"
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var defaultWebSearchAllowed = true
     @Namespace private var wizardTransition
+
+    // Window and content entrance animation state
+    @State private var windowAppeared = false
+    @State private var progressAppeared = false
+    @State private var cardAppeared = false
+    @State private var bottomBarAppeared = false
     var body: some View {
         bodyContent
     }
@@ -29,6 +35,8 @@ struct OnboardingInterviewView: View {
                 .padding(.top, 16)
                 .padding(.bottom, 24)
                 .padding(.horizontal, 32)
+                .opacity(progressAppeared ? 1 : 0)
+                .offset(y: progressAppeared ? 0 : -10)
             // Main body centered within available space
             VStack(spacing: 8) {
                 mainCard(
@@ -36,6 +44,8 @@ struct OnboardingInterviewView: View {
                     state: uiState
                 )
                 .animation(.spring(response: 0.4, dampingFraction: 0.82), value: coordinator.wizardTracker.currentStep)
+                .opacity(cardAppeared ? 1 : 0)
+                .scaleEffect(cardAppeared ? 1 : 0.95)
                 Spacer(minLength: 16) // centers body relative to bottom bar
                 OnboardingInterviewBottomBar(
                     showBack: shouldShowBackButton(for: coordinator.wizardTracker.currentStep),
@@ -48,6 +58,8 @@ struct OnboardingInterviewView: View {
                 )
                 .padding(.horizontal, 16)
                 .animation(.easeInOut(duration: 0.25), value: coordinator.wizardTracker.currentStep)
+                .opacity(bottomBarAppeared ? 1 : 0)
+                .offset(y: bottomBarAppeared ? 0 : 15)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal, 32)
@@ -60,6 +72,10 @@ struct OnboardingInterviewView: View {
             .padding(.vertical, 24)
             .clipShape(cardShape)
             .background(cardShape.fill(.thickMaterial))
+            // Window entrance animation
+            .scaleEffect(windowAppeared ? 1 : 0.92)
+            .opacity(windowAppeared ? 1 : 0)
+            .offset(y: windowAppeared ? 0 : 20)
         // --- Lifecycle bindings and tasks ---
         let withLifecycle = styledContent
             .task {
@@ -132,6 +148,28 @@ struct OnboardingInterviewView: View {
                 Text("You have existing onboarding data (knowledge cards, cover letter sources, and experience defaults). Would you like to resume where you left off, or start over with a fresh session?\n\nWarning: Starting over will permanently delete all knowledge cards, cover letter sources, and experience defaults.")
             }
         return withSheets
+            .onAppear {
+                // Window container animates first
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                    windowAppeared = true
+                }
+                // Staggered content animations
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.15)) {
+                    progressAppeared = true
+                }
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.75).delay(0.25)) {
+                    cardAppeared = true
+                }
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.35)) {
+                    bottomBarAppeared = true
+                }
+            }
+            .onDisappear {
+                windowAppeared = false
+                progressAppeared = false
+                cardAppeared = false
+                bottomBarAppeared = false
+            }
             #if DEBUG
             .overlay(alignment: .bottomTrailing) {
                 if debugSettings.showOnboardingDebugButton {
