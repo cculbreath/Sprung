@@ -57,11 +57,26 @@ struct ResumeSplitView: View {
                                 ResumeActionsBar(
                                     selectedTab: $tab,
                                     sheets: $sheets,
-                                    clarifyingQuestions: $clarifyingQuestions
+                                    clarifyingQuestions: $clarifyingQuestions,
+                                    showCreateResumeSheet: $showCreateResumeSheet
                                 )
                                 Divider()
                             }
                             .frame(maxWidth: .infinity)
+                            .sheet(isPresented: $showCreateResumeSheet) {
+                                CreateResumeView(
+                                    onCreateResume: { template, sources in
+                                        if resStore.create(
+                                            jobApp: selApp,
+                                            sources: sources,
+                                            template: template
+                                        ) != nil {
+                                            refresh.toggle()
+                                        }
+                                    }
+                                )
+                                .padding()
+                            }
                         }
                         .frame(width: contentWidth, height: geo.size.height)
                         if isInspectorVisible {
@@ -122,6 +137,7 @@ private struct ResumeActionsBar: View {
     @Binding var selectedTab: TabList
     @Binding var sheets: AppSheets
     @Binding var clarifyingQuestions: [ClarifyingQuestion]
+    @Binding var showCreateResumeSheet: Bool
     var body: some View {
         HStack(spacing: 12) {
             ResumeCustomizeButton(selectedTab: $selectedTab)
@@ -140,6 +156,14 @@ private struct ResumeActionsBar: View {
             .help("AI Resume Review")
             .disabled(jobAppStore.selectedApp?.selectedRes == nil)
             Spacer(minLength: 0)
+            Button {
+                showCreateResumeSheet = true
+            } label: {
+                Label("Create Resume", systemImage: "doc.badge.plus")
+                    .font(.system(size: 14, weight: .light))
+            }
+            .buttonStyle(.automatic)
+            .help("Create a new resume for this job application")
         }
         .controlSize(.large)
         .padding(.horizontal)

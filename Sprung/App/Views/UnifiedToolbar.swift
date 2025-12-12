@@ -143,7 +143,7 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 .help("Browse Knowledge Cards")
             }
             ToolbarItem(id: "inspector", placement: .primaryAction, showsByDefault: true) {
-                Button("Inspector", systemImage: "sidebar.right") {
+                Button {
                     switch selectedTab {
                     case .resume:
                         sheets.showResumeInspector.toggle()
@@ -152,6 +152,19 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                     default:
                         break
                     }
+                } label: {
+                    Label("Inspector", systemImage: "sidebar.right")
+                        .overlay(alignment: .topTrailing) {
+                            if selectedTab == .resume, let resumeCount = jobAppStore.selectedApp?.resumes.count, resumeCount > 1 {
+                                Text("\(resumeCount)")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 1)
+                                    .background(Color.accentColor, in: Capsule())
+                                    .offset(x: 8, y: -6)
+                            }
+                        }
                 }
                 .disabled(selectedTab != .resume && selectedTab != .coverLetter)
                 .help(selectedTab == .resume ? "Show Resume Inspector" :
