@@ -10,6 +10,7 @@ struct ToolPaneTabsView<InterviewContent: View>: View {
         case artifacts = "Artifacts"
         case knowledge = "Knowledge"
         case agents = "Agents"
+        case tokens = "Tokens"
 
         var icon: String {
             switch self {
@@ -18,6 +19,7 @@ struct ToolPaneTabsView<InterviewContent: View>: View {
             case .artifacts: return "doc.text"
             case .knowledge: return "brain.head.profile"
             case .agents: return "person.2.wave.2"
+            case .tokens: return "chart.bar.fill"
             }
         }
     }
@@ -103,6 +105,9 @@ struct ToolPaneTabsView<InterviewContent: View>: View {
         case .agents:
             // Show active agents count
             return coordinator.agentActivityTracker.agents.filter { $0.status == .running }.count
+        case .tokens:
+            // Show total requests count
+            return coordinator.tokenUsageTracker.totalStats.requestCount
         }
     }
 

@@ -150,6 +150,14 @@ final class CoordinatorEventRouter {
         case .planItemStatusChangeRequested(let itemId, let status):
             await handlePlanItemStatusChange(itemId: itemId, status: status)
 
+        // MARK: - Multi-Agent KC Generation Workflow
+        case .generateCardsButtonClicked:
+            await handleGenerateCardsButtonClicked()
+
+        case .cardAssignmentsProposed:
+            // Event handled by UI for awareness; gating done in tool
+            Logger.info("📋 Card assignments proposed - dispatch_kc_agents gated until user approval", category: .ai)
+
         // MARK: - Dossier Collection Trigger (Parallel-Safe)
         case .extractionStateChanged(let inProgress, _):
             if inProgress {
@@ -271,6 +279,29 @@ final class CoordinatorEventRouter {
         await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
 
         Logger.info("✅ Knowledge card persisted: \(cardTitle)", category: .ai)
+    }
+
+    /// Handle "Generate Cards" button click - ungates dispatch_kc_agents and mandates its use
+    private func handleGenerateCardsButtonClicked() async {
+        Logger.info("🚀 Generate Cards button clicked - ungating dispatch_kc_agents", category: .ai)
+
+        // Ungate dispatch_kc_agents tool
+        await state.includeTool(OnboardingToolName.dispatchKCAgents.rawValue)
+
+        // Send system-generated user message with forced toolChoice
+        var userMessage = JSON()
+        userMessage["role"].string = "user"
+        userMessage["content"].string = """
+            I've reviewed the card assignments and I'm ready to generate the knowledge cards. \
+            Please proceed with generating the cards now.
+            """
+        await eventBus.publish(.llmEnqueueUserMessage(
+            payload: userMessage,
+            isSystemGenerated: true,
+            toolChoice: OnboardingToolName.dispatchKCAgents.rawValue
+        ))
+
+        Logger.info("✅ Generate Cards: tool ungated, user message sent with forced toolChoice for dispatch_kc_agents", category: .ai)
     }
 
     /// Persist knowledge card to SwiftData as a ResRef for use in resume generation

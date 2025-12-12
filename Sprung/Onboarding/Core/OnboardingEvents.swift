@@ -90,6 +90,13 @@ enum OnboardingEvent {
     case knowledgeCardAutoPersisted(title: String) // Emitted after successful auto-persist
     case toolGatingRequested(toolName: String, exclude: Bool) // Request to gate/ungate a tool
     case planItemStatusChangeRequested(itemId: String, status: String) // Request to change plan item status
+
+    // MARK: - Multi-Agent KC Generation Workflow
+    /// UI emits when user clicks "Generate Cards" button (approves card assignments)
+    /// Handler ungates dispatch_kc_agents and mandates its use via toolChoice
+    case generateCardsButtonClicked
+    /// Emitted after propose_card_assignments to gate dispatch until user approval
+    case cardAssignmentsProposed(assignmentCount: Int, gapCount: Int)
     // MARK: - Evidence Requirements
     case evidenceRequirementAdded(EvidenceRequirement)
     case evidenceRequirementUpdated(EvidenceRequirement)

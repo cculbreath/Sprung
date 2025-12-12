@@ -185,6 +185,15 @@ struct ProposeCardAssignmentsTool: InterviewTool {
         // Store proposals in state for dispatch_kc_agents to use
         await coordinator.state.storeCardProposals(proposalsToStore)
 
+        // Gate dispatch_kc_agents until user approves assignments
+        await coordinator.state.excludeTool(OnboardingToolName.dispatchKCAgents.rawValue)
+
+        // Emit event for UI/coordinator awareness
+        await coordinator.eventBus.publish(.cardAssignmentsProposed(
+            assignmentCount: validAssignments.count,
+            gapCount: gapsJSON.count
+        ))
+
         // Build response
         var response = JSON()
         response["status"].string = "completed"
