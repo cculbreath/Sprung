@@ -255,9 +255,9 @@ struct OnboardingInterviewToolPane: View {
                 )
                 KnowledgeCardCollectionView(
                     coordinator: coordinator,
-                    onDoneWithCard: { itemId in
+                    onGenerateCards: {
                         Task {
-                            await coordinator.eventBus.publish(.knowledgeCardDoneButtonClicked(itemId: itemId))
+                            await coordinator.eventBus.publish(.generateCardsButtonClicked)
                         }
                     },
                     onAdvanceToNextPhase: {

@@ -89,6 +89,27 @@ final class UIStateUpdateHandler {
              .knowledgeCardPersisted, .knowledgeCardsReplaced:
             await syncArtifactRecordsFromState()
             await syncWizardProgressFromState()
+
+        // MARK: Multi-Agent Workflow State
+        case .cardAssignmentsProposed(let assignmentCount, let gapCount):
+            ui.cardAssignmentsReadyForApproval = true
+            ui.proposedAssignmentCount = assignmentCount
+            ui.identifiedGapCount = gapCount
+            Logger.info("📋 UI: Card assignments ready for approval (\(assignmentCount) assignments, \(gapCount) gaps)", category: .ai)
+
+        case .generateCardsButtonClicked:
+            ui.cardAssignmentsReadyForApproval = false
+            ui.isGeneratingCards = true
+            Logger.info("🚀 UI: Generate Cards initiated - starting KC agents", category: .ai)
+
+        case .kcAgentsDispatchStarted(let count, _):
+            ui.isGeneratingCards = true
+            Logger.info("🤖 UI: KC agents dispatch started (\(count) agents)", category: .ai)
+
+        case .kcAgentsDispatchCompleted(let successCount, let failureCount):
+            ui.isGeneratingCards = false
+            Logger.info("✅ UI: KC agents dispatch completed (\(successCount) success, \(failureCount) failed)", category: .ai)
+
         default:
             break
         }

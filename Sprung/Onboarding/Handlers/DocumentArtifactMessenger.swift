@@ -260,25 +260,38 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
     }
 
     /// Build the extracted content message for artifacts
+    /// IMPORTANT: Only sends summaries to prevent token accumulation in main conversation.
+    /// Full text is preserved in artifacts and available via get_artifact tool.
     private func buildExtractedContentMessage(artifacts: [JSON]) -> String {
-        var messageText = "I've uploaded \(artifacts.count == 1 ? "a document" : "\(artifacts.count) document(s)") (resume): "
+        var messageText = "I've uploaded \(artifacts.count == 1 ? "a document" : "\(artifacts.count) documents"):\n\n"
 
         for (index, artifact) in artifacts.enumerated() {
             let filename = artifact["filename"].stringValue
-            let extractedText = artifact["extracted_text"].stringValue
             let artifactId = artifact["id"].stringValue
+            let summary = artifact["summary"].string ?? "Summary not available"
+            let docType = artifact["metadata"]["document_type"].string
+            let sizeBytes = artifact["size_bytes"].int ?? 0
+            let sizeKB = sizeBytes / 1024
 
             if artifacts.count > 1 {
-                messageText += "\n---\n"
-                messageText += "**Document \(index + 1): \(filename)**\n"
+                messageText += "### Document \(index + 1): \(filename)\n"
             } else {
-                messageText += "\(filename)\n"
+                messageText += "### \(filename)\n"
             }
-            messageText += "Artifact ID: \(artifactId)\n\n"
-            messageText += "Here is the extracted content:\n\n"
-            messageText += extractedText
-            messageText += "\n\n"
+
+            messageText += "- **Artifact ID**: `\(artifactId)`\n"
+            if let docType = docType, !docType.isEmpty {
+                messageText += "- **Type**: \(docType)\n"
+            }
+            messageText += "- **Size**: \(sizeKB) KB\n\n"
+            messageText += "**Summary**:\n\(summary)\n\n"
         }
+
+        messageText += """
+            ---
+            Full document text is preserved and available via `get_artifact(artifact_id)` when needed \
+            for detailed analysis or knowledge card generation.
+            """
 
         return messageText
     }
@@ -360,122 +373,48 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
     }
 
     /// Send git repository analysis artifact to LLM
+    /// IMPORTANT: Only sends summary to prevent token accumulation.
+    /// Full analysis is preserved in artifact and available via get_artifact.
     private func sendGitArtifact(_ record: JSON) async {
         let artifactId = record["id"].stringValue
         let filename = record["filename"].stringValue
         let analysis = record["analysis"]
 
-        // Build a comprehensive message with the git analysis (new schema)
-        var messageText = "Git repository analysis completed for: \(filename)\n\n"
+        // Build a concise summary message (not full analysis)
+        var messageText = "### Git Repository Analysis: \(filename)\n\n"
+        messageText += "- **Artifact ID**: `\(artifactId)`\n"
 
-        // Repository summary
+        // Repository summary (brief)
         let repoSummary = analysis["repository_summary"]
         if repoSummary.exists() {
-            messageText += "**Project:** \(repoSummary["name"].stringValue)\n"
-            messageText += "\(repoSummary["description"].stringValue)\n"
-            messageText += "Domain: \(repoSummary["primary_domain"].stringValue) | "
-            messageText += "Type: \(repoSummary["project_type"].stringValue)\n\n"
+            messageText += "- **Project**: \(repoSummary["name"].stringValue)\n"
+            messageText += "- **Domain**: \(repoSummary["primary_domain"].stringValue)\n"
+            messageText += "- **Type**: \(repoSummary["project_type"].stringValue)\n\n"
+            if let description = repoSummary["description"].string, !description.isEmpty {
+                messageText += "\(description)\n\n"
+            }
         }
 
-        // Technical skills with resume bullets
+        // Key skills (just names, not full details)
         if let skills = analysis["technical_skills"].array, !skills.isEmpty {
-            // Group by category for cleaner display
-            let languages = skills.filter { $0["category"].stringValue == "language" }
-            let frameworks = skills.filter { $0["category"].stringValue == "framework" }
-            let tools = skills.filter { ["tool", "platform", "database"].contains($0["category"].stringValue) }
-
-            if !languages.isEmpty {
-                messageText += "**Languages:**\n"
-                for lang in languages {
-                    messageText += "- \(lang["skill_name"].stringValue) (\(lang["proficiency_level"].stringValue))\n"
-                }
-                messageText += "\n"
-            }
-
-            if !frameworks.isEmpty {
-                messageText += "**Frameworks:**\n"
-                for fw in frameworks {
-                    messageText += "- \(fw["skill_name"].stringValue) (\(fw["proficiency_level"].stringValue))\n"
-                }
-                messageText += "\n"
-            }
-
-            if !tools.isEmpty {
-                messageText += "**Tools & Platforms:**\n"
-                for tool in tools {
-                    messageText += "- \(tool["skill_name"].stringValue) (\(tool["proficiency_level"].stringValue))\n"
-                }
-                messageText += "\n"
-            }
-
-            // Show some resume bullets
-            messageText += "**Sample Resume Bullets:**\n"
-            for skill in skills.prefix(5) {
-                if let bullets = skill["resume_bullets"].array, let firstBullet = bullets.first?.string {
-                    messageText += "- \(firstBullet)\n"
-                }
-            }
-            messageText += "\n"
-        }
-
-        // AI Collaboration Profile
-        let aiProfile = analysis["ai_collaboration_profile"]
-        if aiProfile.exists() {
-            let detected = aiProfile["detected_ai_usage"].boolValue
-            let rating = aiProfile["collaboration_quality_rating"].stringValue
-            messageText += "**AI Collaboration:** "
-            if detected {
-                messageText += "\(rating.replacingOccurrences(of: "_", with: " ").capitalized)\n"
-                if let positioning = aiProfile["resume_positioning"]["framing_recommendation"].string {
-                    messageText += "Resume positioning: \(positioning)\n"
-                }
-            } else {
-                messageText += "No AI usage detected\n"
-            }
-            messageText += "\n"
-        }
-
-        // Architectural competencies
-        if let competencies = analysis["architectural_competencies"].array, !competencies.isEmpty {
-            messageText += "**Architectural Competencies:**\n"
-            for comp in competencies.prefix(5) {
-                messageText += "- \(comp["competency"].stringValue) (\(comp["proficiency_level"].stringValue))\n"
-            }
-            messageText += "\n"
-        }
-
-        // Professional attributes with cover letter phrases
-        if let attrs = analysis["professional_attributes"].array, !attrs.isEmpty {
-            messageText += "**Professional Attributes:**\n"
-            for attr in attrs.prefix(5) {
-                messageText += "- \(attr["attribute"].stringValue) (\(attr["strength_level"].stringValue))\n"
-            }
-            messageText += "\n"
-        }
-
-        // Notable achievements
-        if let achievements = analysis["notable_achievements"].array, !achievements.isEmpty {
-            messageText += "**Notable Achievements:**\n"
-            for achievement in achievements.prefix(8) {
-                messageText += "- \(achievement["resume_bullet"].stringValue)\n"
-            }
-            messageText += "\n"
-        }
-
-        // Keyword cloud for ATS
-        let keywords = analysis["keyword_cloud"]
-        if keywords.exists() {
-            if let primary = keywords["primary"].array, !primary.isEmpty {
-                messageText += "**Primary Keywords (ATS):** \(primary.compactMap { $0.string }.joined(separator: ", "))\n\n"
+            let skillNames = skills.prefix(10).compactMap { $0["skill_name"].string }
+            if !skillNames.isEmpty {
+                messageText += "**Key Technologies**: \(skillNames.joined(separator: ", "))\n\n"
             }
         }
 
-        messageText += "Artifact ID: \(artifactId)\n\n"
-        messageText += "This artifact is now available via `list_artifacts` and `get_artifact`. "
-        messageText += "The full analysis includes resume_bullets and cover_letter_phrases ready for use. "
-        messageText += "Please acknowledge receipt and briefly summarize what you learned about my skills and experience from this repository."
+        // Achievement count
+        let achievementCount = analysis["notable_achievements"].arrayValue.count
+        let competencyCount = analysis["architectural_competencies"].arrayValue.count
+        messageText += "**Analysis includes**: \(achievementCount) notable achievements, \(competencyCount) architectural competencies\n\n"
 
-        // Send as user message so the LLM acknowledges receipt
+        messageText += """
+            ---
+            Full analysis (resume bullets, cover letter phrases, detailed skills) is available via \
+            `get_artifact("\(artifactId)")` for knowledge card generation.
+            """
+
+        // Send as user message
         var payload = JSON()
         payload["text"].string = messageText
 
@@ -484,6 +423,6 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
         // Turn off extraction indicator now that analysis is complete
         await emit(.extractionStateChanged(false, statusMessage: nil))
 
-        Logger.info("📤 Git analysis artifact sent to LLM (user message): \(artifactId)", category: .ai)
+        Logger.info("📤 Git analysis summary sent to LLM: \(artifactId)", category: .ai)
     }
 }

@@ -187,10 +187,10 @@ actor AgentRunner {
                 if let usage = response.usage {
                     await emitTokenUsage(
                         modelId: config.modelId,
-                        inputTokens: usage.inputTokens ?? 0,
-                        outputTokens: usage.outputTokens ?? 0,
-                        cachedTokens: usage.inputTokensDetails?.cachedTokens ?? 0,
-                        reasoningTokens: usage.outputTokensDetails?.reasoningTokens ?? 0
+                        inputTokens: usage.promptTokens ?? 0,
+                        outputTokens: usage.completionTokens ?? 0,
+                        cachedTokens: usage.promptTokensDetails?.cachedTokens ?? 0,
+                        reasoningTokens: usage.completionTokensDetails?.reasoningTokens ?? 0
                     )
                 }
 
@@ -389,14 +389,14 @@ actor AgentRunner {
         guard let eventBus = eventBus else { return }
 
         let source: UsageSource = (config.agentType == .knowledgeCard) ? .kcAgent : .mainCoordinator
-        await eventBus.emit(.llmTokenUsageReceived(
+        await eventBus.publish(.llmTokenUsageReceived(
             modelId: modelId,
             inputTokens: inputTokens,
             outputTokens: outputTokens,
             cachedTokens: cachedTokens,
             reasoningTokens: reasoningTokens,
             source: source
-        ), topic: .llm)
+        ))
     }
 }
 

@@ -53,6 +53,17 @@ final class OnboardingUIState {
     var knowledgeCardPlanFocus: String?
     var knowledgeCardPlanMessage: String?
 
+    // MARK: - Multi-Agent Workflow State
+    /// True when card assignments have been proposed and await user approval
+    /// Set by .cardAssignmentsProposed event, cleared when dispatch begins
+    var cardAssignmentsReadyForApproval: Bool = false
+    /// Number of card assignments proposed
+    var proposedAssignmentCount: Int = 0
+    /// Number of documentation gaps identified
+    var identifiedGapCount: Int = 0
+    /// True when KC agents are actively generating cards
+    var isGeneratingCards: Bool = false
+
     // MARK: - Objective Status (for Phase 3 subphase tracking)
     var objectiveStatuses: [String: String] = [:]
 

@@ -1,22 +1,14 @@
 import SwiftUI
 
-/// View that displays the knowledge card collection plan as a todo list.
-/// Shows the current item being worked on with a "Done with this card" button.
-/// Gates completion until all pending artifacts are processed.
+/// View that displays the knowledge card collection plan and generation workflow.
+/// Multi-agent workflow: plan → assignments → Generate Cards button → parallel generation
 struct KnowledgeCardCollectionView: View {
     let coordinator: OnboardingInterviewCoordinator
-    let onDoneWithCard: (String) -> Void
+    let onGenerateCards: () -> Void
     let onAdvanceToNextPhase: () -> Void
-
-    @State private var pendingArtifactStatus: String?
-    @State private var hasPendingArtifacts = false
 
     private var planItems: [KnowledgeCardPlanItem] {
         coordinator.ui.knowledgeCardPlan
-    }
-
-    private var currentFocus: String? {
-        coordinator.ui.knowledgeCardPlanFocus
     }
 
     private var message: String? {
@@ -25,6 +17,22 @@ struct KnowledgeCardCollectionView: View {
 
     private var hasCompletedCards: Bool {
         planItems.contains { $0.status == .completed }
+    }
+
+    private var isReadyForGeneration: Bool {
+        coordinator.ui.cardAssignmentsReadyForApproval
+    }
+
+    private var isGenerating: Bool {
+        coordinator.ui.isGeneratingCards
+    }
+
+    private var assignmentCount: Int {
+        coordinator.ui.proposedAssignmentCount
+    }
+
+    private var gapCount: Int {
+        coordinator.ui.identifiedGapCount
     }
 
     var body: some View {
@@ -37,8 +45,18 @@ struct KnowledgeCardCollectionView: View {
                 planListSection
             }
 
+            // Show Generate Cards button when assignments are ready
+            if isReadyForGeneration && !isGenerating {
+                generateCardsButton
+            }
+
+            // Show generation progress when generating
+            if isGenerating {
+                generatingProgressView
+            }
+
             // Show advance button when at least one card is complete
-            if hasCompletedCards {
+            if hasCompletedCards && !isGenerating {
                 advanceToNextPhaseButton
             }
         }
@@ -49,21 +67,6 @@ struct KnowledgeCardCollectionView: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
         )
-        .task(id: currentFocus) {
-            await updatePendingStatus()
-        }
-        .task {
-            // Periodically check for pending artifact updates
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(2))
-                await updatePendingStatus()
-            }
-        }
-    }
-
-    private func updatePendingStatus() async {
-        hasPendingArtifacts = await coordinator.hasPendingArtifactsForCurrentItem()
-        pendingArtifactStatus = await coordinator.getPendingArtifactStatus()
     }
 
     private var headerSection: some View {
@@ -113,15 +116,57 @@ struct KnowledgeCardCollectionView: View {
                 ForEach(planItems) { item in
                     KnowledgeCardPlanRow(
                         item: item,
-                        isFocused: item.id == currentFocus,
-                        hasPendingArtifacts: item.id == currentFocus && hasPendingArtifacts,
-                        pendingStatus: item.id == currentFocus ? pendingArtifactStatus : nil,
-                        onDone: { onDoneWithCard(item.id) }
+                        isGenerating: isGenerating
                     )
                 }
             }
             .padding(.bottom, 4)
         }
+    }
+
+    private var generateCardsButton: some View {
+        VStack(spacing: 6) {
+            Button(action: onGenerateCards) {
+                HStack {
+                    Image(systemName: "sparkles")
+                    Text("Generate \(assignmentCount) Knowledge Card\(assignmentCount == 1 ? "" : "s")")
+                }
+                .font(.caption.weight(.semibold))
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .tint(.green)
+
+            if gapCount > 0 {
+                Text("\(gapCount) documentation gap\(gapCount == 1 ? "" : "s") identified — upload more docs or proceed")
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+            }
+
+            Text("Review the assignments in chat before generating")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.top, 4)
+    }
+
+    private var generatingProgressView: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .scaleEffect(0.8)
+                .frame(width: 16, height: 16)
+
+            Text("Generating knowledge cards...")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .background(Color.accentColor.opacity(0.1))
+        .cornerRadius(8)
     }
 
     private var advanceToNextPhaseButton: some View {
@@ -142,10 +187,7 @@ struct KnowledgeCardCollectionView: View {
 
 private struct KnowledgeCardPlanRow: View {
     let item: KnowledgeCardPlanItem
-    let isFocused: Bool
-    let hasPendingArtifacts: Bool
-    let pendingStatus: String?
-    let onDone: () -> Void
+    let isGenerating: Bool
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
@@ -164,12 +206,11 @@ private struct KnowledgeCardPlanRow: View {
                     typeTag
                 }
 
-                if item.status == .inProgress && isFocused {
-                    if hasPendingArtifacts {
-                        pendingArtifactView
-                    } else {
-                        doneButton
-                    }
+                if let description = item.description {
+                    Text(description)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
             }
         }
@@ -179,25 +220,8 @@ private struct KnowledgeCardPlanRow: View {
         .cornerRadius(6)
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .stroke(borderColor, lineWidth: isFocused ? 2 : 1)
+                .stroke(borderColor, lineWidth: 1)
         )
-    }
-
-    @ViewBuilder
-    private var pendingArtifactView: some View {
-        HStack(spacing: 6) {
-            ProgressView()
-                .scaleEffect(0.7)
-                .frame(width: 16, height: 16)
-
-            Text(pendingStatus ?? "Processing artifacts...")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.vertical, 4)
-        .padding(.horizontal, 8)
-        .background(Color.orange.opacity(0.1))
-        .cornerRadius(6)
     }
 
     @ViewBuilder
@@ -208,10 +232,15 @@ private struct KnowledgeCardPlanRow: View {
                 .font(.caption)
                 .foregroundStyle(.green)
         case .inProgress:
-            Image(systemName: "circle.dotted")
-                .font(.caption)
-                .foregroundStyle(Color.accentColor)
-                .symbolEffect(.pulse, options: .repeating)
+            if isGenerating {
+                ProgressView()
+                    .scaleEffect(0.6)
+                    .frame(width: 14, height: 14)
+            } else {
+                Image(systemName: "circle.dotted")
+                    .font(.caption)
+                    .foregroundStyle(Color.accentColor)
+            }
         case .pending:
             Image(systemName: "circle")
                 .font(.caption)
@@ -233,18 +262,8 @@ private struct KnowledgeCardPlanRow: View {
             .cornerRadius(4)
     }
 
-    private var doneButton: some View {
-        Button(action: onDone) {
-            Label("Done with this card", systemImage: "checkmark")
-                .font(.caption.weight(.medium))
-        }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
-        .tint(.green)
-    }
-
     private var backgroundColor: Color {
-        if isFocused && item.status == .inProgress {
+        if item.status == .inProgress && isGenerating {
             return Color.accentColor.opacity(0.05)
         } else if item.status == .completed {
             return Color.green.opacity(0.03)
@@ -253,8 +272,8 @@ private struct KnowledgeCardPlanRow: View {
     }
 
     private var borderColor: Color {
-        if isFocused && item.status == .inProgress {
-            return Color.accentColor
+        if item.status == .inProgress && isGenerating {
+            return Color.accentColor.opacity(0.5)
         } else if item.status == .completed {
             return Color.green.opacity(0.3)
         }
