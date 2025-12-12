@@ -186,6 +186,9 @@ struct OnboardingInterviewChatPanel: View {
             scrollToLatestButton(proxy: proxy)
         }
         .overlay(scrollOffsetOverlay())
+        .overlay {
+            reasoningSummaryOverlay
+        }
         .contextMenu { exportTranscriptContextMenu() }
         .onChange(of: coordinator.ui.messages.count, initial: true) { _, newValue in
             handleMessageCountChange(newValue: newValue, proxy: proxy)
@@ -319,6 +322,49 @@ struct OnboardingInterviewChatPanel: View {
             return 0
         }
         return lastMessage.text.count
+    }
+
+    /// Show reasoning summary while model is thinking, dismiss when response starts streaming
+    @ViewBuilder
+    private var reasoningSummaryOverlay: some View {
+        let summary = coordinator.chatTranscriptStore.currentReasoningSummarySync
+        let isActive = coordinator.chatTranscriptStore.isReasoningActiveSync
+        let hasContent = !(summary?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        // Show when reasoning is active with content, hide when response starts streaming
+        let shouldShow = (isActive || hasContent) && streamingMessageContentLength == 0
+
+        if shouldShow, let text = summary {
+            VStack {
+                Spacer()
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "brain.head.profile")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Thinking")
+                                .font(.headline)
+                            if isActive {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                        }
+                        Text(text)
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
+                    Spacer()
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
+                .padding(20)
+            }
+            .transition(.opacity.combined(with: .move(edge: .bottom)))
+            .animation(.easeInOut(duration: 0.3), value: shouldShow)
+        }
     }
     private func exportTranscript() {
         let panel = NSSavePanel()

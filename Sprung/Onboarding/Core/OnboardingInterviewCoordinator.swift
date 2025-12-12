@@ -17,6 +17,7 @@ final class OnboardingInterviewCoordinator {
     var toolRegistry: ToolRegistry { container.toolRegistry }
     var ui: OnboardingUIState { container.ui }
     var conversationLogStore: ConversationLogStore { container.conversationLogStore }
+    var chatTranscriptStore: ChatTranscriptStore { container.chatTranscriptStore }
     // MARK: - Private Accessors (for internal use)
     // Session & Lifecycle
     private var sessionCoordinator: InterviewSessionCoordinator { container.sessionCoordinator }

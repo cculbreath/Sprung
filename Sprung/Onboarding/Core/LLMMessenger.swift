@@ -563,10 +563,10 @@ actor LLMMessenger: OnboardingEventEmitter {
         if useCacheRetention {
             parameters.promptCacheRetention = "24h"
         }
-        // Apply default reasoning effort from settings
+        // Apply default reasoning effort from settings, with summary enabled for UI display
         let effectiveReasoning = await stateCoordinator.getDefaultReasoningEffort()
         if effectiveReasoning != "none" {
-            parameters.reasoning = Reasoning(effort: effectiveReasoning)
+            parameters.reasoning = Reasoning(effort: effectiveReasoning, summary: .auto)
         }
         Logger.info(
             "📝 Built request: previousResponseId=\(previousResponseId?.description ?? "nil"), inputItems=\(inputItems.count), parallelToolCalls=\(parameters.parallelToolCalls?.description ?? "nil"), serviceTier=\(parameters.serviceTier ?? "default"), cacheRetention=\(useCacheRetention ? "24h" : "default"), reasoningEffort=\(effectiveReasoning)",
@@ -635,11 +635,11 @@ actor LLMMessenger: OnboardingEventEmitter {
         if useCacheRetention {
             parameters.promptCacheRetention = "24h"
         }
-        // Set reasoning effort (use provided value or default from settings)
+        // Set reasoning effort (use provided value or default from settings), with summary enabled
         let defaultReasoning = await stateCoordinator.getDefaultReasoningEffort()
         let effectiveReasoning = reasoningEffort ?? defaultReasoning
         if effectiveReasoning != "none" {
-            parameters.reasoning = Reasoning(effort: effectiveReasoning)
+            parameters.reasoning = Reasoning(effort: effectiveReasoning, summary: .auto)
         }
         let toolChoiceDesc: String
         switch toolChoice {
@@ -710,11 +710,11 @@ actor LLMMessenger: OnboardingEventEmitter {
         if useCacheRetention {
             parameters.promptCacheRetention = "24h"
         }
-        // Set reasoning effort (use provided value or default from settings)
+        // Set reasoning effort (use provided value or default from settings), with summary enabled
         let defaultReasoning = await stateCoordinator.getDefaultReasoningEffort()
         let effectiveReasoning = reasoningEffort ?? defaultReasoning
         if effectiveReasoning != "none" {
-            parameters.reasoning = Reasoning(effort: effectiveReasoning)
+            parameters.reasoning = Reasoning(effort: effectiveReasoning, summary: .auto)
         }
         Logger.info("📝 Built tool response request: parallelToolCalls=\(parameters.parallelToolCalls?.description ?? "nil"), toolChoice=\(forcedToolChoice ?? "auto"), serviceTier=\(parameters.serviceTier ?? "default"), cacheRetention=\(useCacheRetention ? "24h" : "default"), reasoningEffort=\(effectiveReasoning)", category: .ai)
         return parameters
@@ -748,10 +748,10 @@ actor LLMMessenger: OnboardingEventEmitter {
         if useCacheRetention {
             parameters.promptCacheRetention = "24h"
         }
-        // Apply default reasoning effort from settings
+        // Apply default reasoning effort from settings, with summary enabled
         let effectiveReasoning = await stateCoordinator.getDefaultReasoningEffort()
         if effectiveReasoning != "none" {
-            parameters.reasoning = Reasoning(effort: effectiveReasoning)
+            parameters.reasoning = Reasoning(effort: effectiveReasoning, summary: .auto)
         }
         Logger.info("📝 Built batched tool response request: \(inputItems.count) tool outputs, parallelToolCalls=\(parameters.parallelToolCalls?.description ?? "nil"), serviceTier=\(parameters.serviceTier ?? "default"), cacheRetention=\(useCacheRetention ? "24h" : "default"), reasoningEffort=\(effectiveReasoning)", category: .ai)
         return parameters
