@@ -34,6 +34,9 @@ struct OnboardingInterviewChatPanel: View {
     @State private var isStreamingMessage = false
     @State private var showMessageFailedAlert = false
     @State private var lastStreamingContentLength: Int = 0
+    @State private var reasoningDismissTime: Date?
+    @State private var reasoningStreamStartLength: Int = 0
+    @State private var reasoningTimerTick: Int = 0
     var body: some View {
         let horizontalPadding: CGFloat = 32
         let topPadding: CGFloat = 28
@@ -199,6 +202,7 @@ struct OnboardingInterviewChatPanel: View {
                 // LLM message was finalized, scroll to bottom
                 isStreamingMessage = false
                 lastStreamingContentLength = 0
+                resetReasoningOverlayState()
                 Task { @MainActor in
                     try? await Task.sleep(for: .milliseconds(100))
                     withAnimation(.easeInOut(duration: 0.3)) {
@@ -221,7 +225,11 @@ struct OnboardingInterviewChatPanel: View {
             }
         }
         // Track streaming message content changes for auto-scroll during streaming
-        .onChange(of: streamingMessageContentLength) { _, newLength in
+        .onChange(of: streamingMessageContentLength) { oldLength, newLength in
+            // Start reasoning dismiss timer when streaming begins
+            if oldLength == 0 && newLength > 0 {
+                startReasoningDismissTimer()
+            }
             // Only auto-scroll if streaming and user hasn't scrolled away
             if isStreamingMessage && state.shouldAutoScroll && newLength > lastStreamingContentLength {
                 lastStreamingContentLength = newLength
@@ -324,18 +332,26 @@ struct OnboardingInterviewChatPanel: View {
         return lastMessage.text.count
     }
 
-    /// Show reasoning summary while model is thinking, dismiss when response starts streaming
+    /// Show reasoning summary at top of chat while model is thinking.
+    /// Holds for 7s after streaming starts or until response would occlude overlay, whichever is shorter.
     @ViewBuilder
     private var reasoningSummaryOverlay: some View {
         let summary = coordinator.chatTranscriptStore.currentReasoningSummarySync
         let isActive = coordinator.chatTranscriptStore.isReasoningActiveSync
         let hasContent = !(summary?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
-        // Show when reasoning is active with content, hide when response starts streaming
-        let shouldShow = (isActive || hasContent) && streamingMessageContentLength == 0
+
+        // Dismiss conditions when streaming (use reasoningTimerTick to trigger re-evaluation):
+        // 1. 7 seconds elapsed since streaming started
+        // 2. Response has grown significantly (would be occluded by overlay ~200 chars)
+        let _ = reasoningTimerTick // Force view update on timer tick
+        let isStreaming = streamingMessageContentLength > 0
+        let timedOut = reasoningDismissTime.map { Date() > $0 } ?? false
+        let responseGrownLarge = isStreaming && (streamingMessageContentLength - reasoningStreamStartLength) > 200
+
+        let shouldShow = hasContent && !timedOut && !responseGrownLarge
 
         if shouldShow, let text = summary {
             VStack {
-                Spacer()
                 HStack(alignment: .top, spacing: 12) {
                     Image(systemName: "brain.head.profile")
                         .font(.title2)
@@ -353,6 +369,7 @@ struct OnboardingInterviewChatPanel: View {
                             .font(.body)
                             .foregroundStyle(.secondary)
                             .textSelection(.enabled)
+                            .lineLimit(6)
                     }
                     Spacer()
                 }
@@ -361,10 +378,28 @@ struct OnboardingInterviewChatPanel: View {
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
                 .padding(20)
+                Spacer()
             }
-            .transition(.opacity.combined(with: .move(edge: .bottom)))
-            .animation(.easeInOut(duration: 0.3), value: shouldShow)
+            .transition(.opacity.combined(with: .move(edge: .top)))
         }
+    }
+
+    /// Start the 7-second dismiss timer when streaming begins
+    private func startReasoningDismissTimer() {
+        guard reasoningDismissTime == nil else { return }
+        reasoningStreamStartLength = streamingMessageContentLength
+        reasoningDismissTime = Date().addingTimeInterval(7)
+        // Schedule a view update after 7 seconds to trigger dismissal
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(7))
+            reasoningTimerTick += 1
+        }
+    }
+
+    /// Reset reasoning overlay state when streaming ends
+    private func resetReasoningOverlayState() {
+        reasoningDismissTime = nil
+        reasoningStreamStartLength = 0
     }
     private func exportTranscript() {
         let panel = NSSavePanel()
