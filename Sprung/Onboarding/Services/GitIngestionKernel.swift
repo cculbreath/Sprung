@@ -17,11 +17,22 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
     private var llmFacade: LLMFacade?
     private weak var ingestionCoordinator: ArtifactIngestionCoordinator?
 
+    /// Agent activity tracker for UI visibility
+    private weak var agentActivityTracker: AgentActivityTracker?
+
     /// Active ingestion tasks by pending ID
     private var activeTasks: [String: Task<Void, Never>] = [:]
 
+    /// Mapping from pending ID to agent tracker ID
+    private var agentIds: [String: String] = [:]
+
     init(eventBus: EventCoordinator) {
         self.eventBus = eventBus
+    }
+
+    /// Set the agent activity tracker for monitoring
+    func setAgentActivityTracker(_ tracker: AgentActivityTracker) {
+        self.agentActivityTracker = tracker
     }
 
     /// Update the LLM facade (called when dependencies change)
@@ -57,16 +68,34 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
             statusMessage: "Analyzing repository..."
         )
 
+        // Register with agent activity tracker for UI visibility
+        let agentId = UUID().uuidString
+        agentIds[pendingId] = agentId
+
         // Start async processing
         let task = Task { [weak self] in
             guard let self = self else { return }
             await self.analyzeRepository(
                 pendingId: pendingId,
+                agentId: agentId,
                 repoURL: source,
+                repoName: repoName,
                 planItemId: planItemId
             )
         }
         activeTasks[pendingId] = task
+
+        // Register agent after creating task (so we can associate the task with it)
+        if let tracker = agentActivityTracker {
+            await MainActor.run {
+                tracker.trackAgent(
+                    id: agentId,
+                    type: .gitIngestion,
+                    name: "Git: \(repoName)",
+                    task: task
+                )
+            }
+        }
 
         return pending
     }
@@ -81,22 +110,39 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
 
     private func analyzeRepository(
         pendingId: String,
+        agentId: String,
         repoURL: URL,
+        repoName: String,
         planItemId: String?
     ) async {
-        Logger.info("🔬 [GitIngest] analyzeRepository Task started for: \(repoURL.lastPathComponent)", category: .ai)
+        Logger.info("🔬 [GitIngest] analyzeRepository Task started for: \(repoName)", category: .ai)
         let repoPath = repoURL.path
-        let repoName = repoURL.lastPathComponent
+
+        // Capture tracker locally for sendable closure access
+        let tracker = agentActivityTracker
+
+        // Helper to append transcript entries
+        @Sendable func appendTranscript(_ type: AgentTranscriptEntry.EntryType, _ content: String, details: String? = nil) async {
+            if let tracker = tracker {
+                await MainActor.run {
+                    tracker.appendTranscript(agentId: agentId, entryType: type, content: content, details: details)
+                }
+            }
+        }
 
         do {
             await eventBus.publish(.extractionStateChanged(true, statusMessage: "Gathering repository data..."))
+            await appendTranscript(.system, "Starting repository analysis", details: repoPath)
 
             // Step 1: Gather raw git data
             Logger.info("🔬 [GitIngest] About to call gatherGitData for: \(repoPath)", category: .ai)
             let gitData = try gatherGitData(repoPath: repoPath)
-            Logger.info("🔬 [GitIngest] gatherGitData completed, contributors: \(gitData["contributors"].count)", category: .ai)
+            let contributorCount = gitData["contributors"].arrayValue.count
+            Logger.info("🔬 [GitIngest] gatherGitData completed, contributors: \(contributorCount)", category: .ai)
+            await appendTranscript(.system, "Gathered repository metadata", details: "\(contributorCount) contributor(s) found")
 
             await eventBus.publish(.extractionStateChanged(true, statusMessage: "Analyzing code patterns with multi-turn agent..."))
+            await appendTranscript(.system, "Starting multi-turn code analysis agent")
             Logger.info("🔬 [GitIngest] About to call runAnalysisAgent (requires @MainActor hop)", category: .ai)
 
             // Step 2: Run multi-turn agent to analyze actual code
@@ -145,14 +191,30 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
             await ingestionCoordinator?.handleIngestionCompleted(pendingId: pendingId, result: result)
             // Note: DocumentArtifactMessenger.sendGitArtifact turns off the spinner after sending the developer message
 
+            // Mark agent as completed in tracker
+            await appendTranscript(.assistant, "Analysis complete", details: "Artifact created: \(record["id"].stringValue)")
+            if let tracker = tracker {
+                await MainActor.run {
+                    tracker.markCompleted(agentId: agentId)
+                }
+            }
+
             Logger.info("✅ Git repository analysis completed: \(repoName)", category: .ai)
 
         } catch {
             await ingestionCoordinator?.handleIngestionFailed(pendingId: pendingId, error: error.localizedDescription)
+
+            // Mark agent as failed in tracker
+            if let tracker = tracker {
+                await MainActor.run {
+                    tracker.markFailed(agentId: agentId, error: error.localizedDescription)
+                }
+            }
             Logger.error("❌ Git repository analysis failed: \(error.localizedDescription)", category: .ai)
         }
 
         activeTasks[pendingId] = nil
+        agentIds[pendingId] = nil
     }
 
     // MARK: - Git Data Gathering

@@ -256,6 +256,12 @@ final class OnboardingDependencyContainer {
         self.gitIngestionKernel = ingestion.gitIngestionKernel
         self.artifactIngestionCoordinator = ingestion.artifactIngestionCoordinator
 
+        // Wire up agent activity tracker to git kernel for UI visibility (captured locally to avoid self capture issue)
+        let activityTracker = self.agentActivityTracker
+        Task {
+            await ingestion.gitIngestionKernel.setAgentActivityTracker(activityTracker)
+        }
+
         // 12. Initialize remaining handlers
         self.profilePersistenceHandler = ProfilePersistenceHandler(
             applicantProfileStore: applicantProfileStore, toolRouter: tools.toolRouter, eventBus: core.eventBus, ui: ui
