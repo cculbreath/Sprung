@@ -184,6 +184,11 @@ final class ProfileInteractionHandler {
         return url
     }
     /// Completes profile intake with a user-filled draft.
+    /// Note: We no longer emit an artifact record here. The profile data is:
+    /// 1. Persisted to ApplicantProfile via SwiftData (handled by caller)
+    /// 2. Returned directly in the tool response via UIResponseCoordinator.submitProfileDraft()
+    /// The contact card artifact was never used after the initial turn, and the summary-only
+    /// artifact messages were confusing the LLM into making extra calls to retrieve data.
     func completeDraft(_ draft: ApplicantProfileDraft, source: OnboardingApplicantProfileIntakeState.Source) {
         let dataJSON = attachingValidationMetadata(
             to: draft.toSafeJSON(),
@@ -192,10 +197,8 @@ final class ProfileInteractionHandler {
         if dataJSON != .null {
             lastSubmittedDraft = dataJSON
         }
-        // Emit artifact record for contacts and manual entry
-        Task {
-            await emitProfileArtifactRecord(profileJSON: dataJSON, source: source)
-        }
+        // Show the profile summary card
+        showProfileSummary(profile: dataJSON)
         Logger.info("✅ Draft completed (source: \(source == .contacts ? "contacts" : "manual"))", category: .ai)
     }
     /// Cancels profile intake.
@@ -226,43 +229,6 @@ final class ProfileInteractionHandler {
         enriched["meta"]["validated_via"].string = channel
         enriched["meta"]["validated_at"].string = isoFormatter.string(from: Date())
         return enriched
-    }
-    // MARK: - Artifact Record Creation
-    private func emitProfileArtifactRecord(
-        profileJSON: JSON,
-        source: OnboardingApplicantProfileIntakeState.Source
-    ) async {
-        let artifactId = UUID().uuidString
-        // For contacts, use vCard text; for manual, use JSON
-        let extractedText: String
-        if source == .contacts {
-            // Try to get vCard text representation
-            if let vCardData = try? await contactsImportService.fetchMeCardAsVCard(),
-               let vCardString = String(data: vCardData, encoding: .utf8) {
-                extractedText = vCardString
-            } else {
-                // Fallback to JSON if vCard fetch fails
-                extractedText = profileJSON.rawString() ?? "{}"
-            }
-        } else {
-            extractedText = profileJSON.rawString() ?? "{}"
-        }
-        var artifactRecord = JSON()
-        artifactRecord["id"].string = artifactId
-        artifactRecord["filename"].string = source == .contacts ? "contact-card.vcf" : "manual-entry.json"
-        artifactRecord["document_type"].string = "applicant_profile"
-        artifactRecord["extracted_text"].string = extractedText
-        artifactRecord["content_type"].string = source == .contacts ? "text/vcard" : "application/json"
-        artifactRecord["created_at"].string = isoFormatter.string(from: Date())
-        // Add metadata for LLM
-        var metadata = JSON()
-        metadata["target_phase_objectives"] = JSON(["applicant_profile.contact_intake"])  // Contact Information sub-objective
-        metadata["target_deliverable"].string = "ApplicantProfile"
-        metadata["user_validated"].bool = true
-        artifactRecord["metadata"] = metadata
-        // Emit artifact record produced event
-        await eventBus.publish(.artifactRecordProduced(record: artifactRecord))
-        Logger.info("📦 Profile artifact record emitted: \(artifactId) (source: \(source == .contacts ? "contacts" : "manual"))", category: .ai)
     }
     // MARK: - Profile Summary Management
     /// Shows the profile summary card in the tool pane.
