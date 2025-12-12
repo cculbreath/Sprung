@@ -278,6 +278,20 @@ actor ArtifactRepository: OnboardingEventEmitter {
     func getKnowledgeCards() -> [JSON] {
         artifacts.knowledgeCards
     }
+
+    // MARK: - Card Proposals (Multi-Agent)
+
+    /// Store card proposals from propose_card_assignments tool
+    func setCardProposals(_ proposals: JSON) {
+        artifacts.cardProposals = proposals
+        Logger.info("📋 Card proposals stored (\(proposals.arrayValue.count) proposals)", category: .ai)
+    }
+
+    /// Get stored card proposals for dispatch_kc_agents
+    func getCardProposals() -> JSON {
+        artifacts.cardProposals
+    }
+
     // MARK: - Writing Samples
     /// Add writing sample
     func addWritingSample(_ sample: JSON) async {

@@ -761,9 +761,20 @@ actor StateCoordinator: OnboardingEventEmitter {
                 experienceCards: await artifactRepository.getExperienceCards(),
                 writingSamples: await artifactRepository.getWritingSamples(),
                 artifactRecords: await artifactRepository.getArtifacts().artifactRecords,
-                knowledgeCards: await artifactRepository.getKnowledgeCards()
+                knowledgeCards: await artifactRepository.getKnowledgeCards(),
+                cardProposals: await artifactRepository.getCardProposals()
             )
         }
+    }
+
+    /// Store card proposals from propose_card_assignments tool
+    func storeCardProposals(_ proposals: JSON) async {
+        await artifactRepository.setCardProposals(proposals)
+    }
+
+    /// Get card proposals for dispatch_kc_agents
+    func getCardProposals() async -> JSON {
+        await artifactRepository.getCardProposals()
     }
     func listArtifactSummaries() async -> [JSON] {
         await artifactRepository.listArtifactSummaries()

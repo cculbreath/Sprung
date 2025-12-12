@@ -61,6 +61,7 @@ final class OnboardingToolRegistrar {
         toolRegistry.register(ScanGitRepoTool(coordinator: coordinator))
         toolRegistry.register(SubmitKnowledgeCardTool(coordinator: coordinator, dataStore: dataStore, eventBus: eventBus))
         toolRegistry.register(DispatchKCAgentsTool(coordinator: coordinator))
+        toolRegistry.register(ProposeCardAssignmentsTool(coordinator: coordinator))
         toolRegistry.register(StartPhaseThreeTool(coordinator: coordinator))
         toolRegistry.register(IngestWritingSampleTool(coordinator: coordinator, eventBus: eventBus))
         toolRegistry.register(SubmitExperienceDefaultsTool(coordinator: coordinator, eventBus: eventBus))
