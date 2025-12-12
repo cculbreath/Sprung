@@ -14,7 +14,7 @@ struct OnboardingInterviewInteractiveCard: View {
                 coordinator: coordinator,
                 isOccupied: $isToolPaneOccupied
             )
-            .frame(minWidth: 340, maxWidth: 400)
+            .frame(minWidth: 360, maxWidth: 420)
             .frame(maxHeight: .infinity, alignment: .topLeading)
             Divider()
             OnboardingInterviewChatPanel(

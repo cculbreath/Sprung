@@ -219,7 +219,7 @@ private extension OnboardingInterviewView {
                     modelStatusDescription: modelStatusDescription(coordinator: coordinator),
                     onOpenSettings: openSettings
                 )
-                .frame(width: 900)
+                .frame(width: 920)
                 .matchedGeometryEffect(id: "mainCard", in: wizardTransition)
                 .transition(.asymmetric(
                     insertion: .scale(scale: 0.95).combined(with: .opacity),
