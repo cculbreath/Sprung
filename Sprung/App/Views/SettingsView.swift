@@ -9,6 +9,8 @@ struct SettingsView: View {
     @AppStorage("onboardingInterviewDefaultModelId") private var onboardingModelId: String = "gpt-5"
     @AppStorage("onboardingPDFExtractionModelId") private var pdfExtractionModelId: String = "google/gemini-2.0-flash-001"
     @AppStorage("onboardingGitIngestModelId") private var gitIngestModelId: String = "anthropic/claude-haiku-4.5"
+    @AppStorage("onboardingDocSummaryModelId") private var docSummaryModelId: String = "gemini-2.0-flash-lite"
+    @AppStorage("onboardingKCAgentModelId") private var kcAgentModelId: String = "anthropic/claude-haiku-4.5"
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var onboardingWebSearchAllowed: Bool = true
     @AppStorage("onboardingInterviewReasoningEffort") private var onboardingReasoningEffort: String = "none"
     @AppStorage("onboardingInterviewHardTaskReasoningEffort") private var onboardingHardTaskReasoningEffort: String = "medium"
@@ -121,7 +123,9 @@ struct SettingsView: View {
             Section {
                 onboardingInterviewModelPicker
                 pdfExtractionModelPicker
+                docSummaryModelPicker
                 gitIngestModelPicker
+                kcAgentModelPicker
 
                 Toggle("Allow web search during interviews", isOn: $onboardingWebSearchAllowed)
 
@@ -204,10 +208,12 @@ struct SettingsView: View {
         .task {
             sanitizePDFExtractionModelIfNeeded()
             sanitizeGitIngestModelIfNeeded()
+            sanitizeKCAgentModelIfNeeded()
         }
         .onChange(of: enabledLLMStore.enabledModels.map(\.modelId)) { _, _ in
             sanitizePDFExtractionModelIfNeeded()
             sanitizeGitIngestModelIfNeeded()
+            sanitizeKCAgentModelIfNeeded()
         }
         .sheet(isPresented: $showSetupWizard) {
             SetupWizardView {
@@ -446,6 +452,80 @@ private extension SettingsView {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    var docSummaryModelPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if !hasGeminiKey {
+                Label("Add Google Gemini API key above to enable document summarization.", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .font(.callout)
+            } else if geminiModels.isEmpty {
+                HStack {
+                    Text("No Gemini models available")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    Button("Load Models") {
+                        Task { await loadGeminiModels() }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            } else {
+                Picker("Doc Summary Model", selection: $docSummaryModelId) {
+                    ForEach(geminiModels) { model in
+                        Text(model.displayName)
+                            .tag(model.id)
+                    }
+                }
+                .pickerStyle(.menu)
+                Text("Generates summaries of uploaded documents. Flash-Lite recommended for cost.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    var kcAgentModelPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if allOpenRouterModels.isEmpty {
+                Label("Enable OpenRouter models in Options before adjusting KC Agent model.", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .font(.callout)
+            } else {
+                Picker("KC Agent Model", selection: Binding(
+                    get: { kcAgentModelId },
+                    set: { newValue in
+                        kcAgentModelId = newValue
+                        _ = sanitizeKCAgentModelIfNeeded()
+                    }
+                )) {
+                    ForEach(allOpenRouterModels, id: \.modelId) { model in
+                        Text(model.displayName.isEmpty ? model.modelId : model.displayName)
+                            .tag(model.modelId)
+                    }
+                }
+                .pickerStyle(.menu)
+                Text("Model for parallel knowledge card generation agents.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @discardableResult
+    func sanitizeKCAgentModelIfNeeded() -> String {
+        let ids = allOpenRouterModels.map(\.modelId)
+        let fallback = "anthropic/claude-haiku-4.5"
+        let (sanitized, adjusted) = ModelPreferenceValidator.sanitize(
+            requested: kcAgentModelId,
+            available: ids,
+            fallback: fallback
+        )
+        if adjusted {
+            kcAgentModelId = sanitized
+        }
+        return sanitized
     }
 
     /// True for base GPT-5 models (gpt-5, gpt-5-mini, etc.) that require "minimal" reasoning minimum

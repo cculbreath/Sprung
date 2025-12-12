@@ -132,7 +132,8 @@ actor ArtifactRepository: OnboardingEventEmitter {
         // Emit confirmation event for persistence
         await emit(.artifactMetadataUpdated(artifact: artifact))
     }
-    /// List artifact summaries (id, filename, size, content_type)
+    /// List artifact summaries (id, filename, size, content_type, summary)
+    /// Used by main coordinator to see all docs at a glance without full text
     func listArtifactSummaries() -> [JSON] {
         artifacts.artifactRecords.map { artifact in
             var summary = JSON()
@@ -140,7 +141,51 @@ actor ArtifactRepository: OnboardingEventEmitter {
             summary["filename"].string = artifact["filename"].string
             summary["size_bytes"].int = artifact["size_bytes"].int
             summary["content_type"].string = artifact["content_type"].string
+            // Include the summary if available (from summarization step)
+            if let docSummary = artifact["summary"].string, !docSummary.isEmpty {
+                summary["summary"].string = docSummary
+            }
+            // Include metadata for additional context
+            if let title = artifact["metadata"]["title"].string, !title.isEmpty {
+                summary["title"].string = title
+            }
+            if let purpose = artifact["metadata"]["purpose"].string, !purpose.isEmpty {
+                summary["purpose"].string = purpose
+            }
             return summary
+        }
+    }
+
+    /// Update the summary field for an artifact (called after summarization)
+    func updateArtifactSummary(artifactId: String, summary: String) async {
+        guard let index = artifacts.artifactRecords.firstIndex(where: { record in
+            record["id"].string == artifactId
+        }) else {
+            Logger.warning("⚠️ Artifact not found for summary update: \(artifactId)", category: .ai)
+            return
+        }
+
+        var artifact = artifacts.artifactRecords[index]
+        artifact["summary"].string = summary
+        artifact["summary_generated_at"].string = ISO8601DateFormatter().string(from: Date())
+        artifacts.artifactRecords[index] = artifact
+        artifactRecordsSync = artifacts.artifactRecords
+
+        Logger.info("✅ Artifact summary updated: \(artifactId) (\(summary.count) chars)", category: .ai)
+    }
+
+    /// Check if an artifact has a summary
+    func hasArtifactSummary(artifactId: String) -> Bool {
+        guard let artifact = getArtifactRecord(id: artifactId) else { return false }
+        return artifact["summary"].string?.isEmpty == false
+    }
+
+    /// Get artifacts that need summarization (have extracted text but no summary)
+    func getArtifactsNeedingSummary() -> [JSON] {
+        artifacts.artifactRecords.filter { artifact in
+            let hasExtractedText = !artifact["extracted_text"].stringValue.isEmpty
+            let hasSummary = !artifact["summary"].stringValue.isEmpty
+            return hasExtractedText && !hasSummary
         }
     }
     // MARK: - Timeline Card Management

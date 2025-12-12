@@ -316,6 +316,129 @@ actor GoogleAIService {
         return text
     }
 
+    // MARK: - Summarization API
+
+    /// Generate a structured summary from extracted document text.
+    /// Uses Gemini Flash-Lite for cost efficiency (~$0.005/doc).
+    /// Returns structured JSON with summary, document type, time periods, skills, etc.
+    /// Model can be configured in Settings > Onboarding Interview > Doc Summary Model.
+    func generateSummary(
+        content: String,
+        filename: String,
+        modelId: String? = nil
+    ) async throws -> DocumentSummary {
+        // Use setting-based model or fallback
+        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingDocSummaryModelId") ?? "gemini-2.0-flash-lite"
+        let apiKey = try getAPIKey()
+        let url = URL(string: "\(baseURL)/v1beta/models/\(effectiveModelId):generateContent?key=\(apiKey)")!
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let summaryPrompt = """
+            Analyze this document and provide a structured summary for job application context.
+            Document filename: \(filename)
+
+            --- DOCUMENT CONTENT ---
+            \(content.prefix(100000))
+            --- END DOCUMENT ---
+
+            Output as JSON with this exact structure:
+            {
+              "document_type": "resume|performance_review|project_doc|job_description|letter_of_recommendation|certificate|transcript|portfolio|other",
+              "summary": "~500 word narrative summary covering: what the document contains, key information relevant to job applications, notable details that stand out",
+              "time_period": "YYYY-YYYY" or null if not applicable,
+              "companies": ["Company A", "Company B"],
+              "roles": ["Role 1", "Role 2"],
+              "skills": ["Swift", "Python", "Leadership"],
+              "achievements": ["Led team of 5", "Shipped 3 products"],
+              "relevance_hints": "Brief note about what types of knowledge cards this doc could support"
+            }
+
+            Be thorough in the summary - it will be the only context the main LLM coordinator sees.
+            Include specific details, metrics, and quotes where available.
+            """
+
+        let requestBody: [String: Any] = [
+            "contents": [
+                [
+                    "parts": [
+                        ["text": summaryPrompt]
+                    ]
+                ]
+            ],
+            "generationConfig": [
+                "temperature": 0.2,
+                "maxOutputTokens": 4096
+            ]
+        ]
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+
+        Logger.info("📝 Generating summary with \(effectiveModelId) for: \(filename)", category: .ai)
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw GoogleAIError.invalidResponse
+        }
+
+        if httpResponse.statusCode != 200 {
+            let errorMsg = String(data: data, encoding: .utf8) ?? "Unknown error"
+            Logger.error("❌ Summary generation failed: \(errorMsg)", category: .ai)
+            throw GoogleAIError.generateFailed(errorMsg)
+        }
+
+        // Parse response
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let candidates = json["candidates"] as? [[String: Any]],
+              let firstCandidate = candidates.first,
+              let content = firstCandidate["content"] as? [String: Any],
+              let parts = content["parts"] as? [[String: Any]],
+              let firstPart = parts.first,
+              let text = firstPart["text"] as? String else {
+            throw GoogleAIError.invalidResponse
+        }
+
+        // Parse the JSON response
+        let summary = try parseSummaryResponse(text)
+        Logger.info("✅ Summary generated for \(filename) (\(summary.summary.count) chars)", category: .ai)
+
+        return summary
+    }
+
+    /// Parse the summary JSON response
+    private func parseSummaryResponse(_ text: String) throws -> DocumentSummary {
+        // Try to extract JSON from the response (might be wrapped in markdown)
+        var jsonString = text
+
+        // Handle markdown code blocks
+        if text.contains("```json") {
+            let pattern = "```json\\s*([\\s\\S]*?)```"
+            if let regex = try? NSRegularExpression(pattern: pattern),
+               let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+               let jsonRange = Range(match.range(at: 1), in: text) {
+                jsonString = String(text[jsonRange])
+            }
+        } else if text.contains("```") {
+            let pattern = "```\\s*([\\s\\S]*?)```"
+            if let regex = try? NSRegularExpression(pattern: pattern),
+               let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+               let jsonRange = Range(match.range(at: 1), in: text) {
+                jsonString = String(text[jsonRange])
+            }
+        }
+
+        guard let jsonData = jsonString.data(using: .utf8) else {
+            throw GoogleAIError.invalidResponse
+        }
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode(DocumentSummary.self, from: jsonData)
+    }
+
     // MARK: - High-Level API
 
     /// Extract text from a PDF file using Google's Files API
