@@ -7,6 +7,7 @@
 //
 import SwiftUI
 import Observation
+import SwiftOpenAI
 
 struct SetupWizardView: View {
     @Environment(\.dismiss) private var dismiss
@@ -36,6 +37,11 @@ struct SetupWizardView: View {
     @State private var isLoadingGeminiModels = false
     @State private var geminiModelError: String?
     private let googleAIService = GoogleAIService()
+
+    // Interview models from OpenAI (lazy-loaded)
+    @State private var interviewModels: [ModelObject] = []
+    @State private var isLoadingInterviewModels = false
+    @State private var interviewModelError: String?
 
     // Provider prefixes for grouping
     private static let targetProviders = ["google", "openai", "anthropic", "x-ai", "deepseek"]
@@ -395,16 +401,83 @@ private extension SetupWizardView {
 
     var onboardingModelPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Picker("Onboarding Interview Model", selection: $onboardingModelId) {
-                ForEach(onboardingInterviewModelOptions, id: \.id) { option in
-                    Text(option.name).tag(option.id)
+            if openAiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Label("Add OpenAI API key to enable interview model selection.", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .font(.callout)
+            } else if isLoadingInterviewModels {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Loading interview models...")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
                 }
+            } else if let error = interviewModelError {
+                VStack(alignment: .leading, spacing: 4) {
+                    Label(error, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                        .font(.callout)
+                    Button("Retry") {
+                        Task { await loadInterviewModels() }
+                    }
+                }
+            } else if filteredInterviewModels.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("No interview models found.")
+                        .foregroundStyle(.secondary)
+                    Button("Load Models") {
+                        Task { await loadInterviewModels() }
+                    }
+                }
+            } else {
+                Picker("Onboarding Interview Model", selection: $onboardingModelId) {
+                    ForEach(filteredInterviewModels, id: \.id) { model in
+                        Text(model.id).tag(model.id)
+                    }
+                }
+                .pickerStyle(.menu)
             }
-            .pickerStyle(.menu)
             Text("Used for the three-phase onboarding interview (OpenAI Responses API).")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
+        .task {
+            let hasKey = !openAiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            if hasKey && interviewModels.isEmpty {
+                await loadInterviewModels()
+            }
+        }
+    }
+
+    /// Filtered interview models: gpt-5*, gpt-6*, gpt-7* (dynamically fetched from OpenAI)
+    private var filteredInterviewModels: [ModelObject] {
+        interviewModels
+            .filter { model in
+                let id = model.id.lowercased()
+                return id.hasPrefix("gpt-5") || id.hasPrefix("gpt-6") || id.hasPrefix("gpt-7")
+            }
+            .sorted { $0.id < $1.id }
+    }
+
+    func loadInterviewModels() async {
+        let apiKey = openAiApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !apiKey.isEmpty else { return }
+        isLoadingInterviewModels = true
+        interviewModelError = nil
+        do {
+            let service = OpenAIServiceFactory.service(apiKey: apiKey)
+            let response = try await service.listModels()
+            interviewModels = response.data
+            // Validate current selection is still available
+            if !filteredInterviewModels.contains(where: { $0.id == onboardingModelId }) {
+                if let first = filteredInterviewModels.first {
+                    onboardingModelId = first.id
+                }
+            }
+        } catch {
+            interviewModelError = error.localizedDescription
+        }
+        isLoadingInterviewModels = false
     }
 
     var pdfExtractionPicker: some View {
@@ -604,19 +677,4 @@ private extension SetupWizardView {
         }
     }
 
-    var onboardingInterviewModelOptions: [(id: String, name: String)] {
-        [
-            // GPT-5.1 family (preferred - supports "none" reasoning)
-            ("gpt-5.1", "GPT-5.1"),
-            ("gpt-5.1-codex", "GPT-5.1 Codex"),
-            ("gpt-5.1-codex-mini", "GPT-5.1 Codex Mini"),
-            ("gpt-5.1-codex-max", "GPT-5.1 Codex Max"),
-            // GPT-5 family (requires "minimal" reasoning minimum)
-            ("gpt-5", "GPT-5"),
-            ("gpt-5-mini", "GPT-5 Mini"),
-            ("gpt-5-nano", "GPT-5 Nano"),
-            ("gpt-5-pro", "GPT-5 Pro"),
-            ("gpt-5-codex", "GPT-5 Codex")
-        ]
-    }
 }
