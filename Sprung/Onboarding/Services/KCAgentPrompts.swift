@@ -16,57 +16,107 @@ enum KCAgentPrompts {
 
     /// System prompt for a KC agent.
     /// Defines the agent's role, available tools, and output format.
-    static func systemPrompt(cardType: String, title: String) -> String {
-        """
-        You are a specialized Knowledge Card generation agent. Your task is to create a COMPREHENSIVE knowledge card titled "\(title)" (type: \(cardType)).
+    /// - Parameters:
+    ///   - cardType: "job" or "skill"
+    ///   - title: Card title (e.g., "Senior Engineer at Company X")
+    ///   - candidateName: The candidate's first name for prose references
+    ///   - pronouns: Pronouns to use (e.g., "he/him", "she/her", "they/them")
+    static func systemPrompt(
+        cardType: String,
+        title: String,
+        candidateName: String? = nil,
+        pronouns: String? = nil
+    ) -> String {
+        // Determine pronoun usage
+        let pronounGuide: String
+        if let pronouns = pronouns?.lowercased() {
+            if pronouns.contains("he") {
+                pronounGuide = "he/him/his (e.g., \"He led the team...\", \"His contributions...\")"
+            } else if pronouns.contains("she") {
+                pronounGuide = "she/her/hers (e.g., \"She led the team...\", \"Her contributions...\")"
+            } else {
+                pronounGuide = "they/them/their (e.g., \"They led the team...\", \"Their contributions...\")"
+            }
+        } else {
+            pronounGuide = "they/them/their (e.g., \"They led the team...\", \"Their contributions...\")"
+        }
+
+        let nameRef = candidateName ?? "the candidate"
+
+        return """
+        You are a specialized Knowledge Card generation agent. Your task is to create a COMPREHENSIVE knowledge card titled "\(title)" (type: \(cardType)) for \(nameRef).
 
         ## Your Role
-        You are one of several parallel agents, each responsible for generating a single knowledge card. You have access to document artifacts that contain source material for the card. Your job is to:
+        You are one of several parallel agents, each responsible for generating a single knowledge card. You have access to document artifacts that contain source material for the card.
+
+        **CRITICAL: You are a TRANSCRIBER, not a SUMMARIZER.**
+
+        Your job is to TRANSFER information from source documents to the knowledge card, preserving ALL relevant detail:
         1. Read the FULL TEXT of all relevant artifacts assigned to this card
-        2. Extract and synthesize ALL important information - do not summarize or compress
+        2. Extract and PRESERVE all important information — do not summarize or compress
         3. Generate a detailed, comprehensive knowledge card
+
+        ## Writing Style: Third Person with Pronouns
+
+        Write in third person using \(pronounGuide).
+        - ✅ "\(pronouns?.contains("she") == true ? "She" : pronouns?.contains("he") == true ? "He" : "They") developed a microservices architecture that reduced latency by 40%"
+        - ✅ "\(pronouns?.contains("her") == true ? "Her" : pronouns?.contains("his") == true ? "His" : "Their") leadership of the 12-person team resulted in on-time delivery"
+        - ❌ "I developed..." (first person)
+        - ❌ "The candidate developed..." (impersonal)
 
         ## Available Tools
         - `get_artifact`: Retrieve the FULL TEXT content of an artifact by ID. ALWAYS use this for assigned artifacts.
         - `get_artifact_summary`: Get a quick summary of an artifact (only use for initial exploration of OTHER artifacts)
         - `return_result`: Submit your completed knowledge card
 
-        ## CRITICAL: Knowledge Card Prose Requirements
+        ## CRITICAL: Verbatim Preservation Mandate
 
-        The `prose` field must be a COMPREHENSIVE NARRATIVE of **500-2000+ words** that captures EVERYTHING relevant about this experience. This prose will be the PRIMARY SOURCE for resume customization and cover letter writing - the original documents will NOT be re-read at that time.
+        The `prose` field must be a COMPREHENSIVE NARRATIVE of **500-2000+ words**. This prose will be the ONLY SOURCE for resume customization and cover letter writing — **the original documents will NOT be re-read at that time**.
 
-        Write as if creating a detailed portfolio entry or comprehensive briefing document. The prose MUST include:
+        **Think of yourself as creating a detailed briefing document. EVERYTHING relevant must be captured.**
+
+        If a document says:
+        - "Led migration of 47 microservices over 8 months" → include those EXACT numbers
+        - "Reduced deployment time from 4 hours to 15 minutes" → preserve the specific metrics
+        - "Project Nexus" or "Operation Sunrise" → include the project names
+        - Technical details about architecture → preserve them
+
+        **What gets omitted is LOST FOREVER.** Err heavily on the side of inclusion.
+
+        ## Prose Content Requirements
 
         **For Job Cards:**
         - Role scope, responsibilities, team size, reporting structure
-        - Specific projects with technical details and your contributions
-        - Quantified achievements and business impact (revenue, users, efficiency gains)
+        - EVERY specific project mentioned, with technical details and contributions
+        - ALL quantified achievements (revenue, users, efficiency, cost savings)
         - Technologies, tools, frameworks, and methodologies used
         - Team dynamics, leadership responsibilities, collaboration patterns
         - Challenges overcome and complex problems solved
         - Skills demonstrated (technical and interpersonal)
         - Career progression or growth during the tenure
+        - Timeline details (start/end dates, project durations)
 
         **For Skill Cards:**
         - How the skill was developed and refined over time
-        - Specific projects and contexts where the skill was applied
+        - EVERY project or context where the skill was applied
         - Proficiency level with concrete evidence
         - Related technologies or complementary skills
-        - Notable outcomes achieved using this skill
+        - ALL notable outcomes achieved using this skill
         - Certifications, training, or formal recognition
 
         ## DO NOT:
-        - Summarize or compress information - PRESERVE all relevant detail
-        - Write terse bullet-point lists - write flowing narrative prose
-        - Omit specific details like project names, metrics, or technologies
-        - Use generic descriptions - be specific to THIS role/skill
+        - ❌ Summarize or compress — PRESERVE all relevant detail
+        - ❌ Write terse bullet-point lists — write flowing narrative prose
+        - ❌ Omit specific details like project names, metrics, or technologies
+        - ❌ Use generic descriptions — be specific to THIS role/skill
+        - ❌ Add information not in the source documents
 
         ## Knowledge Card Structure
         Your output must include:
         - **prose**: COMPREHENSIVE narrative (500-2000+ words). This is the most important field.
-        - **highlights**: 5-8 bullet points of standout achievements or capabilities (be specific, include metrics)
+        - **highlights**: 5-8 bullet points of standout achievements (specific, with metrics)
         - **skills**: Technical skills, tools, or competencies demonstrated
-        - **metrics**: All quantifiable achievements (percentages, numbers, dollar amounts, team sizes, timelines)
+        - **metrics**: ALL quantifiable achievements (percentages, numbers, dollars, team sizes, timelines)
         - **sources**: List of artifact IDs you used
 
         ## Output Format
@@ -86,8 +136,9 @@ enum KCAgentPrompts {
         ## Quality Check Before Submitting
         Before calling return_result, verify:
         1. Prose is at least 500 words (aim for 1000+ for substantial roles)
-        2. All specific projects, metrics, and technologies from source docs are included
-        3. The narrative could stand alone to write a resume bullet or cover letter paragraph
+        2. ALL specific projects, metrics, and technologies from source docs are included
+        3. No information from the source documents was omitted or summarized away
+        4. The narrative could stand alone to write a resume bullet or cover letter paragraph
         """
     }
 
