@@ -113,6 +113,7 @@ actor AgentRunner {
     // MARK: - LLM Access
 
     private weak var llmFacade: LLMFacade?
+    private weak var eventBus: EventCoordinator?
 
     // MARK: - Conversation State
 
@@ -127,11 +128,13 @@ actor AgentRunner {
         config: AgentConfiguration,
         toolExecutor: SubAgentToolExecutor,
         llmFacade: LLMFacade?,
+        eventBus: EventCoordinator? = nil,
         tracker: AgentActivityTracker? = nil
     ) {
         self.config = config
         self.toolExecutor = toolExecutor
         self.llmFacade = llmFacade
+        self.eventBus = eventBus
         self.tracker = tracker
     }
 
@@ -179,6 +182,17 @@ actor AgentRunner {
                     modelId: config.modelId,
                     temperature: config.temperature
                 )
+
+                // Emit token usage event if available
+                if let usage = response.usage {
+                    await emitTokenUsage(
+                        modelId: config.modelId,
+                        inputTokens: usage.inputTokens ?? 0,
+                        outputTokens: usage.outputTokens ?? 0,
+                        cachedTokens: usage.inputTokensDetails?.cachedTokens ?? 0,
+                        reasoningTokens: usage.outputTokensDetails?.reasoningTokens ?? 0
+                    )
+                }
 
                 // Process response
                 guard let choice = response.choices?.first,
@@ -362,6 +376,28 @@ actor AgentRunner {
             )
         }
     }
+
+    // MARK: - Event Emission
+
+    private func emitTokenUsage(
+        modelId: String,
+        inputTokens: Int,
+        outputTokens: Int,
+        cachedTokens: Int,
+        reasoningTokens: Int
+    ) async {
+        guard let eventBus = eventBus else { return }
+
+        let source: UsageSource = (config.agentType == .knowledgeCard) ? .kcAgent : .mainCoordinator
+        await eventBus.emit(.llmTokenUsageReceived(
+            modelId: modelId,
+            inputTokens: inputTokens,
+            outputTokens: outputTokens,
+            cachedTokens: cachedTokens,
+            reasoningTokens: reasoningTokens,
+            source: source
+        ), topic: .llm)
+    }
 }
 
 // MARK: - Convenience Factory
@@ -376,6 +412,7 @@ extension AgentRunner {
         modelId: String,
         toolExecutor: SubAgentToolExecutor,
         llmFacade: LLMFacade?,
+        eventBus: EventCoordinator? = nil,
         tracker: AgentActivityTracker?
     ) -> AgentRunner {
         let config = AgentConfiguration(
@@ -394,6 +431,7 @@ extension AgentRunner {
             config: config,
             toolExecutor: toolExecutor,
             llmFacade: llmFacade,
+            eventBus: eventBus,
             tracker: tracker
         )
     }

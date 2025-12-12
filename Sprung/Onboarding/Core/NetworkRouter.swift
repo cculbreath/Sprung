@@ -96,7 +96,8 @@ actor NetworkRouter: OnboardingEventEmitter {
                     inputTokens: usage.inputTokens ?? 0,
                     outputTokens: usage.outputTokens ?? 0,
                     cachedTokens: usage.inputTokensDetails?.cachedTokens ?? 0,
-                    reasoningTokens: usage.outputTokensDetails?.reasoningTokens ?? 0
+                    reasoningTokens: usage.outputTokensDetails?.reasoningTokens ?? 0,
+                    source: .mainCoordinator
                 ))
             }
             // Reset state for next response

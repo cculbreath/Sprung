@@ -164,7 +164,8 @@ class GitAnalysisAgent {
                         inputTokens: usage.promptTokens ?? 0,
                         outputTokens: usage.completionTokens ?? 0,
                         cachedTokens: usage.promptTokensDetails?.cachedTokens ?? 0,
-                        reasoningTokens: 0  // Chat API doesn't have reasoning tokens
+                        reasoningTokens: 0,  // Chat API doesn't have reasoning tokens
+                        source: .gitAgent
                     ))
                 }
 

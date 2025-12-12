@@ -186,10 +186,10 @@ class TokenUsageTracker {
         Task { @MainActor [weak self] in
             for await event in await eventBus.stream(topic: .llm) {
                 guard let self = self else { return }
-                if case .llmTokenUsageReceived(let modelId, let inputTokens, let outputTokens, let cachedTokens, let reasoningTokens) = event {
+                if case .llmTokenUsageReceived(let modelId, let inputTokens, let outputTokens, let cachedTokens, let reasoningTokens, let source) = event {
                     self.recordUsage(
                         modelId: modelId,
-                        source: .mainCoordinator,
+                        source: source,
                         inputTokens: inputTokens,
                         outputTokens: outputTokens,
                         cachedTokens: cachedTokens,
