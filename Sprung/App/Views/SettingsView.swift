@@ -50,6 +50,12 @@ struct SettingsView: View {
         "gpt-4.1"
     ]
 
+    /// Models that support flex processing (50% cost savings, variable latency)
+    private let flexProcessingCompatibleModels: Set<String> = [
+        "gpt-5.2", "gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-5-nano",
+        "o3", "o4-mini"
+    ]
+
     // Reasoning options differ by model family:
     // - GPT-5: minimal, low, medium, high (NO "none")
     // - GPT-5.1: none, low, medium, high (NO "minimal")
@@ -519,12 +525,22 @@ private extension SettingsView {
         }
     }
 
+    var isFlexProcessingCompatible: Bool {
+        flexProcessingCompatibleModels.contains(onboardingModelId)
+    }
+
     var onboardingFlexProcessingToggle: some View {
         VStack(alignment: .leading, spacing: 8) {
             Toggle("Flex Processing (50% cost savings)", isOn: $onboardingFlexProcessing)
-            Text("Variable latency for non-time-critical tasks like document ingestion.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+            if onboardingFlexProcessing && !isFlexProcessingCompatible {
+                Label("Not supported by \(onboardingModelId)", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .font(.footnote)
+            } else {
+                Text("Variable latency for non-time-critical tasks like document ingestion.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
