@@ -28,6 +28,13 @@ struct DebugSettingsView: View {
         )
     }
 
+    private var forceQueryUserExperienceToolBinding: Binding<Bool> {
+        Binding(
+            get: { debugSettings.forceQueryUserExperienceTool },
+            set: { debugSettings.forceQueryUserExperienceTool = $0 }
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Toggle("Save debug files to Downloads", isOn: saveDebugPromptsBinding)
@@ -35,6 +42,9 @@ struct DebugSettingsView: View {
 
             Toggle("Show debug button in onboarding interview", isOn: showDebugButtonBinding)
                 .help("When enabled, shows the ladybug button in the bottom-right corner of the onboarding interview window for viewing event logs.")
+
+            Toggle("Force QueryUserExperienceTool in resume customization", isOn: forceQueryUserExperienceToolBinding)
+                .help("When enabled, forces the LLM to use the QueryUserExperienceTool as its first response during round 2 of the customize resume workflow.")
 
             VStack(alignment: .leading, spacing: 8) {
                 Picker("Log Level", selection: logLevelBinding) {

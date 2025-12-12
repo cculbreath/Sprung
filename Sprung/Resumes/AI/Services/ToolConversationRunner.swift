@@ -53,15 +53,20 @@ class ToolConversationRunner {
     ///   - modelId: The LLM model to use
     ///   - resume: The resume being customized
     ///   - jobApp: Optional job application context
+    ///   - initialToolChoice: Optional tool choice to force for the first turn (reverts to .auto after)
     /// - Returns: The final text response from the LLM after all tool calls are resolved.
     func runConversation(
         systemPrompt: String,
         userPrompt: String,
         modelId: String,
         resume: Resume,
-        jobApp: JobApp?
+        jobApp: JobApp?,
+        initialToolChoice: ToolChoice? = nil
     ) async throws -> String {
         Logger.info("🔧 [Tools] Starting tool-enabled conversation with \(toolRegistry.toolNames.count) tools")
+        if let forcedTool = initialToolChoice {
+            Logger.info("🔧 [Tools] Initial tool choice forced: \(forcedTool)")
+        }
 
         // Build initial messages
         var messages: [ChatCompletionParameters.Message] = [
@@ -74,13 +79,20 @@ class ToolConversationRunner {
 
         // Tool execution loop
         var maxIterations = 10
+        var isFirstIteration = true
         while maxIterations > 0 {
             maxIterations -= 1
+
+            // Use initialToolChoice for first iteration only, then switch to .auto
+            let currentToolChoice: ToolChoice = (isFirstIteration && initialToolChoice != nil)
+                ? initialToolChoice!
+                : .auto
+            isFirstIteration = false
 
             let response = try await llm.executeWithTools(
                 messages: messages,
                 tools: tools,
-                toolChoice: .auto,
+                toolChoice: currentToolChoice,
                 modelId: modelId,
                 temperature: 0.7
             )

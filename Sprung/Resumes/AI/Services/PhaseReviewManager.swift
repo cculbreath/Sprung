@@ -9,6 +9,7 @@
 import Foundation
 import SwiftUI
 import SwiftData
+import SwiftOpenAI
 
 /// Delegate protocol for phase review manager to communicate with the view model
 @MainActor
@@ -422,12 +423,22 @@ class PhaseReviewManager {
 
                 let toolSystemPrompt = systemPrompt + buildToolSystemPromptAddendum()
 
+                // Force QueryUserExperienceTool on round 2 if debug setting is enabled
+                let initialToolChoice: ToolChoice?
+                if roundNumber == 2 && UserDefaults.standard.bool(forKey: "forceQueryUserExperienceTool") {
+                    initialToolChoice = .function(name: QueryUserExperienceLevelTool.name)
+                    Logger.info("🔧 [Tools] Debug: Forcing initial tool choice to \(QueryUserExperienceLevelTool.name)")
+                } else {
+                    initialToolChoice = nil
+                }
+
                 let finalResponse = try await toolRunner.runConversation(
                     systemPrompt: toolSystemPrompt,
                     userPrompt: userPrompt + "\n\nPlease provide your review proposals in the specified JSON format.",
                     modelId: modelId,
                     resume: resume,
-                    jobApp: nil
+                    jobApp: nil,
+                    initialToolChoice: initialToolChoice
                 )
 
                 reviewContainer = try parsePhaseReviewFromResponse(finalResponse)
