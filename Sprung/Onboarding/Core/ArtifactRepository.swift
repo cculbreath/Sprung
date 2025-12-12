@@ -145,6 +145,10 @@ actor ArtifactRepository: OnboardingEventEmitter {
             if let docSummary = artifact["summary"].string, !docSummary.isEmpty {
                 summary["summary"].string = docSummary
             }
+            // Include summary_metadata (document_type, time_period, companies, roles, skills, etc.)
+            if !artifact["summary_metadata"].dictionaryValue.isEmpty {
+                summary["summary_metadata"] = artifact["summary_metadata"]
+            }
             // Include metadata for additional context
             if let title = artifact["metadata"]["title"].string, !title.isEmpty {
                 summary["title"].string = title

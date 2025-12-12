@@ -22,11 +22,17 @@ struct DispatchKCAgentsTool: InterviewTool {
                 thread with access to artifact content. Returns completed cards for validation.
 
                 IMPORTANT: Call this after propose_card_assignments when user is ready to generate cards.
+
+                The 'proposals' parameter is optional - if omitted, the tool will use proposals stored
+                from the most recent propose_card_assignments call.
                 """,
             properties: [
                 "proposals": JSONSchema(
                     type: .array,
-                    description: "Array of card proposals to generate",
+                    description: """
+                        Array of card proposals to generate. Optional - if not provided, will use
+                        proposals stored from the most recent propose_card_assignments call.
+                        """,
                     items: JSONSchema(
                         type: .object,
                         properties: [
@@ -60,7 +66,7 @@ struct DispatchKCAgentsTool: InterviewTool {
                     )
                 )
             ],
-            required: ["proposals"],
+            required: [],
             additionalProperties: false
         )
     }()
@@ -80,11 +86,23 @@ struct DispatchKCAgentsTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
-        let proposalsJSON = params["proposals"].arrayValue
+        // Try to get proposals from input first, then fall back to stored proposals
+        var proposalsJSON = params["proposals"].arrayValue
+
+        if proposalsJSON.isEmpty {
+            // Fall back to stored proposals from propose_card_assignments
+            let storedProposals = await coordinator.state.getCardProposals()
+            proposalsJSON = storedProposals.arrayValue
+
+            if !proposalsJSON.isEmpty {
+                Logger.info("🔄 DispatchKCAgentsTool: Using \(proposalsJSON.count) stored proposal(s) from previous propose_card_assignments", category: .ai)
+            }
+        }
+
         guard !proposalsJSON.isEmpty else {
             var error = JSON()
             error["status"].string = "error"
-            error["message"].string = "No proposals provided"
+            error["message"].string = "No proposals provided in input and no stored proposals found. Call propose_card_assignments first."
             return .immediate(error)
         }
 
