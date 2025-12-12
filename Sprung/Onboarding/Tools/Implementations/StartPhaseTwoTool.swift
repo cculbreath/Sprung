@@ -77,17 +77,28 @@ struct StartPhaseTwoTool: InterviewTool {
     private func buildInstructions(entryCount: Int, artifactCount: Int) -> String {
         """
         Phase 2 initialized.
-        - \(entryCount) timeline entries
-        - \(artifactCount) artifact(s) with summaries
+        - \(entryCount) timeline entries from Phase 1
+        - \(artifactCount) artifact(s) with summaries available
 
-        ## YOUR WORKFLOW
+        ## WORKFLOW OVERVIEW
 
-        ### STEP 1: Display Knowledge Card Plan
-        Call `display_knowledge_card_plan` with a plan containing:
-        - A "job" type card for each significant position in the timeline
-        - "skill" type cards for cross-cutting competencies you identify
+        ```
+        STEP 1: display_knowledge_card_plan  →  Show plan to user
+        STEP 2: propose_card_assignments     →  Map docs to cards, identify gaps
+        STEP 3: GAPS ASSESSMENT (CRITICAL)   →  Ask for specific missing docs, WAIT for user
+        STEP 4: dispatch_kc_agents           →  Parallel agents generate cards
+        STEP 5: submit_knowledge_card        →  Persist each returned card
+        STEP 6: next_phase                   →  Advance to Phase 3
+        ```
+
+        ## STEP 1: Display Knowledge Card Plan
+
+        Call `display_knowledge_card_plan` with:
+        - A "job" card for each significant position in the timeline
+        - "skill" cards for cross-cutting competencies (Technical Leadership, etc.)
 
         Example:
+        ```json
         {
           "items": [
             {"id": "uuid1", "type": "job", "title": "Senior Engineer at Company X", "status": "pending"},
@@ -95,39 +106,74 @@ struct StartPhaseTwoTool: InterviewTool {
           ],
           "message": "I've created a plan to document your career."
         }
+        ```
 
-        ### STEP 2: Propose Card Assignments
-        After displaying the plan:
-        - Review the artifact summaries provided above
-        - For each card, identify which artifacts contain relevant information
-        - Call `propose_card_assignments` to map artifacts to cards:
-          - Assign relevant artifact IDs to each card
-          - Identify documentation gaps (cards without sufficient artifacts)
+        ## STEP 2: Propose Card Assignments
 
-        ### STEP 3: Handle Gaps (if any)
-        If there are documentation gaps, be SPECIFIC about what's missing and likely exists:
-        - Don't just say "do you have more documents?" — recommend specific document types
-        - Consider what documents TYPICALLY exist for each role type:
-          * Engineering: performance reviews, design docs, code repos, tech specs
-          * Management: team reviews, budget docs, hiring plans, org charts
-          * Sales: quota attainment, deal lists, client testimonials
-          * All roles: job descriptions, promotion emails, award announcements, LinkedIn recommendations
-        - Example: "For your Senior Engineer role at Acme, we're missing performance reviews. Most companies do annual reviews — do you have any saved? Even email summaries would help."
-        - Wait for user uploads or confirmation they have no more docs
+        Call `propose_card_assignments` to:
+        - Map artifact IDs to each card based on relevance
+        - Identify cards with insufficient documentation (gaps)
 
-        ### STEP 4: Generate Knowledge Cards
-        When artifact assignments are ready:
-        - Call `dispatch_kc_agents` with the card proposals
-        - Parallel agents will read artifacts and generate knowledge cards
-        - Review returned cards for quality
-        - Use `submit_knowledge_card` to persist valid cards
+        ## STEP 3: GAPS ASSESSMENT (CRITICAL - DO NOT SKIP)
 
-        ## KEY POINTS
-        - Artifact summaries let you see all docs WITHOUT reading full text
-        - Sub-agents handle the detailed artifact reading and card generation
-        - After all cards are generated and persisted, OR if the user instructs you to advance through a chat message, call `next_phase` to proceed to Phase 3
+        ⚠️ This step is MANDATORY if any gaps were identified.
 
-        DO NOT skip calling display_knowledge_card_plan. This is required to show the UI.
+        **You MUST present SPECIFIC document requests to the user.** Generic requests are not acceptable.
+
+        ❌ WRONG: "Do you have any other documents I should look at?"
+        ❌ WRONG: "Is there anything else you'd like to add?"
+
+        ✅ RIGHT: Present a structured gaps summary like this:
+
+        "Looking at your timeline, I've identified some documentation gaps that would really strengthen your knowledge cards:
+
+        **For Senior Engineer at Acme (2019-2022):**
+        - Performance reviews — most companies do annual reviews, even informal email summaries help
+        - Project documentation — design docs, architecture decisions, post-mortems you authored
+        - The job description — often saved in offer letters or HR portals
+
+        **For Tech Lead at StartupX (2022-2024):**
+        - Team feedback or 360 reviews
+        - Any presentations or demos you delivered
+
+        **Commonly overlooked sources:**
+        - Promotion announcement emails
+        - LinkedIn recommendations (can copy-paste)
+        - Slack/Teams kudos or thank-you messages
+        - Award certificates or recognition emails
+
+        Do you have any of these available? Or should we proceed with what we have?"
+
+        **Document types by role category:**
+        - Engineering: performance reviews, design docs, code repos, tech specs, PR histories
+        - Management: team reviews, org charts, budget docs, hiring plans, 1:1 notes
+        - Sales/BD: quota attainment, deal lists, client testimonials, pipeline reports
+        - Product/Design: specs, user research, wireframes, A/B results, roadmaps
+
+        **WAIT for user response** before proceeding to Step 4. Do not call dispatch_kc_agents until:
+        - User uploads additional documents, OR
+        - User confirms they have no more documents
+
+        ## STEP 4: Generate Knowledge Cards
+
+        Call `dispatch_kc_agents` with the card proposals from Step 2.
+        - Parallel agents read full artifact text
+        - Each agent generates a comprehensive 500-2000+ word knowledge card
+        - Results return as an array
+
+        ## STEP 5: Persist Cards
+
+        For EACH card in the returned array:
+        - Review for quality and completeness
+        - Call `submit_knowledge_card` to persist
+
+        ## STEP 6: Complete Phase
+
+        When all cards are persisted, call `next_phase` to advance to Phase 3.
+
+        ---
+        DO NOT skip display_knowledge_card_plan. The UI must show the plan.
+        DO NOT skip gaps assessment if propose_card_assignments returns gaps.
         """
     }
 }
