@@ -23,7 +23,8 @@ final class DataResetService {
             // Mark SwiftData store for deletion on next launch.
             // This avoids SQLite relationship constraint errors from batch delete.
             try SwiftDataBackupManager.destroyCurrentStore()
-            try resetUserDefaults()
+            resetAPIKeys()
+            resetUserDefaults()
             try resetFileBasedStorage()
             Logger.info("✅ Factory reset scheduled - data will be cleared on restart", category: .appLifecycle)
         } catch {
@@ -33,23 +34,43 @@ final class DataResetService {
         }
     }
     // MARK: - Private Reset Methods
-    private func resetUserDefaults() throws {
+    private func resetAPIKeys() {
+        APIKeyManager.delete(.openRouter)
+        APIKeyManager.delete(.openAI)
+        APIKeyManager.delete(.gemini)
+        Logger.debug("✅ API keys cleared from Keychain", category: .appLifecycle)
+    }
+
+    private func resetUserDefaults() {
         let defaults = UserDefaults.standard
-        // Reset onboarding-related defaults
+
+        // Reset setup wizard flag to trigger first-run experience
+        defaults.removeObject(forKey: "hasCompletedSetupWizard")
+
+        // Reset onboarding interview settings
         defaults.removeObject(forKey: "onboardingInterviewDefaultModelId")
         defaults.removeObject(forKey: "onboardingPDFExtractionModelId")
+        defaults.removeObject(forKey: "onboardingGitIngestModelId")
         defaults.removeObject(forKey: "onboardingInterviewAllowWebSearchDefault")
-        // Reset AI settings
+        defaults.removeObject(forKey: "onboardingInterviewReasoningEffort")
+        defaults.removeObject(forKey: "onboardingInterviewHardTaskReasoningEffort")
+        defaults.removeObject(forKey: "onboardingInterviewFlexProcessing")
+        defaults.removeObject(forKey: "onboardingInterviewPromptCacheRetention")
+
+        // Reset resume/cover letter AI settings
         defaults.removeObject(forKey: "reasoningEffort")
         defaults.removeObject(forKey: "fixOverflowMaxIterations")
+        defaults.removeObject(forKey: "enableResumeCustomizationTools")
+
         // Reset debug settings
         defaults.removeObject(forKey: "debugLogLevel")
         defaults.removeObject(forKey: "saveDebugPrompts")
-        // Reset other settings
+        defaults.removeObject(forKey: "showOnboardingDebugButton")
+        defaults.removeObject(forKey: "forceQueryUserExperienceTool")
+
+        // Reset other app state
         defaults.removeObject(forKey: "lastOpenedJobAppId")
-        // Set reasonable defaults
-        defaults.set("medium", forKey: "reasoningEffort")
-        defaults.set(3, forKey: "fixOverflowMaxIterations")
+
         Logger.debug("✅ UserDefaults reset", category: .appLifecycle)
     }
     private func resetFileBasedStorage() throws {
