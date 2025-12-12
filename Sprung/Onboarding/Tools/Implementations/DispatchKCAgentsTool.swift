@@ -143,6 +143,13 @@ struct DispatchKCAgentsTool: InterviewTool {
         // Instructions for next steps
         response["instructions"].string = buildInstructions(result: result)
 
+        // Signal toolChoice chaining - LLM MUST call submit_knowledge_card next
+        // This mandates the first card persistence; instructions emphasize iterating through all
+        if result.successCount > 0 {
+            response["next_required_tool"].string = OnboardingToolName.submitKnowledgeCard.rawValue
+            response["cards_pending_persistence"].int = result.successCount
+        }
+
         return .immediate(response)
     }
 
@@ -151,22 +158,33 @@ struct DispatchKCAgentsTool: InterviewTool {
             return """
                 All \(result.successCount) cards generated successfully.
 
-                NEXT STEPS:
-                1. Review each card in the 'cards' array for quality and completeness
-                2. For each valid card, call submit_knowledge_card to persist it
-                3. After all cards are persisted, proceed to the next phase
+                ⚠️ REQUIRED ACTION: You MUST now persist each card.
+
+                For EACH card in the 'cards' array (all \(result.successCount) of them):
+                1. Call `submit_knowledge_card` with the card data
+                2. Wait for confirmation
+                3. Repeat for the next card
+
+                DO NOT skip any cards. DO NOT call next_phase until ALL cards are persisted.
+
+                After all \(result.successCount) cards are persisted, call `next_phase` to proceed.
                 """
         } else {
             return """
                 \(result.successCount) cards succeeded, \(result.failureCount) failed.
 
-                NEXT STEPS:
-                1. Review and persist the successful cards using submit_knowledge_card
-                2. For failed cards, you may:
-                   - Retry by calling dispatch_kc_agents with just the failed proposals
-                   - Skip them if non-critical
-                   - Ask the user for additional information
-                3. Check the 'failures' array for error details
+                ⚠️ REQUIRED ACTION: You MUST persist all successful cards.
+
+                For EACH successful card in the 'cards' array:
+                1. Call `submit_knowledge_card` with the card data
+                2. Wait for confirmation
+                3. Repeat for the next card
+
+                For failed cards (see 'failures' array):
+                - You may retry with dispatch_kc_agents using just the failed proposals
+                - Or skip if non-critical and inform the user
+
+                DO NOT call next_phase until you've handled all cards.
                 """
         }
     }
