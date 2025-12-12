@@ -74,6 +74,11 @@ final class OnboardingInterviewCoordinator {
         container.agentActivityTracker
     }
 
+    /// Token usage tracker for monitoring API token consumption
+    var tokenUsageTracker: TokenUsageTracker {
+        container.tokenUsageTracker
+    }
+
     /// Returns the KC agent service for parallel knowledge card generation
     func getKCAgentService() -> KnowledgeCardAgentService {
         container.getKCAgentService()

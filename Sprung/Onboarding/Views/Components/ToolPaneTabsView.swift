@@ -137,6 +137,9 @@ struct ToolPaneTabsView<InterviewContent: View>: View {
         case .agents:
             AgentsTabContent(tracker: coordinator.agentActivityTracker)
                 .padding(.horizontal, 4)
+        case .tokens:
+            TokenUsageTabContent(tracker: coordinator.tokenUsageTracker)
+                .padding(.horizontal, 4)
         }
     }
 }
