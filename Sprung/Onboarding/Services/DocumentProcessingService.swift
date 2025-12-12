@@ -13,15 +13,19 @@ actor DocumentProcessingService {
     private let documentExtractionService: DocumentExtractionService
     private let uploadStorage: OnboardingUploadStorage
     private let dataStore: InterviewDataStore
+    private let googleAIService: GoogleAIService
+
     // MARK: - Initialization
     init(
         documentExtractionService: DocumentExtractionService,
         uploadStorage: OnboardingUploadStorage,
-        dataStore: InterviewDataStore
+        dataStore: InterviewDataStore,
+        googleAIService: GoogleAIService = GoogleAIService()
     ) {
         self.documentExtractionService = documentExtractionService
         self.uploadStorage = uploadStorage
         self.dataStore = dataStore
+        self.googleAIService = googleAIService
         Logger.info("📄 DocumentProcessingService initialized", category: .ai)
     }
     // MARK: - Public API
@@ -87,7 +91,24 @@ actor DocumentProcessingService {
         let extractedTitle = artifact.title
         let artifactId = artifact.id
         Logger.info("✅ Text extraction completed: \(artifactId)", category: .ai)
-        // Step 3: Create artifact record
+
+        // Step 3: Generate summary (non-blocking - runs after extraction)
+        statusCallback?("Generating summary for \(filename)...")
+        var documentSummary: DocumentSummary?
+        do {
+            documentSummary = try await googleAIService.generateSummary(
+                content: extractedText,
+                filename: filename
+            )
+            Logger.info("✅ Summary generated for \(artifactId) (\(documentSummary?.summary.count ?? 0) chars)", category: .ai)
+        } catch {
+            // Summary generation failure is not fatal - log and continue
+            Logger.warning("⚠️ Summary generation failed for \(filename): \(error.localizedDescription)", category: .ai)
+            // Create a fallback summary from the extracted text
+            documentSummary = DocumentSummary.fallback(from: extractedText, filename: filename)
+        }
+
+        // Step 4: Create artifact record
         var artifactRecord = JSON()
         artifactRecord["id"].string = artifactId
         artifactRecord["filename"].string = filename
@@ -112,6 +133,21 @@ actor DocumentProcessingService {
         artifactRecord["created_at"].string = ISO8601DateFormatter().string(from: Date())
         if let callId = callId {
             artifactRecord["originating_call_id"].string = callId
+        }
+        // Add summary if generated
+        if let summary = documentSummary {
+            artifactRecord["summary"].string = summary.summary
+            artifactRecord["summary_generated_at"].string = ISO8601DateFormatter().string(from: Date())
+            // Store structured summary fields in metadata
+            var summaryMeta = JSON()
+            summaryMeta["document_type"].string = summary.documentType
+            summaryMeta["time_period"].string = summary.timePeriod
+            summaryMeta["companies"].arrayObject = summary.companies
+            summaryMeta["roles"].arrayObject = summary.roles
+            summaryMeta["skills"].arrayObject = summary.skills
+            summaryMeta["achievements"].arrayObject = summary.achievements
+            summaryMeta["relevance_hints"].string = summary.relevanceHints
+            artifactRecord["summary_metadata"] = summaryMeta
         }
         // Merge any additional metadata from upload form
         if !metadata.dictionaryValue.isEmpty {
