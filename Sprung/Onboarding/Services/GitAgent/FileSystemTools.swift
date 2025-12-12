@@ -728,9 +728,11 @@ struct GrepSearchTool: AgentTool {
         process.standardError = FileHandle.nullDevice
 
         try process.run()
+
+        // Read output BEFORE waitUntilExit to avoid pipe buffer deadlock
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
 
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
         let output = String(data: data, encoding: .utf8) ?? ""
 
         return parseRipgrepOutput(

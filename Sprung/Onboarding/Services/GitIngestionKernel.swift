@@ -84,6 +84,7 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
         repoURL: URL,
         planItemId: String?
     ) async {
+        Logger.info("🔬 [GitIngest] analyzeRepository Task started for: \(repoURL.lastPathComponent)", category: .ai)
         let repoPath = repoURL.path
         let repoName = repoURL.lastPathComponent
 
@@ -91,9 +92,12 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
             await eventBus.publish(.extractionStateChanged(true, statusMessage: "Gathering repository data..."))
 
             // Step 1: Gather raw git data
+            Logger.info("🔬 [GitIngest] About to call gatherGitData for: \(repoPath)", category: .ai)
             let gitData = try gatherGitData(repoPath: repoPath)
+            Logger.info("🔬 [GitIngest] gatherGitData completed, contributors: \(gitData["contributors"].count)", category: .ai)
 
             await eventBus.publish(.extractionStateChanged(true, statusMessage: "Analyzing code patterns with multi-turn agent..."))
+            Logger.info("🔬 [GitIngest] About to call runAnalysisAgent (requires @MainActor hop)", category: .ai)
 
             // Step 2: Run multi-turn agent to analyze actual code
             let analysis = try await runAnalysisAgent(gitData: gitData, repoName: repoName, repoURL: repoURL)
@@ -250,21 +254,28 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
         process.standardError = FileHandle.nullDevice
 
         try process.run()
+
+        // IMPORTANT: Read output BEFORE waitUntilExit to avoid deadlock
+        // If we wait first, the pipe buffer can fill up and block the process
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
 
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
         return String(data: data, encoding: .utf8) ?? ""
     }
 
     // MARK: - LLM Analysis Agent
 
     private func runAnalysisAgent(gitData: JSON, repoName: String, repoURL: URL) async throws -> JSON {
+        Logger.info("🔬 [GitIngest] runAnalysisAgent entered, checking llmFacade...", category: .ai)
         guard let facade = llmFacade else {
+            Logger.error("🔬 [GitIngest] llmFacade is nil!", category: .ai)
             throw GitIngestionError.noLLMFacade
         }
+        Logger.info("🔬 [GitIngest] llmFacade exists, getting model ID...", category: .ai)
 
         // Get model from settings (OpenRouter-style ID)
         let modelId = UserDefaults.standard.string(forKey: "onboardingGitIngestModelId") ?? "anthropic/claude-haiku-4.5"
+        Logger.info("🔬 [GitIngest] Using model: \(modelId)", category: .ai)
 
         // Get optional author filter from git data
         let authorFilter: String? = gitData["contributors"].array?.first?["name"].string
