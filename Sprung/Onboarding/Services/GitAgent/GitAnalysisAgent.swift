@@ -157,6 +157,17 @@ class GitAnalysisAgent {
                     temperature: 0.3
                 )
 
+                // Emit token usage event if available
+                if let usage = response.usage {
+                    await emitEvent(.llmTokenUsageReceived(
+                        modelId: modelId,
+                        inputTokens: usage.promptTokens ?? 0,
+                        outputTokens: usage.completionTokens ?? 0,
+                        cachedTokens: usage.promptTokensDetails?.cachedTokens ?? 0,
+                        reasoningTokens: 0  // Chat API doesn't have reasoning tokens
+                    ))
+                }
+
                 // Process response
                 guard let choice = response.choices?.first,
                       let message = choice.message else {

@@ -384,6 +384,7 @@ actor EventCoordinator {
              .knowledgeCardDoneButtonClicked, .knowledgeCardSubmissionPending,
              .knowledgeCardAutoPersistRequested, .knowledgeCardAutoPersisted,
              .toolGatingRequested, .planItemStatusChangeRequested,
+             .generateCardsButtonClicked, .cardAssignmentsProposed,
              .writingSamplePersisted, .candidateDossierPersisted, .experienceDefaultsGenerated:
             return .artifact
         // Evidence Requirements (treated as state/objectives)
@@ -544,6 +545,10 @@ actor EventCoordinator {
             description = "Tool gating requested: \(toolName) (exclude: \(exclude))"
         case .planItemStatusChangeRequested(let itemId, let status):
             description = "Plan item status change requested: \(itemId) → \(status)"
+        case .generateCardsButtonClicked:
+            description = "Generate cards button clicked"
+        case .cardAssignmentsProposed(let assignmentCount, let gapCount):
+            description = "Card assignments proposed: \(assignmentCount) assignments, \(gapCount) gaps"
         case .evidenceRequirementAdded(let req):
             description = "Evidence requirement added: \(req.description)"
         case .evidenceRequirementUpdated(let req):

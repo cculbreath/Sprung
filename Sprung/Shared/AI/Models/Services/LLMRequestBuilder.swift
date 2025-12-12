@@ -277,7 +277,8 @@ struct _LLMRequestBuilder {
             toolChoice: toolChoice,
             tools: tools,
             parallelToolCalls: true,
-            temperature: temperature
+            temperature: temperature,
+            usage: .init(include: true)  // Enable OpenRouter token tracking
         )
     }
 }

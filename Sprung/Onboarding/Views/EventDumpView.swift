@@ -221,6 +221,26 @@ struct EventDumpView: View {
     }
     private func formatMetrics(_ metrics: EventCoordinator.EventMetrics) -> String {
         var lines: [String] = []
+
+        // Token Usage Summary
+        let tracker = coordinator.tokenUsageTracker
+        let stats = tracker.totalStats
+        if stats.requestCount > 0 {
+            lines.append("Token Usage Summary:")
+            lines.append("  Total Tokens:    \(TokenUsageTracker.formatTokenCount(stats.totalTokens))")
+            lines.append("  Input Tokens:    \(TokenUsageTracker.formatTokenCount(stats.inputTokens))")
+            lines.append("  Output Tokens:   \(TokenUsageTracker.formatTokenCount(stats.outputTokens))")
+            if stats.cachedTokens > 0 {
+                lines.append("  Cached Tokens:   \(TokenUsageTracker.formatTokenCount(stats.cachedTokens)) (\(TokenUsageTracker.formatPercentage(stats.cacheHitRate)) hit rate)")
+            }
+            if stats.reasoningTokens > 0 {
+                lines.append("  Reasoning:       \(TokenUsageTracker.formatTokenCount(stats.reasoningTokens))")
+            }
+            lines.append("  Requests:        \(stats.requestCount)")
+            lines.append("  Session Time:    \(tracker.formattedDuration)")
+            lines.append("")
+        }
+
         lines.append("Published Event Counts by Topic:")
         for topic in EventTopic.allCases.sorted(by: { $0.rawValue < $1.rawValue }) {
             let count = metrics.publishedCount[topic] ?? 0
