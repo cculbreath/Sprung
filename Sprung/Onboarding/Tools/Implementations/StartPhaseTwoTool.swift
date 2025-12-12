@@ -47,13 +47,23 @@ struct StartPhaseTwoTool: InterviewTool {
         let timeline = await coordinator.state.artifacts.skeletonTimeline
         let entries = timeline?["experiences"].arrayValue ?? []
 
+        // Get artifact summaries (lightweight view of all uploaded docs)
+        let artifactSummaries = await coordinator.listArtifactSummaries()
+
         var result = JSON()
         result["status"].string = "completed"
         result["timeline_entry_count"].int = entries.count
         result["timeline_entries"] = JSON(entries)
 
+        // Include artifact summaries for doc-to-card mapping
+        result["artifact_count"].int = artifactSummaries.count
+        result["artifact_summaries"] = JSON(artifactSummaries)
+
         // Include explicit instructions for next steps
-        result["instructions"].string = buildInstructions(entryCount: entries.count)
+        result["instructions"].string = buildInstructions(
+            entryCount: entries.count,
+            artifactCount: artifactSummaries.count
+        )
 
         // Signal that this tool should be disabled after use
         result["disable_after_use"].bool = true
@@ -64,57 +74,53 @@ struct StartPhaseTwoTool: InterviewTool {
         return .immediate(result)
     }
 
-    private func buildInstructions(entryCount: Int) -> String {
+    private func buildInstructions(entryCount: Int, artifactCount: Int) -> String {
         """
-        Phase 2 initialized. You have \(entryCount) timeline entries to process.
+        Phase 2 initialized.
+        - \(entryCount) timeline entries
+        - \(artifactCount) artifact(s) with summaries
 
-        YOUR IMMEDIATE NEXT ACTION:
+        ## YOUR WORKFLOW
+
+        ### STEP 1: Display Knowledge Card Plan
         Call `display_knowledge_card_plan` with a plan containing:
-        1. A "job" type card for each significant position in the timeline
-        2. "skill" type cards for cross-cutting competencies you identify
+        - A "job" type card for each significant position in the timeline
+        - "skill" type cards for cross-cutting competencies you identify
 
-        EXAMPLE PLAN STRUCTURE:
+        Example:
         {
           "items": [
             {"id": "uuid1", "type": "job", "title": "Senior Engineer at Company X", "status": "pending"},
-            {"id": "uuid2", "type": "job", "title": "Developer at Startup Y", "status": "pending"},
-            {"id": "uuid3", "type": "skill", "title": "Technical Leadership", "status": "pending"},
-            {"id": "uuid4", "type": "skill", "title": "Full-Stack Development", "status": "pending"}
+            {"id": "uuid2", "type": "skill", "title": "Technical Leadership", "status": "pending"}
           ],
-          "message": "I've created a plan to document your career. Let's start with your most recent role."
+          "message": "I've created a plan to document your career."
         }
 
-        RULES:
-        - Generate the plan based on the timeline entries provided above
-        - Use UUIDs for item IDs
-        - Set all initial statuses to "pending"
-        - Include a helpful message explaining the plan to the user
-        - After displaying the plan, begin working through items systematically
+        ### STEP 2: Propose Card Assignments
+        After displaying the plan:
+        - Review the artifact summaries provided above
+        - For each card, identify which artifacts contain relevant information
+        - Call `propose_card_assignments` to map artifacts to cards:
+          - Assign relevant artifact IDs to each card
+          - Identify documentation gaps (cards without sufficient artifacts)
 
-        PER-ITEM WORKFLOW (CRITICAL - FOLLOW THIS ORDER):
-        1. **ALWAYS FIRST**: Call `set_current_knowledge_card` with the item ID
-           → This highlights the item and enables the "Done with this card" button
-           → Without this step, the user cannot signal when they're ready!
+        ### STEP 3: Handle Gaps (if any)
+        If there are documentation gaps:
+        - Present the gaps to the user
+        - Ask if they have additional documents (performance reviews, project docs, etc.)
+        - Wait for user uploads or confirmation they have no more docs
 
-        2. **ASK ABOUT DOCUMENTS FIRST** - Documents are your primary source material:
-           "Do you have any documents for this role? For example:
-           - Performance reviews or 360 feedback
-           - Project reports, design docs, or presentations
-           - Job description or role summary
-           - Websites, portfolios, or published work
-           - Software projects or git repositories
-           - Publications, patents, or awards"
+        ### STEP 4: Generate Knowledge Cards
+        When artifact assignments are ready:
+        - Call `dispatch_kc_agents` with the card proposals
+        - Parallel agents will read artifacts and generate knowledge cards
+        - Review returned cards for quality
+        - Use `submit_knowledge_card` to persist valid cards
 
-        3. Extract detail from uploaded documents; ask clarifying questions only for gaps
-
-        4. Wait for the user to click "Done with this card" or say they're ready
-
-        5. Call `submit_knowledge_card` with comprehensive prose (500-2000+ words) and sources
-
-        IMPORTANT REMINDERS:
-        - DOCUMENTS are far more efficient than Q&A - one PDF can replace 20 questions
-        - NEVER start asking questions about an item without calling set_current_knowledge_card FIRST
-        - The "Done" button only appears when a card is selected via set_current_knowledge_card
+        ## KEY POINTS
+        - Artifact summaries let you see all docs WITHOUT reading full text
+        - Sub-agents handle the detailed artifact reading and card generation
+        - After cards are generated and persisted, call `next_phase` to advance
 
         DO NOT skip calling display_knowledge_card_plan. This is required to show the UI.
         """

@@ -12,12 +12,17 @@ struct PhaseTwoScript: PhaseScript {
         .cardsGenerated
     ])
     let allowedTools: [String] = OnboardingToolName.rawValues([
-        .startPhaseTwo,          // Bootstrap tool - returns timeline + instructions, forces display_knowledge_card_plan
+        .startPhaseTwo,          // Bootstrap tool - returns timeline + artifact summaries + instructions
         .getUserOption,
         .getTimelineEntries,     // Kept for manual retrieval if needed
         .displayKnowledgeCardPlan,
         .setCurrentKnowledgeCard, // Set active item - enables "Done" button
         .submitKnowledgeCard,    // Submit knowledge card for approval + auto-persist
+
+        // Multi-agent KC generation tools
+        .proposeCardAssignments, // Map docs to cards, identify gaps
+        .dispatchKCAgents,       // Spawn parallel KC agents
+
         .scanGitRepo,
         .requestEvidence,
         .getUserUpload,
