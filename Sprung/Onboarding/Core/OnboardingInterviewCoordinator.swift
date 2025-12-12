@@ -67,6 +67,18 @@ final class OnboardingInterviewCoordinator {
         resRefStore
     }
 
+    // MARK: - Multi-Agent Infrastructure
+
+    /// Agent activity tracker for monitoring parallel agents
+    var agentActivityTracker: AgentActivityTracker {
+        container.agentActivityTracker
+    }
+
+    /// Returns the KC agent service for parallel knowledge card generation
+    func getKCAgentService() -> KnowledgeCardAgentService {
+        container.getKCAgentService()
+    }
+
     // MARK: - UI State Properties (from ToolRouter)
     var pendingUploadRequests: [OnboardingUploadRequest] {
         toolRouter.pendingUploadRequests

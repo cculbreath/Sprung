@@ -127,6 +127,11 @@ final class OnboardingDependencyContainer {
     let ui: OnboardingUIState
     let wizardTracker: WizardProgressTracker
     let conversationLogStore: ConversationLogStore
+
+    // MARK: - Multi-Agent Infrastructure
+    let agentActivityTracker: AgentActivityTracker
+    private var kcAgentService: KnowledgeCardAgentService?
+
     // MARK: - Early-Initialized Coordinators (No Coordinator Reference Needed)
     let toolInteractionCoordinator: ToolInteractionCoordinator
     let coordinatorEventRouter: CoordinatorEventRouter
@@ -166,6 +171,7 @@ final class OnboardingDependencyContainer {
         self.ui = OnboardingUIState(preferences: preferences)
         self.wizardTracker = WizardProgressTracker()
         self.conversationLogStore = ConversationLogStore()
+        self.agentActivityTracker = AgentActivityTracker()
 
         // 3. Initialize state stores
         let stores = Self.createStateStores(eventBus: core.eventBus, phasePolicy: core.phasePolicy)
@@ -455,6 +461,20 @@ final class OnboardingDependencyContainer {
     }
     func getExperienceDefaultsStore() -> ExperienceDefaultsStore {
         experienceDefaultsStore
+    }
+
+    /// Returns or creates the KC agent service for parallel knowledge card generation
+    func getKCAgentService() -> KnowledgeCardAgentService {
+        if let service = kcAgentService {
+            return service
+        }
+        let service = KnowledgeCardAgentService(
+            artifactRepository: artifactRepository,
+            llmFacade: llmFacade,
+            tracker: agentActivityTracker
+        )
+        kcAgentService = service
+        return service
     }
 
     /// Knowledge cards created during onboarding (persisted as ResRefs with isFromOnboarding=true)

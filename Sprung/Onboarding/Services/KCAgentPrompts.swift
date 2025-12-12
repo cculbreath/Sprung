@@ -1,0 +1,224 @@
+//
+//  KCAgentPrompts.swift
+//  Sprung
+//
+//  Centralized prompts for Knowledge Card (KC) generation agents.
+//  Each KC agent receives a system prompt defining its role and an initial
+//  prompt with the card proposal and relevant artifact summaries.
+//
+
+import Foundation
+import SwiftyJSON
+
+enum KCAgentPrompts {
+
+    // MARK: - System Prompt
+
+    /// System prompt for a KC agent.
+    /// Defines the agent's role, available tools, and output format.
+    static func systemPrompt(cardType: String, title: String) -> String {
+        """
+        You are a specialized Knowledge Card generation agent. Your task is to create a COMPREHENSIVE knowledge card titled "\(title)" (type: \(cardType)).
+
+        ## Your Role
+        You are one of several parallel agents, each responsible for generating a single knowledge card. You have access to document artifacts that contain source material for the card. Your job is to:
+        1. Read the FULL TEXT of all relevant artifacts assigned to this card
+        2. Extract and synthesize ALL important information - do not summarize or compress
+        3. Generate a detailed, comprehensive knowledge card
+
+        ## Available Tools
+        - `get_artifact`: Retrieve the FULL TEXT content of an artifact by ID. ALWAYS use this for assigned artifacts.
+        - `get_artifact_summary`: Get a quick summary of an artifact (only use for initial exploration of OTHER artifacts)
+        - `return_result`: Submit your completed knowledge card
+
+        ## CRITICAL: Knowledge Card Prose Requirements
+
+        The `prose` field must be a COMPREHENSIVE NARRATIVE of **500-2000+ words** that captures EVERYTHING relevant about this experience. This prose will be the PRIMARY SOURCE for resume customization and cover letter writing - the original documents will NOT be re-read at that time.
+
+        Write as if creating a detailed portfolio entry or comprehensive briefing document. The prose MUST include:
+
+        **For Job Cards:**
+        - Role scope, responsibilities, team size, reporting structure
+        - Specific projects with technical details and your contributions
+        - Quantified achievements and business impact (revenue, users, efficiency gains)
+        - Technologies, tools, frameworks, and methodologies used
+        - Team dynamics, leadership responsibilities, collaboration patterns
+        - Challenges overcome and complex problems solved
+        - Skills demonstrated (technical and interpersonal)
+        - Career progression or growth during the tenure
+
+        **For Skill Cards:**
+        - How the skill was developed and refined over time
+        - Specific projects and contexts where the skill was applied
+        - Proficiency level with concrete evidence
+        - Related technologies or complementary skills
+        - Notable outcomes achieved using this skill
+        - Certifications, training, or formal recognition
+
+        ## DO NOT:
+        - Summarize or compress information - PRESERVE all relevant detail
+        - Write terse bullet-point lists - write flowing narrative prose
+        - Omit specific details like project names, metrics, or technologies
+        - Use generic descriptions - be specific to THIS role/skill
+
+        ## Knowledge Card Structure
+        Your output must include:
+        - **prose**: COMPREHENSIVE narrative (500-2000+ words). This is the most important field.
+        - **highlights**: 5-8 bullet points of standout achievements or capabilities (be specific, include metrics)
+        - **skills**: Technical skills, tools, or competencies demonstrated
+        - **metrics**: All quantifiable achievements (percentages, numbers, dollar amounts, team sizes, timelines)
+        - **sources**: List of artifact IDs you used
+
+        ## Output Format
+        When ready, call `return_result` with a JSON object:
+        ```json
+        {
+          "card_type": "\(cardType)",
+          "title": "\(title)",
+          "prose": "Comprehensive 500-2000+ word narrative...",
+          "highlights": ["Specific achievement with metrics", "Another specific achievement"],
+          "skills": ["Skill 1", "Skill 2"],
+          "metrics": ["Increased revenue by 40%", "Led team of 12", "Shipped in 6 months"],
+          "sources": ["artifact-id-1", "artifact-id-2"]
+        }
+        ```
+
+        ## Quality Check Before Submitting
+        Before calling return_result, verify:
+        1. Prose is at least 500 words (aim for 1000+ for substantial roles)
+        2. All specific projects, metrics, and technologies from source docs are included
+        3. The narrative could stand alone to write a resume bullet or cover letter paragraph
+        """
+    }
+
+    // MARK: - Initial Prompt
+
+    /// Initial prompt for a KC agent containing the card proposal and artifact summaries.
+    static func initialPrompt(proposal: CardProposal, allSummaries: [JSON]) -> String {
+        // Build artifact summary section
+        var assignedSummaries = ""
+        var otherSummaries = ""
+
+        for summary in allSummaries {
+            let artifactId = summary["id"].stringValue
+            let filename = summary["filename"].stringValue
+            let summaryText = summary["summary"].stringValue
+            let docType = summary["summary_metadata"]["document_type"].stringValue
+
+            let summaryBlock = """
+
+            ### \(filename) (ID: \(artifactId))
+            Type: \(docType)
+            \(summaryText)
+            """
+
+            if proposal.assignedArtifactIds.contains(artifactId) {
+                assignedSummaries += summaryBlock
+            } else {
+                otherSummaries += summaryBlock
+            }
+        }
+
+        // Build the initial prompt
+        var prompt = """
+        ## Card Assignment
+
+        **Card Type**: \(proposal.cardType)
+        **Title**: \(proposal.title)
+        """
+
+        if let timelineEntryId = proposal.timelineEntryId {
+            prompt += "\n**Timeline Entry**: \(timelineEntryId)"
+        }
+
+        if let notes = proposal.notes {
+            prompt += "\n**Notes**: \(notes)"
+        }
+
+        prompt += """
+
+
+        ## Assigned Artifacts
+        These artifacts have been specifically assigned to this card. Read them thoroughly.
+        \(assignedSummaries.isEmpty ? "\n(No specific artifacts assigned - review all available)" : assignedSummaries)
+
+        ## Other Available Artifacts
+        These artifacts may contain additional relevant information.
+        \(otherSummaries.isEmpty ? "\n(No other artifacts available)" : otherSummaries)
+
+        ## Instructions
+        1. Start by reading the full content of your assigned artifacts using `get_artifact`
+        2. If assigned artifacts are insufficient, review other artifacts that might be relevant
+        3. Synthesize the information into a cohesive knowledge card
+        4. Call `return_result` with your completed card
+
+        Begin by reading your assigned artifacts.
+        """
+
+        return prompt
+    }
+
+    // MARK: - Error Recovery Prompt
+
+    /// Prompt sent when an agent encounters an error and needs to retry.
+    static func errorRecoveryPrompt(error: String) -> String {
+        """
+        An error occurred: \(error)
+
+        Please try a different approach:
+        1. If you couldn't read an artifact, try the summary instead
+        2. If no artifacts are available, create the card based on the title and any context provided
+        3. Call `return_result` with whatever information you can provide
+
+        Continue with your card generation.
+        """
+    }
+
+    // MARK: - Skill Card Specific
+
+    /// Additional guidance for skill-type cards.
+    static func skillCardGuidance(skillName: String) -> String {
+        """
+        ## Skill Card Guidance
+
+        For skill "\(skillName)", focus on:
+        - **Proficiency level**: beginner, intermediate, advanced, expert
+        - **Years of experience** with this skill
+        - **Projects or contexts** where this skill was applied
+        - **Related technologies** or complementary skills
+        - **Certifications or training** related to this skill
+        - **Notable outcomes** achieved using this skill
+
+        The prose should explain how the applicant developed and applied this skill, with specific examples.
+        """
+    }
+
+    // MARK: - Job Card Specific
+
+    /// Additional guidance for job-type cards.
+    static func jobCardGuidance(jobTitle: String, company: String?) -> String {
+        var guidance = """
+        ## Job Card Guidance
+
+        For the "\(jobTitle)" role
+        """
+
+        if let company = company {
+            guidance += " at \(company)"
+        }
+
+        guidance += """
+        , focus on:
+        - **Key responsibilities** and scope of the role
+        - **Team size and structure** (reports, peers, leadership)
+        - **Major projects or initiatives** led or contributed to
+        - **Measurable impact** (revenue, efficiency, user growth, etc.)
+        - **Technologies and methodologies** used
+        - **Career progression** or promotions during the tenure
+
+        The prose should read like a compelling story of the applicant's time in this role, emphasizing growth and impact.
+        """
+
+        return guidance
+    }
+}

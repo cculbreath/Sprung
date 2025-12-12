@@ -54,6 +54,10 @@ enum OnboardingToolName: String, CaseIterable {
     case persistData = "persist_data"
     case setObjectiveStatus = "set_objective_status"
 
+    // Multi-Agent Tools (Phase 2)
+    case proposeCardAssignments = "propose_card_assignments"
+    case dispatchKCAgents = "dispatch_kc_agents"
+
     // Phase 3 Tools
     case startPhaseThree = "start_phase_three"
     case ingestWritingSample = "ingest_writing_sample"
