@@ -2,14 +2,14 @@
 //  NodeGroupPhasePanel.swift
 //  Sprung
 //
-//  Auxiliary panel showing all AI-enabled node groups with phase toggles.
-//  Allows users to assign attributes to Phase 1 or Phase 2 for multi-phase review.
+//  Popover panel showing phase assignments for AI-enabled fields.
+//  Phase 1 items are reviewed first, Phase 2 items reviewed in a second round.
 //
 
 import SwiftUI
 import SwiftData
 
-/// Represents a node group created via attribute picker
+/// Represents a field's phase assignment for multi-round review
 struct NodeGroup: Identifiable {
     let id: String  // Collection node ID
     let sectionName: String  // e.g., "Skills", "Work"
@@ -21,121 +21,149 @@ struct NodeGroup: Identifiable {
     }
 }
 
-struct NodeGroupPhasePanel: View {
-    let resume: Resume
+/// Popover panel for assigning fields to review phases
+struct NodeGroupPhasePanelPopover: View {
+    @Bindable var resume: Resume
     @State private var nodeGroups: [NodeGroup] = []
-    @State private var isExpanded: Bool = true
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // Header with toggle
+        VStack(alignment: .leading, spacing: 12) {
+            // Header
             HStack {
-                ToggleChevronView(isExpanded: $isExpanded)
-                Text("AI Customization Node Groups")
-                    .foregroundColor(.secondary)
-                    .fontWeight(.regular)
-                Spacer()
+                Image(systemName: "list.number")
+                    .foregroundColor(.accentColor)
+                Text("Phase Assignments")
+                    .font(.headline)
             }
-            .contentShape(Rectangle())
-            .onTapGesture {
-                withAnimation { isExpanded.toggle() }
-            }
-            .padding(.leading, 20)
-            .padding(.vertical, 5)
+            .padding(.bottom, 4)
 
-            if isExpanded {
-                if nodeGroups.isEmpty {
-                    Text("No node groups configured")
+            Divider()
+
+            if nodeGroups.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "square.stack.3d.up.slash")
+                        .font(.largeTitle)
+                        .foregroundColor(.secondary)
+                    Text("No fields configured")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Text("Enable AI on fields using the sparkle button\nto configure phase assignments.")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                        .padding(.leading, 28)
-                } else {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach($nodeGroups) { $group in
-                            HStack {
-                                Text(group.displayName)
-                                    .font(.subheadline)
-
-                                Spacer()
-
-                                // Phase toggle: 1 | 2
-                                PhaseToggle(phase: $group.phase)
-                            }
-                        }
-                    }
-                    .padding(.leading, 28)
-                    .padding(.trailing, 12)
-                    .padding(.top, 4)
+                        .multilineTextAlignment(.center)
                 }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach($nodeGroups) { $group in
+                        HStack {
+                            // Display as "Section → attribute"
+                            Text(group.displayName)
+                                .font(.subheadline)
+
+                            Spacer()
+
+                            // Phase toggle: 1 | 2
+                            PhaseToggle(phase: Binding(
+                                get: { group.phase },
+                                set: { newPhase in
+                                    group.phase = newPhase
+                                    savePhaseAssignment(groupId: group.id, phase: newPhase)
+                                }
+                            ))
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+
+                Divider()
+
+                // Legend
+                Text("Phase 1 fields are reviewed first, then Phase 2")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
         }
-        .padding(.trailing, 12)
+        .padding()
+        .frame(minWidth: 260, maxWidth: 300)
         .onAppear {
             loadNodeGroups()
         }
     }
 
-    /// Load node groups from the resume tree
+    /// Save a phase assignment to the resume
+    private func savePhaseAssignment(groupId: String, phase: Int) {
+        var assignments = resume.phaseAssignments
+        assignments[groupId] = phase
+        resume.phaseAssignments = assignments
+        Logger.debug("📋 Saved phase assignment: \(groupId) → Phase \(phase)")
+    }
+
+    /// Load node groups from the resume tree based on actual AI-enabled status.
+    /// Only shows collection-type nodes (arrays/objects with children).
+    /// Scalar nodes are fixed to Phase 2 and don't appear in this panel.
     private func loadNodeGroups() {
         guard let rootNode = resume.rootNode else { return }
 
         var groups: [NodeGroup] = []
+        var seenGroupKeys = Set<String>()  // Dedupe by section+attribute
 
-        // Find all collection nodes with group selections
+        // Get phase assignments (defaults applied at tree creation from manifest)
+        let savedAssignments = resume.phaseAssignments
+
+        // Traverse sections to find AI-enabled collection attributes
         for sectionNode in rootNode.orderedChildren {
-            let selectedAttrs = sectionNode.selectedGroupAttributes
-            if !selectedAttrs.isEmpty {
-                // This section has group selections
-                for attr in selectedAttrs {
-                    let group = NodeGroup(
-                        id: "\(sectionNode.id)-\(attr.name)",
-                        sectionName: sectionNode.name.isEmpty ? sectionNode.value : sectionNode.name,
-                        attributeName: attr.name,
-                        phase: getPhase(for: sectionNode.id, attribute: attr.name) ?? (attr.mode == .bundle ? 1 : 2)
-                    )
-                    groups.append(group)
-                }
-            }
+            let sectionName = sectionNode.name.isEmpty ? sectionNode.value : sectionNode.name
+            guard !sectionName.isEmpty else { continue }
 
-            // Also check child nodes (e.g., skills -> categories -> keywords)
-            for childNode in sectionNode.orderedChildren {
-                let childAttrs = childNode.selectedGroupAttributes
-                if !childAttrs.isEmpty {
-                    for attr in childAttrs {
-                        let group = NodeGroup(
-                            id: "\(childNode.id)-\(attr.name)",
-                            sectionName: sectionNode.name.isEmpty ? sectionNode.value : sectionNode.name,
-                            attributeName: attr.name,
-                            phase: getPhase(for: childNode.id, attribute: attr.name) ?? (attr.mode == .bundle ? 1 : 2)
-                        )
-                        groups.append(group)
+            let entries = sectionNode.orderedChildren
+            guard !entries.isEmpty else { continue }
+
+            // Find collection-type attributes that are AI-enabled
+            // (Only show attributes with children - scalars are fixed to Phase 2)
+            var collectionAttributes: Set<String> = []
+
+            for entry in entries {
+                for attr in entry.orderedChildren {
+                    let attrName = attr.name.isEmpty ? attr.value : attr.name
+                    guard !attrName.isEmpty else { continue }
+
+                    // Only include if this is a collection (has children)
+                    let isCollection = !attr.orderedChildren.isEmpty
+
+                    // Check if this attribute or its children are AI-enabled
+                    let isAttrEnabled = attr.status == .aiToReplace
+                    let hasEnabledChildren = attr.orderedChildren.contains { $0.status == .aiToReplace }
+
+                    // Only add collection-type attributes (scalars are fixed to Phase 2)
+                    if isCollection && (isAttrEnabled || hasEnabledChildren) {
+                        collectionAttributes.insert(attrName)
                     }
                 }
             }
-        }
 
-        nodeGroups = groups
-    }
+            // Create groups for each AI-enabled collection attribute
+            for attrName in collectionAttributes {
+                let groupKey = "\(sectionName)-\(attrName)"
+                guard !seenGroupKeys.contains(groupKey) else { continue }
+                seenGroupKeys.insert(groupKey)
 
-    /// Get the configured phase for a node group (from manifest or user override)
-    private func getPhase(for nodeId: String, attribute: String) -> Int? {
-        // Try to get phase from manifest reviewPhases config
-        guard let template = resume.template,
-              let manifest = TemplateManifestLoader.manifest(for: template),
-              let reviewPhases = manifest.reviewPhases else {
-            return nil
-        }
+                // Phase assignment from resume (defaults applied at tree creation)
+                let phase = savedAssignments[groupKey] ?? 2
 
-        // Find matching phase config
-        for (_, phases) in reviewPhases {
-            for phaseConfig in phases {
-                if phaseConfig.field.contains(attribute) {
-                    return phaseConfig.phase
-                }
+                let group = NodeGroup(
+                    id: groupKey,
+                    sectionName: sectionName,
+                    attributeName: attrName,
+                    phase: phase
+                )
+                groups.append(group)
             }
         }
 
-        return nil
+        // Sort groups by section name, then attribute
+        nodeGroups = groups.sorted { ($0.sectionName, $0.attributeName) < ($1.sectionName, $1.attributeName) }
     }
 }
 

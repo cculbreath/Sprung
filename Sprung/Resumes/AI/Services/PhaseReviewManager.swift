@@ -181,44 +181,45 @@ class PhaseReviewManager {
         return result
     }
 
-    /// Build the two-round review structure:
-    /// - Round 1: Phase 1 items from explicitly configured sections
-    /// - Round 2: Everything else (phase 2+ from configured sections + all other AI-selected nodes)
+    /// Build the two-round review structure based on phase assignments:
+    /// - Round 1: Collection-type items assigned to Phase 1
+    /// - Round 2: Everything else (scalars are always Phase 2, collections default to Phase 2)
+    /// Note: Manifest defaults are applied at tree creation time to resume.phaseAssignments
     func buildReviewRounds(for resume: Resume) -> (phase1: [ExportedReviewNode], phase2: [ExportedReviewNode]) {
         guard let rootNode = resume.rootNode else { return ([], []) }
 
-        let explicitPhases = sectionsWithActiveReviewPhases(for: resume)
-        let explicitSectionNames = Set(explicitPhases.map { $0.section.lowercased() })
-
+        let phaseAssignments = resume.phaseAssignments
         var phase1Nodes: [ExportedReviewNode] = []
         var phase2Nodes: [ExportedReviewNode] = []
 
-        // Process explicitly configured sections
-        for (_, phases) in explicitPhases {
-            let sortedPhases = phases.sorted { $0.phase < $1.phase }
-
-            for phaseConfig in sortedPhases {
-                let nodes = TreeNode.exportNodesMatchingPath(phaseConfig.field, from: rootNode)
-                if phaseConfig.phase == 1 {
-                    phase1Nodes.append(contentsOf: nodes)
-                } else {
-                    // Phase 2+ goes into the combined round
-                    phase2Nodes.append(contentsOf: nodes)
-                }
-            }
-        }
-
-        // Add all other AI-selected nodes to phase 2
+        // Process all sections and categorize nodes by phase assignment
         if let children = rootNode.children {
             for sectionNode in children {
-                let sectionName = sectionNode.name.lowercased()
-
-                // Skip sections with explicit phases (already processed above)
-                if explicitSectionNames.contains(sectionName) { continue }
+                let sectionName = sectionNode.name.isEmpty ? sectionNode.value : sectionNode.name
+                guard !sectionName.isEmpty else { continue }
 
                 // Export all AI-selected nodes from this section
                 let sectionNodes = exportAllAISelectedNodes(from: sectionNode)
-                phase2Nodes.append(contentsOf: sectionNodes)
+
+                // Categorize each node by its phase assignment
+                for node in sectionNodes {
+                    // Scalar nodes (no children) are always Phase 2
+                    if !node.isContainer {
+                        phase2Nodes.append(node)
+                        continue
+                    }
+
+                    // Collection nodes: check phase assignment (default Phase 2)
+                    let attrName = extractAttributeName(from: node, sectionName: sectionName)
+                    let assignmentKey = "\(sectionName)-\(attrName)"
+                    let assignedPhase = phaseAssignments[assignmentKey] ?? 2
+
+                    if assignedPhase == 1 {
+                        phase1Nodes.append(node)
+                    } else {
+                        phase2Nodes.append(node)
+                    }
+                }
             }
         }
 
@@ -226,7 +227,30 @@ class PhaseReviewManager {
         return (phase1Nodes, phase2Nodes)
     }
 
-    /// Export all AI-selected nodes from a section node (recursively)
+    /// Extract attribute name from an exported node for phase assignment lookup
+    private func extractAttributeName(from node: ExportedReviewNode, sectionName: String) -> String {
+        // The path format is like "SectionName.EntryName.attributeName" or just "SectionName.attributeName"
+        // We need to extract the attribute name (last meaningful segment)
+        let pathComponents = node.path.split(separator: ".").map(String.init)
+
+        // Find the attribute name - typically the last component, or second-to-last if it's an item
+        if pathComponents.count >= 2 {
+            // Check if this is a nested item (e.g., "Skills.Programming Languages.keywords")
+            let potentialAttr = pathComponents.last ?? ""
+            // Common attribute names we care about
+            let knownAttributes = ["name", "keywords", "highlights", "summary", "position", "title", "description"]
+            if knownAttributes.contains(potentialAttr.lowercased()) {
+                return potentialAttr
+            }
+        }
+
+        // Fallback: use the node's display name or path
+        return node.displayName
+    }
+
+    /// Export all AI-selected nodes from a section node (recursively).
+    /// Sets isBundled=true when a parent node with children is AI-enabled (bundle mode).
+    /// Sets isBundled=false when individual leaf nodes are AI-enabled (per-item mode).
     private func exportAllAISelectedNodes(from sectionNode: TreeNode) -> [ExportedReviewNode] {
         var result: [ExportedReviewNode] = []
 
@@ -238,13 +262,18 @@ class PhaseReviewManager {
                 let hasChildren = node.children?.isEmpty == false
                 let childValues = hasChildren ? node.children?.map { $0.value }.filter { !$0.isEmpty } : nil
 
+                // Bundle mode: parent node with children is AI-enabled
+                // Per-item mode: leaf node (no children) is AI-enabled
+                let isBundledNode = hasChildren && childValues?.isEmpty == false
+
                 let exportedNode = ExportedReviewNode(
                     id: node.id,
                     path: currentPath,
                     displayName: node.displayLabel,
                     value: node.value,
                     childValues: childValues,
-                    childCount: childValues?.count ?? 0
+                    childCount: childValues?.count ?? 0,
+                    isBundled: isBundledNode
                 )
                 result.append(exportedNode)
             }
@@ -327,13 +356,18 @@ class PhaseReviewManager {
         resume: Resume,
         modelId: String
     ) async throws {
+        // Detect bundle mode from tree selection pattern:
+        // If any exported node is bundled (parent AI-enabled), use bundled review
+        // Otherwise use per-item (unbundled) review
+        let isBundledReview = nodes.contains { $0.isBundled }
+
         // Initialize phase review state for this round
         phaseReviewState.isActive = true
         phaseReviewState.currentSection = roundNumber == 1 ? "Phase 1" : "All Fields"
-        phaseReviewState.phases = [TemplateManifest.ReviewPhaseConfig(phase: roundNumber, field: "*", bundle: false)]
+        phaseReviewState.phases = [TemplateManifest.ReviewPhaseConfig(phase: roundNumber, field: "*", bundle: isBundledReview)]
         phaseReviewState.currentPhaseIndex = 0
 
-        Logger.info("🚀 Starting Round \(roundNumber) - \(nodes.count) nodes")
+        Logger.info("🚀 Starting Round \(roundNumber) - \(nodes.count) nodes (bundled: \(isBundledReview))")
 
         do {
             let query = ResumeApiQuery(
@@ -351,7 +385,7 @@ class PhaseReviewManager {
                 phaseNumber: roundNumber,
                 fieldPath: "*",
                 nodes: nodes,
-                isBundled: false
+                isBundled: isBundledReview
             )
 
             let model = openRouterService.findModel(id: modelId)
@@ -923,14 +957,15 @@ class PhaseReviewManager {
             Logger.info("📋 Moving to Round 2 with \(cachedPhase2Nodes.count) nodes")
             phase1Completed = true
 
-            // Reset phase state for round 2
-            phaseReviewState.reset()
-
             guard let modelId = delegate?.currentModelId else {
                 Logger.error("❌ No model ID for round 2")
                 finalizeWorkflow()
                 return
             }
+
+            // Show loading state BEFORE clearing review
+            delegate?.setProcessingRevisions(true)
+            phaseReviewState.reset()
 
             Task {
                 do {

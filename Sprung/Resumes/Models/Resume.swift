@@ -54,6 +54,21 @@ class Resume: Identifiable, Hashable {
             sectionVisibilityData = try? JSONEncoder().encode(newValue)
         }
     }
+    /// User-configured phase assignments for AI review (maps "Section-attribute" to phase number)
+    @Attribute(.externalStorage)
+    private var phaseAssignmentsData: Data?
+    var phaseAssignments: [String: Int] {
+        get {
+            guard let phaseAssignmentsData,
+                  let decoded = try? JSONDecoder().decode([String: Int].self, from: phaseAssignmentsData) else {
+                return [:]
+            }
+            return decoded
+        }
+        set {
+            phaseAssignmentsData = try? JSONEncoder().encode(newValue)
+        }
+    }
     func label(_ key: String) -> String {
         if let myLabel = keyLabels[key] {
             return myLabel

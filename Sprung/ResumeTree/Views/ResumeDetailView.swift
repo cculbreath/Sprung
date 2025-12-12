@@ -13,6 +13,8 @@ struct ResumeDetailView: View {
     @Binding var tab: TabList
     // View-model (owns UI state)
     @State private var vm: ResumeDetailVM
+    // Popover state
+    @State private var showNodeGroupPhasePopover = false
     // MARK: – Init ---------------------------------------------------------
     private var externalIsWide: Binding<Bool>?
     init(
@@ -90,10 +92,24 @@ struct ResumeDetailView: View {
                     }
                 }
 
-                // AI Review section - node group phase configuration
-                NodeGroupPhasePanel(resume: vm.resume)
-                    .padding(.horizontal, 10)
-                    .padding(.top, 8)
+                // Phase assignment configuration button
+                HStack {
+                    Spacer()
+                    Button(action: { showNodeGroupPhasePopover.toggle() }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "list.number")
+                            Text("Phase Assignments")
+                        }
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .popover(isPresented: $showNodeGroupPhasePopover, arrowEdge: .trailing) {
+                        NodeGroupPhasePanelPopover(resume: vm.resume)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.top, 8)
             }
         }
         // Provide the view-model to the subtree via environment so that

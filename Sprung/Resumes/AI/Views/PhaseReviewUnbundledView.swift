@@ -40,8 +40,12 @@ struct PhaseReviewUnbundledView: View {
     }
 
     /// Check if current item has children (is a container like keywords)
+    /// Must have non-empty arrays to be considered a container
     private var isContainerItem: Bool {
-        currentItem?.originalChildren != nil || currentItem?.proposedChildren != nil
+        guard let item = currentItem else { return false }
+        let hasOriginal = item.originalChildren?.isEmpty == false
+        let hasProposed = item.proposedChildren?.isEmpty == false
+        return hasOriginal || hasProposed
     }
 
     var body: some View {
@@ -61,8 +65,10 @@ struct PhaseReviewUnbundledView: View {
                         }
 
                         // Diff view based on item type
+                        // Check for non-nil AND non-empty arrays to determine container vs scalar
                         if let originalChildren = item.originalChildren,
-                           let proposedChildren = item.proposedChildren {
+                           let proposedChildren = item.proposedChildren,
+                           !(originalChildren.isEmpty && proposedChildren.isEmpty) {
                             // Show children diff (like keywords)
                             childrenDiffView(
                                 original: originalChildren,
@@ -70,7 +76,7 @@ struct PhaseReviewUnbundledView: View {
                                 itemName: item.displayName
                             )
                         } else {
-                            // Show scalar diff
+                            // Show scalar diff (includes items with empty children arrays)
                             scalarDiffView(item: item)
                         }
                     }

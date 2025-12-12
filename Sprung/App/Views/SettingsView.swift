@@ -1,6 +1,7 @@
 // Sprung/App/Views/SettingsView.swift
 import SwiftUI
 import SwiftData
+import SwiftOpenAI
 struct SettingsView: View {
     @AppStorage("fixOverflowMaxIterations") private var fixOverflowMaxIterations: Int = 3
     @AppStorage("reasoningEffort") private var reasoningEffort: String = "medium"
@@ -27,24 +28,23 @@ struct SettingsView: View {
     @State private var isLoadingGeminiModels = false
     @State private var geminiModelError: String?
     @State private var showSetupWizard = false
+    @State private var interviewModels: [ModelObject] = []
+    @State private var isLoadingInterviewModels = false
+    @State private var interviewModelError: String?
     private let dataResetService = DataResetService()
     private let pdfExtractionFallbackModelId = "gemini-2.0-flash"
+    private let interviewModelFallbackId = "gpt-5"
     private let googleAIService = GoogleAIService()
 
-    /// Available GPT-5 and GPT-5.1 models for onboarding interviews (uses OpenAI directly, not OpenRouter)
-    private let onboardingInterviewModelOptions: [(id: String, name: String)] = [
-        // GPT-5.1 family (preferred - supports "none" reasoning)
-        ("gpt-5.1", "GPT-5.1"),
-        ("gpt-5.1-codex", "GPT-5.1 Codex"),
-        ("gpt-5.1-codex-mini", "GPT-5.1 Codex Mini"),
-        ("gpt-5.1-codex-max", "GPT-5.1 Codex Max"),
-        // GPT-5 family (requires "minimal" reasoning minimum)
-        ("gpt-5", "GPT-5"),
-        ("gpt-5-mini", "GPT-5 Mini"),
-        ("gpt-5-nano", "GPT-5 Nano"),
-        ("gpt-5-pro", "GPT-5 Pro"),
-        ("gpt-5-codex", "GPT-5 Codex")
-    ]
+    /// Filtered interview models: gpt-5*, gpt-6*, gpt-7* (dynamically fetched from OpenAI)
+    private var filteredInterviewModels: [ModelObject] {
+        interviewModels
+            .filter { model in
+                let id = model.id.lowercased()
+                return id.hasPrefix("gpt-5") || id.hasPrefix("gpt-6") || id.hasPrefix("gpt-7")
+            }
+            .sorted { $0.id < $1.id }
+    }
 
     /// Models that support extended prompt cache retention (24h)
     private let promptCacheRetentionCompatibleModels: Set<String> = [
@@ -249,15 +249,64 @@ private struct SettingsSectionHeader: View {
 private extension SettingsView {
     var onboardingInterviewModelPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Picker("Interview Model", selection: $onboardingModelId) {
-                ForEach(onboardingInterviewModelOptions, id: \.id) { model in
-                    Text(model.name).tag(model.id)
+            if !hasOpenAIKey {
+                Label("Add OpenAI API key above to enable interview model selection.", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .font(.callout)
+            } else if isLoadingInterviewModels {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Loading interview models...")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
                 }
+            } else if let error = interviewModelError {
+                VStack(alignment: .leading, spacing: 4) {
+                    Label("Failed to load models", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .font(.callout)
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("Retry") {
+                        Task { await loadInterviewModels() }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            } else if filteredInterviewModels.isEmpty {
+                HStack {
+                    Text("No GPT-5/6/7 models available")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    Button("Load Models") {
+                        Task { await loadInterviewModels() }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            } else {
+                Picker("Interview Model", selection: $onboardingModelId) {
+                    ForEach(filteredInterviewModels, id: \.id) { model in
+                        Text(model.id).tag(model.id)
+                    }
+                }
+                .pickerStyle(.menu)
+                Text("GPT-5 requires \"Minimal\" reasoning; GPT-5.1+ supports \"None\".")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
-            .pickerStyle(.menu)
-            Text("GPT-5 requires \"Minimal\" reasoning; GPT-5.1 supports \"None\".")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+        }
+        .task {
+            if hasOpenAIKey && interviewModels.isEmpty {
+                await loadInterviewModels()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .apiKeysChanged)) { _ in
+            if hasOpenAIKey && interviewModels.isEmpty {
+                Task { await loadInterviewModels() }
+            }
         }
     }
 
@@ -329,6 +378,34 @@ private extension SettingsView {
         APIKeyManager.get(.gemini) != nil
     }
 
+    private var hasOpenAIKey: Bool {
+        APIKeyManager.get(.openAI) != nil
+    }
+
+    @MainActor
+    private func loadInterviewModels() async {
+        guard let apiKey = APIKeyManager.get(.openAI), !apiKey.isEmpty else {
+            interviewModelError = "OpenAI API key not configured"
+            return
+        }
+        isLoadingInterviewModels = true
+        interviewModelError = nil
+        do {
+            let service = OpenAIServiceFactory.service(apiKey: apiKey)
+            let response = try await service.listModels()
+            interviewModels = response.data
+            // Validate current selection is still available
+            if !filteredInterviewModels.contains(where: { $0.id == onboardingModelId }) {
+                if let first = filteredInterviewModels.first {
+                    onboardingModelId = first.id
+                }
+            }
+        } catch {
+            interviewModelError = error.localizedDescription
+        }
+        isLoadingInterviewModels = false
+    }
+
     @MainActor
     private func loadGeminiModels() async {
         isLoadingGeminiModels = true
@@ -373,17 +450,31 @@ private extension SettingsView {
         }
     }
 
-    var isGPT5Model: Bool {
+    /// True for base GPT-5 models (gpt-5, gpt-5-mini, etc.) that require "minimal" reasoning minimum
+    var isGPT5BaseModel: Bool {
         let id = onboardingModelId.lowercased()
-        return id.hasPrefix("gpt-5") && !id.hasPrefix("gpt-5.1")
+        // GPT-5 base models: gpt-5, gpt-5-mini, gpt-5-nano, gpt-5-pro, gpt-5-codex
+        // NOT gpt-5.1+, gpt-5.2+, etc.
+        guard id.hasPrefix("gpt-5") else { return false }
+        // Check if it has a dot version (gpt-5.1, gpt-5.2, etc.)
+        let afterPrefix = id.dropFirst(5) // Remove "gpt-5"
+        if afterPrefix.isEmpty { return true } // Just "gpt-5"
+        if afterPrefix.first == "." { return false } // gpt-5.x
+        if afterPrefix.first == "-" { return true } // gpt-5-something
+        return false
     }
 
-    var isGPT51Model: Bool {
-        onboardingModelId.lowercased().hasPrefix("gpt-5.1")
+    /// True for GPT-5.1+ models that support "none" reasoning
+    var supportsNoneReasoning: Bool {
+        let id = onboardingModelId.lowercased()
+        // GPT-5.1+, GPT-6+, GPT-7+ all support "none" reasoning
+        if id.hasPrefix("gpt-6") || id.hasPrefix("gpt-7") { return true }
+        if id.hasPrefix("gpt-5.") { return true } // gpt-5.1, gpt-5.2, etc.
+        return false
     }
 
     var availableReasoningOptions: [(value: String, label: String, detail: String)] {
-        if isGPT5Model {
+        if isGPT5BaseModel {
             return reasoningOptions.filter { $0.value != "none" }
         } else {
             return reasoningOptions.filter { $0.value != "minimal" }
@@ -391,7 +482,7 @@ private extension SettingsView {
     }
 
     var availableHardTaskReasoningOptions: [(value: String, label: String, detail: String)] {
-        if isGPT5Model {
+        if isGPT5BaseModel {
             return reasoningOptions.filter { $0.value != "none" }
         } else {
             return reasoningOptions.filter { $0.value != "none" && $0.value != "minimal" }
@@ -407,9 +498,9 @@ private extension SettingsView {
             }
             .pickerStyle(.menu)
             .onChange(of: onboardingModelId) { _, _ in
-                if isGPT5Model && onboardingReasoningEffort == "none" {
+                if isGPT5BaseModel && onboardingReasoningEffort == "none" {
                     onboardingReasoningEffort = "minimal"
-                } else if isGPT51Model && onboardingReasoningEffort == "minimal" {
+                } else if supportsNoneReasoning && onboardingReasoningEffort == "minimal" {
                     onboardingReasoningEffort = "none"
                 }
             }
@@ -424,9 +515,9 @@ private extension SettingsView {
             }
             .pickerStyle(.menu)
             .onChange(of: onboardingModelId) { _, _ in
-                if isGPT5Model && onboardingHardTaskReasoningEffort == "none" {
+                if isGPT5BaseModel && onboardingHardTaskReasoningEffort == "none" {
                     onboardingHardTaskReasoningEffort = "medium"
-                } else if isGPT51Model && onboardingHardTaskReasoningEffort == "minimal" {
+                } else if supportsNoneReasoning && onboardingHardTaskReasoningEffort == "minimal" {
                     onboardingHardTaskReasoningEffort = "medium"
                 }
             }

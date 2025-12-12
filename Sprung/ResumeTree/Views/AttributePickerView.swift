@@ -51,11 +51,37 @@ struct AttributePickerView: View {
         self.onApply = onApply
         self.onCancel = onCancel
 
-        // Initialize with current selections
+        // Initialize with current selections from multiple sources:
+        // 1. Explicit group selections (groupSelectionSourceId)
+        // 2. AI-enabled status from defaultAIFields or manual toggles
         var initial: [String: AttributeGroupingMode] = [:]
+
+        // First, check explicit group selections
         for attr in collectionNode.selectedGroupAttributes {
             initial[attr.name] = attr.mode
         }
+
+        // Then, check for AI-enabled attributes across entries
+        for entry in collectionNode.orderedChildren {
+            for attr in entry.orderedChildren {
+                let attrName = attr.name.isEmpty ? attr.value : attr.name
+                guard !attrName.isEmpty else { continue }
+
+                // Skip if already captured via group selection
+                if initial[attrName] != nil { continue }
+
+                // Check if this attribute or its children are AI-enabled
+                let isAttrEnabled = attr.status == .aiToReplace
+                let hasEnabledChildren = attr.orderedChildren.contains { $0.status == .aiToReplace }
+
+                if isAttrEnabled || hasEnabledChildren {
+                    // Determine mode: if attr itself is enabled, it's bundle; if children are enabled, it's enumerate
+                    let mode: AttributeGroupingMode = isAttrEnabled ? .bundle : .enumerate
+                    initial[attrName] = mode
+                }
+            }
+        }
+
         _selections = State(initialValue: initial)
     }
 
@@ -252,26 +278,62 @@ extension TreeNode {
     func applyGroupSelection(selections: [AttributeSelection], sourceId: String) {
         let selectionMap = Dictionary(uniqueKeysWithValues: selections.map { ($0.name, $0.mode) })
 
+        // First, clear all attributes that are NOT in the new selection
+        for child in orderedChildren {
+            for attr in child.orderedChildren {
+                let attrName = attr.name.isEmpty ? attr.value : attr.name
+                if selectionMap[attrName] == nil {
+                    // This attribute is not selected, clear it
+                    attr.status = .saved
+                    attr.groupSelectionSourceId = nil
+                    attr.groupSelectionModeRaw = nil
+                    // Also clear children if any
+                    for grandchild in attr.orderedChildren {
+                        grandchild.status = .saved
+                    }
+                }
+            }
+        }
+
+        // Then, apply the new selections
         for child in orderedChildren {
             for attr in child.orderedChildren {
                 let attrName = attr.name.isEmpty ? attr.value : attr.name
                 if let mode = selectionMap[attrName] {
-                    attr.status = .aiToReplace
                     attr.groupSelectionSourceId = sourceId
                     attr.groupSelectionModeRaw = mode.rawValue
+
+                    switch mode {
+                    case .bundle:
+                        // Bundle mode: mark the container itself for AI replacement
+                        attr.status = .aiToReplace
+                        // Clear children status (they're bundled with parent)
+                        for grandchild in attr.orderedChildren {
+                            grandchild.status = .saved
+                        }
+                    case .enumerate:
+                        // Enumerate mode: mark each child individually
+                        attr.status = .saved  // Container not marked
+                        for grandchild in attr.orderedChildren {
+                            grandchild.status = .aiToReplace
+                        }
+                    }
                 }
             }
         }
     }
 
-    /// Clear group selection that originated from this node
+    /// Clear all group selections from this collection node (regardless of source)
     func clearGroupSelection() {
         for child in orderedChildren {
             for attr in child.orderedChildren {
-                if attr.groupSelectionSourceId == id {
-                    attr.status = .saved
-                    attr.groupSelectionSourceId = nil
-                    attr.groupSelectionModeRaw = nil
+                // Clear attribute status
+                attr.status = .saved
+                attr.groupSelectionSourceId = nil
+                attr.groupSelectionModeRaw = nil
+                // Also clear children
+                for grandchild in attr.orderedChildren {
+                    grandchild.status = .saved
                 }
             }
         }

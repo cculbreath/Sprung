@@ -205,38 +205,31 @@ struct RevisionReviewView: View {
 
     // MARK: - Hierarchical Review Content
 
-    /// Routes to the appropriate phase view based on bundled/unbundled mode
+    /// Routes to the appropriate phase view based on bundled/unbundled mode.
+    /// Bundle mode is determined by tree selection pattern (parent AI-enabled vs children AI-enabled),
+    /// NOT by manifest configuration.
     @ViewBuilder
     private func hierarchicalReviewContent(resume: Resume) -> some View {
-        if let currentPhase = viewModel.phaseReviewState.currentPhase {
-            if currentPhase.bundle {
-                PhaseReviewBundledView(
-                    viewModel: viewModel,
-                    resume: Binding(
-                        get: { self.resume },
-                        set: { _ in }
-                    )
+        // Determine bundle mode from the current review's isBundled property,
+        // which is set based on tree selection pattern when nodes are exported
+        let isBundledReview = viewModel.phaseReviewState.currentReview?.isBundled ?? false
+
+        if isBundledReview {
+            PhaseReviewBundledView(
+                viewModel: viewModel,
+                resume: Binding(
+                    get: { self.resume },
+                    set: { _ in }
                 )
-            } else {
-                PhaseReviewUnbundledView(
-                    viewModel: viewModel,
-                    resume: Binding(
-                        get: { self.resume },
-                        set: { _ in }
-                    )
-                )
-            }
+            )
         } else {
-            // Fallback for no current phase
-            VStack(spacing: 16) {
-                Image(systemName: "questionmark.circle")
-                    .font(.system(size: 48))
-                    .foregroundStyle(.secondary)
-                Text("No review phase active")
-                    .font(.system(.title3, design: .rounded, weight: .medium))
-                    .foregroundStyle(.secondary)
-            }
-            .padding(40)
+            PhaseReviewUnbundledView(
+                viewModel: viewModel,
+                resume: Binding(
+                    get: { self.resume },
+                    set: { _ in }
+                )
+            )
         }
     }
 }
