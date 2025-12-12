@@ -214,7 +214,7 @@ final class OnboardingInterviewCoordinator {
         }
     }
 
-    /// Clear all onboarding data: session, ResRefs, CoverRefs, and ExperienceDefaults
+    /// Clear all onboarding data: session, ResRefs, CoverRefs, ExperienceDefaults, and ApplicantProfile
     /// Used when user chooses "Start Over" to begin fresh
     func clearAllOnboardingData() {
         Logger.info("🗑️ Clearing all onboarding data", category: .ai)
@@ -243,6 +243,9 @@ final class OnboardingInterviewCoordinator {
         experienceDefaultsStore.save(defaults)
         experienceDefaultsStore.clearCache()
         Logger.info("🗑️ Cleared ExperienceDefaults", category: .ai)
+        // Reset ApplicantProfile to defaults (including photo)
+        applicantProfileStore.reset()
+        Logger.info("🗑️ Reset ApplicantProfile", category: .ai)
     }
     /// Called when user is done with the interview - triggers finalization flow
     func endInterview() async {

@@ -145,7 +145,7 @@ struct OnboardingInterviewView: View {
                 }
                 Button("Cancel", role: .cancel) { }
             } message: {
-                Text("You have existing onboarding data (knowledge cards, cover letter sources, and experience defaults). Would you like to resume where you left off, or start over with a fresh session?\n\nWarning: Starting over will permanently delete all knowledge cards, cover letter sources, and experience defaults.")
+                Text("You have existing onboarding data (knowledge cards, cover letter sources, and experience defaults). Would you like to resume where you left off, or start over with a fresh session?\n\nWarning: Starting over will permanently delete all knowledge cards, cover letter sources, experience defaults, and reset your applicant profile (including photo) to defaults.")
             }
         return withSheets
             .onAppear {

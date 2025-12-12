@@ -44,4 +44,28 @@ final class ApplicantProfileStore: SwiftDataStore, ApplicantProfileProviding {
     func clearCache() {
         cachedProfile = nil
     }
+
+    /// Reset the applicant profile to default values (including clearing photo)
+    func reset() {
+        let profile = currentProfile()
+        // Reset all fields to defaults
+        profile.name = "John Doe"
+        profile.label = "Software Engineer"
+        profile.summary = "Experienced engineer focused on building high-quality macOS applications."
+        profile.address = "123 Main Street"
+        profile.city = "Austin"
+        profile.state = "Texas"
+        profile.zip = "78701"
+        profile.countryCode = "US"
+        profile.websites = "example.com"
+        profile.email = "applicant@example.com"
+        profile.phone = "(555) 123-4567"
+        profile.pictureData = nil
+        profile.pictureMimeType = nil
+        profile.signatureData = nil
+        // Clear social profiles
+        profile.profiles.removeAll()
+        save(profile)
+        Logger.info("🔄 ApplicantProfile reset to defaults", category: .ai)
+    }
 }
