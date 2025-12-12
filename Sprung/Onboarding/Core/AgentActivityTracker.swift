@@ -43,6 +43,18 @@ enum AgentStatus: String, Codable {
     case killed = "killed"
 }
 
+// MARK: - Task Cancellation Protocol
+
+/// Protocol for type-erased task cancellation
+private protocol CancellableTask {
+    func cancel()
+}
+
+/// Extension to make Task conform to CancellableTask
+extension Task: CancellableTask where Failure == Never {
+    // Task already has cancel(), so this just provides protocol conformance
+}
+
 // MARK: - Transcript Entry
 
 /// A single entry in an agent's conversation transcript
@@ -137,8 +149,8 @@ class AgentActivityTracker {
     /// Currently selected agent ID for detail view
     var selectedAgentId: String?
 
-    /// Active task handles for cancellation
-    private var activeTasks: [String: Task<Void, Never>] = [:]
+    /// Active task handles for cancellation (type-erased for flexibility)
+    private var activeTasks: [String: any CancellableTask] = [:]
 
     // MARK: - Computed Properties
 
@@ -188,11 +200,11 @@ class AgentActivityTracker {
     /// Register a new agent for tracking
     /// - Returns: The agent ID for later reference
     @discardableResult
-    func trackAgent(
+    func trackAgent<Success>(
         id: String = UUID().uuidString,
         type: AgentType,
         name: String,
-        task: Task<Void, Never>? = nil
+        task: Task<Success, Never>? = nil
     ) -> String {
         let agent = TrackedAgent(
             id: id,
@@ -214,7 +226,7 @@ class AgentActivityTracker {
     }
 
     /// Associate a task with an already-tracked agent
-    func setTask(_ task: Task<Void, Never>, forAgentId agentId: String) {
+    func setTask<Success>(_ task: Task<Success, Never>, forAgentId agentId: String) {
         activeTasks[agentId] = task
     }
 

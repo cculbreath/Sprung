@@ -212,7 +212,7 @@ actor KnowledgeCardAgentService {
             }
 
             // Process results and add new tasks as slots become available
-            for await (agentId, result) in group {
+            for await (_, result) in group {
                 results.append(result)
                 activeCount -= 1
 
@@ -279,7 +279,7 @@ actor KnowledgeCardAgentService {
                 id: agentId,
                 type: .knowledgeCard,
                 name: proposal.title,
-                task: nil
+                task: nil as Task<Void, Never>?
             )
         }
 
