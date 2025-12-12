@@ -125,12 +125,6 @@ enum OnboardingEvent {
     case kcAgentFailed(agentId: String, cardId: String, error: String)
     /// Emitted when a KC agent is manually killed
     case kcAgentKilled(agentId: String, cardId: String)
-    /// Emitted for KC agent turn progress (similar to git agent)
-    case kcAgentTurnStarted(agentId: String, turn: Int, maxTurns: Int)
-    /// Emitted when KC agent executes a tool
-    case kcAgentToolExecuting(agentId: String, toolName: String, turn: Int)
-    /// Emitted for general KC agent progress updates
-    case kcAgentProgressUpdated(agentId: String, message: String)
     // MARK: - Timeline Operations
     case timelineCardCreated(card: JSON)
     case timelineCardUpdated(id: String, fields: JSON)
@@ -398,8 +392,7 @@ actor EventCoordinator {
 
         // KC Agent Dispatch (treated as processing)
         case .kcAgentsDispatchStarted, .kcAgentsDispatchCompleted,
-             .kcAgentStarted, .kcAgentCompleted, .kcAgentFailed, .kcAgentKilled,
-             .kcAgentTurnStarted, .kcAgentToolExecuting, .kcAgentProgressUpdated:
+             .kcAgentStarted, .kcAgentCompleted, .kcAgentFailed, .kcAgentKilled:
             return .processing
         // Toolpane events
         case .choicePromptRequested, .choicePromptCleared, .uploadRequestPresented,
@@ -580,12 +573,6 @@ actor EventCoordinator {
             description = "KC agent failed: \(cardId.prefix(8))... - \(error.prefix(50))"
         case .kcAgentKilled(_, let cardId):
             description = "KC agent killed: \(cardId.prefix(8))..."
-        case .kcAgentTurnStarted(_, let turn, let maxTurns):
-            description = "KC agent turn \(turn)/\(maxTurns) started"
-        case .kcAgentToolExecuting(_, let toolName, let turn):
-            description = "KC agent executing \(toolName) (turn \(turn))"
-        case .kcAgentProgressUpdated(_, let message):
-            description = "KC agent progress: \(message.prefix(50))"
         case .timelineCardCreated:
             description = "Timeline card created"
         case .timelineCardUpdated(let id, _):
