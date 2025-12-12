@@ -16,10 +16,6 @@ struct SettingsView: View {
     @AppStorage("onboardingInterviewPromptCacheRetention") private var onboardingPromptCacheRetention: Bool = true
     @Environment(OnboardingInterviewCoordinator.self) private var onboardingCoordinator
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
-    @Environment(ApplicantProfileStore.self) private var applicantProfileStore
-    @Environment(ExperienceDefaultsStore.self) private var experienceDefaultsStore
-    @Environment(CareerKeywordStore.self) private var careerKeywordStore
-    @Environment(\.modelContext) private var modelContext
     @State private var showFactoryResetConfirmation = false
     @State private var showFinalResetConfirmation = false
     @State private var resetError: String?
@@ -216,15 +212,9 @@ struct SettingsView: View {
         isResetting = true
         defer { isResetting = false }
         do {
-            try await dataResetService.performFactoryReset(
-                modelContext: modelContext,
-                applicantProfileStore: applicantProfileStore,
-                experienceDefaultsStore: experienceDefaultsStore,
-                enabledLLMStore: enabledLLMStore,
-                careerKeywordStore: careerKeywordStore
-            )
+            try await dataResetService.performFactoryReset()
             resetError = ""
-            try await Task.sleep(nanoseconds: 1_000_000_000)
+            try await Task.sleep(nanoseconds: 500_000_000)
             NSApplication.shared.terminate(nil)
         } catch {
             resetError = error.localizedDescription
