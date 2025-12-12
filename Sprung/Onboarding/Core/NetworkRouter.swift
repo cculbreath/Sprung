@@ -88,6 +88,17 @@ actor NetworkRouter: OnboardingEventEmitter {
                 await emit(.llmToolCallBatchStarted(expectedCount: count, callIds: callIds))
                 Logger.info("🔧 Tool call batch started: expecting \(count) response(s)", category: .ai)
             }
+            // Emit token usage event if usage data is available
+            if let usage = completed.response.usage {
+                let modelId = completed.response.model
+                await emit(.llmTokenUsageReceived(
+                    modelId: modelId,
+                    inputTokens: usage.inputTokens ?? 0,
+                    outputTokens: usage.outputTokens ?? 0,
+                    cachedTokens: usage.inputTokensDetails?.cachedTokens ?? 0,
+                    reasoningTokens: usage.outputTokensDetails?.reasoningTokens ?? 0
+                ))
+            }
             // Reset state for next response
             receivedOutputItemDone = false
             // Emit completion event with response ID

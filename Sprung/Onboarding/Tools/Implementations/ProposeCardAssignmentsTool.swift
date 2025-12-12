@@ -48,7 +48,10 @@ struct ProposeCardAssignmentsTool: InterviewTool {
 
     private static let gapSchema = JSONSchema(
         type: .object,
-        description: "A documentation gap identified by the coordinator",
+        description: """
+            A documentation gap with SPECIFIC recommendations. Do not use generic descriptions.
+            For each gap, recommend actual document types the user likely has.
+            """,
         properties: [
             "card_id": JSONSchema(
                 type: .string,
@@ -58,12 +61,33 @@ struct ProposeCardAssignmentsTool: InterviewTool {
                 type: .string,
                 description: "Title of the card lacking documentation"
             ),
-            "gap_description": JSONSchema(
+            "role_category": JSONSchema(
                 type: .string,
-                description: "Description of what documentation is missing"
+                description: "Role category: 'engineering', 'management', 'sales', 'product', 'design', 'other'"
+            ),
+            "recommended_doc_types": JSONSchema(
+                type: .array,
+                description: """
+                    SPECIFIC document types to request. Be concrete, not generic.
+                    Good: "performance reviews", "design docs", "job description"
+                    Bad: "any documents", "more information"
+                    """,
+                items: JSONSchema(type: .string)
+            ),
+            "example_prompt": JSONSchema(
+                type: .string,
+                description: """
+                    Example prompt to show the user. Be specific and helpful.
+                    Example: "For your Senior Engineer role at Acme, do you have any performance reviews?
+                    Most companies do annual reviews - even informal email summaries would help."
+                    """
+            ),
+            "gap_severity": JSONSchema(
+                type: .string,
+                description: "'critical' (no artifacts at all), 'moderate' (some artifacts, missing key types), 'minor' (has artifacts, could use more)"
             )
         ],
-        required: ["card_id", "card_title", "gap_description"]
+        required: ["card_id", "card_title", "recommended_doc_types", "example_prompt"]
     )
 
     private static let schema: JSONSchema = {
@@ -180,23 +204,77 @@ struct ProposeCardAssignmentsTool: InterviewTool {
             response["has_gaps"].bool = false
         }
 
+        // Signal that user validation is required before dispatch
+        response["requires_user_validation"].bool = true
+        response["validation_message"].string = buildValidationMessage(
+            assignmentCount: validAssignments.count,
+            gapCount: gapsJSON.count,
+            assignmentsWithoutArtifacts: assignmentsWithoutArtifacts
+        )
+
         // Provide next step instructions
-        if gapsJSON.isEmpty {
-            response["next_action"].string = """
-                All cards have artifact assignments. You may now:
-                1. Call dispatch_kc_agents to generate knowledge cards in parallel
-                2. Or ask the user if they want to upload additional documents first
-                """
-        } else {
-            response["next_action"].string = """
-                Documentation gaps identified. You should:
-                1. Present the gaps to the user and ask if they have additional documents
-                2. Wait for user response
-                3. If user uploads docs, call propose_card_assignments again with updated assignments
-                4. When ready, call dispatch_kc_agents to generate cards
-                """
-        }
+        response["next_action"].string = buildNextActionInstructions(hasGaps: !gapsJSON.isEmpty)
 
         return .immediate(response)
+    }
+
+    private func buildValidationMessage(
+        assignmentCount: Int,
+        gapCount: Int,
+        assignmentsWithoutArtifacts: [String]
+    ) -> String {
+        var message = "I've mapped your documents to \(assignmentCount) knowledge card(s)."
+
+        if gapCount > 0 {
+            message += " I've identified \(gapCount) area(s) where additional documentation would help."
+        }
+
+        if !assignmentsWithoutArtifacts.isEmpty {
+            message += " Note: \(assignmentsWithoutArtifacts.count) card(s) have no documents assigned yet."
+        }
+
+        message += """
+
+
+        **Please review the assignments above.** You can:
+        - Ask me to reassign documents to different cards
+        - Request I add or remove cards from the plan
+        - Upload additional documents for any gaps
+        - Tell me to proceed when you're satisfied
+
+        When you're ready, say "generate cards" or click the Generate button.
+        """
+
+        return message
+    }
+
+    private func buildNextActionInstructions(hasGaps: Bool) -> String {
+        if hasGaps {
+            return """
+                ⚠️ USER VALIDATION REQUIRED before dispatch_kc_agents.
+
+                1. Present the assignments and gaps to the user using the validation_message
+                2. Use the structured gap data to make SPECIFIC document requests
+                3. WAIT for user to either:
+                   - Upload additional documents (then call propose_card_assignments again)
+                   - Request changes to the plan (modify and call propose_card_assignments again)
+                   - Confirm they're ready to proceed
+                4. DO NOT call dispatch_kc_agents until user explicitly approves
+
+                The user may say "generate cards", "looks good", "proceed", or click a Generate button.
+                """
+        } else {
+            return """
+                ✅ All cards have document assignments.
+
+                Present the assignments to the user for review. They may want to:
+                - Adjust which documents inform which cards
+                - Add or remove cards from the plan
+                - Upload additional documents
+
+                WAIT for user confirmation before calling dispatch_kc_agents.
+                The user may say "generate cards", "looks good", "proceed", or click a Generate button.
+                """
+        }
     }
 }

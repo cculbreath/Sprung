@@ -162,6 +162,9 @@ enum OnboardingEvent {
     case llmReasoningSummaryDelta(delta: String)  // Incremental reasoning text for sidebar
     case llmReasoningSummaryComplete(text: String)  // Final reasoning text for sidebar
     case llmReasoningItemsForToolCalls(ids: [String])  // Reasoning item IDs to pass back with tool outputs
+
+    // Token usage tracking
+    case llmTokenUsageReceived(modelId: String, inputTokens: Int, outputTokens: Int, cachedTokens: Int, reasoningTokens: Int)
     // Session persistence events
     case llmResponseIdUpdated(responseId: String?)  // previousResponseId updated after API response
     case knowledgeCardPlanUpdated(items: [KnowledgeCardPlanItem], currentFocus: String?, message: String?)  // Plan updated
@@ -349,7 +352,7 @@ actor EventCoordinator {
              .llmToolCallBatchStarted, .llmExecuteBatchedToolResponses,
              .llmExecuteUserMessage, .llmExecuteToolResponse, .llmExecuteDeveloperMessage, .llmStreamCompleted,
              .llmReasoningSummaryDelta, .llmReasoningSummaryComplete, .llmReasoningItemsForToolCalls, .llmCancelRequested,
-             .llmResponseIdUpdated,
+             .llmResponseIdUpdated, .llmTokenUsageReceived,
              .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized:
             return .llm
         // State events
@@ -660,6 +663,9 @@ actor EventCoordinator {
             description = "ToolPane card restored: \(card.rawValue)"
         case .llmResponseIdUpdated(let responseId):
             description = "LLM response ID updated: \(responseId?.prefix(12) ?? "nil")..."
+        case .llmTokenUsageReceived(let modelId, let inputTokens, let outputTokens, let cachedTokens, _):
+            let cachedStr = cachedTokens > 0 ? ", cached: \(cachedTokens)" : ""
+            description = "Token usage: \(modelId) - in: \(inputTokens), out: \(outputTokens)\(cachedStr)"
         case .knowledgeCardPlanUpdated(let items, let focus, _):
             description = "Knowledge card plan updated: \(items.count) items, focus: \(focus ?? "none")"
         }

@@ -132,6 +132,9 @@ final class OnboardingDependencyContainer {
     let agentActivityTracker: AgentActivityTracker
     private var kcAgentService: KnowledgeCardAgentService?
 
+    // MARK: - Usage Tracking
+    let tokenUsageTracker: TokenUsageTracker
+
     // MARK: - Early-Initialized Coordinators (No Coordinator Reference Needed)
     let toolInteractionCoordinator: ToolInteractionCoordinator
     let coordinatorEventRouter: CoordinatorEventRouter
@@ -172,6 +175,7 @@ final class OnboardingDependencyContainer {
         self.wizardTracker = WizardProgressTracker()
         self.conversationLogStore = ConversationLogStore()
         self.agentActivityTracker = AgentActivityTracker()
+        self.tokenUsageTracker = TokenUsageTracker()
 
         // 3. Initialize state stores
         let stores = Self.createStateStores(eventBus: core.eventBus, phasePolicy: core.phasePolicy)
@@ -432,6 +436,10 @@ final class OnboardingDependencyContainer {
             documentExtractionService: documentExtractionService,
             onModelAvailabilityIssue: onModelAvailabilityIssue
         )
+
+        // Start token usage tracking subscription
+        tokenUsageTracker.startEventSubscription(eventBus: eventBus)
+
         Logger.info("🏗️ OnboardingDependencyContainer late initialization completed", category: .ai)
     }
     // MARK: - Service Updates

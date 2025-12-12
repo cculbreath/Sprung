@@ -77,26 +77,28 @@ struct PhaseTwoScript: PhaseScript {
         1. `start_phase_two` → receive timeline entries and artifact summaries
         2. `display_knowledge_card_plan` → show card plan to user in UI
 
-        **PHASE B: Document Assignment & Gaps Assessment**
+        **PHASE B: Document Assignment & User Review**
         3. `propose_card_assignments` → map artifacts to cards, identify documentation gaps
-        4. **GAPS ASSESSMENT (CRITICAL)**: If gaps exist, you MUST:
-           - Present SPECIFIC document requests to the user (see Gaps Assessment section below)
-           - WAIT for user response before proceeding
-           - If user uploads more docs, call `propose_card_assignments` again
-           - Only proceed when user confirms no more docs available
+        4. **USER VALIDATION (CRITICAL)**: Present assignments for user review. User can:
+           - Redirect document assignments ("assign resume.pdf to the Tech Lead card instead")
+           - Edit the card plan ("remove the skill card", "add a card for my volunteer work")
+           - Upload additional documents for gaps
+           - Approve and proceed ("generate cards", "looks good")
+        5. If user requests changes → modify plan and call `propose_card_assignments` again
+        6. WAIT for explicit user approval before proceeding
 
-        **PHASE C: Parallel Card Generation**
-        5. `dispatch_kc_agents` → spawns parallel agents to generate cards
+        **PHASE C: Parallel Card Generation** (only after user approval)
+        7. `dispatch_kc_agents` → spawns parallel agents to generate cards
            - Each agent reads full artifact text and generates comprehensive prose
            - Results return as an array of completed cards
 
         **PHASE D: Validation & Persistence**
-        6. For EACH card returned: call `submit_knowledge_card` to persist
+        8. For EACH card returned: call `submit_knowledge_card` to persist
            - Review card quality before persisting
            - All valid cards must be persisted
 
         **PHASE E: Completion**
-        7. `next_phase` → advance to Phase 3
+        9. `next_phase` → advance to Phase 3
 
         ### What is a Knowledge Card?
         A comprehensive prose narrative (500-2000+ words) that REPLACES source documents for resume generation:
@@ -113,11 +115,22 @@ struct PhaseTwoScript: PhaseScript {
         - **Drop zone**: Users can upload documents anytime
         - **"Add code repository"**: Triggers git analysis
 
-        ### GAPS ASSESSMENT (CRITICAL PHASE)
+        ### USER VALIDATION PHASE (After propose_card_assignments)
 
-        After `propose_card_assignments`, if ANY cards lack sufficient documentation, you MUST conduct a thorough gaps assessment. This is NOT optional.
+        After `propose_card_assignments`, you MUST present the assignments for user review and WAIT for approval.
 
-        **Be SPECIFIC about what documents to request:**
+        **Present a clear summary:**
+        - Which documents are assigned to which cards
+        - Any gaps identified (cards with missing documentation)
+        - Clear options for what user can do
+
+        **User can:**
+        - **Redirect assignments**: "Move resume.pdf to the Senior Engineer card"
+        - **Edit plan**: "Remove the skill card" or "Add a card for my consulting work"
+        - **Upload more docs**: Especially for identified gaps
+        - **Approve**: "Generate cards", "looks good", "proceed"
+
+        **For gaps, be SPECIFIC about what documents to request:**
         - ❌ WRONG: "Do you have any other documents?"
         - ✅ RIGHT: "For your Senior Engineer role at Acme (2019-2022), I notice we're missing:
           - **Performance reviews** — most companies do annual reviews, even informal email summaries
@@ -138,7 +151,7 @@ struct PhaseTwoScript: PhaseScript {
         - Slack/Teams messages with positive feedback
         - Award certificates or recognition emails
 
-        **WAIT for user response** before calling `dispatch_kc_agents`. Do not skip this phase.
+        **DO NOT call `dispatch_kc_agents` until user explicitly approves.**
 
         ### Communication Style
         - Keep messages short and actionable
