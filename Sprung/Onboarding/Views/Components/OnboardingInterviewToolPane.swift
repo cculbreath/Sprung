@@ -20,8 +20,8 @@ struct OnboardingInterviewToolPane: View {
             interviewContent: { AnyView(interviewTabContent) },
             selectedTab: $selectedTab
         )
-        .padding(.vertical, 24)
-        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
+        .padding(.horizontal, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .overlay {
             ZStack {

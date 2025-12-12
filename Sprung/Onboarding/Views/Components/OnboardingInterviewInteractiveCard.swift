@@ -14,7 +14,7 @@ struct OnboardingInterviewInteractiveCard: View {
                 coordinator: coordinator,
                 isOccupied: $isToolPaneOccupied
             )
-            .frame(minWidth: 380, maxWidth: 460)
+            .frame(minWidth: 340, maxWidth: 400)
             .frame(maxHeight: .infinity, alignment: .topLeading)
             Divider()
             OnboardingInterviewChatPanel(
@@ -24,14 +24,14 @@ struct OnboardingInterviewInteractiveCard: View {
                 onOpenSettings: onOpenSettings
             )
         }
-        .padding(.vertical, 24)
-        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
+        .padding(.horizontal, 16)
         .frame(minHeight: 560)
         .background(
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(Color(nsColor: .controlBackgroundColor).opacity(0.65))
                 .shadow(color: Color.black.opacity(0.16), radius: 24, y: 18)
         )
-        .padding(.horizontal, 48)
+        .padding(.horizontal, 24)
     }
 }

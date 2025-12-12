@@ -68,8 +68,8 @@ struct OnboardingInterviewView: View {
         // No SwiftUI shadow overlay needed - system shadow has proper hit testing
         let styledContent = contentStack
             .frame(minWidth: 1040)
-            .padding(.horizontal, 32)
-            .padding(.vertical, 24)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 20)
             .clipShape(cardShape)
             .background(cardShape.fill(.thickMaterial))
             // Window entrance animation
@@ -227,8 +227,8 @@ private extension OnboardingInterviewView {
                 ))
             }
         }
-        .padding(.horizontal, 40)
-        .padding(.top, 30)
+        .padding(.horizontal, 20)
+        .padding(.top, 20)
     }
     func continueButtonTitle(for step: OnboardingWizardStep) -> String {
         switch step {
