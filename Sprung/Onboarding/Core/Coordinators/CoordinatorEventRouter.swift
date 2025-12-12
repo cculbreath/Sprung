@@ -18,8 +18,11 @@ final class CoordinatorEventRouter {
     // Pending knowledge card for auto-persist after user confirmation
     private var pendingKnowledgeCard: JSON?
 
-    // Track whether dossier question was triggered for current extraction session
-    private var hasDossierTriggeredThisExtraction: Bool = false
+    // Track active extractions to avoid dossier spam during parallel doc ingestion
+    // Only trigger dossier when first extraction starts (count goes 0→1)
+    // Never reset mid-batch - only when ALL extractions complete
+    private var activeExtractionCount: Int = 0
+    private var hasDossierTriggeredThisBatch: Bool = false
 
     init(
         ui: OnboardingUIState,
@@ -147,17 +150,23 @@ final class CoordinatorEventRouter {
         case .planItemStatusChangeRequested(let itemId, let status):
             await handlePlanItemStatusChange(itemId: itemId, status: status)
 
-        // MARK: - Dossier Collection Trigger
+        // MARK: - Dossier Collection Trigger (Parallel-Safe)
         case .extractionStateChanged(let inProgress, _):
             if inProgress {
-                // Only trigger dossier collection once per extraction session
-                if !hasDossierTriggeredThisExtraction {
-                    hasDossierTriggeredThisExtraction = true
+                // Increment active count
+                activeExtractionCount += 1
+                // Only trigger dossier when FIRST extraction starts (0→1 transition)
+                if activeExtractionCount == 1 && !hasDossierTriggeredThisBatch {
+                    hasDossierTriggeredThisBatch = true
                     await triggerDossierCollection()
                 }
             } else {
-                // Reset flag when extraction completes
-                hasDossierTriggeredThisExtraction = false
+                // Decrement active count
+                activeExtractionCount = max(0, activeExtractionCount - 1)
+                // Only reset the batch flag when ALL extractions are complete
+                if activeExtractionCount == 0 {
+                    hasDossierTriggeredThisBatch = false
+                }
             }
 
         // All other events are handled elsewhere or don't need handling here
