@@ -128,6 +128,7 @@ actor KnowledgeCardAgentService {
     private let artifactRepository: ArtifactRepository
     private weak var llmFacade: LLMFacade?
     private let tracker: AgentActivityTracker
+    private let eventBus: EventCoordinator
 
     // MARK: - Configuration
 
@@ -140,11 +141,13 @@ actor KnowledgeCardAgentService {
         artifactRepository: ArtifactRepository,
         llmFacade: LLMFacade?,
         tracker: AgentActivityTracker,
+        eventBus: EventCoordinator,
         maxConcurrentAgents: Int = 3
     ) {
         self.artifactRepository = artifactRepository
         self.llmFacade = llmFacade
         self.tracker = tracker
+        self.eventBus = eventBus
         self.maxConcurrentAgents = maxConcurrentAgents
         Logger.info("🤖 KnowledgeCardAgentService initialized (max concurrent: \(maxConcurrentAgents))", category: .ai)
     }
@@ -161,7 +164,12 @@ actor KnowledgeCardAgentService {
         allSummaries: [JSON]
     ) async -> KCDispatchResult {
         let startTime = Date()
+        let cardIds = proposals.map { $0.cardId }
+
         Logger.info("🚀 Dispatching \(proposals.count) KC agent(s)", category: .ai)
+
+        // Emit dispatch started event
+        await eventBus.publish(.kcAgentsDispatchStarted(count: proposals.count, cardIds: cardIds))
 
         // Get model ID from settings
         let modelId = UserDefaults.standard.string(forKey: "onboardingKCAgentModelId") ?? "anthropic/claude-haiku-4.5"
@@ -169,7 +177,7 @@ actor KnowledgeCardAgentService {
         // Generate cards with concurrency limit
         var results: [GeneratedCard] = []
 
-        await withTaskGroup(of: GeneratedCard.self) { group in
+        await withTaskGroup(of: (String, GeneratedCard).self) { group in
             var activeCount = 0
             var proposalIndex = 0
 
@@ -179,17 +187,32 @@ actor KnowledgeCardAgentService {
                 proposalIndex += 1
                 activeCount += 1
 
-                group.addTask { [self] in
+                let agentId = UUID().uuidString
+
+                // Create task for this agent
+                let task = Task {
                     await self.generateCard(
+                        agentId: agentId,
                         proposal: proposal,
                         allSummaries: allSummaries,
                         modelId: modelId
                     )
                 }
+
+                // Register task with tracker for cancellation support
+                await MainActor.run {
+                    tracker.setTask(task, forAgentId: agentId)
+                }
+
+                // Add to task group
+                group.addTask {
+                    let result = await task.value
+                    return (agentId, result)
+                }
             }
 
             // Process results and add new tasks as slots become available
-            for await result in group {
+            for await (agentId, result) in group {
                 results.append(result)
                 activeCount -= 1
 
@@ -199,12 +222,27 @@ actor KnowledgeCardAgentService {
                     proposalIndex += 1
                     activeCount += 1
 
-                    group.addTask { [self] in
+                    let newAgentId = UUID().uuidString
+
+                    // Create task for this agent
+                    let task = Task {
                         await self.generateCard(
+                            agentId: newAgentId,
                             proposal: proposal,
                             allSummaries: allSummaries,
                             modelId: modelId
                         )
+                    }
+
+                    // Register task with tracker for cancellation support
+                    await MainActor.run {
+                        tracker.setTask(task, forAgentId: newAgentId)
+                    }
+
+                    // Add to task group
+                    group.addTask {
+                        let result = await task.value
+                        return (newAgentId, result)
                     }
                 }
             }
@@ -215,6 +253,9 @@ actor KnowledgeCardAgentService {
         let failureCount = results.filter { !$0.success }.count
 
         Logger.info("✅ KC dispatch complete: \(successCount) succeeded, \(failureCount) failed (\(String(format: "%.1f", duration))s)", category: .ai)
+
+        // Emit dispatch completed event
+        await eventBus.publish(.kcAgentsDispatchCompleted(successCount: successCount, failureCount: failureCount))
 
         return KCDispatchResult(
             cards: results,
@@ -227,18 +268,35 @@ actor KnowledgeCardAgentService {
     // MARK: - Private: Single Card Generation
 
     private func generateCard(
+        agentId: String,
         proposal: CardProposal,
         allSummaries: [JSON],
         modelId: String
     ) async -> GeneratedCard {
-        let agentId = UUID().uuidString
-
-        // Track agent in AgentActivityTracker
+        // Track agent in AgentActivityTracker (without task - task is registered separately)
         _ = await MainActor.run {
             tracker.trackAgent(
                 id: agentId,
                 type: .knowledgeCard,
-                name: proposal.title
+                name: proposal.title,
+                task: nil
+            )
+        }
+
+        // Emit agent started event
+        await eventBus.publish(.kcAgentStarted(agentId: agentId, cardId: proposal.cardId, cardTitle: proposal.title))
+
+        // Check for cancellation before starting
+        if Task.isCancelled {
+            await MainActor.run {
+                tracker.markFailed(agentId: agentId, error: "Cancelled by user")
+            }
+            // Emit killed event
+            await eventBus.publish(.kcAgentKilled(agentId: agentId, cardId: proposal.cardId))
+            return GeneratedCard.failed(
+                cardId: proposal.cardId,
+                title: proposal.title,
+                error: "Cancelled by user"
             )
         }
 
@@ -265,6 +323,7 @@ actor KnowledgeCardAgentService {
                 modelId: modelId,
                 toolExecutor: toolExecutor,
                 llmFacade: llmFacade,
+                eventBus: eventBus,
                 tracker: tracker
             )
 
@@ -277,20 +336,49 @@ actor KnowledgeCardAgentService {
 
             // Parse result
             if let result = output.result?["result"] {
+                // Emit agent completed event
+                await eventBus.publish(.kcAgentCompleted(agentId: agentId, cardId: proposal.cardId, cardTitle: proposal.title))
                 return GeneratedCard.fromAgentOutput(result, cardId: proposal.cardId)
             } else {
+                // Emit agent failed event
+                let error = "Agent completed but returned no result"
+                await eventBus.publish(.kcAgentFailed(agentId: agentId, cardId: proposal.cardId, error: error))
                 return GeneratedCard.failed(
                     cardId: proposal.cardId,
                     title: proposal.title,
-                    error: "Agent completed but returned no result"
+                    error: error
                 )
             }
 
+        } catch is CancellationError {
+            // Task was cancelled - check if tracker already marked as killed
+            let status = await MainActor.run {
+                tracker.getAgent(id: agentId)?.status
+            }
+
+            // Only mark as failed if not already killed
+            if status != .killed {
+                await MainActor.run {
+                    tracker.markFailed(agentId: agentId, error: "Cancelled by user")
+                }
+            }
+
+            // Emit killed event
+            await eventBus.publish(.kcAgentKilled(agentId: agentId, cardId: proposal.cardId))
+
+            return GeneratedCard.failed(
+                cardId: proposal.cardId,
+                title: proposal.title,
+                error: "Cancelled by user"
+            )
         } catch {
-            // Mark agent as failed
+            // Other error
             await MainActor.run {
                 tracker.markFailed(agentId: agentId, error: error.localizedDescription)
             }
+
+            // Emit failed event
+            await eventBus.publish(.kcAgentFailed(agentId: agentId, cardId: proposal.cardId, error: error.localizedDescription))
 
             return GeneratedCard.failed(
                 cardId: proposal.cardId,

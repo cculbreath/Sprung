@@ -485,7 +485,8 @@ final class OnboardingDependencyContainer {
         let service = KnowledgeCardAgentService(
             artifactRepository: artifactRepository,
             llmFacade: llmFacade,
-            tracker: agentActivityTracker
+            tracker: agentActivityTracker,
+            eventBus: eventBus
         )
         kcAgentService = service
         return service
