@@ -807,6 +807,22 @@ actor LLMMessenger: OnboardingEventEmitter {
             parameters.reasoning = Reasoning(effort: effectiveReasoning, summary: .auto)
         }
         Logger.info("📝 Built batched tool response request: \(inputItems.count) tool outputs, parallelToolCalls=\(parameters.parallelToolCalls?.description ?? "nil"), serviceTier=\(parameters.serviceTier ?? "default"), cacheRetention=\(useCacheRetention ? "24h" : "default"), reasoningEffort=\(effectiveReasoning)", category: .ai)
+
+        // Log telemetry for token budget tracking
+        let currentPhase = await stateCoordinator.phase
+        RequestTelemetry(
+            phase: currentPhase.rawValue,
+            substate: nil,
+            toolsSentCount: tools.count,
+            instructionsChars: 0,
+            bundledDevMsgsCount: 0,
+            inputTokens: nil,
+            outputTokens: nil,
+            cachedTokens: nil,
+            isFirstTurn: false,  // Batched tool responses are never first turn
+            requestType: .batchedToolResponse
+        ).log()
+
         return parameters
     }
     /// Get tool schemas from ToolRegistry, filtered by allowed tools from StateCoordinator
