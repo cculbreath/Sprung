@@ -4,12 +4,14 @@ import SwiftyJSON
 struct OnboardingInterviewView: View {
     @Environment(OnboardingInterviewCoordinator.self) private var interviewCoordinator
     @Environment(AppEnvironment.self) private var appEnvironment
+    @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(DebugSettingsStore.self) private var debugSettings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var viewModel = OnboardingInterviewViewModel(
         fallbackModelId: OnboardingModelConfig.currentModelId
     )
     @State private var showResumePrompt = false
+    @State private var showSetupWizard = false
     #if DEBUG
     @State private var showEventDump = false
     #endif
@@ -46,8 +48,8 @@ struct OnboardingInterviewView: View {
             // Progress bar anchored close to top
             OnboardingInterviewStepProgressView(coordinator: coordinator)
                 .padding(.top, 8)
-                .padding(.bottom, 24)
-                .padding(.horizontal, 32)
+                .padding(.bottom, 16)
+                .padding(.horizontal, 20)
                 .opacity(progressAppeared ? 1 : 0)
                 .scaleEffect(progressAppeared ? 1 : 0.92)
                 .offset(y: progressAppeared ? 0 : -24)
@@ -68,6 +70,7 @@ struct OnboardingInterviewView: View {
                     showBack: shouldShowBackButton(for: coordinator.wizardTracker.currentStep),
                     continueTitle: continueButtonTitle(for: coordinator.wizardTracker.currentStep),
                     isContinueDisabled: isContinueDisabled(coordinator: coordinator),
+                    continueTooltip: continueButtonTooltip(coordinator: coordinator),
                     onShowSettings: openSettings,
                     onBack: { handleBack(coordinator: coordinator) },
                     onCancel: { handleCancel() },
@@ -81,14 +84,14 @@ struct OnboardingInterviewView: View {
                 .blur(radius: bottomBarAppeared ? 0 : 10)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.horizontal, 32)
+            .padding(.horizontal, 20)
         }
         // Uses system window shadow via BorderlessOverlayWindow.hasShadow = true
         // No SwiftUI shadow overlay needed - system shadow has proper hit testing
         let styledContent = contentStack
             .frame(minWidth: 1040)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 20)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 16)
             .clipShape(cardShape)
             .background(cardShape.fill(.thickMaterial))
             // Window entrance animation
@@ -179,6 +182,15 @@ struct OnboardingInterviewView: View {
                     )
                 }
             }
+            // Setup wizard for missing API keys
+            .sheet(isPresented: $showSetupWizard) {
+                SetupWizardView {
+                    showSetupWizard = false
+                }
+                .environment(appEnvironment.appState)
+                .environment(enabledLLMStore)
+                .environment(appEnvironment.openRouterService)
+            }
         return withSheets
             .onAppear {
                 if reduceMotion {
@@ -248,7 +260,7 @@ private extension OnboardingInterviewView {
                     modelStatusDescription: modelStatusDescription(coordinator: coordinator),
                     onOpenSettings: openSettings
                 )
-                .frame(width: 920)
+                .frame(width: 1020)
                 .matchedGeometryEffect(id: "mainCard", in: wizardTransition)
                 .transition(.asymmetric(
                     insertion: .scale(scale: 0.95).combined(with: .opacity),
@@ -256,8 +268,8 @@ private extension OnboardingInterviewView {
                 ))
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 20)
+        .padding(.horizontal, 12)
+        .padding(.top, 12)
     }
     func continueButtonTitle(for step: OnboardingWizardStep) -> String {
         switch step {
@@ -277,7 +289,8 @@ private extension OnboardingInterviewView {
     ) -> Bool {
         switch coordinator.wizardTracker.currentStep {
         case .introduction:
-            return appEnvironment.appState.openAiApiKey.isEmpty
+            // Allow clicking even without API key - we'll redirect to setup wizard
+            return false
         case .resumeIntake:
             return coordinator.ui.isProcessing ||
             coordinator.pendingChoicePrompt != nil ||
@@ -290,11 +303,35 @@ private extension OnboardingInterviewView {
             return coordinator.ui.isProcessing
         }
     }
+
+    func continueButtonTooltip(
+        coordinator: OnboardingInterviewCoordinator
+    ) -> String? {
+        switch coordinator.wizardTracker.currentStep {
+        case .introduction:
+            if appEnvironment.appState.openAiApiKey.isEmpty {
+                return "OpenAI API key required. Click to open setup wizard."
+            }
+            return nil
+        case .resumeIntake, .artifactDiscovery, .writingCorpus:
+            if coordinator.ui.isProcessing {
+                return "Waiting for AI response..."
+            }
+            return nil
+        default:
+            return nil
+        }
+    }
     func handleContinue(
         coordinator: OnboardingInterviewCoordinator
     ) {
         switch coordinator.wizardTracker.currentStep {
         case .introduction:
+            // Show setup wizard if API key is missing
+            if appEnvironment.appState.openAiApiKey.isEmpty {
+                showSetupWizard = true
+                return
+            }
             beginInterview()
         case .resumeIntake:
             // Wizard steps are now derived from objectives - no manual setting needed
