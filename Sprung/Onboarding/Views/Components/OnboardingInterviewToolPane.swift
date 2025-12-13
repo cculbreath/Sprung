@@ -142,7 +142,9 @@ struct OnboardingInterviewToolPane: View {
                 },
                 onCancel: { }
             )
-        } else if let validation = coordinator.pendingValidationPrompt {
+        } else if let validation = coordinator.pendingValidationPrompt, validation.mode == .editor {
+            // Only show editor mode validations in tool pane
+            // Validation mode prompts are shown as modal sheets
             validationContent(validation)
         } else if let profileRequest = coordinator.pendingApplicantProfileRequest {
             ApplicantProfileReviewCard(
@@ -433,7 +435,9 @@ struct OnboardingInterviewToolPane: View {
             return true
         }
         if coordinator.pendingChoicePrompt != nil { return true }
-        if coordinator.pendingValidationPrompt != nil { return true }
+        // Only editor mode validations count as occupying tool pane
+        // Validation mode prompts are shown as modal sheets
+        if coordinator.pendingValidationPrompt?.mode == .editor { return true }
         if coordinator.pendingApplicantProfileRequest != nil { return true }
         if coordinator.pendingSectionToggleRequest != nil { return true }
         return false

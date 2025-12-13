@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import SwiftyJSON
 struct OnboardingInterviewView: View {
     @Environment(OnboardingInterviewCoordinator.self) private var interviewCoordinator
     @Environment(AppEnvironment.self) private var appEnvironment
@@ -146,6 +147,18 @@ struct OnboardingInterviewView: View {
                 Button("Cancel", role: .cancel) { }
             } message: {
                 Text("You have existing onboarding data (knowledge cards, cover letter sources, and experience defaults). Would you like to resume where you left off, or start over with a fresh session?\n\nWarning: Starting over will permanently delete all knowledge cards, cover letter sources, experience defaults, and reset your applicant profile (including photo) to defaults.")
+            }
+            // Validation prompts as modal sheets - blocks interaction until user responds
+            .sheet(isPresented: Binding(
+                get: { coordinator.pendingValidationPrompt?.mode == .validation },
+                set: { _ in }
+            )) {
+                if let validation = coordinator.pendingValidationPrompt {
+                    ValidationPromptSheet(
+                        validation: validation,
+                        coordinator: coordinator
+                    )
+                }
             }
         return withSheets
             .onAppear {
@@ -346,6 +359,159 @@ private extension OnboardingInterviewView {
             Logger.info("📝 Starting over - clearing all onboarding data", category: .ai)
             interviewCoordinator.clearAllOnboardingData()
             _ = await interviewCoordinator.startInterview(resumeExisting: false)
+        }
+    }
+}
+
+// MARK: - Validation Prompt Sheet
+
+private struct ValidationPromptSheet: View {
+    let validation: OnboardingValidationPrompt
+    let coordinator: OnboardingInterviewCoordinator
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text(headerTitle)
+                    .font(.title2.weight(.semibold))
+                Spacer()
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 24)
+            .padding(.bottom, 16)
+
+            Divider()
+
+            // Content
+            validationContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+        }
+        .frame(minWidth: 700, idealWidth: 800, maxWidth: 900, minHeight: 500, idealHeight: 600, maxHeight: 800)
+        .interactiveDismissDisabled(true) // Prevent dismiss by clicking outside
+    }
+
+    private var headerTitle: String {
+        switch validation.dataType {
+        case "skeleton_timeline":
+            return "Review Timeline"
+        case "knowledge_card":
+            return "Review Knowledge Card"
+        case "applicant_profile":
+            return "Review Profile"
+        default:
+            return "Review Required"
+        }
+    }
+
+    @ViewBuilder
+    private var validationContent: some View {
+        if validation.dataType == "skeleton_timeline" {
+            TimelineCardEditorView(
+                timeline: validation.payload,
+                coordinator: coordinator,
+                mode: .validation,
+                onValidationSubmit: { status in
+                    Task {
+                        await coordinator.submitValidationAndResume(
+                            status: status,
+                            updatedData: nil,
+                            changes: nil,
+                            notes: nil
+                        )
+                    }
+                },
+                onSubmitChangesOnly: {
+                    Task {
+                        await coordinator.clearValidationPromptAndNotifyLLM(
+                            message: "User made changes to the timeline cards and submitted them for review. Please reassess the updated timeline, ask any clarifying questions if needed, or submit for validation again when ready."
+                        )
+                    }
+                }
+            )
+            .padding(16)
+        } else if validation.dataType == "knowledge_card" {
+            KnowledgeCardValidationSheetContent(
+                prompt: validation,
+                artifactsJSON: coordinator.ui.artifactRecords,
+                coordinator: coordinator
+            )
+            .padding(16)
+        } else {
+            OnboardingValidationReviewCard(
+                prompt: validation,
+                onSubmit: { decision, updated, notes in
+                    Task {
+                        await coordinator.submitValidationAndResume(
+                            status: decision.rawValue,
+                            updatedData: updated,
+                            changes: nil,
+                            notes: notes
+                        )
+                    }
+                },
+                onCancel: {
+                    Task {
+                        await coordinator.submitValidationAndResume(
+                            status: "rejected",
+                            updatedData: nil,
+                            changes: nil,
+                            notes: "User cancelled"
+                        )
+                    }
+                }
+            )
+            .padding(16)
+        }
+    }
+}
+
+private struct KnowledgeCardValidationSheetContent: View {
+    let prompt: OnboardingValidationPrompt
+    let coordinator: OnboardingInterviewCoordinator
+    @State private var draft: KnowledgeCardDraft
+    private let artifactRecords: [ArtifactRecord]
+
+    init(
+        prompt: OnboardingValidationPrompt,
+        artifactsJSON: [JSON],
+        coordinator: OnboardingInterviewCoordinator
+    ) {
+        self.prompt = prompt
+        self.coordinator = coordinator
+        _draft = State(initialValue: KnowledgeCardDraft(json: prompt.payload))
+        artifactRecords = artifactsJSON.map { ArtifactRecord(json: $0) }
+    }
+
+    var body: some View {
+        KnowledgeCardReviewCard(
+            card: $draft,
+            artifacts: artifactRecords,
+            onApprove: { approved in
+                Task {
+                    await coordinator.submitValidationAndResume(
+                        status: "approved",
+                        updatedData: approved.toJSON(),
+                        changes: nil,
+                        notes: nil
+                    )
+                }
+            },
+            onReject: { reason in
+                Task {
+                    await coordinator.submitValidationAndResume(
+                        status: "rejected",
+                        updatedData: nil,
+                        changes: nil,
+                        notes: reason.isEmpty ? nil : reason
+                    )
+                }
+            }
+        )
+        .onChange(of: prompt.id) { _, _ in
+            draft = KnowledgeCardDraft(json: prompt.payload)
         }
     }
 }
