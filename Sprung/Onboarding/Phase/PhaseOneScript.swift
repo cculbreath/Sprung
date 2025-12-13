@@ -60,17 +60,18 @@ struct PhaseOneScript: PhaseScript {
                 dependsOn: [OnboardingObjectiveId.contactDataValidated.rawValue],
                 autoStartWhenReady: true,
                 onBegin: { _ in
-                    // CRITICAL: This message must stop the LLM from advancing until user responds
+                    // Proactive: Show the upload form immediately rather than asking first
                     let title = """
-                        STOP AND WAIT FOR USER RESPONSE. \
-                        Ask the user: "Would you like to add a profile photo?" and then WAIT for their response. \
-                        Do NOT proceed to skeleton timeline until the user explicitly answers yes or no. \
-                        If yes, call get_user_upload. If no, mark contact_photo_collected as skipped and continue.
+                        BE PROACTIVE: IMMEDIATELY call get_user_upload to show the photo upload form. \
+                        Tell user: "Next, let's add a profile photo. Upload one here, or say 'skip' to continue without." \
+                        The upload UI must be visible BEFORE you mention it. Never describe UI the user can't see yet.
                         """
                     let details = [
-                        "action": "wait_for_user_response",
+                        "action": "call_get_user_upload_immediately",
                         "objective": OnboardingObjectiveId.contactPhotoCollected.rawValue,
-                        "blocking": "true"
+                        "upload_type": "generic",
+                        "allowed_types": "jpg,jpeg,png",
+                        "target_key": "basics.image"
                     ]
                     return [.developerMessage(title: title, details: details, payload: nil)]
                 },
@@ -90,7 +91,23 @@ struct PhaseOneScript: PhaseScript {
             ),
             OnboardingObjectiveId.skeletonTimeline.rawValue: ObjectiveWorkflow(
                 id: OnboardingObjectiveId.skeletonTimeline.rawValue,
-                dependsOn: [OnboardingObjectiveId.applicantProfile.rawValue],
+                dependsOn: [OnboardingObjectiveId.contactPhotoCollected.rawValue],
+                autoStartWhenReady: true,
+                onBegin: { _ in
+                    let title = """
+                        Skeleton timeline collection starting. Call get_user_upload with upload_type='resume' \
+                        and explain: "I've opened an upload form for your resume or LinkedIn profile. This helps me \
+                        extract your job history quickly. If you don't have one handy, just tell me your work history \
+                        in chat and I'll create the timeline cards manually."
+                        """
+                    let details = [
+                        "action": "call_get_user_upload",
+                        "upload_type": "resume",
+                        "fallback": "User can dictate job history via chat instead of uploading"
+                    ]
+                    // Force get_user_upload to ensure resume upload is offered before timeline editing
+                    return [.developerMessage(title: title, details: details, payload: nil, toolChoice: OnboardingToolName.getUserUpload.rawValue)]
+                },
                 onComplete: { context in
                     let title = """
                         Skeleton timeline captured. \
@@ -144,6 +161,15 @@ struct PhaseOneScript: PhaseScript {
 
         Collect user's contact info and career timeline skeleton.
 
+        ### BE PROACTIVE - DRIVE THE INTERVIEW
+        You are the interviewer. Guide the user through each step:
+        - ALWAYS call the relevant tool BEFORE describing the UI it shows
+        - NEVER describe an upload form, editor, or card that isn't visible yet
+        - After each step completes, proceed to the next step with a tool call
+        - When calling a UI tool, explain what appeared, what it's for, and what options the user has
+          Example: "I've opened an upload form for your resume. This helps me extract your work history quickly—but if you don't have one handy, just tell me your job history in chat and I'll enter it manually."
+          BAD: "Next we'll build your timeline." (doesn't explain what UI appeared or options)
+
         ### Objectives
         - **applicant_profile**: Name, email, phone, location, URLs, social profiles
         - **skeleton_timeline**: High-level timeline of positions with dates and organizations
@@ -151,8 +177,8 @@ struct PhaseOneScript: PhaseScript {
         - **dossier_seed**: 2-3 questions about goals/target roles → auto-transition to Phase 2
 
         ### Workflow
-        START: Write a warm welcome message, then call `agent_ready`. The tool response contains the complete step-by-step workflow.
-        Example: "Welcome! I'm here to help you build a clear, evidence-backed profile we'll later use for tailored resumes and cover letters. Let me get started."
+        START: The welcome message has already been shown to the user. Do NOT write another greeting or say "Welcome".
+        Simply call `agent_ready` to receive the interview workflow. The tool response contains the step-by-step sequence.
 
         ### Coordinator Messages
         Developer messages with "Objective update:" or "Developer status:" are authoritative. Don't re-validate completed objectives—acknowledge and proceed.
@@ -160,8 +186,15 @@ struct PhaseOneScript: PhaseScript {
         ### Timeline Principles
         - Phase 1 captures skeleton only: titles, companies, schools, locations, dates
         - Don't write descriptions, highlights, or bullet points yet—that's Phase 2
+        - Resume/LinkedIn upload speeds extraction, but user can dictate history via chat instead
+        - After creating timeline cards, call display_timeline_entries_for_review and WAIT for user feedback
+        - Do NOT call submit_for_validation until user has had a chance to review and request changes
         - Trust user edits to timeline cards without confirming each one
-        - When user requests changes via chat, act programmatically (delete/create/update cards)
+        - You CAN and SHOULD edit/delete cards when user requests changes via chat:
+          • Use update_timeline_card to modify existing cards
+          • Use delete_timeline_card to remove cards
+          • Use create_timeline_card to add new entries
+          • Use reorder_timeline_cards to change sequence
 
         ### Constraints
         - Finish applicant_profile before skeleton_timeline
@@ -169,8 +202,9 @@ struct PhaseOneScript: PhaseScript {
         - Use first name only after profile is confirmed
 
         ### Communication Style
-        - Move quickly through data collection—don't over-explain each step
-        - Skip acknowledgments when the next action is obvious
+        - Be conversational and helpful—explain what you're doing and why
+        - When showing UI (upload forms, editors), tell the user what it's for and what options they have
         - Trust user-provided data without echoing it back for confirmation
+        - After completing a step, proceed to the next with a brief explanation of what's coming
         """}
     }

@@ -320,9 +320,13 @@ actor StateCoordinator: OnboardingEventEmitter {
                 return
             }
             await objectiveStore.setObjectiveStatus(id, status: status, source: source, notes: notes, details: details)
-        case .objectiveStatusChanged:
+        case .objectiveStatusChanged(let id, _, let newStatus, _, _, _, _):
             // Update wizard progress
             await updateWizardProgress()
+            // Clear any queued developer messages for this objective when it completes
+            if newStatus == "completed" {
+                await llmStateManager.clearQueuedMessagesForObjective(id)
+            }
         default:
             break
         }
@@ -782,6 +786,24 @@ actor StateCoordinator: OnboardingEventEmitter {
     func getCardProposals() async -> JSON {
         await artifactRepository.getCardProposals()
     }
+
+    // MARK: - Pending Knowledge Cards (Milestone 7)
+
+    /// Store a generated card for later submission (keeps content out of main thread)
+    func storePendingCard(_ card: JSON, id: String) async {
+        await artifactRepository.storePendingCard(card, id: id)
+    }
+
+    /// Retrieve a pending card by ID
+    func getPendingCard(id: String) async -> JSON? {
+        await artifactRepository.getPendingCard(id: id)
+    }
+
+    /// Remove a pending card after submission
+    func removePendingCard(id: String) async {
+        await artifactRepository.removePendingCard(id: id)
+    }
+
     func listArtifactSummaries() async -> [JSON] {
         await artifactRepository.listArtifactSummaries()
     }

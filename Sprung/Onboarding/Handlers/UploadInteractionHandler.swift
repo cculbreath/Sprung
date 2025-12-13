@@ -321,6 +321,14 @@ final class UploadInteractionHandler {
             let profileJSON = draft.toSafeJSON()
             await eventBus.publish(.applicantProfileStored(profileJSON))
             Logger.debug("📸 Applicant profile image updated (\(data.count) bytes, mime: \(first.contentType ?? "unknown"))", category: .ai)
+            // Mark contact_photo_collected objective as complete
+            await eventBus.publish(.objectiveStatusUpdateRequested(
+                id: OnboardingObjectiveId.contactPhotoCollected.rawValue,
+                status: "completed",
+                source: "photo_upload",
+                notes: "Profile photo uploaded successfully",
+                details: nil
+            ))
         default:
             throw ToolError.invalidParameters("Unsupported target_key: \(target)")
         }

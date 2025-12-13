@@ -60,8 +60,8 @@ actor LLMMessenger: OnboardingEventEmitter {
     }
     private func handleLLMEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .llmSendUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText):
-            await sendUserMessage(payload, isSystemGenerated: isSystemGenerated, chatboxMessageId: chatboxMessageId, originalText: originalText)
+        case .llmSendUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText, let toolChoice):
+            await sendUserMessage(payload, isSystemGenerated: isSystemGenerated, chatboxMessageId: chatboxMessageId, originalText: originalText, toolChoice: toolChoice)
         // llmSendDeveloperMessage is now routed through StateCoordinator's queue
         // and comes back as llmExecuteDeveloperMessage
         case .llmToolResponseMessage(let payload):
@@ -76,6 +76,8 @@ actor LLMMessenger: OnboardingEventEmitter {
             await executeDeveloperMessage(payload)
         case .llmCancelRequested:
             await cancelCurrentStream()
+        case .llmBudgetExceeded(let inputTokens, let threshold):
+            await handleBudgetExceeded(inputTokens: inputTokens, threshold: threshold)
         default:
             break
         }
@@ -84,7 +86,7 @@ actor LLMMessenger: OnboardingEventEmitter {
         Logger.debug("LLMMessenger received user input event", category: .ai)
     }
     /// Send user message to LLM (enqueues via event publication)
-    private func sendUserMessage(_ payload: JSON, isSystemGenerated: Bool = false, chatboxMessageId: String? = nil, originalText: String? = nil) async {
+    private func sendUserMessage(_ payload: JSON, isSystemGenerated: Bool = false, chatboxMessageId: String? = nil, originalText: String? = nil, toolChoice: String? = nil) async {
         guard isActive else {
             Logger.warning("LLMMessenger not active, ignoring message", category: .ai)
             return
@@ -93,7 +95,8 @@ actor LLMMessenger: OnboardingEventEmitter {
             payload: payload,
             isSystemGenerated: isSystemGenerated,
             chatboxMessageId: chatboxMessageId,
-            originalText: originalText
+            originalText: originalText,
+            toolChoice: toolChoice
         ))
     }
     private func executeUserMessage(_ payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String? = nil, originalText: String? = nil, bundledDeveloperMessages: [JSON] = [], toolChoice: String? = nil) async {
@@ -862,33 +865,29 @@ actor LLMMessenger: OnboardingEventEmitter {
         // Get base allowed tools from state coordinator
         let allowedNames = await stateCoordinator.getAllowedToolNames()
 
-        // Apply tool bundle policy based on context
+        // Get current UI state for context-aware bundling
         let phase = await stateCoordinator.phase
-        let context: ToolBundlePolicy.BundleContext
+        let toolPaneCard = await stateCoordinator.getCurrentToolPaneCard()
 
-        if let choice = toolChoice {
-            switch choice {
-            case .none:
-                // No tools when toolChoice is none
-                Logger.debug("🔧 Tool bundling: toolChoice=none, sending 0 tools", category: .ai)
-                return []
-            case .functionTool(let ft):
-                context = .forcedTool(ft.name)
-            case .customTool(let ct):
-                context = .forcedTool(ct.name)
-            default:
-                context = .normalOperation(phase)
-            }
-        } else {
-            context = .normalOperation(phase)
+        // Determine bundle context using policy (considers toolChoice + UI state)
+        let context = ToolBundlePolicy.determineContext(
+            toolChoice: toolChoice ?? .auto,
+            toolPaneCard: toolPaneCard,
+            phase: phase
+        )
+
+        // Handle no-tools case early
+        if case .noTools = context {
+            Logger.debug("🔧 Tool bundling: context=noTools, sending 0 tools", category: .ai)
+            return []
         }
 
-        // Select minimal bundle
+        // Select minimal bundle based on context
         let bundledNames = ToolBundlePolicy.selectBundle(for: context, from: allowedNames)
         let filterNames = bundledNames.isEmpty ? nil : bundledNames
 
         let schemas = await toolRegistry.toolSchemas(filteredBy: filterNames)
-        Logger.debug("🔧 Tool bundling: context=\(context), sending \(schemas.count) tools", category: .ai)
+        Logger.debug("🔧 Tool bundling: context=\(context), toolPane=\(toolPaneCard.rawValue), sending \(schemas.count) tools", category: .ai)
 
         return schemas
     }
@@ -905,6 +904,14 @@ actor LLMMessenger: OnboardingEventEmitter {
 
         // Phase header
         parts.append("## Working Memory (Phase: \(phase.shortName))")
+
+        // Current visible UI panel (helps LLM know what user sees)
+        let currentPanel = await stateCoordinator.getCurrentToolPaneCard()
+        if currentPanel != .none {
+            parts.append("Visible UI: \(currentPanel.rawValue)")
+        } else {
+            parts.append("Visible UI: none (call upload/prompt tools to show UI)")
+        }
 
         // Objectives status
         let objectives = await stateCoordinator.getAllObjectives()
@@ -970,6 +977,30 @@ actor LLMMessenger: OnboardingEventEmitter {
     func setModelId(_ modelId: String) async {
         await stateCoordinator.setModelId(modelId)
     }
+    // MARK: - Budget Enforcement (Milestone 8)
+
+    /// Handle budget exceeded event by resetting the PRI thread
+    /// This starts a fresh conversation thread seeded with base developer message + WorkingMemory
+    private func handleBudgetExceeded(inputTokens: Int, threshold: Int) async {
+        Logger.warning(
+            "🛑 PRI Reset: Input tokens (\(inputTokens)) exceeded hard stop (\(threshold)). Clearing previous_response_id.",
+            category: .ai
+        )
+
+        // Clear the previous_response_id - this resets the conversation thread
+        // The next request will automatically:
+        // 1. Include the base developer message (since previousResponseId == nil)
+        // 2. Include WorkingMemory in the instructions parameter
+        // Note: StateCoordinator.setPreviousResponseId() delegates to ChatTranscriptStore,
+        // and ConversationContextAssembler.getPreviousResponseId() reads from the same source
+        await stateCoordinator.setPreviousResponseId(nil)
+
+        Logger.info(
+            "✅ PRI thread reset complete. Next request will start fresh with base developer message + WorkingMemory.",
+            category: .ai
+        )
+    }
+
     // MARK: - Stream Cancellation
     /// Cancel the currently running stream
     private func cancelCurrentStream() async {

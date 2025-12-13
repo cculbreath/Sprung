@@ -161,6 +161,18 @@ actor LLMStateManager {
         !queuedDeveloperMessages.isEmpty
     }
 
+    /// Remove queued developer messages for a specific objective (call when objective completes)
+    func clearQueuedMessagesForObjective(_ objectiveId: String) {
+        let before = queuedDeveloperMessages.count
+        queuedDeveloperMessages.removeAll { payload in
+            payload["details"]["objective"].stringValue == objectiveId
+        }
+        let removed = before - queuedDeveloperMessages.count
+        if removed > 0 {
+            Logger.info("🗑️ Cleared \(removed) queued developer message(s) for completed objective: \(objectiveId)", category: .ai)
+        }
+    }
+
     // MARK: - Pending Tool Response Tracking
     /// Store pending tool response payload(s) before sending
     /// These will be retried if a stream error occurs

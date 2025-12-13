@@ -10,7 +10,7 @@ import Foundation
 
 /// Token budget policy configuration and enforcement
 struct TokenBudgetPolicy {
-    // MARK: - Budget Thresholds (from spec)
+    // MARK: - Budget Thresholds
 
     /// Target for first assistant turn (spec: <3k input tokens)
     static let firstTurnBudget: Int = 3_000
@@ -18,11 +18,27 @@ struct TokenBudgetPolicy {
     /// Target for typical turns (spec: <6k input tokens)
     static let typicalTurnBudget: Int = 6_000
 
-    /// Hard stop threshold (spec: <20k input tokens)
-    static let hardStopBudget: Int = 20_000
+    /// Default hard stop threshold - triggers PRI reset safety net
+    static let defaultHardStopBudget: Int = 75_000
+
+    /// UserDefaults key for configurable hard stop
+    private static let hardStopBudgetKey = "tokenBudgetHardStop"
+
+    /// Hard stop threshold - configurable via Settings > Debug
+    static var hardStopBudget: Int {
+        let stored = UserDefaults.standard.integer(forKey: hardStopBudgetKey)
+        return stored > 0 ? stored : defaultHardStopBudget
+    }
+
+    /// Set hard stop budget (for Settings UI)
+    static func setHardStopBudget(_ value: Int) {
+        UserDefaults.standard.set(value, forKey: hardStopBudgetKey)
+    }
 
     /// Warning threshold (80% of hard stop)
-    static let warningThreshold: Int = 16_000
+    static var warningThreshold: Int {
+        Int(Double(hardStopBudget) * 0.8)
+    }
 
     // MARK: - Budget Status
 

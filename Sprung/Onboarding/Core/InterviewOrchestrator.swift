@@ -53,6 +53,16 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
         // Note: Tool subscription now handled by ToolExecutionCoordinator
         Logger.info("📡 InterviewOrchestrator subscriptions initialized", category: .ai)
     }
+    /// Welcome message injected into conversation history before first LLM call
+    private static let welcomeMessage = """
+        Welcome to the Sprung onboarding interview! I'll guide you through collecting your professional documents \
+        and asking questions to build a complete profile. We'll use this to generate tailored resumes and cover letters.
+
+        Feel free to use the chat box anytime to ask questions, provide additional context, or redirect our conversation.
+
+        Let's get started!
+        """
+
     /// Send the initial message to start the interview
     func sendInitialMessage() async {
         guard isActive else {
@@ -61,11 +71,16 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
         }
         await emit(.processingStateChanged(true, statusMessage: "Starting interview..."))
 
-        // Send user message to trigger agent_ready - the tool response contains welcome preamble instructions
+        // Front-load the welcome message into chat history before LLM sees it
+        // This guarantees consistent welcome without relying on model behavior
+        _ = await state.appendAssistantMessage(Self.welcomeMessage)
+        Logger.info("👋 Welcome message injected into conversation history", category: .ai)
+
+        // Send user message with forced toolChoice to skip any LLM greeting
         var payload = JSON()
-        payload["text"].string = "I'm ready to begin. Call agent_ready to receive the interview workflow."
-        await emit(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
-        Logger.info("📤 Initial user message sent to trigger greeting and get_applicant_profile", category: .ai)
+        payload["text"].string = "I'm ready to proceed."
+        await emit(.llmSendUserMessage(payload: payload, isSystemGenerated: true, toolChoice: "agent_ready"))
+        Logger.info("📤 Initial user message sent with forced agent_ready tool", category: .ai)
     }
     func startInterview(isResuming: Bool = false) async throws {
         await initializeSubscriptions()

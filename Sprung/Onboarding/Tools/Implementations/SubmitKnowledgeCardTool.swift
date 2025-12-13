@@ -23,44 +23,18 @@ struct SubmitKnowledgeCardTool: InterviewTool {
     private static let schema = JSONSchema(
         type: .object,
         description: """
-            SUBMIT A KNOWLEDGE CARD for user approval.
-
-            WHEN TO CALL:
-            After collecting evidence for the current plan item (set via set_current_knowledge_card),
-            call this tool to submit the completed knowledge card for user approval.
-
-            BEFORE CALLING, VERIFY:
-            - All required fields (id, title, content, sources) are populated
-            - At least one source is linked (artifact or chat)
-            - Content is comprehensive (500+ words for substantial roles)
-
-            WHAT HAPPENS:
-            1. Tool validates the card (sources are REQUIRED)
-            2. Tool links the card to the current plan item
-            3. Tool presents the card for user approval in the Tool Pane
-            4. If user CONFIRMS: Card is AUTO-PERSISTED, plan item marked "completed"
-            5. If user REJECTS: You receive their feedback to revise and resubmit
-
-            WHAT YOU RECEIVE:
-            - Immediately: { status: "awaiting_confirmation", ... }
-            - After user confirms: "Knowledge card persisted: [title]. Plan item marked complete."
-            - After user rejects: Their feedback. Revise and call submit_knowledge_card again.
-
-            AFTER CONFIRMATION:
-            - Call set_current_knowledge_card for the next pending plan item
-            - Or call display_knowledge_card_plan to see progress
-            - Repeat until all plan items are complete
-
-            SOURCES ARE MANDATORY:
-            Every card MUST link to at least one source. Use:
-            - list_artifacts to get IDs of uploaded documents
-            - Quote specific user statements as chat sources
+            Submit a knowledge card for user approval. Provide EITHER card_id (from dispatch_kc_agents) \
+            OR full card object. Card is validated, presented for approval, and auto-persisted on confirm.
             """,
         properties: [
+            "card_id": JSONSchema(
+                type: .string,
+                description: "ID of a pending card from dispatch_kc_agents. Use this instead of 'card' when available."
+            ),
             "card": KnowledgeCardSchemas.cardSchema,
             "summary": KnowledgeCardSchemas.submissionSummary
         ],
-        required: ["card", "summary"],
+        required: ["summary"],
         additionalProperties: false
     )
 
@@ -94,10 +68,27 @@ struct SubmitKnowledgeCardTool: InterviewTool {
             ))
         }
 
-        // Extract and validate card
-        let card = params["card"]
-        guard card != .null else {
-            return .error(.invalidParameters("card is required"))
+        // Resolve card: prefer card_id (from pending storage), fall back to full card object
+        let card: JSON
+        let pendingCardId = params["card_id"].string
+
+        if let cardId = pendingCardId {
+            // Retrieve from pending storage (Milestone 7: KC content not in main thread)
+            guard let pendingCard = await coordinator.state.getPendingCard(id: cardId) else {
+                return .error(.invalidParameters(
+                    "No pending card found for card_id '\(cardId)'. " +
+                    "Ensure dispatch_kc_agents was called and the card_id matches a successful result."
+                ))
+            }
+            card = pendingCard
+            Logger.info("📦 Retrieved pending card: \(cardId)", category: .ai)
+        } else if params["card"] != .null {
+            card = params["card"]
+        } else {
+            return .error(.invalidParameters(
+                "Either 'card_id' (preferred) or 'card' object is required. " +
+                "Use card_id from dispatch_kc_agents results when available."
+            ))
         }
 
         // Validate required fields
@@ -181,6 +172,12 @@ struct SubmitKnowledgeCardTool: InterviewTool {
         // Emit event for pending card storage (handler will store it)
         await eventBus.publish(.knowledgeCardSubmissionPending(card: linkedCard))
 
+        // Remove from pending storage if it came from there (Milestone 7)
+        // Card data is now in the event handler; no longer needed in pending storage
+        if let inputCardId = pendingCardId {
+            await coordinator.state.removePendingCard(id: inputCardId)
+        }
+
         // Present validation UI
         let prompt = OnboardingValidationPrompt(
             dataType: "knowledge_card",
@@ -203,18 +200,8 @@ struct SubmitKnowledgeCardTool: InterviewTool {
         if let planItemId = planItemId {
             response["linked_plan_item"].string = planItemId
         }
-        response["message"].string = """
-            Knowledge card submitted for user approval.
-            When user confirms, the card will be automatically persisted and the plan updated.
-            """
-        response["next_action"].string = """
-            WAIT for user response.
-            - If CONFIRMED: Card auto-persisted, plan item marked complete.
-            - If REJECTED: User provides feedback. Revise the card and call submit_knowledge_card again.
-
-            If this evidence supports MULTIPLE cards (e.g., a job AND a notable project), you may call \
-            submit_knowledge_card again immediately for the additional card(s) - no need to wait for "Done" again.
-            """
+        response["message"].string = "Card submitted for approval. Auto-persists on confirm."
+        response["next_action"].string = "Wait for user response. On reject, revise and resubmit."
 
         return .immediate(response)
     }

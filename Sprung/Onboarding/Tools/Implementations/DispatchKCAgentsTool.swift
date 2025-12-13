@@ -94,7 +94,13 @@ struct DispatchKCAgentsTool: InterviewTool {
             allSummaries: allSummaries
         )
 
-        // Build response
+        // Store generated cards locally (Milestone 7: keep content out of main thread)
+        for card in result.successfulCards {
+            let cardJSON = card.toJSON()
+            await coordinator.state.storePendingCard(cardJSON, id: card.cardId)
+        }
+
+        // Build response with handles only (no full card content)
         var response = JSON()
         response["status"].string = "completed"
         response["total_cards"].int = result.cards.count
@@ -102,12 +108,19 @@ struct DispatchKCAgentsTool: InterviewTool {
         response["failure_count"].int = result.failureCount
         response["duration_seconds"].double = result.totalDuration
 
-        // Include successful cards for coordinator to persist
-        var successfulCards = JSON([])
+        // Return compact card handles (not full content)
+        var cardHandles: [[String: Any]] = []
         for card in result.successfulCards {
-            successfulCards.arrayObject?.append(card.toJSON().dictionaryObject ?? [:])
+            let wordCount = card.prose.components(separatedBy: .whitespacesAndNewlines).count
+            let shortSummary = String(card.prose.prefix(150)).components(separatedBy: ".").first ?? ""
+            cardHandles.append([
+                "card_id": card.cardId,
+                "title": card.title,
+                "word_count": wordCount,
+                "short_summary": shortSummary.trimmingCharacters(in: .whitespaces)
+            ])
         }
-        response["cards"] = successfulCards
+        response["cards"].arrayObject = cardHandles
 
         // Include failures for coordinator awareness
         if !result.failedCards.isEmpty {
@@ -125,8 +138,7 @@ struct DispatchKCAgentsTool: InterviewTool {
         // Instructions for next steps
         response["instructions"].string = buildInstructions(result: result)
 
-        // Signal toolChoice chaining - LLM MUST call submit_knowledge_card next
-        // This mandates the first card persistence; instructions emphasize iterating through all
+        // Signal toolChoice chaining
         if result.successCount > 0 {
             response["next_required_tool"].string = OnboardingToolName.submitKnowledgeCard.rawValue
             response["cards_pending_persistence"].int = result.successCount

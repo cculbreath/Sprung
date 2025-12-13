@@ -144,7 +144,7 @@ enum OnboardingEvent {
     case llmUserMessageSent(messageId: String, payload: JSON, isSystemGenerated: Bool = false)
     case llmDeveloperMessageSent(messageId: String, payload: JSON)
     case llmSentToolResponseMessage(messageId: String, payload: JSON)
-    case llmSendUserMessage(payload: JSON, isSystemGenerated: Bool = false, chatboxMessageId: String? = nil, originalText: String? = nil)
+    case llmSendUserMessage(payload: JSON, isSystemGenerated: Bool = false, chatboxMessageId: String? = nil, originalText: String? = nil, toolChoice: String? = nil)
     case llmSendDeveloperMessage(payload: JSON)
     case llmToolResponseMessage(payload: JSON)
     case llmStatus(status: LLMStatus)
@@ -166,6 +166,7 @@ enum OnboardingEvent {
 
     // Token usage tracking
     case llmTokenUsageReceived(modelId: String, inputTokens: Int, outputTokens: Int, cachedTokens: Int, reasoningTokens: Int, source: UsageSource)
+    case llmBudgetExceeded(inputTokens: Int, threshold: Int)  // Triggers PRI thread reset (Milestone 8)
     // Session persistence events
     case llmResponseIdUpdated(responseId: String?)  // previousResponseId updated after API response
     case knowledgeCardPlanUpdated(items: [KnowledgeCardPlanItem], currentFocus: String?, message: String?)  // Plan updated
@@ -353,7 +354,7 @@ actor EventCoordinator {
              .llmToolCallBatchStarted, .llmExecuteBatchedToolResponses,
              .llmExecuteUserMessage, .llmExecuteToolResponse, .llmExecuteDeveloperMessage, .llmStreamCompleted,
              .llmReasoningSummaryDelta, .llmReasoningSummaryComplete, .llmReasoningItemsForToolCalls, .llmCancelRequested,
-             .llmResponseIdUpdated, .llmTokenUsageReceived,
+             .llmResponseIdUpdated, .llmTokenUsageReceived, .llmBudgetExceeded,
              .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized:
             return .llm
         // State events
@@ -665,6 +666,8 @@ actor EventCoordinator {
         case .llmTokenUsageReceived(let modelId, let inputTokens, let outputTokens, let cachedTokens, _, let source):
             let cachedStr = cachedTokens > 0 ? ", cached: \(cachedTokens)" : ""
             description = "Token usage [\(source.displayName)]: \(modelId) - in: \(inputTokens), out: \(outputTokens)\(cachedStr)"
+        case .llmBudgetExceeded(let inputTokens, let threshold):
+            description = "🛑 Token budget exceeded: \(inputTokens) > \(threshold) - triggering PRI reset"
         case .knowledgeCardPlanUpdated(let items, let focus, _):
             description = "Knowledge card plan updated: \(items.count) items, focus: \(focus ?? "none")"
         }
