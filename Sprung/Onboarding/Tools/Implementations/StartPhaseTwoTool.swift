@@ -47,23 +47,13 @@ struct StartPhaseTwoTool: InterviewTool {
         let timeline = await coordinator.state.artifacts.skeletonTimeline
         let entries = timeline?["experiences"].arrayValue ?? []
 
-        // Get artifact summaries (lightweight view of all uploaded docs)
-        let artifactSummaries = await coordinator.listArtifactSummaries()
-
         var result = JSON()
         result["status"].string = "completed"
         result["timeline_entry_count"].int = entries.count
         result["timeline_entries"] = JSON(entries)
 
-        // Include artifact summaries for doc-to-card mapping
-        result["artifact_count"].int = artifactSummaries.count
-        result["artifact_summaries"] = JSON(artifactSummaries)
-
         // Include explicit instructions for next steps
-        result["instructions"].string = buildInstructions(
-            entryCount: entries.count,
-            artifactCount: artifactSummaries.count
-        )
+        result["instructions"].string = buildInstructions(entryCount: entries.count)
 
         // Signal that this tool should be disabled after use
         result["disable_after_use"].bool = true
@@ -74,17 +64,16 @@ struct StartPhaseTwoTool: InterviewTool {
         return .immediate(result)
     }
 
-    private func buildInstructions(entryCount: Int, artifactCount: Int) -> String {
+    private func buildInstructions(entryCount: Int) -> String {
         """
         Phase 2 initialized.
         - \(entryCount) timeline entries from Phase 1
-        - \(artifactCount) artifact(s) with summaries available
 
         ## WORKFLOW OVERVIEW
 
         ```
-        STEP 1: open_document_collection     →  Show upload UI, let user add documents
-        STEP 2: propose_card_assignments     →  Map docs to cards, identify gaps
+        STEP 1: open_document_collection     →  Show upload UI, collect supporting documents
+        STEP 2: propose_card_assignments     →  Map uploaded docs to cards, identify gaps
         STEP 3: dispatch_kc_agents           →  Parallel agents generate cards
         STEP 4: submit_knowledge_card        →  Persist each returned card
         STEP 5: next_phase                   →  Advance to Phase 3
@@ -112,7 +101,7 @@ struct StartPhaseTwoTool: InterviewTool {
         ## STEP 2: Propose Card Assignments
 
         After user clicks "Assess Completeness", call `propose_card_assignments` to:
-        - Map artifact IDs to each card based on relevance
+        - Map uploaded artifact IDs to each card based on relevance
         - Identify cards with insufficient documentation (gaps)
 
         If gaps are found, describe SPECIFIC documents that would help:
@@ -148,7 +137,7 @@ struct StartPhaseTwoTool: InterviewTool {
         When all cards are persisted, call `next_phase` to advance to Phase 3.
 
         ---
-        DO NOT skip open_document_collection. Users need to upload supporting docs.
+        DO NOT skip open_document_collection. Users need to upload supporting docs first.
         """
     }
 }
