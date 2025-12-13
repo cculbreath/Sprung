@@ -170,9 +170,12 @@ struct TimelineCardEditorView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(!hasChanges || isSaving)
                 } else {
-                    // Validation mode: Buttons change based on whether user made edits
+                    // Validation mode: Always show reject option, plus confirm buttons
+                    Button("Reject", role: .destructive) {
+                        onValidationSubmit?("rejected")
+                    }
                     if hasChanges {
-                        // User made changes - different options
+                        // User made changes - offer to submit changes for reassessment or confirm with changes
                         Button("Submit Changes Only") {
                             submitChangesOnly()
                         }
@@ -183,10 +186,7 @@ struct TimelineCardEditorView: View {
                         }
                         .buttonStyle(.borderedProminent)
                     } else {
-                        // No changes - simple confirm/reject
-                        Button("Reject", role: .destructive) {
-                            onValidationSubmit?("rejected")
-                        }
+                        // No changes - simple confirm
                         Spacer()
                         Button("Confirm") {
                             onValidationSubmit?("confirmed")

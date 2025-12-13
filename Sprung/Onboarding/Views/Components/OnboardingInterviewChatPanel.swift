@@ -37,12 +37,26 @@ struct OnboardingInterviewChatPanel: View {
     @State private var reasoningDismissTime: Date?
     @State private var reasoningStreamStartLength: Int = 0
     @State private var reasoningTimerTick: Int = 0
+    private let horizontalPadding: CGFloat = 32
+    private let topPadding: CGFloat = 28
+    private let bottomPadding: CGFloat = 28
+    private let sectionSpacing: CGFloat = 20
+
+    private var bannerVisible: Bool {
+        !(coordinator.ui.modelAvailabilityMessage?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+    }
+
+    private var isWaitingForValidation: Bool {
+        coordinator.pendingValidationPrompt?.mode == .validation
+    }
+
+    private var isSendDisabled: Bool {
+        state.userInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+            !coordinator.ui.isActive ||
+            isWaitingForValidation
+    }
+
     var body: some View {
-        let horizontalPadding: CGFloat = 32
-        let topPadding: CGFloat = 28
-        let bottomPadding: CGFloat = 28
-        let sectionSpacing: CGFloat = 20
-        let bannerVisible = !(coordinator.ui.modelAvailabilityMessage?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
         return VStack(spacing: 0) {
             if bannerVisible, let alert = coordinator.ui.modelAvailabilityMessage {
                 ModelAvailabilityBanner(
@@ -105,10 +119,8 @@ struct OnboardingInterviewChatPanel: View {
                         Label("Send", systemImage: "paperplane.fill")
                     })
                     .buttonStyle(.borderedProminent)
-                    .disabled(
-                        state.userInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                            !coordinator.ui.isActive
-                    )
+                    .disabled(isSendDisabled)
+                    .help(isWaitingForValidation ? "Submit or cancel the validation dialog to continue" : "")
                 }
             }
             .padding(.top, sectionSpacing)
