@@ -1,0 +1,92 @@
+7459ac0162763737ac58c30340a587da1ef7cd98	not-for-merge	branch 'Protocol' of https://github.com/groue/GRMustache.swift
+4fc453e8efffc86f3d2f3315261f6ff1ce770d9d	not-for-merge	branch 'StringLiterals' of https://github.com/groue/GRMustache.swift
+fcdda6ece2f4640b3c93a54e974be1cfd6b8327a	not-for-merge	branch 'Swift1.1' of https://github.com/groue/GRMustache.swift
+dab3bb4897c9a1c380504ea01c9f9ed93a0d3c9b	not-for-merge	branch 'Swift1.2' of https://github.com/groue/GRMustache.swift
+a2b09c54b69ce7b2e4ccf02bd3d891db0fe5c2cd	not-for-merge	branch 'Swift2' of https://github.com/groue/GRMustache.swift
+bf7d6031d7e0dd862519eaba2b36b2e11a0d25a9	not-for-merge	branch 'Swift2.1' of https://github.com/groue/GRMustache.swift
+47a9ecbfd8a760e9a78241a159bfe65ca6a410d9	not-for-merge	branch 'Swift2.2' of https://github.com/groue/GRMustache.swift
+8f324a5214cfebea5dc333e144811dfceda7d5fb	not-for-merge	branch 'Swift2.3' of https://github.com/groue/GRMustache.swift
+5ed7e9f5dfe6f6d1ec49e2c3eadcfb27baaf3e2b	not-for-merge	branch 'Swift3' of https://github.com/groue/GRMustache.swift
+e4a89b0ac31c2824a3d0ed7f57d26cd48ac93dd1	not-for-merge	branch 'do-not-merge/branch-for-tag' of https://github.com/groue/GRMustache.swift
+156a722eb6ac14fe605f47b29855054857fb2dc5	not-for-merge	branch 'feature/bump-podspec' of https://github.com/groue/GRMustache.swift
+336776fd55c34bf96fac01a6a43bb9727b44c7fa	not-for-merge	branch 'feature/swift6' of https://github.com/groue/GRMustache.swift
+a3c76de8891feffded57ee66cb9f2b1d34cba805	not-for-merge	branch 'fix-slowness' of https://github.com/groue/GRMustache.swift
+4e3449141ce03cb1510f4752a26751bb9fbff9c2	not-for-merge	branch 'master' of https://github.com/groue/GRMustache.swift
+3dc8710a649f34e45e6f53c2037b8cd0bbac6714	not-for-merge	branch 'release/3.0.1' of https://github.com/groue/GRMustache.swift
+42e08e3cb95162577b09010294dc3dd3ee4aac62	not-for-merge	branch 'release/3.1.1' of https://github.com/groue/GRMustache.swift
+336776fd55c34bf96fac01a6a43bb9727b44c7fa	not-for-merge	'refs/pull/100/head' of https://github.com/groue/GRMustache.swift
+949d70bec2038bd542cce462b18c99a83d85e056	not-for-merge	'refs/pull/101/head' of https://github.com/groue/GRMustache.swift
+2908801d9c59635d762cf1d9ea7134411b12b305	not-for-merge	'refs/pull/102/head' of https://github.com/groue/GRMustache.swift
+c10b07a72fc6fd1275198e49fa3d76f5b715b1c0	not-for-merge	'refs/pull/103/head' of https://github.com/groue/GRMustache.swift
+860ebeea486d9a4bc949a41a7c422eb9103d2abb	not-for-merge	'refs/pull/104/head' of https://github.com/groue/GRMustache.swift
+8c5d64c042f006ec2beb418075a34d5da6779610	not-for-merge	'refs/pull/105/head' of https://github.com/groue/GRMustache.swift
+79a5918838dcb345e3742d59106de3ba8694a6eb	not-for-merge	'refs/pull/106/head' of https://github.com/groue/GRMustache.swift
+156a722eb6ac14fe605f47b29855054857fb2dc5	not-for-merge	'refs/pull/108/head' of https://github.com/groue/GRMustache.swift
+0d8c216d21852caed2078e1d55c8293aaf51e899	not-for-merge	'refs/pull/11/head' of https://github.com/groue/GRMustache.swift
+9d436b5aaebdd3af64da10162b21b258b02a1ebc	not-for-merge	'refs/pull/15/head' of https://github.com/groue/GRMustache.swift
+f7141856e6adf76cf6aece869772cbad2410cce7	not-for-merge	'refs/pull/22/head' of https://github.com/groue/GRMustache.swift
+536f1d369f06715eef0bd0eedfb03fa7d2d8156b	not-for-merge	'refs/pull/24/head' of https://github.com/groue/GRMustache.swift
+b6e9ba477675649603821094d6c2a5ddd542a393	not-for-merge	'refs/pull/24/merge' of https://github.com/groue/GRMustache.swift
+3d5d6394570ccac77a47923e229d702a81d0bb0e	not-for-merge	'refs/pull/25/head' of https://github.com/groue/GRMustache.swift
+9c6a1f4d1071d70ee262eef1985cf623f5f1a2f8	not-for-merge	'refs/pull/26/head' of https://github.com/groue/GRMustache.swift
+c7e4735b3cb1146f08ec0fc4cfafa97c1713fa5e	not-for-merge	'refs/pull/31/head' of https://github.com/groue/GRMustache.swift
+247aa670ee8035b1c5a1d3b47a4558e3ab092469	not-for-merge	'refs/pull/33/head' of https://github.com/groue/GRMustache.swift
+9bcf87dcc922126379c8d27705056a0b86ae9e40	not-for-merge	'refs/pull/34/head' of https://github.com/groue/GRMustache.swift
+e708db9ac644a7004b85992032fc13a0920bd51f	not-for-merge	'refs/pull/34/merge' of https://github.com/groue/GRMustache.swift
+9f141416723a59af15836e93c28f2e74cc5fa0a0	not-for-merge	'refs/pull/35/head' of https://github.com/groue/GRMustache.swift
+fef3c4499d957afae0ddb3db34a1bebeb8b050d5	not-for-merge	'refs/pull/39/head' of https://github.com/groue/GRMustache.swift
+09f9ef547baeaea632c4d62e313f757a973df01c	not-for-merge	'refs/pull/42/head' of https://github.com/groue/GRMustache.swift
+c59f99abac88a4dad8682072ba000e720d8f5952	not-for-merge	'refs/pull/43/head' of https://github.com/groue/GRMustache.swift
+3e6778e4b8a134e3f96d04d6c15c7213bd7d9935	not-for-merge	'refs/pull/46/head' of https://github.com/groue/GRMustache.swift
+2603bb12d67c312ef17ecc755cb40cd77bf386ad	not-for-merge	'refs/pull/49/head' of https://github.com/groue/GRMustache.swift
+858852bf14d3729fc471cc031f738b212876716d	not-for-merge	'refs/pull/5/head' of https://github.com/groue/GRMustache.swift
+b7f18d9f7ebde6bde230298aa6931f07c70b73dc	not-for-merge	'refs/pull/50/head' of https://github.com/groue/GRMustache.swift
+84a8555d11594336118bf942fb7dcf2facf5e91d	not-for-merge	'refs/pull/53/head' of https://github.com/groue/GRMustache.swift
+056af03c2cec5373fd46da3331495d7eabb85464	not-for-merge	'refs/pull/56/head' of https://github.com/groue/GRMustache.swift
+5e57674ae301cbebf731614f0f5a516fa6b70beb	not-for-merge	'refs/pull/57/head' of https://github.com/groue/GRMustache.swift
+751d6fcedc135efbf2de91b796967dbd280f91e1	not-for-merge	'refs/pull/58/head' of https://github.com/groue/GRMustache.swift
+65a2135a17a516275484af757f9ea7d20dc8f4a7	not-for-merge	'refs/pull/6/head' of https://github.com/groue/GRMustache.swift
+0e3d5dd553b079c8f32b2575fbdb577aa884c5e8	not-for-merge	'refs/pull/61/head' of https://github.com/groue/GRMustache.swift
+a3c76de8891feffded57ee66cb9f2b1d34cba805	not-for-merge	'refs/pull/62/head' of https://github.com/groue/GRMustache.swift
+c137bdf2a5608359adb09bf0dbc1f19a40a9dfea	not-for-merge	'refs/pull/63/head' of https://github.com/groue/GRMustache.swift
+3dc8710a649f34e45e6f53c2037b8cd0bbac6714	not-for-merge	'refs/pull/64/head' of https://github.com/groue/GRMustache.swift
+67242ad958f51d4b408ea4b97495443c77ea3747	not-for-merge	'refs/pull/65/head' of https://github.com/groue/GRMustache.swift
+7b11aadf2c7548875328ac30a3c8669784127d1f	not-for-merge	'refs/pull/67/head' of https://github.com/groue/GRMustache.swift
+785f477223e97cb27037bfdcb6afa8794c86aa47	not-for-merge	'refs/pull/7/head' of https://github.com/groue/GRMustache.swift
+49a686c2a2af35bc9a395e3c62d15e1043058aff	not-for-merge	'refs/pull/7/merge' of https://github.com/groue/GRMustache.swift
+80f41bd6b73799679aca8faf70a87f8f91ac2297	not-for-merge	'refs/pull/70/head' of https://github.com/groue/GRMustache.swift
+55efba8438b963b2c6245b3b56d1f3ef932981ff	not-for-merge	'refs/pull/70/merge' of https://github.com/groue/GRMustache.swift
+5aced69cc6b94ba1934df407194677b05578c9c0	not-for-merge	'refs/pull/71/head' of https://github.com/groue/GRMustache.swift
+6b7147dbf10605859efd45747ac0aa3ad1a7ee6f	not-for-merge	'refs/pull/80/head' of https://github.com/groue/GRMustache.swift
+204925d5fc36cc1fec4e040e524655fcbd6a468d	not-for-merge	'refs/pull/81/head' of https://github.com/groue/GRMustache.swift
+69fd73680a270eaeaab62ed7e35a15d62ceaf2d2	not-for-merge	'refs/pull/85/head' of https://github.com/groue/GRMustache.swift
+b771492ad4b3c0220f85be3b23cd96e6d5ed393e	not-for-merge	'refs/pull/86/head' of https://github.com/groue/GRMustache.swift
+efcd69481b5b32c4b7c23bf53879d531be275b71	not-for-merge	'refs/pull/87/head' of https://github.com/groue/GRMustache.swift
+f4aeba740a7704fe89cc48c712132ab5543496d7	not-for-merge	'refs/pull/88/head' of https://github.com/groue/GRMustache.swift
+47b442e4edb5fa4eb4e3a3722766a01a59020398	not-for-merge	'refs/pull/89/head' of https://github.com/groue/GRMustache.swift
+a898858c1537b01234a475f4a1d70fae952a2262	not-for-merge	'refs/pull/94/head' of https://github.com/groue/GRMustache.swift
+68501aa43dbe139758fc94b8fcdf6172c0906e56	not-for-merge	'refs/pull/99/head' of https://github.com/groue/GRMustache.swift
+8d19f46253b6bcec0c209e5fdd2f3fa94e2e1f8c	not-for-merge	tag '1.0.0' of https://github.com/groue/GRMustache.swift
+173cc1e12ee864392632e7bd256a799cde87b5a2	not-for-merge	tag '1.0.1' of https://github.com/groue/GRMustache.swift
+8f324a5214cfebea5dc333e144811dfceda7d5fb	not-for-merge	tag '1.1.0' of https://github.com/groue/GRMustache.swift
+9f141416723a59af15836e93c28f2e74cc5fa0a0	not-for-merge	tag '2.0.0' of https://github.com/groue/GRMustache.swift
+e005633af469573b9690c12ce9407786877cf924	not-for-merge	tag '2.1.0' of https://github.com/groue/GRMustache.swift
+e263074fa6abda2d3c68911c4b7907377b68f63b	not-for-merge	tag '3.0.0' of https://github.com/groue/GRMustache.swift
+4eae4b604cd7354a12b0e15fe61bab8210cc7785	not-for-merge	tag '3.0.1' of https://github.com/groue/GRMustache.swift
+2d2ccfed59dda6ddae5f6d9c9b1ed283975a12e0	not-for-merge	tag '3.1.0' of https://github.com/groue/GRMustache.swift
+42e08e3cb95162577b09010294dc3dd3ee4aac62	not-for-merge	tag '3.1.1' of https://github.com/groue/GRMustache.swift
+dde520e49efbcff01a16cb97811ee57588db0115	not-for-merge	tag '4.0.0' of https://github.com/groue/GRMustache.swift
+671e2c5234e829c1f337c9d300bd6d9b21d1c42a	not-for-merge	tag '4.0.1' of https://github.com/groue/GRMustache.swift
+edbe65da33671ca1e93e0751cbbeffc893b48da8	not-for-merge	tag '4.1.0' of https://github.com/groue/GRMustache.swift
+6e9dcfb807959e19f2915be1928aeccf01babba5	not-for-merge	tag '4.2.0' of https://github.com/groue/GRMustache.swift
+1be6c5166d85a8db256504288511bd8c7b3f91bb	not-for-merge	tag '5.0.0' of https://github.com/groue/GRMustache.swift
+c4ee40ef49ae523b06fa470b8d27185ec027330d	not-for-merge	tag '5.0.1' of https://github.com/groue/GRMustache.swift
+811326995377af216b970ae3afb0645ca94986c8	not-for-merge	tag '6.0.0' of https://github.com/groue/GRMustache.swift
+4e3449141ce03cb1510f4752a26751bb9fbff9c2	not-for-merge	tag '7.0.0' of https://github.com/groue/GRMustache.swift
+34b0cdde0ccad0b5dde09d177efc21b911cf7ea2	not-for-merge	tag 'v0.10.0' of https://github.com/groue/GRMustache.swift
+1cbbb90952c389a26e6d7060a5828bbcb170c2cd	not-for-merge	tag 'v0.11.0' of https://github.com/groue/GRMustache.swift
+20776a0ee1b41910e72f8571275439802f285fde	not-for-merge	tag 'v0.9.0' of https://github.com/groue/GRMustache.swift
+9e34174972901ac508c83b7c03f83bffe62e5746	not-for-merge	tag 'v0.9.1' of https://github.com/groue/GRMustache.swift
+79d651d18af858474462634df46f2f29235988d9	not-for-merge	tag 'v0.9.2' of https://github.com/groue/GRMustache.swift
+a2842ae5ffcf0056c0bc4a94eb6a01019d5f3271	not-for-merge	tag 'v0.9.3' of https://github.com/groue/GRMustache.swift
+6c9138f863b867757f4730aa5763d5a43a02258c	not-for-merge	tag 'v0.9.4' of https://github.com/groue/GRMustache.swift

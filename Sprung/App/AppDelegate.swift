@@ -4,8 +4,9 @@
 //
 //
 import Cocoa
-import SwiftUI
+import QuartzCore
 import SwiftData
+import SwiftUI
 class AppDelegate: NSObject, NSApplicationDelegate {
     var settingsWindow: NSWindow?
     var applicantProfileWindow: NSWindow?
@@ -260,8 +261,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             "🎬 showOnboardingInterviewWindow invoked (existing window: \(onboardingInterviewWindow != nil))",
             category: .ui
         )
+        var shouldAnimatePresentation = false
         if let window = onboardingInterviewWindow, !window.isVisible {
             onboardingInterviewWindow = nil
+            shouldAnimatePresentation = true
         }
         if onboardingInterviewWindow == nil {
             let interviewView = OnboardingInterviewView()
@@ -302,10 +305,72 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             onboardingInterviewWindow?.center()
             onboardingInterviewWindow?.minSize = NSSize(width: windowW, height: 600)
             Logger.info("🆕 Created onboarding interview window", category: .ui)
+            shouldAnimatePresentation = true
         }
-        onboardingInterviewWindow?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        guard let window = onboardingInterviewWindow else {
+            Logger.error("❌ Onboarding interview window is nil after setup", category: .ui)
+            return
+        }
+        if shouldAnimatePresentation {
+            presentOnboardingInterviewWindowAnimated(window)
+        } else {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+        }
         Logger.info("✅ Onboarding interview window presented", category: .ui)
+    }
+
+    @MainActor
+    private func presentOnboardingInterviewWindowAnimated(_ window: NSWindow) {
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            window.alphaValue = 1
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let finalFrame = window.frame
+        let minHeight = window.minSize.height
+
+        func frame(height: CGFloat, yOffset: CGFloat) -> NSRect {
+            var next = finalFrame
+            next.size.height = height
+            let heightDelta = height - finalFrame.size.height
+            next.origin.y = finalFrame.origin.y - (heightDelta / 2) + yOffset
+            return next
+        }
+
+        let startHeight = max(finalFrame.size.height * 0.90, minHeight)
+        let overshootHeight = max(finalFrame.size.height * 1.02, minHeight)
+        let undershootHeight = max(finalFrame.size.height * 0.995, minHeight)
+
+        let startFrame = frame(height: startHeight, yOffset: -120)
+        let overshootFrame = frame(height: overshootHeight, yOffset: 18)
+        let undershootFrame = frame(height: undershootHeight, yOffset: -6)
+
+        window.alphaValue = 0
+        window.setFrame(startFrame, display: true)
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.28
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            window.animator().alphaValue = 1
+            window.animator().setFrame(overshootFrame, display: true)
+        } completionHandler: {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.14
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                window.animator().setFrame(undershootFrame, display: true)
+            } completionHandler: {
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = 0.12
+                    context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                    window.animator().setFrame(finalFrame, display: true)
+                }
+            }
+        }
     }
     @objc func showExperienceEditorWindow() {
         if let window = experienceEditorWindow, !window.isVisible {

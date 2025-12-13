@@ -5,6 +5,7 @@ struct OnboardingInterviewView: View {
     @Environment(OnboardingInterviewCoordinator.self) private var interviewCoordinator
     @Environment(AppEnvironment.self) private var appEnvironment
     @Environment(DebugSettingsStore.self) private var debugSettings
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var viewModel = OnboardingInterviewViewModel(
         fallbackModelId: OnboardingModelConfig.currentModelId
     )
@@ -31,13 +32,26 @@ struct OnboardingInterviewView: View {
         let corner: CGFloat = 44
         let cardShape = RoundedRectangle(cornerRadius: corner, style: .continuous)
         let contentStack = VStack(spacing: 0) {
+            // Window drag handle - allows moving window without conflicting with list reordering
+            WindowDragHandle()
+                .frame(height: 28)
+                .frame(maxWidth: .infinity)
+                .overlay {
+                    // Visual indicator for draggable area
+                    Capsule()
+                        .fill(Color.secondary.opacity(0.3))
+                        .frame(width: 40, height: 5)
+                }
+                .contentShape(Rectangle())
             // Progress bar anchored close to top
             OnboardingInterviewStepProgressView(coordinator: coordinator)
-                .padding(.top, 16)
+                .padding(.top, 8)
                 .padding(.bottom, 24)
                 .padding(.horizontal, 32)
                 .opacity(progressAppeared ? 1 : 0)
-                .offset(y: progressAppeared ? 0 : -10)
+                .scaleEffect(progressAppeared ? 1 : 0.92)
+                .offset(y: progressAppeared ? 0 : -24)
+                .blur(radius: progressAppeared ? 0 : 10)
             // Main body centered within available space
             VStack(spacing: 8) {
                 mainCard(
@@ -46,7 +60,9 @@ struct OnboardingInterviewView: View {
                 )
                 .animation(.spring(response: 0.4, dampingFraction: 0.82), value: coordinator.wizardTracker.currentStep)
                 .opacity(cardAppeared ? 1 : 0)
-                .scaleEffect(cardAppeared ? 1 : 0.95)
+                .scaleEffect(cardAppeared ? 1 : 0.88)
+                .offset(y: cardAppeared ? 0 : 22)
+                .blur(radius: cardAppeared ? 0 : 12)
                 Spacer(minLength: 16) // centers body relative to bottom bar
                 OnboardingInterviewBottomBar(
                     showBack: shouldShowBackButton(for: coordinator.wizardTracker.currentStep),
@@ -60,7 +76,9 @@ struct OnboardingInterviewView: View {
                 .padding(.horizontal, 16)
                 .animation(.easeInOut(duration: 0.25), value: coordinator.wizardTracker.currentStep)
                 .opacity(bottomBarAppeared ? 1 : 0)
-                .offset(y: bottomBarAppeared ? 0 : 15)
+                .scaleEffect(bottomBarAppeared ? 1 : 0.96)
+                .offset(y: bottomBarAppeared ? 0 : 36)
+                .blur(radius: bottomBarAppeared ? 0 : 10)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal, 32)
@@ -74,9 +92,10 @@ struct OnboardingInterviewView: View {
             .clipShape(cardShape)
             .background(cardShape.fill(.thickMaterial))
             // Window entrance animation
-            .scaleEffect(windowAppeared ? 1 : 0.92)
+            .scaleEffect(windowAppeared ? 1 : 0.86)
             .opacity(windowAppeared ? 1 : 0)
-            .offset(y: windowAppeared ? 0 : 20)
+            .offset(y: windowAppeared ? 0 : 56)
+            .blur(radius: windowAppeared ? 0 : 18)
         // --- Lifecycle bindings and tasks ---
         let withLifecycle = styledContent
             .task {
@@ -162,20 +181,17 @@ struct OnboardingInterviewView: View {
             }
         return withSheets
             .onAppear {
-                // Window container animates first
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                if reduceMotion {
                     windowAppeared = true
-                }
-                // Staggered content animations
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.15)) {
                     progressAppeared = true
-                }
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.75).delay(0.25)) {
                     cardAppeared = true
-                }
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.35)) {
                     bottomBarAppeared = true
+                    return
                 }
+                withAnimation(.spring(response: 0.7, dampingFraction: 0.68)) { windowAppeared = true }
+                withAnimation(.spring(response: 0.55, dampingFraction: 0.72).delay(0.14)) { progressAppeared = true }
+                withAnimation(.spring(response: 0.8, dampingFraction: 0.62).delay(0.26)) { cardAppeared = true }
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.72).delay(0.38)) { bottomBarAppeared = true }
             }
             .onDisappear {
                 windowAppeared = false

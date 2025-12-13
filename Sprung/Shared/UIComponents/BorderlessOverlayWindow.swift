@@ -4,9 +4,10 @@
 //
 //
 import Cocoa
+import SwiftUI
 
 /// Custom overlay window for the onboarding interview.
-/// - Movable by dragging the window background (respects interactive controls)
+/// - Movable via dedicated drag handle (not background - conflicts with SwiftUI drag gestures)
 /// - Uses system shadow for proper hit testing
 /// - Not always-on-top (normal window level)
 final class BorderlessOverlayWindow: NSWindow {
@@ -26,12 +27,33 @@ final class BorderlessOverlayWindow: NSWindow {
         hasShadow = true
         // Normal level - not always on top
         level = .normal
-        // Allow window to be moved by dragging its background
-        // This respects the responder chain - interactive controls (lists, scroll views,
-        // drag handles) receive their events first, only unhandled drags move the window
-        isMovableByWindowBackground = true
+        // IMPORTANT: Do NOT use isMovableByWindowBackground - it conflicts with SwiftUI's
+        // onDrag/onDrop gestures for list reordering. Window movement is handled via a
+        // dedicated drag handle using performDrag(with:) instead.
+        isMovableByWindowBackground = false
         collectionBehavior = [.transient, .moveToActiveSpace]
         contentView?.wantsLayer = true
         contentView?.layer?.masksToBounds = false
+    }
+}
+
+/// A SwiftUI view that acts as a window drag handle for BorderlessOverlayWindow.
+/// Place this at the top of your window content to allow users to drag the window.
+struct WindowDragHandle: NSViewRepresentable {
+    func makeNSView(context: Context) -> WindowDragHandleView {
+        WindowDragHandleView()
+    }
+
+    func updateNSView(_ nsView: WindowDragHandleView, context: Context) {}
+}
+
+/// Custom NSView that initiates window dragging on mouse down.
+final class WindowDragHandleView: NSView {
+    override func mouseDown(with event: NSEvent) {
+        window?.performDrag(with: event)
+    }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .openHand)
     }
 }
