@@ -534,9 +534,8 @@ actor LLMMessenger: OnboardingEventEmitter {
                 content: .text(text)
             )))
         }
-        let tools = await getToolSchemas()
 
-        // Use forced tool choice if specified, otherwise determine automatically
+        // Determine tool choice first (needed for tool bundling)
         let toolChoice: ToolChoiceMode
         if let forcedTool = forcedToolChoice {
             toolChoice = .functionTool(FunctionTool(name: forcedTool))
@@ -544,6 +543,10 @@ actor LLMMessenger: OnboardingEventEmitter {
         } else {
             toolChoice = await determineToolChoice(for: text, isSystemGenerated: isSystemGenerated)
         }
+
+        // Get tools with bundling based on toolChoice
+        let tools = await getToolSchemas(for: toolChoice)
+
         let modelId = await stateCoordinator.getCurrentModelId()
         let useFlexTier = await stateCoordinator.getUseFlexProcessing()
         var parameters = ModelResponseParameter(
@@ -625,13 +628,18 @@ actor LLMMessenger: OnboardingEventEmitter {
             role: "developer",
             content: .text(text)
         )))
-        let tools = await getToolSchemas()
+
+        // Determine tool choice first (needed for tool bundling)
         let toolChoice: ToolChoiceMode
         if let toolName = toolChoiceName {
             toolChoice = .functionTool(FunctionTool(name: toolName))
         } else {
             toolChoice = .auto
         }
+
+        // Get tools with bundling based on toolChoice
+        let tools = await getToolSchemas(for: toolChoice)
+
         let modelId = await stateCoordinator.getCurrentModelId()
         let useFlexTier = await stateCoordinator.getUseFlexProcessing()
         var parameters = ModelResponseParameter(
@@ -713,7 +721,19 @@ actor LLMMessenger: OnboardingEventEmitter {
             output: output,
             callId: callId
         )
-        let tools = await getToolSchemas()
+
+        // Determine tool choice first (needed for tool bundling)
+        let toolChoice: ToolChoiceMode
+        if let forcedTool = forcedToolChoice {
+            toolChoice = .functionTool(FunctionTool(name: forcedTool))
+            Logger.info("🔗 Forcing toolChoice to: \(forcedTool)", category: .ai)
+        } else {
+            toolChoice = .auto
+        }
+
+        // Get tools with bundling based on toolChoice
+        let tools = await getToolSchemas(for: toolChoice)
+
         let modelId = await stateCoordinator.getCurrentModelId()
         let useFlexTier = await stateCoordinator.getUseFlexProcessing()
         let previousResponseId = await contextAssembler.getPreviousResponseId()
@@ -728,15 +748,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             text: TextConfiguration(format: .text)
         )
         parameters.stream = true
-
-        // Use forced tool choice if provided (for tool chaining), otherwise auto
-        if let forcedTool = forcedToolChoice {
-            parameters.toolChoice = .functionTool(FunctionTool(name: forcedTool))
-            Logger.info("🔗 Forcing toolChoice to: \(forcedTool)", category: .ai)
-        } else {
-            parameters.toolChoice = .auto
-        }
-
+        parameters.toolChoice = toolChoice
         parameters.tools = tools
         parameters.parallelToolCalls = await shouldEnableParallelToolCalls()
         if useFlexTier {
@@ -775,7 +787,10 @@ actor LLMMessenger: OnboardingEventEmitter {
     /// Build request for batched tool responses (parallel tool calls)
     private func buildBatchedToolResponseRequest(payloads: [JSON]) async -> ModelResponseParameter {
         let inputItems = await contextAssembler.buildForBatchedToolResponses(payloads: payloads)
-        let tools = await getToolSchemas()
+        // Batched tool responses use auto toolChoice
+        let toolChoice: ToolChoiceMode = .auto
+        let tools = await getToolSchemas(for: toolChoice)
+
         let modelId = await stateCoordinator.getCurrentModelId()
         let useFlexTier = await stateCoordinator.getUseFlexProcessing()
         let previousResponseId = await contextAssembler.getPreviousResponseId()
@@ -790,7 +805,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             text: TextConfiguration(format: .text)
         )
         parameters.stream = true
-        parameters.toolChoice = .auto
+        parameters.toolChoice = toolChoice
         parameters.tools = tools
         parameters.parallelToolCalls = await shouldEnableParallelToolCalls()
         if useFlexTier {
@@ -826,10 +841,40 @@ actor LLMMessenger: OnboardingEventEmitter {
         return parameters
     }
     /// Get tool schemas from ToolRegistry, filtered by allowed tools from StateCoordinator
-    private func getToolSchemas() async -> [Tool] {
+    /// - Parameter toolChoice: Optional tool choice mode to further filter tools
+    private func getToolSchemas(for toolChoice: ToolChoiceMode? = nil) async -> [Tool] {
+        // Get base allowed tools from state coordinator
         let allowedNames = await stateCoordinator.getAllowedToolNames()
-        let filterNames = allowedNames.isEmpty ? nil : allowedNames
-        return await toolRegistry.toolSchemas(filteredBy: filterNames)
+
+        // Apply tool bundle policy based on context
+        let phase = await stateCoordinator.phase
+        let context: ToolBundlePolicy.BundleContext
+
+        if let choice = toolChoice {
+            switch choice {
+            case .none:
+                // No tools when toolChoice is none
+                Logger.debug("🔧 Tool bundling: toolChoice=none, sending 0 tools", category: .ai)
+                return []
+            case .functionTool(let ft):
+                context = .forcedTool(ft.name)
+            case .customTool(let ct):
+                context = .forcedTool(ct.name)
+            default:
+                context = .normalOperation(phase)
+            }
+        } else {
+            context = .normalOperation(phase)
+        }
+
+        // Select minimal bundle
+        let bundledNames = ToolBundlePolicy.selectBundle(for: context, from: allowedNames)
+        let filterNames = bundledNames.isEmpty ? nil : bundledNames
+
+        let schemas = await toolRegistry.toolSchemas(filteredBy: filterNames)
+        Logger.debug("🔧 Tool bundling: context=\(context), sending \(schemas.count) tools", category: .ai)
+
+        return schemas
     }
     func activate() {
         isActive = true
