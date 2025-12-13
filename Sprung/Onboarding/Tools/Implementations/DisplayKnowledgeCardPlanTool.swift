@@ -35,8 +35,9 @@ struct DisplayKnowledgeCardPlanTool: InterviewTool {
 
                 MULTI-AGENT WORKFLOW:
                 1. Call this tool after start_phase_two with your full plan
-                2. Next, call propose_card_assignments to map artifacts to cards
-                3. Cards are generated in parallel by KC agents via dispatch_kc_agents
+                2. Next, call open_document_collection to let user upload supporting documents
+                3. After user clicks "Assess Completeness", call propose_card_assignments
+                4. Cards are generated in parallel by KC agents via dispatch_kc_agents
 
                 The plan is displayed to the user as a checklist. User can review and
                 request modifications before generation begins.
@@ -134,17 +135,18 @@ struct DisplayKnowledgeCardPlanTool: InterviewTool {
                 Ready to proceed to Phase 3 or review/refine existing cards.
                 """
         } else {
-            // Multi-agent workflow: chain to propose_card_assignments
-            // This maps documents to cards and identifies gaps
-            response["next_required_tool"].string = OnboardingToolName.proposeCardAssignments.rawValue
+            // Multi-agent workflow: chain to open_document_collection
+            // This shows the document collection UI for user to upload supporting docs
+            response["next_required_tool"].string = OnboardingToolName.openDocumentCollection.rawValue
             response["next_action"].string = """
                 Plan displayed with \(planItems.count) card(s) (\(pendingItems.count) pending).
 
-                You MUST now call `propose_card_assignments` to:
-                1. Map available artifacts to each card
-                2. Identify documentation gaps
+                You MUST now call `open_document_collection` to:
+                1. Show the document collection UI with the KC plan
+                2. Let the user upload supporting documents (resumes, portfolios, etc.)
+                3. Wait for user to click "Assess Completeness"
 
-                Review the artifact summaries from start_phase_two and create assignments.
+                After the user submits documents, proceed with propose_card_assignments.
                 """
         }
 
