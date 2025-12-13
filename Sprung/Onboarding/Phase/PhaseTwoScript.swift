@@ -14,8 +14,7 @@ struct PhaseTwoScript: PhaseScript {
     let allowedTools: [String] = OnboardingToolName.rawValues([
         // Multi-agent workflow tools (in order of use)
         .startPhaseTwo,           // Bootstrap: returns timeline + artifact summaries
-        .displayKnowledgeCardPlan, // Show plan to user
-        .openDocumentCollection,  // Show dropzone + KC list (mandatory step)
+        .openDocumentCollection,  // Show dropzone for document uploads (mandatory step)
         .proposeCardAssignments,  // Map artifacts to cards, identify gaps
         .dispatchKCAgents,        // Spawn parallel KC agents
         .submitKnowledgeCard,     // Persist each generated card
@@ -75,17 +74,16 @@ struct PhaseTwoScript: PhaseScript {
 
         The workflow proceeds through these phases:
 
-        **PHASE A: Plan & Display**
+        **PHASE A: Document Collection (MANDATORY)**
         1. `start_phase_two` → receive timeline entries and artifact summaries
-        2. `display_knowledge_card_plan` → show what cards will be generated
-
-        **PHASE B: Document Collection (MANDATORY)**
-        3. `open_document_collection` → display the document collection UI
-           - Shows planned knowledge cards
+        2. In chat, briefly describe what knowledge cards you'll create based on the timeline:
+           - A card for each significant position
+           - Cards for cross-cutting skills (Technical Leadership, etc.)
+        3. `open_document_collection` → display the document upload UI
            - Large dropzone for file uploads
            - Git repository selector
            - "Assess Document Completeness" button
-        4. Write a message suggesting specific document types for gaps:
+        4. Suggest specific document types for their roles:
            - Performance reviews, job descriptions, project docs
            - Design specs, code repos, promotion emails
            - Be SPECIFIC based on their timeline
@@ -93,7 +91,7 @@ struct PhaseTwoScript: PhaseScript {
            - Each file uploaded becomes a separate artifact
            - User can upload in multiple batches
 
-        **PHASE C: Document Assignment & User Review**
+        **PHASE B: Document Assignment & User Review**
         6. After user clicks "Assess Completeness", call `propose_card_assignments`
            - Maps artifacts to cards
            - Identifies documentation gaps
@@ -105,17 +103,17 @@ struct PhaseTwoScript: PhaseScript {
         8. If user requests changes → modify plan and call `propose_card_assignments` again
         9. WAIT for explicit user approval before proceeding
 
-        **PHASE D: Parallel Card Generation** (only after user approval)
+        **PHASE C: Parallel Card Generation** (only after user approval)
         10. `dispatch_kc_agents` → spawns parallel agents to generate cards
             - Each agent reads full artifact text and generates comprehensive prose
             - Results return as an array of completed cards
 
-        **PHASE E: Validation & Persistence**
+        **PHASE D: Validation & Persistence**
         11. For EACH card returned: call `submit_knowledge_card` to persist
             - Review card quality before persisting
             - All valid cards must be persisted
 
-        **PHASE F: Completion**
+        **PHASE E: Completion**
         12. `next_phase` → advance to Phase 3
 
         ### What is a Knowledge Card?

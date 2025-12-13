@@ -11,8 +11,8 @@ import SwiftyJSON
 
 /// Bootstrap tool for Phase 2 that:
 /// 1. Returns all timeline entries from Phase 1
-/// 2. Provides explicit instructions to generate a knowledge card plan
-/// 3. Mandates calling display_knowledge_card_plan next (via toolChoice chaining)
+/// 2. Provides explicit instructions for knowledge card generation
+/// 3. Mandates calling open_document_collection next (via toolChoice chaining)
 struct StartPhaseTwoTool: InterviewTool {
     private static let schema: JSONSchema = {
         JSONSchema(
@@ -20,7 +20,7 @@ struct StartPhaseTwoTool: InterviewTool {
             description: """
                 Bootstrap tool for Phase 2. Call this FIRST after receiving Phase 2 instructions.
                 RETURNS: Timeline entries from Phase 1 + explicit instructions for knowledge card generation.
-                IMPORTANT: After receiving this tool's response, you MUST call display_knowledge_card_plan.
+                IMPORTANT: After receiving this tool's response, you MUST call open_document_collection.
                 """,
             properties: [:],
             required: [],
@@ -37,7 +37,7 @@ struct StartPhaseTwoTool: InterviewTool {
     var name: String { OnboardingToolName.startPhaseTwo.rawValue }
 
     var description: String {
-        "Bootstrap Phase 2. Returns timeline entries and instructions. MUST be followed by display_knowledge_card_plan."
+        "Bootstrap Phase 2. Returns timeline entries and instructions. MUST be followed by open_document_collection."
     }
 
     var parameters: JSONSchema { Self.schema }
@@ -69,7 +69,7 @@ struct StartPhaseTwoTool: InterviewTool {
         result["disable_after_use"].bool = true
 
         // Signal the required next tool (used by ToolExecutionCoordinator for toolChoice chaining)
-        result["next_required_tool"].string = OnboardingToolName.displayKnowledgeCardPlan.rawValue
+        result["next_required_tool"].string = OnboardingToolName.openDocumentCollection.rawValue
 
         return .immediate(result)
     }
@@ -83,97 +83,72 @@ struct StartPhaseTwoTool: InterviewTool {
         ## WORKFLOW OVERVIEW
 
         ```
-        STEP 1: display_knowledge_card_plan  →  Show plan to user
+        STEP 1: open_document_collection     →  Show upload UI, let user add documents
         STEP 2: propose_card_assignments     →  Map docs to cards, identify gaps
-        STEP 3: GAPS ASSESSMENT (CRITICAL)   →  Ask for specific missing docs, WAIT for user
-        STEP 4: dispatch_kc_agents           →  Parallel agents generate cards
-        STEP 5: submit_knowledge_card        →  Persist each returned card
-        STEP 6: next_phase                   →  Advance to Phase 3
+        STEP 3: dispatch_kc_agents           →  Parallel agents generate cards
+        STEP 4: submit_knowledge_card        →  Persist each returned card
+        STEP 5: next_phase                   →  Advance to Phase 3
         ```
 
-        ## STEP 1: Display Knowledge Card Plan
+        ## STEP 1: Open Document Collection
 
-        Call `display_knowledge_card_plan` with:
-        - A "job" card for each significant position in the timeline
-        - "skill" cards for cross-cutting competencies (Technical Leadership, etc.)
+        Call `open_document_collection` to show the document upload UI.
 
-        Example:
-        ```json
-        {
-          "items": [
-            {"id": "uuid1", "type": "job", "title": "Senior Engineer at Company X", "status": "pending"},
-            {"id": "uuid2", "type": "skill", "title": "Technical Leadership", "status": "pending"}
-          ],
-          "message": "I've created a plan to document your career."
-        }
-        ```
+        Before calling, briefly describe in chat what knowledge cards you plan to create:
+        - A card for each significant position in the timeline
+        - Cards for cross-cutting competencies (Technical Leadership, etc.)
+
+        Example chat message:
+        "Based on your timeline, I'll create knowledge cards for:
+        • Senior Engineer at Company X (2019-2022)
+        • Tech Lead at StartupY (2022-2024)
+        • Technical Leadership (cross-cutting)
+
+        Please upload any supporting documents like performance reviews, project docs,
+        or portfolio materials. When ready, click 'Assess Completeness'."
+
+        The UI will show a dropzone for uploads. Wait for user to click "Assess Completeness".
 
         ## STEP 2: Propose Card Assignments
 
-        Call `propose_card_assignments` to:
+        After user clicks "Assess Completeness", call `propose_card_assignments` to:
         - Map artifact IDs to each card based on relevance
         - Identify cards with insufficient documentation (gaps)
 
-        ## STEP 3: GAPS ASSESSMENT (CRITICAL - DO NOT SKIP)
-
-        ⚠️ This step is MANDATORY if any gaps were identified.
-
-        **You MUST present SPECIFIC document requests to the user.** Generic requests are not acceptable.
-
-        ❌ WRONG: "Do you have any other documents I should look at?"
-        ❌ WRONG: "Is there anything else you'd like to add?"
-
-        ✅ RIGHT: Present a structured gaps summary like this:
-
-        "Looking at your timeline, I've identified some documentation gaps that would really strengthen your knowledge cards:
+        If gaps are found, describe SPECIFIC documents that would help:
 
         **For Senior Engineer at Acme (2019-2022):**
-        - Performance reviews — most companies do annual reviews, even informal email summaries help
-        - Project documentation — design docs, architecture decisions, post-mortems you authored
-        - The job description — often saved in offer letters or HR portals
-
-        **For Tech Lead at StartupX (2022-2024):**
-        - Team feedback or 360 reviews
-        - Any presentations or demos you delivered
+        - Performance reviews — most companies do annual reviews
+        - Project documentation — design docs, architecture decisions
 
         **Commonly overlooked sources:**
         - Promotion announcement emails
-        - LinkedIn recommendations (can copy-paste)
-        - Slack/Teams kudos or thank-you messages
-        - Award certificates or recognition emails
-
-        Do you have any of these available? Or should we proceed with what we have?"
+        - LinkedIn recommendations (copy-paste)
+        - Slack/Teams kudos messages
 
         **Document types by role category:**
-        - Engineering: performance reviews, design docs, code repos, tech specs, PR histories
-        - Management: team reviews, org charts, budget docs, hiring plans, 1:1 notes
-        - Sales/BD: quota attainment, deal lists, client testimonials, pipeline reports
-        - Product/Design: specs, user research, wireframes, A/B results, roadmaps
+        - Engineering: performance reviews, design docs, code repos, tech specs
+        - Management: team reviews, org charts, budget docs, hiring plans
+        - Sales/BD: quota attainment, deal lists, client testimonials
 
-        **WAIT for user response** before proceeding to Step 4. Do not call dispatch_kc_agents until:
-        - User uploads additional documents, OR
-        - User confirms they have no more documents
+        ## STEP 3: Generate Knowledge Cards
 
-        ## STEP 4: Generate Knowledge Cards
-
-        Call `dispatch_kc_agents` with the card proposals from Step 2.
+        Call `dispatch_kc_agents` with the card proposals.
         - Parallel agents read full artifact text
         - Each agent generates a comprehensive 500-2000+ word knowledge card
-        - Results return as an array
 
-        ## STEP 5: Persist Cards
+        ## STEP 4: Persist Cards
 
         For EACH card in the returned array:
         - Review for quality and completeness
         - Call `submit_knowledge_card` to persist
 
-        ## STEP 6: Complete Phase
+        ## STEP 5: Complete Phase
 
         When all cards are persisted, call `next_phase` to advance to Phase 3.
 
         ---
-        DO NOT skip display_knowledge_card_plan. The UI must show the plan.
-        DO NOT skip gaps assessment if propose_card_assignments returns gaps.
+        DO NOT skip open_document_collection. Users need to upload supporting docs.
         """
     }
 }
