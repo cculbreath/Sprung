@@ -1,7 +1,0 @@
-a50914ada46db955be05415db94e174179826902	not-for-merge	branch 'feature/allowed-tools-envelope' of https://github.com/cculbreath/SwiftOpenAI
-3be83cd4c4dc4ad8e6831e7b215a51158ca18782	not-for-merge	branch 'feature/sprung-logging-integration' of https://github.com/cculbreath/SwiftOpenAI
-1fca19a4cd3e40bc64d3087ec9284b9f1356bd11	not-for-merge	branch 'feature/streaming-tts' of https://github.com/cculbreath/SwiftOpenAI
-85c20b3d6a023cacd0b0836151e77e657a788ad8	not-for-merge	branch 'feature/streaming-tts-v4' of https://github.com/cculbreath/SwiftOpenAI
-311b49266541601ac82dd55683f16ecc890a3347	not-for-merge	branch 'main' of https://github.com/cculbreath/SwiftOpenAI
-de98ba73d50e0605f6ac364c7ae67f14cd302d1e	not-for-merge	tag 'v1.0.0-streaming-tts' of https://github.com/cculbreath/SwiftOpenAI
-68420a819a1dc9b1cb1a4e49e8b7bdaf1fcb5d14	not-for-merge	tag 'v1.0.1-streaming-tts' of https://github.com/cculbreath/SwiftOpenAI
