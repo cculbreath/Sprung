@@ -100,6 +100,9 @@ struct OpenDocumentCollectionTool: InterviewTool {
             - Suggest specific document types: reviews, job descriptions, promotion emails, project docs
             - If coverage looks reasonable, proceed directly to propose_card_assignments
 
+            TIP: If artifact summaries aren't enough to assess coverage, use `get_artifact` with
+            an artifact ID to retrieve the full document text before making gap assessments.
+
             This gap check is conversational - if they say "no" or "that's all I have", proceed.
             """
 

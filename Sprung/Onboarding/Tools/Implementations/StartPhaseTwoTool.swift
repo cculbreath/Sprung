@@ -107,6 +107,9 @@ struct StartPhaseTwoTool: InterviewTool {
         "I notice we don't have any documents yet for your role at [Company] (2019-2022).
         Do you have any performance reviews, project documentation, or job descriptions from that time?"
 
+        TIP: If artifact summaries aren't enough to assess coverage, use `get_artifact` with
+        an artifact ID to retrieve full document text before making gap assessments.
+
         If coverage looks reasonable, or they say "that's all I have", proceed to step 3.
 
         ## STEP 3: Propose Card Assignments
