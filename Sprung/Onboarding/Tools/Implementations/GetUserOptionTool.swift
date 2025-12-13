@@ -9,30 +9,11 @@ import SwiftyJSON
 import SwiftOpenAI
 struct GetUserOptionTool: InterviewTool {
     private static let schema: JSONSchema = {
-        let optionProperties: [String: JSONSchema] = [
-            "id": JSONSchema(type: .string, description: "Stable identifier for the option"),
-            "label": JSONSchema(type: .string, description: "Display label for the option"),
-            "description": JSONSchema(type: .string, description: "Optional detailed description"),
-            "icon": JSONSchema(type: .string, description: "Optional system icon name")
-        ]
-        let optionObject = JSONSchema(
-            type: .object,
-            description: "Single selectable option",
-            properties: optionProperties,
-            required: ["id", "label"],
-            additionalProperties: false
-        )
         let properties: [String: JSONSchema] = [
-            "prompt": JSONSchema(type: .string, description: "Question or instruction to display"),
-            "options": JSONSchema(
-                type: .array,
-                description: "Array of available options",
-                items: optionObject,
-                required: nil,
-                additionalProperties: false
-            ),
-            "allowMultiple": JSONSchema(type: .boolean, description: "Allow selecting multiple options"),
-            "required": JSONSchema(type: .boolean, description: "Is selection required to continue")
+            "prompt": UserInteractionSchemas.optionPrompt,
+            "options": UserInteractionSchemas.optionsArray,
+            "allowMultiple": UserInteractionSchemas.allowMultipleOptions,
+            "required": UserInteractionSchemas.requiredSelection
         ]
         return JSONSchema(
             type: .object,

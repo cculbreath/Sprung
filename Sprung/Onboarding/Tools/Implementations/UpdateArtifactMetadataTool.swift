@@ -7,26 +7,9 @@
 import Foundation
 import SwiftyJSON
 import SwiftOpenAI
+
 struct UpdateArtifactMetadataTool: InterviewTool {
-    private static let schema: JSONSchema = {
-        JSONSchema(
-            type: .object,
-            description: "Update metadata fields on an artifact record. Performs field-level merge (adds/updates specified fields without removing others).",
-            properties: [
-                "artifact_id": JSONSchema(
-                    type: .string,
-                    description: "ID of the artifact record to update."
-                ),
-                "metadata_updates": JSONSchema(
-                    type: .object,
-                    description: "Object containing metadata fields to add or update. Each field will be merged into the artifact's metadata. Supports nested paths like 'target_phase_objectives', 'target_deliverable', 'user_validated', etc.",
-                    additionalProperties: true
-                )
-            ],
-            required: ["artifact_id", "metadata_updates"],
-            additionalProperties: false
-        )
-    }()
+    private static let schema: JSONSchema = ArtifactSchemas.updateArtifactMetadata
     private unowned let coordinator: OnboardingInterviewCoordinator
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator

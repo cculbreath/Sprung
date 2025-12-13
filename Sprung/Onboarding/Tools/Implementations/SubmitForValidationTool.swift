@@ -10,19 +10,9 @@ import SwiftOpenAI
 struct SubmitForValidationTool: InterviewTool {
     private static let schema: JSONSchema = {
         let properties: [String: JSONSchema] = [
-            "validation_type": JSONSchema(
-                type: .string,
-                description: "Type of data being validated. Each type presents specialized validation UI.",
-                enum: ["applicant_profile", "skeleton_timeline", "enabled_sections", "knowledge_card", "candidate_dossier"]
-            ),
-            "data": JSONSchema(
-                type: .object,
-                description: "The complete data payload to validate. For skeleton_timeline, this is optional and will be auto-fetched from current timeline state. For other types, provide the complete data object."
-            ),
-            "summary": JSONSchema(
-                type: .string,
-                description: "Human-readable summary shown to user in validation card. Explain what was collected and what they're confirming."
-            )
+            "validation_type": ValidationSchemas.validationType,
+            "data": ValidationSchemas.dataPayload,
+            "summary": ValidationSchemas.summary
         ]
         return JSONSchema(
             type: .object,

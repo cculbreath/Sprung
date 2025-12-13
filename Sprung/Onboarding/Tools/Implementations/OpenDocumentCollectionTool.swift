@@ -37,15 +37,8 @@ struct OpenDocumentCollectionTool: InterviewTool {
                 from your time at Company X?"). Then call propose_card_assignments.
                 """,
             properties: [
-                "message": JSONSchema(
-                    type: .string,
-                    description: "Optional message to display to the user (e.g., suggestions for document types)"
-                ),
-                "suggested_doc_types": JSONSchema(
-                    type: .array,
-                    description: "List of suggested document types for the user to upload (shown as tags)",
-                    items: JSONSchema(type: .string)
-                )
+                "message": UserInteractionSchemas.documentCollectionMessage,
+                "suggested_doc_types": UserInteractionSchemas.suggestedDocTypes
             ],
             required: [],
             additionalProperties: false

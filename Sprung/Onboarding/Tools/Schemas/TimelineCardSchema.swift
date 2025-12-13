@@ -11,6 +11,25 @@ import SwiftyJSON
 
 /// Shared schema definitions for timeline card fields
 enum TimelineCardSchema {
+    // MARK: - Field Schemas
+
+    /// Timeline card unique identifier
+    /// Used by UpdateTimelineCardTool, DeleteTimelineCardTool
+    static let id = JSONSchema(
+        type: .string,
+        description: "Unique identifier of the timeline card. Must match an existing card ID."
+    )
+
+    /// Array of ordered timeline card IDs for reordering operations
+    /// Used by ReorderTimelineCardsTool
+    static let orderedIds = JSONSchema(
+        type: .array,
+        description: "COMPLETE list of ALL existing timeline card IDs in the desired new order. Omitted cards will be removed.",
+        items: JSONSchema(type: .string)
+    )
+
+    // MARK: - Complex Schemas
+
     /// Schema for timeline card fields used in create/update operations
     /// - Parameter requireFields: Fields that should be marked as required (for create vs update)
     static func fieldsSchema(required: [String] = []) -> JSONSchema {

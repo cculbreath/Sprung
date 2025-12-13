@@ -19,10 +19,7 @@ struct CancelUserUploadTool: InterviewTool {
                 DO NOT: Cancel uploads preemptively - wait for user signal. Some users need time to locate files.
                 """,
             properties: [
-                "reason": JSONSchema(
-                    type: .string,
-                    description: "Optional explanation for why upload is being cancelled (for logging/debugging)."
-                )
+                "reason": UserInteractionSchemas.cancelReason
             ],
             required: [],
             additionalProperties: false

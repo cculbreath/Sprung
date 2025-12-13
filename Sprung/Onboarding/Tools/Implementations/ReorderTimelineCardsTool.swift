@@ -20,11 +20,7 @@ struct ReorderTimelineCardsTool: InterviewTool {
             DO NOT: Provide a partial list thinking other cards will stay in place - they will be removed.
             """,
         properties: [
-            "ordered_ids": JSONSchema(
-                type: .array,
-                description: "COMPLETE list of ALL existing timeline card IDs in the desired new order. Omitted cards will be removed.",
-                items: JSONSchema(type: .string)
-            )
+            "ordered_ids": TimelineCardSchema.orderedIds
         ],
         required: ["ordered_ids"],
         additionalProperties: false

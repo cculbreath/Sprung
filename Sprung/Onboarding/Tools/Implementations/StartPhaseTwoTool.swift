@@ -8,25 +8,14 @@
 //
 import Foundation
 import SwiftyJSON
+import SwiftOpenAI
 
 /// Bootstrap tool for Phase 2 that:
 /// 1. Returns all timeline entries from Phase 1
 /// 2. Provides explicit instructions for knowledge card generation
 /// 3. Mandates calling open_document_collection next (via toolChoice chaining)
 struct StartPhaseTwoTool: InterviewTool {
-    private static let schema: JSONSchema = {
-        JSONSchema(
-            type: .object,
-            description: """
-                Bootstrap tool for Phase 2. Call this FIRST after receiving Phase 2 instructions.
-                RETURNS: Timeline entries from Phase 1 + explicit instructions for knowledge card generation.
-                IMPORTANT: After receiving this tool's response, you MUST call open_document_collection.
-                """,
-            properties: [:],
-            required: [],
-            additionalProperties: false
-        )
-    }()
+    private static let schema: JSONSchema = PhaseSchemas.startPhaseTwoSchema()
 
     private unowned let coordinator: OnboardingInterviewCoordinator
 

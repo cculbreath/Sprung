@@ -5,30 +5,7 @@ import SwiftyJSON
 /// The LLM calls this to show the user what cards will be generated and track progress.
 struct DisplayKnowledgeCardPlanTool: InterviewTool {
     private static let schema: JSONSchema = {
-        let itemSchema = JSONSchema(
-            type: .object,
-            description: "A planned knowledge card item",
-            properties: [
-                "id": JSONSchema(type: .string, description: "Unique identifier for this item"),
-                "title": JSONSchema(type: .string, description: "Title of the knowledge card (e.g., job title or skill area)"),
-                "type": JSONSchema(
-                    type: .string,
-                    description: "Type of card: 'job' for positions, 'skill' for skill areas",
-                    enum: ["job", "skill"]
-                ),
-                "description": JSONSchema(type: .string, description: "Brief description of what this card will cover"),
-                "status": JSONSchema(
-                    type: .string,
-                    description: "Current status of this item",
-                    enum: ["pending", "in_progress", "completed", "skipped"]
-                ),
-                "timeline_entry_id": JSONSchema(type: .string, description: "Optional: ID of the related timeline entry")
-            ],
-            required: ["id", "title", "type", "status"],
-            additionalProperties: false
-        )
-
-        return JSONSchema(
+        JSONSchema(
             type: .object,
             description: """
                 Display the knowledge card generation plan to the user.
@@ -43,19 +20,9 @@ struct DisplayKnowledgeCardPlanTool: InterviewTool {
                 request modifications before generation begins.
                 """,
             properties: [
-                "items": JSONSchema(
-                    type: .array,
-                    description: "The complete list of planned knowledge cards with current status",
-                    items: itemSchema
-                ),
-                "current_focus": JSONSchema(
-                    type: .string,
-                    description: "ID of the item currently being worked on (for highlighting)"
-                ),
-                "message": JSONSchema(
-                    type: .string,
-                    description: "Optional message to display with the plan (e.g., 'Starting with your role at Company X')"
-                )
+                "items": KnowledgeCardSchemas.planItemsArray,
+                "current_focus": KnowledgeCardSchemas.currentFocus,
+                "message": KnowledgeCardSchemas.message
             ],
             required: ["items"],
             additionalProperties: false

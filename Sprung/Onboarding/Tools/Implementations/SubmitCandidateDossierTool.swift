@@ -11,75 +11,7 @@ import SwiftOpenAI
 
 struct SubmitCandidateDossierTool: InterviewTool {
     private static let schema: JSONSchema = {
-        let properties: [String: JSONSchema] = [
-            "job_search_context": JSONSchema(
-                type: .string,
-                description: """
-                    REQUIRED. Why looking, what seeking, priorities, non-negotiables, ideal role attributes.
-                    Include: Push factors (leaving), pull factors (seeking), top priorities ranked,
-                    compensation expectations if shared. 2-6 sentences or bullets.
-                    Example: "Seeking greater technical ownership and product impact; frustrated by
-                    bureaucracy at current role. Priorities: 1) High autonomy 2) Small team 3) Modern stack.
-                    Compensation target $160-180k base, flexible for equity upside."
-                    """
-            ),
-            "work_arrangement_preferences": JSONSchema(
-                type: .string,
-                description: """
-                    Remote/hybrid/onsite preferences, relocation willingness, location constraints, travel tolerance.
-                    Example: "Strong preference for remote-first. Would consider hybrid 2 days/week max.
-                    Based in Austin, open to relocating to SF or Seattle for Staff+ role with strong equity."
-                    """
-            ),
-            "availability": JSONSchema(
-                type: .string,
-                description: """
-                    Start timing window, notice period, scheduling constraints.
-                    Example: "Currently employed with 2-week notice. Could start 3 weeks from offer.
-                    No major timing constraints."
-                    """
-            ),
-            "unique_circumstances": JSONSchema(
-                type: .string,
-                description: """
-                    Context for gaps, pivots, visa status, non-compete, sabbatical, or anything unconventional.
-                    Keep factual and neutral. Frame positively where possible.
-                    Example: "6-month sabbatical in 2023 for open-source work and learning Rust.
-                    Intentional skill investment, not unemployment."
-                    """
-            ),
-            "strengths_to_emphasize": JSONSchema(
-                type: .string,
-                description: """
-                    Hidden or under-emphasized strengths not obvious from resume. How to surface these.
-                    Look for: cross-domain expertise, untitled leadership, rare combinations,
-                    skills from unlisted experiences. 2-4 paragraphs.
-                    Example: "Bridge between deep technical expertise and product thinking—highlight
-                    examples where technical decisions drove user impact. Self-directed learner with
-                    demonstrated follow-through (sabbatical learning, OSS contributions)."
-                    """
-            ),
-            "pitfalls_to_avoid": JSONSchema(
-                type: .string,
-                description: """
-                    Potential concerns, vulnerabilities, or red flags and how to address/mitigate them.
-                    Include specific, actionable recommendations. 2-4 paragraphs.
-                    Example: "6-month gap may raise questions—proactively label as 'sabbatical' with
-                    1-liner about OSS work. Avoid sounding negative about previous employer when
-                    discussing departure reasons."
-                    """
-            ),
-            "notes": JSONSchema(
-                type: .string,
-                description: """
-                    Private interviewer observations, impressions, strategic recommendations.
-                    Not for export without consent. Include deal-breakers, cultural fit indicators,
-                    communication style observations.
-                    Example: "Candidate is thoughtful and self-aware. Values substance over polish.
-                    Deal-breakers: full-time office, large bureaucratic orgs, purely managerial track."
-                    """
-            )
-        ]
+        let properties = MiscSchemas.candidateDossierProperties()
 
         return JSONSchema(
             type: .object,

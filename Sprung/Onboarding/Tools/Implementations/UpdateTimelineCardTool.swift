@@ -14,10 +14,7 @@ struct UpdateTimelineCardTool: InterviewTool {
                 DO NOT: Include summary or highlights in Phase 1 - skeleton cards contain only basic facts.
                 """,
             properties: [
-                "id": JSONSchema(
-                    type: .string,
-                    description: "Unique identifier of the timeline card to update"
-                ),
+                "id": TimelineCardSchema.id,
                 "fields": TimelineCardSchema.fieldsSchema(required: [])  // No required fields for PATCH
             ],
             required: ["id", "fields"],

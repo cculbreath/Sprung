@@ -20,102 +20,6 @@ import SwiftOpenAI
 ///
 /// This tool combines validation, approval, and persistence to ensure cards are properly saved.
 struct SubmitKnowledgeCardTool: InterviewTool {
-    private static let sourceSchema = JSONSchema(
-        type: .object,
-        description: """
-            A source reference linking the knowledge card to evidence.
-            Every card MUST have at least one source to ensure claims are backed by evidence.
-            """,
-        properties: [
-            "type": JSONSchema(
-                type: .string,
-                description: "Source type: 'artifact' for uploaded documents/repos, 'chat' for conversation quotes",
-                enum: ["artifact", "chat"]
-            ),
-            "artifact_id": JSONSchema(
-                type: .string,
-                description: "UUID of the artifact (REQUIRED when type='artifact'). Get IDs from list_artifacts."
-            ),
-            "chat_excerpt": JSONSchema(
-                type: .string,
-                description: "Quoted text from conversation (REQUIRED when type='chat'). Include the exact user statement."
-            ),
-            "chat_context": JSONSchema(
-                type: .string,
-                description: "Brief context explaining what the chat excerpt demonstrates"
-            )
-        ],
-        required: ["type"]
-    )
-
-    private static let cardSchema = JSONSchema(
-        type: .object,
-        description: """
-            A knowledge card containing a COMPREHENSIVE PROSE SUMMARY.
-
-            The content field should be a detailed narrative (500-2000+ words) that captures
-            EVERYTHING relevant about this experience. This prose will be the PRIMARY SOURCE
-            for resume customization and cover letter writing - the original documents will
-            NOT be re-read at that time.
-
-            Write as if creating a detailed portfolio entry or comprehensive briefing document.
-            """,
-        properties: [
-            "id": JSONSchema(
-                type: .string,
-                description: "Unique UUID for this card (generate one)"
-            ),
-            "title": JSONSchema(
-                type: .string,
-                description: "Descriptive title (e.g., 'Senior Software Engineer at Acme Corp (2020-2024)')"
-            ),
-            "type": JSONSchema(
-                type: .string,
-                description: "Category: 'job', 'skill', 'education', 'project'. Helps with organization."
-            ),
-            "content": JSONSchema(
-                type: .string,
-                description: """
-                    COMPREHENSIVE PROSE SUMMARY (500-2000+ words).
-
-                    This narrative must capture ALL important details from the source documents:
-                    - Role scope, responsibilities, and context
-                    - Specific projects with technical details and your contributions
-                    - Quantified achievements and business impact
-                    - Technologies, tools, and methodologies used
-                    - Team dynamics, leadership, collaboration patterns
-                    - Challenges overcome and problems solved
-                    - Skills demonstrated (technical and soft)
-
-                    Write in third person. Be specific and detailed. Include numbers, metrics,
-                    and concrete examples. This document will be used to generate tailored
-                    resume bullets and cover letter content for various job applications.
-
-                    DO NOT summarize or compress - PRESERVE all relevant detail from sources.
-                    """
-            ),
-            "sources": JSONSchema(
-                type: .array,
-                description: "Evidence sources backing this card. AT LEAST ONE REQUIRED.",
-                items: sourceSchema
-            ),
-            "time_period": JSONSchema(
-                type: .string,
-                description: "Date range if applicable (e.g., '2020-09 to 2024-06', 'Summer 2019')"
-            ),
-            "organization": JSONSchema(
-                type: .string,
-                description: "Company, university, or organization name"
-            ),
-            "location": JSONSchema(
-                type: .string,
-                description: "Location if relevant (city, state, or 'Remote')"
-            )
-        ],
-        required: ["id", "title", "content", "sources"],
-        additionalProperties: true
-    )
-
     private static let schema = JSONSchema(
         type: .object,
         description: """
@@ -153,11 +57,8 @@ struct SubmitKnowledgeCardTool: InterviewTool {
             - Quote specific user statements as chat sources
             """,
         properties: [
-            "card": cardSchema,
-            "summary": JSONSchema(
-                type: .string,
-                description: "Brief summary for the approval UI (e.g., 'Knowledge card for your 5 years at Acme Corp with 8 achievements')"
-            )
+            "card": KnowledgeCardSchemas.cardSchema,
+            "summary": KnowledgeCardSchemas.submissionSummary
         ],
         required: ["card", "summary"],
         additionalProperties: false

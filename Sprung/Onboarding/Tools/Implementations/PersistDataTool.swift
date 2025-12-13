@@ -10,43 +10,8 @@ import SwiftOpenAI
 struct PersistDataTool: InterviewTool {
     private static let schema: JSONSchema = {
         let properties: [String: JSONSchema] = [
-            "dataType": JSONSchema(
-                type: .string,
-                description: """
-                    Type of data being persisted. Each type triggers specific coordinator events and state updates.
-                    Valid types:
-                    - applicant_profile: Contact info (name, email, phone, location, URLs, social profiles)
-                    - skeleton_timeline: Complete timeline of positions/education entries
-                    - experience_defaults: Resume defaults generated from knowledge cards. REQUIRED structure:
-                        {
-                            "work": [{ "name": "Company", "position": "Title", "location": "City, ST", "startDate": "YYYY-MM", "endDate": "YYYY-MM" or "Present", "summary": "Brief role description", "highlights": ["Achievement 1", "Achievement 2", ...] }],
-                            "education": [{ "institution": "School", "area": "Field of Study", "studyType": "Degree Type", "startDate": "YYYY", "endDate": "YYYY", "score": "GPA if relevant" }],
-                            "projects": [{ "name": "Project Name", "description": "What it does", "startDate": "YYYY-MM", "endDate": "YYYY-MM", "highlights": ["Key accomplishment"], "keywords": ["tech", "stack"] }],
-                            "skills": [{ "name": "Skill Category", "level": "Expert/Advanced/Intermediate", "keywords": ["specific", "technologies"] }],
-                            "languages": [{ "language": "English", "fluency": "Native" }]
-                        }
-                    - enabled_sections: Alternative format for enabled sections (array of section names)
-                    - candidate_dossier_entry: Single Q&A entry for dossier seed (requires: question, answer, asked_at)
-                    - knowledge_card: Deep dive expertise card from Phase 2
-                    - writing_sample: Writing sample with style analysis notes (Phase 3)
-                    - candidate_dossier: Final compiled candidate dossier (Phase 3)
-                    """,
-                enum: [
-                    "applicant_profile",
-                    "skeleton_timeline",
-                    "experience_defaults",
-                    "enabled_sections",
-                    "candidate_dossier_entry",
-                    "knowledge_card",
-                    "writing_sample",
-                    "candidate_dossier"
-                ]
-            ),
-            "data": JSONSchema(
-                type: .object,
-                description: "JSON payload containing the data to persist. Schema varies by dataType.",
-                additionalProperties: true
-            )
+            "dataType": MiscSchemas.persistDataType,
+            "data": MiscSchemas.persistDataPayload
         ]
         return JSONSchema(
             type: .object,

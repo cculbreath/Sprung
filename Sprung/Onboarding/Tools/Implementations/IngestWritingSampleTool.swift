@@ -29,23 +29,10 @@ struct IngestWritingSampleTool: InterviewTool {
                 NOTE: This is for text pasted in chat. For file uploads, use get_user_upload with type "writing_sample".
                 """,
             properties: [
-                "name": JSONSchema(
-                    type: .string,
-                    description: "Descriptive name for the writing sample (e.g., 'Cover letter for Google', 'Professional email to client', 'Graduate school essay')"
-                ),
-                "content": JSONSchema(
-                    type: .string,
-                    description: "The full text content of the writing sample. Include the complete text exactly as provided by the user."
-                ),
-                "writing_type": JSONSchema(
-                    type: .string,
-                    description: "Type of writing sample",
-                    enum: ["cover_letter", "email", "essay", "proposal", "report", "blog_post", "documentation", "other"]
-                ),
-                "context": JSONSchema(
-                    type: .string,
-                    description: "Optional context about the writing sample (when written, purpose, audience)"
-                )
+                "name": MiscSchemas.writingSampleName,
+                "content": MiscSchemas.writingSampleContent,
+                "writing_type": MiscSchemas.writingSampleType,
+                "context": MiscSchemas.writingSampleContext
             ],
             required: ["name", "content", "writing_type"],
             additionalProperties: false

@@ -10,30 +10,8 @@ import SwiftOpenAI
 struct ConfigureEnabledSectionsTool: InterviewTool {
     private static let schema: JSONSchema = {
         let properties: [String: JSONSchema] = [
-            "proposed_sections": JSONSchema(
-                type: .object,
-                description: """
-                    Object mapping JSON Resume top-level section keys to boolean enabled/disabled state.
-                    Valid section keys (from JSON Resume schema):
-                    - work: Work experience entries
-                    - education: Educational background
-                    - volunteer: Volunteer experience
-                    - awards: Professional awards and recognitions
-                    - certificates: Professional certifications
-                    - publications: Published works
-                    - skills: Technical and professional skills
-                    - languages: Language proficiencies
-                    - interests: Personal interests and hobbies
-                    - references: Professional references
-                    - projects: Career projects and portfolio items
-                    Example: { "work": true, "education": true, "skills": true, "publications": false, "projects": true, "awards": false }
-                    """,
-                additionalProperties: true
-            ),
-            "rationale": JSONSchema(
-                type: .string,
-                description: "Optional explanation or context for the proposed sections"
-            )
+            "proposed_sections": MiscSchemas.proposedSections,
+            "rationale": MiscSchemas.sectionConfigRationale
         ]
         return JSONSchema(
             type: .object,

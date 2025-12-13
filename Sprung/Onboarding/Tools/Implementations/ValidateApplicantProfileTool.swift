@@ -32,10 +32,7 @@ struct ValidateApplicantProfileTool: InterviewTool {
                 DO NOT call this tool for contact card imports or manual form submissions.
                 """,
             properties: [
-                "data": JSONSchema(
-                    type: .object,
-                    description: "The applicant profile data to validate (name, email, phone, location, URLs, social profiles). Should match ApplicantProfile schema."
-                )
+                "data": ValidationSchemas.applicantProfileData
             ],
             required: ["data"],
             additionalProperties: false

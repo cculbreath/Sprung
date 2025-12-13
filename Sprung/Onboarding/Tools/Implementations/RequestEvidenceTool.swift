@@ -6,19 +6,9 @@ struct RequestEvidenceTool: InterviewTool {
             type: .object,
             description: "Request a specific piece of evidence (document, link, code) from the user to verify a timeline entry. Use this to build an 'Evidence Request List' that the user can fulfill by uploading files.",
             properties: [
-                "timeline_entry_id": JSONSchema(
-                    type: .string,
-                    description: "ID of the timeline entry this evidence relates to."
-                ),
-                "description": JSONSchema(
-                    type: .string,
-                    description: "Clear description of what evidence is needed (e.g., 'Upload your PhD dissertation PDF')."
-                ),
-                "category": JSONSchema(
-                    type: .string,
-                    description: "Type of evidence: 'paper', 'code', 'website', 'portfolio', 'degree', or 'other'.",
-                    enum: ["paper", "code", "website", "portfolio", "degree", "other"]
-                )
+                "timeline_entry_id": UserInteractionSchemas.timelineEntryId,
+                "description": UserInteractionSchemas.evidenceDescription,
+                "category": UserInteractionSchemas.evidenceCategory
             ],
             required: ["timeline_entry_id", "description", "category"],
             additionalProperties: false

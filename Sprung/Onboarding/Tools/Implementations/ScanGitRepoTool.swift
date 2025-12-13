@@ -7,18 +7,9 @@ import SwiftyJSON
 struct ScanGitRepoTool: InterviewTool {
     private static let schema: JSONSchema = {
         let properties: [String: JSONSchema] = [
-            "repo_path": JSONSchema(
-                type: .string,
-                description: "Absolute path to the local git repository to analyze."
-            ),
-            "author_filter": JSONSchema(
-                type: .string,
-                description: "Optional git author name or email to filter commits. If not provided, will analyze all commits and suggest filtering options."
-            ),
-            "timeline_entry_id": JSONSchema(
-                type: .string,
-                description: "Optional ID of the timeline entry this repo relates to. If provided, analysis will be scoped to that role."
-            )
+            "repo_path": MiscSchemas.gitRepoPath,
+            "author_filter": MiscSchemas.gitAuthorFilter,
+            "timeline_entry_id": MiscSchemas.gitTimelineEntryId
         ]
         return JSONSchema(
             type: .object,

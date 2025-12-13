@@ -29,42 +29,14 @@ struct GetUserUploadTool: InterviewTool {
                 ERROR: Will fail if prompt_to_user is empty or upload_type is invalid.
                 """,
             properties: [
-                "upload_type": JSONSchema(
-                    type: .string,
-                    description: "Expected file category. Valid types: resume, artifact, coverletter, portfolio, transcript, certificate, writingSample, generic, linkedIn",
-                    enum: ["resume", "artifact", "coverletter", "portfolio", "transcript", "certificate", "writingSample", "generic", "linkedIn"]
-                ),
-                "title": JSONSchema(
-                    type: .string,
-                    description: "Optional custom title for the upload card (e.g., 'Upload Photo'). If omitted, auto-generated from upload_type."
-                ),
-                "prompt_to_user": JSONSchema(
-                    type: .string,
-                    description: "Instructions shown to user in upload card UI. Required. Be specific about what you're requesting."
-                ),
-                "allowed_types": JSONSchema(
-                    type: .array,
-                    description: "Allowed file extensions without dots (e.g., ['pdf', 'docx', 'jpg']). Defaults: pdf, txt, rtf, doc, docx, jpg, jpeg, png, gif, md, html, htm",
-                    items: JSONSchema(type: .string),
-                    additionalProperties: false
-                ),
-                "allow_multiple": JSONSchema(
-                    type: .boolean,
-                    description: "Allow selecting multiple files in one upload. Defaults to true except for resume uploads."
-                ),
-                "allow_url": JSONSchema(
-                    type: .boolean,
-                    description: "Allow user to paste URL instead of uploading file. Defaults to true."
-                ),
-                "target_key": JSONSchema(
-                    type: .string,
-                    description: "JSON Resume key path this upload should populate (e.g., 'basics.image'). Currently only 'basics.image' is supported.",
-                    enum: ["basics.image"]
-                ),
-                "cancel_message": JSONSchema(
-                    type: .string,
-                    description: "Optional message to send if user dismisses upload card without providing files."
-                )
+                "upload_type": UserInteractionSchemas.uploadType,
+                "title": UserInteractionSchemas.uploadTitle,
+                "prompt_to_user": UserInteractionSchemas.promptToUser,
+                "allowed_types": UserInteractionSchemas.allowedTypes,
+                "allow_multiple": UserInteractionSchemas.allowMultiple,
+                "allow_url": UserInteractionSchemas.allowURL,
+                "target_key": UserInteractionSchemas.targetKey,
+                "cancel_message": UserInteractionSchemas.cancelMessage
             ],
             required: ["prompt_to_user"],
             additionalProperties: false

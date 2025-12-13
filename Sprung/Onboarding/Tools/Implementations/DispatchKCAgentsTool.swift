@@ -27,44 +27,7 @@ struct DispatchKCAgentsTool: InterviewTool {
                 from the most recent propose_card_assignments call.
                 """,
             properties: [
-                "proposals": JSONSchema(
-                    type: .array,
-                    description: """
-                        Array of card proposals to generate. Optional - if not provided, will use
-                        proposals stored from the most recent propose_card_assignments call.
-                        """,
-                    items: JSONSchema(
-                        type: .object,
-                        properties: [
-                            "card_id": JSONSchema(
-                                type: .string,
-                                description: "Unique ID for this card (UUID)"
-                            ),
-                            "card_type": JSONSchema(
-                                type: .string,
-                                description: "Type of card: 'job' or 'skill'"
-                            ),
-                            "title": JSONSchema(
-                                type: .string,
-                                description: "Title of the card (e.g., 'Senior Engineer at Company X')"
-                            ),
-                            "timeline_entry_id": JSONSchema(
-                                type: .string,
-                                description: "Optional: ID of the timeline entry this card relates to"
-                            ),
-                            "assigned_artifact_ids": JSONSchema(
-                                type: .array,
-                                description: "Array of artifact IDs assigned to this card",
-                                items: JSONSchema(type: .string)
-                            ),
-                            "notes": JSONSchema(
-                                type: .string,
-                                description: "Optional notes for the KC agent about this card"
-                            )
-                        ],
-                        required: ["card_id", "card_type", "title"]
-                    )
-                )
+                "proposals": KnowledgeCardSchemas.proposalsArray
             ],
             required: [],
             additionalProperties: false

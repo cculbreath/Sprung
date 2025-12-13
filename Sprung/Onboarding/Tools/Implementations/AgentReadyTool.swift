@@ -5,22 +5,7 @@ import SwiftOpenAI
 /// The LLM calls this after receiving phase instructions to signal readiness,
 /// triggering the system to send "I am ready to begin" and start the interview.
 struct AgentReadyTool: InterviewTool {
-    private static let schema: JSONSchema = {
-        JSONSchema(
-            type: .object,
-            description: """
-                Signal that you have received and understood the phase instructions and are ready to begin the interview.
-                This is a bootstrap tool used only during conversation initialization. \
-                After receiving developer instructions for a new phase, call this tool to acknowledge receipt and signal readiness. \
-                Proceeed to steps in interview when tool response is received.
-                RETURNS: { "status": "completed", "content": "I am ready to begin. + {{instructions}}" }
-                USAGE: Call this immediately after receiving phase instructions, before attempting any other actions.
-                """,
-            properties: [:],
-            required: [],
-            additionalProperties: false
-        )
-    }()
+    private static let schema: JSONSchema = PhaseSchemas.agentReadySchema()
     init() {}
     var name: String { OnboardingToolName.agentReady.rawValue }
     var description: String {

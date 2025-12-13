@@ -11,156 +11,17 @@ import SwiftOpenAI
 
 struct SubmitExperienceDefaultsTool: InterviewTool {
     private static let schema: JSONSchema = {
-        // Work experience schema
-        let workItemSchema = JSONSchema(
-            type: .object,
-            description: "A work experience entry",
-            properties: [
-                "name": JSONSchema(type: .string, description: "Company/organization name"),
-                "position": JSONSchema(type: .string, description: "Job title"),
-                "location": JSONSchema(type: .string, description: "City, State"),
-                "url": JSONSchema(type: .string, description: "Company website (optional)"),
-                "startDate": JSONSchema(type: .string, description: "Start date (YYYY-MM format)"),
-                "endDate": JSONSchema(type: .string, description: "End date (YYYY-MM or 'Present')"),
-                "summary": JSONSchema(type: .string, description: "Brief role description"),
-                "highlights": JSONSchema(type: .array, description: "Achievement bullets (3-5 recommended)", items: JSONSchema(type: .string))
-            ],
-            required: ["name", "position", "startDate", "endDate"]
-        )
-
-        // Education schema
-        let educationItemSchema = JSONSchema(
-            type: .object,
-            description: "An education entry",
-            properties: [
-                "institution": JSONSchema(type: .string, description: "School/university name"),
-                "area": JSONSchema(type: .string, description: "Field of study"),
-                "studyType": JSONSchema(type: .string, description: "Degree type (e.g., 'Ph.D.', 'Bachelor of Science')"),
-                "startDate": JSONSchema(type: .string, description: "Start year (YYYY)"),
-                "endDate": JSONSchema(type: .string, description: "End year (YYYY)"),
-                "score": JSONSchema(type: .string, description: "GPA if relevant (optional)"),
-                "courses": JSONSchema(type: .array, description: "Notable courses (optional)", items: JSONSchema(type: .string))
-            ],
-            required: ["institution", "area", "studyType", "startDate", "endDate"]
-        )
-
-        // Project schema
-        let projectItemSchema = JSONSchema(
-            type: .object,
-            description: "A project entry",
-            properties: [
-                "name": JSONSchema(type: .string, description: "Project name"),
-                "description": JSONSchema(type: .string, description: "What the project does"),
-                "startDate": JSONSchema(type: .string, description: "Start date (YYYY-MM)"),
-                "endDate": JSONSchema(type: .string, description: "End date (YYYY-MM or 'Present')"),
-                "url": JSONSchema(type: .string, description: "Project URL (optional)"),
-                "organization": JSONSchema(type: .string, description: "Associated organization (optional)"),
-                "highlights": JSONSchema(type: .array, description: "Key accomplishments", items: JSONSchema(type: .string)),
-                "keywords": JSONSchema(type: .array, description: "Technologies used", items: JSONSchema(type: .string))
-            ],
-            required: ["name", "description"]
-        )
-
-        // Skills schema
-        let skillItemSchema = JSONSchema(
-            type: .object,
-            description: "A skill category",
-            properties: [
-                "name": JSONSchema(type: .string, description: "Skill category name (e.g., 'Software Development')"),
-                "level": JSONSchema(type: .string, description: "Proficiency level (Expert/Advanced/Intermediate)"),
-                "keywords": JSONSchema(type: .array, description: "Specific technologies/skills", items: JSONSchema(type: .string))
-            ],
-            required: ["name", "keywords"]
-        )
-
-        // Languages schema
-        let languageItemSchema = JSONSchema(
-            type: .object,
-            description: "A language entry",
-            properties: [
-                "language": JSONSchema(type: .string, description: "Language name"),
-                "fluency": JSONSchema(type: .string, description: "Fluency level (Native/Fluent/Professional/Conversational)")
-            ],
-            required: ["language", "fluency"]
-        )
-
-        // Volunteer schema
-        let volunteerItemSchema = JSONSchema(
-            type: .object,
-            description: "A volunteer experience entry",
-            properties: [
-                "organization": JSONSchema(type: .string, description: "Organization name"),
-                "position": JSONSchema(type: .string, description: "Role/title"),
-                "url": JSONSchema(type: .string, description: "Organization website (optional)"),
-                "startDate": JSONSchema(type: .string, description: "Start date"),
-                "endDate": JSONSchema(type: .string, description: "End date"),
-                "summary": JSONSchema(type: .string, description: "Brief description"),
-                "highlights": JSONSchema(type: .array, description: "Key contributions", items: JSONSchema(type: .string))
-            ],
-            required: ["organization", "position"]
-        )
-
-        // Awards schema
-        let awardItemSchema = JSONSchema(
-            type: .object,
-            description: "An award entry",
-            properties: [
-                "title": JSONSchema(type: .string, description: "Award name"),
-                "date": JSONSchema(type: .string, description: "Date received"),
-                "awarder": JSONSchema(type: .string, description: "Awarding organization"),
-                "summary": JSONSchema(type: .string, description: "Brief description (optional)")
-            ],
-            required: ["title", "awarder"]
-        )
-
-        // Certificates schema
-        let certificateItemSchema = JSONSchema(
-            type: .object,
-            description: "A certificate entry",
-            properties: [
-                "name": JSONSchema(type: .string, description: "Certificate name"),
-                "date": JSONSchema(type: .string, description: "Date earned"),
-                "issuer": JSONSchema(type: .string, description: "Issuing organization"),
-                "url": JSONSchema(type: .string, description: "Verification URL (optional)")
-            ],
-            required: ["name", "issuer"]
-        )
-
-        // Publications schema
-        let publicationItemSchema = JSONSchema(
-            type: .object,
-            description: "A publication entry",
-            properties: [
-                "name": JSONSchema(type: .string, description: "Publication title"),
-                "publisher": JSONSchema(type: .string, description: "Publisher/journal name"),
-                "releaseDate": JSONSchema(type: .string, description: "Publication date"),
-                "url": JSONSchema(type: .string, description: "URL to publication (optional)"),
-                "summary": JSONSchema(type: .string, description: "Brief description (optional)")
-            ],
-            required: ["name", "publisher"]
-        )
-
         let properties: [String: JSONSchema] = [
-            "professional_summary": JSONSchema(
-                type: .string,
-                description: """
-                    A 2-4 sentence professional summary highlighting the candidate's key strengths,
-                    experience level, and career focus. This will be saved to Experience Defaults
-                    for use in resume headers and cover letter introductions.
-                    Example: "Senior software engineer with 8+ years building scalable distributed systems.
-                    Proven track record leading cross-functional teams and delivering high-impact products.
-                    Passionate about developer experience and engineering excellence."
-                    """
-            ),
-            "work": JSONSchema(type: .array, description: "Work experience entries (only if 'work' section enabled)", items: workItemSchema),
-            "education": JSONSchema(type: .array, description: "Education entries (only if 'education' section enabled)", items: educationItemSchema),
-            "projects": JSONSchema(type: .array, description: "Project entries (only if 'projects' section enabled)", items: projectItemSchema),
-            "skills": JSONSchema(type: .array, description: "Skill categories (only if 'skills' section enabled)", items: skillItemSchema),
-            "languages": JSONSchema(type: .array, description: "Language proficiencies (only if 'languages' section enabled)", items: languageItemSchema),
-            "volunteer": JSONSchema(type: .array, description: "Volunteer experiences (only if 'volunteer' section enabled)", items: volunteerItemSchema),
-            "awards": JSONSchema(type: .array, description: "Awards received (only if 'awards' section enabled)", items: awardItemSchema),
-            "certificates": JSONSchema(type: .array, description: "Professional certificates (only if 'certificates' section enabled)", items: certificateItemSchema),
-            "publications": JSONSchema(type: .array, description: "Publications (only if 'publications' section enabled)", items: publicationItemSchema)
+            "professional_summary": MiscSchemas.professionalSummary,
+            "work": MiscSchemas.workArray,
+            "education": MiscSchemas.educationArray,
+            "projects": MiscSchemas.projectsArray,
+            "skills": MiscSchemas.skillsArray,
+            "languages": MiscSchemas.languagesArray,
+            "volunteer": MiscSchemas.volunteerArray,
+            "awards": MiscSchemas.awardsArray,
+            "certificates": MiscSchemas.certificatesArray,
+            "publications": MiscSchemas.publicationsArray
         ]
 
         return JSONSchema(

@@ -16,14 +16,8 @@ struct SetCurrentKnowledgeCardTool: InterviewTool {
             The item's status will automatically be set to "in_progress".
             """,
         properties: [
-            "item_id": JSONSchema(
-                type: .string,
-                description: "The ID of the plan item to mark as current (must match an ID from display_knowledge_card_plan)"
-            ),
-            "message": JSONSchema(
-                type: .string,
-                description: "Optional message to display (e.g., 'Let's start with your role at Company X')"
-            )
+            "item_id": KnowledgeCardSchemas.itemId,
+            "message": KnowledgeCardSchemas.message
         ],
         required: ["item_id"],
         additionalProperties: false

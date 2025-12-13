@@ -13,83 +13,6 @@ import SwiftyJSON
 /// The coordinator reviews artifact summaries and proposes which documents
 /// should inform which knowledge cards, while identifying documentation gaps.
 struct ProposeCardAssignmentsTool: InterviewTool {
-    private static let assignmentSchema = JSONSchema(
-        type: .object,
-        description: "A proposed assignment linking a knowledge card to artifacts",
-        properties: [
-            "card_id": JSONSchema(
-                type: .string,
-                description: "Unique UUID for this card"
-            ),
-            "card_title": JSONSchema(
-                type: .string,
-                description: "Descriptive title (e.g., 'Senior Engineer at Company X')"
-            ),
-            "card_type": JSONSchema(
-                type: .string,
-                description: "Card type: 'job' or 'skill'"
-            ),
-            "timeline_entry_id": JSONSchema(
-                type: .string,
-                description: "Optional: ID of the timeline entry this card relates to"
-            ),
-            "artifact_ids": JSONSchema(
-                type: .array,
-                description: "Artifact IDs assigned to inform this card",
-                items: JSONSchema(type: .string)
-            ),
-            "notes": JSONSchema(
-                type: .string,
-                description: "Brief notes explaining why these artifacts were assigned"
-            )
-        ],
-        required: ["card_id", "card_title", "card_type", "artifact_ids"]
-    )
-
-    private static let gapSchema = JSONSchema(
-        type: .object,
-        description: """
-            A documentation gap with SPECIFIC recommendations. Do not use generic descriptions.
-            For each gap, recommend actual document types the user likely has.
-            """,
-        properties: [
-            "card_id": JSONSchema(
-                type: .string,
-                description: "UUID of the card with insufficient documentation"
-            ),
-            "card_title": JSONSchema(
-                type: .string,
-                description: "Title of the card lacking documentation"
-            ),
-            "role_category": JSONSchema(
-                type: .string,
-                description: "Role category: 'engineering', 'management', 'sales', 'product', 'design', 'other'"
-            ),
-            "recommended_doc_types": JSONSchema(
-                type: .array,
-                description: """
-                    SPECIFIC document types to request. Be concrete, not generic.
-                    Good: "performance reviews", "design docs", "job description"
-                    Bad: "any documents", "more information"
-                    """,
-                items: JSONSchema(type: .string)
-            ),
-            "example_prompt": JSONSchema(
-                type: .string,
-                description: """
-                    Example prompt to show the user. Be specific and helpful.
-                    Example: "For your Senior Engineer role at Acme, do you have any performance reviews?
-                    Most companies do annual reviews - even informal email summaries would help."
-                    """
-            ),
-            "gap_severity": JSONSchema(
-                type: .string,
-                description: "'critical' (no artifacts at all), 'moderate' (some artifacts, missing key types), 'minor' (has artifacts, could use more)"
-            )
-        ],
-        required: ["card_id", "card_title", "recommended_doc_types", "example_prompt"]
-    )
-
     private static let schema: JSONSchema = {
         JSONSchema(
             type: .object,
@@ -113,20 +36,9 @@ struct ProposeCardAssignmentsTool: InterviewTool {
                 4. dispatch_kc_agents → parallel card generation
                 """,
             properties: [
-                "assignments": JSONSchema(
-                    type: .array,
-                    description: "Card-to-artifact assignments",
-                    items: assignmentSchema
-                ),
-                "gaps": JSONSchema(
-                    type: .array,
-                    description: "Documentation gaps identified (cards without sufficient artifacts)",
-                    items: gapSchema
-                ),
-                "summary": JSONSchema(
-                    type: .string,
-                    description: "Brief summary explaining the assignments and any gaps"
-                )
+                "assignments": KnowledgeCardSchemas.assignmentsArray,
+                "gaps": KnowledgeCardSchemas.gapsArray,
+                "summary": KnowledgeCardSchemas.proposalSummary
             ],
             required: ["assignments", "summary"],
             additionalProperties: false

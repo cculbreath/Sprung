@@ -13,7 +13,7 @@ struct DeleteTimelineCardTool: InterviewTool {
             ERROR: Will fail if id doesn't match an existing timeline card.
             """,
         properties: [
-            "id": JSONSchema(type: .string, description: "Unique identifier of the timeline card to delete. Must match an existing card ID.")
+            "id": TimelineCardSchema.id
         ],
         required: ["id"],
         additionalProperties: false

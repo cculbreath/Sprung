@@ -10,10 +10,7 @@ import SwiftOpenAI
 struct DisplayTimelineForReviewTool: InterviewTool {
     private static let schema: JSONSchema = {
         let properties: [String: JSONSchema] = [
-            "summary": JSONSchema(
-                type: .string,
-                description: "Optional summary message shown to user in timeline review card. Explain what they're reviewing and what to check for."
-            )
+            "summary": ValidationSchemas.timelineReviewSummary
         ]
         return JSONSchema(
             type: .object,

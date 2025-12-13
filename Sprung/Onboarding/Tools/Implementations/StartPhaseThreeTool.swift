@@ -7,25 +7,14 @@
 //
 import Foundation
 import SwiftyJSON
+import SwiftOpenAI
 
 /// Bootstrap tool for Phase 3 that:
 /// 1. Returns all confirmed knowledge cards from Phase 2
 /// 2. Returns applicant profile and timeline summary
 /// 3. Provides explicit instructions for writing corpus collection
 struct StartPhaseThreeTool: InterviewTool {
-    private static let schema: JSONSchema = {
-        JSONSchema(
-            type: .object,
-            description: """
-                Bootstrap tool for Phase 3. Call this FIRST after receiving Phase 3 instructions.
-                RETURNS: Knowledge cards from Phase 2, applicant profile, and instructions for writing corpus collection.
-                After receiving this tool's response, begin collecting writing samples and finalizing the dossier.
-                """,
-            properties: [:],
-            required: [],
-            additionalProperties: false
-        )
-    }()
+    private static let schema: JSONSchema = PhaseSchemas.startPhaseThreeSchema()
 
     private unowned let coordinator: OnboardingInterviewCoordinator
 
