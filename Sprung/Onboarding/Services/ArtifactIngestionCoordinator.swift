@@ -207,7 +207,11 @@ actor ArtifactIngestionCoordinator {
     }
 
     private func notifyIngestionStarted(_ pending: PendingArtifact) async {
-        await eventBus.publish(.processingStateChanged(true, statusMessage: "Processing \(pending.filename)..."))
+        // Only trigger blocking processing state for documents, not git repos
+        // Git repos run in background via AgentActivityTracker and use extractionStateChanged
+        if pending.source != .gitRepository {
+            await eventBus.publish(.processingStateChanged(true, statusMessage: "Processing \(pending.filename)..."))
+        }
         await eventBus.publish(.artifactIngestionStarted(pending: pending))
     }
 
