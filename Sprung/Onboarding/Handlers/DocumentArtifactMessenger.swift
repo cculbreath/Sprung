@@ -222,8 +222,9 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
 
         Logger.info("📤 Sending batched artifacts to LLM: \(artifacts.count) document(s)", category: .ai)
 
-        // Build consolidated message content
-        let messageText = buildExtractedContentMessage(artifacts: artifacts)
+        // Build consolidated message content (phase-aware: full content in Phase 1/3, summaries in Phase 2)
+        let currentPhase = await stateCoordinator.phase
+        let messageText = buildExtractedContentMessage(artifacts: artifacts, phase: currentPhase)
 
         // Check if there's a pending UI tool call (from get_user_upload)
         // If so, complete it with extracted content instead of sending a separate user message
@@ -260,14 +261,16 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
     }
 
     /// Build the extracted content message for artifacts
-    /// IMPORTANT: Only sends summaries to prevent token accumulation in main conversation.
-    /// Full text is preserved in artifacts and available via get_artifact tool.
-    private func buildExtractedContentMessage(artifacts: [JSON]) -> String {
+    /// Phase 1 & 3: Include full extracted text (needed for skeleton timeline, finalization)
+    /// Phase 2: Only summaries to prevent token accumulation (many documents processed)
+    private func buildExtractedContentMessage(artifacts: [JSON], phase: InterviewPhase) -> String {
+        let sendFullContent = phase != .phase2DeepDive
         var messageText = "I've uploaded \(artifacts.count == 1 ? "a document" : "\(artifacts.count) documents"):\n\n"
 
         for (index, artifact) in artifacts.enumerated() {
             let filename = artifact["filename"].stringValue
             let artifactId = artifact["id"].stringValue
+            let extractedText = artifact["extracted_text"].stringValue
             let summary = artifact["summary"].string ?? "Summary not available"
             let docType = artifact["metadata"]["document_type"].string
             let sizeBytes = artifact["size_bytes"].int ?? 0
@@ -284,21 +287,31 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
                 messageText += "- **Type**: \(docType)\n"
             }
             messageText += "- **Size**: \(sizeKB) KB\n\n"
-            messageText += "**Summary**:\n\(summary)\n\n"
+
+            if sendFullContent && !extractedText.isEmpty {
+                // Phase 1 & 3: Include full extracted text
+                messageText += "**Extracted Content**:\n\(extractedText)\n\n"
+            } else {
+                // Phase 2: Only summary to save tokens
+                messageText += "**Summary**:\n\(summary)\n\n"
+            }
         }
 
-        messageText += """
-            ---
-            Full document text is preserved and available via `get_artifact(artifact_id)` when needed \
-            for detailed analysis or knowledge card generation.
-            """
+        if !sendFullContent {
+            messageText += """
+                ---
+                Full document text is preserved and available via `get_artifact(artifact_id)` when needed \
+                for detailed analysis or knowledge card generation.
+                """
+        }
 
         return messageText
     }
 
     private func sendSingleArtifact(_ record: JSON) async {
-        // Use the batch helper with a single artifact
-        let messageText = buildExtractedContentMessage(artifacts: [record])
+        // Use the batch helper with a single artifact (phase-aware)
+        let currentPhase = await stateCoordinator.phase
+        let messageText = buildExtractedContentMessage(artifacts: [record], phase: currentPhase)
         let artifactId = record["id"].stringValue
 
         // Check if there's a pending UI tool call (from get_user_upload)
