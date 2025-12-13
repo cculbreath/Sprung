@@ -549,11 +549,15 @@ actor LLMMessenger: OnboardingEventEmitter {
 
         let modelId = await stateCoordinator.getCurrentModelId()
         let useFlexTier = await stateCoordinator.getUseFlexProcessing()
+
+        // Build WorkingMemory for instructions (non-persistent context)
+        let workingMemory = await buildWorkingMemory()
+
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(modelId),
             conversation: nil,
-            instructions: nil,  // No instructions - using developer messages for persistent behavior
+            instructions: workingMemory,  // WorkingMemory snapshot (non-persistent, high priority)
             previousResponseId: previousResponseId,
             store: true,
             temperature: 1.0,
@@ -587,7 +591,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             phase: currentPhase.rawValue,
             substate: nil,
             toolsSentCount: tools.count,
-            instructionsChars: 0,  // instructions not used currently
+            instructionsChars: workingMemory?.count ?? 0,
             bundledDevMsgsCount: bundledDeveloperMessages.count,
             inputTokens: nil,  // Will be populated after response
             outputTokens: nil,
@@ -642,11 +646,15 @@ actor LLMMessenger: OnboardingEventEmitter {
 
         let modelId = await stateCoordinator.getCurrentModelId()
         let useFlexTier = await stateCoordinator.getUseFlexProcessing()
+
+        // Build WorkingMemory for instructions (non-persistent context)
+        let workingMemory = await buildWorkingMemory()
+
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(modelId),
             conversation: nil,
-            instructions: nil,  // Base developer message sent in first request, persists via previous_response_id
+            instructions: workingMemory,  // WorkingMemory snapshot (non-persistent, high priority)
             previousResponseId: previousResponseId,
             store: true,
             temperature: 1.0,
@@ -705,7 +713,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             phase: currentPhase.rawValue,
             substate: nil,
             toolsSentCount: tools.count,
-            instructionsChars: 0,
+            instructionsChars: workingMemory?.count ?? 0,
             bundledDevMsgsCount: 0,
             inputTokens: nil,
             outputTokens: nil,
@@ -737,11 +745,15 @@ actor LLMMessenger: OnboardingEventEmitter {
         let modelId = await stateCoordinator.getCurrentModelId()
         let useFlexTier = await stateCoordinator.getUseFlexProcessing()
         let previousResponseId = await contextAssembler.getPreviousResponseId()
+
+        // Build WorkingMemory for instructions (non-persistent context)
+        let workingMemory = await buildWorkingMemory()
+
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(modelId),
             conversation: nil,
-            instructions: nil,  // Base developer message already sent on first request, persists via previous_response_id
+            instructions: workingMemory,  // WorkingMemory snapshot (non-persistent, high priority)
             previousResponseId: previousResponseId,
             store: true,
             temperature: 1.0,
@@ -773,7 +785,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             phase: currentPhase.rawValue,
             substate: nil,
             toolsSentCount: tools.count,
-            instructionsChars: 0,
+            instructionsChars: workingMemory?.count ?? 0,
             bundledDevMsgsCount: 0,
             inputTokens: nil,
             outputTokens: nil,
@@ -794,11 +806,15 @@ actor LLMMessenger: OnboardingEventEmitter {
         let modelId = await stateCoordinator.getCurrentModelId()
         let useFlexTier = await stateCoordinator.getUseFlexProcessing()
         let previousResponseId = await contextAssembler.getPreviousResponseId()
+
+        // Build WorkingMemory for instructions (non-persistent context)
+        let workingMemory = await buildWorkingMemory()
+
         var parameters = ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(modelId),
             conversation: nil,
-            instructions: nil,
+            instructions: workingMemory,  // WorkingMemory snapshot (non-persistent, high priority)
             previousResponseId: previousResponseId,
             store: true,
             temperature: 1.0,
@@ -829,7 +845,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             phase: currentPhase.rawValue,
             substate: nil,
             toolsSentCount: tools.count,
-            instructionsChars: 0,
+            instructionsChars: workingMemory?.count ?? 0,
             bundledDevMsgsCount: 0,
             inputTokens: nil,
             outputTokens: nil,
@@ -876,6 +892,73 @@ actor LLMMessenger: OnboardingEventEmitter {
 
         return schemas
     }
+
+    // MARK: - Working Memory
+
+    /// Build a compact WorkingMemory snapshot for the `instructions` parameter
+    /// The `instructions` parameter doesn't persist in the PRI thread, making it
+    /// ideal for providing rich context on every turn without growing the thread.
+    private func buildWorkingMemory() async -> String? {
+        let phase = await stateCoordinator.phase
+
+        var parts: [String] = []
+
+        // Phase header
+        parts.append("## Working Memory (Phase: \(phase.shortName))")
+
+        // Objectives status
+        let objectives = await stateCoordinator.getAllObjectives()
+        if !objectives.isEmpty {
+            let statusList = objectives.prefix(8).map { "\($0.id): \($0.status.rawValue)" }
+            parts.append("Objectives: \(statusList.joined(separator: ", "))")
+        }
+
+        // Timeline summary
+        let artifacts = await stateCoordinator.artifacts
+        if let entries = artifacts.skeletonTimeline?["experiences"].array, !entries.isEmpty {
+            let timelineSummary = entries.prefix(6).compactMap { entry -> String? in
+                guard let org = entry["organization"].string,
+                      let title = entry["title"].string else { return nil }
+                let dates = [entry["start"].string, entry["end"].string]
+                    .compactMap { $0 }
+                    .joined(separator: "-")
+                return "\(title) @ \(org)" + (dates.isEmpty ? "" : " (\(dates))")
+            }
+            if !timelineSummary.isEmpty {
+                parts.append("Timeline (\(entries.count) entries): \(timelineSummary.joined(separator: "; "))")
+            }
+        }
+
+        // Artifact summary
+        let artifactSummaries = await stateCoordinator.listArtifactSummaries()
+        if !artifactSummaries.isEmpty {
+            let artifactSummary = artifactSummaries.prefix(6).compactMap { record -> String? in
+                guard let filename = record["filename"].string else { return nil }
+                let desc = record["brief_description"].string ?? record["summary"].string ?? ""
+                let shortDesc = desc.isEmpty ? "" : " - \(String(desc.prefix(40)))"
+                return filename + shortDesc
+            }
+            if !artifactSummary.isEmpty {
+                parts.append("Artifacts (\(artifactSummaries.count)): \(artifactSummary.joined(separator: "; "))")
+            }
+        }
+
+        // Only return if we have meaningful content
+        guard parts.count > 1 else { return nil }
+
+        let memory = parts.joined(separator: "\n")
+
+        // Enforce max size (target ~2KB)
+        let maxChars = 2500
+        if memory.count > maxChars {
+            Logger.warning("⚠️ WorkingMemory exceeds target (\(memory.count) chars)", category: .ai)
+            return String(memory.prefix(maxChars))
+        }
+
+        Logger.debug("📋 WorkingMemory: \(memory.count) chars", category: .ai)
+        return memory
+    }
+
     func activate() {
         isActive = true
         Logger.info("✅ LLMMessenger activated", category: .ai)
