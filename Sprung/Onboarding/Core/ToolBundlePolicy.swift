@@ -346,25 +346,32 @@ struct ToolBundlePolicy {
         toolChoice: ToolChoiceMode? = nil
     ) -> Set<String> {
         // Handle toolChoice overrides
+        // CRITICAL: When forcing a specific tool, that tool MUST be included regardless of
+        // whether allowedTools is populated. On the first request, allowedTools may be empty
+        // because the event system hasn't processed yet. The OpenAI API requires the forced
+        // tool to be present in the tools array.
         if let choice = toolChoice {
             switch choice {
             case .none:
                 return []
             case .functionTool(let ft):
-                var bundle = safeEscapeTools
-                bundle.insert(ft.name)
+                // Always include the forced tool - this is required by OpenAI API
+                var bundle: Set<String> = [ft.name]
+                // Add safe escape tools that are in allowedTools
+                bundle.formUnion(safeEscapeTools.intersection(allowedTools))
                 // Include artifact access in Phase 2-3 even when forcing a tool
                 if subphase.phase != .phase1CoreFacts {
-                    bundle.formUnion(artifactAccessTools)
+                    bundle.formUnion(artifactAccessTools.intersection(allowedTools))
                 }
-                return bundle.intersection(allowedTools)
+                return bundle
             case .customTool(let ct):
-                var bundle = safeEscapeTools
-                bundle.insert(ct.name)
+                // Always include the forced tool - this is required by OpenAI API
+                var bundle: Set<String> = [ct.name]
+                bundle.formUnion(safeEscapeTools.intersection(allowedTools))
                 if subphase.phase != .phase1CoreFacts {
-                    bundle.formUnion(artifactAccessTools)
+                    bundle.formUnion(artifactAccessTools.intersection(allowedTools))
                 }
-                return bundle.intersection(allowedTools)
+                return bundle
             default:
                 break
             }
