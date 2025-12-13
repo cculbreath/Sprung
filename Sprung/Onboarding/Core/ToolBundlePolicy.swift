@@ -54,6 +54,10 @@ struct ToolBundlePolicy {
             OnboardingToolName.getArtifact.rawValue
         ],
         .p1_timelineEditing: [
+            // Resume upload is offered at the START of timeline editing - include upload tools
+            OnboardingToolName.getUserUpload.rawValue,
+            OnboardingToolName.cancelUserUpload.rawValue,
+            // Timeline card management
             OnboardingToolName.createTimelineCard.rawValue,
             OnboardingToolName.updateTimelineCard.rawValue,
             OnboardingToolName.deleteTimelineCard.rawValue,
