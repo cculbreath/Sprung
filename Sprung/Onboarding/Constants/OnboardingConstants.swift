@@ -41,6 +41,7 @@ enum OnboardingToolName: String, CaseIterable {
     case configureEnabledSections = "configure_enabled_sections"
     case listArtifacts = "list_artifacts"
     case getArtifact = "get_artifact"
+    case getContextPack = "get_context_pack"
     case requestRawFile = "request_raw_file"
     case nextPhase = "next_phase"
     // Phase 2 Tools

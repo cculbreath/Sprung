@@ -44,6 +44,7 @@ final class OnboardingToolRegistrar {
         toolRegistry.register(SubmitForValidationTool(coordinator: coordinator))
         toolRegistry.register(ListArtifactsTool(coordinator: coordinator))
         toolRegistry.register(GetArtifactRecordTool(coordinator: coordinator))
+        toolRegistry.register(GetContextPackTool(coordinator: coordinator))
         toolRegistry.register(RequestRawArtifactFileTool(coordinator: coordinator))
         toolRegistry.register(UpdateArtifactMetadataTool(coordinator: coordinator))
         toolRegistry.register(PersistDataTool(dataStore: dataStore, eventBus: eventBus))

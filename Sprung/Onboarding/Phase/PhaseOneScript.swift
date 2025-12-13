@@ -31,6 +31,7 @@ struct PhaseOneScript: PhaseScript {
         .configureEnabledSections,
         .listArtifacts,
         .getArtifact,
+        .getContextPack,
         .requestRawFile,
         .nextPhase
     ])

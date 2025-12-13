@@ -25,6 +25,7 @@ struct PhaseTwoScript: PhaseScript {
         .scanGitRepo,
         .listArtifacts,
         .getArtifact,
+        .getContextPack,
         .requestRawFile,
         // Note: requestEvidence tool removed - users upload via dropzone instead
 

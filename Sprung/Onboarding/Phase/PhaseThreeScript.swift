@@ -22,6 +22,7 @@ struct PhaseThreeScript: PhaseScript {
         .setObjectiveStatus,
         .listArtifacts,
         .getArtifact,
+        .getContextPack,
         .requestRawFile,
         .nextPhase
     ])

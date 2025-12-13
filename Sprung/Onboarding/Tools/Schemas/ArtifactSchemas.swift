@@ -37,9 +37,13 @@ enum ArtifactSchemas {
     static var getArtifact: JSONSchema {
         JSONSchema(
             type: .object,
-            description: "Retrieve full artifact with extracted_text content. Use artifact_id from list_artifacts.",
+            description: "Retrieve artifact content. Use max_chars to limit extracted_text size. Returns {artifact: {...}}.",
             properties: [
-                "artifact_id": artifactId
+                "artifact_id": artifactId,
+                "max_chars": JSONSchema(
+                    type: .integer,
+                    description: "Max chars for extracted_text (default: unlimited). Use 2000-5000 for bounded retrieval."
+                )
             ],
             required: ["artifact_id"],
             additionalProperties: false
@@ -50,8 +54,21 @@ enum ArtifactSchemas {
     static var listArtifacts: JSONSchema {
         JSONSchema(
             type: .object,
-            description: "List all artifacts with summary metadata (id, filename, content_type). Use get_artifact for full content.",
-            properties: [:],
+            description: "List artifacts with pagination. Default returns minimal fields. Use get_artifact for content.",
+            properties: [
+                "limit": JSONSchema(
+                    type: .integer,
+                    description: "Max items to return (default: 10, max: 50)"
+                ),
+                "offset": JSONSchema(
+                    type: .integer,
+                    description: "Skip first N items for pagination (default: 0)"
+                ),
+                "include_summary": JSONSchema(
+                    type: .boolean,
+                    description: "Include brief description/summary (default: false to reduce tokens)"
+                )
+            ],
             required: [],
             additionalProperties: false
         )
@@ -61,12 +78,37 @@ enum ArtifactSchemas {
     static var updateArtifactMetadata: JSONSchema {
         JSONSchema(
             type: .object,
-            description: "Update metadata fields on an artifact record. Performs field-level merge (adds/updates specified fields without removing others).",
+            description: "Update metadata fields on an artifact record. Performs field-level merge.",
             properties: [
                 "artifact_id": artifactId,
                 "metadata_updates": metadataUpdates
             ],
             required: ["artifact_id", "metadata_updates"],
+            additionalProperties: false
+        )
+    }
+
+    /// Complete schema for get_context_pack tool
+    static var getContextPack: JSONSchema {
+        JSONSchema(
+            type: .object,
+            description: "Get curated context bundle for a purpose. Single call instead of multiple retrievals.",
+            properties: [
+                "purpose": JSONSchema(
+                    type: .string,
+                    description: "Context purpose: timeline_review, artifact_overview, card_context, gap_analysis",
+                    enum: ["timeline_review", "artifact_overview", "card_context", "gap_analysis"]
+                ),
+                "max_chars": JSONSchema(
+                    type: .integer,
+                    description: "Max total chars for pack (default: 3000). Includes all items."
+                ),
+                "card_id": JSONSchema(
+                    type: .string,
+                    description: "For card_context: specific card ID to get context for"
+                )
+            ],
+            required: ["purpose"],
             additionalProperties: false
         )
     }
