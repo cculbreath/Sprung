@@ -17,19 +17,7 @@ struct DispatchKCAgentsTool: InterviewTool {
     private static let schema: JSONSchema = {
         JSONSchema(
             type: .object,
-            description: """
-                Dispatch parallel agents to generate knowledge cards. Each agent runs in an isolated
-                thread with access to artifact content. Returns completed cards for validation.
-
-                IMPORTANT: Call this after propose_card_assignments when user is ready to generate cards.
-
-                The 'proposals' parameter is optional - if omitted, the tool will use proposals stored
-                from the most recent propose_card_assignments call.
-
-                Each proposal can optionally include 'chat_excerpts' — relevant quotes from the user's
-                conversation that aren't in uploaded documents. Include these when the user shared
-                important information verbally (e.g., clarifying their role, achievements not in docs).
-                """,
+            description: "Generate knowledge cards via parallel agents. Uses stored proposals from propose_card_assignments. Optional 'proposals' parameter overrides.",
             properties: [
                 "proposals": KnowledgeCardSchemas.proposalsArray
             ],
@@ -149,55 +137,9 @@ struct DispatchKCAgentsTool: InterviewTool {
 
     private func buildInstructions(result: KCDispatchResult) -> String {
         if result.failureCount == 0 {
-            return """
-                All \(result.successCount) cards generated successfully.
-
-                ⚠️ REQUIRED ACTION: You MUST now persist each card.
-
-                Each card in the 'cards' array is PRE-FORMATTED for submit_knowledge_card.
-                Pass the card data DIRECTLY - it already contains the 'card' and 'summary' fields.
-
-                For EACH card in the 'cards' array (all \(result.successCount) of them):
-                1. Call `submit_knowledge_card` passing the card object directly:
-                   ```
-                   submit_knowledge_card({
-                     "card": cards[i].card,
-                     "summary": cards[i].summary
-                   })
-                   ```
-                2. Wait for user confirmation
-                3. Repeat for the next card
-
-                DO NOT skip any cards. DO NOT call next_phase until ALL cards are persisted.
-
-                After all \(result.successCount) cards are persisted, call `next_phase` to proceed.
-                """
+            return "All \(result.successCount) cards generated. Call submit_knowledge_card for each card in 'cards' array."
         } else {
-            return """
-                \(result.successCount) cards succeeded, \(result.failureCount) failed.
-
-                ⚠️ REQUIRED ACTION: You MUST persist all successful cards.
-
-                Each card in the 'cards' array is PRE-FORMATTED for submit_knowledge_card.
-                Pass the card data DIRECTLY - it already contains the 'card' and 'summary' fields.
-
-                For EACH successful card in the 'cards' array:
-                1. Call `submit_knowledge_card` passing the card object directly:
-                   ```
-                   submit_knowledge_card({
-                     "card": cards[i].card,
-                     "summary": cards[i].summary
-                   })
-                   ```
-                2. Wait for user confirmation
-                3. Repeat for the next card
-
-                For failed cards (see 'failures' array):
-                - You may retry with dispatch_kc_agents using just the failed proposals
-                - Or skip if non-critical and inform the user
-
-                DO NOT call next_phase until you've handled all cards.
-                """
+            return "\(result.successCount) succeeded, \(result.failureCount) failed. Persist successful cards via submit_knowledge_card."
         }
     }
 }

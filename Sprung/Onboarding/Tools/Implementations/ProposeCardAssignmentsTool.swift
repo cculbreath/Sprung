@@ -5,42 +5,30 @@
 //  Tool for the main coordinator to propose card-to-document assignments.
 //  Maps timeline entries to artifact sources and identifies documentation gaps.
 //
+//  Supports auto-assignment mode to minimize LLM data construction.
+//  Part of Milestone 6: ID-based updates
+//
 
 import Foundation
 import SwiftyJSON
 
 /// Tool that allows the coordinator to map documents to knowledge cards.
-/// The coordinator reviews artifact summaries and proposes which documents
-/// should inform which knowledge cards, while identifying documentation gaps.
+/// Supports auto-assignment mode for efficient ID-based workflows.
 struct ProposeCardAssignmentsTool: InterviewTool {
     private static let schema: JSONSchema = {
         JSONSchema(
             type: .object,
-            description: """
-                Propose assignments mapping artifacts to knowledge cards.
-
-                WHEN TO CALL:
-                After reviewing artifact summaries (from start_phase_two), call this tool to:
-                1. Assign artifacts to each planned knowledge card
-                2. Identify cards that lack sufficient documentation (gaps)
-
-                WHAT HAPPENS:
-                - Assignments are recorded for use by dispatch_kc_agents
-                - Gaps trigger a prompt for the user to upload additional documents
-                - Returns summary of assignments and next steps
-
-                WORKFLOW:
-                1. start_phase_two → receive timeline + artifact summaries
-                2. propose_card_assignments → map docs to cards, identify gaps
-                3. (optional) User uploads additional docs for gaps
-                4. dispatch_kc_agents → parallel card generation
-                """,
+            description: "Map artifacts to knowledge cards. Use auto_assign=true for system auto-assignment, or manual mode for adjustments.",
             properties: [
+                "auto_assign": JSONSchema(
+                    type: .boolean,
+                    description: "If true, system auto-assigns based on artifact metadata. Recommended for initial assignment."
+                ),
                 "assignments": KnowledgeCardSchemas.assignmentsArray,
                 "gaps": KnowledgeCardSchemas.gapsArray,
                 "summary": KnowledgeCardSchemas.proposalSummary
             ],
-            required: ["assignments", "summary"],
+            required: [],
             additionalProperties: false
         )
     }()
@@ -60,11 +48,19 @@ struct ProposeCardAssignmentsTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
+        let autoAssign = params["auto_assign"].bool ?? false
+
+        // Auto-assignment mode: system generates assignments from state
+        if autoAssign {
+            return try await executeAutoAssign()
+        }
+
+        // Manual mode: use provided assignments
         let assignmentsJSON = params["assignments"].arrayValue
         let gapsJSON = params["gaps"].arrayValue
         _ = params["summary"].stringValue  // Summary included in response
 
-        Logger.info("📋 ProposeCardAssignmentsTool: \(assignmentsJSON.count) assignments, \(gapsJSON.count) gaps", category: .ai)
+        Logger.info("📋 ProposeCardAssignmentsTool: \(assignmentsJSON.count) assignments, \(gapsJSON.count) gaps (manual mode)", category: .ai)
 
         // Validate assignments have at least one artifact
         var validAssignments: [JSON] = []
@@ -139,6 +135,145 @@ struct ProposeCardAssignmentsTool: InterviewTool {
         return .immediate(response)
     }
 
+    // MARK: - Auto-Assignment Mode
+
+    /// Execute auto-assignment: system matches artifacts to timeline entries
+    /// Returns compact summary instead of requiring LLM to construct arrays
+    private func executeAutoAssign() async throws -> ToolResult {
+        Logger.info("📋 ProposeCardAssignmentsTool: Auto-assignment mode", category: .ai)
+
+        // Get timeline entries
+        let artifacts = await coordinator.state.artifacts
+        guard let timeline = artifacts.skeletonTimeline,
+              let entries = timeline["experiences"].array, !entries.isEmpty else {
+            var error = JSON()
+            error["status"].string = "error"
+            error["message"].string = "No timeline entries found. Complete Phase 1 first."
+            return .immediate(error)
+        }
+
+        // Get artifact summaries
+        let summaries = await coordinator.listArtifactSummaries()
+
+        // Auto-generate card proposals from timeline entries
+        var proposals = JSON([])
+        var gaps: [JSON] = []
+        var totalArtifactsAssigned = 0
+
+        for entry in entries {
+            guard let entryId = entry["id"].string else { continue }
+
+            let cardId = UUID().uuidString
+            let org = entry["organization"].string ?? "Unknown"
+            let title = entry["title"].string ?? "Position"
+            let cardTitle = "\(title) at \(org)"
+
+            // Find matching artifacts by organization name or entry ID reference
+            let matchingArtifactIds = findMatchingArtifacts(
+                for: entry,
+                from: summaries
+            )
+
+            var proposal = JSON()
+            proposal["card_id"].string = cardId
+            proposal["card_type"].string = "job"
+            proposal["title"].string = cardTitle
+            proposal["timeline_entry_id"].string = entryId
+            proposal["assigned_artifact_ids"].arrayObject = matchingArtifactIds.map { $0 as Any }
+
+            proposals.arrayObject?.append(proposal.dictionaryObject ?? [:])
+            totalArtifactsAssigned += matchingArtifactIds.count
+
+            // Track gaps (cards with no artifacts)
+            if matchingArtifactIds.isEmpty {
+                var gap = JSON()
+                gap["card_id"].string = cardId
+                gap["card_title"].string = cardTitle
+                gap["recommended_doc_types"].arrayObject = ["resume", "performance review", "project docs"]
+                gap["example_prompt"].string = "Do you have any documents from your time at \(org)?"
+                gaps.append(gap)
+            }
+        }
+
+        // Store proposals for dispatch_kc_agents
+        await coordinator.state.storeCardProposals(proposals)
+
+        // Gate dispatch_kc_agents until user approves
+        await coordinator.state.excludeTool(OnboardingToolName.dispatchKCAgents.rawValue)
+
+        // Emit event for UI
+        await coordinator.eventBus.publish(.cardAssignmentsProposed(
+            assignmentCount: proposals.count,
+            gapCount: gaps.count
+        ))
+
+        // Build compact response (no full arrays)
+        var response = JSON()
+        response["status"].string = "completed"
+        response["mode"].string = "auto"
+        response["card_count"].int = proposals.count
+        response["total_artifacts_assigned"].int = totalArtifactsAssigned
+        response["gap_count"].int = gaps.count
+        response["has_gaps"].bool = !gaps.isEmpty
+
+        // Compact card index (IDs only)
+        var cardIndex: [[String: Any]] = []
+        for proposal in proposals.arrayValue {
+            cardIndex.append([
+                "card_id": proposal["card_id"].stringValue,
+                "title": proposal["title"].stringValue,
+                "artifact_count": proposal["assigned_artifact_ids"].arrayValue.count
+            ])
+        }
+        response["card_index"].arrayObject = cardIndex
+
+        // Gap summaries if any
+        if !gaps.isEmpty {
+            response["gap_titles"].arrayObject = gaps.map { $0["card_title"].stringValue as Any }
+        }
+
+        response["requires_user_validation"].bool = true
+        response["next_action"].string = gaps.isEmpty
+            ? "Present summary to user. When approved, call dispatch_kc_agents with no arguments."
+            : "Present summary and gaps to user. May need additional docs before dispatch."
+
+        return .immediate(response)
+    }
+
+    /// Find artifacts that match a timeline entry based on metadata
+    private func findMatchingArtifacts(for entry: JSON, from summaries: [JSON]) -> [String] {
+        let org = entry["organization"].string?.lowercased() ?? ""
+        let title = entry["title"].string?.lowercased() ?? ""
+        let entryId = entry["id"].string ?? ""
+
+        var matchingIds: [String] = []
+
+        for summary in summaries {
+            guard let artifactId = summary["id"].string else { continue }
+
+            // Check if artifact references this entry
+            let targetObjectives = summary["metadata"]["target_phase_objectives"].arrayValue
+            if targetObjectives.contains(where: { $0.stringValue == entryId }) {
+                matchingIds.append(artifactId)
+                continue
+            }
+
+            // Check filename or description for org/title match
+            let filename = summary["filename"].string?.lowercased() ?? ""
+            let desc = summary["brief_description"].string?.lowercased() ?? summary["summary"].string?.lowercased() ?? ""
+
+            if !org.isEmpty && (filename.contains(org) || desc.contains(org)) {
+                matchingIds.append(artifactId)
+            } else if !title.isEmpty && (filename.contains(title) || desc.contains(title)) {
+                matchingIds.append(artifactId)
+            }
+        }
+
+        return matchingIds
+    }
+
+    // MARK: - UI Messages
+
     private func buildValidationMessage(
         assignmentCount: Int,
         gapCount: Int,
@@ -171,31 +306,9 @@ struct ProposeCardAssignmentsTool: InterviewTool {
 
     private func buildNextActionInstructions(hasGaps: Bool) -> String {
         if hasGaps {
-            return """
-                ⚠️ USER VALIDATION REQUIRED before dispatch_kc_agents.
-
-                1. Present the assignments and gaps to the user using the validation_message
-                2. Use the structured gap data to make SPECIFIC document requests
-                3. WAIT for user to either:
-                   - Upload additional documents (then call propose_card_assignments again)
-                   - Request changes to the plan (modify and call propose_card_assignments again)
-                   - Confirm they're ready to proceed
-                4. DO NOT call dispatch_kc_agents until user explicitly approves
-
-                The user may say "generate cards", "looks good", "proceed", or click a Generate button.
-                """
+            return "Present gaps to user. Wait for approval before dispatch_kc_agents."
         } else {
-            return """
-                ✅ All cards have document assignments.
-
-                Present the assignments to the user for review. They may want to:
-                - Adjust which documents inform which cards
-                - Add or remove cards from the plan
-                - Upload additional documents
-
-                WAIT for user confirmation before calling dispatch_kc_agents.
-                The user may say "generate cards", "looks good", "proceed", or click a Generate button.
-                """
+            return "Present summary to user. Wait for approval before dispatch_kc_agents."
         }
     }
 }
