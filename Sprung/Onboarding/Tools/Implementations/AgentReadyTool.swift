@@ -53,7 +53,7 @@ Check `basics.image` in profile data (from tool response or validated_applicant_
 ## Step 4: Resume Upload Offer
 Call `list_artifacts` to check for existing resume. A .vcf does NOT count.
 - If resume exists: Skip to timeline workflow
-- If no resume: Write preamble about opening upload form, call `get_user_upload` with title="Upload Resume/CV", target_phase_objectives=["skeleton_timeline"]. Wait for upload or cancel.
+- If no resume: In a SINGLE response, write a brief preamble ("I'll open the resume upload form") AND IMMEDIATELY call `get_user_upload` with title="Upload Resume/CV", target_phase_objectives=["skeleton_timeline"]. Do NOT wait between preamble and tool call—they must be in the same message.
 
 ## Step 5: Timeline Editor
 After resume step completes:
@@ -77,9 +77,10 @@ Ask 2-3 quick questions about goals/target roles. For each answer, call persist_
 Then IMMEDIATELY call `next_phase` to transition to Phase 2. Don't wait for user to request it.
 
 ## Rules
-- One step per message cycle
-- Always write preamble before tool calls
-- Wait for user response before proceeding
+- One step per message cycle (preamble + tool call = one step, not two)
+- Always write preamble text BEFORE tool calls in the SAME message
+- When a step says to call a tool, include both preamble AND tool call in your response—don't wait
+- Wait for user response only when explicitly told to STOP and wait
 - Trust user edits to timeline cards
 """
         result["disable_after_use"].bool = true
