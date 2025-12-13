@@ -124,6 +124,58 @@ enum OnboardingDataType: String, CaseIterable {
     case experienceDefaults = "experience_defaults"
     case enabledSections = "enabled_sections"
 }
+
+// MARK: - Interview Subphases
+/// Granular subphases for precise tool bundling.
+/// Each subphase maps to a specific set of tools the model needs.
+enum InterviewSubphase: String, CaseIterable, Codable {
+    // MARK: Phase 1: Core Facts
+    case p1_profileIntake = "p1_profile_intake"           // Collecting contact info
+    case p1_photoCollection = "p1_photo_collection"       // Offering/collecting profile photo
+    case p1_resumeUpload = "p1_resume_upload"             // Offering resume upload before timeline
+    case p1_timelineEditing = "p1_timeline_editing"       // Building skeleton timeline
+    case p1_timelineValidation = "p1_timeline_validation" // Reviewing timeline before submission
+    case p1_sectionConfig = "p1_section_config"           // Configuring enabled sections
+    case p1_dossierSeed = "p1_dossier_seed"               // Asking 2-3 questions about goals
+    case p1_phaseTransition = "p1_phase_transition"       // Ready to advance to Phase 2
+
+    // MARK: Phase 2: Deep Dive
+    case p2_bootstrap = "p2_bootstrap"                     // Calling start_phase_two
+    case p2_documentCollection = "p2_document_collection" // Dropzone open, collecting documents
+    case p2_cardAssignment = "p2_card_assignment"         // Proposing card-to-artifact assignments
+    case p2_userApprovalWait = "p2_user_approval_wait"   // Waiting for user approval
+    case p2_kcGeneration = "p2_kc_generation"             // Dispatching KC agents
+    case p2_cardSubmission = "p2_card_submission"         // Submitting generated cards
+    case p2_phaseTransition = "p2_phase_transition"       // Ready to advance to Phase 3
+
+    // MARK: Phase 3: Writing Corpus
+    case p3_bootstrap = "p3_bootstrap"                     // Calling start_phase_three
+    case p3_writingCollection = "p3_writing_collection"   // Collecting writing samples
+    case p3_sampleReview = "p3_sample_review"             // Evaluating sample quality
+    case p3_dossierCompilation = "p3_dossier_compilation" // Compiling Phase 1-3 assets
+    case p3_dossierValidation = "p3_dossier_validation"   // User reviewing dossier
+    case p3_dataSubmission = "p3_data_submission"         // Submitting final data
+    case p3_interviewComplete = "p3_interview_complete"   // Interview finished
+
+    /// The parent phase for this subphase
+    var phase: InterviewPhase {
+        switch self {
+        case .p1_profileIntake, .p1_photoCollection, .p1_resumeUpload,
+             .p1_timelineEditing, .p1_timelineValidation, .p1_sectionConfig,
+             .p1_dossierSeed, .p1_phaseTransition:
+            return .phase1CoreFacts
+        case .p2_bootstrap, .p2_documentCollection, .p2_cardAssignment,
+             .p2_userApprovalWait, .p2_kcGeneration, .p2_cardSubmission,
+             .p2_phaseTransition:
+            return .phase2DeepDive
+        case .p3_bootstrap, .p3_writingCollection, .p3_sampleReview,
+             .p3_dossierCompilation, .p3_dossierValidation, .p3_dataSubmission,
+             .p3_interviewComplete:
+            return .phase3WritingCorpus
+        }
+    }
+}
+
 // MARK: - Convenience Extensions
 extension OnboardingToolName {
     /// Convert an array of tool name enums to their raw string values.
