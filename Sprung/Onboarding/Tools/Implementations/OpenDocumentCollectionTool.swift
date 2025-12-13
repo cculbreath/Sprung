@@ -3,13 +3,13 @@
 //  Sprung
 //
 //  Tool that opens the document collection UI in Phase 2.
-//  Part of the mandatory tool chain: start_phase_two → display_knowledge_card_plan → open_document_collection
+//  Part of the mandatory tool chain: start_phase_two → open_document_collection
 //
 import Foundation
 import SwiftyJSON
 
 /// Tool that opens the document collection UI for Phase 2 evidence gathering.
-/// Displays the KC plan, large dropzone, and "Assess Completeness" button.
+/// Displays the KC plan, large dropzone, and "Done with Uploads" button.
 struct OpenDocumentCollectionTool: InterviewTool {
     private static let schema: JSONSchema = {
         JSONSchema(
@@ -18,23 +18,23 @@ struct OpenDocumentCollectionTool: InterviewTool {
                 Open the document collection UI for Phase 2 evidence gathering.
 
                 MANDATORY TOOL CHAIN:
-                1. start_phase_two → get timeline + existing artifacts
-                2. display_knowledge_card_plan → show what cards will be generated
-                3. open_document_collection (THIS TOOL) → show dropzone for uploads
+                1. start_phase_two → get timeline entries
+                2. open_document_collection (THIS TOOL) → show dropzone for uploads
 
                 This tool displays:
-                - List of planned knowledge cards
                 - Large dropzone for file uploads
                 - Git repository selector
-                - "Assess Document Completeness" button
+                - "Done with Uploads" button
 
                 After calling this tool, WAIT for the user to:
                 - Upload documents (each file becomes a separate artifact)
                 - Select git repositories for analysis
-                - Click "Assess Completeness" when done
+                - Click "Done with Uploads" when finished
 
-                The user's click on "Assess Completeness" sends a message to continue the conversation.
-                You should then call propose_card_assignments to map artifacts to cards.
+                When user clicks "Done with Uploads", you receive a chat message with artifact summaries.
+                Before calling propose_card_assignments, you may optionally ask if they have additional
+                documents for specific gaps (e.g., "Do you have any performance reviews or project docs
+                from your time at Company X?"). Then call propose_card_assignments.
                 """,
             properties: [
                 "message": JSONSchema(
@@ -88,11 +88,19 @@ struct OpenDocumentCollectionTool: InterviewTool {
             - Drag and drop files (PDFs, Word docs, images, text files)
             - Click "Browse Files" to select files
             - Click "Add Git Repo" to analyze code repositories
-            - Click "Assess Document Completeness" when done uploading
+            - Click "Done with Uploads" when finished
 
-            WAIT for the user to click "Assess Document Completeness" before proceeding.
-            When they do, you will receive a chat message. Then call `propose_card_assignments`
-            to map the uploaded artifacts to knowledge cards.
+            WAIT for the user to click "Done with Uploads" before proceeding.
+            When they do, you will receive a chat message with artifact summaries.
+
+            BEFORE calling `propose_card_assignments`, you may OPTIONALLY ask about gaps:
+            - Review what they uploaded vs. their timeline positions
+            - If significant gaps exist (e.g., a 4-year job with no supporting docs), ask:
+              "Do you have any performance reviews or project documentation from your time at [Company]?"
+            - Suggest specific document types: reviews, job descriptions, promotion emails, project docs
+            - If coverage looks reasonable, proceed directly to propose_card_assignments
+
+            This gap check is conversational - if they say "no" or "that's all I have", proceed.
             """
 
         if let message = message {

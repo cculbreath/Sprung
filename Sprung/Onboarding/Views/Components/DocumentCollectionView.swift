@@ -245,8 +245,8 @@ struct DocumentCollectionView: View {
         VStack(spacing: 8) {
             Button(action: onAssessCompleteness) {
                 HStack {
-                    Image(systemName: "checkmark.shield.fill")
-                    Text("Assess Document Completeness")
+                    Image(systemName: "checkmark.circle.fill")
+                    Text("Done with Uploads")
                 }
                 .font(.headline)
                 .frame(maxWidth: .infinity)
@@ -255,7 +255,7 @@ struct DocumentCollectionView: View {
             .buttonStyle(.borderedProminent)
             .tint(.blue)
 
-            Text("Click when done uploading to have the AI evaluate your documents")
+            Text("Click when finished to proceed with knowledge card generation")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
