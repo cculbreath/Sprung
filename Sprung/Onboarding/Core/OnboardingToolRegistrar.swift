@@ -57,6 +57,7 @@ final class OnboardingToolRegistrar {
         toolRegistry.register(RequestEvidenceTool(coordinator: coordinator))
         toolRegistry.register(GetTimelineEntriesTool(coordinator: coordinator))
         toolRegistry.register(DisplayKnowledgeCardPlanTool(coordinator: coordinator))
+        toolRegistry.register(OpenDocumentCollectionTool(coordinator: coordinator))
         toolRegistry.register(SetCurrentKnowledgeCardTool(coordinator: coordinator, eventBus: eventBus))
         toolRegistry.register(ScanGitRepoTool(coordinator: coordinator))
         toolRegistry.register(SubmitKnowledgeCardTool(coordinator: coordinator, dataStore: dataStore, eventBus: eventBus))

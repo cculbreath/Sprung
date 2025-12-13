@@ -245,8 +245,19 @@ struct OnboardingInterviewToolPane: View {
     private var phaseSpecificInterviewContent: some View {
         switch coordinator.ui.phase {
         case .phase2DeepDive:
-            VStack(spacing: 12) {
-                PersistentUploadDropZone(
+            // Show DocumentCollectionView when active, otherwise show KC generation view
+            if coordinator.ui.isDocumentCollectionActive {
+                DocumentCollectionView(
+                    coordinator: coordinator,
+                    onAssessCompleteness: {
+                        Task {
+                            // Deactivate collection UI and send message to LLM
+                            await MainActor.run {
+                                coordinator.ui.isDocumentCollectionActive = false
+                            }
+                            await coordinator.sendChatMessage("I'm done uploading documents. Please assess the completeness of my evidence.")
+                        }
+                    },
                     onDropFiles: { urls, extractionMethod in
                         Task { await coordinator.uploadFilesDirectly(urls, extractionMethod: extractionMethod) }
                     },
@@ -255,19 +266,31 @@ struct OnboardingInterviewToolPane: View {
                         Task { await coordinator.startGitRepoAnalysis(repoURL) }
                     }
                 )
-                KnowledgeCardCollectionView(
-                    coordinator: coordinator,
-                    onGenerateCards: {
-                        Task {
-                            await coordinator.eventBus.publish(.generateCardsButtonClicked)
+            } else {
+                VStack(spacing: 12) {
+                    PersistentUploadDropZone(
+                        onDropFiles: { urls, extractionMethod in
+                            Task { await coordinator.uploadFilesDirectly(urls, extractionMethod: extractionMethod) }
+                        },
+                        onSelectFiles: { openDirectUploadPanel() },
+                        onSelectGitRepo: { repoURL in
+                            Task { await coordinator.startGitRepoAnalysis(repoURL) }
                         }
-                    },
-                    onAdvanceToNextPhase: {
-                        Task {
-                            await coordinator.requestPhaseAdvanceFromUI()
+                    )
+                    KnowledgeCardCollectionView(
+                        coordinator: coordinator,
+                        onGenerateCards: {
+                            Task {
+                                await coordinator.eventBus.publish(.generateCardsButtonClicked)
+                            }
+                        },
+                        onAdvanceToNextPhase: {
+                            Task {
+                                await coordinator.requestPhaseAdvanceFromUI()
+                            }
                         }
-                    }
-                )
+                    )
+                }
             }
         case .phase3WritingCorpus:
             WritingCorpusCollectionView(

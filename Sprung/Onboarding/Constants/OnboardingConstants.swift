@@ -47,6 +47,7 @@ enum OnboardingToolName: String, CaseIterable {
     case startPhaseTwo = "start_phase_two"
     case getTimelineEntries = "get_timeline_entries"
     case displayKnowledgeCardPlan = "display_knowledge_card_plan"
+    case openDocumentCollection = "open_document_collection"
     case setCurrentKnowledgeCard = "set_current_knowledge_card"
     case scanGitRepo = "scan_git_repo"
     case requestEvidence = "request_evidence"

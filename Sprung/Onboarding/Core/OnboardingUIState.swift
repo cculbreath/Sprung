@@ -53,6 +53,11 @@ final class OnboardingUIState {
     var knowledgeCardPlanFocus: String?
     var knowledgeCardPlanMessage: String?
 
+    // MARK: - Document Collection Phase
+    /// True when document collection UI should be displayed (Phase 2)
+    /// Set by open_document_collection tool, cleared when user clicks "Assess Completeness"
+    var isDocumentCollectionActive: Bool = false
+
     // MARK: - Multi-Agent Workflow State
     /// True when card assignments have been proposed and await user approval
     /// Set by .cardAssignmentsProposed event, cleared when dispatch begins

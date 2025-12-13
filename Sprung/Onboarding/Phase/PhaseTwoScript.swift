@@ -15,6 +15,7 @@ struct PhaseTwoScript: PhaseScript {
         // Multi-agent workflow tools (in order of use)
         .startPhaseTwo,           // Bootstrap: returns timeline + artifact summaries
         .displayKnowledgeCardPlan, // Show plan to user
+        .openDocumentCollection,  // Show dropzone + KC list (mandatory step)
         .proposeCardAssignments,  // Map artifacts to cards, identify gaps
         .dispatchKCAgents,        // Spawn parallel KC agents
         .submitKnowledgeCard,     // Persist each generated card
@@ -26,6 +27,7 @@ struct PhaseTwoScript: PhaseScript {
         .listArtifacts,
         .getArtifact,
         .requestRawFile,
+        // Note: requestEvidence tool removed - users upload via dropzone instead
 
         // User interaction
         .getUserOption,
@@ -75,30 +77,46 @@ struct PhaseTwoScript: PhaseScript {
 
         **PHASE A: Plan & Display**
         1. `start_phase_two` → receive timeline entries and artifact summaries
-        2. `display_knowledge_card_plan` → show card plan to user in UI
+        2. `display_knowledge_card_plan` → show what cards will be generated
 
-        **PHASE B: Document Assignment & User Review**
-        3. `propose_card_assignments` → map artifacts to cards, identify documentation gaps
-        4. **USER VALIDATION (CRITICAL)**: Present assignments for user review. User can:
+        **PHASE B: Document Collection (MANDATORY)**
+        3. `open_document_collection` → display the document collection UI
+           - Shows planned knowledge cards
+           - Large dropzone for file uploads
+           - Git repository selector
+           - "Assess Document Completeness" button
+        4. Write a message suggesting specific document types for gaps:
+           - Performance reviews, job descriptions, project docs
+           - Design specs, code repos, promotion emails
+           - Be SPECIFIC based on their timeline
+        5. **WAIT** for user to upload documents and click "Assess Completeness"
+           - Each file uploaded becomes a separate artifact
+           - User can upload in multiple batches
+
+        **PHASE C: Document Assignment & User Review**
+        6. After user clicks "Assess Completeness", call `propose_card_assignments`
+           - Maps artifacts to cards
+           - Identifies documentation gaps
+        7. **USER VALIDATION (CRITICAL)**: Present assignments for review. User can:
            - Redirect document assignments ("assign resume.pdf to the Tech Lead card instead")
            - Edit the card plan ("remove the skill card", "add a card for my volunteer work")
            - Upload additional documents for gaps
            - Approve and proceed ("generate cards", "looks good")
-        5. If user requests changes → modify plan and call `propose_card_assignments` again
-        6. WAIT for explicit user approval before proceeding
+        8. If user requests changes → modify plan and call `propose_card_assignments` again
+        9. WAIT for explicit user approval before proceeding
 
-        **PHASE C: Parallel Card Generation** (only after user approval)
-        7. `dispatch_kc_agents` → spawns parallel agents to generate cards
-           - Each agent reads full artifact text and generates comprehensive prose
-           - Results return as an array of completed cards
+        **PHASE D: Parallel Card Generation** (only after user approval)
+        10. `dispatch_kc_agents` → spawns parallel agents to generate cards
+            - Each agent reads full artifact text and generates comprehensive prose
+            - Results return as an array of completed cards
 
-        **PHASE D: Validation & Persistence**
-        8. For EACH card returned: call `submit_knowledge_card` to persist
-           - Review card quality before persisting
-           - All valid cards must be persisted
+        **PHASE E: Validation & Persistence**
+        11. For EACH card returned: call `submit_knowledge_card` to persist
+            - Review card quality before persisting
+            - All valid cards must be persisted
 
-        **PHASE E: Completion**
-        9. `next_phase` → advance to Phase 3
+        **PHASE F: Completion**
+        12. `next_phase` → advance to Phase 3
 
         ### What is a Knowledge Card?
         A comprehensive prose narrative (500-2000+ words) that REPLACES source documents for resume generation:
