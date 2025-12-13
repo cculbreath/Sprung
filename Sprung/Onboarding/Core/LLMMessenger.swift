@@ -466,9 +466,14 @@ actor LLMMessenger: OnboardingEventEmitter {
         }
     }
     /// Determine if parallel tool calls should be enabled based on current state
+    /// Enabled for Phase 1 (skeleton timeline) and Phase 2 (document collection/KC generation)
     private func shouldEnableParallelToolCalls() async -> Bool {
-        let validation = await stateCoordinator.pendingValidationPrompt
-        return validation?.dataType == "skeleton_timeline"
+        let currentPhase = await stateCoordinator.phase
+
+        // Enable parallel tool calls for Phase 1 and Phase 2
+        // Phase 1: skeleton timeline extraction and validation
+        // Phase 2: document collection and KC generation
+        return currentPhase == .phase1CoreFacts || currentPhase == .phase2DeepDive
     }
     private func buildUserMessageRequest(text: String, isSystemGenerated: Bool, bundledDeveloperMessages: [JSON] = [], forcedToolChoice: String? = nil, imageBase64: String? = nil, imageContentType: String? = nil) async -> ModelResponseParameter {
         let previousResponseId = await contextAssembler.getPreviousResponseId()
