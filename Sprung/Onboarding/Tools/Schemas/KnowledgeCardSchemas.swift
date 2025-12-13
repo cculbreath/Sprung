@@ -89,11 +89,7 @@ enum KnowledgeCardSchemas {
             ),
             "chat_excerpts": JSONSchema(
                 type: .array,
-                description: """
-                    Relevant conversation excerpts to include as source material.
-                    Use this when the user has shared information verbally that isn't in uploaded documents.
-                    Each excerpt should be a direct quote from the user with optional context.
-                    """,
+                description: "Conversation excerpts as source material (for verbally shared info)",
                 items: chatExcerptInputSchema
             ),
             "notes": JSONSchema(
@@ -147,44 +143,18 @@ enum KnowledgeCardSchemas {
     /// Used by: ProposeCardAssignmentsTool
     static let gapSchema = JSONSchema(
         type: .object,
-        description: """
-            A documentation gap with SPECIFIC recommendations. Do not use generic descriptions.
-            For each gap, recommend actual document types the user likely has.
-            """,
+        description: "Documentation gap with specific recommendations",
         properties: [
-            "card_id": JSONSchema(
-                type: .string,
-                description: "UUID of the card with insufficient documentation"
-            ),
-            "card_title": JSONSchema(
-                type: .string,
-                description: "Title of the card lacking documentation"
-            ),
-            "role_category": JSONSchema(
-                type: .string,
-                description: "Role category: 'engineering', 'management', 'sales', 'product', 'design', 'other'"
-            ),
+            "card_id": JSONSchema(type: .string, description: "UUID of the card"),
+            "card_title": JSONSchema(type: .string, description: "Title of the card"),
+            "role_category": JSONSchema(type: .string, description: "Role category: engineering, management, sales, product, design, other"),
             "recommended_doc_types": JSONSchema(
                 type: .array,
-                description: """
-                    SPECIFIC document types to request. Be concrete, not generic.
-                    Good: "performance reviews", "design docs", "job description"
-                    Bad: "any documents", "more information"
-                    """,
+                description: "Specific doc types to request (e.g., 'performance reviews', 'design docs')",
                 items: JSONSchema(type: .string)
             ),
-            "example_prompt": JSONSchema(
-                type: .string,
-                description: """
-                    Example prompt to show the user. Be specific and helpful.
-                    Example: "For your Senior Engineer role at Acme, do you have any performance reviews?
-                    Most companies do annual reviews - even informal email summaries would help."
-                    """
-            ),
-            "gap_severity": JSONSchema(
-                type: .string,
-                description: "'critical' (no artifacts at all), 'moderate' (some artifacts, missing key types), 'minor' (has artifacts, could use more)"
-            )
+            "example_prompt": JSONSchema(type: .string, description: "Example prompt for the user"),
+            "gap_severity": JSONSchema(type: .string, description: "critical, moderate, or minor")
         ],
         required: ["card_id", "card_title", "recommended_doc_types", "example_prompt"]
     )
@@ -195,28 +165,12 @@ enum KnowledgeCardSchemas {
     /// Used by: SubmitKnowledgeCardTool
     static let sourceSchema = JSONSchema(
         type: .object,
-        description: """
-            A source reference linking the knowledge card to evidence.
-            Every card MUST have at least one source to ensure claims are backed by evidence.
-            """,
+        description: "Source reference linking card to evidence",
         properties: [
-            "type": JSONSchema(
-                type: .string,
-                description: "Source type: 'artifact' for uploaded documents/repos, 'chat' for conversation quotes",
-                enum: ["artifact", "chat"]
-            ),
-            "artifact_id": JSONSchema(
-                type: .string,
-                description: "UUID of the artifact (REQUIRED when type='artifact'). Get IDs from list_artifacts."
-            ),
-            "chat_excerpt": JSONSchema(
-                type: .string,
-                description: "Quoted text from conversation (REQUIRED when type='chat'). Include the exact user statement."
-            ),
-            "chat_context": JSONSchema(
-                type: .string,
-                description: "Brief context explaining what the chat excerpt demonstrates"
-            )
+            "type": JSONSchema(type: .string, description: "Source type", enum: ["artifact", "chat"]),
+            "artifact_id": JSONSchema(type: .string, description: "Artifact UUID (required for type=artifact)"),
+            "chat_excerpt": JSONSchema(type: .string, description: "Quoted text (required for type=chat)"),
+            "chat_context": JSONSchema(type: .string, description: "Context for the excerpt")
         ],
         required: ["type"]
     )
@@ -227,67 +181,16 @@ enum KnowledgeCardSchemas {
     /// Used by: SubmitKnowledgeCardTool
     static let cardSchema = JSONSchema(
         type: .object,
-        description: """
-            A knowledge card containing a COMPREHENSIVE PROSE SUMMARY.
-
-            The content field should be a detailed narrative (500-2000+ words) that captures
-            EVERYTHING relevant about this experience. This prose will be the PRIMARY SOURCE
-            for resume customization and cover letter writing - the original documents will
-            NOT be re-read at that time.
-
-            Write as if creating a detailed portfolio entry or comprehensive briefing document.
-            """,
+        description: "Knowledge card with comprehensive prose content (500-2000+ words) and sources",
         properties: [
-            "id": JSONSchema(
-                type: .string,
-                description: "Unique UUID for this card (generate one)"
-            ),
-            "title": JSONSchema(
-                type: .string,
-                description: "Descriptive title (e.g., 'Senior Software Engineer at Acme Corp (2020-2024)')"
-            ),
-            "type": JSONSchema(
-                type: .string,
-                description: "Category: 'job', 'skill', 'education', 'project'. Helps with organization."
-            ),
-            "content": JSONSchema(
-                type: .string,
-                description: """
-                    COMPREHENSIVE PROSE SUMMARY (500-2000+ words).
-
-                    This narrative must capture ALL important details from the source documents:
-                    - Role scope, responsibilities, and context
-                    - Specific projects with technical details and your contributions
-                    - Quantified achievements and business impact
-                    - Technologies, tools, and methodologies used
-                    - Team dynamics, leadership, collaboration patterns
-                    - Challenges overcome and problems solved
-                    - Skills demonstrated (technical and soft)
-
-                    Write in third person. Be specific and detailed. Include numbers, metrics,
-                    and concrete examples. This document will be used to generate tailored
-                    resume bullets and cover letter content for various job applications.
-
-                    DO NOT summarize or compress - PRESERVE all relevant detail from sources.
-                    """
-            ),
-            "sources": JSONSchema(
-                type: .array,
-                description: "Evidence sources backing this card. AT LEAST ONE REQUIRED.",
-                items: sourceSchema
-            ),
-            "time_period": JSONSchema(
-                type: .string,
-                description: "Date range if applicable (e.g., '2020-09 to 2024-06', 'Summer 2019')"
-            ),
-            "organization": JSONSchema(
-                type: .string,
-                description: "Company, university, or organization name"
-            ),
-            "location": JSONSchema(
-                type: .string,
-                description: "Location if relevant (city, state, or 'Remote')"
-            )
+            "id": JSONSchema(type: .string, description: "Unique UUID"),
+            "title": JSONSchema(type: .string, description: "Descriptive title (e.g., 'Senior Engineer at Acme (2020-2024)')"),
+            "type": JSONSchema(type: .string, description: "Category: job, skill, education, or project"),
+            "content": JSONSchema(type: .string, description: "Comprehensive prose (500-2000+ words). Include all details: projects, achievements, metrics, skills."),
+            "sources": JSONSchema(type: .array, description: "Evidence sources (at least one required)", items: sourceSchema),
+            "time_period": JSONSchema(type: .string, description: "Date range (e.g., '2020-09 to 2024-06')"),
+            "organization": JSONSchema(type: .string, description: "Company/organization name"),
+            "location": JSONSchema(type: .string, description: "Location or 'Remote'")
         ],
         required: ["id", "title", "content", "sources"],
         additionalProperties: true
@@ -344,10 +247,7 @@ enum KnowledgeCardSchemas {
     /// Used by: DispatchKCAgentsTool
     static let proposalsArray = JSONSchema(
         type: .array,
-        description: """
-            Array of card proposals to process in parallel.
-            Each proposal defines a knowledge card to generate and which artifacts to use.
-            """,
+        description: "Card proposals to process in parallel",
         items: cardProposalSchema
     )
 

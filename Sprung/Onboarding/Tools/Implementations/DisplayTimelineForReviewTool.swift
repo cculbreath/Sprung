@@ -14,26 +14,7 @@ struct DisplayTimelineForReviewTool: InterviewTool {
         ]
         return JSONSchema(
             type: .object,
-            description: """
-                Activate the timeline EDITOR UI in the Tool Pane so timeline cards become visible and editable as you create them.
-                PURPOSE: This opens an EDITOR interface (NOT final approval). The user can make live edits, delete cards, or click "Save Timeline" to send changes back to you. This allows iterative refinement.
-                CRITICAL WORKFLOW SEQUENCE:
-                1. FIRST: Call this tool to activate the timeline editor (even before creating any cards)
-                2. THEN: Create timeline cards using create_timeline_card - cards appear in editor immediately
-                3. DURING: User can edit, delete, reorder cards and click "Save Timeline" to send updates
-                4. FINALLY: When timeline is complete, call submit_for_validation to present FINAL APPROVAL UI
-                RETURNS: { "message": "Timeline review UI activated.", "status": "completed" }
-                The tool completes immediately after activating the editor. Timeline cards you create afterward will appear in this UI automatically.
-                USAGE: Call this BEFORE creating timeline cards when starting skeleton_timeline workflow. This activates the editor where cards will appear.
-                WORKFLOW:
-                1. Call display_timeline_entries_for_review to activate editor UI
-                2. Create cards with create_timeline_card - each appears immediately
-                3. User makes live edits and clicks "Save Timeline" when ready
-                4. You receive user's changes as a developer message
-                5. When timeline is complete, call submit_for_validation for FINAL approval
-                IMPORTANT: This is the EDITOR, not the final approval step. After timeline is complete, you must call submit_for_validation to get user's final confirmation.
-                ERROR: Will fail if called when timeline UI is already active or if skeleton timeline has already been validated/persisted.
-                """,
+            description: "Activate timeline EDITOR UI. Call before create_timeline_card. Use submit_for_validation for final approval.",
             properties: properties,
             required: [],
             additionalProperties: false
