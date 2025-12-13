@@ -68,36 +68,13 @@ struct OpenDocumentCollectionTool: InterviewTool {
         let artifactCount = await MainActor.run { coordinator.ui.artifactRecords.count }
         let planCount = await MainActor.run { coordinator.ui.knowledgeCardPlan.count }
 
-        // Build response
+        // Build minimal response
         var response = JSON()
         response["status"].string = "completed"
         response["ui_displayed"].bool = true
         response["artifact_count"].int = artifactCount
         response["kc_plan_count"].int = planCount
-
-        // Provide clear instructions for next steps
-        response["next_action"].string = """
-            Document collection UI is now displayed. The user can:
-            - Drag and drop files (PDFs, Word docs, images, text files)
-            - Click "Browse Files" to select files
-            - Click "Add Git Repo" to analyze code repositories
-            - Click "Done with Uploads" when finished
-
-            WAIT for the user to click "Done with Uploads" before proceeding.
-            When they do, you will receive a chat message with artifact summaries.
-
-            BEFORE calling `propose_card_assignments`, you may OPTIONALLY ask about gaps:
-            - Review what they uploaded vs. their timeline positions
-            - If significant gaps exist (e.g., a 4-year job with no supporting docs), ask:
-              "Do you have any performance reviews or project documentation from your time at [Company]?"
-            - Suggest specific document types: reviews, job descriptions, promotion emails, project docs
-            - If coverage looks reasonable, proceed directly to propose_card_assignments
-
-            TIP: If artifact summaries aren't enough to assess coverage, use `get_artifact` with
-            an artifact ID to retrieve the full document text before making gap assessments.
-
-            This gap check is conversational - if they say "no" or "that's all I have", proceed.
-            """
+        response["await_user_action"].string = "done_with_uploads"
 
         if let message = message {
             response["displayed_message"].string = message
