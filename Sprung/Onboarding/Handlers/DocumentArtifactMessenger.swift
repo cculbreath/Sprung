@@ -31,12 +31,16 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
     /// Large PDFs (20+ MB) can take 2+ minutes to extract via Google Files API
     private let timeoutPerDocumentSeconds: Double = 120.0
 
-    private struct PendingBatch {
-        let expectedCount: Int
+    private class PendingBatch {
+        var expectedCount: Int
         var collectedArtifacts: [JSON] = []
         var skippedCount: Int = 0
         var startTime: Date = Date()
         var timeoutTask: Task<Void, Never>?
+
+        init(expectedCount: Int) {
+            self.expectedCount = expectedCount
+        }
 
         var totalProcessed: Int {
             collectedArtifacts.count + skippedCount
@@ -105,16 +109,24 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
         // Cancel any existing batch timeout
         pendingBatch?.timeoutTask?.cancel()
 
-        Logger.info("📦 Starting artifact batch: expecting \(expectedCount) document(s)", category: .ai)
+        // If there's an existing batch in progress, MERGE the expected counts
+        // This handles the case where user uploads more files while previous batch is processing
+        let newExpectedCount: Int
+        if let existingBatch = pendingBatch {
+            newExpectedCount = existingBatch.expectedCount + expectedCount
+            existingBatch.expectedCount = newExpectedCount
+            Logger.info("📦 Merging into existing batch: now expecting \(newExpectedCount) document(s) (was \(existingBatch.expectedCount - expectedCount), added \(expectedCount))", category: .ai)
+        } else {
+            newExpectedCount = expectedCount
+            Logger.info("📦 Starting new artifact batch: expecting \(expectedCount) document(s)", category: .ai)
+            // Emit batch started event - this prevents validation prompts from interrupting uploads
+            await emit(.batchUploadStarted(expectedCount: expectedCount))
+            pendingBatch = PendingBatch(expectedCount: expectedCount)
+        }
 
-        // Emit batch started event - this prevents validation prompts from interrupting uploads
-        await emit(.batchUploadStarted(expectedCount: expectedCount))
-
-        pendingBatch = PendingBatch(expectedCount: expectedCount)
-
-        // Start timeout task (scales with number of documents)
-        let batchTimeout = timeoutPerDocumentSeconds * Double(expectedCount)
-        Logger.debug("📦 Batch timeout set to \(Int(batchTimeout))s for \(expectedCount) document(s)", category: .ai)
+        // Start/restart timeout task (scales with total number of documents)
+        let batchTimeout = timeoutPerDocumentSeconds * Double(newExpectedCount)
+        Logger.debug("📦 Batch timeout set to \(Int(batchTimeout))s for \(newExpectedCount) document(s)", category: .ai)
         let timeoutTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(batchTimeout))
             guard !Task.isCancelled else { return }
