@@ -135,6 +135,14 @@ final class UIResponseCoordinator {
         // Clear the validation prompt
         toolRouter.clearValidationPrompt()
         await eventBus.publish(.validationPromptCleared)
+
+        // Complete the pending UI tool call with "changes_submitted" status
+        // This unblocks the LLM from waiting for the submit_for_validation response
+        var output = JSON()
+        output["message"].string = message
+        output["status"].string = "changes_submitted"
+        await completePendingUIToolCall(output: output)
+
         // Get current timeline state to include in the message
         let timelineInfo = await buildTimelineCardSummary()
         // Send user message to LLM with current card state
