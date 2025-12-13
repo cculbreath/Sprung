@@ -703,6 +703,11 @@ actor StateCoordinator: OnboardingEventEmitter {
     func getObjectivesForPhase(_ phase: InterviewPhase) async -> [ObjectiveStore.ObjectiveEntry] {
         await objectiveStore.getObjectivesForPhase(phase)
     }
+    /// Get all objectives as a dictionary mapping ID to status string (for subphase inference)
+    func getObjectiveStatusMap() async -> [String: String] {
+        let objectives = await objectiveStore.getAllObjectives()
+        return Dictionary(uniqueKeysWithValues: objectives.map { ($0.id, $0.status.rawValue) })
+    }
     /// Restore an objective status from persisted session
     func restoreObjectiveStatus(objectiveId: String, status: String) async {
         guard let objectiveStatus = ObjectiveStatus(rawValue: status) else {

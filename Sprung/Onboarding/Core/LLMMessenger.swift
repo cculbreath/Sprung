@@ -859,35 +859,39 @@ actor LLMMessenger: OnboardingEventEmitter {
 
         return parameters
     }
-    /// Get tool schemas from ToolRegistry, filtered by allowed tools from StateCoordinator
-    /// - Parameter toolChoice: Optional tool choice mode to further filter tools
+    /// Get tool schemas from ToolRegistry, filtered by allowed tools using subphase-aware bundling
+    /// - Parameter toolChoice: Optional tool choice mode to override bundling
     private func getToolSchemas(for toolChoice: ToolChoiceMode? = nil) async -> [Tool] {
         // Get base allowed tools from state coordinator
         let allowedNames = await stateCoordinator.getAllowedToolNames()
 
-        // Get current UI state for context-aware bundling
+        // Get current state for subphase inference
         let phase = await stateCoordinator.phase
         let toolPaneCard = await stateCoordinator.getCurrentToolPaneCard()
+        let objectives = await stateCoordinator.getObjectiveStatusMap()
 
-        // Determine bundle context using policy (considers toolChoice + UI state)
-        let context = ToolBundlePolicy.determineContext(
-            toolChoice: toolChoice ?? .auto,
+        // Infer current subphase from objectives + UI state
+        let subphase = ToolBundlePolicy.inferSubphase(
+            phase: phase,
             toolPaneCard: toolPaneCard,
-            phase: phase
+            objectives: objectives
         )
 
-        // Handle no-tools case early
-        if case .noTools = context {
-            Logger.debug("🔧 Tool bundling: context=noTools, sending 0 tools", category: .ai)
+        // Select tools based on subphase (handles toolChoice internally)
+        let bundledNames = ToolBundlePolicy.selectBundleForSubphase(
+            subphase,
+            allowedTools: allowedNames,
+            toolChoice: toolChoice
+        )
+
+        // Handle empty bundle case
+        if bundledNames.isEmpty {
+            Logger.debug("🔧 Tool bundling: subphase=\(subphase.rawValue), sending 0 tools", category: .ai)
             return []
         }
 
-        // Select minimal bundle based on context
-        let bundledNames = ToolBundlePolicy.selectBundle(for: context, from: allowedNames)
-        let filterNames = bundledNames.isEmpty ? nil : bundledNames
-
-        let schemas = await toolRegistry.toolSchemas(filteredBy: filterNames)
-        Logger.debug("🔧 Tool bundling: context=\(context), toolPane=\(toolPaneCard.rawValue), sending \(schemas.count) tools", category: .ai)
+        let schemas = await toolRegistry.toolSchemas(filteredBy: bundledNames)
+        Logger.debug("🔧 Tool bundling: subphase=\(subphase.rawValue), toolPane=\(toolPaneCard.rawValue), sending \(schemas.count) tools: \(bundledNames.sorted().joined(separator: ", "))", category: .ai)
 
         return schemas
     }
