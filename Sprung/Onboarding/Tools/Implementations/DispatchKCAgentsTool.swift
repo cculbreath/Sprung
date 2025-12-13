@@ -25,6 +25,10 @@ struct DispatchKCAgentsTool: InterviewTool {
 
                 The 'proposals' parameter is optional - if omitted, the tool will use proposals stored
                 from the most recent propose_card_assignments call.
+
+                Each proposal can optionally include 'chat_excerpts' — relevant quotes from the user's
+                conversation that aren't in uploaded documents. Include these when the user shared
+                important information verbally (e.g., clarifying their role, achievements not in docs).
                 """,
             properties: [
                 "proposals": KnowledgeCardSchemas.proposalsArray
@@ -73,12 +77,21 @@ struct DispatchKCAgentsTool: InterviewTool {
 
         // Convert JSON proposals to CardProposal structs
         let proposals = proposalsJSON.map { json -> CardProposal in
-            CardProposal(
+            // Parse chat excerpts if provided
+            let chatExcerpts = json["chat_excerpts"].arrayValue.map { excerptJSON in
+                ChatExcerptInput(
+                    excerpt: excerptJSON["excerpt"].stringValue,
+                    context: excerptJSON["context"].string
+                )
+            }
+
+            return CardProposal(
                 cardId: json["card_id"].stringValue,
                 cardType: json["card_type"].stringValue,
                 title: json["title"].stringValue,
                 timelineEntryId: json["timeline_entry_id"].string,
                 assignedArtifactIds: json["assigned_artifact_ids"].arrayValue.map { $0.stringValue },
+                chatExcerpts: chatExcerpts,
                 notes: json["notes"].string
             )
         }

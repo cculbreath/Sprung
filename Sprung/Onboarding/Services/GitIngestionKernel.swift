@@ -146,7 +146,7 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
             Logger.info("🔬 [GitIngest] About to call runAnalysisAgent (requires @MainActor hop)", category: .ai)
 
             // Step 2: Run multi-turn agent to analyze actual code
-            let analysis = try await runAnalysisAgent(gitData: gitData, repoName: repoName, repoURL: repoURL)
+            let analysis = try await runAnalysisAgent(gitData: gitData, repoName: repoName, repoURL: repoURL, agentId: agentId, tracker: tracker)
 
             await eventBus.publish(.extractionStateChanged(true, statusMessage: "Creating artifact record..."))
 
@@ -154,7 +154,7 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
             var record = JSON()
             record["id"].string = UUID().uuidString
             record["type"].string = "git_analysis"
-            record["source"].string = "git_repository"
+            record["source_type"].string = "git_repository"
             record["filename"].string = repoName
             record["file_path"].string = repoPath
             record["created_at"].string = ISO8601DateFormatter().string(from: Date())
@@ -164,22 +164,43 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
             record["analysis"] = analysis
             record["raw_data"] = gitData
 
-            // Set extracted_text from analysis summary for artifact display
-            if let summary = analysis["summary"].string, !summary.isEmpty {
-                record["extracted_text"].string = summary
-            } else {
-                // Fallback: build a summary from highlights and skills
-                var summaryParts: [String] = []
-                if let highlights = analysis["highlights"].array {
-                    summaryParts.append(contentsOf: highlights.prefix(5).compactMap { $0.string })
-                }
-                if let skills = analysis["skills"].array {
-                    let skillNames = skills.prefix(10).compactMap { $0["skill"].string }
+            // Store analysis in metadata for SwiftData persistence
+            // persistArtifact reads record["metadata"] not record["analysis"]
+            var metadata = JSON()
+            metadata["analysis"] = analysis
+            metadata["git_metadata"] = gitData
+            record["metadata"] = metadata
+
+            // Set extracted_text from repository_summary.description (correct path after Codable encoding)
+            // The analysis JSON uses snake_case keys from CodingKeys
+            let repoDescription = analysis["repository_summary"]["description"].stringValue
+            if !repoDescription.isEmpty {
+                // Build comprehensive extracted_text for artifact display and persistence
+                var extractedParts: [String] = []
+                extractedParts.append("## Repository: \(repoName)")
+                extractedParts.append(repoDescription)
+
+                // Add key skills from technical_skills array
+                if let skills = analysis["technical_skills"].array, !skills.isEmpty {
+                    let skillNames = skills.prefix(15).compactMap { $0["skill_name"].string }
                     if !skillNames.isEmpty {
-                        summaryParts.append("Skills: " + skillNames.joined(separator: ", "))
+                        extractedParts.append("\n## Key Technologies\n" + skillNames.joined(separator: ", "))
                     }
                 }
-                record["extracted_text"].string = summaryParts.joined(separator: "\n\n")
+
+                // Add notable achievements
+                if let achievements = analysis["notable_achievements"].array, !achievements.isEmpty {
+                    let bullets = achievements.prefix(5).compactMap { $0["resume_bullet"].string }
+                    if !bullets.isEmpty {
+                        extractedParts.append("\n## Notable Achievements\n" + bullets.map { "• \($0)" }.joined(separator: "\n"))
+                    }
+                }
+
+                record["extracted_text"].string = extractedParts.joined(separator: "\n")
+            } else {
+                // Fallback: minimal summary if repository_summary.description is missing
+                record["extracted_text"].string = "Git repository analysis for \(repoName)"
+                Logger.warning("⚠️ Git analysis missing repository_summary.description", category: .ai)
             }
 
             let result = IngestionResult(
@@ -327,7 +348,7 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
 
     // MARK: - LLM Analysis Agent
 
-    private func runAnalysisAgent(gitData: JSON, repoName: String, repoURL: URL) async throws -> JSON {
+    private func runAnalysisAgent(gitData: JSON, repoName: String, repoURL: URL, agentId: String, tracker: AgentActivityTracker?) async throws -> JSON {
         Logger.info("🔬 [GitIngest] runAnalysisAgent entered, checking llmFacade...", category: .ai)
         guard let facade = llmFacade else {
             Logger.error("🔬 [GitIngest] llmFacade is nil!", category: .ai)
@@ -350,7 +371,9 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
             repoPath: repoURL,
             authorFilter: authorFilter,
             modelId: modelId,
-            eventBus: eventBus
+            eventBus: eventBus,
+            agentId: agentId,
+            tracker: tracker
         )
 
         // Convert GitAnalysisResult to JSON using Codable (CodingKeys handle snake_case)
@@ -378,14 +401,18 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
         repoPath: URL,
         authorFilter: String?,
         modelId: String,
-        eventBus: EventCoordinator
+        eventBus: EventCoordinator,
+        agentId: String,
+        tracker: AgentActivityTracker?
     ) async throws -> GitAnalysisResult {
         let agent = GitAnalysisAgent(
             repoPath: repoPath,
             authorFilter: authorFilter,
             modelId: modelId,
             facade: facade,
-            eventBus: eventBus
+            eventBus: eventBus,
+            agentId: agentId,
+            tracker: tracker
         )
         return try await agent.run()
     }

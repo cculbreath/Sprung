@@ -350,7 +350,7 @@ enum MiscSchemas {
             - enabled_sections: Alternative format for enabled sections (array of section names)
             - candidate_dossier_entry: Single Q&A entry for dossier seed (requires: question, answer, asked_at)
             - knowledge_card: Deep dive expertise card from Phase 2
-            - writing_sample: Writing sample with style analysis notes (Phase 3)
+            - writing_sample: Writing sample (Phase 3)
             - candidate_dossier: Final compiled candidate dossier (Phase 3)
             """,
         enum: [

@@ -87,6 +87,10 @@ class GitAnalysisAgent {
     private weak var facade: LLMFacade?
     private var eventBus: EventCoordinator?
 
+    // Agent tracking
+    private let agentId: String?
+    private let tracker: AgentActivityTracker?
+
     // State
     private(set) var status: GitAgentStatus = .idle
     private(set) var currentAction: String = ""
@@ -108,13 +112,17 @@ class GitAnalysisAgent {
         authorFilter: String? = nil,
         modelId: String,
         facade: LLMFacade,
-        eventBus: EventCoordinator? = nil
+        eventBus: EventCoordinator? = nil,
+        agentId: String? = nil,
+        tracker: AgentActivityTracker? = nil
     ) {
         self.repoPath = repoPath
         self.authorFilter = authorFilter
         self.modelId = modelId
         self.facade = facade
         self.eventBus = eventBus
+        self.agentId = agentId
+        self.tracker = tracker
         self.tools = Self.buildTools()
     }
 
@@ -159,14 +167,28 @@ class GitAnalysisAgent {
 
                 // Emit token usage event if available
                 if let usage = response.usage {
+                    let inputTokens = usage.promptTokens ?? 0
+                    let outputTokens = usage.completionTokens ?? 0
+                    let cachedTokens = usage.promptTokensDetails?.cachedTokens ?? 0
+
                     await emitEvent(.llmTokenUsageReceived(
                         modelId: modelId,
-                        inputTokens: usage.promptTokens ?? 0,
-                        outputTokens: usage.completionTokens ?? 0,
-                        cachedTokens: usage.promptTokensDetails?.cachedTokens ?? 0,
+                        inputTokens: inputTokens,
+                        outputTokens: outputTokens,
+                        cachedTokens: cachedTokens,
                         reasoningTokens: 0,  // Chat API doesn't have reasoning tokens
                         source: .gitAgent
                     ))
+
+                    // Update agent's token tracking
+                    if let agentId = agentId {
+                        tracker?.addTokenUsage(
+                            agentId: agentId,
+                            input: inputTokens,
+                            output: outputTokens,
+                            cached: cachedTokens
+                        )
+                    }
                 }
 
                 // Process response

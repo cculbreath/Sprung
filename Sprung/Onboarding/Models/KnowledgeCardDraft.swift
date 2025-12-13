@@ -165,6 +165,8 @@ struct ArtifactRecord: Identifiable, Equatable {
     var sizeInBytes: Int
     var sha256: String?
     var extractedContent: String
+    var summary: String?
+    var briefDescription: String?
     var metadata: JSON
 
     /// Display name for the artifact (title if available, otherwise filename)
@@ -175,6 +177,22 @@ struct ArtifactRecord: Identifiable, Equatable {
         return filename
     }
 
+    /// Estimate token count from text (approximately 4 characters per token for English)
+    static func estimateTokens(_ text: String) -> Int {
+        max(1, text.count / 4)
+    }
+
+    /// Estimated tokens in extracted content
+    var extractedContentTokens: Int {
+        Self.estimateTokens(extractedContent)
+    }
+
+    /// Estimated tokens in summary
+    var summaryTokens: Int {
+        guard let summary, !summary.isEmpty else { return 0 }
+        return Self.estimateTokens(summary)
+    }
+
     init(
         id: String = UUID().uuidString,
         filename: String,
@@ -183,6 +201,8 @@ struct ArtifactRecord: Identifiable, Equatable {
         sizeInBytes: Int = 0,
         sha256: String? = nil,
         extractedContent: String = "",
+        summary: String? = nil,
+        briefDescription: String? = nil,
         metadata: JSON = JSON()
     ) {
         self.id = id
@@ -192,6 +212,8 @@ struct ArtifactRecord: Identifiable, Equatable {
         self.sizeInBytes = sizeInBytes
         self.sha256 = sha256
         self.extractedContent = extractedContent
+        self.summary = summary
+        self.briefDescription = briefDescription
         self.metadata = metadata
     }
     init(json: JSON) {
@@ -214,6 +236,9 @@ struct ArtifactRecord: Identifiable, Equatable {
         extractedContent = json["extracted_text"].stringValue.isEmpty
             ? json["extracted_content"].stringValue
             : json["extracted_text"].stringValue
+        summary = json["summary"].string
+        // Try direct field first, then summary_metadata
+        briefDescription = json["brief_description"].string ?? json["summary_metadata"]["brief_description"].string
         metadata = json["metadata"]
     }
     func toJSON() -> JSON {

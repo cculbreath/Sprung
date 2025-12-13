@@ -3,6 +3,7 @@ struct OnboardingInterviewBottomBar: View {
     let showBack: Bool
     let continueTitle: String
     let isContinueDisabled: Bool
+    var continueTooltip: String? = nil
     let onShowSettings: () -> Void
     let onBack: () -> Void
     let onCancel: () -> Void
@@ -33,6 +34,7 @@ struct OnboardingInterviewBottomBar: View {
             .buttonStyle(.glassProminent)
             .buttonBorderShape(.capsule)
             .disabled(isContinueDisabled)
+            .help(continueTooltip ?? "")
         }
     }
 }

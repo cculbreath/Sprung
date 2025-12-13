@@ -96,7 +96,38 @@ struct EventDumpView: View {
                                             .font(.caption2)
                                             .fontWeight(.semibold)
                                             .foregroundStyle(colorForType(entry.type))
+
                                         Spacer()
+
+                                        // Token usage display (if available)
+                                        if let tokens = entry.tokenUsage {
+                                            HStack(spacing: 4) {
+                                                Text("In:")
+                                                    .foregroundStyle(.tertiary)
+                                                Text(TokenUsageTracker.formatTokenCount(tokens.input))
+                                                Text("Out:")
+                                                    .foregroundStyle(.tertiary)
+                                                Text(TokenUsageTracker.formatTokenCount(tokens.output))
+                                                if tokens.cached > 0 {
+                                                    Text("Cache:")
+                                                        .foregroundStyle(.tertiary)
+                                                    Text(TokenUsageTracker.formatTokenCount(tokens.cached))
+                                                }
+                                            }
+                                            .font(.caption2.monospacedDigit())
+                                            .foregroundStyle(.secondary)
+                                        }
+
+                                        // Running total (if available)
+                                        if let runningTotal = entry.runningTotal {
+                                            Text("Total:")
+                                                .font(.caption2)
+                                                .foregroundStyle(.tertiary)
+                                            Text(TokenUsageTracker.formatTokenCount(runningTotal))
+                                                .font(.caption2.monospacedDigit())
+                                                .fontWeight(.medium)
+                                                .foregroundStyle(.blue)
+                                        }
                                     }
                                     Text(entry.content)
                                         .font(.system(.caption, design: .monospaced))

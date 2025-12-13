@@ -104,7 +104,6 @@ enum OnboardingObjectiveId: String, CaseIterable {
     case oneWritingSample = "one_writing_sample"
     case oneWritingSampleCollectionSetup = "one_writing_sample.collection_setup"
     case oneWritingSampleIngestSample = "one_writing_sample.ingest_sample"
-    case oneWritingSampleStyleAnalysis = "one_writing_sample.style_analysis"
     // Dossier Complete
     case dossierComplete = "dossier_complete"
     case dossierCompleteCompileAssets = "dossier_complete.compile_assets"

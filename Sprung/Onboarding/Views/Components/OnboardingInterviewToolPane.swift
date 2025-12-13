@@ -20,8 +20,8 @@ struct OnboardingInterviewToolPane: View {
             interviewContent: { AnyView(interviewTabContent) },
             selectedTab: $selectedTab
         )
-        .padding(.vertical, 16)
-        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 10)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .overlay {
             ZStack {
@@ -256,6 +256,12 @@ struct OnboardingInterviewToolPane: View {
                                 coordinator.ui.isDocumentCollectionActive = false
                             }
                             await coordinator.sendChatMessage("I'm done uploading documents. Please assess the completeness of my evidence.")
+                        }
+                    },
+                    onCancelExtractionsAndFinish: {
+                        Task {
+                            // Cancel active extraction agents
+                            await coordinator.cancelExtractionAgentsAndFinishUploads()
                         }
                     },
                     onDropFiles: { urls, extractionMethod in

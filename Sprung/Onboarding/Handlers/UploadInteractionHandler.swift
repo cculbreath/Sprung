@@ -219,11 +219,12 @@ final class UploadInteractionHandler {
                     payload["status"].string = "uploaded"
                     payload["files"] = JSON(filesJSON)
                     // Emit generic upload completed event
+                    // Use item.filename (original name) not storageURL.lastPathComponent (UUID)
                     let uploadInfos = processed.map { item in
                         ProcessedUploadInfo(
                             storageURL: item.storageURL,
                             contentType: item.contentType,
-                            filename: item.storageURL.lastPathComponent
+                            filename: item.filename
                         )
                     }
                     // Emit generic upload completed event (downstream handlers will process based on file type)

@@ -69,6 +69,13 @@ enum KCAgentPrompts {
         - `get_artifact_summary`: Get a quick summary of an artifact (only use for initial exploration of OTHER artifacts)
         - `return_result`: Submit your completed knowledge card
 
+        ## Source Types
+        You may receive two types of source material:
+        1. **Artifacts**: Uploaded documents (resumes, performance reviews, etc.) - retrieve with `get_artifact`
+        2. **Conversation Excerpts**: Direct quotes from the user provided in your initial prompt - use as-is
+
+        When listing sources in your output, include BOTH artifact IDs and any conversation excerpts you used.
+
         ## CRITICAL: Verbatim Preservation Mandate
 
         The `prose` field must be a COMPREHENSIVE NARRATIVE of **500-2000+ words**. This prose will be the ONLY SOURCE for resume customization and cover letter writing — **the original documents will NOT be re-read at that time**.
@@ -129,9 +136,13 @@ enum KCAgentPrompts {
           "highlights": ["Specific achievement with metrics", "Another specific achievement"],
           "skills": ["Skill 1", "Skill 2"],
           "metrics": ["Increased revenue by 40%", "Led team of 12", "Shipped in 6 months"],
-          "sources": ["artifact-id-1", "artifact-id-2"]
+          "sources": ["artifact-id-1", "artifact-id-2"],
+          "chat_sources": [
+            {"excerpt": "I led the migration project...", "context": "User describing project leadership"}
+          ]
         }
         ```
+        Note: `chat_sources` is optional - only include if conversation excerpts were provided and used.
 
         ## Quality Check Before Submitting
         Before calling return_result, verify:
@@ -145,28 +156,52 @@ enum KCAgentPrompts {
     // MARK: - Initial Prompt
 
     /// Initial prompt for a KC agent containing the card proposal and artifact summaries.
+    /// - Assigned artifacts: Full summaries included for thorough context
+    /// - Other artifacts: Brief descriptions only to save tokens (use get_artifact if needed)
     static func initialPrompt(proposal: CardProposal, allSummaries: [JSON]) -> String {
-        // Build artifact summary section
+        // Build artifact sections - full summaries for assigned, brief for others
         var assignedSummaries = ""
-        var otherSummaries = ""
+        var otherArtifactsList = ""
 
         for summary in allSummaries {
             let artifactId = summary["id"].stringValue
             let filename = summary["filename"].stringValue
-            let summaryText = summary["summary"].stringValue
-            let docType = summary["summary_metadata"]["document_type"].stringValue
-
-            let summaryBlock = """
-
-            ### \(filename) (ID: \(artifactId))
-            Type: \(docType)
-            \(summaryText)
-            """
 
             if proposal.assignedArtifactIds.contains(artifactId) {
-                assignedSummaries += summaryBlock
+                // Full summary for assigned artifacts
+                let summaryText = summary["summary"].stringValue
+                let docType = summary["summary_metadata"]["document_type"].stringValue
+
+                assignedSummaries += """
+
+                ### \(filename) (ID: \(artifactId))
+                Type: \(docType)
+                \(summaryText)
+                """
             } else {
-                otherSummaries += summaryBlock
+                // Brief description only for other artifacts (token efficient)
+                let briefDesc = summary["brief_description"].string
+                    ?? summary["summary_metadata"]["brief_description"].string
+                    ?? summary["summary_metadata"]["document_type"].string
+                    ?? "document"
+
+                otherArtifactsList += "\n- **\(filename)** (ID: \(artifactId)): \(briefDesc)"
+            }
+        }
+
+        // Build chat excerpts section if any are provided
+        var chatExcerptsSection = ""
+        if !proposal.chatExcerpts.isEmpty {
+            chatExcerptsSection = "\n\n## Conversation Excerpts\n"
+            chatExcerptsSection += "The following are relevant quotes from the user's conversation. "
+            chatExcerptsSection += "These are PRIMARY SOURCES - include this information in your knowledge card.\n"
+
+            for (index, excerpt) in proposal.chatExcerpts.enumerated() {
+                chatExcerptsSection += "\n### Excerpt \(index + 1)"
+                if let context = excerpt.context {
+                    chatExcerptsSection += " (\(context))"
+                }
+                chatExcerptsSection += "\n> \"\(excerpt.excerpt)\"\n"
             }
         }
 
@@ -189,19 +224,19 @@ enum KCAgentPrompts {
         prompt += """
 
 
-        ## Assigned Artifacts
-        These artifacts have been specifically assigned to this card. Read them thoroughly.
-        \(assignedSummaries.isEmpty ? "\n(No specific artifacts assigned - review all available)" : assignedSummaries)
-
+        ## Assigned Artifacts (Full Summaries)
+        These artifacts have been specifically assigned to this card. Read them thoroughly using `get_artifact`.
+        \(assignedSummaries.isEmpty ? "\n(No specific artifacts assigned - review available artifacts below)" : assignedSummaries)
+        \(chatExcerptsSection)
         ## Other Available Artifacts
-        These artifacts may contain additional relevant information.
-        \(otherSummaries.isEmpty ? "\n(No other artifacts available)" : otherSummaries)
+        Brief descriptions only. Use `get_artifact` if you need more detail from any of these.
+        \(otherArtifactsList.isEmpty ? "\n(No other artifacts available)" : otherArtifactsList)
 
         ## Instructions
         1. Start by reading the full content of your assigned artifacts using `get_artifact`
         2. If assigned artifacts are insufficient, review other artifacts that might be relevant
-        3. Synthesize the information into a cohesive knowledge card
-        4. Call `return_result` with your completed card
+        3. \(proposal.chatExcerpts.isEmpty ? "" : "Incorporate information from the conversation excerpts above\n        4. ")Synthesize the information into a cohesive knowledge card
+        \(proposal.chatExcerpts.isEmpty ? "4" : "5"). Call `return_result` with your completed card
 
         Begin by reading your assigned artifacts.
         """

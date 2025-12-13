@@ -52,6 +52,7 @@ enum DocumentExtractionPrompts {
         Output as JSON with this exact structure:
         {
           "document_type": "resume|performance_review|project_doc|job_description|letter_of_recommendation|certificate|transcript|portfolio|other",
+          "brief_description": "10-word max one-liner describing document content (e.g., 'Resume covering 5 years at tech startups')",
           "summary": "~500 word narrative summary covering: what the document contains, key information relevant to job applications, notable details that stand out",
           "time_period": "YYYY-YYYY" or null if not applicable,
           "companies": ["Company A", "Company B"],
@@ -60,6 +61,11 @@ enum DocumentExtractionPrompts {
           "achievements": ["Led team of 5", "Shipped 3 products"],
           "relevance_hints": "Brief note about what types of knowledge cards this doc could support"
         }
+
+        BRIEF DESCRIPTION: A quick glance identifier (max 10 words). Examples:
+        - "Resume: Senior engineer at Acme Corp, 2019-2023"
+        - "Performance review: Q4 2022 exceeds expectations rating"
+        - "Project doc: Microservices migration architecture proposal"
 
         DOCUMENT TYPE GUIDANCE:
         - resume: A CV or resume document showing work history, education, and skills

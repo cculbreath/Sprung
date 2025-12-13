@@ -413,11 +413,12 @@ final class UIResponseCoordinator {
             }
 
             // Convert to ProcessedUploadInfo for the event
+            // Use item.filename (original name) not storageURL.lastPathComponent (UUID)
             let uploadInfos = processed.map { item in
                 ProcessedUploadInfo(
                     storageURL: item.storageURL,
                     contentType: item.contentType,
-                    filename: item.storageURL.lastPathComponent
+                    filename: item.filename
                 )
             }
 
@@ -458,15 +459,16 @@ final class UIResponseCoordinator {
             // Build upload metadata for writing sample
             var metadata = JSON()
             metadata["title"].string = "Writing sample"
-            metadata["instructions"].string = "Transcribe this writing sample verbatim for style analysis"
+            metadata["instructions"].string = "Transcribe this writing sample verbatim"
             metadata["verbatim_transcription"].bool = true  // Flag for verbatim mode
 
             // Convert to ProcessedUploadInfo for the event
+            // Use item.filename (original name) not storageURL.lastPathComponent (UUID)
             let uploadInfos = processed.map { item in
                 ProcessedUploadInfo(
                     storageURL: item.storageURL,
                     contentType: item.contentType,
-                    filename: item.storageURL.lastPathComponent
+                    filename: item.filename
                 )
             }
 

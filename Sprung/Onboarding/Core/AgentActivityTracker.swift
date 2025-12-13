@@ -101,6 +101,13 @@ struct TrackedAgent: Identifiable, Codable {
     var transcript: [AgentTranscriptEntry]
     var error: String?
 
+    // Token usage tracking
+    var inputTokens: Int = 0
+    var outputTokens: Int = 0
+    var cachedTokens: Int = 0
+
+    var totalTokens: Int { inputTokens + outputTokens }
+
     /// Duration in seconds (nil if still running)
     var duration: TimeInterval? {
         guard let end = endTime else { return nil }
@@ -286,6 +293,23 @@ class AgentActivityTracker {
         )
 
         Logger.error("❌ Agent failed: \(agents[index].name) - \(error)", category: .ai)
+    }
+
+    /// Add token usage to an agent's running totals
+    func addTokenUsage(agentId: String, input: Int, output: Int, cached: Int = 0) {
+        guard let index = agents.firstIndex(where: { $0.id == agentId }) else {
+            Logger.warning("⚠️ Cannot add token usage: agent not found (id: \(agentId.prefix(8)))", category: .ai)
+            return
+        }
+
+        agents[index].inputTokens += input
+        agents[index].outputTokens += output
+        agents[index].cachedTokens += cached
+
+        Logger.debug(
+            "📊 Agent token usage: +\(input) in, +\(output) out (total: \(agents[index].totalTokens))",
+            category: .ai
+        )
     }
 
     /// Kill (cancel) a running agent

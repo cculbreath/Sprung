@@ -141,6 +141,10 @@ actor ArtifactRepository: OnboardingEventEmitter {
             summary["filename"].string = artifact["filename"].string
             summary["size_bytes"].int = artifact["size_bytes"].int
             summary["content_type"].string = artifact["content_type"].string
+            // Include the brief description if available (short ~10 word description)
+            if let briefDesc = artifact["brief_description"].string, !briefDesc.isEmpty {
+                summary["brief_description"].string = briefDesc
+            }
             // Include the summary if available (from summarization step)
             if let docSummary = artifact["summary"].string, !docSummary.isEmpty {
                 summary["summary"].string = docSummary
@@ -158,6 +162,21 @@ actor ArtifactRepository: OnboardingEventEmitter {
             }
             return summary
         }
+    }
+
+    /// Delete an artifact record by ID
+    /// Returns the deleted artifact (for notification purposes) or nil if not found
+    func deleteArtifactRecord(id: String) -> JSON? {
+        guard let index = artifacts.artifactRecords.firstIndex(where: { record in
+            record["id"].string == id || record["sha256"].string == id
+        }) else {
+            Logger.warning("⚠️ Artifact not found for deletion: \(id)", category: .ai)
+            return nil
+        }
+        let deleted = artifacts.artifactRecords.remove(at: index)
+        artifactRecordsSync = artifacts.artifactRecords
+        Logger.info("🗑️ Artifact record deleted: \(deleted["filename"].stringValue)", category: .ai)
+        return deleted
     }
 
     /// Update the summary field for an artifact (called after summarization)

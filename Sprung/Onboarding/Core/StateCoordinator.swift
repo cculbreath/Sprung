@@ -739,6 +739,12 @@ actor StateCoordinator: OnboardingEventEmitter {
     func getArtifactsForPhaseObjective(_ objectiveId: String) async -> [JSON] {
         await artifactRepository.getArtifactsForPhaseObjective(objectiveId)
     }
+
+    /// Delete an artifact record by ID (returns the deleted artifact for notification purposes)
+    func deleteArtifactRecord(id: String) async -> JSON? {
+        await artifactRepository.deleteArtifactRecord(id: id)
+    }
+
     /// Store applicant profile in artifact repository
     func storeApplicantProfile(_ profile: JSON) async {
         await artifactRepository.setApplicantProfile(profile)

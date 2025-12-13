@@ -15,6 +15,9 @@ struct DocumentSummary: Codable {
     /// Type of document (resume, performance_review, project_doc, etc.)
     let documentType: String
 
+    /// Brief one-line description (~10 words) for quick reference
+    let briefDescription: String
+
     /// ~500 word narrative summary of the document content
     let summary: String
 
@@ -76,6 +79,7 @@ struct DocumentSummary: Codable {
         let truncated = String(text.prefix(1000))
         return DocumentSummary(
             documentType: "other",
+            briefDescription: "Uploaded document: \(filename)",
             summary: "Document: \(filename). Content preview: \(truncated)...",
             timePeriod: nil,
             companies: [],

@@ -86,9 +86,9 @@ struct StartPhaseThreeTool: InterviewTool {
 
         PHASE 3 GOALS:
         This phase focuses on KNOWLEDGE GATHERING for the writing corpus and dossier:
-        1. Collect writing samples (cover letters, emails, proposals, etc.)
-        2. Analyze writing style (if user consents)
-        3. Compile and validate the candidate dossier
+        1. Collect unabridged writing samples (cover letters, emails, proposals, etc.)
+        2. Complete the candidate dossier
+        3. Generate experience defaults and persist all data
 
         IMPORTANT REMINDERS:
         - This is still KNOWLEDGE GATHERING, not resume/cover letter creation
@@ -97,12 +97,21 @@ struct StartPhaseThreeTool: InterviewTool {
 
         WORKFLOW:
         1. Ask what type of writing sample they can provide
-        2. Use `get_user_upload` to collect samples
-        3. If consented, analyze writing style (tone, structure, vocabulary)
-        4. Use `persist_data` to save the writing sample and style notes
+        2. Collect samples via file upload or chat paste (use `ingest_writing_sample` for chat text)
+        3. Evaluate sample quality - ask for more if inadequate (too short, too formulaic, only bullet points)
+        4. If samples are sparse, review prior artifacts for strong writing to excerpt
         5. Compile the dossier by referencing all Phase 1-3 artifacts
         6. Use `submit_for_validation` for final dossier review
-        7. Mark objectives complete and call `next_phase` to finish
+        7. Call `submit_experience_defaults` to generate resume defaults
+        8. Call `submit_candidate_dossier` to persist dossier data
+        9. Mark objectives complete and call `next_phase` to finish
+
+        WRITING SAMPLE QUALITY:
+        - Good samples: 150+ words, professional prose, shows original voice
+        - If inadequate: politely request longer/more personal samples
+        - If user's samples are sparse: use `list_artifacts` and `get_artifact` to find strong writing in Phase 1-2 documents (cover letters, proposals, narrative sections)
+        - Excerpt strong writing from prior artifacts using `ingest_writing_sample` with context noting the source
+        - If writing is strong or exceptional, acknowledge it with a brief compliment—but no praise needed for mediocre writing
 
         AVAILABLE DATA:
         - \(cardCount) knowledge cards covering jobs and skills
@@ -113,6 +122,7 @@ struct StartPhaseThreeTool: InterviewTool {
         DO NOT:
         - Offer to write resumes or cover letters now
         - Skip the writing sample collection
+        - Accept inadequate samples without asking for more
         - Rush through dossier validation
         """
     }

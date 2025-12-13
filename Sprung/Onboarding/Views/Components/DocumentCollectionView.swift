@@ -13,12 +13,21 @@ import UniformTypeIdentifiers
 struct DocumentCollectionView: View {
     let coordinator: OnboardingInterviewCoordinator
     let onAssessCompleteness: () -> Void
+    let onCancelExtractionsAndFinish: () -> Void
     let onDropFiles: ([URL], LargePDFExtractionMethod?) -> Void
     let onSelectFiles: () -> Void
     let onSelectGitRepo: (URL) -> Void
 
     @State private var isDropTargeted = false
     @State private var showGitRepoPicker = false
+    @State private var showActiveAgentsAlert = false
+
+    /// Check if extraction agents are still working
+    private var hasActiveExtractionAgents: Bool {
+        coordinator.ui.hasBatchUploadInProgress ||
+        coordinator.ui.isExtractionInProgress ||
+        coordinator.ui.pendingExtraction != nil
+    }
 
     private var planItems: [KnowledgeCardPlanItem] {
         coordinator.ui.knowledgeCardPlan
@@ -243,7 +252,13 @@ struct DocumentCollectionView: View {
 
     private var actionSection: some View {
         VStack(spacing: 8) {
-            Button(action: onAssessCompleteness) {
+            Button {
+                if hasActiveExtractionAgents {
+                    showActiveAgentsAlert = true
+                } else {
+                    onAssessCompleteness()
+                }
+            } label: {
                 HStack {
                     Image(systemName: "checkmark.circle.fill")
                     Text("Done with Uploads")
@@ -254,6 +269,17 @@ struct DocumentCollectionView: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(.blue)
+            .alert(
+                "Extraction in Progress",
+                isPresented: $showActiveAgentsAlert
+            ) {
+                Button("OK", role: .cancel) { }
+                Button("Cancel Agents and Finish", role: .destructive) {
+                    onCancelExtractionsAndFinish()
+                }
+            } message: {
+                Text("Document extraction agents are still working. You can wait for them to finish, or cancel them and proceed.")
+            }
 
             Text("Click when finished to proceed with knowledge card generation")
                 .font(.caption)

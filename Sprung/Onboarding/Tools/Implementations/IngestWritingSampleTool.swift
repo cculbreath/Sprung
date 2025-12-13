@@ -3,7 +3,7 @@
 //  Sprung
 //
 //  Tool for LLM to ingest writing samples from text pasted in chat.
-//  Creates an artifact record for the writing sample for later style analysis.
+//  Creates an artifact record for the writing sample.
 //
 import Foundation
 import SwiftyJSON
@@ -22,7 +22,7 @@ struct IngestWritingSampleTool: InterviewTool {
                 WORKFLOW:
                 1. User pastes text in chat describing it as a writing sample
                 2. Call this tool with the full text content and descriptive name
-                3. The tool creates an artifact record for later style analysis
+                3. The tool creates an artifact record
 
                 RETURNS: { "status": "ingested", "artifact_id": "<uuid>", "name": "<name>", "character_count": <n> }
 
@@ -102,10 +102,14 @@ struct IngestWritingSampleTool: InterviewTool {
         response["word_count"].int = content.split(separator: " ").count
 
         response["next_action"].string = """
-            Writing sample captured successfully. You can now:
-            1. Ask if the user has more writing samples to share
-            2. If style analysis is consented, analyze the writing style
-            3. Mark one_writing_sample.ingest_sample as completed when done collecting samples
+            Writing sample captured successfully. Evaluate quality:
+            - Is it substantial (150+ words of prose)?
+            - Does it show the candidate's authentic voice?
+
+            If inadequate, ask for a longer or more personal sample.
+            If user has no more samples but corpus is sparse, check prior artifacts for strong writing to excerpt.
+            If the writing is genuinely strong or exceptional, acknowledge it—but no praise needed for mediocre writing.
+            Mark one_writing_sample.ingest_sample as completed when you have at least one quality sample.
             """
 
         return .immediate(response)

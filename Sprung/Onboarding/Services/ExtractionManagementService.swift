@@ -102,9 +102,9 @@ final class ExtractionManagementService: OnboardingEventEmitter {
     private func createStatusMessage(for update: ExtractionProgressUpdate) -> String? {
         switch (update.stage, update.state) {
         case (.fileAnalysis, .active):
-            return update.detail ?? "Analyzing PDF document..."
+            return update.detail ?? "Analyzing document..."
         case (.aiExtraction, .active):
-            return "Processing with Gemini AI..."
+            return update.detail ?? "Processing with Gemini AI..."
         case (.artifactSave, .active):
             return "Saving extracted content..."
         case (.assistantHandoff, .active):

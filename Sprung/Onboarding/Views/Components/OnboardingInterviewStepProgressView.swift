@@ -2,7 +2,7 @@ import SwiftUI
 struct OnboardingInterviewStepProgressView: View {
     @Bindable var coordinator: OnboardingInterviewCoordinator
     var body: some View {
-        HStack(alignment: .center, spacing: 28) {
+        HStack(alignment: .center, spacing: 12) {
             // Note: Wizard step status tracking is handled by WizardProgressTracker
             // This view shows the actual progress from the tracker
             let tracker = coordinator.wizardTracker
@@ -20,11 +20,11 @@ private struct OnboardingStepProgressItem: View {
     let status: OnboardingWizardStepStatus
     @State private var measuredLabelWidth: CGFloat = 0
     @State private var animatedProgress: CGFloat = 0
-    private let bubbleSize: CGFloat = 20
-    private let capsuleHeight: CGFloat = 34
-    private let horizontalPadding: CGFloat = 24
-    private let verticalPadding: CGFloat = 10
-    private let contentSpacing: CGFloat = 12
+    private let bubbleSize: CGFloat = 18
+    private let capsuleHeight: CGFloat = 30
+    private let horizontalPadding: CGFloat = 16
+    private let verticalPadding: CGFloat = 8
+    private let contentSpacing: CGFloat = 8
     var body: some View {
         let font = status == .current ? Font.headline : Font.subheadline
         let textColor: Color = status == .pending ? .secondary : .primary

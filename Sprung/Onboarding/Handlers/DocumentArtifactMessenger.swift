@@ -137,10 +137,8 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
 
     private func handleArtifactProduced(_ record: JSON) async {
         let contentType = record["content_type"].stringValue
-        let sourceType = record["source"].stringValue
-
         // Handle git repository artifacts directly (no batching)
-        if sourceType == "git_repository" || record["type"].stringValue == "git_analysis" {
+        if record["source_type"].stringValue == "git_repository" || record["type"].stringValue == "git_analysis" {
             await sendGitArtifact(record)
             return
         }

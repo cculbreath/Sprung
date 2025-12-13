@@ -31,14 +31,17 @@ actor DocumentProcessingService {
     // MARK: - Public API
     /// Process a document file and return an artifact record
     /// Note: The fileURL is expected to already be in storage (copied by UploadInteractionHandler)
+    /// - Parameter displayFilename: Original filename for user-facing messages (storage URL may have UUID prefix)
     func processDocument(
         fileURL: URL,
         documentType: String,
         callId: String?,
         metadata: JSON,
+        displayFilename: String? = nil,
         statusCallback: (@Sendable (String) -> Void)? = nil
     ) async throws -> JSON {
-        let filename = fileURL.lastPathComponent
+        // Use displayFilename if provided, otherwise fall back to URL's lastPathComponent
+        let filename = displayFilename ?? fileURL.lastPathComponent
         Logger.info("📄 Processing document: \(filename)", category: .ai)
 
         // File is already in storage (copied by UploadInteractionHandler before this is called)
@@ -66,7 +69,8 @@ actor DocumentProcessingService {
             returnTypes: ["text"],
             autoPersist: false,
             timeout: nil,
-            extractionMethod: extractionMethod
+            extractionMethod: extractionMethod,
+            displayFilename: filename
         )
         // Create progress handler that maps to status callback
         let progressHandler: ExtractionProgressHandler? = statusCallback.map { callback in
@@ -137,10 +141,12 @@ actor DocumentProcessingService {
         // Add summary if generated
         if let summary = documentSummary {
             artifactRecord["summary"].string = summary.summary
+            artifactRecord["brief_description"].string = summary.briefDescription
             artifactRecord["summary_generated_at"].string = ISO8601DateFormatter().string(from: Date())
             // Store structured summary fields in metadata
             var summaryMeta = JSON()
             summaryMeta["document_type"].string = summary.documentType
+            summaryMeta["brief_description"].string = summary.briefDescription
             summaryMeta["time_period"].string = summary.timePeriod
             summaryMeta["companies"].arrayObject = summary.companies
             summaryMeta["roles"].arrayObject = summary.roles

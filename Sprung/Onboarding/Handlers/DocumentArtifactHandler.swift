@@ -261,6 +261,7 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
                 documentType: requestKind,
                 callId: callId,
                 metadata: metadata,
+                displayFilename: filename,
                 statusCallback: { [weak self, agentId] statusMsg in
                     guard let self else { return }
                     Task {

@@ -577,6 +577,22 @@ actor LLMMessenger: OnboardingEventEmitter {
             "📝 Built request: previousResponseId=\(previousResponseId?.description ?? "nil"), inputItems=\(inputItems.count), parallelToolCalls=\(parameters.parallelToolCalls?.description ?? "nil"), serviceTier=\(parameters.serviceTier ?? "default"), cacheRetention=\(useCacheRetention ? "24h" : "default"), reasoningEffort=\(effectiveReasoning)",
             category: .ai
         )
+
+        // Log telemetry for token budget tracking
+        let currentPhase = await stateCoordinator.phase
+        RequestTelemetry(
+            phase: currentPhase.rawValue,
+            substate: nil,
+            toolsSentCount: tools.count,
+            instructionsChars: 0,  // instructions not used currently
+            bundledDevMsgsCount: bundledDeveloperMessages.count,
+            inputTokens: nil,  // Will be populated after response
+            outputTokens: nil,
+            cachedTokens: nil,
+            isFirstTurn: previousResponseId == nil,
+            requestType: .userMessage
+        ).log()
+
         return parameters
     }
     /// Determine appropriate tool_choice for the given message context
@@ -674,6 +690,22 @@ actor LLMMessenger: OnboardingEventEmitter {
             """,
             category: .ai
         )
+
+        // Log telemetry for token budget tracking
+        let currentPhase = await stateCoordinator.phase
+        RequestTelemetry(
+            phase: currentPhase.rawValue,
+            substate: nil,
+            toolsSentCount: tools.count,
+            instructionsChars: 0,
+            bundledDevMsgsCount: 0,
+            inputTokens: nil,
+            outputTokens: nil,
+            cachedTokens: nil,
+            isFirstTurn: previousResponseId == nil,
+            requestType: .developerMessage
+        ).log()
+
         return parameters
     }
     private func buildToolResponseRequest(output: JSON, callId: String, reasoningEffort: String? = nil, forcedToolChoice: String? = nil) async -> ModelResponseParameter {
@@ -722,6 +754,22 @@ actor LLMMessenger: OnboardingEventEmitter {
             parameters.reasoning = Reasoning(effort: effectiveReasoning, summary: .auto)
         }
         Logger.info("📝 Built tool response request: parallelToolCalls=\(parameters.parallelToolCalls?.description ?? "nil"), toolChoice=\(forcedToolChoice ?? "auto"), serviceTier=\(parameters.serviceTier ?? "default"), cacheRetention=\(useCacheRetention ? "24h" : "default"), reasoningEffort=\(effectiveReasoning)", category: .ai)
+
+        // Log telemetry for token budget tracking
+        let currentPhase = await stateCoordinator.phase
+        RequestTelemetry(
+            phase: currentPhase.rawValue,
+            substate: nil,
+            toolsSentCount: tools.count,
+            instructionsChars: 0,
+            bundledDevMsgsCount: 0,
+            inputTokens: nil,
+            outputTokens: nil,
+            cachedTokens: nil,
+            isFirstTurn: false,  // Tool responses are never first turn
+            requestType: .toolResponse
+        ).log()
+
         return parameters
     }
     /// Build request for batched tool responses (parallel tool calls)

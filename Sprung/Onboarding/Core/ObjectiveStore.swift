@@ -111,9 +111,8 @@ actor ObjectiveStore: OnboardingEventEmitter {
         ],
         .phase3WritingCorpus: [
             ("one_writing_sample", "Writing sample collected", nil),
-            ("one_writing_sample.collection_setup", "Request writing sample and capture consent/preferences", "one_writing_sample"),
+            ("one_writing_sample.collection_setup", "Request writing sample and capture preferences", "one_writing_sample"),
             ("one_writing_sample.ingest_sample", "Collect/upload at least one writing sample", "one_writing_sample"),
-            ("one_writing_sample.style_analysis", "Analyze writing style when consented", "one_writing_sample"),
             ("dossier_complete", "Dossier completed", nil),
             ("dossier_complete.compile_assets", "Compile applicant assets into dossier", "dossier_complete"),
             ("dossier_complete.validation", "Present dossier summary for validation", "dossier_complete"),

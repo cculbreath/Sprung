@@ -17,6 +17,8 @@ actor DocumentExtractionService {
         let autoPersist: Bool
         let timeout: TimeInterval?
         let extractionMethod: LargePDFExtractionMethod?
+        /// Original filename for user-facing messages (storage URL may have UUID prefix)
+        let displayFilename: String?
 
         init(
             fileURL: URL,
@@ -24,7 +26,8 @@ actor DocumentExtractionService {
             returnTypes: [String] = [],
             autoPersist: Bool = false,
             timeout: TimeInterval? = nil,
-            extractionMethod: LargePDFExtractionMethod? = nil
+            extractionMethod: LargePDFExtractionMethod? = nil,
+            displayFilename: String? = nil
         ) {
             self.fileURL = fileURL
             self.purpose = purpose
@@ -32,6 +35,7 @@ actor DocumentExtractionService {
             self.autoPersist = autoPersist
             self.timeout = timeout
             self.extractionMethod = extractionMethod
+            self.displayFilename = displayFilename
         }
     }
 
@@ -95,13 +99,19 @@ actor DocumentExtractionService {
     private var llmFacade: LLMFacade?
     private let googleAIService = GoogleAIService()
     private let defaultModelId = "gemini-2.0-flash"
+    private var eventBus: EventCoordinator?
 
-    init(llmFacade: LLMFacade?) {
+    init(llmFacade: LLMFacade?, eventBus: EventCoordinator? = nil) {
         self.llmFacade = llmFacade
+        self.eventBus = eventBus
     }
 
     func updateLLMFacade(_ facade: LLMFacade?) {
         self.llmFacade = facade
+    }
+
+    func updateEventBus(_ bus: EventCoordinator?) {
+        self.eventBus = bus
     }
 
     func setInvalidModelHandler(_ handler: @escaping (String) -> Void) {
@@ -116,7 +126,8 @@ actor DocumentExtractionService {
         }
 
         let fileURL = request.fileURL
-        let filename = fileURL.lastPathComponent
+        // Use displayFilename if provided, otherwise fall back to URL's lastPathComponent
+        let filename = request.displayFilename ?? fileURL.lastPathComponent
         let sizeInBytes = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? NSNumber)?.intValue ?? 0
         let contentType = contentTypeForFile(at: fileURL) ?? "application/octet-stream"
         let extractionStart = Date()
@@ -360,11 +371,11 @@ actor DocumentExtractionService {
         )
 
         await notifyProgress(.fileAnalysis, .completed, detail: "Using \(modelId)")
-        await notifyProgress(.aiExtraction, .active, detail: "Uploading PDF to Google...")
+        await notifyProgress(.aiExtraction, .active, detail: "Uploading \(filename) to Google...")
 
         let llmStart = Date()
         do {
-            let (extractedTitle, extractedText) = try await googleAIService.extractTextFromPDF(
+            let (extractedTitle, extractedText, tokenUsage) = try await googleAIService.extractTextFromPDF(
                 pdfData: fileData,
                 filename: filename,
                 modelId: modelId
@@ -380,6 +391,18 @@ actor DocumentExtractionService {
                     "chars": "\(extractedText.count)"
                 ]
             )
+
+            // Emit token usage event if available
+            if let usage = tokenUsage, let eventBus = eventBus {
+                await eventBus.publish(.llmTokenUsageReceived(
+                    modelId: modelId,
+                    inputTokens: usage.promptTokenCount,
+                    outputTokens: usage.candidatesTokenCount,
+                    cachedTokens: 0,
+                    reasoningTokens: 0,
+                    source: .documentExtraction
+                ))
+            }
 
             if extractedText.isEmpty {
                 await notifyProgress(.aiExtraction, .failed, detail: "No text extracted")

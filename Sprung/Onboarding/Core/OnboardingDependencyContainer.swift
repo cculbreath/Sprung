@@ -327,6 +327,11 @@ final class OnboardingDependencyContainer {
         eventBus: EventCoordinator, documentExtractionService: DocumentExtractionService, dataStore: InterviewDataStore,
         stateCoordinator: StateCoordinator, agentTracker: AgentActivityTracker
     ) -> DocumentComponents {
+        // Update the extraction service with the event bus for token tracking
+        Task {
+            await documentExtractionService.updateEventBus(eventBus)
+        }
+
         let uploadStorage = OnboardingUploadStorage()
         let documentProcessingService = DocumentProcessingService(
             documentExtractionService: documentExtractionService, uploadStorage: uploadStorage, dataStore: dataStore

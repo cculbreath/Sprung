@@ -13,6 +13,13 @@ actor GoogleAIService {
 
     // MARK: - Types
 
+    /// Token usage from a Gemini API response
+    struct GeminiTokenUsage {
+        let promptTokenCount: Int
+        let candidatesTokenCount: Int
+        let totalTokenCount: Int
+    }
+
     struct GeminiModel: Identifiable, Hashable {
         let id: String
         let displayName: String
@@ -261,7 +268,7 @@ actor GoogleAIService {
         mimeType: String,
         modelId: String,
         prompt: String
-    ) async throws -> String {
+    ) async throws -> (content: String, tokenUsage: GeminiTokenUsage?) {
         let apiKey = try getAPIKey()
         let url = URL(string: "\(baseURL)/v1beta/models/\(modelId):generateContent?key=\(apiKey)")!
 
@@ -311,9 +318,23 @@ actor GoogleAIService {
             throw GoogleAIError.invalidResponse
         }
 
+        // Parse token usage from usageMetadata
+        var tokenUsage: GeminiTokenUsage?
+        if let usageMetadata = json["usageMetadata"] as? [String: Any] {
+            let promptTokens = usageMetadata["promptTokenCount"] as? Int ?? 0
+            let candidatesTokens = usageMetadata["candidatesTokenCount"] as? Int ?? 0
+            let totalTokens = usageMetadata["totalTokenCount"] as? Int ?? 0
+            tokenUsage = GeminiTokenUsage(
+                promptTokenCount: promptTokens,
+                candidatesTokenCount: candidatesTokens,
+                totalTokenCount: totalTokens
+            )
+            Logger.info("📊 Token usage: prompt=\(promptTokens), candidates=\(candidatesTokens), total=\(totalTokens)", category: .ai)
+        }
+
         Logger.info("✅ Content generated successfully (\(text.count) chars)", category: .ai)
 
-        return text
+        return (text, tokenUsage)
     }
 
     // MARK: - Summarization API
@@ -426,7 +447,7 @@ actor GoogleAIService {
         filename: String,
         modelId: String,
         prompt: String? = nil
-    ) async throws -> (title: String?, content: String) {
+    ) async throws -> (title: String?, content: String, tokenUsage: GeminiTokenUsage?) {
         let extractionPrompt = prompt ?? DocumentExtractionPrompts.defaultExtractionPrompt
 
         // Upload file
@@ -450,7 +471,7 @@ actor GoogleAIService {
         }
 
         // Generate content
-        let result = try await extractPDFContent(
+        let (result, tokenUsage) = try await extractPDFContent(
             fileURI: activeFile.uri,
             mimeType: "application/pdf",
             modelId: modelId,
@@ -462,7 +483,7 @@ actor GoogleAIService {
            let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
             let title = json["title"] as? String
             let content = json["content"] as? String ?? result
-            return (title, content)
+            return (title, content, tokenUsage)
         }
 
         // If not valid JSON, try to extract from markdown code block
@@ -476,11 +497,11 @@ actor GoogleAIService {
                    let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
                     let title = json["title"] as? String
                     let content = json["content"] as? String ?? result
-                    return (title, content)
+                    return (title, content, tokenUsage)
                 }
             }
         }
 
-        return (nil, result)
+        return (nil, result, tokenUsage)
     }
 }

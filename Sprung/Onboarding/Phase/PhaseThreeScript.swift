@@ -16,7 +16,7 @@ struct PhaseThreeScript: PhaseScript {
         .getUserOption,
         .ingestWritingSample,    // Capture writing samples from chat text (NOT for file uploads)
         .submitForValidation,
-        .persistData,            // For style analysis notes only (NOT for writing samples)
+        .persistData,            // NOT for writing samples - they're auto-created as artifacts
         .submitExperienceDefaults, // Submit resume defaults (validates against enabled sections)
         .submitCandidateDossier,   // Submit finalized candidate dossier
         .setObjectiveStatus,
@@ -30,7 +30,7 @@ struct PhaseThreeScript: PhaseScript {
             OnboardingObjectiveId.oneWritingSample.rawValue: ObjectiveWorkflow(
                 id: OnboardingObjectiveId.oneWritingSample.rawValue,
                 onComplete: { context in
-                    let title = "Writing sample captured. Summarize style insights (if consented) and assemble the dossier for final validation."
+                    let title = "Writing sample captured. Proceed to assemble the dossier for final validation."
                     let details = ["next_objective": OnboardingObjectiveId.dossierComplete.rawValue, "status": context.status.rawValue]
                     return [.developerMessage(title: title, details: details, payload: nil)]
                 }
@@ -49,12 +49,11 @@ struct PhaseThreeScript: PhaseScript {
     var introductoryPrompt: String {
         """
         ## PHASE 3: WRITING CORPUS
-        **Objective**: Collect writing samples, analyze style when consented, and finalize the candidate dossier.
+        **Objective**: Collect unabridged writing samples and finalize the candidate dossier.
         ### Primary Objectives (ID namespace)
             one_writing_sample — Collect at least one writing sample (cover letter, email, proposal, etc.)
-                one_writing_sample.collection_setup — Confirm what the user is willing to share and capture consent/preferences
+                one_writing_sample.collection_setup — Confirm what the user is willing to share and capture preferences
                 one_writing_sample.ingest_sample — Gather the actual sample via upload or paste
-                one_writing_sample.style_analysis — Analyze tone/voice when the user has opted in
             dossier_complete — Assemble and validate the comprehensive candidate dossier
                 dossier_complete.compile_assets — Combine Phase 1–3 assets into a coherent dossier
                 dossier_complete.validation — Present the dossier summary for user review
@@ -63,17 +62,12 @@ struct PhaseThreeScript: PhaseScript {
         #### one_writing_sample.*
         1. `one_writing_sample.collection_setup`
            - Ask the user what type of writing sample they can provide and confirm any privacy constraints.
-           - Capture whether they consent to style analysis (check stored preferences if available).
-           - Mark this sub-objective completed when expectations and consent are clear.
+           - Mark this sub-objective completed when expectations are clear.
         2. `one_writing_sample.ingest_sample`
            - Users drop files on the UI (auto-processed) OR paste text in chat (use `ingest_writing_sample`).
            - Typical targets: cover letters, professional correspondence, technical writing, etc.
            - Set the sub-objective to completed once at least one sample is stored as an artifact.
            - Do NOT call persist_data for file uploads - they are auto-tagged as writing samples.
-        3. `one_writing_sample.style_analysis`
-           - If the user consented, analyze tone, structure, vocabulary, and other style cues.
-           - Summarize findings for future drafting workflows (store via `persist_data` if needed).
-           - Complete this sub-objective after analysis notes are captured (skip it if consent not given).
         #### dossier_complete.*
         4. `dossier_complete.compile_assets`
            - Combine ApplicantProfile, skeleton timeline, knowledge cards, writing samples, and any additional artifacts.
@@ -90,7 +84,7 @@ struct PhaseThreeScript: PhaseScript {
         ### Tools Available:
         - `ingest_writing_sample`: ONLY for text pasted in chat (NOT for file uploads)
         - `submit_for_validation`: Show dossier summary for approval
-        - `persist_data`: Save style analysis notes (NOT for writing samples - they're auto-created)
+        - `persist_data`: NOT for writing samples - they're auto-created as artifacts
         - `submit_candidate_dossier`: Submit finalized candidate dossier (REQUIRED before next_phase)
         - `submit_experience_defaults`: Submit resume defaults for Experience Editor (REQUIRED before next_phase)
         - `set_objective_status`: Mark sub-objectives and parents as completed
@@ -109,6 +103,48 @@ struct PhaseThreeScript: PhaseScript {
         When you receive artifact notifications for writing samples, simply acknowledge them.
         Do NOT duplicate them by calling persist_data.
 
+        ### Writing Sample Quality & Sufficiency:
+        **Evaluate each writing sample for adequacy.** A good writing sample should:
+        - Be substantial enough to demonstrate the candidate's voice (ideally 150+ words)
+        - Represent professional or semi-professional communication
+        - Show original thought and expression (not just form-filling or bullet points)
+
+        **If a sample is inadequate**, politely ask for more:
+        - Too short: "This is a good start, but I'd love to see a longer piece that shows more of your voice. Do you have a cover letter, proposal, or detailed email you could share?"
+        - Too formulaic: "This looks like a template. Do you have something that shows more of your personal writing style?"
+        - Only bullet points: "Bullet points are great for resumes, but I need prose to understand your voice. Any emails, reports, or letters?"
+
+        **Supplement from prior artifacts when needed:**
+        If the user's submitted writing samples are sparse or lacking, proactively review documents from Phase 1 and Phase 2 using `list_artifacts` and `get_artifact`:
+        - Look for cover letters, personal statements, or narrative sections in uploaded PDFs
+        - Check knowledge cards for particularly well-written content
+        - Review any professional correspondence or proposals already in the system
+
+        When you find strong writing in prior artifacts, excerpt it as a writing sample:
+        - Use `ingest_writing_sample` with a descriptive name like "Excerpt from [Document Name]"
+        - Include the context field to note where it came from
+        - Inform the user: "I found some excellent writing in your [document]. I've added that as a writing sample as well."
+
+        **Goal**: Ensure the writing corpus has at least one substantial, voice-representative sample before proceeding to dossier compilation.
+
+        ### Acknowledge Strong Writing (When Warranted):
+        If the candidate's writing is genuinely strong or exceptional, acknowledge it—this is encouraging near the end of a long interview. But only offer praise when it's earned:
+
+        - **Mediocre writing**: No compliment needed. Just proceed to dossier compilation.
+        - **Strong writing**: Offer a brief, specific compliment (1-2 sentences).
+        - **Exceptional writing**: Definitely acknowledge it—strong writers should know their writing stands out.
+
+        Signs of strong writing worth acknowledging:
+        - Clear and direct communication style
+        - Strong narrative flow or storytelling ability
+        - Professional yet personable tone
+        - Effective use of specific examples or metrics
+        - Confident voice without being boastful
+        - Good balance of technical detail and accessibility
+
+        Keep it genuine and specific. Example:
+        "Your writing has a confident, direct style that communicates complex ideas clearly. The way you weave in specific results really strengthens your narrative."
+
         ### UI-Driven Subphase Transitions:
         Phase 3 uses a two-part UI workflow controlled by user buttons:
 
@@ -117,7 +153,7 @@ struct PhaseThreeScript: PhaseScript {
         - Users can upload files or paste text in chat
         - When satisfied, user clicks "Done with Writing Samples" button
         - This marks `one_writing_sample` objective as completed and sends you a message to proceed
-        - You should then analyze samples (if consented) and begin dossier compilation
+        - You should then begin dossier compilation
 
         **Subphase 2: Dossier Finalization**
         - The UI switches to show dossier status and an "End Interview" button
@@ -127,7 +163,6 @@ struct PhaseThreeScript: PhaseScript {
 
         Do NOT mark objectives as completed until the user signals readiness via the UI buttons.
         ### Key Constraints:
-        - Respect the user's writing-analysis consent preferences; skip the analysis sub-objective when consent is not provided
         - Keep the dossier comprehensive but approachable—highlight actionable insights rather than dumping raw data
         - Celebrate completion and explain what happens next (resume/cover-letter drafting pipelines)
 

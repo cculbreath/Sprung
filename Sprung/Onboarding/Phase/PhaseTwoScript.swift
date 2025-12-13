@@ -107,6 +107,10 @@ struct PhaseTwoScript: PhaseScript {
         10. `dispatch_kc_agents` → spawns parallel agents to generate cards
             - Each agent reads full artifact text and generates comprehensive prose
             - Results return as an array of completed cards
+            - **Include relevant chat excerpts**: If the user shared information verbally during the interview
+              that isn't captured in uploaded documents, include those quotes in `chat_excerpts` array.
+              Example: User said "I actually led that project even though my title was junior"—include this
+              so the agent can incorporate it. Only include when relevant; this field is optional.
 
         **PHASE D: Validation & Persistence**
         11. For EACH card returned: call `submit_knowledge_card` to persist

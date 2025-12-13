@@ -618,6 +618,12 @@ private extension SetupWizardView {
         }
         NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
         appState.reconfigureOpenRouterService()
+
+        // Directly configure OpenRouterService with the key we have,
+        // rather than relying on Keychain read-back which can race
+        if !router.isEmpty {
+            openRouterService.configure(apiKey: router)
+        }
     }
 
     func finalizeDefaults() {

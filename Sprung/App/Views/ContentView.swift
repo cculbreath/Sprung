@@ -198,15 +198,26 @@ struct ContentView: View {
     }
     // MARK: - Helper Methods
     private func shouldShowSetupWizard() -> Bool {
-        guard !hasCompletedSetupWizard else { return false }
         // Don't show wizard in read-only mode - the underlying content is disabled
         // which would make all wizard buttons non-interactive
         guard !appEnvironment.launchState.isReadOnly else { return false }
+
         let hasOpenRouterKey = !(APIKeyManager.get(.openRouter)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
         let hasOpenAIKey = !(APIKeyManager.get(.openAI)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+
+        // Always show wizard if required keys are missing, even if previously completed
+        // (handles case where keys were wiped by clean build or user action)
+        if !hasOpenRouterKey || !hasOpenAIKey {
+            return true
+        }
+
+        // If required keys are present and wizard was completed, don't show again
+        guard !hasCompletedSetupWizard else { return false }
+
+        // For first-time users, also check optional keys and models
         let hasGeminiKey = !(APIKeyManager.get(.gemini)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
         let hasModels = !enabledLLMStore.enabledModels.isEmpty
-        return !hasOpenRouterKey || !hasOpenAIKey || !hasGeminiKey || !hasModels
+        return !hasGeminiKey || !hasModels
     }
     private func openTemplateEditor() {
         presentTemplateEditorWindow()

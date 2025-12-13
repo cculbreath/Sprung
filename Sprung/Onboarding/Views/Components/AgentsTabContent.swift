@@ -137,6 +137,14 @@ struct AgentRowView: View {
                                 .font(.caption2.monospacedDigit())
                                 .foregroundStyle(.tertiary)
                         }
+
+                        if agent.totalTokens > 0 {
+                            Text("·")
+                                .foregroundStyle(.tertiary)
+                            Text(TokenUsageTracker.formatTokenCount(agent.totalTokens))
+                                .font(.caption2.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
 
@@ -260,6 +268,21 @@ struct AgentTranscriptView: View {
                         .foregroundStyle(.secondary)
 
                     statusBadge
+
+                    if agent.totalTokens > 0 {
+                        HStack(spacing: 4) {
+                            Text("In:")
+                                .foregroundStyle(.tertiary)
+                            Text(TokenUsageTracker.formatTokenCount(agent.inputTokens))
+                                .monospacedDigit()
+                            Text("Out:")
+                                .foregroundStyle(.tertiary)
+                            Text(TokenUsageTracker.formatTokenCount(agent.outputTokens))
+                                .monospacedDigit()
+                        }
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    }
                 }
             }
 

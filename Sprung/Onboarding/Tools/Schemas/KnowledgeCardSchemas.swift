@@ -39,6 +39,26 @@ enum KnowledgeCardSchemas {
         additionalProperties: false
     )
 
+    // MARK: - Chat Excerpt Input Schema
+
+    /// Schema for a chat excerpt to include as source material
+    /// Used by: DispatchKCAgentsTool, ProposeCardAssignmentsTool
+    static let chatExcerptInputSchema = JSONSchema(
+        type: .object,
+        description: "A conversation excerpt to include as source material for a knowledge card",
+        properties: [
+            "excerpt": JSONSchema(
+                type: .string,
+                description: "The quoted text from the conversation (user's exact words)"
+            ),
+            "context": JSONSchema(
+                type: .string,
+                description: "Brief context explaining what this excerpt demonstrates or why it's relevant"
+            )
+        ],
+        required: ["excerpt"]
+    )
+
     // MARK: - Card Proposal Schema
 
     /// Schema for a card proposal (used in dispatch workflow)
@@ -66,6 +86,15 @@ enum KnowledgeCardSchemas {
                 type: .array,
                 description: "Array of artifact IDs assigned to this card",
                 items: JSONSchema(type: .string)
+            ),
+            "chat_excerpts": JSONSchema(
+                type: .array,
+                description: """
+                    Relevant conversation excerpts to include as source material.
+                    Use this when the user has shared information verbally that isn't in uploaded documents.
+                    Each excerpt should be a direct quote from the user with optional context.
+                    """,
+                items: chatExcerptInputSchema
             ),
             "notes": JSONSchema(
                 type: .string,

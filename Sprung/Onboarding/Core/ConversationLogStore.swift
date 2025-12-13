@@ -19,6 +19,15 @@ enum ConversationLogEntryType: String {
     case system = "SYSTEM"
 }
 
+/// Token usage for a conversation entry
+struct EntryTokenUsage {
+    let input: Int
+    let output: Int
+    let cached: Int
+
+    var total: Int { input + output }
+}
+
 /// A single entry in the conversation log
 struct ConversationLogEntry: Identifiable {
     let id = UUID()
@@ -26,6 +35,12 @@ struct ConversationLogEntry: Identifiable {
     let type: ConversationLogEntryType
     let content: String
     let metadata: [String: String]
+
+    // Token usage (populated for assistant messages correlated with token events)
+    var tokenUsage: EntryTokenUsage?
+
+    // Running total at this point in the conversation
+    var runningTotal: Int?
 
     var formattedTimestamp: String {
         let formatter = DateFormatter()
@@ -38,7 +53,28 @@ struct ConversationLogEntry: Identifiable {
         if !metadata.isEmpty {
             metaString = " | meta: " + metadata.map { "\($0.key)=\($0.value)" }.joined(separator: ", ")
         }
-        return "[\(formattedTimestamp)] [\(type.rawValue)] \(content)\(metaString)"
+
+        var tokenString = ""
+        if let usage = tokenUsage {
+            tokenString = " | tokens: in=\(usage.input), out=\(usage.output)"
+            if usage.cached > 0 {
+                tokenString += ", cached=\(usage.cached)"
+            }
+        }
+        if let total = runningTotal {
+            // Use simple formatting since we can't call MainActor methods here
+            let formatted: String
+            if total >= 1_000_000 {
+                formatted = String(format: "%.1fM", Double(total) / 1_000_000)
+            } else if total >= 1_000 {
+                formatted = String(format: "%.1fK", Double(total) / 1_000)
+            } else {
+                formatted = "\(total)"
+            }
+            tokenString += " | running=\(formatted)"
+        }
+
+        return "[\(formattedTimestamp)] [\(type.rawValue)] \(content)\(metaString)\(tokenString)"
     }
 }
 
@@ -47,6 +83,12 @@ struct ConversationLogEntry: Identifiable {
 final class ConversationLogStore {
     private var entries: [ConversationLogEntry] = []
     private let maxEntries = 2000
+
+    // Running token total for the session
+    private var runningTokenTotal: Int = 0
+
+    // Time window for correlating token events with messages (500ms)
+    private let correlationWindow: TimeInterval = 0.5
 
     init() {}
 
@@ -120,9 +162,53 @@ final class ConversationLogStore {
                 addEntry(type: .system, content: "Response includes \(tools.count) tool call(s)", metadata: ["messageId": String(id.uuidString.prefix(8))])
             }
 
+        // Token usage events (correlate with recent assistant messages)
+        case .llmTokenUsageReceived(_, let inputTokens, let outputTokens, let cachedTokens, _, let source):
+            // Only track main coordinator tokens for conversation correlation
+            guard source == .mainCoordinator else { break }
+
+            // Update running total
+            runningTokenTotal += inputTokens + outputTokens
+
+            // Create token usage
+            let tokenUsage = EntryTokenUsage(
+                input: inputTokens,
+                output: outputTokens,
+                cached: cachedTokens
+            )
+
+            // Correlate with recent assistant message
+            attachTokenToRecentAssistantMessage(tokenUsage)
+
         default:
             break
         }
+    }
+
+    /// Attach token usage to the most recent assistant message within the correlation window
+    private func attachTokenToRecentAssistantMessage(_ tokenUsage: EntryTokenUsage) {
+        let now = Date()
+
+        // Find the most recent assistant entry within the time window
+        for i in stride(from: entries.count - 1, through: max(0, entries.count - 10), by: -1) {
+            let entry = entries[i]
+
+            // Check if it's within the time window
+            guard now.timeIntervalSince(entry.timestamp) <= correlationWindow else {
+                continue
+            }
+
+            // Check if it's an assistant message without tokens already
+            if entry.type == .assistant && entry.tokenUsage == nil {
+                entries[i].tokenUsage = tokenUsage
+                entries[i].runningTotal = runningTokenTotal
+                Logger.debug("📊 Correlated tokens with assistant message: in=\(tokenUsage.input), out=\(tokenUsage.output)", category: .ai)
+                return
+            }
+        }
+
+        // No recent assistant message found - log but don't create orphan entry
+        Logger.debug("📊 Token usage received but no recent assistant message to correlate (running total: \(runningTokenTotal))", category: .ai)
     }
 
     // MARK: - Entry Management
@@ -148,6 +234,12 @@ final class ConversationLogStore {
 
     func clear() {
         entries.removeAll()
+        runningTokenTotal = 0
+    }
+
+    /// Get the current running token total
+    func getRunningTokenTotal() -> Int {
+        runningTokenTotal
     }
 
     // MARK: - Export

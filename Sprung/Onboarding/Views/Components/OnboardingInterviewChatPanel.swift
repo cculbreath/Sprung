@@ -37,10 +37,10 @@ struct OnboardingInterviewChatPanel: View {
     @State private var reasoningDismissTime: Date?
     @State private var reasoningStreamStartLength: Int = 0
     @State private var reasoningTimerTick: Int = 0
-    private let horizontalPadding: CGFloat = 32
-    private let topPadding: CGFloat = 28
-    private let bottomPadding: CGFloat = 28
-    private let sectionSpacing: CGFloat = 20
+    private let horizontalPadding: CGFloat = 20
+    private let topPadding: CGFloat = 16
+    private let bottomPadding: CGFloat = 16
+    private let sectionSpacing: CGFloat = 14
 
     private var bannerVisible: Bool {
         !(coordinator.ui.modelAvailabilityMessage?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
@@ -152,7 +152,7 @@ struct OnboardingInterviewChatPanel: View {
             .padding(.bottom, bottomPadding)
             .animation(.easeInOut(duration: 0.2), value: coordinator.ui.isExtractionInProgress)
         }
-        .frame(minWidth: 640, maxWidth: .infinity, maxHeight: .infinity)
+        .frame(minWidth: 480, maxWidth: .infinity, maxHeight: .infinity)
         // .animation(.easeInOut(duration: 0.2), value: coordinator.latestReasoningSummary)
         .animation(.easeInOut(duration: 0.2), value: coordinator.ui.modelAvailabilityMessage)
         .alert("Export Failed", isPresented: Binding(
@@ -191,7 +191,7 @@ struct OnboardingInterviewChatPanel: View {
                     .frame(height: 1)
                     .id("bottom")
             }
-            .padding(20)
+            .padding(14)
         }
         .textSelection(.enabled)
         .background(bubbleShape.fill(.thinMaterial))

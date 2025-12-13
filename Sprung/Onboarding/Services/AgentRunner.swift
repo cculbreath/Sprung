@@ -397,6 +397,16 @@ actor AgentRunner {
             reasoningTokens: reasoningTokens,
             source: source
         ))
+
+        // Update agent's token tracking
+        await MainActor.run {
+            tracker?.addTokenUsage(
+                agentId: config.agentId,
+                input: inputTokens,
+                output: outputTokens,
+                cached: cachedTokens
+            )
+        }
     }
 }
 

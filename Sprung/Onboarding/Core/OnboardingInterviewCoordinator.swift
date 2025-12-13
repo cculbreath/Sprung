@@ -291,7 +291,7 @@ final class OnboardingInterviewCoordinator {
         userMessage["role"].string = "user"
         userMessage["content"].string = """
             I'm done uploading writing samples. \
-            Please analyze the samples (if I consented to style analysis) and proceed to compile my candidate dossier.
+            Please proceed to compile my candidate dossier.
             """
         await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
     }
@@ -601,6 +601,38 @@ final class OnboardingInterviewCoordinator {
         }
         await eventBus.publish(.llmSendDeveloperMessage(payload: payload))
     }
+
+    /// Delete an artifact record and notify the LLM via developer message.
+    /// Called when user deletes an artifact from the Artifacts tab.
+    func deleteArtifactRecord(id: String) async {
+        // Delete from repository (returns the deleted artifact for notification)
+        guard let deleted = await state.deleteArtifactRecord(id: id) else {
+            Logger.warning("⚠️ Failed to delete artifact: \(id) - not found", category: .ai)
+            return
+        }
+
+        let filename = deleted["filename"].stringValue
+        let title = deleted["metadata"]["title"].string ?? filename
+
+        // Update UI state
+        await MainActor.run {
+            ui.artifactRecords = container.artifactRepository.artifactRecordsSync
+        }
+
+        // Send developer message to notify LLM
+        await sendDeveloperMessage(
+            title: "Artifact Deleted by User",
+            details: [
+                "artifact_id": id,
+                "filename": filename,
+                "title": title,
+                "action": "The user has deleted this artifact from the Artifacts tab. It is no longer available for reference."
+            ]
+        )
+
+        Logger.info("🗑️ Artifact deleted and LLM notified: \(filename)", category: .ai)
+    }
+
     /// Cancel all active LLM streams and ingestion tasks.
     /// Called when user clicks the Stop button.
     func requestCancelLLM() async {
@@ -617,6 +649,35 @@ final class OnboardingInterviewCoordinator {
 
         Logger.info("✅ All streams and ingestion cancelled", category: .ai)
     }
+
+    /// Cancel extraction agents and finish the document upload phase.
+    /// Called when user chooses to cancel running agents from the alert dialog.
+    func cancelExtractionAgentsAndFinishUploads() async {
+        Logger.info("🛑 Cancelling extraction agents and finishing uploads", category: .ai)
+
+        // Cancel any document/git ingestion in progress
+        await container.artifactIngestionCoordinator.cancelAllIngestion()
+
+        // Clear extraction-related UI state
+        await MainActor.run {
+            ui.hasBatchUploadInProgress = false
+            ui.isExtractionInProgress = false
+            ui.extractionStatusMessage = nil
+        }
+        await eventBus.publish(.pendingExtractionUpdated(nil, statusMessage: nil))
+        await eventBus.publish(.processingStateChanged(false))
+
+        // Deactivate document collection UI
+        await MainActor.run {
+            ui.isDocumentCollectionActive = false
+        }
+
+        // Send message to LLM
+        await sendChatMessage("I'm done uploading documents. (Note: Some document extractions were cancelled.) Please assess the completeness of my evidence.")
+
+        Logger.info("✅ Extraction agents cancelled and document upload phase finished", category: .ai)
+    }
+
     // MARK: - Data Store Management (Delegated to InterviewSessionCoordinator)
     func clearArtifacts() {
         sessionCoordinator.clearArtifacts()
