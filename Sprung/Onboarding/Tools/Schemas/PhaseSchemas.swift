@@ -52,20 +52,20 @@ enum PhaseSchemas {
         JSONSchema(
             type: .object,
             description: """
-                Request transition to the next interview phase (Phase 1 → Phase 2 → Phase 3 → Complete).
-                Transitions immediately. If objectives are incomplete, they are listed in the response.
+                Skip to the next interview phase. Use when user wants to skip or when stuck.
+                Normal progression uses phase-specific tools (dispatch_kc_agents, submit_knowledge_card, etc.).
                 RETURNS:
-                - { "status": "completed", "previous_phase": "...", "new_phase": "...", "next_required_tool": "start_phase_two" or "start_phase_three" }
-                - If objectives incomplete: includes "skipped_objectives" array
-                - Already complete: { "status": "completed", "message": "Interview is already complete" }
-                - If experience_defaults not persisted (Phase 3 → Complete): { "error": true, "reason": "missing_experience_defaults", ... }
-                Phase transitions:
-                - Phase 1 (Core Facts) → Phase 2 (Deep Dive) → call start_phase_two next
-                - Phase 2 (Deep Dive) → Phase 3 (Writing Corpus) → call start_phase_three next
-                - Phase 3 (Writing Corpus) → Complete (REQUIRES experience_defaults to be persisted first)
-                IMPORTANT: Before transitioning from Phase 3 to Complete, you MUST call persist_data with dataType="experience_defaults".
+                - { "status": "completed", "new_phase": "...", "next_required_tool": "..." }
+                - If objectives skipped: includes "skipped_objectives" array
+                - Phase 2→3 with no evidence: { "status": "warning", "warning": "no_evidence_collected" } - call again with confirm_skip=true to proceed
+                - Phase 3→Complete without experience_defaults: { "error": true, "reason": "missing_experience_defaults" }
                 """,
-            properties: [:],
+            properties: [
+                "confirm_skip": JSONSchema(
+                    type: .boolean,
+                    description: "Set to true to confirm skipping when warned about missing evidence/data"
+                )
+            ],
             required: [],
             additionalProperties: false
         )

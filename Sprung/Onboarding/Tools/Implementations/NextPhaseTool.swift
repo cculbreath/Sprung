@@ -16,7 +16,14 @@ struct NextPhaseTool: InterviewTool {
         self.dataStore = dataStore
     }
     var name: String { OnboardingToolName.nextPhase.rawValue }
-    var description: String { "Transition to the next interview phase. Returns {status, new_phase, next_required_tool}." }
+    var description: String {
+        """
+        Skip to the next interview phase. Use this when user wants to skip remaining steps \
+        or when stuck. Normal progression uses phase-specific tools (submit_for_validation, \
+        configure_enabled_sections, dispatch_kc_agents, etc.). Returns {status, new_phase, \
+        skipped_objectives, next_required_tool}.
+        """
+    }
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {
         // Check if we can advance to the next phase
@@ -29,6 +36,27 @@ struct NextPhaseTool: InterviewTool {
             nextPhase = .phase2DeepDive
         case .phase2DeepDive:
             nextPhase = .phase3WritingCorpus
+            // VALIDATION: Warn if no evidence documents were uploaded
+            let artifacts = await dataStore.list(dataType: "artifact")
+            let knowledgeCards = await dataStore.list(dataType: "knowledge_card")
+            if artifacts.isEmpty && knowledgeCards.isEmpty {
+                Logger.warning("⚠️ next_phase warning: no evidence documents or knowledge cards", category: .ai)
+                var response = JSON()
+                response["status"].string = "warning"
+                response["warning"].string = "no_evidence_collected"
+                response["message"].string = """
+                    No evidence documents were uploaded and no knowledge cards were generated. \
+                    This will result in generic resume content without specific achievements. \
+                    Are you sure you want to proceed to Phase 3? If so, call next_phase again with \
+                    confirm_skip=true. Otherwise, use open_document_collection to upload evidence.
+                    """
+                // Check if user confirmed the skip
+                let confirmSkip = params["confirm_skip"].boolValue
+                if !confirmSkip {
+                    return .immediate(response)
+                }
+                Logger.info("✅ User confirmed skip to Phase 3 without evidence", category: .ai)
+            }
         case .phase3WritingCorpus:
             nextPhase = .complete
             // VALIDATION: experience_defaults MUST be persisted before completing the interview
