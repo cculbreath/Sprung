@@ -121,6 +121,8 @@ actor AgentRunner {
     private var turnCount: Int = 0
     private var isCompleted: Bool = false
     private var completionResult: JSON?
+    private var textOnlyRetries: Int = 0
+    private let maxTextOnlyRetries: Int = 2
 
     // MARK: - Initialization
 
@@ -210,12 +212,39 @@ actor AgentRunner {
 
                 // Check for tool calls
                 guard let toolCalls = message.toolCalls, !toolCalls.isEmpty else {
-                    // No tool calls and model stopped - check if it completed
+                    // No tool calls - check if already completed
                     if isCompleted {
                         break
                     }
-                    throw AgentRunnerError.noCompletionTool
+
+                    // Track consecutive text-only responses
+                    textOnlyRetries += 1
+                    await logTranscript(
+                        type: .error,
+                        content: "No tool call in response (attempt \(textOnlyRetries)/\(maxTextOnlyRetries))",
+                        details: message.content ?? "(no content)"
+                    )
+
+                    if textOnlyRetries >= maxTextOnlyRetries {
+                        throw AgentRunnerError.noCompletionTool
+                    }
+
+                    // Send reminder to use the return_result tool
+                    let reminderMessage = """
+                    You must call the `return_result` tool to submit your completed knowledge card.
+
+                    Do not respond with text only - you MUST call `return_result` with a JSON object containing:
+                    - card_type, title, prose (500-2000+ words), highlights, skills, metrics, sources
+
+                    Call `return_result` now with your completed card.
+                    """
+                    messages.append(buildUserMessage(content: reminderMessage))
+                    await logTranscript(type: .system, content: "Sent return_result reminder")
+                    continue
                 }
+
+                // Successfully got tool calls - reset retry counter
+                textOnlyRetries = 0
 
                 // Check for completion tool first
                 if let completionCall = toolCalls.first(where: { $0.function.name == "return_result" }) {
@@ -318,6 +347,13 @@ actor AgentRunner {
         ChatCompletionParameters.Message(
             role: .user,
             content: .text(config.initialUserMessage)
+        )
+    }
+
+    private func buildUserMessage(content: String) -> ChatCompletionParameters.Message {
+        ChatCompletionParameters.Message(
+            role: .user,
+            content: .text(content)
         )
     }
 
