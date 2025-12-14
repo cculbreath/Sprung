@@ -461,6 +461,15 @@ actor StateCoordinator: OnboardingEventEmitter {
     func getHasStreamedFirstResponse() async -> Bool {
         await streamQueueManager.getHasStreamedFirstResponse()
     }
+
+    /// Restore streaming state when resuming a session
+    /// Call this after restoring messages to mark that conversation is in progress
+    func restoreStreamingState(hasMessages: Bool) async {
+        if hasMessages {
+            await streamQueueManager.restoreState(hasStreamedFirstResponse: true)
+            Logger.info("✅ Restored hasStreamedFirstResponse=true (session has messages)", category: .ai)
+        }
+    }
     // MARK: - LLM State Accessors (Delegated to LLMStateManager)
     /// Get allowed tool names
     func getAllowedToolNames() async -> Set<String> {

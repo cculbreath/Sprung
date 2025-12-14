@@ -107,6 +107,11 @@ final class InterviewSessionCoordinator {
         // Restore artifacts to state coordinator
         await restoreArtifacts(from: session)
 
+        // Restore streaming state (must be done after messages are restored)
+        // This ensures tool_choice is set to .auto instead of .none for resumed sessions
+        let hasMessages = !ui.messages.isEmpty
+        await state.restoreStreamingState(hasMessages: hasMessages)
+
         // Restore timeline, profile, and sections
         await restoreTimelineAndProfile(from: session)
 
@@ -116,6 +121,10 @@ final class InterviewSessionCoordinator {
         subscribeToStateUpdates?()
         await documentArtifactHandler.start()
         await documentArtifactMessenger.start()
+
+        // Re-publish tool permissions now that event subscriptions are active
+        // (setPhase was called before subscriptions, so the event was missed)
+        await state.publishAllowedToolsNow()
 
         // Set model ID BEFORE starting interview (so first message uses correct model)
         let modelId = OnboardingModelConfig.currentModelId
