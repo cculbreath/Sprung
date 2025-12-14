@@ -59,10 +59,12 @@ actor ChatboxHandler: OnboardingEventEmitter {
             Logger.info("💬 User message while UI tool pending - cancelling \(pendingTool.toolName)", category: .ai)
 
             // Build cancelled tool response
+            // NOTE: OpenAI Responses API only accepts: "in_progress", "completed", "incomplete"
+            // Use "incomplete" for cancelled/skipped tool interactions
             var cancelPayload = JSON()
             cancelPayload["callId"].string = pendingTool.callId
             var output = JSON()
-            output["status"].string = "cancelled"
+            output["status"].string = "incomplete"
             output["reason"].string = "User sent a chat message, overriding the pending UI interaction"
             output["user_message"].string = text
             cancelPayload["output"] = output

@@ -65,18 +65,27 @@ struct ToolBundlePolicy {
             OnboardingToolName.getTimelineEntries.rawValue,
             OnboardingToolName.displayTimelineEntriesForReview.rawValue,
             OnboardingToolName.listArtifacts.rawValue,
-            OnboardingToolName.getArtifact.rawValue
+            OnboardingToolName.getArtifact.rawValue,
+            // Progression tools - model needs these to advance the interview
+            OnboardingToolName.submitForValidation.rawValue,
+            OnboardingToolName.configureEnabledSections.rawValue,
+            OnboardingToolName.nextPhase.rawValue
         ],
         .p1_timelineValidation: [
             OnboardingToolName.submitForValidation.rawValue,
             OnboardingToolName.displayTimelineEntriesForReview.rawValue,
             OnboardingToolName.updateTimelineCard.rawValue,
             OnboardingToolName.deleteTimelineCard.rawValue,
-            OnboardingToolName.createTimelineCard.rawValue
+            OnboardingToolName.createTimelineCard.rawValue,
+            // Progression tools
+            OnboardingToolName.configureEnabledSections.rawValue,
+            OnboardingToolName.nextPhase.rawValue
         ],
         .p1_sectionConfig: [
-            // Only the specialized tool - forces model to use it instead of generic get_user_option
-            OnboardingToolName.configureEnabledSections.rawValue
+            // Specialized section config tool
+            OnboardingToolName.configureEnabledSections.rawValue,
+            // Progression tools
+            OnboardingToolName.nextPhase.rawValue
         ],
         .p1_dossierSeed: [
             OnboardingToolName.persistData.rawValue,
