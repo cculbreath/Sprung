@@ -234,14 +234,16 @@ actor KnowledgeCardAgentService {
         llmFacade: LLMFacade?,
         tracker: AgentActivityTracker,
         eventBus: EventCoordinator,
-        maxConcurrentAgents: Int = 3
+        maxConcurrentAgents: Int? = nil
     ) {
         self.artifactRepository = artifactRepository
         self.llmFacade = llmFacade
         self.tracker = tracker
         self.eventBus = eventBus
-        self.maxConcurrentAgents = maxConcurrentAgents
-        Logger.info("🤖 KnowledgeCardAgentService initialized (max concurrent: \(maxConcurrentAgents))", category: .ai)
+        // Read from UserDefaults, fallback to provided value or default of 5
+        let settingsValue = UserDefaults.standard.integer(forKey: "onboardingKCAgentMaxConcurrent")
+        self.maxConcurrentAgents = maxConcurrentAgents ?? (settingsValue > 0 ? settingsValue : 5)
+        Logger.info("🤖 KnowledgeCardAgentService initialized (max concurrent: \(self.maxConcurrentAgents))", category: .ai)
     }
 
     // MARK: - Public API
@@ -258,13 +260,29 @@ actor KnowledgeCardAgentService {
         let startTime = Date()
         let cardIds = proposals.map { $0.cardId }
 
-        Logger.info("🚀 Dispatching \(proposals.count) KC agent(s)", category: .ai)
+        Logger.info("🚀 Dispatching \(proposals.count) KC agent(s) (max concurrent: \(maxConcurrentAgents))", category: .ai)
 
         // Emit dispatch started event
         await eventBus.publish(.kcAgentsDispatchStarted(count: proposals.count, cardIds: cardIds))
 
         // Get model ID from settings
         let modelId = UserDefaults.standard.string(forKey: "onboardingKCAgentModelId") ?? "anthropic/claude-haiku-4.5"
+
+        // Pre-register all agents as pending (so they show in the UI immediately)
+        var agentIds: [String] = []
+        for proposal in proposals {
+            let agentId = UUID().uuidString
+            agentIds.append(agentId)
+            await MainActor.run {
+                tracker.trackAgent(
+                    id: agentId,
+                    type: .knowledgeCard,
+                    name: proposal.title,
+                    status: .pending,
+                    task: nil as Task<Void, Never>?
+                )
+            }
+        }
 
         // Generate cards with concurrency limit
         var results: [GeneratedCard] = []
@@ -276,10 +294,14 @@ actor KnowledgeCardAgentService {
             // Add initial batch of tasks up to max concurrent
             while proposalIndex < proposals.count && activeCount < maxConcurrentAgents {
                 let proposal = proposals[proposalIndex]
+                let agentId = agentIds[proposalIndex]
                 proposalIndex += 1
                 activeCount += 1
 
-                let agentId = UUID().uuidString
+                // Mark agent as running
+                await MainActor.run {
+                    tracker.markRunning(agentId: agentId)
+                }
 
                 // Create task for this agent
                 let task = Task {
@@ -311,15 +333,19 @@ actor KnowledgeCardAgentService {
                 // Add next proposal if available
                 if proposalIndex < proposals.count {
                     let proposal = proposals[proposalIndex]
+                    let agentId = agentIds[proposalIndex]
                     proposalIndex += 1
                     activeCount += 1
 
-                    let newAgentId = UUID().uuidString
+                    // Mark agent as running
+                    await MainActor.run {
+                        tracker.markRunning(agentId: agentId)
+                    }
 
                     // Create task for this agent
                     let task = Task {
                         await self.generateCard(
-                            agentId: newAgentId,
+                            agentId: agentId,
                             proposal: proposal,
                             allSummaries: allSummaries,
                             modelId: modelId
@@ -328,13 +354,13 @@ actor KnowledgeCardAgentService {
 
                     // Register task with tracker for cancellation support
                     await MainActor.run {
-                        tracker.setTask(task, forAgentId: newAgentId)
+                        tracker.setTask(task, forAgentId: agentId)
                     }
 
                     // Add to task group
                     group.addTask {
                         let result = await task.value
-                        return (newAgentId, result)
+                        return (agentId, result)
                     }
                 }
             }
@@ -365,16 +391,7 @@ actor KnowledgeCardAgentService {
         allSummaries: [JSON],
         modelId: String
     ) async -> GeneratedCard {
-        // Track agent in AgentActivityTracker (without task - task is registered separately)
-        _ = await MainActor.run {
-            tracker.trackAgent(
-                id: agentId,
-                type: .knowledgeCard,
-                name: proposal.title,
-                task: nil as Task<Void, Never>?
-            )
-        }
-
+        // Agent is already pre-registered as pending in dispatchAgents() and marked running before this call
         // Emit agent started event
         await eventBus.publish(.kcAgentStarted(agentId: agentId, cardId: proposal.cardId, cardTitle: proposal.title))
 

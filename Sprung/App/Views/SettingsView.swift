@@ -11,6 +11,7 @@ struct SettingsView: View {
     @AppStorage("onboardingGitIngestModelId") private var gitIngestModelId: String = "anthropic/claude-haiku-4.5"
     @AppStorage("onboardingDocSummaryModelId") private var docSummaryModelId: String = "gemini-2.0-flash-lite"
     @AppStorage("onboardingKCAgentModelId") private var kcAgentModelId: String = "anthropic/claude-haiku-4.5"
+    @AppStorage("onboardingKCAgentMaxConcurrent") private var kcAgentMaxConcurrent: Int = 5
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var onboardingWebSearchAllowed: Bool = true
     @AppStorage("onboardingInterviewReasoningEffort") private var onboardingReasoningEffort: String = "none"
     @AppStorage("onboardingInterviewHardTaskReasoningEffort") private var onboardingHardTaskReasoningEffort: String = "medium"
@@ -507,6 +508,11 @@ private extension SettingsView {
                 }
                 .pickerStyle(.menu)
                 Text("Model for parallel knowledge card generation agents.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                Stepper("Max Concurrent Agents: \(kcAgentMaxConcurrent)", value: $kcAgentMaxConcurrent, in: 1...10)
+                Text("Maximum number of KC agents running simultaneously.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

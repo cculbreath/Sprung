@@ -108,7 +108,11 @@ struct ToolBundlePolicy {
             OnboardingToolName.startPhaseTwo.rawValue,
             // Progression: after bootstrap, model collects documents
             OnboardingToolName.openDocumentCollection.rawValue,
-            OnboardingToolName.getUserUpload.rawValue
+            OnboardingToolName.getUserUpload.rawValue,
+            // Allow model to progress itself and dispatch agents once docs are ready
+            OnboardingToolName.setObjectiveStatus.rawValue,
+            OnboardingToolName.dispatchKCAgents.rawValue,
+            OnboardingToolName.nextPhase.rawValue
         ],
         .p2_documentCollection: [
             OnboardingToolName.getUserUpload.rawValue,
@@ -311,31 +315,39 @@ struct ToolBundlePolicy {
         }
 
         // Infer from objective state
-        let auditStatus = objectives[OnboardingObjectiveId.evidenceAuditCompleted.rawValue] ?? "pending"
-        let cardsStatus = objectives[OnboardingObjectiveId.cardsGenerated.rawValue] ?? "pending"
+        // NOTE: Must match ObjectiveStore Phase 2 objectives (interviewed_one_experience, one_card_generated)
+        let interviewStatus = objectives[OnboardingObjectiveId.interviewedOneExperience.rawValue] ?? "pending"
+        let cardsStatus = objectives[OnboardingObjectiveId.oneCardGenerated.rawValue] ?? "pending"
 
         // Bootstrap phase (no objectives started)
-        if auditStatus == "pending" {
+        if interviewStatus == "pending" && cardsStatus == "pending" {
             return .p2_bootstrap
         }
 
-        // Evidence audit in progress
-        if auditStatus == "in_progress" {
+        // Interview/document collection in progress
+        if interviewStatus == "in_progress" {
             // Could be document collection or card assignment
             // Default to document collection if we don't have enough context
             return .p2_documentCollection
         }
 
-        // Cards generation
-        if auditStatus == "completed" && cardsStatus != "completed" {
-            if cardsStatus == "pending" {
-                return .p2_kcGeneration
-            }
-            return .p2_cardSubmission
+        // Interview complete, ready for card generation
+        if interviewStatus == "completed" && cardsStatus == "pending" {
+            return .p2_kcGeneration
         }
 
-        // All complete
-        return .p2_phaseTransition
+        // Cards generation in progress
+        if cardsStatus == "in_progress" {
+            return .p2_kcGeneration
+        }
+
+        // Cards complete, ready for submission
+        if cardsStatus == "completed" {
+            return .p2_phaseTransition
+        }
+
+        // Default to KC generation if we have documents but interview started
+        return .p2_kcGeneration
     }
 
     /// Infer Phase 3 subphase

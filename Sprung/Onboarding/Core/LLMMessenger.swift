@@ -917,10 +917,10 @@ actor LLMMessenger: OnboardingEventEmitter {
             parts.append("Visible UI: none (call upload/prompt tools to show UI)")
         }
 
-        // Objectives status
-        let objectives = await stateCoordinator.getAllObjectives()
+        // Objectives status (filtered to current phase)
+        let objectives = await stateCoordinator.getObjectivesForPhase(phase)
         if !objectives.isEmpty {
-            let statusList = objectives.prefix(8).map { "\($0.id): \($0.status.rawValue)" }
+            let statusList = objectives.map { "\($0.id): \($0.status.rawValue)" }
             parts.append("Objectives: \(statusList.joined(separator: ", "))")
         }
 

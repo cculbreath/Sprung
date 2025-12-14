@@ -37,6 +37,7 @@ enum AgentType: String, Codable, CaseIterable {
 
 /// Status of a tracked agent
 enum AgentStatus: String, Codable {
+    case pending = "pending"
     case running = "running"
     case completed = "completed"
     case failed = "failed"
@@ -211,13 +212,14 @@ class AgentActivityTracker {
         id: String = UUID().uuidString,
         type: AgentType,
         name: String,
+        status: AgentStatus = .running,
         task: Task<Success, Never>? = nil
     ) -> String {
         let agent = TrackedAgent(
             id: id,
             agentType: type,
             name: name,
-            status: .running,
+            status: status,
             startTime: Date()
         )
 
@@ -227,9 +229,21 @@ class AgentActivityTracker {
             activeTasks[id] = task
         }
 
-        Logger.info("🚀 Agent tracked: [\(type.displayName)] \(name) (id: \(id.prefix(8)))", category: .ai)
+        let statusEmoji = status == .pending ? "⏳" : "🚀"
+        Logger.info("\(statusEmoji) Agent tracked: [\(type.displayName)] \(name) (id: \(id.prefix(8)), status: \(status.rawValue))", category: .ai)
 
         return id
+    }
+
+    /// Mark an agent as running (transitions from pending)
+    func markRunning(agentId: String) {
+        guard let index = agents.firstIndex(where: { $0.id == agentId }) else {
+            Logger.warning("⚠️ Cannot mark running: agent not found (id: \(agentId.prefix(8)))", category: .ai)
+            return
+        }
+
+        agents[index].status = .running
+        Logger.info("🚀 Agent started: \(agents[index].name) (id: \(agentId.prefix(8)))", category: .ai)
     }
 
     /// Associate a task with an already-tracked agent

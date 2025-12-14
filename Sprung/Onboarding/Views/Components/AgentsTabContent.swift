@@ -41,10 +41,12 @@ struct AgentListView: View {
     @Bindable var tracker: AgentActivityTracker
 
     private var sortedAgents: [TrackedAgent] {
-        // Running agents first, then by start time (newest first)
+        // Running first, then pending, then others by start time (newest first)
         tracker.agents.sorted { a, b in
-            if a.status == .running && b.status != .running { return true }
-            if a.status != .running && b.status == .running { return false }
+            let priorityOrder: [AgentStatus] = [.running, .pending, .completed, .failed, .killed]
+            let aPriority = priorityOrder.firstIndex(of: a.status) ?? 99
+            let bPriority = priorityOrder.firstIndex(of: b.status) ?? 99
+            if aPriority != bPriority { return aPriority < bPriority }
             return a.startTime > b.startTime
         }
     }
@@ -174,6 +176,10 @@ struct AgentRowView: View {
     @ViewBuilder
     private var statusIcon: some View {
         switch agent.status {
+        case .pending:
+            Image(systemName: "clock.fill")
+                .foregroundStyle(.gray)
+                .font(.caption)
         case .running:
             ProgressView()
                 .scaleEffect(0.6)
@@ -317,6 +323,7 @@ struct AgentTranscriptView: View {
 
     private var statusInfo: (Color, String) {
         switch agent.status {
+        case .pending: return (.gray, "Pending")
         case .running: return (.blue, "Running")
         case .completed: return (.green, "Completed")
         case .failed: return (.red, "Failed")
