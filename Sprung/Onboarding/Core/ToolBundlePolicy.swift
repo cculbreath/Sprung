@@ -45,13 +45,19 @@ struct ToolBundlePolicy {
         .p1_photoCollection: [
             OnboardingToolName.getUserUpload.rawValue,
             OnboardingToolName.cancelUserUpload.rawValue,
-            OnboardingToolName.getUserOption.rawValue
+            OnboardingToolName.getUserOption.rawValue,
+            // Progression: after photo, model starts timeline
+            OnboardingToolName.createTimelineCard.rawValue,
+            OnboardingToolName.displayTimelineEntriesForReview.rawValue
         ],
         .p1_resumeUpload: [
             OnboardingToolName.getUserUpload.rawValue,
             OnboardingToolName.cancelUserUpload.rawValue,
             OnboardingToolName.listArtifacts.rawValue,
-            OnboardingToolName.getArtifact.rawValue
+            OnboardingToolName.getArtifact.rawValue,
+            // Progression: after resume upload, model creates timeline cards
+            OnboardingToolName.createTimelineCard.rawValue,
+            OnboardingToolName.displayTimelineEntriesForReview.rawValue
         ],
         .p1_timelineEditing: [
             // Resume upload is offered at the START of timeline editing - include upload tools
@@ -99,24 +105,39 @@ struct ToolBundlePolicy {
 
         // MARK: Phase 2 Subphases (all include artifact access)
         .p2_bootstrap: [
-            OnboardingToolName.startPhaseTwo.rawValue
+            OnboardingToolName.startPhaseTwo.rawValue,
+            // Progression: after bootstrap, model collects documents
+            OnboardingToolName.openDocumentCollection.rawValue,
+            OnboardingToolName.getUserUpload.rawValue
         ],
         .p2_documentCollection: [
             OnboardingToolName.getUserUpload.rawValue,
             OnboardingToolName.cancelUserUpload.rawValue,
             OnboardingToolName.scanGitRepo.rawValue,
-            OnboardingToolName.openDocumentCollection.rawValue
+            OnboardingToolName.openDocumentCollection.rawValue,
+            // Progression: after document collection, model proposes assignments
+            OnboardingToolName.proposeCardAssignments.rawValue,
+            OnboardingToolName.setObjectiveStatus.rawValue
         ],
         .p2_cardAssignment: [
             OnboardingToolName.proposeCardAssignments.rawValue,
-            OnboardingToolName.getUserOption.rawValue
+            OnboardingToolName.getUserOption.rawValue,
+            // Progression: after assignment, model dispatches agents
+            OnboardingToolName.dispatchKCAgents.rawValue,
+            OnboardingToolName.setObjectiveStatus.rawValue
         ],
         .p2_userApprovalWait: [
-            OnboardingToolName.getUserOption.rawValue
+            OnboardingToolName.getUserOption.rawValue,
+            // Progression: after approval, model dispatches agents
+            OnboardingToolName.dispatchKCAgents.rawValue,
+            OnboardingToolName.setObjectiveStatus.rawValue
         ],
         .p2_kcGeneration: [
             OnboardingToolName.dispatchKCAgents.rawValue,
-            OnboardingToolName.setObjectiveStatus.rawValue
+            OnboardingToolName.setObjectiveStatus.rawValue,
+            // Progression: after generation, model submits cards
+            OnboardingToolName.submitKnowledgeCard.rawValue,
+            OnboardingToolName.nextPhase.rawValue
         ],
         .p2_cardSubmission: [
             OnboardingToolName.submitKnowledgeCard.rawValue,
@@ -130,25 +151,41 @@ struct ToolBundlePolicy {
 
         // MARK: Phase 3 Subphases (all include artifact access)
         .p3_bootstrap: [
-            OnboardingToolName.startPhaseThree.rawValue
+            OnboardingToolName.startPhaseThree.rawValue,
+            // Progression: after bootstrap, model collects writing samples
+            OnboardingToolName.getUserUpload.rawValue,
+            OnboardingToolName.ingestWritingSample.rawValue
         ],
         .p3_writingCollection: [
             OnboardingToolName.ingestWritingSample.rawValue,
             OnboardingToolName.getUserUpload.rawValue,
-            OnboardingToolName.cancelUserUpload.rawValue
+            OnboardingToolName.cancelUserUpload.rawValue,
+            // Progression: after collection, model compiles dossier
+            OnboardingToolName.setObjectiveStatus.rawValue,
+            OnboardingToolName.submitExperienceDefaults.rawValue
         ],
         .p3_sampleReview: [
             OnboardingToolName.ingestWritingSample.rawValue,
-            OnboardingToolName.setObjectiveStatus.rawValue
+            OnboardingToolName.setObjectiveStatus.rawValue,
+            // Progression: after review, model compiles dossier
+            OnboardingToolName.submitExperienceDefaults.rawValue,
+            OnboardingToolName.submitCandidateDossier.rawValue
         ],
         .p3_dossierCompilation: [
             OnboardingToolName.submitExperienceDefaults.rawValue,
             OnboardingToolName.submitCandidateDossier.rawValue,
-            OnboardingToolName.setObjectiveStatus.rawValue
+            OnboardingToolName.setObjectiveStatus.rawValue,
+            // Progression: after compilation, model validates dossier
+            OnboardingToolName.submitForValidation.rawValue,
+            OnboardingToolName.nextPhase.rawValue
         ],
         .p3_dossierValidation: [
             OnboardingToolName.submitForValidation.rawValue,
-            OnboardingToolName.getUserOption.rawValue
+            OnboardingToolName.getUserOption.rawValue,
+            // Progression: after validation, model submits final data
+            OnboardingToolName.setObjectiveStatus.rawValue,
+            OnboardingToolName.submitCandidateDossier.rawValue,
+            OnboardingToolName.nextPhase.rawValue
         ],
         .p3_dataSubmission: [
             OnboardingToolName.submitExperienceDefaults.rawValue,
