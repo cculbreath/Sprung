@@ -22,7 +22,7 @@ struct PhaseTwoScript: PhaseScript {
         // Document collection tools
         .getUserUpload,
         .cancelUserUpload,
-        .scanGitRepo,
+        // Note: scanGitRepo removed - it's triggered by UI button, not LLM
         .listArtifacts,
         .getArtifact,
         .getContextPack,

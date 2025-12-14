@@ -429,23 +429,4 @@ enum MiscSchemas {
         description: "Optional explanation or context for the proposed sections"
     )
 
-    // MARK: - ScanGitRepoTool Schemas
-
-    /// Git repository path schema
-    static let gitRepoPath = JSONSchema(
-        type: .string,
-        description: "Absolute path to the local git repository to analyze."
-    )
-
-    /// Git author filter schema
-    static let gitAuthorFilter = JSONSchema(
-        type: .string,
-        description: "Optional git author name or email to filter commits. If not provided, will analyze all commits and suggest filtering options."
-    )
-
-    /// Timeline entry ID schema for git repo analysis
-    static let gitTimelineEntryId = JSONSchema(
-        type: .string,
-        description: "Optional ID of the timeline entry this repo relates to. If provided, analysis will be scoped to that role."
-    )
 }

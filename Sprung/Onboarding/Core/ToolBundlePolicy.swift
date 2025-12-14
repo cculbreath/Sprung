@@ -113,11 +113,13 @@ struct ToolBundlePolicy {
         .p2_documentCollection: [
             OnboardingToolName.getUserUpload.rawValue,
             OnboardingToolName.cancelUserUpload.rawValue,
-            OnboardingToolName.scanGitRepo.rawValue,
+            // NOTE: scanGitRepo removed - it's triggered by UI button, not LLM
             OnboardingToolName.openDocumentCollection.rawValue,
-            // Progression: after document collection, model proposes assignments
+            // Progression: after document collection, model proposes assignments OR dispatches agents
             OnboardingToolName.proposeCardAssignments.rawValue,
-            OnboardingToolName.setObjectiveStatus.rawValue
+            OnboardingToolName.dispatchKCAgents.rawValue,
+            OnboardingToolName.setObjectiveStatus.rawValue,
+            OnboardingToolName.nextPhase.rawValue
         ],
         .p2_cardAssignment: [
             OnboardingToolName.proposeCardAssignments.rawValue,
