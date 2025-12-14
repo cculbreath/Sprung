@@ -15,9 +15,9 @@ struct ToolBundlePolicy {
     // MARK: - Safe Escape Tools
 
     /// Minimal set of tools that should always be available (for error recovery)
-    static let safeEscapeTools: Set<String> = [
-        OnboardingToolName.getUserOption.rawValue
-    ]
+    /// NOTE: get_user_option removed - it was causing the model to prefer generic tools
+    /// over specialized ones. It's now explicitly included only in bundles that need it.
+    static let safeEscapeTools: Set<String> = []
 
     // MARK: - Artifact Access Tools
 
@@ -75,8 +75,8 @@ struct ToolBundlePolicy {
             OnboardingToolName.createTimelineCard.rawValue
         ],
         .p1_sectionConfig: [
-            OnboardingToolName.configureEnabledSections.rawValue,
-            OnboardingToolName.getUserOption.rawValue
+            // Only the specialized tool - forces model to use it instead of generic get_user_option
+            OnboardingToolName.configureEnabledSections.rawValue
         ],
         .p1_dossierSeed: [
             OnboardingToolName.persistData.rawValue,
