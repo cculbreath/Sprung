@@ -311,19 +311,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         case .llmToolCallBatchStarted(let expectedCount, let callIds):
             await streamQueueManager.startToolCallBatch(expectedCount: expectedCount, callIds: callIds)
         case .llmEnqueueToolResponse(let payload):
-            // Bundle any queued developer messages with the tool response
-            // They'll be sent as separate requests after the tool response completes
-            let hasQueuedMessages = await llmStateManager.hasQueuedDeveloperMessages()
             await streamQueueManager.enqueueToolResponse(payload)
-
-            if hasQueuedMessages {
-                // Send queued developer messages after the tool response
-                let queuedMessages = await llmStateManager.drainQueuedDeveloperMessages()
-                Logger.info("📦 After tool response, sending \(queuedMessages.count) queued developer message(s)", category: .ai)
-                for devMessage in queuedMessages {
-                    await streamQueueManager.enqueue(.developerMessage(payload: devMessage))
-                }
-            }
         case .llmStreamCompleted:
             // Handle stream completion via event to ensure proper ordering with tool call events
             await streamQueueManager.handleStreamCompleted()
