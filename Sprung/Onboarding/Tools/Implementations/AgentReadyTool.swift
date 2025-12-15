@@ -17,6 +17,13 @@ struct AgentReadyTool: InterviewTool {
         result["status"].string = "completed"
         result["next_required_tool"].string = OnboardingToolName.getApplicantProfile.rawValue
         result["disable_after_use"].bool = true
+        result["workflow_summary"].string = """
+            After profile intake completes, you'll be guided to:
+            1. Offer profile photo upload (optional - user can skip)
+            2. Offer resume/LinkedIn upload for timeline building (optional - user can dictate instead)
+            Be proactive: Always call the upload tool BEFORE describing it to the user.
+            Never ask if they want to upload - just show the upload UI and explain their options.
+            """
         return .immediate(result)
     }
 }
