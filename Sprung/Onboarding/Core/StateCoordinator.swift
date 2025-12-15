@@ -28,6 +28,12 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     // MARK: - Dossier Tracking (Opportunistic Collection)
     private var dossierTracker = CandidateDossierTracker()
+
+    // MARK: - Dossier WIP Notes (Scratchpad for LLM)
+    /// Free-form notes the LLM can update during the interview.
+    /// Included in working memory so LLM can reference prior notes.
+    /// Persisted with snapshot so notes survive session resume.
+    private(set) var dossierNotes: String = ""
     // MARK: - Wizard Progress (Computed from ObjectiveStore)
     enum WizardStep: String, CaseIterable {
         case introduction
@@ -219,6 +225,10 @@ actor StateCoordinator: OnboardingEventEmitter {
         case .processingStateChanged(let processing, _):
             // Delegate to SessionUIState
             await uiState.setProcessingState(processing, emitEvent: false)
+            // Clear reasoning summary when processing ends to dismiss the thinking overlay
+            if !processing {
+                await chatStore.clearReasoningSummary()
+            }
         case .waitingStateChanged(let waiting, _):
             // SessionUIState handles this internally, just log
             Logger.debug("Waiting state changed: \(waiting ?? "nil")", category: .ai)
@@ -301,7 +311,19 @@ actor StateCoordinator: OnboardingEventEmitter {
         case .llmToolCallBatchStarted(let expectedCount, let callIds):
             await streamQueueManager.startToolCallBatch(expectedCount: expectedCount, callIds: callIds)
         case .llmEnqueueToolResponse(let payload):
+            // Bundle any queued developer messages with the tool response
+            // They'll be sent as separate requests after the tool response completes
+            let hasQueuedMessages = await llmStateManager.hasQueuedDeveloperMessages()
             await streamQueueManager.enqueueToolResponse(payload)
+
+            if hasQueuedMessages {
+                // Send queued developer messages after the tool response
+                let queuedMessages = await llmStateManager.drainQueuedDeveloperMessages()
+                Logger.info("📦 After tool response, sending \(queuedMessages.count) queued developer message(s)", category: .ai)
+                for devMessage in queuedMessages {
+                    await streamQueueManager.enqueue(.developerMessage(payload: devMessage))
+                }
+            }
         case .llmStreamCompleted:
             // Handle stream completion via event to ensure proper ordering with tool call events
             await streamQueueManager.handleStreamCompleted()
@@ -586,6 +608,8 @@ actor StateCoordinator: OnboardingEventEmitter {
         // ToolPane UI state for resume
         let currentToolPaneCard: OnboardingToolPaneCard
         let evidenceRequirements: [EvidenceRequirement]
+        // Dossier WIP notes (scratchpad)
+        let dossierNotes: String?
     }
     func createSnapshot() async -> StateSnapshot {
         let allObjectives = await objectiveStore.getAllObjectives()
@@ -604,7 +628,8 @@ actor StateCoordinator: OnboardingEventEmitter {
             messages: currentMessages,
             hasStreamedFirstResponse: hasStreamedFirst,
             currentToolPaneCard: llmSnapshot.currentToolPaneCard,
-            evidenceRequirements: evidenceRequirements
+            evidenceRequirements: evidenceRequirements,
+            dossierNotes: dossierNotes.isEmpty ? nil : dossierNotes
         )
     }
     func restoreFromSnapshot(_ snapshot: StateSnapshot) async {
@@ -632,6 +657,8 @@ actor StateCoordinator: OnboardingEventEmitter {
         await streamQueueManager.restoreState(hasStreamedFirstResponse: snapshot.hasStreamedFirstResponse)
         // Restore evidence requirements
         evidenceRequirements = snapshot.evidenceRequirements
+        // Restore dossier notes
+        dossierNotes = snapshot.dossierNotes ?? ""
         Logger.info("📥 State restored from snapshot with conversation history", category: .ai)
     }
     /// Backfill objective statuses when migrating from legacy snapshots
@@ -912,6 +939,19 @@ actor StateCoordinator: OnboardingEventEmitter {
     /// Check if a dossier field has been collected
     func hasDossierFieldCollected(_ field: CandidateDossierField) -> Bool {
         dossierTracker.hasCollected(field)
+    }
+
+    // MARK: - Dossier WIP Notes API
+
+    /// Update dossier WIP notes (replaces entire content)
+    func setDossierNotes(_ notes: String) {
+        dossierNotes = notes
+        Logger.info("📝 Dossier notes updated (\(notes.count) chars)", category: .ai)
+    }
+
+    /// Get current dossier notes
+    func getDossierNotes() -> String {
+        dossierNotes
     }
 
     /// Re-include a previously excluded tool (e.g., when user action enables it)

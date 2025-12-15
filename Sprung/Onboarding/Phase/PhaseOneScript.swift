@@ -111,10 +111,18 @@ struct PhaseOneScript: PhaseScript {
                 onComplete: { context in
                     let title = """
                         Skeleton timeline captured. \
-                        Prepare the user to choose enabled résumé sections.
+                        Now call configure_enabled_sections to show the section toggle UI. \
+                        Based on user's data, propose which sections to enable (work, education, skills, etc.). \
+                        Do NOT use get_user_option—use configure_enabled_sections which has the proper section toggle UI.
                         """
-                    let details = ["next_objective": OnboardingObjectiveId.enabledSections.rawValue, "status": context.status.rawValue]
-                    return [.developerMessage(title: title, details: details, payload: nil)]
+                    let details = [
+                        "next_objective": OnboardingObjectiveId.enabledSections.rawValue,
+                        "status": context.status.rawValue,
+                        "action": "call_configure_enabled_sections",
+                        "tool": "configure_enabled_sections"
+                    ]
+                    // Force configure_enabled_sections tool call - weaker models may not execute without forcing
+                    return [.developerMessage(title: title, details: details, payload: nil, toolChoice: OnboardingToolName.configureEnabledSections.rawValue)]
                 }
             ),
             OnboardingObjectiveId.enabledSections.rawValue: ObjectiveWorkflow(
