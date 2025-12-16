@@ -327,7 +327,14 @@ actor LLMMessenger: OnboardingEventEmitter {
             let callId = payload["callId"].stringValue
             let output = payload["output"]
             let reasoningEffort = payload["reasoningEffort"].string
-            let toolChoice = payload["toolChoice"].string  // For tool chaining
+            // For tool chaining: allow the UI/tool layer to force the next tool call, even when
+            // the forcing signal arrived via a queued developer message.
+            let toolChoice: String?
+            if let payloadToolChoice = payload["toolChoice"].string {
+                toolChoice = payloadToolChoice
+            } else {
+                toolChoice = await stateCoordinator.popPendingForcedToolChoice()
+            }
             Logger.debug("📤 Tool response payload: callId=\(callId), output=\(output.rawString() ?? "nil")", category: .ai)
             Logger.info("📤 Sending tool response for callId=\(String(callId.prefix(12)))...", category: .ai)
             let request = await buildToolResponseRequest(output: output, callId: callId, reasoningEffort: reasoningEffort, forcedToolChoice: toolChoice)
@@ -539,8 +546,16 @@ actor LLMMessenger: OnboardingEventEmitter {
         }
 
         // Determine tool choice first (needed for tool bundling)
+        // If we have a queued forced tool choice (from a workflow developer message),
+        // apply it to the next request as a one-shot override.
+        let effectiveForcedToolChoice: String?
+        if let forcedToolChoice {
+            effectiveForcedToolChoice = forcedToolChoice
+        } else {
+            effectiveForcedToolChoice = await stateCoordinator.popPendingForcedToolChoice()
+        }
         let toolChoice: ToolChoiceMode
-        if let forcedTool = forcedToolChoice {
+        if let forcedTool = effectiveForcedToolChoice {
             toolChoice = .functionTool(FunctionTool(name: forcedTool))
             Logger.info("🎯 Using forced toolChoice: \(forcedTool)", category: .ai)
         } else {
@@ -952,6 +967,14 @@ actor LLMMessenger: OnboardingEventEmitter {
             if !artifactSummary.isEmpty {
                 parts.append("Artifacts (\(artifactSummaries.count)): \(artifactSummary.joined(separator: "; "))")
             }
+        }
+
+        // Dossier WIP notes (scratchpad for LLM to track dossier info during interview)
+        let dossierNotes = await stateCoordinator.getDossierNotes()
+        if !dossierNotes.isEmpty {
+            // Truncate to prevent exceeding memory budget
+            let truncatedNotes = String(dossierNotes.prefix(800))
+            parts.append("Dossier Notes:\n\(truncatedNotes)")
         }
 
         // Only return if we have meaningful content

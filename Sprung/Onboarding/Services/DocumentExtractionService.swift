@@ -357,6 +357,7 @@ actor DocumentExtractionService {
 
         let modelId = currentModelId()
         let sizeMB = Double(sizeInBytes) / 1_048_576.0
+        let pageCount = PDFDocument(data: fileData)?.pageCount
 
         await notifyProgress(.fileAnalysis, .active, detail: "Preparing PDF (\(String(format: "%.1f", sizeMB)) MB)...")
 
@@ -366,19 +367,35 @@ actor DocumentExtractionService {
             metadata: [
                 "filename": filename,
                 "size_mb": String(format: "%.1f", sizeMB),
-                "model": modelId
+                "model": modelId,
+                "page_count": pageCount.map(String.init) ?? "unknown"
             ]
         )
 
         await notifyProgress(.fileAnalysis, .completed, detail: "Using \(modelId)")
         await notifyProgress(.aiExtraction, .active, detail: "Uploading \(filename) to Google...")
 
+        let extractionPrompt = DocumentExtractionPrompts.promptWithDocumentHints(
+            filename: filename,
+            pageCount: pageCount,
+            sizeInBytes: sizeInBytes
+        )
+
+        // Keep short docs eligible for verbatim transcription, but prevent runaway outputs on long docs.
+        let maxOutputTokens: Int = {
+            if let pageCount, pageCount <= 10 { return 32768 }
+            if sizeMB <= 2.0 { return 24576 }
+            return 16384
+        }()
+
         let llmStart = Date()
         do {
             let (extractedTitle, extractedText, tokenUsage) = try await googleAIService.extractTextFromPDF(
                 pdfData: fileData,
                 filename: filename,
-                modelId: modelId
+                modelId: modelId,
+                prompt: extractionPrompt,
+                maxOutputTokens: maxOutputTokens
             )
 
             let llmDurationMs = Int(Date().timeIntervalSince(llmStart) * 1000)
@@ -388,7 +405,9 @@ actor DocumentExtractionService {
                 metadata: [
                     "filename": filename,
                     "duration_ms": "\(llmDurationMs)",
-                    "chars": "\(extractedText.count)"
+                    "chars": "\(extractedText.count)",
+                    "page_count": pageCount.map(String.init) ?? "unknown",
+                    "max_output_tokens": "\(maxOutputTokens)"
                 ]
             )
 
@@ -417,8 +436,12 @@ actor DocumentExtractionService {
                 "purpose": purpose,
                 "source_file_url": fileURL.absoluteString,
                 "source_filename": filename,
-                "extraction_method": "google_files_api"
+                "extraction_method": "google_files_api",
+                "max_output_tokens": maxOutputTokens
             ]
+            if let pageCount {
+                metadata["page_count"] = pageCount
+            }
             if let title = extractedTitle {
                 metadata["title"] = title
             }

@@ -271,14 +271,16 @@ final class OnboardingDependencyContainer {
             applicantProfileStore: applicantProfileStore, toolRouter: tools.toolRouter, eventBus: core.eventBus, ui: ui
         )
         self.uiResponseCoordinator = UIResponseCoordinator(
-            eventBus: core.eventBus, toolRouter: tools.toolRouter, state: state, ui: ui
+            eventBus: core.eventBus, toolRouter: tools.toolRouter, state: state, ui: ui,
+            sessionUIState: sessionUIState
         )
         // 13. Initialize early coordinators (don't need coordinator reference)
         self.toolInteractionCoordinator = ToolInteractionCoordinator(
             eventBus: core.eventBus, toolRouter: tools.toolRouter
         )
         self.coordinatorEventRouter = CoordinatorEventRouter(
-            ui: ui, state: state, phaseTransitionController: controllers.phaseTransitionController,
+            ui: ui, state: state, sessionUIState: sessionUIState,
+            phaseTransitionController: controllers.phaseTransitionController,
             toolRouter: tools.toolRouter, applicantProfileStore: applicantProfileStore,
             resRefStore: resRefStore, coverRefStore: coverRefStore,
             experienceDefaultsStore: experienceDefaultsStore,

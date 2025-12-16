@@ -92,9 +92,49 @@ actor SubAgentToolExecutor {
             throw SubAgentToolError.notFound("Artifact not found: \(artifactId)")
         }
 
+        // Sub-agents can easily blow past model context limits if we return multi-megabyte
+        // extracted_text fields. Return a compact artifact view, truncating extracted_text.
+        let maxExtractedChars = 180_000
+        let extracted = artifact["extracted_text"].stringValue
+        let extractedOriginalChars = extracted.count
+        let extractedTruncated: String
+        let didTruncate: Bool
+        if extractedOriginalChars > maxExtractedChars {
+            didTruncate = true
+            extractedTruncated = String(extracted.prefix(maxExtractedChars)) + "\n\n[TRUNCATED: extracted_text exceeded \(maxExtractedChars) chars]"
+        } else {
+            didTruncate = false
+            extractedTruncated = extracted
+        }
+
+        var compact = JSON()
+        compact["id"].string = artifact["id"].string
+        compact["filename"].string = artifact["filename"].string
+        compact["content_type"].string = artifact["content_type"].string
+        compact["size_bytes"].int = artifact["size_bytes"].int
+        if let brief = artifact["brief_description"].string, !brief.isEmpty {
+            compact["brief_description"].string = brief
+        }
+        if let summary = artifact["summary"].string, !summary.isEmpty {
+            compact["summary"].string = summary
+        }
+        if !artifact["summary_metadata"].dictionaryValue.isEmpty {
+            compact["summary_metadata"] = artifact["summary_metadata"]
+        }
+        // Keep selected metadata fields that help interpretation but avoid dumping huge blobs.
+        if let title = artifact["metadata"]["title"].string, !title.isEmpty {
+            compact["metadata"]["title"].string = title
+        }
+        if let purpose = artifact["metadata"]["purpose"].string, !purpose.isEmpty {
+            compact["metadata"]["purpose"].string = purpose
+        }
+        compact["extracted_text"].string = extractedTruncated
+        compact["extracted_text_original_chars"].int = extractedOriginalChars
+        compact["extracted_text_truncated"].bool = didTruncate
+
         var result = JSON()
         result["status"].string = "completed"
-        result["artifact"] = artifact
+        result["artifact"] = compact
         return result.rawString() ?? "{}"
     }
 
@@ -192,6 +232,52 @@ actor SubAgentToolExecutor {
     }
 
     private func buildReturnResultTool() -> ChatCompletionParameters.Tool {
+        let chatSourceSchema = JSONSchema(
+            type: .object,
+            description: "A source excerpt from the user conversation used as evidence",
+            properties: [
+                "excerpt": JSONSchema(type: .string, description: "Direct quote from the user"),
+                "context": JSONSchema(type: .string, description: "Why this excerpt matters / what it supports")
+            ],
+            required: ["excerpt"],
+            additionalProperties: false
+        )
+
+        let resultSchema = JSONSchema(
+            type: .object,
+            description: "Knowledge card generation output",
+            properties: [
+                "card_type": JSONSchema(
+                    type: .string,
+                    description: "Card type/category",
+                    enum: ["job", "skill", "education", "project"]
+                ),
+                "title": JSONSchema(type: .string, description: "Card title (non-empty)"),
+                "prose": JSONSchema(
+                    type: .string,
+                    description: "Comprehensive narrative prose (500-2000+ words). Must be non-empty."
+                ),
+                "highlights": JSONSchema(type: .array, description: "Key achievements (bullets)", items: JSONSchema(type: .string)),
+                "skills": JSONSchema(type: .array, description: "Skills demonstrated", items: JSONSchema(type: .string)),
+                "metrics": JSONSchema(type: .array, description: "Quantitative results", items: JSONSchema(type: .string)),
+                "sources": JSONSchema(
+                    type: .array,
+                    description: "Artifact IDs used as evidence (prefer non-empty); include assigned artifacts whenever possible.",
+                    items: JSONSchema(type: .string)
+                ),
+                "chat_sources": JSONSchema(
+                    type: .array,
+                    description: "Optional conversation excerpts used as evidence",
+                    items: chatSourceSchema
+                ),
+                "time_period": JSONSchema(type: .string, description: "Optional date range"),
+                "organization": JSONSchema(type: .string, description: "Optional organization"),
+                "location": JSONSchema(type: .string, description: "Optional location/remote")
+            ],
+            required: ["card_type", "title", "prose", "sources"],
+            additionalProperties: false
+        )
+
         let schema = JSONSchema(
             type: .object,
             description: """
@@ -209,10 +295,7 @@ actor SubAgentToolExecutor {
                 - metrics: Quantitative achievements if available
                 """,
             properties: [
-                "result": JSONSchema(
-                    type: .object,
-                    description: "The completed result object to return"
-                )
+                "result": resultSchema
             ],
             required: ["result"],
             additionalProperties: false
@@ -221,7 +304,7 @@ actor SubAgentToolExecutor {
         return ChatCompletionParameters.Tool(
             function: ChatCompletionParameters.ChatFunction(
                 name: "return_result",
-                strict: false,
+                strict: true,
                 description: "Return completed result to the coordinator. Call when task is complete.",
                 parameters: schema
             )

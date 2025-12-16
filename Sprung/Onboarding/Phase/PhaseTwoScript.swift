@@ -75,11 +75,14 @@ struct PhaseTwoScript: PhaseScript {
         4. `propose_card_assignments` → map docs to cards, identify gaps, present for user review
         5. WAIT for explicit user approval ("generate cards", "looks good") before proceeding
         6. `dispatch_kc_agents` → parallel agents generate comprehensive cards
-        7. `submit_knowledge_card` for each returned card
-        8. `next_phase` → advance to Phase 3
+        7. Cards are AUTOMATICALLY presented for user validation (no tool call needed)
+        8. You will receive developer messages indicating approval/rejection status for each card
+        9. `next_phase` → advance to Phase 3 after all cards are processed
 
         **Critical rules**:
         - After propose_card_assignments: WAIT for user to approve before dispatch_kc_agents
+        - After dispatch_kc_agents: wait for validation status messages (cards auto-presented to user)
+        - If a card is rejected, you may dispatch another KC agent to regenerate it
         - For gaps, be SPECIFIC: "performance reviews from Acme (2019-2022)" not "any other docs?"
         - Suggest document types by role: reviews, design docs, job descriptions, promotion emails
         - Include relevant chat_excerpts in dispatch_kc_agents if user shared info verbally

@@ -6,6 +6,7 @@ import SwiftyJSON
 final class CoordinatorEventRouter {
     private let ui: OnboardingUIState
     private let state: StateCoordinator
+    private let sessionUIState: SessionUIState
     private let phaseTransitionController: PhaseTransitionController
     private let toolRouter: ToolHandler
     private let applicantProfileStore: ApplicantProfileStore
@@ -18,6 +19,9 @@ final class CoordinatorEventRouter {
     // Pending knowledge card for auto-persist after user confirmation
     private var pendingKnowledgeCard: JSON?
 
+    // Track failed KC agent generations so the coordinator LLM can fall back to manual card creation.
+    private var failedKCCards: [(cardId: String, title: String, error: String)] = []
+
     // Track active extractions to avoid dossier spam during parallel doc ingestion
     // Only trigger dossier when first extraction starts (count goes 0→1)
     // Never reset mid-batch - only when ALL extractions complete
@@ -27,6 +31,7 @@ final class CoordinatorEventRouter {
     init(
         ui: OnboardingUIState,
         state: StateCoordinator,
+        sessionUIState: SessionUIState,
         phaseTransitionController: PhaseTransitionController,
         toolRouter: ToolHandler,
         applicantProfileStore: ApplicantProfileStore,
@@ -38,6 +43,7 @@ final class CoordinatorEventRouter {
     ) {
         self.ui = ui
         self.state = state
+        self.sessionUIState = sessionUIState
         self.phaseTransitionController = phaseTransitionController
         self.toolRouter = toolRouter
         self.applicantProfileStore = applicantProfileStore
@@ -157,6 +163,22 @@ final class CoordinatorEventRouter {
         case .cardAssignmentsProposed:
             // Event handled by UI for awareness; gating done in tool
             Logger.info("📋 Card assignments proposed - dispatch_kc_agents gated until user approval", category: .ai)
+
+        // MARK: - KC Auto-Validation (from Agent Completion)
+        case .kcAgentCompleted(let agentId, let cardId, let cardTitle):
+            await handleKCAgentCompleted(agentId: agentId, cardId: cardId, cardTitle: cardTitle)
+
+        case .kcAgentFailed(let agentId, let cardId, let error):
+            await handleKCAgentFailed(agentId: agentId, cardId: cardId, error: error)
+
+        case .kcAgentsDispatchCompleted(let successCount, let failureCount):
+            await handleKCAgentsDispatchCompleted(successCount: successCount, failureCount: failureCount)
+
+        case .kcAutoValidationApproved:
+            await handleKCAutoValidationApproved()
+
+        case .kcAutoValidationRejected(let reason):
+            await handleKCAutoValidationRejected(reason: reason)
 
         // MARK: - Dossier Collection Trigger (Parallel-Safe)
         case .extractionStateChanged(let inProgress, _):
@@ -304,6 +326,205 @@ final class CoordinatorEventRouter {
         Logger.info("✅ Generate Cards: tool ungated, user message sent with forced toolChoice for dispatch_kc_agents", category: .ai)
     }
 
+    // MARK: - KC Auto-Validation Handler
+
+    /// Handle KC agent failure - surface error to user
+    private func handleKCAgentFailed(agentId: String, cardId: String, error: String) async {
+        Logger.error("❌ KC agent failed: cardId=\(cardId.prefix(8)), error=\(error)", category: .ai)
+
+        // Ensure manual fallback tool is available (subphase bundling must also include it).
+        await state.includeTool(OnboardingToolName.submitKnowledgeCard.rawValue)
+
+        // Capture failure details for a single summary message after dispatch completes.
+        let planItems = await MainActor.run { ui.knowledgeCardPlan }
+        let title = planItems.first(where: { $0.id == cardId })?.title ?? "Unknown card"
+        failedKCCards.append((cardId: cardId, title: title, error: error))
+
+        // Surface error to user via the error event (displayed in chat/UI)
+        let failureMessage = "Knowledge card generation failed: \(error)"
+        await eventBus.publish(.errorOccurred(failureMessage))
+    }
+
+    /// After all agents finish, instruct the coordinator LLM to fill gaps manually if needed.
+    private func handleKCAgentsDispatchCompleted(successCount: Int, failureCount: Int) async {
+        guard failureCount > 0 else {
+            failedKCCards.removeAll()
+            return
+        }
+
+        await state.includeTool(OnboardingToolName.submitKnowledgeCard.rawValue)
+
+        let failures = failedKCCards
+        failedKCCards.removeAll()
+
+        var lines: [String] = []
+        lines.append("Some knowledge card agents failed (\(failureCount) failed, \(successCount) succeeded).")
+        if !failures.isEmpty {
+            lines.append("")
+            lines.append("Failed cards to create manually:")
+            for item in failures.prefix(10) {
+                lines.append("- \(item.title) (card_id: \(item.cardId))")
+            }
+        }
+        lines.append("")
+        lines.append("Please create replacement cards manually using `submit_knowledge_card` (full card object + summary).")
+        lines.append("Use `get_context_pack` (optionally with `card_id`) and `list_artifacts/get_artifact` to pull the needed evidence first.")
+
+        var userMessage = JSON()
+        userMessage["role"].string = "user"
+        userMessage["content"].string = lines.joined(separator: "\n")
+        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+
+        Logger.info("🛟 Manual KC fallback activated: submit_knowledge_card ungated after agent failures", category: .ai)
+    }
+
+    /// Handle KC agent completion - auto-present validation UI without LLM tool call
+    /// Cards are queued and presented immediately as they complete
+    private func handleKCAgentCompleted(agentId: String, cardId: String, cardTitle: String) async {
+        Logger.info("🎉 KC agent completed: '\(cardTitle)' (cardId: \(cardId.prefix(8)), agentId: \(agentId.prefix(8)))", category: .ai)
+
+        // Enqueue this card for validation
+        await sessionUIState.enqueueKCValidation(cardId)
+
+        // Check if validation UI is already showing
+        let currentValidation = await sessionUIState.pendingValidationPrompt
+        if currentValidation != nil {
+            // Another validation is in progress - card is already queued
+            Logger.info("📋 KC validation queued (another validation in progress): \(cardTitle)", category: .ai)
+            return
+        }
+
+        // No active validation - present this card immediately
+        await presentNextKCValidation()
+    }
+
+    /// Present the next card from the KC validation queue
+    private func presentNextKCValidation() async {
+        // Dequeue the next card ID
+        guard let cardId = await sessionUIState.dequeueNextKCValidation() else {
+            Logger.debug("📋 No KC validations in queue", category: .ai)
+            return
+        }
+
+        // Retrieve the pending card from state
+        guard let card = await state.getPendingCard(id: cardId) else {
+            Logger.warning("⚠️ KC auto-validation: pending card not found for ID \(cardId.prefix(8))", category: .ai)
+            // Try the next card in queue
+            if await sessionUIState.hasQueuedKCValidations() {
+                await presentNextKCValidation()
+            }
+            return
+        }
+
+        let cardTitle = card["card"]["title"].stringValue
+
+        // Mark as auto-validation (not tool-initiated)
+        await sessionUIState.setAutoValidation(true)
+
+        // Store as pending knowledge card for auto-persist
+        pendingKnowledgeCard = card
+
+        // Build summary for validation UI
+        let wordCount = card["card"]["content"].stringValue.components(separatedBy: .whitespacesAndNewlines).count
+        let summary = "Knowledge card for \(cardTitle) (\(wordCount) words)"
+
+        // Create validation prompt
+        let prompt = OnboardingValidationPrompt(
+            dataType: "knowledge_card",
+            payload: card["card"],
+            message: summary
+        )
+
+        // Emit validation prompt request (will show UI)
+        await eventBus.publish(.validationPromptRequested(prompt: prompt))
+        Logger.info("🎯 KC auto-validation presented: \(cardTitle)", category: .ai)
+    }
+
+    /// Present next KC validation after user completes one (called from UIResponseCoordinator)
+    func presentNextKCValidationIfQueued() async {
+        if await sessionUIState.hasQueuedKCValidations() {
+            await presentNextKCValidation()
+        } else {
+            // Clear auto-validation flag when queue is empty
+            await sessionUIState.setAutoValidation(false)
+        }
+    }
+
+    /// Handle KC auto-validation approval - persist card and send developer message
+    private func handleKCAutoValidationApproved() async {
+        guard let card = pendingKnowledgeCard else {
+            Logger.warning("⚠️ KC auto-validation approved but no pending card", category: .ai)
+            await presentNextKCValidationIfQueued()
+            return
+        }
+
+        let cardData = card["card"]
+        let cardTitle = cardData["title"].stringValue
+        let cardId = cardData["id"].stringValue
+
+        // Persist to ResRef
+        persistToResRef(card: cardData)
+
+        // Clear pending card
+        pendingKnowledgeCard = nil
+
+        // Remove from pending storage
+        await state.removePendingCard(id: cardId)
+
+        // Clear validation prompt
+        toolRouter.clearValidationPrompt()
+        await eventBus.publish(.validationPromptCleared)
+
+        // Send developer message to LLM
+        let message = """
+        Knowledge card "\(cardTitle)" has been approved and persisted.
+        Card ID: \(cardId)
+        """
+        await eventBus.publish(.llmSendDeveloperMessage(payload: JSON(["text": message])))
+
+        Logger.info("✅ KC auto-validation approved and persisted: \(cardTitle)", category: .ai)
+
+        // Present next card from queue (if any)
+        await presentNextKCValidationIfQueued()
+    }
+
+    /// Handle KC auto-validation rejection - send developer message with reason
+    private func handleKCAutoValidationRejected(reason: String) async {
+        guard let card = pendingKnowledgeCard else {
+            Logger.warning("⚠️ KC auto-validation rejected but no pending card", category: .ai)
+            await presentNextKCValidationIfQueued()
+            return
+        }
+
+        let cardData = card["card"]
+        let cardTitle = cardData["title"].stringValue
+        let cardId = cardData["id"].stringValue
+
+        // Clear pending card (not persisted)
+        pendingKnowledgeCard = nil
+
+        // Remove from pending storage (rejected, won't be resubmitted automatically)
+        await state.removePendingCard(id: cardId)
+
+        // Clear validation prompt
+        toolRouter.clearValidationPrompt()
+        await eventBus.publish(.validationPromptCleared)
+
+        // Send developer message to LLM
+        let message = """
+        Knowledge card "\(cardTitle)" was rejected by the user.
+        Card ID: \(cardId)
+        Reason: \(reason)
+        You may dispatch another KC agent to regenerate this card if needed.
+        """
+        await eventBus.publish(.llmSendDeveloperMessage(payload: JSON(["text": message])))
+
+        Logger.info("❌ KC auto-validation rejected: \(cardTitle) - \(reason)", category: .ai)
+
+        // Present next card from queue (if any)
+        await presentNextKCValidationIfQueued()
+    }
+
     /// Persist knowledge card to SwiftData as a ResRef for use in resume generation
     private func persistToResRef(card: JSON) {
         let title = card["title"].stringValue
@@ -392,10 +613,11 @@ final class CoordinatorEventRouter {
         // Persist writing samples to CoverRefStore
         // Check multiple fields since writing samples can come from different sources:
         // - IngestWritingSampleTool: sets source_type = "writing_sample"
-        // - File uploads via get_user_upload: sets document_type = "writingSample"
+        // - File uploads via get_user_upload (Phase 3 writing sample flow): sets document_type = "writing_sample"
         let writingSamples = artifacts.filter { artifact in
             artifact["source_type"].stringValue == "writing_sample" ||
-            artifact["document_type"].stringValue == "writingSample" ||
+            artifact["document_type"].stringValue == "writing_sample" ||
+            artifact["document_type"].stringValue == "writingSample" || // legacy
             artifact["metadata"]["writing_type"].exists()
         }
         Logger.info("💾 [persistWritingCorpus] Filtered to \(writingSamples.count) writing samples", category: .ai)

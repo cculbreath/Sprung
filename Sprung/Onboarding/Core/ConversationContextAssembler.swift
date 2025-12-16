@@ -70,7 +70,7 @@ actor ConversationContextAssembler {
         // OpenAI Responses API with previous_response_id handles reasoning continuity automatically
         // Tool response requests should contain ONLY the function call output
         let outputString = output.rawString() ?? "{}"
-        let status = output["status"].string
+        let status = sanitizeToolStatus(output["status"].string)
         let toolOutput = InputItem.functionToolCallOutput(FunctionToolCallOutput(
             callId: callId,
             output: outputString,
@@ -87,7 +87,7 @@ actor ConversationContextAssembler {
             let callId = payload["callId"].stringValue
             let output = payload["output"]
             let outputString = output.rawString() ?? "{}"
-            let status = output["status"].string
+            let status = sanitizeToolStatus(output["status"].string)
             let toolOutput = InputItem.functionToolCallOutput(FunctionToolCallOutput(
                 callId: callId,
                 output: outputString,
@@ -99,6 +99,15 @@ actor ConversationContextAssembler {
         return items
     }
     // MARK: - Private Helpers
+    private func sanitizeToolStatus(_ status: String?) -> String? {
+        guard let status else { return nil }
+        let allowed = ["in_progress", "completed", "incomplete"]
+        guard allowed.contains(status) else {
+            Logger.warning("⚠️ Tool status '\(status)' not allowed by API; coercing to 'incomplete'", category: .ai)
+            return "incomplete"
+        }
+        return status
+    }
     /// Build state cues developer message
     /// Note: Tool management is now handled via API's tools parameter, not injected here
     private func buildStateCues() async -> String {

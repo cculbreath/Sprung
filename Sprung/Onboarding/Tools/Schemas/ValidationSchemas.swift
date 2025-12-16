@@ -15,7 +15,7 @@ enum ValidationSchemas {
     static let validationType = JSONSchema(
         type: .string,
         description: "Type of data being validated. Each type presents specialized validation UI.",
-        enum: ["applicant_profile", "skeleton_timeline", "enabled_sections", "knowledge_card", "candidate_dossier"]
+        enum: ["applicant_profile", "skeleton_timeline", "enabled_sections", "knowledge_card", "candidate_dossier", "experience_defaults"]
     )
 
     /// Schema for validation data payload

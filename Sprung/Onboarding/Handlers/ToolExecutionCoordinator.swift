@@ -146,6 +146,22 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             // Don't send tool response yet - it will be sent when user acts.
             // Developer messages will be queued behind this pending tool.
             let pendingToolName = toolName ?? "unknown"
+
+            // Check if there's already a pending UI tool call
+            // If so, auto-complete this duplicate to prevent conversation sync errors
+            // (The LLM sometimes issues parallel identical UI tool calls in a batch)
+            if let existingPending = await stateCoordinator.getPendingUIToolCall() {
+                Logger.warning("⚠️ Duplicate UI tool call detected: \(pendingToolName) (callId: \(callId.prefix(8))) while \(existingPending.toolName) (callId: \(existingPending.callId.prefix(8))) is already pending", category: .ai)
+
+                // Auto-complete the duplicate with a success message
+                var autoCompleteOutput = JSON()
+                autoCompleteOutput["status"].string = "completed"
+                autoCompleteOutput["message"].string = "Request already in progress - user is responding to the active prompt"
+                await emitToolResponse(callId: callId, output: autoCompleteOutput)
+                Logger.info("✅ Auto-completed duplicate UI tool call: \(pendingToolName) (callId: \(callId.prefix(8)))", category: .ai)
+                return
+            }
+
             await stateCoordinator.setPendingUIToolCall(callId: callId, toolName: pendingToolName)
             Logger.info("🎯 UI tool pending user action: \(pendingToolName) (callId: \(callId.prefix(8)))", category: .ai)
         }

@@ -53,6 +53,7 @@ final class OnboardingToolRegistrar {
         toolRegistry.register(ValidateApplicantProfileTool(coordinator: coordinator))
         toolRegistry.register(GetValidatedApplicantProfileTool(coordinator: coordinator))
         toolRegistry.register(ConfigureEnabledSectionsTool(coordinator: coordinator))
+        toolRegistry.register(UpdateDossierNotesTool(coordinator: coordinator))
         toolRegistry.register(AgentReadyTool())
         toolRegistry.register(StartPhaseTwoTool(coordinator: coordinator))
         toolRegistry.register(RequestEvidenceTool(coordinator: coordinator))
@@ -65,7 +66,7 @@ final class OnboardingToolRegistrar {
         toolRegistry.register(ProposeCardAssignmentsTool(coordinator: coordinator))
         toolRegistry.register(StartPhaseThreeTool(coordinator: coordinator))
         toolRegistry.register(IngestWritingSampleTool(coordinator: coordinator, eventBus: eventBus))
-        toolRegistry.register(SubmitExperienceDefaultsTool(coordinator: coordinator, eventBus: eventBus))
+        toolRegistry.register(SubmitExperienceDefaultsTool(coordinator: coordinator, eventBus: eventBus, dataStore: dataStore))
         toolRegistry.register(SubmitCandidateDossierTool(eventBus: eventBus, dataStore: dataStore))
         Logger.info("✅ Registered \(toolRegistry.allTools().count) tools", category: .ai)
     }

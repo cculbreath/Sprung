@@ -71,9 +71,14 @@ final class UIStateUpdateHandler {
         case .batchUploadStarted(let expectedCount):
             ui.hasBatchUploadInProgress = true
             Logger.info("📦 Batch upload started: \(expectedCount) document(s) expected, blocking validation prompts", category: .ai)
+            // Prevent the LLM from thrashing retrieval while the user is still selecting/uploads are still in progress.
+            // The upload UI already provides context; retrieval during this window tends to produce spammy tool calls.
+            await state.excludeTool(OnboardingToolName.getContextPack.rawValue)
         case .batchUploadCompleted:
             ui.hasBatchUploadInProgress = false
             Logger.info("📦 Batch upload completed, validation prompts can proceed", category: .ai)
+            // Restore normal retrieval tools after uploads are complete.
+            await state.includeTool(OnboardingToolName.getContextPack.rawValue)
         case .extractionStateChanged(let inProgress, let statusMessage):
             ui.updateExtraction(inProgress: inProgress, statusMessage: statusMessage)
             Logger.info("📄 Extraction state: \(inProgress ? "started" : "completed") - \(statusMessage ?? "no message")", category: .ai)

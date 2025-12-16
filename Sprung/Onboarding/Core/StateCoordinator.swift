@@ -189,6 +189,10 @@ actor StateCoordinator: OnboardingEventEmitter {
             }
         }
         try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
+        // Ensure LLMStateManager has an initial allowed-tools snapshot, even if
+        // SessionUIState published tool permissions before subscriptions attached.
+        let effectiveTools = await uiState.getEffectiveAllowedToolsSnapshot()
+        await llmStateManager.setAllowedToolNames(effectiveTools)
         Logger.info("📡 StateCoordinator subscribed to event streams", category: .ai)
     }
     // MARK: - Event Handlers (Delegate to Services)
@@ -306,6 +310,9 @@ actor StateCoordinator: OnboardingEventEmitter {
             // 1. User sends a chatbox message
             // 2. An artifact completion arrives (sent as user message)
             // 3. A pending UI tool call is completed
+            if let forcedTool = payload["toolChoice"].string {
+                await llmStateManager.setPendingForcedToolChoice(forcedTool)
+            }
             await llmStateManager.queueDeveloperMessage(payload)
             Logger.debug("📥 Developer message queued (awaiting user action)", category: .ai)
         case .llmToolCallBatchStarted(let expectedCount, let callIds):
@@ -575,6 +582,11 @@ actor StateCoordinator: OnboardingEventEmitter {
     /// Drain queued developer messages (call after UI tool output is sent)
     func drainQueuedDeveloperMessages() async -> [JSON] {
         await llmStateManager.drainQueuedDeveloperMessages()
+    }
+
+    /// Pop any pending forced tool choice override (one-shot).
+    func popPendingForcedToolChoice() async -> String? {
+        await llmStateManager.popPendingForcedToolChoice()
     }
 
     /// Check if there are queued developer messages

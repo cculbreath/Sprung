@@ -29,15 +29,15 @@ struct ToolPaneTabsView<InterviewContent: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             // Tab picker
-            HStack(spacing: 2) {
+            HStack(spacing: 1) {
                 ForEach(Tab.allCases, id: \.self) { tab in
                     tabButton(for: tab)
                 }
             }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 4)
+            .padding(.horizontal, 2)
+            .padding(.vertical, 2)
             .background(Color(nsColor: .controlBackgroundColor))
-            .cornerRadius(10)
+            .cornerRadius(8)
 
             Divider()
                 .padding(.vertical, 8)
@@ -61,11 +61,15 @@ struct ToolPaneTabsView<InterviewContent: View>: View {
                 Text(tab.rawValue)
                     .font(.caption2.weight(.medium))
                     .lineLimit(1)
-                    .fixedSize()
+                if hasActiveAgents {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .scaleEffect(0.7)
+                }
                 badgeView(for: tab)
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(selectedTab == tab ? Color.accentColor.opacity(0.15) : Color.clear)
@@ -88,7 +92,7 @@ struct ToolPaneTabsView<InterviewContent: View>: View {
         let total = tabItemTotal(for: tab)
         if total != 0 {
             Text("\(total)")
-                .font(.caption2.weight(.semibold))
+                .font(.caption2.weight(.semibold).monospacedDigit())
                 .padding(.horizontal, 4)
                 .padding(.vertical, 1)
                 .background(
@@ -120,10 +124,9 @@ struct ToolPaneTabsView<InterviewContent: View>: View {
     private var tabContent: some View {
         switch selectedTab {
         case .interview:
-            ScrollView {
-                interviewContent()
-                    .padding(.horizontal, 4)
-            }
+            // No outer ScrollView - interview components manage their own scrolling
+            interviewContent()
+                .padding(.horizontal, 4)
         case .timeline:
             ScrollView {
                 TimelineTabContent(coordinator: coordinator)
@@ -949,4 +952,5 @@ private struct KnowledgeTabContent: View {
         )
     }
 }
+
 

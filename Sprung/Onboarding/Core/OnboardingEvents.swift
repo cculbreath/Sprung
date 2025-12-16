@@ -125,6 +125,10 @@ enum OnboardingEvent {
     case kcAgentFailed(agentId: String, cardId: String, error: String)
     /// Emitted when a KC agent is manually killed
     case kcAgentKilled(agentId: String, cardId: String)
+    /// Emitted when KC auto-validation is approved by user (no tool call involved)
+    case kcAutoValidationApproved
+    /// Emitted when KC auto-validation is rejected by user (no tool call involved)
+    case kcAutoValidationRejected(reason: String)
     // MARK: - Timeline Operations
     case timelineCardCreated(card: JSON)
     case timelineCardUpdated(id: String, fields: JSON)
@@ -393,7 +397,8 @@ actor EventCoordinator {
 
         // KC Agent Dispatch (treated as processing)
         case .kcAgentsDispatchStarted, .kcAgentsDispatchCompleted,
-             .kcAgentStarted, .kcAgentCompleted, .kcAgentFailed, .kcAgentKilled:
+             .kcAgentStarted, .kcAgentCompleted, .kcAgentFailed, .kcAgentKilled,
+             .kcAutoValidationApproved, .kcAutoValidationRejected:
             return .processing
         // Toolpane events
         case .choicePromptRequested, .choicePromptCleared, .uploadRequestPresented,
@@ -574,6 +579,10 @@ actor EventCoordinator {
             description = "KC agent failed: \(cardId.prefix(8))... - \(error.prefix(50))"
         case .kcAgentKilled(_, let cardId):
             description = "KC agent killed: \(cardId.prefix(8))..."
+        case .kcAutoValidationApproved:
+            description = "KC auto-validation approved"
+        case .kcAutoValidationRejected(let reason):
+            description = "KC auto-validation rejected: \(reason.prefix(50))"
         case .timelineCardCreated:
             description = "Timeline card created"
         case .timelineCardUpdated(let id, _):

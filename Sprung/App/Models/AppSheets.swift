@@ -14,11 +14,14 @@ struct AppSheets {
     var showMultiModelChooseBest = false
     var showBatchCoverLetter = false
     var showNewJobApp = false
+    var showCreateResume = false
     // UI state that was previously in ResumeButtons
     var showResumeInspector = false
     var showCoverLetterInspector = false
     // Knowledge cards browser
     var showKnowledgeCardsBrowser = false
+    // Writing context browser (CoverRefs: dossier + writing samples + background facts)
+    var showWritingContextBrowser = false
 }
 // MARK: - Sheet Presentation ViewModifier
 struct AppSheetsModifier: ViewModifier {
@@ -26,11 +29,13 @@ struct AppSheetsModifier: ViewModifier {
     @Binding var clarifyingQuestions: [ClarifyingQuestion]
     @Binding var refPopup: Bool
     @Environment(JobAppStore.self) private var jobAppStore
+    @Environment(ResStore.self) private var resStore
     @Environment(CoverLetterStore.self) private var coverLetterStore
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(AppState.self) private var appState
     @Environment(ResumeReviseViewModel.self) private var resumeReviseViewModel
     @Environment(ResRefStore.self) private var resRefStore
+    @Environment(CoverRefStore.self) private var coverRefStore
     private var revisionSheetBinding: Binding<Bool> {
         Binding(
             get: { resumeReviseViewModel.showResumeRevisionSheet },
@@ -53,6 +58,30 @@ struct AppSheetsModifier: ViewModifier {
             .sheet(isPresented: $sheets.showNewJobApp) {
                 NewAppSheetView(isPresented: $sheets.showNewJobApp)
                 .environment(jobAppStore)
+            }
+            .sheet(isPresented: $sheets.showCreateResume) {
+                if let selApp = jobAppStore.selectedApp {
+                    CreateResumeView(
+                        onCreateResume: { template, sources in
+                            _ = resStore.create(jobApp: selApp, sources: sources, template: template)
+                        }
+                    )
+                    .padding()
+                } else {
+                    VStack(spacing: 12) {
+                        Text("Select a job application first")
+                            .font(.headline)
+                        Text("Create Resume is scoped to a specific job application.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                        Button("Close") {
+                            sheets.showCreateResume = false
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    .frame(minWidth: 420, minHeight: 220)
+                    .padding()
+                }
             }
             .sheet(isPresented: $sheets.showResumeReview) {
                 if let selectedResume = jobAppStore.selectedApp?.selectedRes {
@@ -112,6 +141,10 @@ struct AppSheetsModifier: ViewModifier {
                         resRefStore.addResRef(card)
                     }
                 )
+            }
+            .sheet(isPresented: $sheets.showWritingContextBrowser) {
+                WritingContextBrowserSheet(isPresented: $sheets.showWritingContextBrowser)
+                    .environment(coverRefStore)
             }
             .sheet(isPresented: skillExperiencePickerBinding) {
                 SkillExperiencePickerSheet(

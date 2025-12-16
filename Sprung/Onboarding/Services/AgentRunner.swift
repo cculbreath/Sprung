@@ -123,6 +123,8 @@ actor AgentRunner {
     private var completionResult: JSON?
     private var textOnlyRetries: Int = 0
     private let maxTextOnlyRetries: Int = 2
+    private var invalidCompletionRetries: Int = 0
+    private let maxInvalidCompletionRetries: Int = 2
 
     // MARK: - Initialization
 
@@ -249,6 +251,35 @@ actor AgentRunner {
                 // Check for completion tool first
                 if let completionCall = toolCalls.first(where: { $0.function.name == "return_result" }) {
                     let result = try parseCompletionResult(arguments: completionCall.function.arguments)
+
+                    if config.agentType == .knowledgeCard,
+                       let errorMessage = knowledgeCardCompletionValidationError(result) {
+                        invalidCompletionRetries += 1
+                        await logTranscript(
+                            type: .error,
+                            content: "Invalid return_result payload (attempt \(invalidCompletionRetries)/\(maxInvalidCompletionRetries))",
+                            details: errorMessage
+                        )
+
+                        if invalidCompletionRetries >= maxInvalidCompletionRetries {
+                            throw AgentRunnerError.invalidOutput("Invalid return_result payload: \(errorMessage)")
+                        }
+
+                        let correctionMessage = """
+                        Your last `return_result` payload was invalid:
+                        \(errorMessage)
+
+                        Fix the JSON and call `return_result` again. Requirements:
+                        - result.card_type: one of job/skill/education/project
+                        - result.title: non-empty
+                        - result.prose: non-empty, substantial narrative (500+ words recommended)
+                        - result.sources: include the artifact IDs you used as evidence and prefer non-empty
+                        """
+                        messages.append(buildUserMessage(content: correctionMessage))
+                        await logTranscript(type: .system, content: "Sent return_result correction request")
+                        continue
+                    }
+
                     completionResult = result
                     isCompleted = true
                     await logTranscript(
@@ -392,6 +423,48 @@ actor AgentRunner {
         } catch {
             throw AgentRunnerError.invalidOutput("Invalid JSON: \(error.localizedDescription)")
         }
+    }
+
+    private func knowledgeCardCompletionValidationError(_ payload: JSON) -> String? {
+        let result = payload["result"]
+        guard result != .null else {
+            return "Missing required top-level key `result` (object)."
+        }
+
+        let cardType = result["card_type"].stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cardType.isEmpty {
+            return "Missing `result.card_type` (job/skill/education/project)."
+        }
+        if ["job", "skill", "education", "project"].contains(cardType) == false {
+            return "Invalid `result.card_type` value '\(cardType)'."
+        }
+
+        let title = result["title"].stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if title.isEmpty {
+            return "Missing `result.title` (non-empty string)."
+        }
+
+        let prose = result["prose"].stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if prose.isEmpty {
+            return "Missing `result.prose` (non-empty narrative)."
+        }
+        if prose.count < 1000 {
+            return "`result.prose` is too short (\(prose.count) chars). Provide a substantial narrative; do not leave it blank or terse."
+        }
+
+        let sources = result["sources"].arrayValue
+            .map { $0.stringValue.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        let chatSources = result["chat_sources"].arrayValue
+            .map { $0["excerpt"].stringValue.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        if sources.isEmpty && chatSources.isEmpty {
+            return "No evidence sources provided. Include `result.sources` (artifact IDs) and/or `result.chat_sources` excerpts."
+        }
+
+        return nil
     }
 
     // MARK: - Transcript Logging

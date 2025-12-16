@@ -127,19 +127,21 @@ enum KCAgentPrompts {
         - **sources**: List of artifact IDs you used
 
         ## Output Format
-        When ready, call `return_result` with a JSON object:
+        When ready, call `return_result` with your card wrapped in a `result` object:
         ```json
         {
-          "card_type": "\(cardType)",
-          "title": "\(title)",
-          "prose": "Comprehensive 500-2000+ word narrative...",
-          "highlights": ["Specific achievement with metrics", "Another specific achievement"],
-          "skills": ["Skill 1", "Skill 2"],
-          "metrics": ["Increased revenue by 40%", "Led team of 12", "Shipped in 6 months"],
-          "sources": ["artifact-id-1", "artifact-id-2"],
-          "chat_sources": [
-            {"excerpt": "I led the migration project...", "context": "User describing project leadership"}
-          ]
+          "result": {
+            "card_type": "\(cardType)",
+            "title": "\(title)",
+            "prose": "Comprehensive 500-2000+ word narrative...",
+            "highlights": ["Specific achievement with metrics", "Another specific achievement"],
+            "skills": ["Skill 1", "Skill 2"],
+            "metrics": ["Increased revenue by 40%", "Led team of 12", "Shipped in 6 months"],
+            "sources": ["artifact-id-1", "artifact-id-2"],
+            "chat_sources": [
+              {"excerpt": "I led the migration project...", "context": "User describing project leadership"}
+            ]
+          }
         }
         ```
         Note: `chat_sources` is optional - only include if conversation excerpts were provided and used.

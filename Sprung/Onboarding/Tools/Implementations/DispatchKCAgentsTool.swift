@@ -94,11 +94,8 @@ struct DispatchKCAgentsTool: InterviewTool {
             allSummaries: allSummaries
         )
 
-        // Store generated cards locally (Milestone 7: keep content out of main thread)
-        for card in result.successfulCards {
-            let cardJSON = card.toJSON()
-            await coordinator.state.storePendingCard(cardJSON, id: card.cardId)
-        }
+        // Note: Cards are now stored immediately when agents complete (in KnowledgeCardAgentService.runSingleAgent)
+        // This fixes the race condition where kcAgentCompleted event arrived before card was stored
 
         // Build response with handles only (no full card content)
         var response = JSON()
@@ -135,23 +132,17 @@ struct DispatchKCAgentsTool: InterviewTool {
             response["failures"] = failures
         }
 
-        // Instructions for next steps
+        // Instructions for next steps - cards are auto-presented for validation
         response["instructions"].string = buildInstructions(result: result)
-
-        // Signal toolChoice chaining
-        if result.successCount > 0 {
-            response["next_required_tool"].string = OnboardingToolName.submitKnowledgeCard.rawValue
-            response["cards_pending_persistence"].int = result.successCount
-        }
 
         return .immediate(response)
     }
 
     private func buildInstructions(result: KCDispatchResult) -> String {
         if result.failureCount == 0 {
-            return "All \(result.successCount) cards generated. Call submit_knowledge_card for each card in 'cards' array."
+            return "All \(result.successCount) cards generated successfully. Cards will be automatically presented for user validation. You will receive developer messages indicating approval/rejection status."
         } else {
-            return "\(result.successCount) succeeded, \(result.failureCount) failed. Persist successful cards via submit_knowledge_card."
+            return "\(result.successCount) succeeded, \(result.failureCount) failed. Successful cards will be automatically presented for user validation."
         }
     }
 }

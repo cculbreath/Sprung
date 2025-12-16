@@ -267,7 +267,8 @@ actor GoogleAIService {
         fileURI: String,
         mimeType: String,
         modelId: String,
-        prompt: String
+        prompt: String,
+        maxOutputTokens: Int
     ) async throws -> (content: String, tokenUsage: GeminiTokenUsage?) {
         let apiKey = try getAPIKey()
         let url = URL(string: "\(baseURL)/v1beta/models/\(modelId):generateContent?key=\(apiKey)")!
@@ -287,7 +288,7 @@ actor GoogleAIService {
             ],
             "generationConfig": [
                 "temperature": 0.1,
-                "maxOutputTokens": 65536
+                "maxOutputTokens": maxOutputTokens
             ]
         ]
 
@@ -446,9 +447,12 @@ actor GoogleAIService {
         pdfData: Data,
         filename: String,
         modelId: String,
-        prompt: String? = nil
+        prompt: String? = nil,
+        maxOutputTokens: Int? = nil
     ) async throws -> (title: String?, content: String, tokenUsage: GeminiTokenUsage?) {
         let extractionPrompt = prompt ?? DocumentExtractionPrompts.defaultExtractionPrompt
+        let effectiveMaxOutputTokens = maxOutputTokens ?? 32768
+        let maxChars = 250_000
 
         // Upload file
         let uploadedFile = try await uploadFile(
@@ -475,7 +479,8 @@ actor GoogleAIService {
             fileURI: activeFile.uri,
             mimeType: "application/pdf",
             modelId: modelId,
-            prompt: extractionPrompt
+            prompt: extractionPrompt,
+            maxOutputTokens: effectiveMaxOutputTokens
         )
 
         // Try to parse as JSON for title extraction
@@ -483,7 +488,8 @@ actor GoogleAIService {
            let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
             let title = json["title"] as? String
             let content = json["content"] as? String ?? result
-            return (title, content, tokenUsage)
+            let capped = capExtractionContent(content, maxChars: maxChars)
+            return (title, capped.content, tokenUsage)
         }
 
         // If not valid JSON, try to extract from markdown code block
@@ -497,11 +503,37 @@ actor GoogleAIService {
                    let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
                     let title = json["title"] as? String
                     let content = json["content"] as? String ?? result
-                    return (title, content, tokenUsage)
+                    let capped = capExtractionContent(content, maxChars: maxChars)
+                    return (title, capped.content, tokenUsage)
                 }
             }
         }
 
-        return (nil, result, tokenUsage)
+        let capped = capExtractionContent(result, maxChars: maxChars)
+        return (nil, capped.content, tokenUsage)
+    }
+
+    private func capExtractionContent(_ content: String, maxChars: Int) -> (content: String, originalChars: Int, wasTruncated: Bool) {
+        let originalChars = content.count
+        guard originalChars > maxChars else {
+            return (content, originalChars, false)
+        }
+
+        Logger.warning(
+            "⚠️ PDF extraction content exceeds cap; truncating tool output",
+            category: .ai,
+            metadata: [
+                "original_chars": "\(originalChars)",
+                "max_chars": "\(maxChars)"
+            ]
+        )
+
+        let headChars = Int(Double(maxChars) * 0.6)
+        let tailChars = max(0, maxChars - headChars - 200)
+
+        let head = String(content.prefix(headChars))
+        let tail = tailChars > 0 ? String(content.suffix(tailChars)) : ""
+        let marker = "\n\n[... TRUNCATED: original_chars=\(originalChars), max_chars=\(maxChars) ...]\n\n"
+        return (head + marker + tail, originalChars, true)
     }
 }

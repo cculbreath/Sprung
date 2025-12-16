@@ -68,6 +68,13 @@ class MenuNotificationHandler {
             // Open the knowledge cards deck browser sheet
             self?.sheets?.wrappedValue.showKnowledgeCardsBrowser = true
         }
+        NotificationCenter.default.addObserver(
+            forName: .showWritingContextBrowser,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.sheets?.wrappedValue.showWritingContextBrowser = true
+        }
         // Resume Commands
         NotificationCenter.default.addObserver(
             forName: .customizeResume,

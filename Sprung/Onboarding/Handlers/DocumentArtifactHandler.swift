@@ -16,8 +16,11 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
 
     // MARK: - Configuration
 
-    /// Maximum number of concurrent document extractions
-    private let maxConcurrentExtractions = 3
+    /// Maximum number of concurrent document extractions (reads from Settings)
+    private var maxConcurrentExtractions: Int {
+        let settingsValue = UserDefaults.standard.integer(forKey: "onboardingKCAgentMaxConcurrent")
+        return settingsValue > 0 ? settingsValue : 5
+    }
 
     // MARK: - Lifecycle State
     private var subscriptionTask: Task<Void, Never>?

@@ -10,6 +10,8 @@ actor SessionUIState: OnboardingEventEmitter {
     private let phasePolicy: PhasePolicy
     private var currentPhase: InterviewPhase
     private var excludedTools: Set<String> = []
+    /// Cache of last published tools to avoid duplicate emissions
+    private var lastPublishedTools: Set<String>?
     // MARK: - Session State
     private(set) var isActive = false
     private(set) var isProcessing = false
@@ -28,6 +30,13 @@ actor SessionUIState: OnboardingEventEmitter {
     private(set) var pendingValidationPrompt: OnboardingValidationPrompt?
     private(set) var pendingExtraction: OnboardingPendingExtraction?
     private(set) var pendingStreamingStatus: String?
+
+    // MARK: - KC Validation Queue (Auto-Validation from Agent Completion)
+    /// Queue of card IDs waiting for user validation (FIFO order)
+    /// Cards are enqueued automatically when KC agents complete
+    private(set) var pendingKCValidationQueue: [String] = []
+    /// Whether current validation is from KC auto-queue (vs tool-initiated)
+    private(set) var isAutoValidation: Bool = false
     // MARK: - Synchronous Caches (for SwiftUI)
     nonisolated(unsafe) private(set) var isProcessingSync = false
     nonisolated(unsafe) private(set) var isActiveSync = false
@@ -108,6 +117,44 @@ actor SessionUIState: OnboardingEventEmitter {
         let newWaitingState: WaitingState? = (prompt != nil && prompt?.mode == .validation) ? .validation : nil
         await setWaitingState(newWaitingState)
     }
+
+    // MARK: - KC Auto-Validation Queue Management
+
+    /// Enqueue a card ID for auto-validation
+    /// If no validation is currently active, immediately emit validation request
+    /// Returns: whether the card was queued (true) or immediately presented (false)
+    func enqueueKCValidation(_ cardId: String) {
+        pendingKCValidationQueue.append(cardId)
+        Logger.info("📋 KC validation queued: \(cardId) (queue size: \(pendingKCValidationQueue.count))", category: .ai)
+    }
+
+    /// Get the next card ID from the validation queue without removing it
+    func peekNextKCValidation() -> String? {
+        pendingKCValidationQueue.first
+    }
+
+    /// Remove and return the next card ID from the validation queue
+    func dequeueNextKCValidation() -> String? {
+        guard !pendingKCValidationQueue.isEmpty else { return nil }
+        return pendingKCValidationQueue.removeFirst()
+    }
+
+    /// Check if there are pending KC validations in the queue
+    func hasQueuedKCValidations() -> Bool {
+        !pendingKCValidationQueue.isEmpty
+    }
+
+    /// Set whether current validation is auto-initiated (from KC agent completion)
+    func setAutoValidation(_ isAuto: Bool) {
+        isAutoValidation = isAuto
+    }
+
+    /// Clear the KC validation queue
+    func clearKCValidationQueue() {
+        pendingKCValidationQueue.removeAll()
+        isAutoValidation = false
+        Logger.info("🗑️ KC validation queue cleared", category: .ai)
+    }
     /// Set pending extraction
     func setPendingExtraction(_ extraction: OnboardingPendingExtraction?) async {
         pendingExtraction = extraction
@@ -147,23 +194,32 @@ actor SessionUIState: OnboardingEventEmitter {
             // During waiting states (except extraction), restrict to empty set
             // Extraction is special: tools stay enabled for dossier question collection
             tools = []
-            await emit(.stateAllowedToolsUpdated(tools: tools))
+        } else {
+            // No waiting state OR extraction state - use normal phase-based tools
+            tools = getAllowedToolsForCurrentPhase()
+        }
+
+        // Avoid duplicate emissions - only publish if tools actually changed
+        if tools == lastPublishedTools {
+            return
+        }
+        lastPublishedTools = tools
+
+        await emit(.stateAllowedToolsUpdated(tools: tools))
+
+        // Log after emitting
+        if let waitingState = waitingState, waitingState != .extraction {
             Logger.info("🚫 ALL TOOLS GATED - Waiting for user input (state: \(waitingState.rawValue))", category: .ai)
             let normalTools = getAllowedToolsForCurrentPhase()
             if !normalTools.isEmpty {
                 Logger.info("   ⛔️ Blocked tools (\(normalTools.count)): \(normalTools.sorted().joined(separator: ", "))", category: .ai)
             }
+        } else if tools.isEmpty {
+            Logger.info("🔧 No tools available in current phase", category: .ai)
+        } else if waitingState == .extraction {
+            Logger.info("🔧 Tools enabled during extraction (\(tools.count)): allowing dossier questions", category: .ai)
         } else {
-            // No waiting state OR extraction state - use normal phase-based tools
-            tools = getAllowedToolsForCurrentPhase()
-            await emit(.stateAllowedToolsUpdated(tools: tools))
-            if tools.isEmpty {
-                Logger.info("🔧 No tools available in current phase", category: .ai)
-            } else if waitingState == .extraction {
-                Logger.info("🔧 Tools enabled during extraction (\(tools.count)): allowing dossier questions", category: .ai)
-            } else {
-                Logger.info("🔧 Tools enabled (\(tools.count)): \(tools.sorted().joined(separator: ", "))", category: .ai)
-            }
+            Logger.info("🔧 Tools enabled (\(tools.count)): \(tools.sorted().joined(separator: ", "))", category: .ai)
         }
     }
     /// Get allowed tools for the current phase, minus any excluded tools
@@ -174,6 +230,16 @@ actor SessionUIState: OnboardingEventEmitter {
     /// Public API to trigger tool permission republication
     func publishToolPermissionsNow() async {
         await publishToolPermissions()
+    }
+
+    /// Snapshot the currently effective allowed tools set (after waiting-state gating).
+    /// This is used during session resume to avoid relying on `stateAllowedToolsUpdated`
+    /// events that may have been emitted before subscribers were attached.
+    func getEffectiveAllowedToolsSnapshot() -> Set<String> {
+        if let waitingState = waitingState, waitingState != .extraction {
+            return []
+        }
+        return getAllowedToolsForCurrentPhase()
     }
     /// Update excluded tools and republish permissions
     func setExcludedTools(_ tools: Set<String>) async {
@@ -202,6 +268,9 @@ actor SessionUIState: OnboardingEventEmitter {
         pendingExtraction = nil
         pendingStreamingStatus = nil
         excludedTools = []
+        // Reset KC validation queue
+        pendingKCValidationQueue = []
+        isAutoValidation = false
         // Reset sync caches
         isProcessingSync = false
         isActiveSync = false

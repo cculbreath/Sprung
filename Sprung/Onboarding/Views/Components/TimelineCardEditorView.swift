@@ -10,15 +10,14 @@ struct TimelineCardEditorView: View {
     var mode: Mode = .editor
     var onValidationSubmit: ((String) -> Void)?  // Callback for validation mode: "confirmed" or "confirmed_with_changes"
     var onSubmitChangesOnly: (() -> Void)?  // Callback for "Submit Changes Only" - saves and lets LLM reassess
-    @State private var drafts: [WorkExperienceDraft] = []
-    @State private var previousDraftIds: Set<UUID> = []  // Track draft IDs to detect deletions
+    @State private var drafts: [TimelineEntryDraft] = []
     @State private var baselineCards: [TimelineCard] = []
+    @State private var previousDraftIds: Set<String> = []  // Track IDs to detect deletions
     @State private var meta: JSON?
     @State private var hasChanges = false
     @State private var isSaving = false
     @State private var isLoadingFromCoordinator = false  // Track when loading from coordinator to prevent drafts onChange interference
     @State private var errorMessage: String?
-    @State private var editingEntries: Set<UUID> = []
     @State private var lastLoadedToken: Int = -1  // Track last loaded version to prevent redundant loads
     var body: some View {
         // IMPORTANT: Access timelineUIChangeToken in body to establish @Observable tracking
@@ -30,7 +29,13 @@ struct TimelineCardEditorView: View {
 
             // Scrollable cards section - uses remaining space but leaves room for footer
             ScrollView {
-                WorkExperienceSectionView(items: $drafts, callbacks: callbacks())
+                TimelineEntrySectionView(
+                    entries: $drafts,
+                    onChange: {
+                        guard !isLoadingFromCoordinator else { return }
+                        hasChanges = TimelineCardAdapter.cards(from: drafts) != baselineCards
+                    }
+                )
                     .padding(.horizontal, 4)
                     .padding(.vertical, 4)
             }
@@ -93,13 +98,12 @@ struct TimelineCardEditorView: View {
                 isLoadingFromCoordinator = true
                 // Load the new timeline
                 baselineCards = state.cards
-                drafts = TimelineCardAdapter.workDrafts(from: state.cards)
+                drafts = TimelineCardAdapter.entryDrafts(from: state.cards)
                 previousDraftIds = Set(drafts.map { $0.id })  // Update tracking set
                 meta = state.meta
                 // If LLM created/modified cards, they need user confirmation
                 hasChanges = needsConfirmation
                 errorMessage = nil
-                editingEntries.removeAll()
                 lastLoadedToken = newToken
                 // Clear loading flag
                 isLoadingFromCoordinator = false
@@ -117,9 +121,8 @@ struct TimelineCardEditorView: View {
             if !deletedIds.isEmpty {
                 Task {
                     for deletedId in deletedIds {
-                        let cardId = deletedId.uuidString
-                        Logger.info("🗑️ UI deletion detected: immediately syncing card \(cardId) deletion to coordinator", category: .ai)
-                        await coordinator.deleteTimelineCardFromUI(id: cardId)
+                        Logger.info("🗑️ UI deletion detected: immediately syncing card \(deletedId) deletion to coordinator", category: .ai)
+                        await coordinator.deleteTimelineCardFromUI(id: deletedId)
                     }
                 }
             }
@@ -131,22 +134,19 @@ struct TimelineCardEditorView: View {
     private var header: some View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Timeline Cards")
+                Text("Timeline Entries")
                     .font(.title3.weight(.semibold))
-                Text("Use the cards below to tidy titles, companies, and dates. Drag handles to reorder entries before we dive deeper.")
+                Text("Use the entries below to tidy types, titles, organizations, and dates.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
             Spacer()
             Button {
-                let draft = WorkExperienceDraft()
-                let identifier = draft.id
                 withAnimation {
-                    drafts.append(draft)
-                    editingEntries.insert(identifier)
+                    drafts.append(TimelineEntryDraft())
                 }
             } label: {
-                Label("Add Card", systemImage: "plus")
+                Label("Add Entry", systemImage: "plus")
             }
         }
     }
@@ -202,12 +202,10 @@ struct TimelineCardEditorView: View {
         // Set loading flag to prevent drafts onChange from interfering
         isLoadingFromCoordinator = true
         baselineCards = state.cards
-        drafts = TimelineCardAdapter.workDrafts(from: state.cards)
-        previousDraftIds = Set(drafts.map { $0.id })  // Initialize tracking set
+        drafts = TimelineCardAdapter.entryDrafts(from: state.cards)
         meta = state.meta
         hasChanges = false
         errorMessage = nil
-        editingEntries.removeAll()
         // Clear loading flag
         isLoadingFromCoordinator = false
     }
@@ -215,9 +213,8 @@ struct TimelineCardEditorView: View {
         withAnimation {
             // Set loading flag to prevent drafts onChange from interfering
             isLoadingFromCoordinator = true
-            drafts = TimelineCardAdapter.workDrafts(from: baselineCards)
+            drafts = TimelineCardAdapter.entryDrafts(from: baselineCards)
             hasChanges = false
-            editingEntries.removeAll()
             // Clear loading flag
             isLoadingFromCoordinator = false
         }
@@ -273,20 +270,5 @@ struct TimelineCardEditorView: View {
                 onSubmitChangesOnly?()
             }
         }
-    }
-    private func callbacks() -> ExperienceSectionViewCallbacks {
-        ExperienceSectionViewCallbacks(
-            isEditing: { editingEntries.contains($0) },
-            beginEditing: { editingEntries.insert($0) },
-            toggleEditing: { id in
-                if editingEntries.contains(id) {
-                    editingEntries.remove(id)
-                } else {
-                    editingEntries.insert(id)
-                }
-            },
-            endEditing: { editingEntries.remove($0) },
-            onChange: { hasChanges = TimelineCardAdapter.cards(from: drafts) != baselineCards }
-        )
     }
 }

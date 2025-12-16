@@ -39,6 +39,7 @@ enum OnboardingToolName: String, CaseIterable {
     case validateApplicantProfile = "validate_applicant_profile"
     case validatedApplicantProfileData = "validated_applicant_profile_data"
     case configureEnabledSections = "configure_enabled_sections"
+    case updateDossierNotes = "update_dossier_notes"
     case listArtifacts = "list_artifacts"
     case getArtifact = "get_artifact"
     case getContextPack = "get_context_pack"

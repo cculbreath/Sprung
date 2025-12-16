@@ -20,6 +20,14 @@ struct GetContextPackTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
+        let hasBatchInProgress = await MainActor.run { coordinator.ui.hasBatchUploadInProgress }
+        if hasBatchInProgress {
+            throw ToolError.executionFailed(
+                "Cannot call get_context_pack while document uploads are in progress. " +
+                "Wait for the user to finish uploading and click 'Done with uploads', then try again."
+            )
+        }
+
         guard let purpose = params["purpose"].string else {
             throw ToolError.invalidParameters("purpose is required")
         }
@@ -64,6 +72,7 @@ struct GetContextPackTool: InterviewTool {
         for entry in entries {
             var item = JSON()
             item["id"].string = entry["id"].string
+            item["experience_type"].string = entry["experience_type"].string
             item["organization"].string = entry["organization"].string
             item["title"].string = entry["title"].string
             item["start"].string = entry["start"].string

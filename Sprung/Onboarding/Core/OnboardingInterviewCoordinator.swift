@@ -585,6 +585,18 @@ final class OnboardingInterviewCoordinator {
     func clearValidationPromptAndNotifyLLM(message: String) async {
         await uiResponseCoordinator.clearValidationPromptAndNotifyLLM(message: message)
     }
+
+    /// Returns the current experience defaults as JSON for validation UI.
+    /// Used by SubmitForValidationTool when validation_type="experience_defaults".
+    func currentExperienceDefaultsForValidation() async -> JSON {
+        let draft = experienceDefaultsStore.loadDraft()
+        guard let data = try? JSONEncoder().encode(draft),
+              let obj = try? JSONSerialization.jsonObject(with: data) else {
+            Logger.warning("⚠️ Failed to encode ExperienceDefaultsDraft for validation", category: .ai)
+            return JSON()
+        }
+        return JSON(obj)
+    }
     func sendChatMessage(_ text: String) async {
         await uiResponseCoordinator.sendChatMessage(text)
     }

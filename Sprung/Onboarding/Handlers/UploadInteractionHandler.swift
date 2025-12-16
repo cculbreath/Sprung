@@ -218,7 +218,14 @@ final class UploadInteractionHandler {
                     }
                     payload["status"].string = "uploaded"
                     payload["files"] = JSON(filesJSON)
-                    // Emit generic upload completed event
+                }
+                // Handle targeted uploads (e.g., basics.image)
+                if let target = request.metadata.targetKey {
+                    Logger.info("🎯 Handling targeted upload: \(target)", category: .ai)
+                    try await handleTargetedUpload(target: target, processed: processed)
+                    payload["updates"] = JSON([target])
+                } else if !processed.isEmpty {
+                    // Non-targeted upload: emit uploadCompleted so document/image pipelines can run.
                     // Use item.filename (original name) not storageURL.lastPathComponent (UUID)
                     let uploadInfos = processed.map { item in
                         ProcessedUploadInfo(
@@ -227,19 +234,12 @@ final class UploadInteractionHandler {
                             filename: item.filename
                         )
                     }
-                    // Emit generic upload completed event (downstream handlers will process based on file type)
                     await eventBus.publish(.uploadCompleted(
                         files: uploadInfos,
                         requestKind: request.kind.rawValue,
                         callId: nil,
                         metadata: uploadMetadata
                     ))
-                }
-                // Handle targeted uploads (e.g., basics.image)
-                if let target = request.metadata.targetKey {
-                    Logger.info("🎯 Handling targeted upload: \(target)", category: .ai)
-                    try await handleTargetedUpload(target: target, processed: processed)
-                    payload["updates"] = JSON([target])
                 } else {
                     Logger.debug("ℹ️ Upload has no target_key (generic upload)", category: .ai)
                 }
@@ -310,7 +310,12 @@ final class UploadInteractionHandler {
                 throw ToolError.executionFailed("No file received for basics.image")
             }
             let data = try Data(contentsOf: first.storageURL)
-            try uploadFileService.validateImageData(data: data, fileExtension: first.storageURL.pathExtension)
+            let ext = first.storageURL.pathExtension.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard ["jpg", "jpeg", "png"].contains(ext) else {
+                throw ToolError.invalidParameters("Profile photo must be a .jpg or .png (got .\(ext)).")
+            }
+            // Validate that the payload is an actual image (defense-in-depth)
+            try uploadFileService.validateImageData(data: data, fileExtension: ext)
             // Store image in applicant profile
             let profile = applicantProfileStore.currentProfile()
             profile.pictureData = data
@@ -321,6 +326,18 @@ final class UploadInteractionHandler {
             let profileJSON = draft.toSafeJSON()
             await eventBus.publish(.applicantProfileStored(profileJSON))
             Logger.debug("📸 Applicant profile image updated (\(data.count) bytes, mime: \(first.contentType ?? "unknown"))", category: .ai)
+
+            // Notify LLM (without sending image data)
+            var devPayload = JSON()
+            devPayload["title"].string = "Profile photo uploaded"
+            var details = JSON()
+            details["target_key"].string = "basics.image"
+            details["filename"].string = first.filename
+            details["content_type"].string = first.contentType
+            details["note"].string = "Photo stored in ApplicantProfile; binary image data is not sent to the LLM."
+            devPayload["details"] = details
+            await eventBus.publish(.llmSendDeveloperMessage(payload: devPayload))
+
             // Mark contact_photo_collected objective as complete
             await eventBus.publish(.objectiveStatusUpdateRequested(
                 id: OnboardingObjectiveId.contactPhotoCollected.rawValue,

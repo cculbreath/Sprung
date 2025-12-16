@@ -20,8 +20,8 @@ struct OnboardingInterviewToolPane: View {
             interviewContent: { AnyView(interviewTabContent) },
             selectedTab: $selectedTab
         )
-        .padding(.vertical, 10)
-        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .padding(.horizontal, 4)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .overlay {
             ZStack {
@@ -398,11 +398,10 @@ struct OnboardingInterviewToolPane: View {
                 $0.kind == .generic && $0.metadata.targetKey == "basics.image"
             }
         }
-        if filtered.count != coordinator.pendingUploadRequests.count {
-            let headshotRequests = coordinator.pendingUploadRequests.filter { $0.metadata.targetKey == "basics.image" }
-            for request in headshotRequests where filtered.contains(where: { $0.id == request.id }) == false {
-                filtered.append(request)
-            }
+        // Always include any pending requests that weren't captured by step-based filtering
+        // This ensures generic uploads (like profile photos) always appear
+        for request in coordinator.pendingUploadRequests where !filtered.contains(where: { $0.id == request.id }) {
+            filtered.append(request)
         }
         if !filtered.isEmpty {
             let kinds = filtered.map { $0.kind.rawValue }.joined(separator: ",")

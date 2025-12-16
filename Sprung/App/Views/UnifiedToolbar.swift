@@ -49,26 +49,7 @@ struct UnifiedToolbar: CustomizableToolbarContent {
             ToolbarItem(id: "bestJob", placement: .navigation, showsByDefault: true) {
                 BestJobButton()
             }
-            ToolbarItem(id: "applicantProfile", placement: .navigation, showsByDefault: true) {
-                Button(action: {
-                    Task { @MainActor in
-                        NotificationCenter.default.post(name: .showApplicantProfile, object: nil)
-                        if !NSApp.sendAction(#selector(AppDelegate.showApplicantProfileWindow), to: nil, from: nil),
-                           let delegate = NSApplication.shared.delegate as? AppDelegate {
-                            delegate.showApplicantProfileWindow()
-                        }
-                    }
-                }, label: {
-                    Label("Profile", systemImage: "person")
-                        .font(.system(size: 14, weight: .light))
-                })
-                .buttonStyle(.automatic)
-                .help("Open Applicant Profile")
-            }
-        }}
-    private var mainButtonsGroup: some CustomizableToolbarContent {
-        Group {
-            ToolbarItem(id: "startOnboardingInterview", placement: .secondaryAction, showsByDefault: true) {
+            ToolbarItem(id: "startOnboardingInterview", placement: .navigation, showsByDefault: true) {
                 Button(action: {
                     Task { @MainActor in
                         Logger.info("🎙️ Toolbar interview button tapped", category: .ui)
@@ -85,6 +66,33 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 })
                 .buttonStyle(.automatic)
                 .help("Launch onboarding interview")
+            }
+        }}
+    private var mainButtonsGroup: some CustomizableToolbarContent {
+        Group {
+            ToolbarItem(id: "templateEditor", placement: .secondaryAction, showsByDefault: true) {
+                Button(action: {
+                    Task { @MainActor in
+                        NotificationCenter.default.post(name: .showTemplateEditor, object: nil)
+                        NSApp.sendAction(#selector(AppDelegate.showTemplateEditorWindow), to: nil, from: nil)
+                    }
+                }, label: {
+                    Label("Templates", systemImage: "richtext.page")
+                        .font(.system(size: 14, weight: .light))
+                })
+                .buttonStyle(.automatic)
+                .help("Open Template Editor")
+            }
+            ToolbarItem(id: "createResume", placement: .secondaryAction, showsByDefault: true) {
+                Button(action: {
+                    sheets.showCreateResume = true
+                }, label: {
+                    Label("Resume", systemImage: "doc.badge.plus")
+                        .font(.system(size: 14, weight: .light))
+                })
+                .buttonStyle(.automatic)
+                .help("Create a new resume for the selected job application")
+                .disabled(jobAppStore.selectedApp == nil)
             }
             ToolbarItem(id: "coverLetter", placement: .secondaryAction, showsByDefault: true) {
                 CoverLetterGenerateButton()
@@ -106,19 +114,6 @@ struct UnifiedToolbar: CustomizableToolbarContent {
     }
     private var inspectorButtonGroup: some CustomizableToolbarContent {
         Group {
-            ToolbarItem(id: "templateEditor", placement: .primaryAction, showsByDefault: true) {
-                Button(action: {
-                    Task { @MainActor in
-                        NotificationCenter.default.post(name: .showTemplateEditor, object: nil)
-                        NSApp.sendAction(#selector(AppDelegate.showTemplateEditorWindow), to: nil, from: nil)
-                    }
-                }, label: {
-                    Label("Templates", systemImage: "richtext.page")
-                        .font(.system(size: 14, weight: .light))
-                })
-                .buttonStyle(.automatic)
-                .help("Open Template Editor")
-            }
             ToolbarItem(id: "experienceEditor", placement: .primaryAction, showsByDefault: true) {
                 Button(action: {
                     Task { @MainActor in
@@ -136,11 +131,37 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 Button(action: {
                     sheets.showKnowledgeCardsBrowser = true
                 }, label: {
-                    Label("Knowledge Cards", systemImage: "brain.head.profile")
+                    Label("Knowledge", systemImage: "brain.head.profile")
                         .font(.system(size: 14, weight: .light))
                 })
                 .buttonStyle(.automatic)
                 .help("Browse Knowledge Cards")
+            }
+            ToolbarItem(id: "writingContext", placement: .primaryAction, showsByDefault: true) {
+                Button(action: {
+                    sheets.showWritingContextBrowser = true
+                }, label: {
+                    Label("Dossier", systemImage: "doc.text.magnifyingglass")
+                        .font(.system(size: 14, weight: .light))
+                })
+                .buttonStyle(.automatic)
+                .help("Browse writing samples and dossier (CoverRefs)")
+            }
+            ToolbarItem(id: "applicantProfile", placement: .primaryAction, showsByDefault: true) {
+                Button(action: {
+                    Task { @MainActor in
+                        NotificationCenter.default.post(name: .showApplicantProfile, object: nil)
+                        if !NSApp.sendAction(#selector(AppDelegate.showApplicantProfileWindow), to: nil, from: nil),
+                           let delegate = NSApplication.shared.delegate as? AppDelegate {
+                            delegate.showApplicantProfileWindow()
+                        }
+                    }
+                }, label: {
+                    Label("Profile", systemImage: "person")
+                        .font(.system(size: 14, weight: .light))
+                })
+                .buttonStyle(.automatic)
+                .help("Open Applicant Profile")
             }
             ToolbarItem(id: "inspector", placement: .primaryAction, showsByDefault: true) {
                 Button {

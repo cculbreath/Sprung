@@ -156,6 +156,10 @@ struct SprungApp: App {
                 NotificationCenter.default.post(name: .generateCoverLetter, object: nil)
             }
             .keyboardShortcut("l", modifiers: [.command])
+            Button("Dossier and Writing Samples...") {
+                NotificationCenter.default.post(name: .showWritingContextBrowser, object: nil)
+            }
+            .keyboardShortcut("w", modifiers: [.command, .option])
             Button("Batch Cover Letters") {
                 NotificationCenter.default.post(name: .batchCoverLetter, object: nil)
             }

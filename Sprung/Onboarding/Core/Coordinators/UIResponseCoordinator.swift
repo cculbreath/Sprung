@@ -8,16 +8,19 @@ final class UIResponseCoordinator {
     private let toolRouter: ToolHandler
     private let state: StateCoordinator
     private let ui: OnboardingUIState
+    private let sessionUIState: SessionUIState
     init(
         eventBus: EventCoordinator,
         toolRouter: ToolHandler,
         state: StateCoordinator,
-        ui: OnboardingUIState
+        ui: OnboardingUIState,
+        sessionUIState: SessionUIState
     ) {
         self.eventBus = eventBus
         self.toolRouter = toolRouter
         self.state = state
         self.ui = ui
+        self.sessionUIState = sessionUIState
     }
     // MARK: - Choice Selection
     func submitChoiceSelection(_ selectionIds: [String]) async {
@@ -80,7 +83,7 @@ final class UIResponseCoordinator {
         // No separate user message needed - tool response contains the completion info
         var output = JSON()
         output["message"].string = "User skipped the upload"
-        output["status"].string = "cancelled"
+        output["status"].string = "completed"
         await completePendingUIToolCall(output: output)
         Logger.info("✅ Upload skipped - info included in tool response", category: .ai)
     }
@@ -105,31 +108,63 @@ final class UIResponseCoordinator {
             statusDescription = status.lowercased()
         }
 
-        // Build tool response message with notes if provided
+        let isConfirmed = ["confirmed", "confirmed_with_changes", "approved", "modified"].contains(status.lowercased())
+
+        // Check if this is KC auto-validation (no tool call to complete)
+        let isAutoValidation = await sessionUIState.isAutoValidation
+
+        if isAutoValidation {
+            // KC Auto-Validation: Send developer message instead of tool response
+            await handleKCAutoValidationResponse(
+                isConfirmed: isConfirmed,
+                notes: notes,
+                coordinator: coordinator
+            )
+            return
+        }
+
+        // Standard tool-initiated validation: complete the pending tool call
         var message = "Validation response: \(statusDescription)"
         if let notes = notes, !notes.isEmpty {
             message += ". Notes: \(notes)"
         }
 
-        // Complete pending UI tool call (Codex paradigm)
-        // No separate user message needed - tool response contains the validation info
         var output = JSON()
         output["message"].string = message
         output["status"].string = "completed"
         await completePendingUIToolCall(output: output)
 
         // Check for pending knowledge card that needs auto-persist
-        let isConfirmed = ["confirmed", "confirmed_with_changes", "approved", "modified"].contains(status.lowercased())
-
         if isConfirmed && coordinator.hasPendingKnowledgeCard() {
             // Emit event for auto-persist - handler will respond with knowledgeCardAutoPersisted
             await eventBus.publish(.knowledgeCardAutoPersistRequested)
-            // Note: The LLM message will be sent by the event handler after persist completes
             Logger.info("📤 Emitted knowledgeCardAutoPersistRequested event", category: .ai)
             return
         }
 
         Logger.info("✅ Validation response - info included in tool response", category: .ai)
+    }
+
+    /// Handle KC auto-validation response (from agent completion, not tool call)
+    /// Sends developer messages to LLM and triggers next card presentation
+    private func handleKCAutoValidationResponse(
+        isConfirmed: Bool,
+        notes: String?,
+        coordinator: OnboardingInterviewCoordinator
+    ) async {
+        if isConfirmed && coordinator.hasPendingKnowledgeCard() {
+            // Emit auto-persist event - handler will:
+            // 1. Persist the card
+            // 2. Send developer message to LLM
+            // 3. Present next card from queue
+            await eventBus.publish(.kcAutoValidationApproved)
+            Logger.info("✅ KC auto-validation approved - emitted kcAutoValidationApproved", category: .ai)
+        } else {
+            // Rejected - emit rejection event with reason
+            let reason = notes ?? "No reason provided"
+            await eventBus.publish(.kcAutoValidationRejected(reason: reason))
+            Logger.info("❌ KC auto-validation rejected: \(reason)", category: .ai)
+        }
     }
     func clearValidationPromptAndNotifyLLM(message: String) async {
         // Clear the validation prompt
@@ -305,8 +340,14 @@ final class UIResponseCoordinator {
 
         // Build comprehensive tool output that includes profile data
         // This eliminates the need for a separate user message, reducing LLM round trips
+        // Tool response is visible to the LLM; omit binary photo data to avoid token waste.
+        var llmSafeProfile = profileJSON
+        if let image = llmSafeProfile["image"].string, !image.isEmpty {
+            llmSafeProfile["image"].string = "[Image uploaded - binary data omitted]"
+        }
+
         var wrappedData = JSON()
-        wrappedData["applicant_profile"] = profileJSON
+        wrappedData["applicant_profile"] = llmSafeProfile
         wrappedData["validation_status"].string = "validated_by_user"
 
         var output = JSON()
@@ -521,11 +562,12 @@ final class UIResponseCoordinator {
         var lines: [String] = []
         for card in cards {
             let id = card.id
+            let type = card.experienceType.rawValue
             let title = card.title
             let org = card.organization
             let start = card.start
             let end = card.end.isEmpty ? "present" : card.end
-            lines.append("- [\(id)] \(title) @ \(org) (\(start) - \(end))")
+            lines.append("- [\(id)] [\(type)] \(title) @ \(org) (\(start) - \(end))")
         }
         return lines.joined(separator: "\n")
     }

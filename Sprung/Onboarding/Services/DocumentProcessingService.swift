@@ -155,9 +155,13 @@ actor DocumentProcessingService {
             summaryMeta["relevance_hints"].string = summary.relevanceHints
             artifactRecord["summary_metadata"] = summaryMeta
         }
-        // Merge any additional metadata from upload form
-        if !metadata.dictionaryValue.isEmpty {
-            artifactRecord["metadata"] = metadata
+        // Persist both upload metadata and extraction metadata
+        var combinedMetadata = metadata
+        if !artifact.metadata.isEmpty {
+            combinedMetadata["extraction"] = JSON(artifact.metadata)
+        }
+        if !combinedMetadata.dictionaryValue.isEmpty {
+            artifactRecord["metadata"] = combinedMetadata
         }
         Logger.info("📦 Artifact record created: \(artifactId)", category: .ai)
         return artifactRecord

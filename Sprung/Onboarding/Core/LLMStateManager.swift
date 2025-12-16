@@ -35,6 +35,12 @@ actor LLMStateManager {
     /// Queued developer messages waiting for pending UI tool to complete
     private var queuedDeveloperMessages: [JSON] = []
 
+    // MARK: - Pending Forced Tool Choice (Tool Chaining)
+    /// One-shot override used to force the next LLM request to call a specific tool.
+    /// This exists because developer messages may be queued behind pending UI tools; we still
+    /// need the toolChoice to apply to the very next continuation request (often a tool output).
+    private var pendingForcedToolChoice: String?
+
     // MARK: - Tool Names
     /// Get the current set of allowed tool names
     func getAllowedToolNames() -> Set<String> {
@@ -159,6 +165,18 @@ actor LLMStateManager {
     /// Check if there are queued developer messages
     func hasQueuedDeveloperMessages() -> Bool {
         !queuedDeveloperMessages.isEmpty
+    }
+
+    // MARK: - Forced Tool Choice Override
+    func setPendingForcedToolChoice(_ toolName: String) {
+        pendingForcedToolChoice = toolName
+        Logger.info("🎯 Pending forced toolChoice set: \(toolName)", category: .ai)
+    }
+
+    /// Pop (return + clear) the pending forced tool choice.
+    func popPendingForcedToolChoice() -> String? {
+        defer { pendingForcedToolChoice = nil }
+        return pendingForcedToolChoice
     }
 
     /// Remove queued developer messages for a specific objective (call when objective completes)

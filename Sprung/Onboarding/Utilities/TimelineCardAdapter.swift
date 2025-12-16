@@ -20,35 +20,34 @@ enum TimelineCardAdapter {
         }
         return (cards, meta)
     }
-    static func workDrafts(from cards: [TimelineCard]) -> [WorkExperienceDraft] {
+    static func entryDrafts(from cards: [TimelineCard]) -> [TimelineEntryDraft] {
         cards.map { card in
-            var draft = WorkExperienceDraft()
-            draft.id = UUID(uuidString: card.id) ?? UUID()
-            draft.position = card.title
-            draft.name = card.organization
-            draft.location = card.location
-            draft.startDate = card.start
-            draft.endDate = card.end
-            draft.summary = card.summary
-            draft.highlights = card.highlights.map { text in
-                var highlight = HighlightDraft()
-                highlight.text = text
-                return highlight
-            }
-            return draft
+            TimelineEntryDraft(
+                id: card.id,
+                experienceType: card.experienceType,
+                title: card.title,
+                organization: card.organization,
+                location: card.location,
+                start: card.start,
+                end: card.end,
+                summary: card.summary,
+                highlights: card.highlights
+            )
         }
     }
-    static func cards(from drafts: [WorkExperienceDraft]) -> [TimelineCard] {
+
+    static func cards(from drafts: [TimelineEntryDraft]) -> [TimelineCard] {
         drafts.map { draft in
             TimelineCard(
-                id: draft.id.uuidString,
-                title: draft.position,
-                organization: draft.name,
+                id: draft.id,
+                experienceType: draft.experienceType,
+                title: draft.title,
+                organization: draft.organization,
                 location: draft.location,
-                start: draft.startDate,
-                end: draft.endDate,
+                start: draft.start,
+                end: draft.end,
                 summary: draft.summary,
-                highlights: draft.highlights.map { $0.text }
+                highlights: draft.highlights
             )
         }
     }

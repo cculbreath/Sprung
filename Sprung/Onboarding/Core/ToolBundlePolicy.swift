@@ -17,7 +17,9 @@ struct ToolBundlePolicy {
     /// Minimal set of tools that should always be available (for error recovery)
     /// NOTE: get_user_option removed - it was causing the model to prefer generic tools
     /// over specialized ones. It's now explicitly included only in bundles that need it.
-    static let safeEscapeTools: Set<String> = []
+    static let safeEscapeTools: Set<String> = [
+        OnboardingToolName.updateDossierNotes.rawValue  // Scratchpad always available
+    ]
 
     // MARK: - Artifact Access Tools
 
@@ -109,6 +111,8 @@ struct ToolBundlePolicy {
             // Progression: after bootstrap, model collects documents
             OnboardingToolName.openDocumentCollection.rawValue,
             OnboardingToolName.getUserUpload.rawValue,
+            // Allow proposing assignments even if subphase inference lags (prevents stalls)
+            OnboardingToolName.proposeCardAssignments.rawValue,
             // Allow model to progress itself and dispatch agents once docs are ready
             OnboardingToolName.setObjectiveStatus.rawValue,
             OnboardingToolName.dispatchKCAgents.rawValue,
@@ -128,31 +132,41 @@ struct ToolBundlePolicy {
         .p2_cardAssignment: [
             OnboardingToolName.proposeCardAssignments.rawValue,
             OnboardingToolName.getUserOption.rawValue,
+            // Fallback: allow manual KC creation if an agent fails
+            OnboardingToolName.submitKnowledgeCard.rawValue,
             // Progression: after assignment, model dispatches agents
             OnboardingToolName.dispatchKCAgents.rawValue,
             OnboardingToolName.setObjectiveStatus.rawValue
         ],
         .p2_userApprovalWait: [
             OnboardingToolName.getUserOption.rawValue,
+            // Fallback: allow manual KC creation if an agent fails
+            OnboardingToolName.submitKnowledgeCard.rawValue,
             // Progression: after approval, model dispatches agents
             OnboardingToolName.dispatchKCAgents.rawValue,
             OnboardingToolName.setObjectiveStatus.rawValue
         ],
         .p2_kcGeneration: [
+            // Critical bridge tool: required before dispatch if proposals are missing
+            OnboardingToolName.proposeCardAssignments.rawValue,
             OnboardingToolName.dispatchKCAgents.rawValue,
             OnboardingToolName.setObjectiveStatus.rawValue,
-            // Progression: after generation, model submits cards
+            // Cards are auto-presented for validation - no submit_knowledge_card needed
+            // Keep submitKnowledgeCard available for manual card creation (edge case)
             OnboardingToolName.submitKnowledgeCard.rawValue,
             OnboardingToolName.nextPhase.rawValue
         ],
         .p2_cardSubmission: [
+            // Keep for manual card creation (LLM crafts card without agent)
             OnboardingToolName.submitKnowledgeCard.rawValue,
             OnboardingToolName.setObjectiveStatus.rawValue,
             OnboardingToolName.nextPhase.rawValue
         ],
         .p2_phaseTransition: [
             OnboardingToolName.nextPhase.rawValue,
-            OnboardingToolName.setObjectiveStatus.rawValue
+            OnboardingToolName.setObjectiveStatus.rawValue,
+            // Fallback: keep manual KC tool available if dispatch had failures
+            OnboardingToolName.submitKnowledgeCard.rawValue
         ],
 
         // MARK: Phase 3 Subphases (all include artifact access)
@@ -178,6 +192,7 @@ struct ToolBundlePolicy {
             OnboardingToolName.submitCandidateDossier.rawValue
         ],
         .p3_dossierCompilation: [
+            OnboardingToolName.persistData.rawValue,
             OnboardingToolName.submitExperienceDefaults.rawValue,
             OnboardingToolName.submitCandidateDossier.rawValue,
             OnboardingToolName.setObjectiveStatus.rawValue,
@@ -186,6 +201,7 @@ struct ToolBundlePolicy {
             OnboardingToolName.nextPhase.rawValue
         ],
         .p3_dossierValidation: [
+            OnboardingToolName.persistData.rawValue,
             OnboardingToolName.submitForValidation.rawValue,
             OnboardingToolName.getUserOption.rawValue,
             // Progression: after validation, model submits final data
@@ -194,12 +210,14 @@ struct ToolBundlePolicy {
             OnboardingToolName.nextPhase.rawValue
         ],
         .p3_dataSubmission: [
+            OnboardingToolName.persistData.rawValue,
             OnboardingToolName.submitExperienceDefaults.rawValue,
             OnboardingToolName.submitCandidateDossier.rawValue,
             OnboardingToolName.setObjectiveStatus.rawValue,
             OnboardingToolName.nextPhase.rawValue
         ],
         .p3_interviewComplete: [
+            OnboardingToolName.persistData.rawValue,
             OnboardingToolName.nextPhase.rawValue
         ]
     ]

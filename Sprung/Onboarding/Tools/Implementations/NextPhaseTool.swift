@@ -34,6 +34,24 @@ struct NextPhaseTool: InterviewTool {
         switch currentPhase {
         case .phase1CoreFacts:
             nextPhase = .phase2DeepDive
+            // VALIDATION: skeleton_timeline MUST have at least one entry before Phase 2
+            let timeline = await coordinator.ui.skeletonTimeline
+            let experiences = timeline?["experiences"].array ?? []
+            if experiences.isEmpty {
+                Logger.warning("⚠️ next_phase blocked: skeleton_timeline is empty", category: .ai)
+                var response = JSON()
+                response["error"].bool = true
+                response["reason"].string = "missing_skeleton_timeline"
+                response["status"].string = "incomplete"
+                response["message"].string = """
+                    Cannot advance to Phase 2: No timeline entries exist. \
+                    You must create skeleton timeline cards from the user's resume or work history before proceeding. \
+                    Use create_timeline_card to add work experience, education, and other entries. \
+                    If user uploaded a resume, extract the positions and create cards for each.
+                    """
+                return .immediate(response)
+            }
+            Logger.info("✅ skeleton_timeline validated (\(experiences.count) entries) for Phase 1 → Phase 2", category: .ai)
         case .phase2DeepDive:
             nextPhase = .phase3WritingCorpus
             // VALIDATION: Warn if no evidence documents were uploaded
@@ -42,7 +60,7 @@ struct NextPhaseTool: InterviewTool {
             if artifacts.isEmpty && knowledgeCards.isEmpty {
                 Logger.warning("⚠️ next_phase warning: no evidence documents or knowledge cards", category: .ai)
                 var response = JSON()
-                response["status"].string = "warning"
+                response["status"].string = "incomplete"
                 response["warning"].string = "no_evidence_collected"
                 response["message"].string = """
                     No evidence documents were uploaded and no knowledge cards were generated. \
@@ -66,16 +84,16 @@ struct NextPhaseTool: InterviewTool {
                 var response = JSON()
                 response["error"].bool = true
                 response["reason"].string = "missing_experience_defaults"
-                response["status"].string = "blocked"
+                response["status"].string = "incomplete"
                 response["message"].string = """
                     Cannot complete interview: experience_defaults have not been persisted.
-                    You MUST call persist_data with dataType="experience_defaults" before calling next_phase.
+                    You MUST call submit_experience_defaults (or persist_data) before calling next_phase.
                     Use the knowledge cards and skeleton timeline to generate structured resume data with:
                     - work: Array of work experience entries from timeline
                     - education: Array of education entries from timeline
                     - projects: Array of project entries (if any)
                     - skills: Array of skill categories extracted from knowledge cards
-                    Example: persist_data({"dataType": "experience_defaults", "data": {"work": [...], "education": [...], "skills": [...]}})
+                    Example: submit_experience_defaults({"work": [...], "education": [...], "skills": [...]})
                     """
                 return .immediate(response)
             }

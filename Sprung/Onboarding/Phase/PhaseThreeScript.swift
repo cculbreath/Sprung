@@ -81,10 +81,11 @@ struct PhaseThreeScript: PhaseScript {
         6. `dossier_complete.persisted`
            - Save the finalized dossier via `submit_candidate_dossier`.
            - Save resume defaults via `submit_experience_defaults`.
+           - After submitting defaults, use `submit_for_validation(validation_type="experience_defaults", data={}, summary="...")` for explicit user approval (the tool auto-fetches the current defaults).
            - Congratulate the user, summarize next steps, and set both the sub-objective and parent objective to completed.
         ### Tools Available:
         - `ingest_writing_sample`: ONLY for text pasted in chat (NOT for file uploads)
-        - `submit_for_validation`: Show dossier summary for approval
+        - `submit_for_validation`: Show dossier summary for approval; also use validation_type="experience_defaults" so the user can approve resume defaults (or request fixes)
         - `persist_data`: NOT for writing samples - they're auto-created as artifacts
         - `submit_candidate_dossier`: Submit finalized candidate dossier (REQUIRED before next_phase)
         - `submit_experience_defaults`: Submit resume defaults for Experience Editor (REQUIRED before next_phase)

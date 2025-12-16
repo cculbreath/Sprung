@@ -16,7 +16,7 @@ struct OnboardingInterviewInteractiveCard: View {
                 coordinator: coordinator,
                 isOccupied: $isToolPaneOccupied
             )
-            .frame(minWidth: 460, maxWidth: 520)
+            .frame(minWidth: 480, maxWidth: 580)
             .frame(maxHeight: .infinity, alignment: .topLeading)
             .opacity(animateIn ? 1 : 0)
             .scaleEffect(animateIn ? 1 : 0.96)
@@ -47,15 +47,15 @@ struct OnboardingInterviewInteractiveCard: View {
                 value: animateIn
             )
         }
-        .padding(.vertical, 10)
-        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .padding(.horizontal, 4)
         .frame(minHeight: 560)
         .background(
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(Color(nsColor: .controlBackgroundColor).opacity(0.65))
                 .shadow(color: Color.black.opacity(0.16), radius: 24, y: 18)
         )
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 4)
         .opacity(animateIn ? 1 : 0)
         .scaleEffect(animateIn ? 1 : 0.94)
         .rotationEffect(.degrees(animateIn ? 0 : -1.6))

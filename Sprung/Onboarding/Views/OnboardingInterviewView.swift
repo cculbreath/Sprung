@@ -21,6 +21,7 @@ struct OnboardingInterviewView: View {
 
     // Window and content entrance animation state
     @State private var windowAppeared = false
+    @State private var showCompletionReview = false
     @State private var progressAppeared = false
     @State private var cardAppeared = false
     @State private var bottomBarAppeared = false
@@ -84,14 +85,14 @@ struct OnboardingInterviewView: View {
                 .blur(radius: bottomBarAppeared ? 0 : 10)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 8)
         }
         // Uses system window shadow via BorderlessOverlayWindow.hasShadow = true
         // No SwiftUI shadow overlay needed - system shadow has proper hit testing
         let styledContent = contentStack
-            .frame(minWidth: 1040)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 16)
+            .frame(minWidth: 1060)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 12)
             .clipShape(cardShape)
             .background(cardShape.fill(.thickMaterial))
             // Window entrance animation
@@ -123,7 +124,7 @@ struct OnboardingInterviewView: View {
             }
             .onChange(of: coordinator.ui.interviewJustCompleted) { _, completed in
                 if completed {
-                    handleInterviewCompleted()
+                    showCompletionReview = true
                 }
             }
         let withSheets = withLifecycle
@@ -153,6 +154,15 @@ struct OnboardingInterviewView: View {
                         }
                     )
                 }
+            }
+            .sheet(isPresented: $showCompletionReview) {
+                OnboardingCompletionReviewSheet(
+                    coordinator: interviewCoordinator,
+                    onFinish: {
+                        showCompletionReview = false
+                        handleInterviewCompleted()
+                    }
+                )
             }
             .alert("Import Failed", isPresented: $uiState.showImportError, presenting: uiState.importErrorText, actions: { _ in
                 Button("OK") { uiState.clearImportError() }
@@ -260,7 +270,7 @@ private extension OnboardingInterviewView {
                     modelStatusDescription: modelStatusDescription(coordinator: coordinator),
                     onOpenSettings: openSettings
                 )
-                .frame(width: 1020)
+                .frame(width: 1040)
                 .matchedGeometryEffect(id: "mainCard", in: wizardTransition)
                 .transition(.asymmetric(
                     insertion: .scale(scale: 0.95).combined(with: .opacity),
@@ -268,8 +278,8 @@ private extension OnboardingInterviewView {
                 ))
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 12)
+        .padding(.horizontal, 4)
+        .padding(.top, 8)
     }
     func continueButtonTitle(for step: OnboardingWizardStep) -> String {
         switch step {
@@ -454,6 +464,8 @@ private struct ValidationPromptSheet: View {
             return "Review Knowledge Card"
         case "applicant_profile":
             return "Review Profile"
+        case "experience_defaults":
+            return "Review Experience Defaults"
         default:
             return "Review Required"
         }
@@ -492,6 +504,9 @@ private struct ValidationPromptSheet: View {
                 coordinator: coordinator
             )
             .padding(16)
+        } else if validation.dataType == "experience_defaults" {
+            ExperienceDefaultsValidationView(coordinator: coordinator)
+                .padding(16)
         } else {
             OnboardingValidationReviewCard(
                 prompt: validation,

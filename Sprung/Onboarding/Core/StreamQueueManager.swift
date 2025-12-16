@@ -85,11 +85,21 @@ actor StreamQueueManager {
         let callId = payload["callId"].stringValue.prefix(12)
         Logger.info("📦 [\(instanceId.uuidString.prefix(8))] enqueueToolResponse called: callId=\(callId), expectedCount=\(expectedToolResponseCount), collected=\(collectedToolResponses.count)", category: .ai)
 
-        // If we don't know the batch count yet, hold the response
-        // startToolCallBatch will process collected responses when it's called
+        // If we don't know the batch count yet, this could be:
+        // 1. A response arriving before startToolCallBatch (hold it)
+        // 2. A UI tool response after batch state was cleared (send immediately)
+        // Heuristic: if the queue is empty and no stream is active, send immediately
+        // Otherwise hold for batching
         if expectedToolResponseCount == 0 {
-            collectedToolResponses.append(payload)
-            Logger.info("📦 Holding tool response (batch count unknown) - collected \(collectedToolResponses.count)", category: .ai)
+            if streamQueue.isEmpty && !isStreaming {
+                // No pending work - this is likely a UI tool response, send immediately
+                enqueue(.toolResponse(payload: payload))
+                Logger.info("📦 Tool response (no active batch) - sent immediately", category: .ai)
+            } else {
+                // Stream in progress or queue has work - hold for potential batching
+                collectedToolResponses.append(payload)
+                Logger.info("📦 Holding tool response (batch count unknown) - collected \(collectedToolResponses.count)", category: .ai)
+            }
             return
         }
 
@@ -176,17 +186,40 @@ actor StreamQueueManager {
         }
     }
     /// Process the stream queue serially
-    /// Priority: tool responses must complete before ANY other messages when tool calls are pending
-    /// This prevents duplicate LLM responses when UI flows send messages during tool execution
+    /// Priority: tool responses must complete before system-generated messages when tool calls are pending
+    /// Exception: Chatbox (non-system-generated) user messages are HIGH PRIORITY and clear any tool response block
     private func processQueue() async {
         while !streamQueue.isEmpty {
             guard !isStreaming else {
                 Logger.debug("⏸️ Queue processing paused (stream in progress)", category: .ai)
                 return
             }
+
+            // Check for high-priority chatbox message first
+            // Chatbox messages (isSystemGenerated=false) should never be blocked by pending tool responses
+            if let chatboxIndex = streamQueue.firstIndex(where: { request in
+                if case .userMessage(_, let isSystemGenerated, _, _, _, _) = request {
+                    return !isSystemGenerated  // Chatbox messages are NOT system-generated
+                }
+                return false
+            }) {
+                // Clear tool response expectation - chatbox messages take priority
+                if expectedToolResponseCount > 0 || !collectedToolResponses.isEmpty {
+                    Logger.info("🔔 Chatbox message detected - clearing tool response block (was expecting \(expectedToolResponseCount), held \(collectedToolResponses.count))", category: .ai)
+                    expectedToolResponseCount = 0
+                    collectedToolResponses = []
+                    expectedToolCallIds = []
+                }
+                isStreaming = true
+                let request = streamQueue.remove(at: chatboxIndex)
+                Logger.info("▶️ Processing HIGH PRIORITY chatbox message", category: .ai)
+                await emitStreamRequest(request)
+                continue
+            }
+
             // Find the next request to process
-            // Priority: tool responses MUST complete before user or developer messages
-            // This prevents race conditions where user messages trigger LLM turns before tool responses arrive
+            // Priority: tool responses MUST complete before system-generated user or developer messages
+            // This prevents race conditions where system messages trigger LLM turns before tool responses arrive
             let nextIndex: Int
             if expectedToolResponseCount > 0 || hasPendingToolResponse() || !collectedToolResponses.isEmpty {
                 // Tool responses are expected - they MUST be processed first
@@ -197,8 +230,7 @@ actor StreamQueueManager {
                 }) {
                     nextIndex = toolIndex
                 } else {
-                    // No tool response in queue yet - wait for it before processing ANY messages
-                    // This prevents duplicate LLM responses from user messages arriving during tool execution
+                    // No tool response in queue yet - wait for it before processing system messages
                     Logger.debug("⏸️ Queue waiting for tool responses (expectedCount: \(expectedToolResponseCount), held: \(collectedToolResponses.count), queue: \(streamQueue.count))", category: .ai)
                     return
                 }

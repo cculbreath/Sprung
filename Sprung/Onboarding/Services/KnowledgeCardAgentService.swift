@@ -8,6 +8,7 @@
 //
 
 import Foundation
+import SwiftOpenAI
 import SwiftyJSON
 
 // MARK: - Card Proposal
@@ -77,6 +78,37 @@ struct GeneratedCard {
     var timePeriod: String?
     var organization: String?
     var location: String?
+
+    func validationError(minProseChars: Int = 1000) -> String? {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedTitle.isEmpty {
+            return "Missing title"
+        }
+
+        let trimmedType = cardType.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedType.isEmpty {
+            return "Missing card_type"
+        }
+        if ["job", "skill", "education", "project"].contains(trimmedType) == false {
+            return "Invalid card_type '\(trimmedType)'"
+        }
+
+        let trimmedProse = prose.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedProse.isEmpty {
+            return "Missing prose"
+        }
+        if trimmedProse.count < minProseChars {
+            return "Prose too short (\(trimmedProse.count) chars)"
+        }
+
+        let hasArtifactSources = sources.contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        let hasChatSources = chatSources.contains { !$0.excerpt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        if !hasArtifactSources && !hasChatSources {
+            return "Missing evidence sources (artifact IDs and/or chat_sources)"
+        }
+
+        return nil
+    }
 
     /// Convert to JSON format matching submit_knowledge_card schema.
     /// Output format:
@@ -274,7 +306,7 @@ actor KnowledgeCardAgentService {
             let agentId = UUID().uuidString
             agentIds.append(agentId)
             await MainActor.run {
-                tracker.trackAgent(
+                _ = tracker.trackAgent(
                     id: agentId,
                     type: .knowledgeCard,
                     name: proposal.title,
@@ -438,16 +470,33 @@ actor KnowledgeCardAgentService {
 
             let output = try await runner.run()
 
-            // Mark agent as completed
-            await MainActor.run {
-                tracker.markCompleted(agentId: agentId)
-            }
-
             // Parse result
             if let result = output.result?["result"] {
-                // Emit agent completed event
+                // Build and store card BEFORE emitting completion event (fixes race condition)
+                let generatedCard = GeneratedCard.fromAgentOutput(result, cardId: proposal.cardId)
+
+                if let validationError = generatedCard.validationError() {
+                    let error = "KC agent returned invalid output: \(validationError)"
+                    await MainActor.run {
+                        tracker.markFailed(agentId: agentId, error: error)
+                    }
+                    await eventBus.publish(.kcAgentFailed(agentId: agentId, cardId: proposal.cardId, error: error))
+                    return GeneratedCard.failed(
+                        cardId: proposal.cardId,
+                        title: proposal.title,
+                        error: error
+                    )
+                }
+
+                await artifactRepository.storePendingCard(generatedCard.toJSON(), id: proposal.cardId)
+
+                // Mark agent as completed only after the card is valid and stored
+                await MainActor.run {
+                    tracker.markCompleted(agentId: agentId)
+                }
+                // NOW emit agent completed event (card is already stored)
                 await eventBus.publish(.kcAgentCompleted(agentId: agentId, cardId: proposal.cardId, cardTitle: proposal.title))
-                return GeneratedCard.fromAgentOutput(result, cardId: proposal.cardId)
+                return generatedCard
             } else {
                 // Emit agent failed event
                 let error = "Agent completed but returned no result"
@@ -481,18 +530,25 @@ actor KnowledgeCardAgentService {
                 error: "Cancelled by user"
             )
         } catch {
-            // Other error
+            // Extract detailed error message from APIError if available
+            let errorMessage: String
+            if let apiError = error as? APIError {
+                errorMessage = apiError.displayDescription
+            } else {
+                errorMessage = error.localizedDescription
+            }
+
             await MainActor.run {
-                tracker.markFailed(agentId: agentId, error: error.localizedDescription)
+                tracker.markFailed(agentId: agentId, error: errorMessage)
             }
 
             // Emit failed event
-            await eventBus.publish(.kcAgentFailed(agentId: agentId, cardId: proposal.cardId, error: error.localizedDescription))
+            await eventBus.publish(.kcAgentFailed(agentId: agentId, cardId: proposal.cardId, error: errorMessage))
 
             return GeneratedCard.failed(
                 cardId: proposal.cardId,
                 title: proposal.title,
-                error: error.localizedDescription
+                error: errorMessage
             )
         }
     }

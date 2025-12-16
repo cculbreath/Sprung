@@ -43,6 +43,7 @@ struct SubmitExperienceDefaultsTool: InterviewTool {
 
     private unowned let coordinator: OnboardingInterviewCoordinator
     private let eventBus: EventCoordinator
+    private let dataStore: InterviewDataStore
 
     var name: String { OnboardingToolName.submitExperienceDefaults.rawValue }
     var description: String {
@@ -54,9 +55,10 @@ struct SubmitExperienceDefaultsTool: InterviewTool {
     }
     var parameters: JSONSchema { Self.schema }
 
-    init(coordinator: OnboardingInterviewCoordinator, eventBus: EventCoordinator) {
+    init(coordinator: OnboardingInterviewCoordinator, eventBus: EventCoordinator, dataStore: InterviewDataStore) {
         self.coordinator = coordinator
         self.eventBus = eventBus
+        self.dataStore = dataStore
     }
 
     func execute(_ params: JSON) async throws -> ToolResult {
@@ -121,6 +123,31 @@ struct SubmitExperienceDefaultsTool: InterviewTool {
 
         // Emit event to populate ExperienceDefaultsStore
         await eventBus.publish(.experienceDefaultsGenerated(defaults: filteredPayload))
+
+        // Persist for phase completion gating (NextPhaseTool checks InterviewDataStore)
+        // Keep the persisted payload small: enabled sections only + professional_summary.
+        do {
+            let persistedId = try await dataStore.persist(dataType: "experience_defaults", payload: filteredPayload)
+            Logger.info("💾 Persisted experience_defaults for phase completion (\(persistedId))", category: .ai)
+        } catch {
+            Logger.error("❌ Failed to persist experience_defaults: \(error.localizedDescription)", category: .ai)
+            return .error(.executionFailed("Failed to persist experience_defaults required for completion: \(error.localizedDescription)"))
+        }
+
+        // Mandate an explicit user review of experience defaults via submit_for_validation.
+        // We force the next continuation (tool_response) to call submit_for_validation.
+        // submit_for_validation will auto-fetch current experience defaults from the store.
+        var devPayload = JSON()
+        devPayload["title"].string = "Review Experience Defaults"
+        devPayload["toolChoice"].string = OnboardingToolName.submitForValidation.rawValue
+        var details = JSON()
+        details["instruction"].string = """
+            Next, call submit_for_validation with validation_type=\"experience_defaults\" and a short summary. \
+            You may pass an empty data object; the tool will auto-fetch current experience defaults. \
+            If the user rejects or requests changes, revise and re-run submit_experience_defaults before proceeding.
+            """
+        devPayload["details"] = details
+        await coordinator.eventBus.publish(.llmSendDeveloperMessage(payload: devPayload))
 
         // Build response
         var response = JSON()
