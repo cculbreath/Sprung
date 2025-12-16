@@ -124,7 +124,7 @@ final class _OpenAIResponsesClient: LLMClient {
         let parameters = ModelResponseParameter(
             input: .array(inputItems),
             model: .custom(modelId),
-            store: false,
+            store: true,
             temperature: temperature ?? defaultTemperature,
             text: TextConfiguration(format: .text)
         )
