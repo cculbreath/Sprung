@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 struct ExperienceEditorView: View {
     @Environment(ExperienceDefaultsStore.self) private var defaultsStore: ExperienceDefaultsStore
+    @Environment(AppEnvironment.self) private var appEnvironment: AppEnvironment
     @Environment(\.dismiss) private var dismiss
     @State private var draft = ExperienceDefaultsDraft()
     @State private var originalDraft = ExperienceDefaultsDraft()
@@ -10,6 +11,7 @@ struct ExperienceEditorView: View {
     @State private var hasChanges = false
     @State private var saveState: SaveState = .idle
     @State private var editingEntries: Set<UUID> = []
+    @State private var showImportSheet = false
     private enum SaveState: Equatable {
         case idle
         case saving
@@ -45,6 +47,15 @@ struct ExperienceEditorView: View {
                 saveState = .idle
             }
         }
+        .sheet(isPresented: $showImportSheet) {
+            ExperienceDefaultsImportSheet(
+                currentDraft: draft,
+                onImport: { imported in
+                    draft = imported
+                    markDirty()
+                }
+            )
+        }
     }
     // MARK: - Header
     private var header: some View {
@@ -57,6 +68,14 @@ struct ExperienceEditorView: View {
                 Label(showSectionBrowser ? "Hide Sections" : "Enable Sections", systemImage: "slider.horizontal.3")
             })
             .buttonStyle(.bordered)
+            Button {
+                showImportSheet = true
+            } label: {
+                Label("Import…", systemImage: "square.and.arrow.down")
+            }
+            .buttonStyle(.bordered)
+            .disabled(isLoading || appEnvironment.launchState.isReadOnly)
+            .help("Import values from an existing resume into Experience Defaults")
             if case .saved = saveState {
                 Text("✅ Changes saved")
                     .foregroundStyle(.green)
