@@ -455,15 +455,15 @@ struct ComparisonPanel: View {
         .overlay(
             // Edit button overlay - positioned absolutely
             Group {
-                if showEditButton, let onEdit = onEdit, isHovering {
+                if showEditButton, let onEdit = onEdit {
                     Button(action: onEdit) {
                         Image(systemName: "pencil.circle")
                             .font(.system(size: 20, weight: .medium))
                             .foregroundStyle(.green)
+                            .opacity(isHovering ? 1.0 : 0.85)
                     }
                     .buttonStyle(.plain)
-                    .help("Edit Response")
-                    .transition(.opacity.combined(with: .scale))
+                    .help("Edit and accept a customized revision")
                 }
             },
             alignment: .topTrailing
@@ -591,7 +591,7 @@ struct EditableComparisonPanel: View {
                 .cornerRadius(8)
             // Save/Cancel buttons directly below the editor
             HStack(spacing: 12) {
-                Button("Save Changes") {
+                Button("Save & Accept") {
                     onSave()
                 }
                 .buttonStyle(.borderedProminent)
