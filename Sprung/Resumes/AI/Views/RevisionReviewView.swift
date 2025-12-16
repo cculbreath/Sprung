@@ -673,6 +673,19 @@ struct RevisionActionButtons: View {
                 .animation(.spring(response: 0.4, dampingFraction: 0.8), value: viewModel.isCommenting || viewModel.isMoreCommenting)
             }
             if currentRevNode?.valueChanged == true {
+                if !viewModel.isEditingResponse {
+                    Button {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            viewModel.isCommenting = false
+                            viewModel.isMoreCommenting = false
+                            viewModel.isEditingResponse = true
+                        }
+                    } label: {
+                        Label("Edit & Accept…", systemImage: "pencil")
+                    }
+                    .buttonStyle(.bordered)
+                    .help("Edit the proposed revision, then save and accept")
+                }
                 Text("Accept proposed revision?")
                     .font(.system(.title3, design: .rounded, weight: .semibold))
                     .foregroundStyle(.primary)
