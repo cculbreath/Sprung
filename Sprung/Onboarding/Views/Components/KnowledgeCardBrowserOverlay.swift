@@ -18,6 +18,7 @@ struct KnowledgeCardBrowserOverlay: View {
     @State private var showDeleteConfirmation = false
     @State private var cardToDelete: ResRef?
     @State private var showAddSheet = false
+    @State private var showIngestionSheet = false
     @State private var dealAnimation = false
 
     enum CardTypeFilter: String, CaseIterable {
@@ -134,6 +135,16 @@ struct KnowledgeCardBrowserOverlay: View {
                 }
             )
         }
+        .sheet(isPresented: $showIngestionSheet) {
+            DocumentIngestionSheet { newCard in
+                onCardAdded(newCard)
+                // Navigate to the new card
+                if let index = filteredCards.firstIndex(where: { $0.id == newCard.id }) {
+                    currentIndex = index
+                }
+            }
+            .environment(resRefStore)
+        }
         .alert("Delete Card?", isPresented: $showDeleteConfirmation, presenting: cardToDelete) { card in
             Button("Delete", role: .destructive) {
                 deleteCard(card)
@@ -175,6 +186,14 @@ struct KnowledgeCardBrowserOverlay: View {
             // Export button
             Button(action: exportCardsAsJSON) {
                 Label("Export", systemImage: "square.and.arrow.up")
+                    .font(.subheadline.weight(.medium))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.regular)
+
+            // Ingest button (AI-powered card generation from documents)
+            Button(action: { showIngestionSheet = true }) {
+                Label("Ingest", systemImage: "arrow.down.doc")
                     .font(.subheadline.weight(.medium))
             }
             .buttonStyle(.bordered)

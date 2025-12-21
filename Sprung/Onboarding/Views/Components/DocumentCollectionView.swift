@@ -21,6 +21,12 @@ struct DocumentCollectionView: View {
     @State private var isDropTargeted = false
     @State private var showGitRepoPicker = false
     @State private var showActiveAgentsAlert = false
+    @State private var showArchivedArtifactsPicker = false
+
+    /// Number of archived artifacts available for reuse
+    private var archivedArtifactCount: Int {
+        coordinator.ui.archivedArtifactCount
+    }
 
     /// Check if extraction agents are still working
     private var hasActiveExtractionAgents: Bool {
@@ -85,6 +91,12 @@ struct DocumentCollectionView: View {
             if case .success(let urls) = result, let url = urls.first {
                 onSelectGitRepo(url)
             }
+        }
+        .sheet(isPresented: $showArchivedArtifactsPicker) {
+            ArchivedArtifactsPickerSheet(
+                coordinator: coordinator,
+                onDismiss: { showArchivedArtifactsPicker = false }
+            )
         }
     }
 
@@ -176,6 +188,17 @@ struct DocumentCollectionView: View {
                             Label("Add Git Repo", systemImage: "terminal")
                         }
                         .buttonStyle(.bordered)
+                    }
+
+                    // Previously imported docs button (only show if there are archived artifacts)
+                    if archivedArtifactCount > 0 {
+                        Button {
+                            showArchivedArtifactsPicker = true
+                        } label: {
+                            Label("Use Previously Imported (\(archivedArtifactCount))", systemImage: "clock.arrow.circlepath")
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.secondary)
                     }
                 }
                 .padding(24)
@@ -362,5 +385,164 @@ private struct FlowLayout: Layout {
         }
 
         return (offsets, CGSize(width: maxWidth, height: currentY + lineHeight))
+    }
+}
+
+// MARK: - Archived Artifacts Picker Sheet
+
+/// Sheet for selecting archived artifacts to promote to the current interview
+struct ArchivedArtifactsPickerSheet: View {
+    let coordinator: OnboardingInterviewCoordinator
+    let onDismiss: () -> Void
+
+    @State private var selectedIds: Set<String> = []
+
+    private var archivedArtifacts: [ArtifactRecord] {
+        coordinator.getArchivedArtifacts().map { ArtifactRecord(json: $0) }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Previously Imported Documents")
+                    .font(.headline)
+                Spacer()
+                Button("Cancel") {
+                    onDismiss()
+                }
+                .buttonStyle(.bordered)
+            }
+            .padding()
+
+            Divider()
+
+            // Artifact list with checkboxes
+            if archivedArtifacts.isEmpty {
+                ContentUnavailableView(
+                    "No Archived Documents",
+                    systemImage: "doc.text",
+                    description: Text("Previously imported documents will appear here.")
+                )
+                .frame(maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    VStack(spacing: 8) {
+                        ForEach(archivedArtifacts) { artifact in
+                            ArchivedArtifactPickerRow(
+                                artifact: artifact,
+                                isSelected: selectedIds.contains(artifact.id),
+                                onToggle: {
+                                    if selectedIds.contains(artifact.id) {
+                                        selectedIds.remove(artifact.id)
+                                    } else {
+                                        selectedIds.insert(artifact.id)
+                                    }
+                                }
+                            )
+                        }
+                    }
+                    .padding()
+                }
+            }
+
+            Divider()
+
+            // Footer with action button
+            HStack {
+                Text("\(selectedIds.count) selected")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Button("Add to Interview") {
+                    Task {
+                        for id in selectedIds {
+                            await coordinator.promoteArchivedArtifact(id: id)
+                        }
+                        onDismiss()
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(selectedIds.isEmpty)
+            }
+            .padding()
+        }
+        .frame(width: 500, height: 400)
+    }
+}
+
+private struct ArchivedArtifactPickerRow: View {
+    let artifact: ArtifactRecord
+    let isSelected: Bool
+    let onToggle: () -> Void
+
+    var body: some View {
+        Button(action: onToggle) {
+            HStack(spacing: 12) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isSelected ? .blue : .secondary)
+                    .font(.title3)
+
+                fileIcon
+                    .frame(width: 24, height: 24)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(artifact.displayName)
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(1)
+
+                    if let brief = artifact.briefDescription, !brief.isEmpty {
+                        Text(brief)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    } else {
+                        Text(artifact.filename)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer()
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .background(isSelected ? Color.blue.opacity(0.1) : Color.clear)
+            .cornerRadius(8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var fileIcon: some View {
+        let iconName: String
+        let iconColor: Color
+
+        switch artifact.contentType?.lowercased() {
+        case let type where type?.contains("pdf") == true:
+            iconName = "doc.richtext"
+            iconColor = .red
+        case let type where type?.contains("word") == true || type?.contains("docx") == true:
+            iconName = "doc.text"
+            iconColor = .blue
+        case let type where type?.contains("image") == true:
+            iconName = "photo"
+            iconColor = .green
+        default:
+            if artifact.metadata["source_type"].string == "git_repository" {
+                iconName = "chevron.left.forwardslash.chevron.right"
+                iconColor = .orange
+            } else {
+                iconName = "doc"
+                iconColor = .gray
+            }
+        }
+
+        return Image(systemName: iconName)
+            .font(.body)
+            .foregroundStyle(iconColor)
     }
 }

@@ -30,7 +30,7 @@ import SwiftyJSON
 actor SubAgentToolExecutor {
     // MARK: - Dependencies
 
-    private let artifactRepository: ArtifactRepository
+    private let artifactRepository: any ArtifactStorageProtocol
 
     // MARK: - Tool Definitions
 
@@ -38,7 +38,7 @@ actor SubAgentToolExecutor {
 
     // MARK: - Initialization
 
-    init(artifactRepository: ArtifactRepository) {
+    init(artifactRepository: any ArtifactStorageProtocol) {
         self.artifactRepository = artifactRepository
     }
 

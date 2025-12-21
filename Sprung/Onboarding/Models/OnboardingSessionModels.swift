@@ -36,7 +36,8 @@ class OnboardingSession {
     @Relationship(deleteRule: .cascade, inverse: \OnboardingObjectiveRecord.session)
     var objectives: [OnboardingObjectiveRecord] = []
 
-    @Relationship(deleteRule: .cascade, inverse: \OnboardingArtifactRecord.session)
+    // Note: .nullify keeps artifacts when session is deleted (they become archived)
+    @Relationship(deleteRule: .nullify, inverse: \OnboardingArtifactRecord.session)
     var artifacts: [OnboardingArtifactRecord] = []
 
     @Relationship(deleteRule: .cascade, inverse: \OnboardingMessageRecord.session)
@@ -117,6 +118,16 @@ class OnboardingArtifactRecord {
     var planItemId: String?
 
     var session: OnboardingSession?
+
+    /// True if this artifact belongs to an active session (not archived)
+    var isInCurrentSession: Bool {
+        session != nil
+    }
+
+    /// True if this artifact is archived (no session, available for reuse)
+    var isArchived: Bool {
+        session == nil
+    }
 
     init(
         id: UUID = UUID(),

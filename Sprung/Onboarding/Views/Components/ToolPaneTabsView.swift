@@ -276,34 +276,26 @@ private struct ArtifactsTabContent: View {
     let coordinator: OnboardingInterviewCoordinator
     @State private var expandedArtifactIds: Set<String> = []
     @State private var artifactToDelete: ArtifactRecord?
+    @State private var artifactToDemote: ArtifactRecord?
+    @State private var archivedArtifactToDelete: ArtifactRecord?
+    @State private var isArchivedSectionExpanded: Bool = false
 
     private var artifacts: [ArtifactRecord] {
         coordinator.ui.artifactRecords.map { ArtifactRecord(json: $0) }
     }
 
+    private var archivedArtifacts: [ArtifactRecord] {
+        coordinator.getArchivedArtifacts().map { ArtifactRecord(json: $0) }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if artifacts.isEmpty {
-                emptyState
-            } else {
-                ForEach(artifacts) { artifact in
-                    ArtifactRow(
-                        artifact: artifact,
-                        isExpanded: expandedArtifactIds.contains(artifact.id),
-                        onToggleExpand: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                if expandedArtifactIds.contains(artifact.id) {
-                                    expandedArtifactIds.remove(artifact.id)
-                                } else {
-                                    expandedArtifactIds.insert(artifact.id)
-                                }
-                            }
-                        },
-                        onDelete: {
-                            artifactToDelete = artifact
-                        }
-                    )
-                }
+        VStack(alignment: .leading, spacing: 12) {
+            // Current Interview Artifacts
+            currentArtifactsSection
+
+            // Previously Imported Section (only show if there are archived artifacts)
+            if !archivedArtifacts.isEmpty {
+                archivedArtifactsSection
             }
         }
         .alert("Delete Artifact?", isPresented: .init(
@@ -326,6 +318,141 @@ private struct ArtifactsTabContent: View {
                 Text("Are you sure you want to delete \"\(artifact.displayName)\"? The LLM will be notified that this artifact is no longer available.")
             }
         }
+        .alert("Permanently Delete Archived Artifact?", isPresented: .init(
+            get: { archivedArtifactToDelete != nil },
+            set: { if !$0 { archivedArtifactToDelete = nil } }
+        )) {
+            Button("Cancel", role: .cancel) {
+                archivedArtifactToDelete = nil
+            }
+            Button("Delete Permanently", role: .destructive) {
+                if let artifact = archivedArtifactToDelete {
+                    Task {
+                        await coordinator.deleteArchivedArtifact(id: artifact.id)
+                    }
+                    archivedArtifactToDelete = nil
+                }
+            }
+        } message: {
+            if let artifact = archivedArtifactToDelete {
+                Text("Are you sure you want to permanently delete \"\(artifact.displayName)\"? This cannot be undone.")
+            }
+        }
+        .alert("Remove from Interview?", isPresented: .init(
+            get: { artifactToDemote != nil },
+            set: { if !$0 { artifactToDemote = nil } }
+        )) {
+            Button("Cancel", role: .cancel) {
+                artifactToDemote = nil
+            }
+            Button("Remove", role: .destructive) {
+                if let artifact = artifactToDemote {
+                    Task {
+                        await coordinator.demoteArtifact(id: artifact.id)
+                    }
+                    artifactToDemote = nil
+                }
+            }
+        } message: {
+            if let artifact = artifactToDemote {
+                Text("Remove \"\(artifact.displayName)\" from this interview? It will be moved to the archive and can be added back later.")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var currentArtifactsSection: some View {
+        if artifacts.isEmpty {
+            emptyState
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Current Interview")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 4)
+
+                ForEach(artifacts) { artifact in
+                    ArtifactRow(
+                        artifact: artifact,
+                        isExpanded: expandedArtifactIds.contains(artifact.id),
+                        onToggleExpand: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                if expandedArtifactIds.contains(artifact.id) {
+                                    expandedArtifactIds.remove(artifact.id)
+                                } else {
+                                    expandedArtifactIds.insert(artifact.id)
+                                }
+                            }
+                        },
+                        onDemote: {
+                            artifactToDemote = artifact
+                        },
+                        onDelete: {
+                            artifactToDelete = artifact
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var archivedArtifactsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Collapsible header
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isArchivedSectionExpanded.toggle()
+                }
+            }) {
+                HStack {
+                    Image(systemName: isArchivedSectionExpanded ? "chevron.down" : "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 12)
+
+                    Text("Previously Imported")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+
+                    Text("(\(archivedArtifacts.count))")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 4)
+
+            if isArchivedSectionExpanded {
+                ForEach(archivedArtifacts) { artifact in
+                    ArchivedArtifactRow(
+                        artifact: artifact,
+                        isExpanded: expandedArtifactIds.contains(artifact.id),
+                        onToggleExpand: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                if expandedArtifactIds.contains(artifact.id) {
+                                    expandedArtifactIds.remove(artifact.id)
+                                } else {
+                                    expandedArtifactIds.insert(artifact.id)
+                                }
+                            }
+                        },
+                        onPromote: {
+                            Task {
+                                await coordinator.promoteArchivedArtifact(id: artifact.id)
+                            }
+                        },
+                        onDelete: {
+                            archivedArtifactToDelete = artifact
+                        }
+                    )
+                }
+            }
+        }
+        .padding(.top, 8)
     }
 
     private var emptyState: some View {
@@ -338,10 +465,138 @@ private struct ArtifactsTabContent: View {
     }
 }
 
+// MARK: - Archived Artifact Row
+
+private struct ArchivedArtifactRow: View {
+    let artifact: ArtifactRecord
+    let isExpanded: Bool
+    let onToggleExpand: () -> Void
+    let onPromote: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header row
+            HStack(spacing: 0) {
+                Button(action: onToggleExpand) {
+                    HStack(spacing: 10) {
+                        fileIcon
+                            .frame(width: 32, height: 32)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(artifact.displayName)
+                                .font(.subheadline.weight(.medium))
+                                .lineLimit(2)
+
+                            if let brief = artifact.briefDescription, !brief.isEmpty {
+                                Text(brief)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            } else {
+                                Text(artifact.filename)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+
+                        Spacer()
+
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                            .foregroundStyle(.tertiary)
+                            .font(.caption)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                HStack(spacing: 4) {
+                    // Promote button
+                    Button(action: onPromote) {
+                        Image(systemName: "arrow.up.circle")
+                            .foregroundStyle(.blue)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Add to current interview")
+
+                    // Delete button
+                    Button(action: onDelete) {
+                        Image(systemName: "trash")
+                            .foregroundStyle(.red.opacity(0.8))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Delete permanently")
+                }
+                .padding(.leading, 8)
+            }
+            .padding(.vertical, 6)
+            .padding(.horizontal, 8)
+
+            // Expanded content
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 8) {
+                    if let summary = artifact.summary, !summary.isEmpty {
+                        Text(summary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(8)
+                            .background(Color.blue.opacity(0.1))
+                            .cornerRadius(6)
+                    }
+
+                    if !artifact.extractedContent.isEmpty {
+                        Text(artifact.extractedContent.prefix(500) + (artifact.extractedContent.count > 500 ? "..." : ""))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(8)
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(6)
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.bottom, 8)
+            }
+        }
+        .background(Color.gray.opacity(0.05))
+        .cornerRadius(8)
+    }
+
+    private var fileIcon: some View {
+        let iconName: String
+        let iconColor: Color
+
+        switch artifact.contentType?.lowercased() {
+        case let type where type?.contains("pdf") == true:
+            iconName = "doc.richtext"
+            iconColor = .red
+        case let type where type?.contains("word") == true || type?.contains("docx") == true:
+            iconName = "doc.text"
+            iconColor = .blue
+        case let type where type?.contains("image") == true:
+            iconName = "photo"
+            iconColor = .green
+        default:
+            if artifact.metadata["source_type"].string == "git_repository" {
+                iconName = "chevron.left.forwardslash.chevron.right"
+                iconColor = .orange
+            } else {
+                iconName = "doc"
+                iconColor = .gray
+            }
+        }
+
+        return Image(systemName: iconName)
+            .font(.title2)
+            .foregroundStyle(iconColor)
+    }
+}
+
 private struct ArtifactRow: View {
     let artifact: ArtifactRecord
     let isExpanded: Bool
     let onToggleExpand: () -> Void
+    let onDemote: () -> Void
     let onDelete: () -> Void
 
     private var hasContent: Bool {
@@ -409,16 +664,27 @@ private struct ArtifactRow: View {
                 }
                 .buttonStyle(.plain)
 
-                // Delete button
-                Button(action: onDelete) {
-                    Image(systemName: "trash")
+                // Demote button (remove from interview, keep in archive)
+                Button(action: onDemote) {
+                    Image(systemName: "arrow.down.circle")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(8)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("Delete artifact")
+                .help("Remove from interview (keep in archive)")
+
+                // Delete button
+                Button(action: onDelete) {
+                    Image(systemName: "trash")
+                        .font(.caption)
+                        .foregroundStyle(.red.opacity(0.7))
+                        .padding(8)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Delete permanently")
             }
 
             // Expanded content

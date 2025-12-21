@@ -154,6 +154,85 @@ final class OnboardingSessionStore: SwiftDataStore {
         session.artifacts
     }
 
+    // MARK: - Archived Artifact Management
+
+    /// Get all archived artifacts (session == nil, available for reuse)
+    func getArchivedArtifacts() -> [OnboardingArtifactRecord] {
+        let descriptor = FetchDescriptor<OnboardingArtifactRecord>(
+            predicate: #Predicate { $0.session == nil },
+            sortBy: [SortDescriptor(\.ingestedAt, order: .reverse)]
+        )
+        return (try? modelContext.fetch(descriptor)) ?? []
+    }
+
+    /// Find artifact by ID globally (across all sessions and archived)
+    func findArtifactById(_ id: UUID) -> OnboardingArtifactRecord? {
+        var descriptor = FetchDescriptor<OnboardingArtifactRecord>(
+            predicate: #Predicate { $0.id == id }
+        )
+        descriptor.fetchLimit = 1
+        return (try? modelContext.fetch(descriptor))?.first
+    }
+
+    /// Find artifact by ID string (convenience for JSON-based lookups)
+    func findArtifactById(_ idString: String) -> OnboardingArtifactRecord? {
+        guard let uuid = UUID(uuidString: idString) else { return nil }
+        return findArtifactById(uuid)
+    }
+
+    /// Promote an archived artifact to the current session
+    func promoteArtifact(_ artifact: OnboardingArtifactRecord, to session: OnboardingSession) {
+        artifact.session = session
+        session.artifacts.append(artifact)
+        session.lastActiveAt = Date()
+        saveContext()
+        Logger.info("📦 Promoted archived artifact to session: \(artifact.sourceFilename)", category: .ai)
+    }
+
+    /// Permanently delete an artifact
+    func deleteArtifact(_ artifact: OnboardingArtifactRecord) {
+        let filename = artifact.sourceFilename
+        modelContext.delete(artifact)
+        saveContext()
+        Logger.info("📦 Permanently deleted artifact: \(filename)", category: .ai)
+    }
+
+    /// Add a standalone artifact (no session, immediately archived)
+    /// Used by KC Browser for document ingestion outside of onboarding
+    func addStandaloneArtifact(
+        sourceType: String,
+        sourceFilename: String,
+        extractedContent: String,
+        sourceHash: String? = nil,
+        metadataJSON: String? = nil,
+        rawFileRelativePath: String? = nil,
+        planItemId: String? = nil
+    ) -> OnboardingArtifactRecord {
+        let record = OnboardingArtifactRecord(
+            sourceType: sourceType,
+            sourceFilename: sourceFilename,
+            sourceHash: sourceHash,
+            extractedContent: extractedContent,
+            metadataJSON: metadataJSON,
+            rawFileRelativePath: rawFileRelativePath,
+            planItemId: planItemId
+        )
+        // Note: session is nil, so artifact is immediately archived
+        modelContext.insert(record)
+        saveContext()
+        Logger.info("📦 Added standalone artifact (archived): \(sourceFilename) (\(sourceType))", category: .ai)
+        return record
+    }
+
+    /// Check if an artifact with matching hash already exists (global deduplication)
+    func findExistingArtifactByHash(_ hash: String) -> OnboardingArtifactRecord? {
+        var descriptor = FetchDescriptor<OnboardingArtifactRecord>(
+            predicate: #Predicate { $0.sourceHash == hash }
+        )
+        descriptor.fetchLimit = 1
+        return (try? modelContext.fetch(descriptor))?.first
+    }
+
     // MARK: - Message Management
 
     /// Add a message record

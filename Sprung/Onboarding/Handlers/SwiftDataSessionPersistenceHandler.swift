@@ -332,6 +332,7 @@ final class SwiftDataSessionPersistenceHandler {
     }
 
     private func persistArtifact(session: OnboardingSession, record: JSON) {
+        let artifactId = record["id"].string
         let sourceType = record["source_type"].stringValue
         let filename = record["filename"].stringValue
         let extractedContent = record["extracted_text"].stringValue
@@ -339,9 +340,17 @@ final class SwiftDataSessionPersistenceHandler {
         let metadataJSON = record["metadata"].rawString()
         let planItemId = record["plan_item_id"].string
 
-        // Check if artifact already exists
+        // Check if this is a promoted artifact (already exists with this ID globally)
+        if let existingId = artifactId,
+           sessionStore.findArtifactById(existingId) != nil {
+            // Artifact was promoted - already in SwiftData, skip re-add
+            Logger.debug("💾 Artifact already persisted (promoted): \(filename)", category: .ai)
+            return
+        }
+
+        // Check if artifact already exists in this session by hash
         if sessionStore.findExistingArtifact(session, filename: filename, hash: sourceHash) != nil {
-            Logger.debug("💾 Artifact already exists, skipping: \(filename)", category: .ai)
+            Logger.debug("💾 Artifact already exists in session, skipping: \(filename)", category: .ai)
             return
         }
 
@@ -426,5 +435,44 @@ final class SwiftDataSessionPersistenceHandler {
     /// Get restored enabled sections
     func getRestoredEnabledSections(_ session: OnboardingSession) -> Set<String> {
         sessionStore.getEnabledSections(session)
+    }
+
+    // MARK: - Archived Artifacts
+
+    /// Get all archived artifacts as JSON for UI display
+    func getArchivedArtifactsAsJSON() -> [JSON] {
+        sessionStore.getArchivedArtifacts().map { artifactRecordToJSON($0) }
+    }
+
+    /// Get archived artifacts count (for UI visibility decisions)
+    func getArchivedArtifactsCount() -> Int {
+        sessionStore.getArchivedArtifacts().count
+    }
+
+    /// Convert an OnboardingArtifactRecord to JSON format
+    private func artifactRecordToJSON(_ record: OnboardingArtifactRecord) -> JSON {
+        var json = JSON()
+        json["id"].string = record.id.uuidString
+        json["source_type"].string = record.sourceType
+        json["filename"].string = record.sourceFilename
+        json["extracted_text"].string = record.extractedContent
+        json["source_hash"].string = record.sourceHash
+        json["raw_file_path"].string = record.rawFileRelativePath
+        json["plan_item_id"].string = record.planItemId
+        json["ingested_at"].string = ISO8601DateFormatter().string(from: record.ingestedAt)
+        json["is_archived"].bool = record.isArchived
+        if let metadataJSON = record.metadataJSON,
+           let data = metadataJSON.data(using: .utf8),
+           let metadata = try? JSON(data: data) {
+            json["metadata"] = metadata
+            // Also extract summary/brief_description to top level for easier access
+            if let summary = metadata["summary"].string {
+                json["summary"].string = summary
+            }
+            if let brief = metadata["brief_description"].string {
+                json["brief_description"].string = brief
+            }
+        }
+        return json
     }
 }

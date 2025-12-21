@@ -2,7 +2,7 @@ import Foundation
 import SwiftyJSON
 /// Domain service for artifact storage and management.
 /// Owns all artifact state including timeline cards, knowledge cards, and uploaded documents.
-actor ArtifactRepository: OnboardingEventEmitter {
+actor ArtifactRepository: OnboardingEventEmitter, ArtifactStorageProtocol {
     // MARK: - Event System
     let eventBus: EventCoordinator
     // MARK: - Artifact Storage
@@ -16,6 +16,8 @@ actor ArtifactRepository: OnboardingEventEmitter {
     nonisolated(unsafe) private(set) var skeletonTimelineSync: JSON?
     nonisolated(unsafe) private(set) var enabledSectionsSync: Set<String> = []
     nonisolated(unsafe) private(set) var knowledgeCardsSync: [JSON] = []
+    /// Archived artifacts (from previous sessions, available for reuse)
+    nonisolated(unsafe) private(set) var archivedArtifactsSync: [JSON] = []
     // MARK: - Initialization
     init(eventBus: EventCoordinator) {
         self.eventBus = eventBus
@@ -213,6 +215,35 @@ actor ArtifactRepository: OnboardingEventEmitter {
             return hasExtractedText && !hasSummary
         }
     }
+
+    // MARK: - Archived Artifacts Management
+
+    /// Set archived artifacts (loaded from SwiftData)
+    /// Called by coordinator to populate the cache on startup
+    func setArchivedArtifacts(_ records: [JSON]) {
+        archivedArtifactsSync = records
+        Logger.info("📦 Archived artifacts loaded: \(records.count)", category: .ai)
+    }
+
+    /// Refresh archived artifacts cache
+    /// Called after promotion or deletion to update UI
+    func refreshArchivedArtifacts(_ records: [JSON]) {
+        archivedArtifactsSync = records
+        Logger.debug("📦 Archived artifacts refreshed: \(records.count)", category: .ai)
+    }
+
+    /// Remove an artifact from the archived cache
+    /// Called after promotion (artifact moves to current session)
+    func removeFromArchivedCache(id: String) {
+        archivedArtifactsSync.removeAll { $0["id"].stringValue == id }
+        Logger.debug("📦 Removed from archived cache: \(id)", category: .ai)
+    }
+
+    /// Get archived artifacts count (for UI visibility)
+    func getArchivedArtifactsCount() -> Int {
+        archivedArtifactsSync.count
+    }
+
     // MARK: - Timeline Card Management
     /// Helper to get current timeline cards using TimelineCardAdapter
     private func currentTimelineCards() -> (cards: [TimelineCard], meta: JSON?) {
