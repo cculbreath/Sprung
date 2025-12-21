@@ -10,6 +10,7 @@ import SwiftUI
 
 enum SearchOpsSection: String, CaseIterable, Identifiable {
     case daily = "Daily"
+    case pipeline = "Pipeline"
     case sources = "Sources"
     case events = "Events"
     case contacts = "Contacts"
@@ -19,6 +20,7 @@ enum SearchOpsSection: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .daily: return "checklist"
+        case .pipeline: return "rectangle.split.3x1"
         case .sources: return "link.circle"
         case .events: return "calendar"
         case .contacts: return "person.2"
@@ -28,6 +30,7 @@ enum SearchOpsSection: String, CaseIterable, Identifiable {
     var description: String {
         switch self {
         case .daily: return "Today's tasks and time tracking"
+        case .pipeline: return "Application stages kanban"
         case .sources: return "Job boards and career sites"
         case .events: return "Networking events pipeline"
         case .contacts: return "Professional contacts CRM"
@@ -78,6 +81,8 @@ struct SearchOpsMainView: View {
         switch section {
         case .daily:
             DailyView(coordinator: coordinator)
+        case .pipeline:
+            PipelineView(coordinator: coordinator)
         case .sources:
             SourcesView(coordinator: coordinator)
         case .events:

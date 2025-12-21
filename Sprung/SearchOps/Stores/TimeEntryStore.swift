@@ -33,6 +33,10 @@ final class TimeEntryStore: SwiftDataStore {
         saveContext()
     }
 
+    func update(_ entry: TimeEntry) {
+        saveContext()
+    }
+
     func entry(byId id: UUID) -> TimeEntry? {
         allEntries.first { $0.id == id }
     }

@@ -17,6 +17,7 @@ final class SearchOpsCoordinator {
     let preferencesStore: SearchPreferencesStore
     let settingsStore: SearchOpsSettingsStore
     let jobSourceStore: JobSourceStore
+    let jobLeadStore: JobLeadStore
     let dailyTaskStore: DailyTaskStore
     let timeEntryStore: TimeEntryStore
     let weeklyGoalStore: WeeklyGoalStore
@@ -29,6 +30,7 @@ final class SearchOpsCoordinator {
 
     let urlValidationService: URLValidationService
     private(set) var llmService: SearchOpsLLMService?
+    private(set) var calendarService: CalendarIntegrationService?
 
     // MARK: - State
 
@@ -41,6 +43,7 @@ final class SearchOpsCoordinator {
         self.preferencesStore = SearchPreferencesStore(context: modelContext)
         self.settingsStore = SearchOpsSettingsStore(context: modelContext)
         self.jobSourceStore = JobSourceStore(context: modelContext)
+        self.jobLeadStore = JobLeadStore(context: modelContext)
         self.dailyTaskStore = DailyTaskStore(context: modelContext)
         self.timeEntryStore = TimeEntryStore(context: modelContext)
         self.weeklyGoalStore = WeeklyGoalStore(context: modelContext)
@@ -49,6 +52,7 @@ final class SearchOpsCoordinator {
         self.interactionStore = NetworkingInteractionStore(context: modelContext)
         self.feedbackStore = EventFeedbackStore(context: modelContext)
         self.urlValidationService = URLValidationService()
+        self.calendarService = CalendarIntegrationService()
     }
 
     /// Configure the LLM service. Must be called after initialization with LLMFacade.
@@ -378,6 +382,21 @@ final class SearchOpsCoordinator {
         Logger.info("✅ Evaluated event: \(event.name) - \(result.recommendation)", category: .ai)
 
         return result
+    }
+
+    /// Generate an elevator pitch for an event using LLM agent
+    func generateEventPitch(for event: NetworkingEventOpportunity) async throws -> String? {
+        guard let agent = agentService else {
+            throw SearchOpsLLMError.toolExecutionFailed("Agent service not configured")
+        }
+
+        let result = try await agent.prepareForEvent(
+            eventId: event.id,
+            focusCompanies: [],
+            goals: nil
+        )
+
+        return result.pitchScript
     }
 
     /// Prepare for an event using LLM agent
