@@ -13,6 +13,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var templateEditorWindow: NSWindow?
     var onboardingInterviewWindow: NSWindow?
     var experienceEditorWindow: NSWindow?
+    var searchOpsWindow: NSWindow?
     var appEnvironment: AppEnvironment?
     var modelContainer: ModelContainer?
     var enabledLLMStore: EnabledLLMStore?
@@ -20,6 +21,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var onboardingCoordinator: OnboardingInterviewCoordinator?
     var experienceDefaultsStore: ExperienceDefaultsStore?
     var careerKeywordStore: CareerKeywordStore?
+    var searchOpsCoordinator: SearchOpsCoordinator?
     func applicationDidFinishLaunching(_: Notification) {
         // Wait until the app is fully loaded before modifying the menu
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
@@ -106,7 +108,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                let enabledLLMStore = self.enabledLLMStore,
                let applicantProfileStore = self.applicantProfileStore,
                let experienceDefaultsStore = self.experienceDefaultsStore,
-               let careerKeywordStore = self.careerKeywordStore {
+               let careerKeywordStore = self.careerKeywordStore,
+               let searchOpsCoordinator = self.searchOpsCoordinator {
                 let appState = appEnvironment.appState
                 let debugSettingsStore = appState.debugSettingsStore ?? appEnvironment.debugSettingsStore
                 let root = settingsView
@@ -120,6 +123,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(careerKeywordStore)
                     .environment(appEnvironment.openRouterService)
                     .environment(debugSettingsStore)
+                    .environment(searchOpsCoordinator)
                     .modelContainer(container)
                 hostingView = NSHostingView(rootView: AnyView(root))
             } else {
@@ -371,6 +375,44 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+    }
+    @MainActor @objc func showSearchOpsWindow() {
+        Logger.info("🔍 showSearchOpsWindow invoked", category: .ui)
+        if let window = searchOpsWindow, !window.isVisible {
+            searchOpsWindow = nil
+        }
+        if searchOpsWindow == nil {
+            let searchOpsView = SearchOpsMainView()
+            let hostingView: NSHostingView<AnyView>
+            if let modelContainer,
+               let appEnvironment,
+               let searchOpsCoordinator {
+                let root = searchOpsView
+                    .modelContainer(modelContainer)
+                    .environment(appEnvironment)
+                    .environment(appEnvironment.appState)
+                    .environment(searchOpsCoordinator)
+                hostingView = NSHostingView(rootView: AnyView(root))
+            } else if let modelContainer {
+                hostingView = NSHostingView(rootView: AnyView(searchOpsView.modelContainer(modelContainer)))
+            } else {
+                hostingView = NSHostingView(rootView: AnyView(searchOpsView))
+            }
+            searchOpsWindow = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 900, height: 700),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                backing: .buffered,
+                defer: false
+            )
+            searchOpsWindow?.contentView = hostingView
+            searchOpsWindow?.title = "Job Search Operations"
+            searchOpsWindow?.isReleasedWhenClosed = false
+            searchOpsWindow?.center()
+            searchOpsWindow?.minSize = NSSize(width: 700, height: 500)
+        }
+        searchOpsWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        Logger.info("✅ SearchOps window presented", category: .ui)
     }
     @objc func showExperienceEditorWindow() {
         if let window = experienceEditorWindow, !window.isVisible {

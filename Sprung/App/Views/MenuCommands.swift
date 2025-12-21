@@ -59,6 +59,8 @@ extension Notification.Name {
     static let analyzeApplication = Notification.Name("analyzeApplication")
     // Interview Commands
     static let startOnboardingInterview = Notification.Name("startOnboardingInterview")
+    // SearchOps Commands
+    static let showSearchOps = Notification.Name("showSearchOps")
     // Window Commands (for toolbar buttons)
     static let showSettings = Notification.Name("showSettings")
     static let showApplicantProfile = Notification.Name("showApplicantProfile")

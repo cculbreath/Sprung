@@ -32,6 +32,7 @@ final class AppDependencies {
     let llmService: _LLMService
     let reasoningStreamManager: ReasoningStreamManager
     let resumeReviseViewModel: ResumeReviseViewModel
+    let searchOpsCoordinator: SearchOpsCoordinator
     // MARK: - UI State
     let dragInfo: DragInfo
     let debugSettingsStore: DebugSettingsStore
@@ -141,6 +142,12 @@ final class AppDependencies {
             preferences: preferences
         )
         self.onboardingCoordinator = onboardingCoordinator
+
+        // SearchOps Coordinator
+        let searchOpsCoordinator = SearchOpsCoordinator(modelContext: modelContext)
+        searchOpsCoordinator.configureLLMService(llmFacade: llmFacade)
+        self.searchOpsCoordinator = searchOpsCoordinator
+
         self.appEnvironment = AppEnvironment(
             appState: appState,
             navigationState: navigationState,

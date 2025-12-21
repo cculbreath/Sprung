@@ -31,7 +31,19 @@ enum SprungSchema {
         OnboardingObjectiveRecord.self,
         OnboardingArtifactRecord.self,
         OnboardingMessageRecord.self,
-        OnboardingPlanItemRecord.self
+        OnboardingPlanItemRecord.self,
+        // SearchOps Models
+        SearchPreferences.self,
+        SearchOpsSettings.self,
+        JobSource.self,
+        DailyTask.self,
+        TimeEntry.self,
+        WeeklyGoal.self,
+        // Networking Coach Models
+        NetworkingEventOpportunity.self,
+        NetworkingContact.self,
+        NetworkingInteraction.self,
+        EventFeedback.self
     ]
     static var schema: Schema {
         Schema(models)

@@ -1,0 +1,847 @@
+//
+//  SearchOpsAgentService.swift
+//  Sprung
+//
+//  Actor-based agent service for SearchOps LLM interactions.
+//  Runs agentic loops with tool calling using LLMFacade + ChatCompletions.
+//  Per SEARCHOPS_AMENDMENT: Uses local context management, NOT server-managed.
+//
+
+import Foundation
+import SwiftOpenAI
+import SwiftyJSON
+
+// MARK: - SearchOps Agent Service
+
+actor SearchOpsAgentService {
+
+    // MARK: - Dependencies
+
+    private let llmFacade: LLMFacade
+    private let toolExecutor: SearchOpsToolExecutor
+    private let settingsStore: SearchOpsSettingsStore
+
+    // MARK: - Configuration
+
+    private let maxIterations = 10
+
+    // MARK: - Initialization
+
+    init(llmFacade: LLMFacade, contextProvider: SearchOpsContextProvider, settingsStore: SearchOpsSettingsStore) {
+        self.llmFacade = llmFacade
+        self.toolExecutor = SearchOpsToolExecutor(contextProvider: contextProvider)
+        self.settingsStore = settingsStore
+    }
+
+    // MARK: - Model Configuration
+
+    private var modelId: String {
+        get async {
+            await MainActor.run {
+                settingsStore.current().llmModelId
+            }
+        }
+    }
+
+    // MARK: - Public API: Agent Conversations
+
+    /// Run a conversational agent that can use tools to complete a task
+    /// - Parameters:
+    ///   - systemPrompt: System instructions for the agent
+    ///   - userMessage: The user's request
+    ///   - enableTools: Whether to enable tool calling (default: true)
+    /// - Returns: The agent's final response
+    func runAgent(
+        systemPrompt: String,
+        userMessage: String,
+        enableTools: Bool = true
+    ) async throws -> String {
+        let model = await modelId
+
+        var messages: [ChatCompletionParameters.Message] = [
+            .init(role: .system, content: .text(systemPrompt)),
+            .init(role: .user, content: .text(userMessage))
+        ]
+
+        let tools = enableTools ? toolExecutor.getToolSchemas() : []
+
+        // Agent loop
+        var iterations = 0
+        while iterations < maxIterations {
+            iterations += 1
+
+            let response = try await llmFacade.executeWithTools(
+                messages: messages,
+                tools: tools,
+                toolChoice: enableTools ? .auto : nil,
+                modelId: model,
+                temperature: 0.7
+            )
+
+            guard let choices = response.choices,
+                  let choice = choices.first,
+                  let message = choice.message else {
+                throw SearchOpsAgentError.noResponse
+            }
+
+            // Check for tool calls
+            if let toolCalls = message.toolCalls, !toolCalls.isEmpty {
+                // Add assistant message with tool calls to history
+                let assistantContent: ChatCompletionParameters.Message.ContentType
+                if let text = message.content {
+                    assistantContent = .text(text)
+                } else {
+                    assistantContent = .text("")
+                }
+                messages.append(ChatCompletionParameters.Message(
+                    role: .assistant,
+                    content: assistantContent,
+                    toolCalls: message.toolCalls
+                ))
+
+                // Execute each tool call
+                for toolCall in toolCalls {
+                    let toolCallId = toolCall.id ?? UUID().uuidString
+                    let toolName = toolCall.function.name ?? "unknown"
+                    let arguments = toolCall.function.arguments
+
+                    Logger.debug("🔧 Executing tool: \(toolName)", category: .ai)
+
+                    let result = await toolExecutor.execute(
+                        toolName: toolName,
+                        arguments: arguments
+                    )
+
+                    // Add tool result to messages
+                    messages.append(ChatCompletionParameters.Message(
+                        role: .tool,
+                        content: .text(result),
+                        toolCallID: toolCallId
+                    ))
+                }
+
+                // Continue loop to get next response
+                continue
+            }
+
+            // No tool calls - final response
+            let responseText = message.content ?? ""
+            Logger.info("✅ Agent completed with response", category: .ai)
+            return responseText
+        }
+
+        throw SearchOpsAgentError.toolLoopExceeded
+    }
+
+    // MARK: - Convenience Methods for Common Tasks
+
+    /// Generate daily tasks using the agent
+    func generateDailyTasks(focusArea: String = "balanced") async throws -> DailyTasksResult {
+        let systemPrompt = """
+            You are a job search coach helping generate today's prioritized action items.
+            Focus on high-impact activities that move the job search forward.
+            Priority order: follow-ups > applications > networking > lead gathering.
+            Be specific and actionable. Each task should be completable in one sitting.
+
+            When you receive context from the generate_daily_tasks tool, analyze it and return
+            your final response as a JSON object with:
+            {
+                "tasks": [
+                    {
+                        "task_type": "gather|customize|apply|follow_up|networking|event_prep|debrief",
+                        "title": "Short actionable title",
+                        "description": "Brief context or instructions",
+                        "priority": 0-2 (higher = more important),
+                        "estimated_minutes": 15-60,
+                        "related_id": "UUID if related to a specific source/event/contact"
+                    }
+                ],
+                "summary": "Brief summary of today's focus"
+            }
+            """
+
+        let userMessage = "Generate today's job search tasks. Focus area: \(focusArea)"
+
+        let response = try await runAgent(
+            systemPrompt: systemPrompt,
+            userMessage: userMessage
+        )
+
+        return try parseTasksResponse(response)
+    }
+
+    /// Discover job sources using the agent
+    func discoverJobSources(sectors: [String], location: String) async throws -> JobSourcesResult {
+        let systemPrompt = """
+            You are an expert job search researcher. Generate high-quality job sources
+            tailored to the candidate's target sectors and location.
+
+            Include a mix of:
+            - Local job boards and tech community sites
+            - Industry-specific boards
+            - Company career pages for target employers
+            - Startup-focused boards
+            - Professional networking resources
+
+            IMPORTANT: Only include sources with REAL, verifiable URLs. Do not make up URLs.
+
+            After using the discover_job_sources tool, return your findings as:
+            {
+                "sources": [
+                    {
+                        "name": "Source name",
+                        "url": "Full URL",
+                        "category": "local|industry|company_direct|aggregator|startup|staffing|networking",
+                        "relevance_reason": "Why this is relevant",
+                        "recommended_cadence_days": 3-7
+                    }
+                ]
+            }
+            """
+
+        let userMessage = "Discover job sources for sectors: \(sectors.joined(separator: ", ")) in \(location)"
+
+        let response = try await runAgent(
+            systemPrompt: systemPrompt,
+            userMessage: userMessage
+        )
+
+        return try parseSourcesResponse(response)
+    }
+
+    /// Discover networking events using the agent
+    func discoverNetworkingEvents(sectors: [String], location: String, daysAhead: Int = 14) async throws -> NetworkingEventsResult {
+        let systemPrompt = """
+            You are a networking coach helping find relevant professional events.
+
+            Search for:
+            - Meetups and tech community events
+            - Industry conferences and workshops
+            - Company-hosted events and open houses
+            - Career fairs and networking mixers
+            - Virtual events if relevant
+
+            After using the discover_networking_events tool, return findings as:
+            {
+                "events": [
+                    {
+                        "name": "Event name",
+                        "date": "ISO8601 date",
+                        "time": "Event time",
+                        "location": "Venue or 'Virtual'",
+                        "url": "Event URL",
+                        "event_type": "meetup|happy_hour|conference|workshop|tech_talk|open_house|career_fair|panel_discussion|hackathon|virtual_event",
+                        "organizer": "Organizer name",
+                        "estimated_attendance": "intimate|small|medium|large|massive",
+                        "cost": "Free or cost",
+                        "relevance_reason": "Why this is relevant"
+                    }
+                ]
+            }
+            """
+
+        let userMessage = "Find networking events for sectors: \(sectors.joined(separator: ", ")) in \(location) for the next \(daysAhead) days"
+
+        let response = try await runAgent(
+            systemPrompt: systemPrompt,
+            userMessage: userMessage
+        )
+
+        return try parseEventsResponse(response)
+    }
+
+    /// Evaluate an event for attendance
+    func evaluateEvent(eventId: UUID) async throws -> EventEvaluationResult {
+        let systemPrompt = """
+            You are a strategic networking advisor. Evaluate events based on:
+            - Relevance to target sectors and companies
+            - Expected networking value (quality of attendees)
+            - Time investment vs. potential return
+            - Historical outcomes from similar events
+
+            After using the evaluate_networking_event tool, return:
+            {
+                "recommendation": "strong_yes|yes|maybe|skip",
+                "rationale": "Detailed explanation",
+                "expected_value": "What you might gain",
+                "concerns": ["Any concerns"],
+                "preparation_tips": ["Tips if attending"]
+            }
+            """
+
+        let userMessage = "Evaluate event \(eventId.uuidString) for attendance"
+
+        let response = try await runAgent(
+            systemPrompt: systemPrompt,
+            userMessage: userMessage
+        )
+
+        return try parseEvaluationResponse(response)
+    }
+
+    /// Prepare for an upcoming event
+    func prepareForEvent(eventId: UUID, focusCompanies: [String] = [], goals: String? = nil) async throws -> EventPrepResult {
+        let systemPrompt = """
+            You are a networking coach helping prepare for an event.
+            Create comprehensive preparation materials including:
+            - A clear goal for the event
+            - An elevator pitch tailored to the audience
+            - Talking points with relevance to your background
+            - Research on target companies
+            - Conversation starters
+            - Things to avoid
+
+            After using the prepare_for_event tool, return preparation materials as JSON.
+            """
+
+        var userMessage = "Prepare me for event \(eventId.uuidString)"
+        if !focusCompanies.isEmpty {
+            userMessage += ". Focus on companies: \(focusCompanies.joined(separator: ", "))"
+        }
+        if let goals = goals {
+            userMessage += ". My goals: \(goals)"
+        }
+
+        let response = try await runAgent(
+            systemPrompt: systemPrompt,
+            userMessage: userMessage
+        )
+
+        return try parsePrepResponse(response)
+    }
+
+    /// Generate weekly reflection
+    func generateWeeklyReflection() async throws -> String {
+        let systemPrompt = """
+            You are a supportive job search coach providing a weekly reflection.
+            Be encouraging but honest. Focus on:
+            - What went well
+            - Areas for improvement
+            - Specific, actionable suggestions for next week
+
+            Keep it concise (2-3 paragraphs). Be personal and motivating.
+
+            After using the generate_weekly_reflection tool, provide the reflection directly.
+            """
+
+        let userMessage = "Generate my weekly job search reflection"
+
+        return try await runAgent(
+            systemPrompt: systemPrompt,
+            userMessage: userMessage
+        )
+    }
+
+    /// Suggest networking actions
+    func suggestNetworkingActions(focus: String = "balanced") async throws -> NetworkingActionsResult {
+        let systemPrompt = """
+            You are a relationship management advisor. Suggest specific networking actions.
+            Consider:
+            - Contacts whose warmth is decaying
+            - Pending follow-ups
+            - Upcoming events to leverage
+            - Opportunities to strengthen key relationships
+
+            After using suggest_networking_actions, return:
+            {
+                "actions": [
+                    {
+                        "contact_name": "Name",
+                        "contact_id": "UUID",
+                        "action_type": "reach_out|follow_up|reconnect|invite_to_event",
+                        "action_description": "Specific action",
+                        "urgency": "high|medium|low",
+                        "suggested_opener": "Message opener"
+                    }
+                ]
+            }
+            """
+
+        let userMessage = "Suggest networking actions. Focus: \(focus)"
+
+        let response = try await runAgent(
+            systemPrompt: systemPrompt,
+            userMessage: userMessage
+        )
+
+        return try parseActionsResponse(response)
+    }
+
+    /// Draft an outreach message
+    func draftOutreachMessage(contactId: UUID, purpose: String, channel: String, tone: String = "professional") async throws -> OutreachMessageResult {
+        let systemPrompt = """
+            You are a professional communication coach. Draft personalized outreach messages.
+            Consider:
+            - The relationship history
+            - The purpose of the outreach
+            - The appropriate tone for the channel
+            - Best practices for professional networking
+
+            After using draft_outreach_message, return:
+            {
+                "subject": "Subject line (for email)",
+                "message": "The draft message",
+                "notes": "Tips for sending"
+            }
+            """
+
+        let userMessage = "Draft a \(channel) message to contact \(contactId.uuidString). Purpose: \(purpose). Tone: \(tone)"
+
+        let response = try await runAgent(
+            systemPrompt: systemPrompt,
+            userMessage: userMessage
+        )
+
+        return try parseOutreachResponse(response)
+    }
+
+    // MARK: - Response Parsing
+
+    private func parseTasksResponse(_ response: String) throws -> DailyTasksResult {
+        guard let jsonData = extractJSON(from: response),
+              let data = jsonData.data(using: .utf8) else {
+            throw SearchOpsAgentError.invalidResponse
+        }
+
+        let json = try JSON(data: data)
+        var tasks: [GeneratedDailyTask] = []
+
+        for taskJson in json["tasks"].arrayValue {
+            let task = GeneratedDailyTask(
+                taskType: taskJson["task_type"].stringValue,
+                title: taskJson["title"].stringValue,
+                description: taskJson["description"].string,
+                priority: taskJson["priority"].intValue,
+                relatedJobSourceId: taskJson["related_id"].string,
+                relatedJobAppId: nil,
+                relatedContactId: nil,
+                relatedEventId: nil,
+                estimatedMinutes: taskJson["estimated_minutes"].int
+            )
+            tasks.append(task)
+        }
+
+        return DailyTasksResult(tasks: tasks, summary: json["summary"].string)
+    }
+
+    private func parseSourcesResponse(_ response: String) throws -> JobSourcesResult {
+        guard let jsonData = extractJSON(from: response),
+              let data = jsonData.data(using: .utf8) else {
+            throw SearchOpsAgentError.invalidResponse
+        }
+
+        let json = try JSON(data: data)
+        var sources: [GeneratedJobSource] = []
+
+        for sourceJson in json["sources"].arrayValue {
+            let source = GeneratedJobSource(
+                name: sourceJson["name"].stringValue,
+                url: sourceJson["url"].stringValue,
+                category: sourceJson["category"].stringValue,
+                relevanceReason: sourceJson["relevance_reason"].stringValue,
+                recommendedCadenceDays: sourceJson["recommended_cadence_days"].int
+            )
+            sources.append(source)
+        }
+
+        return JobSourcesResult(sources: sources)
+    }
+
+    private func parseEventsResponse(_ response: String) throws -> NetworkingEventsResult {
+        guard let jsonData = extractJSON(from: response),
+              let data = jsonData.data(using: .utf8) else {
+            throw SearchOpsAgentError.invalidResponse
+        }
+
+        let json = try JSON(data: data)
+        var events: [GeneratedNetworkingEvent] = []
+
+        for eventJson in json["events"].arrayValue {
+            let event = GeneratedNetworkingEvent(
+                name: eventJson["name"].stringValue,
+                date: eventJson["date"].stringValue,
+                time: eventJson["time"].string,
+                location: eventJson["location"].stringValue,
+                url: eventJson["url"].stringValue,
+                eventType: eventJson["event_type"].stringValue,
+                organizer: eventJson["organizer"].string,
+                estimatedAttendance: eventJson["estimated_attendance"].string,
+                cost: eventJson["cost"].string,
+                relevanceReason: eventJson["relevance_reason"].string
+            )
+            events.append(event)
+        }
+
+        return NetworkingEventsResult(events: events)
+    }
+
+    private func parseEvaluationResponse(_ response: String) throws -> EventEvaluationResult {
+        guard let jsonData = extractJSON(from: response),
+              let data = jsonData.data(using: .utf8) else {
+            throw SearchOpsAgentError.invalidResponse
+        }
+
+        let json = try JSON(data: data)
+
+        return EventEvaluationResult(
+            recommendation: json["recommendation"].stringValue,
+            rationale: json["rationale"].stringValue,
+            expectedValue: json["expected_value"].string,
+            concerns: json["concerns"].arrayValue.map { $0.stringValue },
+            preparationTips: json["preparation_tips"].arrayValue.map { $0.stringValue }
+        )
+    }
+
+    private func parsePrepResponse(_ response: String) throws -> EventPrepResult {
+        guard let jsonData = extractJSON(from: response),
+              let data = jsonData.data(using: .utf8) else {
+            throw SearchOpsAgentError.invalidResponse
+        }
+
+        let json = try JSON(data: data)
+
+        return EventPrepResult(
+            goal: json["goal"].stringValue,
+            pitchScript: json["pitch_script"].stringValue,
+            talkingPoints: json["talking_points"].arrayValue.map {
+                TalkingPointResult(
+                    topic: $0["topic"].stringValue,
+                    relevance: $0["relevance"].stringValue,
+                    yourAngle: $0["your_angle"].stringValue
+                )
+            },
+            targetCompanies: json["target_companies"].arrayValue.map {
+                TargetCompanyResult(
+                    company: $0["company"].stringValue,
+                    whyRelevant: $0["why_relevant"].stringValue,
+                    recentNews: $0["recent_news"].string,
+                    openRoles: $0["open_roles"].arrayValue.map { $0.stringValue },
+                    possibleOpeners: $0["possible_openers"].arrayValue.map { $0.stringValue }
+                )
+            },
+            conversationStarters: json["conversation_starters"].arrayValue.map { $0.stringValue },
+            thingsToAvoid: json["things_to_avoid"].arrayValue.map { $0.stringValue }
+        )
+    }
+
+    private func parseActionsResponse(_ response: String) throws -> NetworkingActionsResult {
+        guard let jsonData = extractJSON(from: response),
+              let data = jsonData.data(using: .utf8) else {
+            throw SearchOpsAgentError.invalidResponse
+        }
+
+        let json = try JSON(data: data)
+
+        return NetworkingActionsResult(
+            actions: json["actions"].arrayValue.map {
+                NetworkingActionItem(
+                    contactName: $0["contact_name"].stringValue,
+                    contactId: $0["contact_id"].string,
+                    actionType: $0["action_type"].stringValue,
+                    actionDescription: $0["action_description"].stringValue,
+                    urgency: $0["urgency"].stringValue,
+                    suggestedOpener: $0["suggested_opener"].string
+                )
+            }
+        )
+    }
+
+    private func parseOutreachResponse(_ response: String) throws -> OutreachMessageResult {
+        guard let jsonData = extractJSON(from: response),
+              let data = jsonData.data(using: .utf8) else {
+            throw SearchOpsAgentError.invalidResponse
+        }
+
+        let json = try JSON(data: data)
+
+        return OutreachMessageResult(
+            subject: json["subject"].string,
+            message: json["message"].stringValue,
+            notes: json["notes"].string
+        )
+    }
+
+    /// Extract JSON from response that may contain markdown code blocks
+    private func extractJSON(from response: String) -> String? {
+        // Try to find JSON in code blocks first
+        if let jsonMatch = response.range(of: "```json\\s*(.+?)```", options: .regularExpression) {
+            var extracted = String(response[jsonMatch])
+            extracted = extracted.replacingOccurrences(of: "```json", with: "")
+            extracted = extracted.replacingOccurrences(of: "```", with: "")
+            return extracted.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        // Try to find raw JSON (starts with { or [)
+        if let jsonStart = response.firstIndex(of: "{"),
+           let jsonEnd = response.lastIndex(of: "}") {
+            return String(response[jsonStart...jsonEnd])
+        }
+
+        if let jsonStart = response.firstIndex(of: "["),
+           let jsonEnd = response.lastIndex(of: "]") {
+            return String(response[jsonStart...jsonEnd])
+        }
+
+        return nil
+    }
+}
+
+// MARK: - Result Types
+
+struct DailyTasksResult {
+    let tasks: [GeneratedDailyTask]
+    let summary: String?
+}
+
+struct JobSourcesResult {
+    let sources: [GeneratedJobSource]
+}
+
+struct NetworkingEventsResult {
+    let events: [GeneratedNetworkingEvent]
+}
+
+// MARK: - Generated Types (from LLM responses)
+
+struct GeneratedDailyTask: Codable {
+    let taskType: String
+    let title: String
+    let description: String?
+    let priority: Int
+    let relatedJobSourceId: String?
+    let relatedJobAppId: String?
+    let relatedContactId: String?
+    let relatedEventId: String?
+    let estimatedMinutes: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case taskType = "task_type"
+        case title
+        case description
+        case priority
+        case relatedJobSourceId = "related_job_source_id"
+        case relatedJobAppId = "related_job_app_id"
+        case relatedContactId = "related_contact_id"
+        case relatedEventId = "related_event_id"
+        case estimatedMinutes = "estimated_minutes"
+    }
+
+    func toDailyTask() -> DailyTask {
+        let task = DailyTask()
+        task.title = title
+        task.taskDescription = description
+        task.priority = priority
+        task.estimatedMinutes = estimatedMinutes
+        task.isLLMGenerated = true
+
+        switch taskType.lowercased() {
+        case "gather": task.taskType = .gatherLeads
+        case "customize": task.taskType = .customizeMaterials
+        case "apply": task.taskType = .submitApplication
+        case "follow_up": task.taskType = .followUp
+        case "networking": task.taskType = .networking
+        case "event_prep": task.taskType = .eventPrep
+        case "debrief": task.taskType = .eventDebrief
+        default: task.taskType = .gatherLeads
+        }
+
+        if let sourceId = relatedJobSourceId, let uuid = UUID(uuidString: sourceId) {
+            task.relatedJobSourceId = uuid
+        }
+        if let jobAppId = relatedJobAppId, let uuid = UUID(uuidString: jobAppId) {
+            task.relatedJobAppId = uuid
+        }
+        if let contactId = relatedContactId, let uuid = UUID(uuidString: contactId) {
+            task.relatedContactId = uuid
+        }
+        if let eventId = relatedEventId, let uuid = UUID(uuidString: eventId) {
+            task.relatedEventId = uuid
+        }
+
+        return task
+    }
+}
+
+struct GeneratedJobSource: Codable {
+    let name: String
+    let url: String
+    let category: String
+    let relevanceReason: String
+    let recommendedCadenceDays: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case name, url, category
+        case relevanceReason = "relevance_reason"
+        case recommendedCadenceDays = "recommended_cadence_days"
+    }
+
+    func toJobSource() -> JobSource {
+        let source = JobSource()
+        source.name = name
+        source.url = url
+        source.notes = relevanceReason
+        source.isLLMGenerated = true
+
+        switch category.lowercased() {
+        case "local": source.category = .local
+        case "industry": source.category = .industry
+        case "company_direct": source.category = .companyDirect
+        case "aggregator": source.category = .aggregator
+        case "startup": source.category = .startup
+        case "staffing": source.category = .staffing
+        case "networking": source.category = .networking
+        default: source.category = .aggregator
+        }
+
+        if let days = recommendedCadenceDays {
+            source.recommendedCadenceDays = days
+        } else {
+            source.recommendedCadenceDays = source.category.defaultCadenceDays
+        }
+
+        return source
+    }
+}
+
+struct GeneratedNetworkingEvent {
+    let name: String
+    let date: String
+    let time: String?
+    let location: String
+    let url: String
+    let eventType: String
+    let organizer: String?
+    let estimatedAttendance: String?
+    let cost: String?
+    let relevanceReason: String?
+
+    func toNetworkingEventOpportunity() -> NetworkingEventOpportunity {
+        let event = NetworkingEventOpportunity()
+        event.name = name
+        if let parsedDate = ISO8601DateFormatter().date(from: date) {
+            event.date = parsedDate
+        }
+        event.time = time
+        event.location = location
+        event.url = url
+        event.eventType = parseEventType(eventType)
+        event.organizer = organizer
+        event.estimatedAttendance = parseAttendanceSize(estimatedAttendance)
+        event.cost = cost
+        event.relevanceReason = relevanceReason
+        event.discoveredVia = .webSearch
+        return event
+    }
+
+    private func parseEventType(_ type: String) -> NetworkingEventType {
+        NetworkingEventType(rawValue: type.replacingOccurrences(of: "_", with: " ").capitalized) ?? .meetup
+    }
+
+    private func parseAttendanceSize(_ size: String?) -> AttendanceSize {
+        guard let size = size else { return .medium }
+        switch size.lowercased() {
+        case "intimate": return .intimate
+        case "small": return .small
+        case "medium": return .medium
+        case "large": return .large
+        case "massive": return .massive
+        default: return .medium
+        }
+    }
+}
+
+struct EventEvaluationResult {
+    let recommendation: String
+    let rationale: String
+    let expectedValue: String?
+    let concerns: [String]
+    let preparationTips: [String]
+
+    var attendanceRecommendation: AttendanceRecommendation {
+        switch recommendation.lowercased() {
+        case "strong_yes": return .strongYes
+        case "yes": return .yes
+        case "maybe": return .maybe
+        case "skip": return .skip
+        default: return .maybe
+        }
+    }
+}
+
+struct EventPrepResult {
+    let goal: String
+    let pitchScript: String
+    let talkingPoints: [TalkingPointResult]
+    let targetCompanies: [TargetCompanyResult]
+    let conversationStarters: [String]
+    let thingsToAvoid: [String]
+}
+
+struct TalkingPointResult {
+    let topic: String
+    let relevance: String
+    let yourAngle: String
+
+    func toTalkingPoint() -> TalkingPoint {
+        TalkingPoint(topic: topic, relevance: relevance, yourAngle: yourAngle)
+    }
+}
+
+struct TargetCompanyResult {
+    let company: String
+    let whyRelevant: String
+    let recentNews: String?
+    let openRoles: [String]
+    let possibleOpeners: [String]
+
+    func toTargetCompanyContext() -> TargetCompanyContext {
+        TargetCompanyContext(
+            company: company,
+            whyRelevant: whyRelevant,
+            recentNews: recentNews,
+            openRoles: openRoles,
+            possibleOpeners: possibleOpeners
+        )
+    }
+}
+
+struct NetworkingActionsResult {
+    let actions: [NetworkingActionItem]
+}
+
+struct NetworkingActionItem {
+    let contactName: String
+    let contactId: String?
+    let actionType: String
+    let actionDescription: String
+    let urgency: String
+    let suggestedOpener: String?
+}
+
+struct OutreachMessageResult {
+    let subject: String?
+    let message: String
+    let notes: String?
+}
+
+// MARK: - Errors
+
+enum SearchOpsAgentError: Error, LocalizedError {
+    case noResponse
+    case toolLoopExceeded
+    case invalidResponse
+    case toolExecutionFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .noResponse:
+            return "No response from LLM"
+        case .toolLoopExceeded:
+            return "Tool call loop exceeded maximum iterations"
+        case .invalidResponse:
+            return "Could not parse LLM response"
+        case .toolExecutionFailed(let reason):
+            return "Tool execution failed: \(reason)"
+        }
+    }
+}
