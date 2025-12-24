@@ -18,115 +18,96 @@ enum ResumeReviewType: String, CaseIterable, Identifiable {
     func promptTemplate() -> String {
         switch self {
         case .assessQuality:
-            // Enhanced prompt – asks for a structured, actionable answer in markdown
-            return """
-            Context:
-            ────────────────────────────────────────────
-            • Applicant is applying for **{jobPosition}** at **{companyName}**.
-            • Full job description is included below.
-            • A draft of the applicant’s resume follows the job description.
-            {includeImage}
-            Job Description
-            ----------------
-            {jobDescription}
-            Resume Draft
-            -------------
-            {resumeText}
-            Task:
-            You are an expert hiring manager and resume coach.
-            1. Evaluate the overall quality and professionalism of the resume **for this particular role**.
-            2. Provide exactly 3 key strengths (bullet list).
-            3. Provide exactly 3 concrete, actionable improvements (bullet list).
-            4. Give the resume an **overall score from 1-10** for readiness to submit.
-            Output format (markdown):
-            ### Overall Assessment (Score: <1-10>)
-            **Strengths**
-            • …
-            • …
-            • …
-            **Areas to Improve**
-            • …
-            • …
-            • …
-            Keep the tone encouraging yet direct. Use concise, professional language.
-            """
+            let contextHeader = ReviewPromptBuilder.buildContextHeader(
+                jobPosition: "{jobPosition}",
+                companyName: "{companyName}",
+                additionalInfo: [
+                    "• Full job description is included below.",
+                    "• A draft of the applicant's resume follows the job description."
+                ],
+                includeImage: true
+            )
+
+            let sections = [
+                (title: "Job Description", placeholder: "jobDescription"),
+                (title: "Resume Draft", placeholder: "resumeText")
+            ]
+
+            return ReviewPromptBuilder.buildAssessmentPrompt(
+                contextHeader: contextHeader,
+                sections: sections,
+                taskIntro: "You are an expert hiring manager and resume coach.",
+                strengthsLabel: "Strengths",
+                improvementsLabel: "Areas to Improve",
+                ratingLabel: "Score",
+                assessmentItems: [
+                    "Evaluate the overall quality and professionalism of the resume **for this particular role**.",
+                    "Provide exactly 3 key strengths (bullet list).",
+                    "Provide exactly 3 concrete, actionable improvements (bullet list).",
+                    "Give the resume an **overall score from 1-10** for readiness to submit."
+                ],
+                outputHeader: "### Overall Assessment (Score: <1-10>)",
+                closingNote: "Keep the tone encouraging yet direct. Use concise, professional language."
+            )
+
         case .assessFit:
-            return """
-            Context:
-            ────────────────────────────────────────────
-            • Applicant wishes to apply for **{jobPosition}** at **{companyName}**.
-            • Job description and resume draft are provided.
-            {includeImage}
-            Job Description
-            ----------------
-            {jobDescription}
-            Resume Draft
-            -------------
-            {resumeText}
-            Task:
-            1. Assess how well the candidate’s background matches the role requirements.
-            2. List the **top 3 strengths** relevant to the job (bullet list).
-            3. List the **top 3 gaps** or missing qualifications (bullet list).
-            4. Give a **Fit Rating (1-10)** where 10 = perfect fit.
-            5. State in one sentence whether it is worthwhile to apply.
-            Output format (markdown):
-            ### Fit Analysis (Rating: <1-10>)
-            **Strengths**
-            • …
-            • …
-            • …
-            **Gaps / Weaknesses**
-            • …
-            • …
-            • …
-            **Recommendation**
-            <One-sentence recommendation>
-            """
+            return ReviewPromptBuilder.buildFitAnalysisPrompt(
+                jobPosition: "{jobPosition}",
+                companyName: "{companyName}",
+                includeImage: true
+            )
+
         case .suggestChanges:
-            return """
-            Context:
-            ────────────────────────────────────────────
-            • Target role: **{jobPosition}** at **{companyName}**.
-            • Job description is supplied below.
-            • Current resume draft follows.
-            • Additional background docs (if any) are appended at the end.
-            Job Description
-            ----------------
-            {jobDescription}
-            Resume Draft
-            -------------
-            {resumeText}
-            Background Docs
-            ---------------
-            {backgroundDocs}
-            Task:
-            Identify resume sections (titles, bullet points, skill headings, summarized achievements, etc.) that should be **revised or strengthened** to maximise impact for this role.
-            For each suggested change give:
-            • The current text (quote succinctly)
-            • The rationale for change (1-2 sentences)
-            • A concise rewritten version (max 40 words)
-            Output as a markdown table with columns: *Section*, *Why change?*, *Suggested Rewrite*.
-            """
+            return ReviewPromptBuilder.buildChangeSuggestionPrompt(
+                jobPosition: "{jobPosition}",
+                companyName: "{companyName}",
+                sections: [
+                    (title: "Job Description", placeholder: "jobDescription"),
+                    (title: "Resume Draft", placeholder: "resumeText"),
+                    (title: "Background Docs", placeholder: "backgroundDocs")
+                ],
+                additionalInfo: [
+                    "• Job description is supplied below.",
+                    "• Current resume draft follows.",
+                    "• Additional background docs (if any) are appended at the end."
+                ],
+                instructions: """
+                Identify resume sections (titles, bullet points, skill headings, summarized achievements, etc.) that should be **revised or strengthened** to maximise impact for this role.
+                For each suggested change give:
+                • The current text (quote succinctly)
+                • The rationale for change (1-2 sentences)
+                • A concise rewritten version (max 40 words)
+                Output as a markdown table with columns: *Section*, *Why change?*, *Suggested Rewrite*.
+                """
+            )
+
         case .fixOverflow:
-            // This prompt is more complex and will be constructed within ResumeReviewService
-            // as it involves image data and iterative calls.
-            // A base instruction could be:
-            return "The 'Skills and Expertise' section of the resume is overflowing. Please adjust the content to fit."
+            return ReviewPromptBuilder.buildSimplePrompt(
+                instruction: "The 'Skills and Expertise' section of the resume is overflowing. Please adjust the content to fit."
+            )
+
         case .reorderSkills:
-            return """
-            Context:
-            ────────────────────────────────────────────
-            • Applicant is applying for **{jobPosition}** at **{companyName}**.
-            • Full job description is included below.
-            • A draft of the applicant's resume follows the job description.
-            {includeImage}
-            Job Description
-            ----------------
-            {jobDescription}
-            Resume Draft
-            -------------
-            {resumeText}
-            Task:
+            let contextHeader = ReviewPromptBuilder.buildContextHeader(
+                jobPosition: "{jobPosition}",
+                companyName: "{companyName}",
+                additionalInfo: [
+                    "• Full job description is included below.",
+                    "• A draft of the applicant's resume follows the job description."
+                ],
+                includeImage: true
+            )
+
+            let sections = [
+                (title: "Job Description", placeholder: "jobDescription"),
+                (title: "Resume Draft", placeholder: "resumeText")
+            ]
+
+            var components = [contextHeader]
+            for section in sections {
+                components.append(ReviewPromptBuilder.buildSection(title: section.title, placeholder: section.placeholder))
+            }
+
+            components.append(ReviewPromptBuilder.buildTask(instructions: """
             You are an expert resume consultant specializing in strategic skills presentation.
             1. Review the 'Skills & Experience' section of the resume.
             2. Analyze the job description to identify the most valuable and relevant skills.
@@ -140,10 +121,12 @@ enum ResumeReviewType: String, CaseIterable, Identifiable {
             <List the skills in recommended order with the most relevant first>
             **Rationale**
             <Brief explanation of the recommended changes and how they align with the job requirements>
-            """
+            """))
+
+            return components.joined(separator: "\n")
+
         case .custom:
-            // Custom prompt will be built dynamically; return empty string here.
-            return ""
+            return ReviewPromptBuilder.emptyCustomPrompt()
         }
     }
 }

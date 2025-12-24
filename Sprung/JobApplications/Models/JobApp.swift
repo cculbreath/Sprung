@@ -5,6 +5,40 @@
 //
 import Foundation
 import SwiftData
+
+/// Priority level for a job application
+enum JobLeadPriority: String, Codable, CaseIterable {
+    case high = "High"
+    case medium = "Medium"
+    case low = "Low"
+}
+
+/// Stage in the application pipeline (used by SearchOps Kanban)
+enum ApplicationStage: String, Codable, CaseIterable {
+    case identified = "Identified"
+    case researching = "Researching"
+    case applying = "Applying"
+    case applied = "Applied"
+    case interviewing = "Interviewing"
+    case offer = "Offer"
+    case accepted = "Accepted"
+    case rejected = "Rejected"
+    case withdrawn = "Withdrawn"
+
+    /// Next stage in the progression
+    var next: ApplicationStage? {
+        switch self {
+        case .identified: return .researching
+        case .researching: return .applying
+        case .applying: return .applied
+        case .applied: return .interviewing
+        case .interviewing: return .offer
+        case .offer: return .accepted
+        case .accepted, .rejected, .withdrawn: return nil
+        }
+    }
+}
+
 enum Statuses: String, Codable, CaseIterable {
     case new = "new"
     case inProgress = "In Progress"
@@ -90,6 +124,47 @@ extension Statuses {
     var postingURL: String = ""
     var status: Statuses = Statuses.new
     var notes: String = ""
+
+    // MARK: - SearchOps Pipeline Properties
+
+    /// Priority level for the application (SearchOps Kanban)
+    var priority: JobLeadPriority = JobLeadPriority.medium
+
+    /// Current stage in the application pipeline (SearchOps Kanban)
+    var stage: ApplicationStage = ApplicationStage.identified
+
+    /// Source where the lead was discovered (e.g., LinkedIn, Indeed)
+    var source: String?
+
+    /// URL to the application form
+    var applicationUrl: String?
+
+    // MARK: - Pipeline Dates
+
+    var createdAt: Date = Date()
+    var identifiedDate: Date?
+    var appliedDate: Date?
+    var firstInterviewDate: Date?
+    var lastInterviewDate: Date?
+    var offerDate: Date?
+    var closedDate: Date?
+
+    // MARK: - Interview Tracking
+
+    var interviewCount: Int = 0
+    var lastInterviewNotes: String?
+
+    // MARK: - Outcome Details
+
+    var rejectionReason: String?
+    var withdrawalReason: String?
+    var offerDetails: String?
+
+    // MARK: - LLM Assessment
+
+    var fitScore: Double?
+    var llmAssessment: String?
+
     enum CodingKeys: String, CodingKey {
         case jobPosition = "job_position"
         case jobLocation = "job_location"
@@ -215,5 +290,83 @@ extension Statuses {
             }
         }
         return result
+    }
+
+    // MARK: - SearchOps Computed Properties
+
+    var daysSinceCreated: Int? {
+        Calendar.current.dateComponents([.day], from: createdAt, to: Date()).day
+    }
+
+    var daysSinceApplied: Int? {
+        guard let appliedDate = appliedDate else { return nil }
+        return Calendar.current.dateComponents([.day], from: appliedDate, to: Date()).day
+    }
+
+    var isActive: Bool {
+        switch stage {
+        case .accepted, .rejected, .withdrawn: return false
+        default: return true
+        }
+    }
+
+    var displayTitle: String {
+        if !jobPosition.isEmpty {
+            return "\(jobPosition) at \(companyName)"
+        }
+        return companyName
+    }
+
+    // MARK: - Conversion from JobLead (Legacy)
+
+    /// Initialize JobApp from legacy JobLead model
+    /// - Parameter jobLead: The JobLead to convert
+    convenience init(from jobLead: JobLead) {
+        self.init(
+            jobPosition: jobLead.role ?? "",
+            jobLocation: "",
+            companyName: jobLead.company,
+            companyLinkedinId: "",
+            jobPostingTime: "",
+            jobDescription: "",
+            seniorityLevel: "",
+            employmentType: "",
+            jobFunction: "",
+            industries: "",
+            jobApplyLink: jobLead.applicationUrl ?? "",
+            postingURL: jobLead.url ?? ""
+        )
+
+        // Map SearchOps-specific properties
+        self.priority = jobLead.priority
+        self.stage = jobLead.stage
+        self.source = jobLead.source
+        self.applicationUrl = jobLead.applicationUrl
+        self.notes = jobLead.notes ?? ""
+
+        // Map dates
+        self.createdAt = jobLead.createdAt
+        self.identifiedDate = jobLead.identifiedDate
+        self.appliedDate = jobLead.appliedDate
+        self.firstInterviewDate = jobLead.firstInterviewDate
+        self.lastInterviewDate = jobLead.lastInterviewDate
+        self.offerDate = jobLead.offerDate
+        self.closedDate = jobLead.closedDate
+
+        // Map interview tracking
+        self.interviewCount = jobLead.interviewCount
+        self.lastInterviewNotes = jobLead.lastInterviewNotes
+
+        // Map outcome details
+        self.rejectionReason = jobLead.rejectionReason
+        self.withdrawalReason = jobLead.withdrawalReason
+        self.offerDetails = jobLead.offerDetails
+
+        // Map LLM assessment
+        self.fitScore = jobLead.fitScore
+        self.llmAssessment = jobLead.llmAssessment
+
+        // Note: resumeId and coverLetterId from JobLead are not directly mapped
+        // as JobApp uses relationships instead
     }
 }

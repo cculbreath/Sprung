@@ -309,7 +309,10 @@ final class UploadInteractionHandler {
             guard let first = processed.first else {
                 throw ToolError.executionFailed("No file received for basics.image")
             }
-            let data = try Data(contentsOf: first.storageURL)
+            // Read file data off main thread to avoid blocking UI
+            let data = try await Task.detached {
+                try Data(contentsOf: first.storageURL)
+            }.value
             let ext = first.storageURL.pathExtension.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             guard ["jpg", "jpeg", "png"].contains(ext) else {
                 throw ToolError.invalidParameters("Profile photo must be a .jpg or .png (got .\(ext)).")

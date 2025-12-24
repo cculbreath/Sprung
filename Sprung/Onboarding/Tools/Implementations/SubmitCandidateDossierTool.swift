@@ -55,12 +55,10 @@ struct SubmitCandidateDossierTool: InterviewTool {
 
     func execute(_ params: JSON) async throws -> ToolResult {
         // Validate required field
-        guard let jobSearchContext = params["job_search_context"].string, !jobSearchContext.isEmpty else {
-            throw ToolError.invalidParameters(
-                "job_search_context is required. Include: why looking, what seeking, priorities, " +
-                "ideal role attributes, and compensation expectations if shared."
-            )
-        }
+        let jobSearchContext = try ToolResultHelpers.requireString(
+            params["job_search_context"].string,
+            named: "job_search_context"
+        )
 
         // Build dossier with auto-generated fields
         let dossierId = "doss_\(UUID().uuidString.prefix(8).lowercased())"
@@ -121,7 +119,7 @@ struct SubmitCandidateDossierTool: InterviewTool {
 
             return .immediate(response)
         } catch {
-            return .error(.executionFailed("Failed to persist dossier: \(error.localizedDescription)"))
+            return ToolResultHelpers.executionFailed("Failed to persist dossier: \(error.localizedDescription)")
         }
     }
 }

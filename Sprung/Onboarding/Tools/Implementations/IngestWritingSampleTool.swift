@@ -52,17 +52,9 @@ struct IngestWritingSampleTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
-        guard let sampleName = params["name"].string, !sampleName.isEmpty else {
-            return .error(.invalidParameters("name is required"))
-        }
-
-        guard let content = params["content"].string, !content.isEmpty else {
-            return .error(.invalidParameters("content is required - include the full text of the writing sample"))
-        }
-
-        guard let writingType = params["writing_type"].string else {
-            return .error(.invalidParameters("writing_type is required"))
-        }
+        let sampleName = try ToolResultHelpers.requireString(params["name"].string, named: "name")
+        let content = try ToolResultHelpers.requireString(params["content"].string, named: "content")
+        let writingType = try ToolResultHelpers.requireString(params["writing_type"].string, named: "writing_type")
 
         let context = params["context"].string
 

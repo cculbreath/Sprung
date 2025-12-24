@@ -31,24 +31,30 @@ struct GetTimelineEntriesTool: InterviewTool {
         let timeline = await coordinator.state.artifacts.skeletonTimeline
 
         guard let timeline = timeline else {
-            var response = JSON()
-            response["status"].string = "completed"
-            response["count"].int = 0
-            response["entries"] = JSON([])
-            response["message"].string = "No skeleton timeline available. Complete Phase 1 first."
-            return .immediate(response)
+            return ToolResultHelpers.statusResponse(
+                status: "completed",
+                message: "No skeleton timeline available. Complete Phase 1 first.",
+                additionalData: JSON(["count": 0, "entries": []])
+            )
         }
 
         let entries = timeline["experiences"].arrayValue
-        var response = JSON()
-        response["status"].string = "completed"
-        response["count"].int = entries.count
-        response["entries"] = JSON(entries)
+
+        var additionalData = JSON()
+        additionalData["count"].int = entries.count
+        additionalData["entries"] = JSON(entries)
 
         if entries.isEmpty {
-            response["message"].string = "Timeline exists but has no entries."
+            return ToolResultHelpers.statusResponse(
+                status: "completed",
+                message: "Timeline exists but has no entries.",
+                additionalData: additionalData
+            )
         }
 
-        return .immediate(response)
+        return ToolResultHelpers.statusResponse(
+            status: "completed",
+            additionalData: additionalData
+        )
     }
 }

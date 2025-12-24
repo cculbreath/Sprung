@@ -9,7 +9,7 @@ import SwiftUI
 @MainActor
 @Observable
 class ModelValidationService {
-    private let baseURL = "https://openrouter.ai/api/v1"
+    private let baseURL = "\(AppConfig.openRouterBaseURL)/\(AppConfig.openRouterAPIPath)/\(AppConfig.openRouterVersion)"
     // Validation state
     var isValidating = false
     var validationResults: [String: ModelValidationResult] = [:]

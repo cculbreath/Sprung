@@ -1,0 +1,25 @@
+{
+  "type": "object",
+  "properties": {
+    "subject": {
+      "type": "string",
+      "description": "Email subject (if applicable)"
+    },
+    "message": {
+      "type": "string",
+      "description": "The message body"
+    },
+    "alternative_versions": {
+      "type": "array",
+      "description": "Alternative message options",
+      "items": {
+        "type": "string"
+      }
+    },
+    "sending_tips": {
+      "type": "string",
+      "description": "Tips for effective sending"
+    }
+  },
+  "required": ["message"]
+}

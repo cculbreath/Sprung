@@ -1,0 +1,60 @@
+{
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Event name"
+    },
+    "description": {
+      "type": "string",
+      "description": "Event description"
+    },
+    "date": {
+      "type": "string",
+      "description": "Event date (ISO format)"
+    },
+    "time": {
+      "type": "string",
+      "description": "Start time"
+    },
+    "location": {
+      "type": "string",
+      "description": "Venue name or 'Virtual'"
+    },
+    "is_virtual": {
+      "type": "boolean"
+    },
+    "url": {
+      "type": "string",
+      "description": "Event page URL"
+    },
+    "organizer": {
+      "type": "string",
+      "description": "Organizing group/company"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": ["meetup", "happy_hour", "conference", "workshop", "tech_talk", "open_house", "career_fair", "panel_discussion", "hackathon", "virtual_event", "coffee_chat", "other"]
+    },
+    "estimated_attendance": {
+      "type": "string",
+      "enum": ["intimate", "small", "medium", "large", "massive"]
+    },
+    "cost": {
+      "type": "string",
+      "description": "Cost (e.g., 'Free', '$25')"
+    },
+    "relevance_reason": {
+      "type": "string",
+      "description": "Why this event is relevant"
+    },
+    "target_companies_likely": {
+      "type": "array",
+      "description": "Companies likely to have attendees",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": ["name", "date", "location", "url", "event_type", "relevance_reason"]
+}

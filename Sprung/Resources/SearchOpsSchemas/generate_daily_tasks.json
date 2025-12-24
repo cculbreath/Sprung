@@ -1,0 +1,118 @@
+{
+  "type": "object",
+  "description": "Generate today's action items based on the current state of the job search: pending applications, follow-ups needed, sources due for checking, and networking tasks.",
+  "properties": {
+    "pending_applications": {
+      "type": "array",
+      "description": "Applications in progress that need attention",
+      "items": {
+        "type": "object",
+        "properties": {
+          "job_app_id": {
+            "type": "string"
+          },
+          "company": {
+            "type": "string"
+          },
+          "position": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "due_sources": {
+      "type": "array",
+      "description": "Job sources that are due for checking",
+      "items": {
+        "type": "object",
+        "properties": {
+          "source_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "days_since_visit": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "follow_ups_needed": {
+      "type": "array",
+      "description": "Applications needing follow-up",
+      "items": {
+        "type": "object",
+        "properties": {
+          "job_app_id": {
+            "type": "string"
+          },
+          "company": {
+            "type": "string"
+          },
+          "days_since_applied": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "upcoming_events": {
+      "type": "array",
+      "description": "Networking events coming up",
+      "items": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "days_until": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "contacts_needing_attention": {
+      "type": "array",
+      "description": "Contacts with decaying relationships",
+      "items": {
+        "type": "object",
+        "properties": {
+          "contact_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "days_since_contact": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "weekly_progress": {
+      "type": "object",
+      "description": "Progress toward weekly goals",
+      "properties": {
+        "applications_target": {
+          "type": "integer"
+        },
+        "applications_actual": {
+          "type": "integer"
+        },
+        "networking_events_target": {
+          "type": "integer"
+        },
+        "networking_events_actual": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  "required": ["pending_applications", "due_sources", "follow_ups_needed"]
+}

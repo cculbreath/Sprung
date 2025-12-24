@@ -2,8 +2,8 @@
 //  SearchOpsCoordinator.swift
 //  Sprung
 //
-//  Main coordinator for SearchOps module. Provides unified access to all stores
-//  and orchestrates cross-store operations.
+//  Main coordinator for SearchOps module. Composes pipeline and networking
+//  sub-coordinators and orchestrates cross-concern operations.
 //
 
 import Foundation
@@ -12,72 +12,64 @@ import SwiftData
 @Observable
 @MainActor
 final class SearchOpsCoordinator {
-    // MARK: - Stores
+    // MARK: - Sub-Coordinators
 
-    let preferencesStore: SearchPreferencesStore
-    let settingsStore: SearchOpsSettingsStore
-    let jobSourceStore: JobSourceStore
-    let jobLeadStore: JobLeadStore
-    let dailyTaskStore: DailyTaskStore
-    let timeEntryStore: TimeEntryStore
-    let weeklyGoalStore: WeeklyGoalStore
-    let eventStore: NetworkingEventStore
-    let contactStore: NetworkingContactStore
-    let interactionStore: NetworkingInteractionStore
-    let feedbackStore: EventFeedbackStore
+    let pipelineCoordinator: SearchOpsPipelineCoordinator
+    let networkingCoordinator: SearchOpsNetworkingCoordinator
 
-    // MARK: - Services
+    // MARK: - Convenience Store Access (delegated to sub-coordinators)
 
-    let urlValidationService: URLValidationService
-    private(set) var llmService: SearchOpsLLMService?
-    private(set) var calendarService: CalendarIntegrationService?
+    var preferencesStore: SearchPreferencesStore { pipelineCoordinator.preferencesStore }
+    var settingsStore: SearchOpsSettingsStore { pipelineCoordinator.settingsStore }
+    var jobSourceStore: JobSourceStore { networkingCoordinator.jobSourceStore }
+    var jobLeadStore: JobLeadStore { pipelineCoordinator.jobLeadStore }
+    var dailyTaskStore: DailyTaskStore { pipelineCoordinator.dailyTaskStore }
+    var timeEntryStore: TimeEntryStore { pipelineCoordinator.timeEntryStore }
+    var weeklyGoalStore: WeeklyGoalStore { pipelineCoordinator.weeklyGoalStore }
+    var eventStore: NetworkingEventStore { networkingCoordinator.eventStore }
+    var contactStore: NetworkingContactStore { networkingCoordinator.contactStore }
+    var interactionStore: NetworkingInteractionStore { networkingCoordinator.interactionStore }
+    var feedbackStore: EventFeedbackStore { networkingCoordinator.feedbackStore }
+
+    // MARK: - Convenience Service Access (delegated to sub-coordinators)
+
+    var urlValidationService: URLValidationService { networkingCoordinator.urlValidationService }
+    var llmService: SearchOpsLLMService? { pipelineCoordinator.llmService }
+    var calendarService: CalendarIntegrationService? { pipelineCoordinator.calendarService }
 
     // MARK: - State
 
     private(set) var isInitialized: Bool = false
-    private(set) var currentTimeEntry: TimeEntry?
+    var currentTimeEntry: TimeEntry? { pipelineCoordinator.currentTimeEntry }
 
     // MARK: - Initialization
 
     init(modelContext: ModelContext) {
-        self.preferencesStore = SearchPreferencesStore(context: modelContext)
-        self.settingsStore = SearchOpsSettingsStore(context: modelContext)
-        self.jobSourceStore = JobSourceStore(context: modelContext)
-        self.jobLeadStore = JobLeadStore(context: modelContext)
-        self.dailyTaskStore = DailyTaskStore(context: modelContext)
-        self.timeEntryStore = TimeEntryStore(context: modelContext)
-        self.weeklyGoalStore = WeeklyGoalStore(context: modelContext)
-        self.eventStore = NetworkingEventStore(context: modelContext)
-        self.contactStore = NetworkingContactStore(context: modelContext)
-        self.interactionStore = NetworkingInteractionStore(context: modelContext)
-        self.feedbackStore = EventFeedbackStore(context: modelContext)
-        self.urlValidationService = URLValidationService()
-        self.calendarService = CalendarIntegrationService()
+        self.pipelineCoordinator = SearchOpsPipelineCoordinator(modelContext: modelContext)
+        self.networkingCoordinator = SearchOpsNetworkingCoordinator(modelContext: modelContext)
     }
 
     /// Configure the LLM service. Must be called after initialization with LLMFacade.
     func configureLLMService(llmFacade: LLMFacade) {
-        self.llmService = SearchOpsLLMService(
-            llmFacade: llmFacade,
-            settingsStore: settingsStore
-        )
+        pipelineCoordinator.configureLLMService(llmFacade: llmFacade)
+
+        // Set up agent service with full context provider
+        if let llmService = pipelineCoordinator.llmService {
+            let contextProvider = SearchOpsContextProviderImpl(coordinator: self)
+            let agentService = SearchOpsAgentService(
+                llmFacade: llmService.llmFacade,
+                contextProvider: contextProvider,
+                settingsStore: settingsStore
+            )
+            pipelineCoordinator.setAgentService(agentService)
+        }
     }
 
     func initialize() {
         guard !isInitialized else { return }
 
-        // Ensure preferences and settings exist
-        _ = preferencesStore.current()
-        _ = settingsStore.current()
-
-        // Ensure current week's goal exists
-        _ = weeklyGoalStore.currentWeek()
-
-        // Clean up old tasks
-        dailyTaskStore.clearOldTasks(olderThan: 14)
-
-        // Update relationship warmth levels
-        contactStore.updateAllWarmthLevels()
+        pipelineCoordinator.initialize()
+        networkingCoordinator.initialize()
 
         isInitialized = true
         Logger.info("✅ SearchOps initialized", category: .appLifecycle)
@@ -86,77 +78,40 @@ final class SearchOpsCoordinator {
     // MARK: - Module State Checks
 
     var needsOnboarding: Bool {
-        !preferencesStore.isConfigured
+        pipelineCoordinator.needsOnboarding
     }
 
     var hasActiveSources: Bool {
-        !jobSourceStore.activeSources.isEmpty
+        networkingCoordinator.hasActiveSources
     }
 
-    // MARK: - Time Tracking
+    // MARK: - Time Tracking (delegated to pipeline coordinator)
 
     func startTimeTracking(activity: ActivityType) {
-        // End any existing entry
-        endTimeTracking()
-
-        let entry = TimeEntry(activityType: activity, startTime: Date())
-        entry.isAutomatic = true
-        entry.trackingSource = .appForeground
-        timeEntryStore.add(entry)
-        currentTimeEntry = entry
+        pipelineCoordinator.startTimeTracking(activity: activity)
     }
 
     func endTimeTracking() {
-        guard let entry = currentTimeEntry else { return }
-
-        entry.endTime = Date()
-        entry.durationSeconds = Int(entry.endTime!.timeIntervalSince(entry.startTime))
-        currentTimeEntry = nil
-
-        // Add to weekly goal
-        weeklyGoalStore.addTimeMinutes(entry.durationMinutes)
+        pipelineCoordinator.endTimeTracking()
     }
 
     func switchTimeTracking(to activity: ActivityType) {
-        endTimeTracking()
-        startTimeTracking(activity: activity)
+        pipelineCoordinator.switchTimeTracking(to: activity)
     }
 
-    // MARK: - Source Operations
+    // MARK: - Source Operations (delegated to networking coordinator)
 
     func visitSource(_ source: JobSource) {
-        jobSourceStore.markVisited(source)
+        networkingCoordinator.visitSource(source)
     }
 
-    // MARK: - Source Validation
+    // MARK: - Source Validation (delegated to networking coordinator)
 
     func validateSources() async {
-        let sourcesToValidate = jobSourceStore.sourcesNeedingRevalidation
-
-        guard !sourcesToValidate.isEmpty else {
-            Logger.debug("📋 No sources need revalidation", category: .networking)
-            return
-        }
-
-        Logger.info("🔍 Validating \(sourcesToValidate.count) job sources", category: .networking)
-
-        let urls = sourcesToValidate.map { $0.url }
-        let results = await urlValidationService.validateBatch(urls)
-
-        for result in results {
-            if let source = jobSourceStore.source(byUrl: result.url) {
-                jobSourceStore.updateValidation(source, valid: result.isValid)
-
-                if !result.isValid {
-                    Logger.warning("⚠️ Source validation failed: \(source.name) - \(result.error ?? "Unknown")", category: .networking)
-                }
-            }
-        }
-
-        Logger.info("✅ Source validation complete", category: .networking)
+        await networkingCoordinator.validateSources()
     }
 
-    // MARK: - Daily Summary
+    // MARK: - Daily Summary (coordinated across sub-coordinators)
 
     struct DailySummary {
         let tasksTotal: Int
@@ -170,31 +125,16 @@ final class SearchOpsCoordinator {
     }
 
     func todaysSummary() -> DailySummary {
-        let tasks = dailyTaskStore.todaysTasks
-        let completedTasks = tasks.filter { $0.isCompleted }
+        let eventsToday = networkingCoordinator.eventsToday()
+        let contactsNeedingAttention = networkingCoordinator.contactsNeedingAttention(limit: 5)
 
-        let applicationsSubmitted = completedTasks.filter { $0.taskType == .submitApplication }.count
-        let followUpsSent = completedTasks.filter { $0.taskType == .followUp }.count
-        let sourcesVisited = completedTasks.filter { $0.taskType == .gatherLeads }.count
-
-        let calendar = Calendar.current
-        let todaysEvents = eventStore.upcomingEvents.filter {
-            calendar.isDateInToday($0.date)
-        }
-
-        return DailySummary(
-            tasksTotal: tasks.count,
-            tasksCompleted: completedTasks.count,
-            timeSpentMinutes: timeEntryStore.totalMinutesForDate(Date()),
-            sourcesVisited: sourcesVisited,
-            applicationsSubmitted: applicationsSubmitted,
-            followUpsSent: followUpsSent,
-            eventsToday: todaysEvents,
-            contactsNeedingAttention: Array(contactStore.needsAttention.prefix(5))
+        return pipelineCoordinator.todaysSummary(
+            eventsToday: eventsToday,
+            contactsNeedingAttention: contactsNeedingAttention
         )
     }
 
-    // MARK: - Weekly Summary
+    // MARK: - Weekly Summary (coordinated across sub-coordinators)
 
     struct WeeklySummary {
         let goal: WeeklyGoal
@@ -208,35 +148,21 @@ final class SearchOpsCoordinator {
     }
 
     func thisWeeksSummary() -> WeeklySummary {
-        let goal = weeklyGoalStore.currentWeek()
+        let topSources = jobSourceStore.topSourcesByEffectiveness(limit: 3)
+        let eventsAttended = networkingCoordinator.eventsAttendedThisWeek()
+        let newContacts = networkingCoordinator.newContactsThisWeek()
 
-        let calendar = Calendar.current
-        let weekStart = calendar.date(
-            from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())
-        ) ?? Date()
-
-        let eventsAttended = eventStore.attendedEvents.filter { event in
-            guard let attendedAt = event.attendedAt else { return false }
-            return attendedAt >= weekStart
-        }
-
-        return WeeklySummary(
-            goal: goal,
-            applicationProgress: goal.applicationProgress,
-            networkingProgress: goal.networkingProgress,
-            timeProgress: goal.timeProgress,
-            topSources: jobSourceStore.topSourcesByEffectiveness(limit: 3),
+        return pipelineCoordinator.thisWeeksSummary(
+            topSources: topSources,
             eventsAttended: eventsAttended,
-            newContacts: contactStore.thisWeeksNewContacts,
-            reflectionNeeded: goal.llmReflection == nil && goal.applicationActual > 0
+            newContacts: newContacts
         )
     }
 
-    // MARK: - Event Workflow Helpers
+    // MARK: - Event Workflow Helpers (delegated to networking coordinator)
 
     func recordEventAttendance(_ event: NetworkingEventOpportunity) {
-        eventStore.markAsAttended(event)
-        weeklyGoalStore.incrementEventsAttended()
+        networkingCoordinator.recordEventAttendance(event, weeklyGoalStore: weeklyGoalStore)
     }
 
     func recordEventDebrief(
@@ -247,75 +173,31 @@ final class SearchOpsCoordinator {
         whatWorked: String?,
         whatDidntWork: String?
     ) {
-        // Update event
-        event.contactCount = contacts.count
-        event.eventRating = rating
-        event.wouldRecommend = wouldRecommend
-        event.whatWorked = whatWorked
-        event.whatDidntWork = whatDidntWork
-        eventStore.markAsDebriefed(event)
-
-        // Record feedback for learning
-        let feedback = EventFeedback()
-        feedback.eventOpportunityId = event.id
-        feedback.eventType = event.eventType
-        feedback.organizer = event.organizer
-        feedback.attendanceSize = event.estimatedAttendance
-        feedback.wasVirtual = event.isVirtual
-        feedback.cost = event.cost
-        feedback.rating = rating
-        feedback.contactsMade = contacts.count
-        feedback.qualityContactsMade = contacts.filter { $0.warmth == .hot }.count
-        feedback.wouldRecommend = wouldRecommend
-        feedback.whatWorked = whatWorked
-        feedback.whatDidntWork = whatDidntWork
-        feedbackStore.add(feedback)
-
-        // Update weekly goal
-        weeklyGoalStore.incrementNewContacts(count: contacts.count)
-
-        Logger.info("📝 Event debrief recorded: \(event.name) - \(contacts.count) contacts", category: .ai)
+        networkingCoordinator.recordEventDebrief(
+            event,
+            contacts: contacts,
+            rating: rating,
+            wouldRecommend: wouldRecommend,
+            whatWorked: whatWorked,
+            whatDidntWork: whatDidntWork,
+            weeklyGoalStore: weeklyGoalStore
+        )
     }
 
-    // MARK: - Agent Service
-
-    private var _agentService: SearchOpsAgentService?
+    // MARK: - Agent Service Access
 
     private var agentService: SearchOpsAgentService? {
-        if let existing = _agentService {
-            return existing
-        }
-        guard let llmService = llmService else { return nil }
-        let contextProvider = SearchOpsContextProviderImpl(coordinator: self)
-        let service = SearchOpsAgentService(
-            llmFacade: llmService.llmFacade,
-            contextProvider: contextProvider,
-            settingsStore: settingsStore
-        )
-        _agentService = service
-        return service
+        pipelineCoordinator.getOrCreateAgentService()
     }
 
-    // MARK: - LLM Agent Operations
+    // MARK: - LLM Agent Operations (delegated to sub-coordinators)
 
     /// Generate today's tasks using LLM agent
     func generateDailyTasks(focusArea: String = "balanced") async throws {
         guard let agent = agentService else {
             throw SearchOpsLLMError.toolExecutionFailed("Agent service not configured")
         }
-
-        let result = try await agent.generateDailyTasks(focusArea: focusArea)
-
-        // Clear existing LLM-generated tasks for today
-        for task in dailyTaskStore.todaysTasks where task.isLLMGenerated {
-            dailyTaskStore.delete(task)
-        }
-
-        // Convert and add new tasks
-        let tasks = result.tasks.map { $0.toDailyTask() }
-        dailyTaskStore.addMultiple(tasks)
-
-        Logger.info("✅ Generated \(tasks.count) daily tasks", category: .ai)
+        try await pipelineCoordinator.generateDailyTasks(using: agent, focusArea: focusArea)
     }
 
     /// Discover new job sources using LLM agent
@@ -323,21 +205,12 @@ final class SearchOpsCoordinator {
         guard let agent = agentService else {
             throw SearchOpsLLMError.toolExecutionFailed("Agent service not configured")
         }
-
         let prefs = preferencesStore.current()
-        let result = try await agent.discoverJobSources(
+        try await networkingCoordinator.discoverJobSources(
+            using: agent,
             sectors: prefs.targetSectors,
             location: prefs.primaryLocation
         )
-
-        // Filter duplicates and add new sources
-        let newSources = result.sources.filter { generated in
-            !jobSourceStore.exists(url: generated.url)
-        }.map { $0.toJobSource() }
-
-        jobSourceStore.addMultiple(newSources)
-
-        Logger.info("✅ Discovered \(newSources.count) new job sources", category: .ai)
     }
 
     /// Discover networking events using LLM agent
@@ -345,22 +218,13 @@ final class SearchOpsCoordinator {
         guard let agent = agentService else {
             throw SearchOpsLLMError.toolExecutionFailed("Agent service not configured")
         }
-
         let prefs = preferencesStore.current()
-        let result = try await agent.discoverNetworkingEvents(
+        try await networkingCoordinator.discoverNetworkingEvents(
+            using: agent,
             sectors: prefs.targetSectors,
             location: prefs.primaryLocation,
             daysAhead: daysAhead
         )
-
-        // Filter duplicates and add new events
-        let newEvents = eventStore.filterNew(
-            result.events.map { $0.toNetworkingEventOpportunity() }
-        )
-
-        eventStore.addMultiple(newEvents)
-
-        Logger.info("✅ Discovered \(newEvents.count) new events", category: .ai)
     }
 
     /// Evaluate an event for attendance using LLM agent
@@ -368,20 +232,7 @@ final class SearchOpsCoordinator {
         guard let agent = agentService else {
             throw SearchOpsLLMError.toolExecutionFailed("Agent service not configured")
         }
-
-        let result = try await agent.evaluateEvent(eventId: event.id)
-
-        // Update event with evaluation
-        event.llmRecommendation = result.attendanceRecommendation
-        event.llmRationale = result.rationale
-        event.expectedValue = result.expectedValue
-        event.concerns = result.concerns
-        event.status = .evaluating
-        eventStore.update(event)
-
-        Logger.info("✅ Evaluated event: \(event.name) - \(result.recommendation)", category: .ai)
-
-        return result
+        return try await networkingCoordinator.evaluateEvent(event, using: agent)
     }
 
     /// Generate an elevator pitch for an event using LLM agent
@@ -389,14 +240,7 @@ final class SearchOpsCoordinator {
         guard let agent = agentService else {
             throw SearchOpsLLMError.toolExecutionFailed("Agent service not configured")
         }
-
-        let result = try await agent.prepareForEvent(
-            eventId: event.id,
-            focusCompanies: [],
-            goals: nil
-        )
-
-        return result.pitchScript
+        return try await networkingCoordinator.generateEventPitch(for: event, using: agent)
     }
 
     /// Prepare for an event using LLM agent
@@ -404,33 +248,12 @@ final class SearchOpsCoordinator {
         guard let agent = agentService else {
             throw SearchOpsLLMError.toolExecutionFailed("Agent service not configured")
         }
-
-        let result = try await agent.prepareForEvent(
-            eventId: event.id,
+        return try await networkingCoordinator.prepareForEvent(
+            event,
             focusCompanies: focusCompanies,
-            goals: goals
+            goals: goals,
+            using: agent
         )
-
-        // Update event with prep materials
-        event.goal = result.goal
-        event.pitchScript = result.pitchScript
-
-        // Encode talking points and target companies as JSON
-        let encoder = JSONEncoder()
-        if let talkingPointsData = try? encoder.encode(result.talkingPoints.map { $0.toTalkingPoint() }) {
-            event.talkingPointsJSON = String(data: talkingPointsData, encoding: .utf8)
-        }
-        if let targetCompaniesData = try? encoder.encode(result.targetCompanies.map { $0.toTargetCompanyContext() }) {
-            event.targetCompaniesJSON = String(data: targetCompaniesData, encoding: .utf8)
-        }
-
-        event.conversationStarters = result.conversationStarters
-        event.thingsToAvoid = result.thingsToAvoid
-        eventStore.update(event)
-
-        Logger.info("✅ Prepared for event: \(event.name)", category: .ai)
-
-        return result
     }
 
     /// Generate weekly reflection using LLM agent
@@ -438,12 +261,7 @@ final class SearchOpsCoordinator {
         guard let agent = agentService else {
             throw SearchOpsLLMError.toolExecutionFailed("Agent service not configured")
         }
-
-        let reflection = try await agent.generateWeeklyReflection()
-
-        weeklyGoalStore.setReflection(reflection)
-
-        Logger.info("✅ Generated weekly reflection", category: .ai)
+        try await pipelineCoordinator.generateWeeklyReflection(using: agent)
     }
 
     /// Suggest networking actions using LLM agent
@@ -451,12 +269,7 @@ final class SearchOpsCoordinator {
         guard let agent = agentService else {
             throw SearchOpsLLMError.toolExecutionFailed("Agent service not configured")
         }
-
-        let result = try await agent.suggestNetworkingActions(focus: focus)
-
-        Logger.info("✅ Suggested \(result.actions.count) networking actions", category: .ai)
-
-        return result
+        return try await networkingCoordinator.suggestNetworkingActions(focus: focus, using: agent)
     }
 
     /// Draft an outreach message using LLM agent
@@ -469,17 +282,13 @@ final class SearchOpsCoordinator {
         guard let agent = agentService else {
             throw SearchOpsLLMError.toolExecutionFailed("Agent service not configured")
         }
-
-        let result = try await agent.draftOutreachMessage(
-            contactId: contact.id,
+        return try await networkingCoordinator.draftOutreachMessage(
+            contact: contact,
             purpose: purpose,
             channel: channel,
-            tone: tone
+            tone: tone,
+            using: agent
         )
-
-        Logger.info("✅ Drafted outreach message for: \(contact.displayName)", category: .ai)
-
-        return result
     }
 
     /// Run a conversational agent with custom prompt
@@ -487,14 +296,14 @@ final class SearchOpsCoordinator {
         guard let agent = agentService else {
             throw SearchOpsLLMError.toolExecutionFailed("Agent service not configured")
         }
-
-        return try await agent.runAgent(
+        return try await pipelineCoordinator.runAgent(
+            using: agent,
             systemPrompt: systemPrompt,
             userMessage: userMessage
         )
     }
 
-    // MARK: - Contact Workflow Helpers
+    // MARK: - Contact Workflow Helpers (delegated to networking coordinator)
 
     func recordContactInteraction(
         _ contact: NetworkingContact,
@@ -505,27 +314,15 @@ final class SearchOpsCoordinator {
         followUpAction: String? = nil,
         followUpDate: Date? = nil
     ) {
-        let interaction = NetworkingInteraction(contactId: contact.id, type: type)
-        interaction.notes = notes
-        interaction.outcome = outcome
-        interaction.followUpNeeded = followUpNeeded
-        interaction.followUpAction = followUpAction
-        interaction.followUpDate = followUpDate
-        interactionStore.add(interaction)
-
-        // Update contact
-        contactStore.recordInteraction(contact, type: type.rawValue)
-
-        // Upgrade warmth if positive outcome
-        if outcome == .positive || outcome == .referralOffered || outcome == .introOffered {
-            if contact.warmth != .hot {
-                contactStore.updateWarmth(contact, to: .hot)
-            }
-        }
-
-        // Track follow-ups
-        if type.isOutbound {
-            weeklyGoalStore.incrementFollowUpsSent()
-        }
+        networkingCoordinator.recordContactInteraction(
+            contact,
+            type: type,
+            notes: notes,
+            outcome: outcome,
+            followUpNeeded: followUpNeeded,
+            followUpAction: followUpAction,
+            followUpDate: followUpDate,
+            weeklyGoalStore: weeklyGoalStore
+        )
     }
 }

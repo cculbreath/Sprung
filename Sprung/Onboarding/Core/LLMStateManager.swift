@@ -223,6 +223,10 @@ actor LLMStateManager {
     func hasPendingToolResponses() -> Bool {
         !pendingToolResponsePayloads.isEmpty
     }
+    /// Get the current retry count for pending tool responses (for exponential backoff calculation)
+    func getPendingToolResponseRetryCount() -> Int {
+        pendingToolResponseRetryCount
+    }
     /// Clear pending tool responses (call after successful acknowledgment)
     func clearPendingToolResponses() {
         if !pendingToolResponsePayloads.isEmpty {

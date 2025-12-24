@@ -11,6 +11,7 @@ extension ExperienceDefaultsDraft {
     }
     private mutating func setEnabled(_ isEnabled: Bool, for key: ExperienceSectionKey) {
         switch key {
+        case .summary: isSummaryEnabled = isEnabled
         case .work: isWorkEnabled = isEnabled
         case .volunteer: isVolunteerEnabled = isEnabled
         case .education: isEducationEnabled = isEnabled
@@ -27,6 +28,7 @@ extension ExperienceDefaultsDraft {
     }
     private func isEnabled(for key: ExperienceSectionKey) -> Bool {
         switch key {
+        case .summary: return isSummaryEnabled
         case .work: return isWorkEnabled
         case .volunteer: return isVolunteerEnabled
         case .education: return isEducationEnabled

@@ -39,9 +39,7 @@ struct UpdateDossierNotesTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
-        guard let notes = params["notes"].string else {
-            throw ToolError.invalidParameters("notes must be provided")
-        }
+        let notes = try ToolResultHelpers.requireString(params["notes"].string, named: "notes")
 
         let shouldAppend = params["append"].boolValue
 

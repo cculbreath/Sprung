@@ -22,15 +22,13 @@ struct GetContextPackTool: InterviewTool {
     func execute(_ params: JSON) async throws -> ToolResult {
         let hasBatchInProgress = await MainActor.run { coordinator.ui.hasBatchUploadInProgress }
         if hasBatchInProgress {
-            throw ToolError.executionFailed(
+            return ToolResultHelpers.executionFailed(
                 "Cannot call get_context_pack while document uploads are in progress. " +
                 "Wait for the user to finish uploading and click 'Done with uploads', then try again."
             )
         }
 
-        guard let purpose = params["purpose"].string else {
-            throw ToolError.invalidParameters("purpose is required")
-        }
+        let purpose = try ToolResultHelpers.requireString(params["purpose"].string, named: "purpose")
 
         let maxChars = params["max_chars"].int ?? 3000
         let cardId = params["card_id"].string
@@ -49,7 +47,7 @@ struct GetContextPackTool: InterviewTool {
         case "gap_analysis":
             response["pack"] = await buildGapAnalysisPack(maxChars: maxChars)
         default:
-            throw ToolError.invalidParameters("Unknown purpose: \(purpose)")
+            return ToolResultHelpers.invalidParameters("Unknown purpose: \(purpose). Valid values: timeline_review, artifact_overview, card_context, gap_analysis")
         }
 
         return .immediate(response)

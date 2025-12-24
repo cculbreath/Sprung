@@ -45,7 +45,9 @@ struct ListArtifactsTool: InterviewTool {
             artifacts.append(entry)
         }
 
+        // Use paginatedResponse helper, but need to add status and rename artifacts to match expected format
         var response = JSON()
+        response["success"].bool = true
         response["status"].string = "completed"
         response["total"].int = totalCount
         response["offset"].int = offset

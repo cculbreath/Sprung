@@ -303,8 +303,7 @@ class ResumeReviseViewModel {
                     jsonSchema: ResumeApiQuery.revNodeArraySchema
                 )
 
-                self.currentConversationId = result.conversationId
-                self.currentModelId = modelId
+                workflowState.setConversationContext(conversationId: result.conversationId, modelId: modelId)
                 revisions = result.revisions
 
             } else {
@@ -316,8 +315,7 @@ class ResumeReviseViewModel {
                     modelId: modelId
                 )
 
-                self.currentConversationId = conversationId
-                self.currentModelId = modelId
+                workflowState.setConversationContext(conversationId: conversationId, modelId: modelId)
 
                 revisions = try await llm.continueConversationStructured(
                     userMessage: "Please provide the revision suggestions in the specified JSON format.",

@@ -15,14 +15,14 @@ struct GetArtifactRecordTool: InterviewTool {
     var description: String { "Retrieve artifact summary and metadata. Full content is processed by KC agents, not the coordinator." }
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {
-        guard let artifactId = params["artifact_id"].string?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !artifactId.isEmpty else {
-            throw ToolError.invalidParameters("artifact_id is required and must be non-empty.")
-        }
+        let artifactId = try ToolResultHelpers.requireString(
+            params["artifact_id"].string?.trimmingCharacters(in: .whitespacesAndNewlines),
+            named: "artifact_id"
+        )
 
         // Get artifact record from coordinator state
         guard let artifact = await coordinator.getArtifactRecord(id: artifactId) else {
-            throw ToolError.executionFailed("No artifact found with ID: \(artifactId)")
+            return ToolResultHelpers.executionFailed("No artifact found with ID: \(artifactId)")
         }
 
         // Return summary only - coordinator doesn't need full content or metadata

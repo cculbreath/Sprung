@@ -11,17 +11,18 @@ struct SetObjectiveStatusTool: InterviewTool {
     var description: String { "Update objective status (atomic operation - call alone, no assistant message). Returns {objective_id, status, updated}. Silent background operation." }
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {
-        guard let objectiveId = params["objective_id"].string, !objectiveId.isEmpty else {
-            throw ToolError.invalidParameters("objective_id must be provided")
-        }
+        let objectiveId = try ToolResultHelpers.requireString(params["objective_id"].string, named: "objective_id")
+
         guard let status = params["status"].string?.lowercased() else {
-            throw ToolError.invalidParameters("status must be provided")
+            throw ToolError.missingField("status")
         }
+
         // Validate status value
         let validStatuses = ["pending", "in_progress", "completed", "skipped"]
         guard validStatuses.contains(status) else {
-            throw ToolError.invalidParameters("Invalid status: \(status). Must be one of: pending, in_progress, completed, skipped")
+            throw ToolError.invalidEnum(field: "status", value: status, validValues: validStatuses)
         }
+
         // Extract optional metadata
         let notes = params["notes"].string
         var details: [String: String] = [:]

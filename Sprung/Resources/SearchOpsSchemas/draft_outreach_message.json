@@ -1,0 +1,32 @@
+{
+  "type": "object",
+  "description": "Generate a personalized outreach message for a networking contact.",
+  "properties": {
+    "contact_name": {
+      "type": "string"
+    },
+    "contact_company": {
+      "type": "string"
+    },
+    "contact_title": {
+      "type": "string"
+    },
+    "relationship_context": {
+      "type": "string",
+      "description": "How you know them"
+    },
+    "message_type": {
+      "type": "string",
+      "enum": ["linkedin_connection", "follow_up", "thank_you", "ask_for_intro", "check_in", "congratulate", "share_content"]
+    },
+    "desired_outcome": {
+      "type": "string",
+      "description": "What you want from this"
+    },
+    "additional_context": {
+      "type": "string",
+      "description": "Any extra context to include"
+    }
+  },
+  "required": ["contact_name", "message_type"]
+}

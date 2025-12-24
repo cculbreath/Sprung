@@ -1,0 +1,34 @@
+{
+  "type": "object",
+  "properties": {
+    "recommendation": {
+      "type": "string",
+      "enum": ["strong_yes", "yes", "maybe", "skip"]
+    },
+    "confidence_score": {
+      "type": "number",
+      "description": "0.0-1.0"
+    },
+    "rationale": {
+      "type": "string"
+    },
+    "expected_value": {
+      "type": "string",
+      "description": "What you might gain"
+    },
+    "concerns": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "suggested_goal": {
+      "type": "string",
+      "description": "Specific goal for attending"
+    },
+    "preparation_needed": {
+      "type": "string"
+    }
+  },
+  "required": ["recommendation", "rationale", "expected_value"]
+}

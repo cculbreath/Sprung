@@ -1,0 +1,35 @@
+{
+  "type": "object",
+  "properties": {
+    "contact_id": {
+      "type": "string"
+    },
+    "contact_name": {
+      "type": "string"
+    },
+    "action_type": {
+      "type": "string",
+      "enum": ["reconnect", "follow_up", "congratulate", "share_content", "ask_for_intro", "offer_help", "check_in"]
+    },
+    "suggestion": {
+      "type": "string",
+      "description": "What to do"
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Why this action"
+    },
+    "draft_message": {
+      "type": "string",
+      "description": "Optional message draft"
+    },
+    "priority": {
+      "type": "string",
+      "enum": ["urgent", "high", "medium", "low"]
+    },
+    "estimated_time_minutes": {
+      "type": "integer"
+    }
+  },
+  "required": ["contact_id", "contact_name", "action_type", "suggestion", "priority"]
+}

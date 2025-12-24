@@ -40,9 +40,8 @@ struct PersistDataTool: InterviewTool {
         self.eventBus = eventBus
     }
     func execute(_ params: JSON) async throws -> ToolResult {
-        guard let dataType = params["dataType"].string, !dataType.isEmpty else {
-            throw ToolError.invalidParameters("dataType must be a non-empty string")
-        }
+        let dataType = try ToolResultHelpers.requireString(params["dataType"].string, named: "dataType")
+
         let payload = params["data"]
         guard payload != .null, payload.type != .null else {
             throw ToolError.invalidParameters("Missing required 'data' parameter. You must include the actual content to persist as a JSON object in the 'data' field. For candidate_dossier, include the full dossier content: {\"dataType\": \"candidate_dossier\", \"data\": {\"headline\": \"...\", \"summary\": \"...\", ...}}")
@@ -51,14 +50,21 @@ struct PersistDataTool: InterviewTool {
             let identifier = try await dataStore.persist(dataType: dataType, payload: payload)
             // Emit domain-specific events after successful persist
             await emitDomainEvent(for: dataType, payload: payload)
-            var response = JSON()
-            response["status"].string = "completed"
-            response["persisted"]["id"].string = identifier
-            response["persisted"]["type"].string = dataType
-            response["persisted"]["status"].string = "created"
-            return .immediate(response)
+
+            var persistedData = JSON()
+            persistedData["id"].string = identifier
+            persistedData["type"].string = dataType
+            persistedData["status"].string = "created"
+
+            var additionalData = JSON()
+            additionalData["persisted"] = persistedData
+
+            return ToolResultHelpers.statusResponse(
+                status: "completed",
+                additionalData: additionalData
+            )
         } catch {
-            return .error(.executionFailed("Failed to persist data: \(error.localizedDescription)"))
+            return ToolResultHelpers.executionFailed("Failed to persist data: \(error.localizedDescription)")
         }
     }
     // MARK: - Domain Event Emission

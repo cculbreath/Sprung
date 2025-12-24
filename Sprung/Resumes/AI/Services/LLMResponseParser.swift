@@ -62,18 +62,53 @@ struct LLMResponseParser {
         ]))
     }
     /// Extract JSON from text that may contain other content
-    /// Handles code blocks (```json) and standalone JSON objects
+    /// Handles code blocks (```json) and standalone JSON objects/arrays
+    /// Uses multiple fallback strategies for robust extraction
     /// - Parameter text: Raw text potentially containing JSON
     /// - Returns: Extracted JSON string
     private static func extractJSONFromText(_ text: String) -> String {
-        // Look for JSON between code blocks
+        // Strategy 1: Look for JSON between markdown code blocks (```json...```)
         if let range = text.range(of: "```json") {
             let afterStart = text[range.upperBound...]
             if let endRange = afterStart.range(of: "```") {
                 return String(afterStart[..<endRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
             }
         }
-        // Look for standalone JSON object
+
+        // Strategy 2: Look for JSON between generic code blocks (```...```)
+        if let range = text.range(of: "```") {
+            let afterStart = text[range.upperBound...]
+            if let endRange = afterStart.range(of: "```") {
+                let extracted = String(afterStart[..<endRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+                // Only return if it looks like JSON (starts with { or [)
+                if extracted.hasPrefix("{") || extracted.hasPrefix("[") {
+                    return extracted
+                }
+            }
+        }
+
+        // Strategy 3: Try regex patterns for more complex scenarios
+        let patterns = [
+            "```json\\s*([\\s\\S]*?)```",  // JSON code block with capture group
+            "```([\\s\\S]*?)```",           // Generic code block with capture group
+            "\\{[\\s\\S]*\\}"               // Standalone JSON object
+        ]
+
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+               let match = regex.firstMatch(in: text, options: [], range: NSRange(text.startIndex..., in: text)) {
+                let extractedRange = match.range(at: 1).location != NSNotFound ? match.range(at: 1) : match.range(at: 0)
+                if let swiftRange = Range(extractedRange, in: text) {
+                    let extractedText = String(text[swiftRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    // Validate it looks like JSON before returning
+                    if extractedText.hasPrefix("{") || extractedText.hasPrefix("[") {
+                        return extractedText
+                    }
+                }
+            }
+        }
+
+        // Strategy 4: Look for standalone JSON object using brace counting
         if let startRange = text.range(of: "{") {
             var braceCount = 1
             var index = text.index(after: startRange.lowerBound)
@@ -91,6 +126,27 @@ struct LLMResponseParser {
                 return String(text[jsonRange])
             }
         }
+
+        // Strategy 5: Look for standalone JSON array using bracket counting
+        if let startRange = text.range(of: "[") {
+            var bracketCount = 1
+            var index = text.index(after: startRange.lowerBound)
+            while index < text.endIndex && bracketCount > 0 {
+                let char = text[index]
+                if char == "[" {
+                    bracketCount += 1
+                } else if char == "]" {
+                    bracketCount -= 1
+                }
+                index = text.index(after: index)
+            }
+            if bracketCount == 0 {
+                let jsonRange = startRange.lowerBound..<index
+                return String(text[jsonRange])
+            }
+        }
+
+        // Fallback: return original text
         return text
     }
 }

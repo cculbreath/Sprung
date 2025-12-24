@@ -1,0 +1,61 @@
+{
+  "type": "object",
+  "description": "Analyze network health and suggest specific actions to maintain and strengthen relationships.",
+  "properties": {
+    "contacts": {
+      "type": "array",
+      "description": "Current contacts with relationship status",
+      "items": {
+        "type": "object",
+        "properties": {
+          "contact_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "company": {
+            "type": "string"
+          },
+          "warmth": {
+            "type": "string",
+            "enum": ["hot", "warm", "cold", "dormant"]
+          },
+          "days_since_contact": {
+            "type": "integer"
+          },
+          "has_offered_help": {
+            "type": "boolean"
+          },
+          "is_at_target_company": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "target_companies": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "upcoming_events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "required": ["contacts"]
+}

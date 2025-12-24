@@ -22,17 +22,19 @@ struct RequestEvidenceTool: InterviewTool {
     var description: String { "Request specific evidence from the user to verify a timeline entry." }
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {
-        guard let timelineEntryId = params["timeline_entry_id"].string, !timelineEntryId.isEmpty else {
-            throw ToolError.invalidParameters("timeline_entry_id must be provided")
-        }
-        guard let description = params["description"].string, !description.isEmpty else {
-            throw ToolError.invalidParameters("description must be provided")
-        }
+        let timelineEntryId = try ToolResultHelpers.requireString(params["timeline_entry_id"].string, named: "timeline_entry_id")
+        let description = try ToolResultHelpers.requireString(params["description"].string, named: "description")
+
         guard let categoryString = params["category"].string else {
-            throw ToolError.invalidParameters("category must be provided")
+            throw ToolError.missingField("category")
         }
+
         guard let category = EvidenceRequirement.EvidenceCategory(rawValue: categoryString) else {
-            throw ToolError.invalidParameters("Invalid category: \(categoryString). Must be one of: paper, code, website, portfolio, degree, other")
+            throw ToolError.invalidEnum(
+                field: "category",
+                value: categoryString,
+                validValues: ["paper", "code", "website", "portfolio", "degree", "other"]
+            )
         }
         let requirement = EvidenceRequirement(
             timelineEntryId: timelineEntryId,

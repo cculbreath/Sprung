@@ -2,8 +2,9 @@
 //  JobLeadStore.swift
 //  Sprung
 //
-//  Store for managing job leads in the application pipeline.
+//  Store for managing job applications in the SearchOps pipeline.
 //  Provides CRUD operations and pipeline stage management.
+//  Now uses JobApp model instead of deprecated JobLead.
 //
 
 import Foundation
@@ -20,22 +21,22 @@ final class JobLeadStore {
 
     // MARK: - Queries
 
-    var allLeads: [JobLead] {
-        let descriptor = FetchDescriptor<JobLead>(
+    var allLeads: [JobApp] {
+        let descriptor = FetchDescriptor<JobApp>(
             sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
         )
         return (try? context.fetch(descriptor)) ?? []
     }
 
-    var activeLeads: [JobLead] {
+    var activeLeads: [JobApp] {
         allLeads.filter { $0.isActive }
     }
 
-    func leads(forStage stage: ApplicationStage) -> [JobLead] {
+    func leads(forStage stage: ApplicationStage) -> [JobApp] {
         allLeads.filter { $0.stage == stage }
     }
 
-    func lead(byId id: UUID) -> JobLead? {
+    func lead(byId id: UUID) -> JobApp? {
         allLeads.first { $0.id == id }
     }
 
@@ -64,30 +65,30 @@ final class JobLeadStore {
 
     // MARK: - CRUD
 
-    func add(_ lead: JobLead) {
+    func add(_ lead: JobApp) {
         context.insert(lead)
         try? context.save()
     }
 
-    func addMultiple(_ leads: [JobLead]) {
+    func addMultiple(_ leads: [JobApp]) {
         for lead in leads {
             context.insert(lead)
         }
         try? context.save()
     }
 
-    func update(_ lead: JobLead) {
+    func update(_ lead: JobApp) {
         try? context.save()
     }
 
-    func delete(_ lead: JobLead) {
+    func delete(_ lead: JobApp) {
         context.delete(lead)
         try? context.save()
     }
 
     // MARK: - Stage Management
 
-    func advanceStage(_ lead: JobLead) {
+    func advanceStage(_ lead: JobApp) {
         guard let nextStage = lead.stage.next else { return }
 
         lead.stage = nextStage
@@ -113,7 +114,7 @@ final class JobLeadStore {
         try? context.save()
     }
 
-    func setStage(_ lead: JobLead, to stage: ApplicationStage) {
+    func setStage(_ lead: JobApp, to stage: ApplicationStage) {
         lead.stage = stage
 
         if stage == .accepted || stage == .rejected || stage == .withdrawn {
@@ -123,21 +124,21 @@ final class JobLeadStore {
         try? context.save()
     }
 
-    func reject(_ lead: JobLead, reason: String?) {
+    func reject(_ lead: JobApp, reason: String?) {
         lead.stage = .rejected
         lead.rejectionReason = reason
         lead.closedDate = Date()
         try? context.save()
     }
 
-    func withdraw(_ lead: JobLead, reason: String?) {
+    func withdraw(_ lead: JobApp, reason: String?) {
         lead.stage = .withdrawn
         lead.withdrawalReason = reason
         lead.closedDate = Date()
         try? context.save()
     }
 
-    func recordInterview(_ lead: JobLead, notes: String?) {
+    func recordInterview(_ lead: JobApp, notes: String?) {
         lead.interviewCount += 1
         lead.lastInterviewDate = Date()
         if lead.firstInterviewDate == nil {
@@ -151,18 +152,18 @@ final class JobLeadStore {
 
     // MARK: - Priority Management
 
-    func setPriority(_ lead: JobLead, to priority: JobLeadPriority) {
+    func setPriority(_ lead: JobApp, to priority: JobLeadPriority) {
         lead.priority = priority
         try? context.save()
     }
 
     // MARK: - Filtering
 
-    var highPriorityLeads: [JobLead] {
+    var highPriorityLeads: [JobApp] {
         activeLeads.filter { $0.priority == .high }
     }
 
-    var needsAction: [JobLead] {
+    var needsAction: [JobApp] {
         activeLeads.filter { lead in
             // Leads that have been stale for too long
             switch lead.stage {

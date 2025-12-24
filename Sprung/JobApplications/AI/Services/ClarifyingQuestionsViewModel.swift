@@ -123,9 +123,9 @@ class ClarifyingQuestionsViewModel {
                     }
                 }
                 cancelActiveStreaming()
-                // Parse the JSON response
+                // Parse the JSON response using shared parser
                 let responseText = jsonResponse.isEmpty ? fullResponse : jsonResponse
-                let questionsRequest = try parseJSONFromText(responseText, as: ClarifyingQuestionsRequest.self)
+                let questionsRequest = try LLMResponseParser.parseJSON(responseText, as: ClarifyingQuestionsRequest.self)
                 // Continue with the parsed questions
                 await handleClarifyingQuestionsResponse(questionsRequest, resume: resume, modelId: modelId)
             } else {
@@ -356,61 +356,6 @@ class ClarifyingQuestionsViewModel {
         }
         prompt += "Please provide the revision suggestions in the specified JSON format."
         return prompt
-    }
-    /// Parse JSON from text content with fallback strategies
-    private func parseJSONFromText<T: Codable>(_ text: String, as type: T.Type) throws -> T {
-        Logger.debug("🔍 Attempting to parse JSON from text: \(text.prefix(500))...")
-        // First try direct parsing if the entire text is JSON
-        if let jsonData = text.data(using: .utf8) {
-            do {
-                let result = try JSONDecoder().decode(type, from: jsonData)
-                Logger.info("✅ Direct JSON parsing successful")
-                return result
-            } catch {
-                Logger.debug("❌ Direct JSON parsing failed: \(error)")
-            }
-        }
-        // Try to extract JSON from text (look for JSON between ```json and ``` or just {...})
-        let cleanedText = extractJSONFromText(text)
-        if let jsonData = cleanedText.data(using: .utf8) {
-            do {
-                let result = try JSONDecoder().decode(type, from: jsonData)
-                Logger.info("✅ Extracted JSON parsing successful")
-                return result
-            } catch {
-                Logger.debug("❌ Extracted JSON parsing failed: \(error)")
-            }
-        }
-        throw LLMError.decodingFailed(NSError(domain: "ClarifyingQuestionsViewModel", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not parse JSON from response"]))
-    }
-    /// Extract JSON from text that may contain other content
-    private func extractJSONFromText(_ text: String) -> String {
-        // Look for JSON between code blocks
-        if let range = text.range(of: "```json") {
-            let afterStart = text[range.upperBound...]
-            if let endRange = afterStart.range(of: "```") {
-                return String(afterStart[..<endRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-        }
-        // Look for standalone JSON object
-        if let startRange = text.range(of: "{") {
-            var braceCount = 1
-            var index = text.index(after: startRange.lowerBound)
-            while index < text.endIndex && braceCount > 0 {
-                let char = text[index]
-                if char == "{" {
-                    braceCount += 1
-                } else if char == "}" {
-                    braceCount -= 1
-                }
-                index = text.index(after: index)
-            }
-            if braceCount == 0 {
-                let jsonRange = startRange.lowerBound..<index
-                return String(text[jsonRange])
-            }
-        }
-        return text
     }
 }
 // MARK: - Error Types

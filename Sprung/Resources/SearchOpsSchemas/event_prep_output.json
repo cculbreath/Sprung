@@ -1,0 +1,88 @@
+{
+  "type": "object",
+  "properties": {
+    "suggested_goal": {
+      "type": "string",
+      "description": "Specific, measurable goal"
+    },
+    "pitch_30_seconds": {
+      "type": "string",
+      "description": "30-second intro pitch"
+    },
+    "pitch_60_seconds": {
+      "type": "string",
+      "description": "60-second detailed pitch"
+    },
+    "talking_points": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "type": "string"
+          },
+          "relevance": {
+            "type": "string"
+          },
+          "your_angle": {
+            "type": "string"
+          },
+          "transition_phrase": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "target_company_context": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "company": {
+            "type": "string"
+          },
+          "why_relevant": {
+            "type": "string"
+          },
+          "recent_news": {
+            "type": "string"
+          },
+          "currently_hiring": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "possible_openers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "conversation_starters": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "questions_to_ask": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "things_to_avoid": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "logistics_notes": {
+      "type": "string"
+    }
+  },
+  "required": ["suggested_goal", "pitch_30_seconds", "conversation_starters"]
+}

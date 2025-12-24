@@ -1,0 +1,30 @@
+{
+  "type": "object",
+  "description": "Generate a list of job sources relevant to the candidate's target sectors and location. Returns URLs for job boards, company career pages, and industry-specific resources.",
+  "properties": {
+    "sectors": {
+      "type": "array",
+      "description": "Target sectors to find sources for (e.g., 'Robotics', 'Aerospace', 'Semiconductors')",
+      "items": {
+        "type": "string"
+      }
+    },
+    "location": {
+      "type": "string",
+      "description": "Primary location for job search (e.g., 'Austin, TX')"
+    },
+    "include_remote": {
+      "type": "boolean",
+      "description": "Include remote job sources"
+    },
+    "exclude_categories": {
+      "type": "array",
+      "description": "Categories to exclude (e.g., 'staffing')",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": ["sectors", "location"],
+  "additionalProperties": false
+}

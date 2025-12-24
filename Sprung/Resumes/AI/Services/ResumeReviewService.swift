@@ -407,53 +407,8 @@ class ResumeReviewService: @unchecked Sendable {
                 }
             }
         }
-        // Parse the JSON response
+        // Parse the JSON response using shared parser
         let responseText = jsonResponse.isEmpty ? fullResponse : jsonResponse
-        return try parseJSONFromText(responseText, as: T.self)
-    }
-    /// Parse JSON from text content with fallback strategies
-    @MainActor
-    private func parseJSONFromText<T: Codable>(_ text: String, as type: T.Type) throws -> T {
-        Logger.debug("🔍 Attempting to parse JSON from text: \(text.prefix(500))...")
-        // First try direct parsing if the entire text is JSON
-        if let jsonData = text.data(using: .utf8) {
-            do {
-                let result = try JSONDecoder().decode(type, from: jsonData)
-                Logger.info("✅ Direct JSON parsing successful")
-                return result
-            } catch {
-                Logger.debug("❌ Direct parsing failed: \(error)")
-            }
-        }
-        // Try to extract JSON from markdown code blocks
-        let patterns = [
-            "```json\\s*([\\s\\S]*?)```",
-            "```([\\s\\S]*?)```",
-            "\\{[\\s\\S]*\\}"
-        ]
-        for pattern in patterns {
-            if let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
-               let match = regex.firstMatch(in: text, options: [], range: NSRange(text.startIndex..., in: text)) {
-                let extractedRange = match.range(at: 1).location != NSNotFound ? match.range(at: 1) : match.range(at: 0)
-                if let swiftRange = Range(extractedRange, in: text) {
-                    let extractedText = String(text[swiftRange]).trimmingCharacters(in: .whitespacesAndNewlines)
-                    if let jsonData = extractedText.data(using: .utf8) {
-                        do {
-                            let result = try JSONDecoder().decode(type, from: jsonData)
-                            Logger.info("✅ Extracted JSON parsing successful with pattern: \(pattern)")
-                            return result
-                        } catch {
-                            Logger.debug("❌ Pattern \(pattern) extraction failed: \(error)")
-                            continue
-                        }
-                    }
-                }
-            }
-        }
-        throw NSError(
-            domain: "ResumeReviewService",
-            code: 1007,
-            userInfo: [NSLocalizedDescriptionKey: "Failed to parse JSON from response text"]
-        )
+        return try LLMResponseParser.parseJSON(responseText, as: T.self)
     }
 }

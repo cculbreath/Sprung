@@ -12,42 +12,49 @@ struct RequestRawArtifactFileTool: InterviewTool {
     var description: String { "Get original file URL for artifact. Returns {status, file_url, filename}. Rarely needed - use get_artifact for text content." }
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {
-        guard let artifactId = params["artifact_id"].string?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !artifactId.isEmpty else {
-            throw ToolError.invalidParameters("artifact_id is required and must be non-empty.")
-        }
+        let artifactId = try ToolResultHelpers.requireString(
+            params["artifact_id"].string?.trimmingCharacters(in: .whitespacesAndNewlines),
+            named: "artifact_id"
+        )
+
         // Get the artifact record to find the file URL
         guard let artifact = await coordinator.getArtifactRecord(id: artifactId) else {
-            var response = JSON()
-            response["status"].string = "completed"
-            response["error"].bool = true
-            response["artifact_id"].string = artifactId
-            response["message"].string = "No artifact found with ID: \(artifactId)"
-            return .immediate(response)
+            var additionalData = JSON()
+            additionalData["error"].bool = true
+            additionalData["artifact_id"].string = artifactId
+            return ToolResultHelpers.statusResponse(
+                status: "completed",
+                message: "No artifact found with ID: \(artifactId)",
+                additionalData: additionalData
+            )
         }
         // Extract file URL from artifact metadata
         let fileURL = artifact["file_url"].string
             ?? artifact["storageUrl"].string
             ?? artifact["url"].string
         guard let fileURL, !fileURL.isEmpty else {
-            var response = JSON()
-            response["status"].string = "completed"
-            response["error"].bool = true
-            response["artifact_id"].string = artifactId
-            response["message"].string = "Artifact does not have an associated file URL."
-            return .immediate(response)
+            var additionalData = JSON()
+            additionalData["error"].bool = true
+            additionalData["artifact_id"].string = artifactId
+            return ToolResultHelpers.statusResponse(
+                status: "completed",
+                message: "Artifact does not have an associated file URL.",
+                additionalData: additionalData
+            )
         }
         // Verify file exists if it's a local file URL
         if let url = URL(string: fileURL), url.isFileURL {
             let fileExists = FileManager.default.fileExists(atPath: url.path)
             if !fileExists {
-                var response = JSON()
-                response["status"].string = "completed"
-                response["error"].bool = true
-                response["artifact_id"].string = artifactId
-                response["file_url"].string = fileURL
-                response["message"].string = "The file referenced by this artifact no longer exists."
-                return .immediate(response)
+                var additionalData = JSON()
+                additionalData["error"].bool = true
+                additionalData["artifact_id"].string = artifactId
+                additionalData["file_url"].string = fileURL
+                return ToolResultHelpers.statusResponse(
+                    status: "completed",
+                    message: "The file referenced by this artifact no longer exists.",
+                    additionalData: additionalData
+                )
             }
         }
         // Return the file information

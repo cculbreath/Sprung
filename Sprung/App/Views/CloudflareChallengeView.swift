@@ -43,6 +43,7 @@ struct CloudflareChallengeView: NSViewRepresentable {
 
     // MARK: Coordinator
 
+    @MainActor
     class Coordinator: NSObject {
         let parent: CloudflareChallengeView
         let navigationHelper: WebViewNavigationHelper

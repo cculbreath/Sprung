@@ -2,46 +2,31 @@
 //  JobLead.swift
 //  Sprung
 //
-//  Model for tracking job leads through the application pipeline.
-//  Represents a potential job opportunity from discovery to outcome.
+//  ⚠️ DEPRECATED: This model has been superseded by JobApp.
+//
+//  This file is kept for backward compatibility with existing SwiftData records.
+//  All new code should use JobApp instead, which unifies job tracking across
+//  the Resume/CoverLetter creation workflow and the SearchOps Kanban pipeline.
+//
+//  Migration Path:
+//  - JobApp now includes all SearchOps properties (stage, priority, dates, etc.)
+//  - JobLeadStore has been updated to use JobApp
+//  - PipelineView has been updated to use JobApp
+//  - Existing JobLead records will remain in the database for backward compatibility
+//  - New records should be created as JobApp instances
+//  - Use `JobApp(from: jobLead)` to convert existing JobLead instances
+//
+//  DO NOT ADD NEW FEATURES TO THIS MODEL.
+//  DO NOT CREATE NEW INSTANCES OF JobLead.
 //
 
 import Foundation
 import SwiftData
 
-/// Priority level for a job lead
-enum JobLeadPriority: String, Codable, CaseIterable {
-    case high = "High"
-    case medium = "Medium"
-    case low = "Low"
-}
+// Note: JobLeadPriority and ApplicationStage are now defined in JobApp.swift
+// This file references those enums to maintain compatibility with existing records.
 
-/// Stage in the application pipeline
-enum ApplicationStage: String, Codable, CaseIterable {
-    case identified = "Identified"
-    case researching = "Researching"
-    case applying = "Applying"
-    case applied = "Applied"
-    case interviewing = "Interviewing"
-    case offer = "Offer"
-    case accepted = "Accepted"
-    case rejected = "Rejected"
-    case withdrawn = "Withdrawn"
-
-    /// Next stage in the progression
-    var next: ApplicationStage? {
-        switch self {
-        case .identified: return .researching
-        case .researching: return .applying
-        case .applying: return .applied
-        case .applied: return .interviewing
-        case .interviewing: return .offer
-        case .offer: return .accepted
-        case .accepted, .rejected, .withdrawn: return nil
-        }
-    }
-}
-
+@available(*, deprecated, message: "Use JobApp instead. JobApp now includes all SearchOps pipeline properties.")
 @Model
 final class JobLead {
     var id: UUID

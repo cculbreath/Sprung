@@ -1,0 +1,27 @@
+{
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Source name (e.g., 'Built In Austin')"
+    },
+    "url": {
+      "type": "string",
+      "description": "Source URL"
+    },
+    "category": {
+      "type": "string",
+      "description": "Category: 'local', 'industry', 'company_direct', 'aggregator', 'startup', 'staffing', 'networking'",
+      "enum": ["local", "industry", "company_direct", "aggregator", "startup", "staffing", "networking"]
+    },
+    "relevance_reason": {
+      "type": "string",
+      "description": "Why this source is relevant"
+    },
+    "recommended_cadence_days": {
+      "type": "integer",
+      "description": "How often to check (days)"
+    }
+  },
+  "required": ["name", "url", "category", "relevance_reason"]
+}

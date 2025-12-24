@@ -136,7 +136,7 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
 
             // Step 1: Gather raw git data
             Logger.info("🔬 [GitIngest] About to call gatherGitData for: \(repoPath)", category: .ai)
-            let gitData = try gatherGitData(repoPath: repoPath)
+            let gitData = try await gatherGitData(repoPath: repoPath)
             let contributorCount = gitData["contributors"].arrayValue.count
             Logger.info("🔬 [GitIngest] gatherGitData completed, contributors: \(contributorCount)", category: .ai)
             await appendTranscript(.system, "Gathered repository metadata", details: "\(contributorCount) contributor(s) found")
@@ -240,34 +240,34 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
 
     // MARK: - Git Data Gathering
 
-    private func gatherGitData(repoPath: String) throws -> JSON {
+    private func gatherGitData(repoPath: String) async throws -> JSON {
         var data = JSON()
 
         // Get contributors
-        let contributors = try runGitCommand(["shortlog", "-sne", "HEAD"], in: repoPath)
+        let contributors = try await runGitCommand(["shortlog", "-sne", "HEAD"], in: repoPath)
         data["contributors"] = parseContributors(contributors)
 
         // Get file types breakdown
-        let files = try runGitCommand(["ls-files"], in: repoPath)
+        let files = try await runGitCommand(["ls-files"], in: repoPath)
         data["file_types"] = parseFileTypes(files)
 
         // Get recent commits (last 50)
-        let commits = try runGitCommand([
+        let commits = try await runGitCommand([
             "log", "--oneline", "-50", "--format=%h|%an|%s"
         ], in: repoPath)
         data["recent_commits"] = parseCommits(commits)
 
         // Get branch info
-        let branches = try runGitCommand(["branch", "-a"], in: repoPath)
+        let branches = try await runGitCommand(["branch", "-a"], in: repoPath)
         data["branches"] = JSON(branches.split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespaces) })
 
         // Get repo stats
-        let totalCommits = try runGitCommand(["rev-list", "--count", "HEAD"], in: repoPath)
+        let totalCommits = try await runGitCommand(["rev-list", "--count", "HEAD"], in: repoPath)
         data["total_commits"].int = Int(totalCommits.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
 
         // Get first and last commit dates
-        let firstCommit = try runGitCommand(["log", "--reverse", "--format=%ci", "-1"], in: repoPath)
-        let lastCommit = try runGitCommand(["log", "--format=%ci", "-1"], in: repoPath)
+        let firstCommit = try await runGitCommand(["log", "--reverse", "--format=%ci", "-1"], in: repoPath)
+        let lastCommit = try await runGitCommand(["log", "--format=%ci", "-1"], in: repoPath)
         data["first_commit"].string = firstCommit.trimmingCharacters(in: .whitespacesAndNewlines)
         data["last_commit"].string = lastCommit.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -326,24 +326,26 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
         return JSON(commits)
     }
 
-    private func runGitCommand(_ args: [String], in directory: String) throws -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-        process.arguments = args
-        process.currentDirectoryURL = URL(fileURLWithPath: directory)
+    private func runGitCommand(_ args: [String], in directory: String) async throws -> String {
+        // Run process in detached task to avoid blocking the actor
+        try await Task.detached {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+            process.arguments = args
+            process.currentDirectoryURL = URL(fileURLWithPath: directory)
 
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = FileHandle.nullDevice
 
-        try process.run()
+            // IMPORTANT: Read output BEFORE waitUntilExit to avoid deadlock
+            // If we wait first, the pipe buffer can fill up and block the process
+            try process.run()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
 
-        // IMPORTANT: Read output BEFORE waitUntilExit to avoid deadlock
-        // If we wait first, the pipe buffer can fill up and block the process
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-
-        return String(data: data, encoding: .utf8) ?? ""
+            return String(data: data, encoding: .utf8) ?? ""
+        }.value
     }
 
     // MARK: - LLM Analysis Agent

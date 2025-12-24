@@ -1,0 +1,33 @@
+{
+  "type": "object",
+  "description": "Search the web for upcoming networking events, meetups, conferences, and professional gatherings relevant to candidate's target sectors and location.",
+  "properties": {
+    "sectors": {
+      "type": "array",
+      "description": "Target sectors to find events for",
+      "items": {
+        "type": "string"
+      }
+    },
+    "location": {
+      "type": "string",
+      "description": "Location for local events"
+    },
+    "days_ahead": {
+      "type": "integer",
+      "description": "How many days ahead to search (default: 14)"
+    },
+    "include_virtual": {
+      "type": "boolean",
+      "description": "Include virtual events (default: true)"
+    },
+    "exclude_event_types": {
+      "type": "array",
+      "description": "Event types to exclude (e.g., 'career_fair')",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": ["sectors", "location"]
+}

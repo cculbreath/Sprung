@@ -26,8 +26,14 @@ struct TemplateTextFilters {
         TextFilterInfo(
             name: "join",
             signature: "join(array, separator)",
-            description: "Joins array elements into a single string using the separator.",
+            description: "Joins array elements into a single string using the separator (defaults to \" · \" if not provided).",
             snippet: "{{ join(skills, \", \") }}"
+        ),
+        TextFilterInfo(
+            name: "joinBullet",
+            signature: "joinBullet(array)",
+            description: "Joins array elements with a middle dot separator (·).",
+            snippet: "{{ joinBullet(skills) }}"
         ),
         TextFilterInfo(
             name: "contactLine",
@@ -42,6 +48,12 @@ struct TemplateTextFilters {
             snippet: "{{{ htmlDecode(position) }}}"
         ),
         TextFilterInfo(
+            name: "htmlStrip",
+            signature: "htmlStrip(text)",
+            description: "Decodes HTML entities and strips all HTML tags.",
+            snippet: "{{{ htmlStrip(description) }}}"
+        ),
+        TextFilterInfo(
             name: "projectLine",
             signature: "projects[].projectLine",
             description: "Precomputed \"Name: Description\" string for each project entry. Useful for wrapping without custom separators.",
@@ -50,19 +62,19 @@ struct TemplateTextFilters {
         TextFilterInfo(
             name: "concatPair",
             signature: "concatPair(first, second, separator?)",
-            description: "Concatenates two values with an optional separator value pulled from context (defaults to a single space).",
+            description: "Concatenates two values with an optional separator (defaults to a single space). Omits empty values gracefully.",
             snippet: "{{ concatPair(name, description) }}"
         ),
         TextFilterInfo(
             name: "bulletList",
             signature: "bulletList(array, width, indent, bullet, valueKey)",
-            description: "Formats an array as bullet points. `valueKey` is optional for dictionary arrays.",
+            description: "Formats an array as bullet points. For dictionary arrays, `valueKey` specifies the field to extract (defaults to \"description\").",
             snippet: "{{{ bulletList(highlights, 72, 2, \"•\") }}}"
         ),
         TextFilterInfo(
             name: "formatDate",
             signature: "formatDate(date, outputFormat, inputFormat)",
-            description: "Formats dates (default input patterns include ISO and yyyy-MM).",
+            description: "Formats dates (default input patterns include ISO and yyyy-MM). Accepts \"present\" as a special case.",
             snippet: "{{ formatDate(start, \"MMM yyyy\") }}"
         ),
         TextFilterInfo(
@@ -70,6 +82,12 @@ struct TemplateTextFilters {
             signature: "uppercase(text)",
             description: "Uppercases the provided text if present.",
             snippet: "{{ uppercase(section-labels.summary) }}"
+        ),
+        TextFilterInfo(
+            name: "hasContent",
+            signature: "hasContent(value1, value2, ...)",
+            description: "Returns true if any of the provided values has displayable content (non-empty strings, non-empty arrays, etc.).",
+            snippet: "{{# hasContent(summary, work) }}Show this block{{/ hasContent }}"
         )
     ]
 }

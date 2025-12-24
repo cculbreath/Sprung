@@ -44,18 +44,22 @@ struct GetValidatedApplicantProfileTool: InterviewTool {
             if let imageData = llmSafeJSON["image"].string, !imageData.isEmpty {
                 llmSafeJSON["image"].string = "[Image uploaded - binary data omitted]"
             }
-            var response = JSON()
-            response["status"].string = "completed"
-            response["found"].bool = true
-            response["data"] = llmSafeJSON
-            response["message"].string = "Retrieved validated applicant profile data"
-            return .immediate(response)
+            var additionalData = JSON()
+            additionalData["found"].bool = true
+            additionalData["data"] = llmSafeJSON
+            return ToolResultHelpers.statusResponse(
+                status: "completed",
+                message: "Retrieved validated applicant profile data",
+                additionalData: additionalData
+            )
         } else {
-            var response = JSON()
-            response["status"].string = "completed"
-            response["found"].bool = false
-            response["message"].string = "No validated applicant profile found. Profile has not been persisted yet."
-            return .immediate(response)
+            var additionalData = JSON()
+            additionalData["found"].bool = false
+            return ToolResultHelpers.statusResponse(
+                status: "completed",
+                message: "No validated applicant profile found. Profile has not been persisted yet.",
+                additionalData: additionalData
+            )
         }
     }
 }

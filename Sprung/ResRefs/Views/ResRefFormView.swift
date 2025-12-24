@@ -129,20 +129,22 @@ struct ResRefFormView: View {
                     showDropError("Unsupported file type: \(url.pathExtension.uppercased()). Please drop a plain text, Markdown, or JSON file.")
                     return
                 }
-                do {
-                    let text = try String(contentsOf: url, encoding: .utf8)
-                    let fileName = url.deletingPathExtension().lastPathComponent
-                    DispatchQueue.main.async {
-                        self.sourceName = fileName
-                        self.sourceContent = text
-                        self.dropErrorMessage = nil
-                        saveRefForm()
-                        resetRefForm()
-                        closePopup()
+                Task.detached {
+                    do {
+                        let text = try String(contentsOf: url, encoding: .utf8)
+                        let fileName = url.deletingPathExtension().lastPathComponent
+                        await MainActor.run {
+                            self.sourceName = fileName
+                            self.sourceContent = text
+                            self.dropErrorMessage = nil
+                            saveRefForm()
+                            resetRefForm()
+                            closePopup()
+                        }
+                    } catch {
+                        Logger.error("❌ Failed to load dropped file as UTF-8 text: \(error.localizedDescription)")
+                        showDropError("Could not read the file using UTF-8 encoding.")
                     }
-                } catch {
-                    Logger.error("❌ Failed to load dropped file as UTF-8 text: \(error.localizedDescription)")
-                    showDropError("Could not read the file using UTF-8 encoding.")
                 }
             }
         }

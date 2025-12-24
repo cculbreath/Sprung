@@ -1,0 +1,63 @@
+{
+  "type": "object",
+  "description": "Generate an insightful weekly reflection based on the week's job search activities, progress toward goals, and outcomes. Provide actionable guidance for the next week.",
+  "properties": {
+    "week_start": {
+      "type": "string",
+      "description": "Week start date (ISO format)"
+    },
+    "applications_submitted": {
+      "type": "integer"
+    },
+    "applications_target": {
+      "type": "integer"
+    },
+    "events_attended": {
+      "type": "integer"
+    },
+    "events_target": {
+      "type": "integer"
+    },
+    "new_contacts": {
+      "type": "integer"
+    },
+    "contacts_target": {
+      "type": "integer"
+    },
+    "follow_ups_sent": {
+      "type": "integer"
+    },
+    "follow_ups_target": {
+      "type": "integer"
+    },
+    "time_spent_minutes": {
+      "type": "integer"
+    },
+    "notable_outcomes": {
+      "type": "array",
+      "description": "Notable events like interviews, referrals, responses",
+      "items": {
+        "type": "string"
+      }
+    },
+    "sources_used": {
+      "type": "array",
+      "description": "Job sources used this week with visit counts",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "visits": {
+            "type": "integer"
+          },
+          "leads_captured": {
+            "type": "integer"
+          }
+        }
+      }
+    }
+  },
+  "required": ["week_start", "applications_submitted", "applications_target"]
+}

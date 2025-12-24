@@ -14,7 +14,7 @@ struct PipelineView: View {
     @State private var selectedStage: ApplicationStage? = nil
     @State private var showingAddLead = false
 
-    private var stages: [(ApplicationStage, [JobLead])] {
+    private var stages: [(ApplicationStage, [JobApp])] {
         ApplicationStage.allCases.compactMap { stage in
             let leads = coordinator.jobLeadStore.leads(forStage: stage)
             guard !leads.isEmpty || stage == .identified else { return nil }
@@ -62,11 +62,11 @@ struct PipelineView: View {
         }
     }
 
-    private func advanceLead(_ lead: JobLead) {
+    private func advanceLead(_ lead: JobApp) {
         coordinator.jobLeadStore.advanceStage(lead)
     }
 
-    private func rejectLead(_ lead: JobLead) {
+    private func rejectLead(_ lead: JobApp) {
         coordinator.jobLeadStore.reject(lead, reason: nil)
     }
 }
@@ -75,9 +75,9 @@ struct PipelineView: View {
 
 struct PipelineStageColumn: View {
     let stage: ApplicationStage
-    let leads: [JobLead]
-    let onAdvance: (JobLead) -> Void
-    let onReject: (JobLead) -> Void
+    let leads: [JobApp]
+    let onAdvance: (JobApp) -> Void
+    let onReject: (JobApp) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -121,7 +121,7 @@ struct PipelineStageColumn: View {
 // MARK: - Lead Card
 
 struct PipelineLeadCard: View {
-    let lead: JobLead
+    let lead: JobApp
     let stage: ApplicationStage
     let onAdvance: () -> Void
     let onReject: () -> Void
@@ -131,12 +131,12 @@ struct PipelineLeadCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Company and Role
-            Text(lead.company)
+            Text(lead.companyName)
                 .font(.headline)
                 .lineLimit(1)
 
-            if let role = lead.role {
-                Text(role)
+            if !lead.jobPosition.isEmpty {
+                Text(lead.jobPosition)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -261,13 +261,24 @@ struct AddLeadView: View {
     }
 
     private func addLead() {
-        let lead = JobLead(
-            company: company,
-            role: role.isEmpty ? nil : role,
-            source: source.isEmpty ? nil : source,
-            url: url.isEmpty ? nil : url,
-            priority: priority
+        let lead = JobApp(
+            jobPosition: role,
+            jobLocation: "",
+            companyName: company,
+            companyLinkedinId: "",
+            jobPostingTime: "",
+            jobDescription: "",
+            seniorityLevel: "",
+            employmentType: "",
+            jobFunction: "",
+            industries: "",
+            jobApplyLink: "",
+            postingURL: url
         )
+        lead.priority = priority
+        lead.source = source.isEmpty ? nil : source
+        lead.stage = .identified
+        lead.identifiedDate = Date()
         if !notes.isEmpty {
             lead.notes = notes
         }

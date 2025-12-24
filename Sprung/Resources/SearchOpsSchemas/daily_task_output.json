@@ -1,0 +1,43 @@
+{
+  "type": "object",
+  "properties": {
+    "task_type": {
+      "type": "string",
+      "description": "Task type",
+      "enum": ["gather", "customize", "apply", "follow_up", "networking", "event_prep", "debrief"]
+    },
+    "title": {
+      "type": "string",
+      "description": "Short task title"
+    },
+    "description": {
+      "type": "string",
+      "description": "Task description"
+    },
+    "priority": {
+      "type": "integer",
+      "description": "Priority (0=low, 1=medium, 2=high)"
+    },
+    "related_job_source_id": {
+      "type": "string",
+      "description": "Related source ID if applicable"
+    },
+    "related_job_app_id": {
+      "type": "string",
+      "description": "Related application ID if applicable"
+    },
+    "related_contact_id": {
+      "type": "string",
+      "description": "Related contact ID if applicable"
+    },
+    "related_event_id": {
+      "type": "string",
+      "description": "Related event ID if applicable"
+    },
+    "estimated_minutes": {
+      "type": "integer",
+      "description": "Estimated time in minutes"
+    }
+  },
+  "required": ["task_type", "title", "priority"]
+}

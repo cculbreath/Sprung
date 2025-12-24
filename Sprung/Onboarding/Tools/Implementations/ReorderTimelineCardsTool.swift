@@ -33,10 +33,13 @@ struct ReorderTimelineCardsTool: InterviewTool {
     var description: String { "Reorder timeline cards. CRITICAL: Must include ALL card IDs - omitted cards are removed. Returns {success, count}." }
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {
-        guard let orderedIds = params["ordered_ids"].array?.compactMap({ $0.string }),
-              !orderedIds.isEmpty else {
-            throw ToolError.invalidParameters("ordered_ids must be a non-empty array of strings")
+        let orderedIdsArray = try ToolResultHelpers.requireNonEmptyArray(params["ordered_ids"].array, named: "ordered_ids")
+
+        let orderedIds = orderedIdsArray.compactMap { $0.string }
+        guard orderedIds.count == orderedIdsArray.count else {
+            throw ToolError.invalidParameters("All elements in ordered_ids must be strings")
         }
+
         // Reorder timeline cards via coordinator (which emits events)
         let result = await coordinator.reorderTimelineCards(orderedIds: orderedIds)
         return .immediate(result)

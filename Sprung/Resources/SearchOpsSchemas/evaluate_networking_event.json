@@ -1,0 +1,82 @@
+{
+  "type": "object",
+  "description": "Analyze a networking event and provide attendance recommendation with rationale.",
+  "properties": {
+    "event": {
+      "type": "object",
+      "description": "Event details to evaluate",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string"
+        },
+        "location": {
+          "type": "string"
+        },
+        "event_type": {
+          "type": "string"
+        },
+        "estimated_attendance": {
+          "type": "string"
+        },
+        "organizer": {
+          "type": "string"
+        },
+        "cost": {
+          "type": "string"
+        },
+        "target_companies_likely": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "candidate_sectors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "target_companies": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "past_event_feedback": {
+      "type": "array",
+      "description": "Aggregated feedback from similar events",
+      "items": {
+        "type": "object",
+        "properties": {
+          "event_type": {
+            "type": "string"
+          },
+          "organizer": {
+            "type": "string"
+          },
+          "average_rating": {
+            "type": "number"
+          },
+          "average_contacts_made": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "calendar_conflict": {
+      "type": "boolean"
+    },
+    "conflict_description": {
+      "type": "string"
+    }
+  },
+  "required": ["event", "candidate_sectors"]
+}

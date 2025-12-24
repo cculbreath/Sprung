@@ -1,0 +1,36 @@
+{
+  "type": "object",
+  "description": "Generate comprehensive preparation materials for an upcoming networking event.",
+  "properties": {
+    "event_name": {
+      "type": "string"
+    },
+    "event_type": {
+      "type": "string"
+    },
+    "event_description": {
+      "type": "string"
+    },
+    "expected_attendees": {
+      "type": "string",
+      "description": "Who typically attends"
+    },
+    "candidate_background": {
+      "type": "string",
+      "description": "Candidate's professional summary"
+    },
+    "target_companies": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "candidate_sectors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": ["event_name", "event_type", "candidate_background"]
+}
