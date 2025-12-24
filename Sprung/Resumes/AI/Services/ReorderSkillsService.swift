@@ -54,6 +54,83 @@ class ReorderSkillsService {
             return .failure(ReorderSkillsError.applyReorderingFailed)
         }
     }
+    // MARK: - Networking Methods
+
+    /// Sends a request to reorder skills based on job relevance
+    /// - Parameters:
+    ///   - resume: The resume containing the skills
+    ///   - modelId: The model to use for skill reordering
+    ///   - onComplete: Completion callback with result
+    func sendReorderSkillsRequest(
+        resume: Resume,
+        modelId: String,
+        onComplete: @escaping (Result<ReorderSkillsResponse, Error>) -> Void
+    ) {
+        guard let jobApp = resume.jobApp else {
+            onComplete(.failure(NSError(
+                domain: "ReorderSkillsService",
+                code: 1010,
+                userInfo: [NSLocalizedDescriptionKey: "No job application associated with this resume."]
+            )))
+            return
+        }
+        Logger.debug("ReorderSkillsService: sendReorderSkillsRequest called (using SkillReorderService)")
+        Task { @MainActor in
+            do {
+                let service = SkillReorderService(llmFacade: llm)
+                let reorderedNodes = try await service.fetchReorderedSkills(
+                    resume: resume,
+                    jobDescription: jobApp.jobDescription,
+                    modelId: modelId
+                )
+                let response = ReorderSkillsResponse(reorderedSkillsAndExpertise: reorderedNodes)
+                onComplete(.success(response))
+            } catch {
+                Logger.error("SkillReorderService error: \(error.localizedDescription)")
+                onComplete(.failure(error))
+            }
+        }
+    }
+
+    /// Apply skill reordering to the resume's tree structure
+    func applySkillReordering(resume: Resume, reorderedNodes: [ReorderedSkillNode]) -> Bool {
+        guard let rootNode = resume.rootNode else {
+            Logger.error("Cannot apply skill reordering: resume has no root node")
+            return false
+        }
+        // Find the skills section
+        guard let skillsSection = rootNode.children?.first(where: {
+            $0.name.lowercased() == "skills-and-expertise" || $0.name.lowercased() == "skills and expertise"
+        }) else {
+            Logger.error("Cannot apply skill reordering: skills section not found")
+            return false
+        }
+        // Get all skill nodes as a mutable array
+        guard var skillNodes = skillsSection.children else {
+            Logger.error("Cannot apply skill reordering: skills section has no children")
+            return false
+        }
+        // Create a map of reordered positions
+        var newPositions: [String: Int] = [:]
+        for reorderedNode in reorderedNodes {
+            newPositions[reorderedNode.id] = reorderedNode.newPosition
+        }
+        // Sort skill nodes according to new positions
+        skillNodes.sort { node1, node2 in
+            let pos1 = newPositions[node1.id] ?? Int.max
+            let pos2 = newPositions[node2.id] ?? Int.max
+            return pos1 < pos2
+        }
+        // Update each node's myIndex to reflect their new position
+        for (index, node) in skillNodes.enumerated() {
+            node.myIndex = index
+        }
+        // Update the skills section with reordered children
+        skillsSection.children = skillNodes
+        Logger.debug("✅ Successfully applied skill reordering: \(reorderedNodes.count) skills reordered")
+        return true
+    }
+
     // MARK: - Private Helper Methods
     private func getReorderSuggestions(resume: Resume, selectedModel: String) async -> Result<ReorderSkillsResponse, Error> {
         await withCheckedContinuation { continuation in

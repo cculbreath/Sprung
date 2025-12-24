@@ -30,7 +30,7 @@ struct LLMFacadeFactory {
     ) -> (facade: LLMFacade, llmService: OpenRouterServiceBackend) {
         let requestExecutor = LLMRequestExecutor()
         let llmService = OpenRouterServiceBackend(requestExecutor: requestExecutor)
-        let client = _SwiftOpenAIClient(executor: requestExecutor)
+        let client = SwiftOpenAIClientWrapper(executor: requestExecutor)
 
         let facade = LLMFacade(
             client: client,

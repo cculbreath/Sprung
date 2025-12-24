@@ -36,7 +36,7 @@ final class DebugSettingsStore {
                 return .debug
             }
         }
-        var swiftOpenAILogLevel: _SwiftOpenAIClient.LogLevel {
+        var swiftOpenAILogLevel: SwiftOpenAIClientWrapper.LogLevel {
             switch self {
             case .quiet:
                 return .quiet
@@ -57,7 +57,7 @@ final class DebugSettingsStore {
         didSet {
             defaults.set(logLevelSetting.rawValue, forKey: Keys.debugLogLevel)
             Logger.updateMinimumLevel(logLevelSetting.loggerLevel)
-            _SwiftOpenAIClient.setLogLevel(logLevelSetting.swiftOpenAILogLevel)
+            SwiftOpenAIClientWrapper.setLogLevel(logLevelSetting.swiftOpenAILogLevel)
         }
     }
     var saveDebugPrompts: Bool {
@@ -86,7 +86,7 @@ final class DebugSettingsStore {
         // Apply persisted settings to the logging facade on initialization.
         Logger.updateMinimumLevel(storedLevel.loggerLevel)
         Logger.updateFileLogging(isEnabled: saveDebugPrompts)
-        _SwiftOpenAIClient.setLogLevel(storedLevel.swiftOpenAILogLevel)
+        SwiftOpenAIClientWrapper.setLogLevel(storedLevel.swiftOpenAILogLevel)
     }
     private enum Keys {
         static let debugLogLevel = "debugLogLevel"

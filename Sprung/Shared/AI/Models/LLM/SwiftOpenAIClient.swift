@@ -10,7 +10,7 @@ import SwiftOpenAI
 /// Implements OpenAILoggerProtocol to route SwiftOpenAI logs through Sprung's centralized Logger
 private class SprungOpenAILogger: OpenAILoggerProtocol {
     func debug(_ message: String) {
-        guard _SwiftOpenAIClient.shouldEmitDebug(message) else { return }
+        guard SwiftOpenAIClientWrapper.shouldEmitDebug(message) else { return }
         // All SwiftOpenAI debug messages should use Sprung's debug level
         // This ensures JSON payloads only appear when user explicitly wants debug detail
         Logger.debug(message, category: .ai)
@@ -24,7 +24,7 @@ private class SprungOpenAILogger: OpenAILoggerProtocol {
 /// - Important: This is an internal implementation type. Use `LLMFacade` as the
 ///   public entry point for LLM operations. Do not instantiate directly outside
 ///   of `LLMFacadeFactory`.
-final class _SwiftOpenAIClient: LLMClient {
+final class SwiftOpenAIClientWrapper: LLMClient {
     // Reuse existing request executor and builders
     private let executor: LLMRequestExecutor
     private let defaultTemperature: Double = 1.0
