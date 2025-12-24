@@ -203,15 +203,17 @@ enum EventTopic: String, CaseIterable {
 actor EventCoordinator {
     // Broadcast continuations: each topic has multiple subscriber continuations
     private var subscriberContinuations: [EventTopic: [UUID: AsyncStream<OnboardingEvent>.Continuation]] = [:]
-    // Event history for debugging
+    #if DEBUG
+    // Event history for debugging (debug builds only)
     private var eventHistory: [OnboardingEvent] = []
-    private let maxHistorySize = 10000  // Large enough to capture full sessions without losing important events
+    private let maxHistorySize = 1000  // Reduced from 10,000 to limit memory usage
     // Streaming consolidation state
     private var lastStreamingMessageId: UUID?
     private var consolidatedStreamingUpdates = 0
     private var consolidatedStreamingChars = 0
     // Metrics
     private var metrics = EventMetrics()
+    #endif
     struct EventMetrics {
         var publishedCount: [EventTopic: Int] = [:]
         var queueDepth: [EventTopic: Int] = [:]
@@ -221,7 +223,9 @@ actor EventCoordinator {
         // Initialize subscriber dictionaries for each topic
         for topic in EventTopic.allCases {
             subscriberContinuations[topic] = [:]
+            #if DEBUG
             metrics.publishedCount[topic] = 0
+            #endif
         }
         Logger.info("📡 EventCoordinator initialized with AsyncStream broadcast architecture", category: .ai)
     }
@@ -283,27 +287,156 @@ actor EventCoordinator {
     /// Publish an event to its appropriate topic
     func publish(_ event: OnboardingEvent) async {
         let topic = extractTopic(from: event)
-        // Log the event
+        #if DEBUG
+        // Log the event (debug builds only)
         logEvent(event)
         // Update metrics
         metrics.publishedCount[topic, default: 0] += 1
         metrics.lastPublishTime[topic] = Date()
         // Add to history with streaming event consolidation
         addToHistoryWithConsolidation(event)
+        #endif
         // Broadcast to ALL subscriber continuations for this topic
         if let continuations = subscriberContinuations[topic] {
+            #if DEBUG
             let subscriberCount = continuations.count
             // Log delivery for timelineUIUpdateNeeded to trace the issue
             if case .timelineUIUpdateNeeded = event {
                 Logger.info("[EventBus] Delivering timelineUIUpdateNeeded to \(subscriberCount) subscriber(s) on topic: \(topic)", category: .ai)
             }
+            #endif
             for continuation in continuations.values {
                 continuation.yield(event)
             }
         } else {
+            #if DEBUG
             Logger.warning("[EventBus] No subscribers for topic: \(topic)", category: .ai)
+            #endif
         }
     }
+    #if DEBUG
+    /// Strip heavy payloads from events before storing in history
+    private func stripHeavyPayloads(_ event: OnboardingEvent) -> OnboardingEvent {
+        switch event {
+        // Strip large JSON payloads - keep only small metadata
+        case .applicantProfileStored(let json):
+            let size = json.rawString()?.count ?? 0
+            if size > 1024 {
+                let placeholder = JSON(["_stripped": "Payload stripped: \(size) bytes"])
+                return .applicantProfileStored(placeholder)
+            }
+        case .skeletonTimelineStored(let json):
+            let size = json.rawString()?.count ?? 0
+            if size > 1024 {
+                let placeholder = JSON(["_stripped": "Payload stripped: \(size) bytes"])
+                return .skeletonTimelineStored(placeholder)
+            }
+        case .toolCallCompleted(let id, let result, let statusMessage):
+            let size = result.rawString()?.count ?? 0
+            if size > 1024 {
+                let placeholder = JSON(["_stripped": "Result stripped: \(size) bytes"])
+                return .toolCallCompleted(id: id, result: placeholder, statusMessage: statusMessage)
+            }
+        case .uploadCompleted(let files, let requestKind, let callId, let metadata):
+            let size = metadata.rawString()?.count ?? 0
+            if size > 1024 {
+                let placeholder = JSON(["_stripped": "Metadata stripped: \(size) bytes"])
+                return .uploadCompleted(files: files, requestKind: requestKind, callId: callId, metadata: placeholder)
+            }
+        case .artifactRecordProduced(let record):
+            let size = record.rawString()?.count ?? 0
+            if size > 1024 {
+                let id = record["id"].stringValue
+                let placeholder = JSON(["id": id, "_stripped": "Record stripped: \(size) bytes"])
+                return .artifactRecordProduced(record: placeholder)
+            }
+        case .artifactRecordsReplaced(let records):
+            let strippedRecords = records.map { record in
+                let size = record.rawString()?.count ?? 0
+                if size > 1024 {
+                    let id = record["id"].stringValue
+                    return JSON(["id": id, "_stripped": "Record stripped: \(size) bytes"])
+                }
+                return record
+            }
+            return .artifactRecordsReplaced(records: strippedRecords)
+        case .knowledgeCardPersisted(let card):
+            let size = card.rawString()?.count ?? 0
+            if size > 1024 {
+                let title = card["title"].stringValue
+                let placeholder = JSON(["title": title, "_stripped": "Card stripped: \(size) bytes"])
+                return .knowledgeCardPersisted(card: placeholder)
+            }
+        case .knowledgeCardsReplaced(let cards):
+            let strippedCards = cards.map { card in
+                let size = card.rawString()?.count ?? 0
+                if size > 1024 {
+                    let title = card["title"].stringValue
+                    return JSON(["title": title, "_stripped": "Card stripped: \(size) bytes"])
+                }
+                return card
+            }
+            return .knowledgeCardsReplaced(cards: strippedCards)
+        case .stateSnapshot(let keys, let snapshot):
+            let size = snapshot.rawString()?.count ?? 0
+            if size > 1024 {
+                let placeholder = JSON(["_stripped": "Snapshot stripped: \(size) bytes, \(keys.count) keys"])
+                return .stateSnapshot(updatedKeys: keys, snapshot: placeholder)
+            }
+        case .llmUserMessageSent(let messageId, let payload, let isSystemGenerated):
+            let size = payload.rawString()?.count ?? 0
+            if size > 1024 {
+                let placeholder = JSON(["_stripped": "Payload stripped: \(size) bytes"])
+                return .llmUserMessageSent(messageId: messageId, payload: placeholder, isSystemGenerated: isSystemGenerated)
+            }
+        case .llmDeveloperMessageSent(let messageId, let payload):
+            let size = payload.rawString()?.count ?? 0
+            if size > 1024 {
+                let placeholder = JSON(["_stripped": "Payload stripped: \(size) bytes"])
+                return .llmDeveloperMessageSent(messageId: messageId, payload: placeholder)
+            }
+        case .llmSentToolResponseMessage(let messageId, let payload):
+            let size = payload.rawString()?.count ?? 0
+            if size > 1024 {
+                let placeholder = JSON(["_stripped": "Payload stripped: \(size) bytes"])
+                return .llmSentToolResponseMessage(messageId: messageId, payload: placeholder)
+            }
+        case .llmExecuteBatchedToolResponses(let payloads):
+            let strippedPayloads = payloads.map { payload in
+                let size = payload.rawString()?.count ?? 0
+                if size > 1024 {
+                    return JSON(["_stripped": "Payload stripped: \(size) bytes"])
+                }
+                return payload
+            }
+            return .llmExecuteBatchedToolResponses(payloads: strippedPayloads)
+        case .skeletonTimelineReplaced(let timeline, let diff, let meta):
+            let timelineSize = timeline.rawString()?.count ?? 0
+            var strippedTimeline = timeline
+            var strippedMeta = meta
+
+            if timelineSize > 1024 {
+                strippedTimeline = JSON(["_stripped": "Timeline stripped: \(timelineSize) bytes"])
+            }
+            if let metaJson = meta {
+                let metaSize = metaJson.rawString()?.count ?? 0
+                if metaSize > 1024 {
+                    strippedMeta = JSON(["_stripped": "Meta stripped: \(metaSize) bytes"])
+                }
+            }
+            return .skeletonTimelineReplaced(timeline: strippedTimeline, diff: diff, meta: strippedMeta)
+        case .timelineUIUpdateNeeded(let timeline):
+            let size = timeline.rawString()?.count ?? 0
+            if size > 1024 {
+                let placeholder = JSON(["_stripped": "Timeline stripped: \(size) bytes"])
+                return .timelineUIUpdateNeeded(timeline: placeholder)
+            }
+        default:
+            break
+        }
+        return event
+    }
+
     /// Add event to history with consolidation of streaming delta events
     private func addToHistoryWithConsolidation(_ event: OnboardingEvent) {
         // Check if this is a streaming message update
@@ -342,12 +475,15 @@ actor EventCoordinator {
             consolidatedStreamingUpdates = 0
             consolidatedStreamingChars = 0
         }
-        // Append event to history
-        eventHistory.append(event)
+        // Strip heavy payloads before appending to history
+        let strippedEvent = stripHeavyPayloads(event)
+        eventHistory.append(strippedEvent)
         if eventHistory.count > maxHistorySize {
             eventHistory.removeFirst(eventHistory.count - maxHistorySize)
         }
     }
+    #endif
+
     /// Extract topic from event type
     private func extractTopic(from event: OnboardingEvent) -> EventTopic {
         switch event {
@@ -421,19 +557,22 @@ actor EventCoordinator {
             return .state
         }
     }
-    /// Get metrics for monitoring
+    #if DEBUG
+    /// Get metrics for monitoring (debug builds only)
     func getMetrics() -> EventMetrics {
         metrics
     }
-    /// Get recent event history
+    /// Get recent event history (debug builds only)
     func getRecentEvents(count: Int = 10) -> [OnboardingEvent] {
         Array(eventHistory.suffix(count))
     }
-    /// Clear event history
+    /// Clear event history (debug builds only)
     func clearHistory() {
         eventHistory.removeAll()
     }
+    #endif
     // MARK: - Private
+    #if DEBUG
     // swiftlint:disable:next function_body_length
     private func logEvent(_ event: OnboardingEvent) {
         let description: String
@@ -682,6 +821,7 @@ actor EventCoordinator {
         }
         Logger.debug("[Event] \(description)", category: .ai)
     }
+    #endif
 }
 /// Protocol for components that can emit events
 protocol OnboardingEventEmitter {
