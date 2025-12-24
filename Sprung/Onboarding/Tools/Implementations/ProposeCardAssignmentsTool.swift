@@ -123,14 +123,19 @@ struct ProposeCardAssignmentsTool: InterviewTool {
 
         // Signal that user validation is required before dispatch
         response["requires_user_validation"].bool = true
+        response["dispatch_kc_agents_locked"].bool = true
         response["validation_message"].string = buildValidationMessage(
             assignmentCount: validAssignments.count,
             gapCount: gapsJSON.count,
             assignmentsWithoutArtifacts: assignmentsWithoutArtifacts
         )
 
-        // Provide next step instructions
-        response["next_action"].string = buildNextActionInstructions(hasGaps: !gapsJSON.isEmpty)
+        // Provide explicit instructions that tool is locked
+        response["next_action"].string = """
+            IMPORTANT: dispatch_kc_agents is LOCKED until user clicks the "Generate Cards" button in the UI.
+            DO NOT call dispatch_kc_agents - it will fail. Present the summary to user and WAIT.
+            The system will automatically unlock the tool and prompt you when user approves.
+            """
 
         return .immediate(response)
     }
@@ -233,9 +238,12 @@ struct ProposeCardAssignmentsTool: InterviewTool {
         }
 
         response["requires_user_validation"].bool = true
-        response["next_action"].string = gaps.isEmpty
-            ? "Present summary to user. When approved, call dispatch_kc_agents with no arguments."
-            : "Present summary and gaps to user. May need additional docs before dispatch."
+        response["dispatch_kc_agents_locked"].bool = true
+        response["next_action"].string = """
+            IMPORTANT: dispatch_kc_agents is LOCKED until user clicks the "Generate Cards" button in the UI.
+            DO NOT call dispatch_kc_agents - it will fail. Present the summary to user and WAIT.
+            The system will automatically unlock the tool and prompt you when user approves.
+            """
 
         return .immediate(response)
     }
@@ -304,11 +312,4 @@ struct ProposeCardAssignmentsTool: InterviewTool {
         return message
     }
 
-    private func buildNextActionInstructions(hasGaps: Bool) -> String {
-        if hasGaps {
-            return "Present gaps to user. Wait for approval before dispatch_kc_agents."
-        } else {
-            return "Present summary to user. Wait for approval before dispatch_kc_agents."
-        }
-    }
 }
