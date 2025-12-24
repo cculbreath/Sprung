@@ -46,7 +46,7 @@ final class LLMFacade {
         }
     }
     private let client: LLMClient
-    private let llmService: _LLMService // temporary bridge for conversation flows
+    private let llmService: OpenRouterServiceBackend // temporary bridge for conversation flows
     private let openRouterService: OpenRouterService
     private let enabledLLMStore: EnabledLLMStore?
     private let modelValidationService: ModelValidationService
@@ -55,7 +55,7 @@ final class LLMFacade {
     private var conversationServices: [Backend: LLMConversationService] = [:]
     init(
         client: LLMClient,
-        llmService: _LLMService,
+        llmService: OpenRouterServiceBackend,
         openRouterService: OpenRouterService,
         enabledLLMStore: EnabledLLMStore?,
         modelValidationService: ModelValidationService

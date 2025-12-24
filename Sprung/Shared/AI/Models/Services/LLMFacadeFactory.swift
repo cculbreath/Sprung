@@ -27,9 +27,9 @@ struct LLMFacadeFactory {
         openRouterService: OpenRouterService,
         enabledLLMStore: EnabledLLMStore?,
         modelValidationService: ModelValidationService
-    ) -> (facade: LLMFacade, llmService: _LLMService) {
+    ) -> (facade: LLMFacade, llmService: OpenRouterServiceBackend) {
         let requestExecutor = _LLMRequestExecutor()
-        let llmService = _LLMService(requestExecutor: requestExecutor)
+        let llmService = OpenRouterServiceBackend(requestExecutor: requestExecutor)
         let client = _SwiftOpenAIClient(executor: requestExecutor)
 
         let facade = LLMFacade(
@@ -54,7 +54,7 @@ struct LLMFacadeFactory {
     ///   - enabledLLMStore: Store for enabled model preferences
     ///   - openRouterService: Service for OpenRouter model metadata
     static func initialize(
-        llmService: _LLMService,
+        llmService: OpenRouterServiceBackend,
         appState: AppState,
         modelContext: ModelContext?,
         enabledLLMStore: EnabledLLMStore?,

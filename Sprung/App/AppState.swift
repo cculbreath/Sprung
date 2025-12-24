@@ -21,7 +21,7 @@ class AppState {
     // OpenRouter service
     let openRouterService: OpenRouterService
     let modelValidationService: ModelValidationService
-    var llmService: _LLMService?
+    var llmService: OpenRouterServiceBackend?
     // Debug/diagnostics settings
     var debugSettingsStore: DebugSettingsStore?
     // Cached API key state for SwiftUI bindings

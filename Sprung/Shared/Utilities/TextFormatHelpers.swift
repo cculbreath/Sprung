@@ -23,12 +23,12 @@ struct TextFormatHelpers {
         return array.joined(separator: separator)
     }
     static func sectionLine(_ title: String, width: Int = 80) -> String {
-        let cleanTitle = stripTags(title)
+        let cleanTitle = HTMLUtility.stripTags(title).uppercased()
         let titleLength = cleanTitle.count
         let totalDashes = width - titleLength - 4 // 4 accounts for the '*' and spaces around the title
         let leftDashes = totalDashes / 2
         let rightDashes = totalDashes - leftDashes
-        return "*\(String(repeating: "-", count: leftDashes)) \(cleanTitle.uppercased()) \(String(repeating: "-", count: rightDashes))*"
+        return "*\(String(repeating: "-", count: leftDashes)) \(cleanTitle) \(String(repeating: "-", count: rightDashes))*"
     }
     static func bulletText(_ text: String, marginLeft: Int = 0, width: Int = 80, bullet: String = "*") -> String {
         let bulletSpace = bullet.count + 1
@@ -63,15 +63,5 @@ struct TextFormatHelpers {
             lines.append(currentLine)
         }
         return lines
-    }
-    private static func stripTags(_ html: String) -> String {
-        guard let data = html.data(using: .utf8) else { return html.uppercased() }
-        let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
-            .documentType: NSAttributedString.DocumentType.html,
-            .characterEncoding: String.Encoding.utf8.rawValue
-        ]
-        let attributed = try? NSAttributedString(data: data, options: options, documentAttributes: nil)
-        let cleaned = attributed?.string ?? html
-        return cleaned.replacingOccurrences(of: "↪︎", with: "").uppercased()
     }
 }

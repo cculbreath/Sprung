@@ -7,10 +7,14 @@ struct FixOverflowStatus {
 }
 @MainActor
 class FixOverflowService {
-    private let reviewService: ResumeReviewService
+    private let llm: LLMFacade
+    private let query = ResumeReviewQuery()
     private let exportCoordinator: ResumeExportCoordinator
-    init(reviewService: ResumeReviewService, exportCoordinator: ResumeExportCoordinator) {
-        self.reviewService = reviewService
+    private var currentRequestID: UUID?
+    private var activeStreamingHandle: LLMStreamingHandle?
+
+    init(llm: LLMFacade, exportCoordinator: ResumeExportCoordinator) {
+        self.llm = llm
         self.exportCoordinator = exportCoordinator
     }
     func performFixOverflow(
@@ -47,7 +51,7 @@ class FixOverflowService {
             }
             Logger.debug("FixOverflow: Successfully converted PDF to image")
             // Extract skills
-            guard let skillsJsonString = reviewService.extractSkillsForFixOverflow(resume: resume) else {
+            guard let skillsJsonString = extractSkillsForFixOverflow(resume: resume) else {
                 return .failure(FixOverflowError.skillsExtractionFailed(iteration: loopCount))
             }
             Logger.debug("FixOverflow: Successfully extracted skills JSON: \(skillsJsonString.prefix(100))...")
@@ -131,6 +135,179 @@ class FixOverflowService {
         exportCoordinator.debounceExport(resume: resume)
         return .success(finalStatus)
     }
+    // MARK: - Networking Methods
+
+    /// Sends a request to the LLM to revise skills for fitting
+    /// - Parameters:
+    ///   - skillsJsonString: JSON string representation of skills
+    ///   - base64Image: Base64 encoded image of the resume
+    ///   - overflowLineCount: Number of lines overflowing from previous contentsFit check
+    ///   - allowEntityMerge: Whether to allow merging of redundant entries
+    ///   - supportsReasoning: Whether the model supports reasoning (for streaming)
+    ///   - onReasoningUpdate: Optional callback for reasoning content streaming
+    ///   - onComplete: Completion callback with result
+    func sendFixFitsRequest(
+        skillsJsonString: String,
+        base64Image: String,
+        overflowLineCount: Int = 0,
+        modelId: String,
+        allowEntityMerge: Bool = false,
+        supportsReasoning: Bool = false,
+        onReasoningUpdate: ((String) -> Void)? = nil,
+        onComplete: @escaping (Result<FixFitsResponseContainer, Error>) -> Void
+    ) {
+        let requestID = UUID()
+        currentRequestID = requestID
+        let provider = AIModels.providerForModel(modelId)
+        Task { @MainActor in
+            do {
+                Logger.debug("🔍 FixOverflowService: Sending fix fits request with model: \(modelId)")
+                Logger.debug("🔍 Skills JSON being sent to LLM: \(skillsJsonString.prefix(500))...")
+                Logger.debug("🔍 Using allowEntityMerge: \(allowEntityMerge), overflowLineCount: \(overflowLineCount)")
+                let response: FixFitsResponseContainer
+                // Check if we should use streaming for reasoning models
+                let shouldStream = supportsReasoning && onReasoningUpdate != nil
+                if shouldStream && provider == AIModels.Provider.grok {
+                    Logger.debug("Using streaming approach for reasoning-capable Grok model: \(modelId)")
+                    // Only Grok supports streaming since it's text-only
+                    response = try await streamGrokFixFitsRequest(
+                        skillsJsonString: skillsJsonString,
+                        overflowLineCount: overflowLineCount,
+                        allowEntityMerge: allowEntityMerge,
+                        modelId: modelId,
+                        onReasoningUpdate: onReasoningUpdate
+                    )
+                } else {
+                    // Non-streaming approach for non-reasoning models or when streaming not requested
+                    // Special handling for Grok models - use text-only approach
+                    if provider == AIModels.Provider.grok {
+                        Logger.debug("Using Grok text-only approach for fix fits request")
+                        // Build specialized prompt for Grok that doesn't require image analysis
+                        let grokPrompt = query.buildGrokFixFitsPrompt(
+                            skillsJsonString: skillsJsonString,
+                            overflowLineCount: overflowLineCount,
+                            allowEntityMerge: allowEntityMerge
+                        )
+                        // Text-only structured request for Grok
+                        response = try await llm.executeStructured(
+                            prompt: grokPrompt,
+                            modelId: modelId,
+                            as: FixFitsResponseContainer.self,
+                            temperature: nil
+                        )
+                    } else {
+                        Logger.debug("Using standard image-based approach for fix fits request")
+                        // Standard approach for other models (OpenAI, Claude, Gemini)
+                        let prompt = query.buildFixFitsPrompt(
+                            skillsJsonString: skillsJsonString,
+                            allowEntityMerge: allowEntityMerge
+                        )
+                        // Convert base64Image back to Data for LLMService
+                        guard let imageData = Data(base64Encoded: base64Image) else {
+                            throw NSError(domain: "FixOverflowService", code: 1005, userInfo: [NSLocalizedDescriptionKey: "Failed to decode base64 image data"])
+                        }
+                        // Multimodal structured request
+                        response = try await llm.executeStructuredWithImages(
+                            prompt: prompt,
+                            modelId: modelId,
+                            images: [imageData],
+                            as: FixFitsResponseContainer.self,
+                            temperature: nil
+                        )
+                    }
+                }
+                // Check if request was cancelled
+                guard currentRequestID == requestID else {
+                    Logger.debug("FixOverflowService: Fix fits request cancelled")
+                    return
+                }
+                Logger.debug("✅ FixOverflowService: Fix fits request completed successfully")
+                onComplete(.success(response))
+            } catch {
+                // Check if request was cancelled
+                guard currentRequestID == requestID else {
+                    Logger.debug("FixOverflowService: Fix fits request cancelled during error handling")
+                    return
+                }
+                Logger.error("FixOverflowService: Fix fits request failed: \(error.localizedDescription)")
+                onComplete(.failure(error))
+            }
+        }
+    }
+
+    /// Sends a request to the LLM to check if content fits
+    /// - Parameters:
+    ///   - base64Image: Base64 encoded image of the resume
+    ///   - onComplete: Completion callback with result
+    func sendContentsFitRequest(
+        base64Image: String,
+        modelId: String,
+        onComplete: @escaping (Result<ContentsFitResponse, Error>) -> Void
+    ) {
+        let requestID = UUID()
+        currentRequestID = requestID
+        Task { @MainActor in
+            do {
+                Logger.debug("🔍 FixOverflowService: Sending contents fit request with model: \(modelId)")
+                // Build the prompt using the centralized ResumeReviewQuery
+                let prompt = query.buildContentsFitPrompt()
+                Logger.debug("FixOverflowService: ContentsFit prompt:\n\(query.consoleFriendlyPrompt(prompt))")
+                // Convert base64Image back to Data for LLMService
+                guard let imageData = Data(base64Encoded: base64Image) else {
+                    throw NSError(
+                        domain: "FixOverflowService",
+                        code: 1006,
+                        userInfo: [NSLocalizedDescriptionKey: "Failed to decode base64 image data for contents fit check"]
+                    )
+                }
+                // ContentsFit always uses images, so no streaming support
+                // Multimodal structured request
+                let response: ContentsFitResponse = try await llm.executeStructuredWithImages(
+                    prompt: prompt,
+                    modelId: modelId,
+                    images: [imageData],
+                    as: ContentsFitResponse.self
+                )
+                // Check if request was cancelled
+                guard currentRequestID == requestID else {
+                    Logger.debug("FixOverflowService: Contents fit request cancelled")
+                    return
+                }
+                Logger.debug("✅ FixOverflowService: Contents fit check completed successfully: contentsFit=\(response.contentsFit)")
+                onComplete(.success(response))
+            } catch {
+                // Check if request was cancelled
+                guard currentRequestID == requestID else {
+                    Logger.debug("FixOverflowService: Contents fit request cancelled during error handling")
+                    return
+                }
+                Logger.error("FixOverflowService: Contents fit request failed: \(error.localizedDescription)")
+                // For backward compatibility, provide a fallback response
+                Logger.debug("Defaulting to contentsFit:false to continue iterations")
+                onComplete(.success(ContentsFitResponse(contentsFit: false, overflowLineCount: 0)))
+            }
+        }
+    }
+
+    /// Extracts skills for fix overflow operation with bundled title/description
+    /// - Parameter resume: The resume to extract skills from
+    /// - Returns: A JSON string representing the bundled skills
+    func extractSkillsForFixOverflow(resume: Resume) -> String? {
+        guard let rootNode = resume.rootNode else {
+            Logger.debug("Error: Resume has no rootNode for skills extraction")
+            return nil
+        }
+        // Find the skills section
+        guard let skillsSection = rootNode.children?.first(where: {
+            $0.name.lowercased() == "skills-and-expertise" || $0.name.lowercased() == "skills and expertise"
+        }) else {
+            Logger.debug("Error: 'Skills and Expertise' section not found")
+            return nil
+        }
+        // Extract skills as a simple JSON structure
+        return skillsSection.toJSONString()
+    }
+
     // MARK: - Private Helper Methods
     private func ensurePDFAvailable(resume: Resume, onStatusUpdate: @escaping (FixOverflowStatus) -> Void) async throws {
         if resume.pdfData == nil {
@@ -159,7 +336,7 @@ class FixOverflowService {
         await withCheckedContinuation { continuation in
             // Only allow entity merge on the first iteration
             let allowMergeForThisIteration = allowEntityMerge && iteration == 1
-            reviewService.sendFixFitsRequest(
+            sendFixFitsRequest(
                 skillsJsonString: skillsJsonString,
                 base64Image: currentImageBase64,
                 overflowLineCount: currentOverflowLineCount,
@@ -253,7 +430,7 @@ class FixOverflowService {
         Logger.debug("FixOverflow: About to send contentsFit request in iteration \(iteration)")
         return await withCheckedContinuation { continuation in
             Logger.debug("FixOverflow: Inside continuation for contentsFit request")
-            reviewService.sendContentsFitRequest(
+            sendContentsFitRequest(
                 base64Image: updatedImageBase64,
                 modelId: selectedModel
             ) { result in

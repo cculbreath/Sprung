@@ -235,7 +235,7 @@ class NativePDFGenerator: ObservableObject {
         processedContext overrideContext: [String: Any]? = nil
     ) async throws -> Data {
         let context = try overrideContext ?? renderingContext(for: resume)
-        let fontsFixed = fixFontReferences(customHTML)
+        let fontsFixed = HTMLUtility.fixFontReferences(customHTML)
         let translation = HandlebarsTranslator.translate(fontsFixed)
         logTranslationWarnings(translation.warnings, slug: resume.template?.slug ?? "custom")
         let finalContent = preprocessTemplateForGRMustache(translation.template)
@@ -280,7 +280,7 @@ class NativePDFGenerator: ObservableObject {
         let profile = profileProvider.currentProfile()
         let context = try ResumeContextBuilder.buildContext(for: resume, profile: profile)
         // Fix font URLs for macOS system fonts and preprocess helpers
-        let fontsFixed = fixFontReferences(content)
+        let fontsFixed = HTMLUtility.fixFontReferences(content)
         let translation = HandlebarsTranslator.translate(fontsFixed)
         logTranslationWarnings(translation.warnings, slug: template)
         var finalContent = preprocessTemplateForGRMustache(translation.template)
@@ -311,23 +311,6 @@ class NativePDFGenerator: ObservableObject {
         for warning in warnings {
             Logger.warning("Handlebars compatibility (\(slug)): \(warning)")
         }
-    }
-    private func fixFontReferences(_ template: String) -> String {
-        var fixedTemplate = template
-        // Remove file:// URLs for fonts since we're using system-installed fonts
-        // This regex matches font-face src declarations with local file URLs
-        fixedTemplate = fixedTemplate.replacingOccurrences(
-            of: #"src: url\("file://[^"]+"\) format\("[^"]+"\);"#,
-            with: "/* Font file removed - using system fonts */",
-            options: .regularExpression
-        )
-        // Also remove any remaining font-face declarations that reference files
-        fixedTemplate = fixedTemplate.replacingOccurrences(
-            of: #"@font-face \{[^}]*url\("file://[^}]*\}"#,
-            with: "/* Font-face removed - using system fonts */",
-            options: .regularExpression
-        )
-        return fixedTemplate
     }
     private func saveDebugHTML(_ html: String, template: String, format: String) {
         // Check if debug file saving is enabled in user settings

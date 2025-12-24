@@ -51,7 +51,7 @@ enum LLMError: LocalizedError {
 ///   public entry point for LLM operations. Do not instantiate directly outside
 ///   of `LLMFacadeFactory`.
 @Observable
-final class _LLMService {
+final class OpenRouterServiceBackend {
     // Dependencies
     private var appState: AppState?
     private var enabledLLMStore: EnabledLLMStore?

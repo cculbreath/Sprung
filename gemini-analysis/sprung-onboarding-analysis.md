@@ -1,149 +1,176 @@
 # Code Analysis: sprung-onboarding.swift.txt
 
-Based on the comprehensive review of the `Sprung/Onboarding` module, here is the analysis regarding dead code, anti-patterns, duplication, and legacy cruft.
+Here is the comprehensive code review of the Sprung Onboarding module.
 
-### 1. Legacy Cruft & Incomplete Migrations (Dedicated Section)
+### Executive Summary
+The codebase represents a sophisticated, AI-driven onboarding flow. It recently underwent a significant refactor to move from a monolithic architecture to a service-oriented one (Dependency Injection via `OnboardingDependencyContainer`).
 
-This module shows signs of a transition between a monolithic architecture and an event-driven actor system. Several components are explicitly marked as "Milestone M0" (MVP) or "First Pass".
-
-**A. UI Stubs & WIPs (Safe to Delete/Update)**
-*   **File:** `Sprung/Onboarding/Views/OnboardingInterviewView.swift`
-*   **Issue:** The `ExtractionReviewSheet` confirmation action is a hardcoded stub explicitly marked as not implemented.
-*   **Code:**
-    ```swift
-    onConfirm: { _, _ in
-        Logger.debug("Extraction confirmation is not implemented in milestone M0.")
-    },
-    ```
-*   **Recommendation:** Implement the logic to merge the extraction JSON into the `ApplicantProfile` or `Timeline`, or remove the sheet if extraction review is handled elsewhere (e.g., `DocumentArtifactHandler`).
-
-*   **File:** `Sprung/Onboarding/Views/OnboardingCompletionReviewSheet.swift`
-*   **Issue:** The UI contains explicit developer comments exposed to the user, indicating it is a temporary placeholder.
-*   **Code:**
-    ```swift
-    Text("This screen is a first pass to avoid abrupt endings; we can expand it into a tabbed, per-asset feedback workflow.")
-    ```
-*   **Recommendation:** Remove the meta-commentary text view.
-
-**B. Hardcoded Logic replacing Configuration**
-*   **File:** `Sprung/Onboarding/Tools/Implementations/NextPhaseTool.swift`
-*   **Issue:** The state transitions are hardcoded inside the tool implementation rather than relying purely on the `PhasePolicy` or `PhaseScript`.
-*   **Code:** `switch currentPhase { case .phase1CoreFacts: nextPhase = .phase2DeepDive ... }`
-*   **Recommendation:** Move transition logic entirely to `PhaseScriptRegistry` so the Tool acts as a generic trigger, asking the Registry "What is next?".
-
-**C. Deprecated/Redundant Types**
-*   **File:** `Sprung/Onboarding/Models/TimelineEntryDraft.swift`
-*   **Issue:** Redundant model. `TimelineCard` exists and supports JSON serialization. `TimelineEntryDraft` mirrors it almost exactly but is used only in `TimelineCardEditorView`.
-*   **Recommendation:** Consolidate usage to `TimelineCard` (struct) and `TimelineCardViewModel` (observable) to reduce type conversion boilerplate in `TimelineCardAdapter`.
+**Key Architectural Observation:** The system is currently in a "hybrid" state. While logic has been moved to specialized services (e.g., `ToolHandler`, `UIResponseCoordinator`), the main `OnboardingInterviewCoordinator` remains as a massive "God Proxy," forwarding calls to these new services rather than Views interacting with services directly. This results in significant boilerplate code.
 
 ---
 
-### 2. Critical Issues (Fix Immediately)
+### 1. Legacy Cleanup (Refactoring Remnants)
 
-**A. Force Unwrapping in Tool Execution**
-*   **File:** `Sprung/Onboarding/Tools/Implementations/CreateTimelineCardTool.swift` (and others)
-*   **Issue:** Force unwrapping dictionary values after helper checks. If `requireObject` implementation changes or returns a different type, this crashes.
-*   **Code:**
-    ```swift
-    _ = try ToolResultHelpers.requireObject(params["fields"].dictionary, named: "fields")
-    let fields = JSON(params["fields"].dictionary!) // Crash risk if dictionary is nil despite check
-    ```
-*   **Recommendation:** Bind the result of `requireObject` directly:
-    ```swift
-    let fieldsDict = try ToolResultHelpers.requireObject(params["fields"].dictionary, named: "fields")
-    let fields = JSON(fieldsDict)
-    ```
+These items appear to be artifacts of the recent refactor that were left behind or only partially migrated.
 
-**B. Race Conditions in Data Store**
-*   **File:** `Sprung/Onboarding/Core/ArtifactRepository.swift`
-*   **Issue:** Use of `nonisolated(unsafe)` to expose sync properties from an actor for UI binding. While convenient for SwiftUI, this bypasses actor isolation guarantees and risks data races if background threads update the actor state while the main thread reads these properties.
-*   **Code:** `nonisolated(unsafe) private(set) var artifactRecordsSync: [JSON] = []`
-*   **Recommendation:** Remove `nonisolated(unsafe)`. Use `@MainActor` on the `OnboardingUIState` to hold the "view" copy of the data, and have the `ArtifactRepository` emit events to update the UI state asynchronously.
+#### Safe to Delete Immediately
 
----
+1.  **File:** `Sprung/Onboarding/Core/ConversationContextAssembler.swift`
+    *   **Issue:** Empty Method Stub.
+    *   **Description:** `buildScratchpadSummary` returns an empty string and is likely a remnant of a previous context assembly strategy before `WorkingMemory` was implemented in `LLMMessenger`.
+    *   **Code:**
+        ```swift
+        func buildScratchpadSummary() async -> String {
+            return ""
+        }
+        ```
 
-### 3. High Priority Issues
+2.  **File:** `Sprung/Onboarding/Core/OnboardingConstants.swift`
+    *   **Issue:** Unused Enum Extensions.
+    *   **Description:** `OnboardingToolName.timelineTools` creates a Set of raw strings. While used in `SessionUIState`, `rawValues` helper methods are largely redundant given direct Set initialization is often cleaner.
+    *   **Code:**
+        ```swift
+        extension OnboardingToolName {
+            static func rawValues(_ tools: [OnboardingToolName]) -> [String] { ... }
+            // ...
+        }
+        ```
 
-**A. Stringly-Typed Event Routing**
-*   **File:** `Sprung/Onboarding/Core/Coordinators/CoordinatorEventRouter.swift`
-*   **Issue:** The router logic relies heavily on raw string matching for Objective IDs and Tool Names, bypassing the type safety of `OnboardingObjectiveId` and `OnboardingToolName` enums.
-*   **Code:** `if id == "applicant_profile" && newStatus == "completed"`
-*   **Recommendation:** Use the enums defined in `OnboardingConstants.swift`.
-    ```swift
-    if id == OnboardingObjectiveId.applicantProfile.rawValue ...
-    ```
+3.  **File:** `Sprung/Onboarding/Core/ArtifactRepository.swift`
+    *   **Issue:** Unused Method.
+    *   **Description:** `scratchpadSummary()` generates a string representation of artifacts, likely for the old `ConversationContextAssembler`. The new `LLMMessenger` builds its own `WorkingMemory` string directly via `listArtifactSummaries()`.
+    *   **Code:**
+        ```swift
+        func scratchpadSummary() -> [String] {
+            var lines: [String] = []
+            // ... logic to build summary ...
+            return lines
+        }
+        ```
 
-**B. "God Object" Coordinator**
-*   **File:** `Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift`
-*   **Issue:** This class exposes *every* internal service (state, eventBus, toolRouter, wizardTracker, etc.) publicly. It creates tight coupling between Views and the entire backend graph.
-*   **Recommendation:** Create specific ViewModels for the sub-views (e.g., `DocumentCollectionViewModel`, `TimelineViewModel`) that only expose the specific functions and state needed for those views, rather than passing the whole Coordinator.
+#### Requires Verification / Needs Completion
 
-**C. Hardcoded API/Model Fallbacks**
-*   **File:** `Sprung/Onboarding/Services/DocumentExtractionService.swift`
-*   **Issue:** Hardcoded model IDs buried in service logic.
-*   **Code:** `private let defaultModelId = "gemini-2.0-flash"` and `UserDefaults.standard.string(...) ?? "google/gemini-2.0-flash-001"`
-*   **Recommendation:** Move all Model ID configurations to `OnboardingModelConfig` or a unified `ModelProvider` struct to ensure consistency and easier updates.
+4.  **File:** `Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift`
+    *   **Issue:** The "God Proxy" Pattern (Incomplete Migration).
+    *   **Description:** This class acts as a massive passthrough. It exposes methods that simply forward calls to `toolRouter`, `uiResponseCoordinator`, or `artifactIngestionCoordinator`.
+    *   **Recommendation:** Views should interact with the specific coordinators/handlers exposed by the `OnboardingDependencyContainer` or the `OnboardingInterviewCoordinator` should expose the *handlers* (e.g., `var uploads: UploadInteractionHandler`) rather than wrapping every single method.
+    *   **Code:**
+        ```swift
+        // Example of 50+ methods like this:
+        func completeUpload(id: UUID, fileURLs: [URL]) async -> JSON? {
+            await tools.completeUpload(id: id, fileURLs: fileURLs)
+        }
+        ```
 
----
-
-### 4. Medium Priority (Anti-Patterns & Duplication)
-
-**A. Distributed Prompt Management**
-*   **File:** Various (Tool Implementations, PhaseScripts, Services)
-*   **Issue:** Prompts are scattered.
-    *   `PhaseOneScript.swift`: Contains `introductoryPrompt`.
-    *   `KCAgentPrompts.swift`: Contains agent system prompts.
-    *   `DocumentExtractionPrompts.swift`: Contains extraction prompts.
-    *   `AgentReadyTool.swift`: Contains workflow summary strings.
-*   **Recommendation:** Centralize all prompt strings into a `PromptLibrary` or grouped resource files. This makes tweaking system personalities or instructions significantly easier.
-
-**B. JSON Schema Duplication**
-*   **File:** `Sprung/Onboarding/Tools/Schemas/`
-*   **Issue:** `MiscSchemas` defines schemas for `workItemSchema`, `educationItemSchema`, etc. These structures (JSON Resume standard) likely exist elsewhere in the core app or `ExperienceDefaultsDraft`.
-*   **Recommendation:** If the core app has `Codable` structs for JSON Resume, use `Encoder` reflection or a shared schema generator to create these JSONSchemas, ensuring the AI tools always match the internal data models.
-
-**C. Massive View Body**
-*   **File:** `Sprung/Onboarding/Views/Components/OnboardingInterviewChatPanel.swift`
-*   **Issue:** The `body` property is very large, containing logic for banners, scroll readers, dividers, and input fields.
-*   **Recommendation:** Extract the `ComposerView`, `BannerView`, and `MessageListView` into separate, smaller SwiftUI components.
-
-**D. Tool Gating Logic Complexity**
-*   **File:** `Sprung/Onboarding/Core/SessionUIState.swift`
-*   **Issue:** `ToolGating.availability` contains hardcoded sets of tools (`timelineTools`) inside the method logic.
-*   **Code:** `static let timelineTools: Set<String> = [...]`
-*   **Recommendation:** Move these groupings to `OnboardingToolName` as static properties (e.g., `OnboardingToolName.timelineTools`) to reuse them in the `PhaseScript` definitions and avoid drift.
+5.  **File:** `Sprung/Onboarding/Constants/OnboardingConstants.swift`
+    *   **Issue:** Competing State Machines (`InterviewSubphase`).
+    *   **Description:** The system uses `ObjectiveWorkflowEngine` (new) to drive progress via Objectives, but *also* retains `InterviewSubphase` (old) to calculate tool bundles in `ToolBundlePolicy`.
+    *   **Problem:** `ToolBundlePolicy.inferSubphase` contains massive `switch` logic trying to map Objectives/UI State back to a `Subphase`. This is fragile.
+    *   **Recommendation:** Deprecate `InterviewSubphase`. Define allowed tools directly in the `PhaseScript` or `ObjectiveWorkflow` configuration, removing the need to infer a "subphase" to determine tool availability.
 
 ---
 
-### 5. Dead Code Detection
+### 2. Critical Issues (Stability & Concurrency)
 
-**A. Unused / Redundant Enum Cases**
-*   **File:** `Sprung/Onboarding/Constants/OnboardingConstants.swift`
-*   **Item:** `OnboardingToolName.getUserOption`
-*   **Observation:** While defined, `ConfigureEnabledSectionsTool` seems to replace the generic `getUserOption` for the specific case of section selection. If `getUserOption` is no longer used for generic choices in the scripts, it can be removed.
+1.  **File:** `Sprung/Onboarding/Handlers/UploadInteractionHandler.swift`
+    *   **Issue:** Synchronous I/O on Main Thread/Actor.
+    *   **Description:** `handleTargetedUpload` is an `async` function on a `@MainActor` class, yet it calls `Data(contentsOf: ...)` inside a `Task.detached` block that returns to the main actor context, but `applicantProfileStore.save` (which might write to disk) happens on Main. More critically, `Image(nsImage: ...)` initialization from data happens on Main in `ApplicantProfileSummaryCard`.
+    *   **Specific Concern:** `validateImageData` reads data. If `processed.first` is a large file, this might hitch.
+    *   **Code:**
+        ```swift
+        // In handleTargetedUpload
+        let data = try await Task.detached {
+            try Data(contentsOf: first.storageURL) // Good, background
+        }.value
+        // ...
+        applicantProfileStore.save(profile) // SwiftData/CoreData on Main? Potentially blocking.
+        ```
 
-**B. Orphaned Logic in Git Agent**
-*   **File:** `Sprung/Onboarding/Services/GitAgent/AgentPrompts.swift`
-*   **Item:** `authorFilter` parameter.
-*   **Observation:** The system prompt builder accepts an `authorFilter`, but in `GitIngestionKernel`, it is populated with `gitData["contributors"].array?.first?["name"].string`. This logic effectively locks analysis to the *first* contributor found in shortlog, which might be incorrect for multi-author repos or if the user isn't the top contributor.
+2.  **File:** `Sprung/Onboarding/Services/DocumentExtractionService.swift`
+    *   **Issue:** Unbounded File Reading.
+    *   **Description:** `extractPlainText` reads the entire file content into a String or Data object in memory. For a very large PDF or text file (e.g., 100MB log file renamed to .txt), this could crash the app.
+    *   **Recommendation:** Implement a file size limit check *before* attempting to read `Data(contentsOf: fileURL)`.
+    *   **Code:**
+        ```swift
+        guard let fileData = try? Data(contentsOf: fileURL) else { ... }
+        ```
 
-**C. Unused Properties**
-*   **File:** `Sprung/Onboarding/Core/AgentActivityTracker.swift`
-*   **Item:** `cachedTokens` in `TrackedAgent`.
-*   **Observation:** It is incremented in `addTokenUsage`, but `totalTokens` calculation is `inputTokens + outputTokens`. It is displayed in the UI, but logically `totalTokens` usually implies billable load or total context, which might be misleading if cache isn't factored in or out explicitly.
+3.  **File:** `Sprung/Onboarding/Core/AgentActivityTracker.swift`
+    *   **Issue:** Unsafe Array Access.
+    *   **Description:** The class is `@MainActor`, but `agents` is modified by `trackAgent` (insert at 0) and accessed by index in `markRunning`, `appendTranscript`, etc. If an agent is removed (e.g. `pruneCompletedAgents`) while an async task tries to update it by ID via `firstIndex`, it might be safe, but relying on `firstIndex` followed by subscript `agents[index]` is risky if `prune` happens in between (though Actor isolation helps here, logical race conditions exist).
+    *   **Recommendation:** Use a Dictionary `[String: TrackedAgent]` keyed by ID instead of an Array to prevent index-out-of-bounds logic errors and improve lookup performance from O(n) to O(1).
 
-### 6. Code Duplication
+---
 
-**A. Artifact/File Type Checking**
-*   **Locations:**
-    *   `DropZoneHandler.swift`: `acceptedExtensions` set.
-    *   `DocumentArtifactMessenger.swift`: `extractableExtensions` set (different list).
-    *   `DocumentArtifactHandler.swift`: `extractableExtensions` set (different list).
-    *   `DocumentExtractionService.swift`: `extractPlainText` checks extensions.
-*   **Recommendation:** Create a single `DocumentTypePolicy` struct that defines what extensions are accepted, which are extractable text, and which are images.
+### 3. High Priority (Architecture & Anti-Patterns)
 
-**B. Timeline Serialization**
-*   **Locations:**
-    *   `TimelineCardAdapter.swift`
-    *   `OnboardingValidationReviewCard.swift` (`timelineJSON` method)
-*   **Recommendation:** `OnboardingValidationReviewCard` manually reconstructs JSON from drafts. It should use `TimelineCardAdapter` or `ExperienceDefaultsEncoder` exclusively to ensure the JSON sent for validation matches exactly what the system processes.
+1.  **File:** `Sprung/Onboarding/Core/ArtifactRepository.swift`
+    *   **Issue:** `nonisolated(unsafe)` usage.
+    *   **Description:** Several properties are marked `nonisolated(unsafe)` to allow synchronous access (`artifactRecordsSync`, `applicantProfileSync`).
+    *   **Why it's bad:** This bypasses actor isolation protections. If `artifacts.artifactRecords` (internal) is updated while a view reads `artifactRecordsSync`, you have a race condition unless you guarantee strictly that updates *only* happen on the thread reading them (Main), which isn't guaranteed by `Actor` semantics alone.
+    *   **Recommendation:** Move this state to `OnboardingUIState` (which is `@MainActor`) if it needs to be observed by SwiftUI, or accept `await` access.
+
+2.  **File:** `Sprung/Onboarding/Core/OnboardingToolRegistrar.swift`
+    *   **Issue:** Hardcoded Tool Registration.
+    *   **Description:** The registrar manually instantiates every tool. If a new tool is added but not added to this list, it fails silently or requires debugging.
+    *   **Code:**
+        ```swift
+        toolRegistry.register(GetUserOptionTool(coordinator: coordinator))
+        toolRegistry.register(GetUserUploadTool(coordinator: coordinator))
+        // ... 30+ lines of this
+        ```
+    *   **Recommendation:** Use a protocol-based discovery or a list iteration if possible, though manual registration is acceptable if the list is maintained carefully. The bigger issue is that `ToolRegistry` relies on `OnboardingInterviewCoordinator` for *every* tool, reinforcing the "God Object" anti-pattern.
+
+3.  **File:** `Sprung/Onboarding/Views/Components/OnboardingInterviewView.swift`
+    *   **Issue:** Massive View / Logic Leakage.
+    *   **Description:** The main view handles window dragging, view transitions, settings logic, resume prompts, and debug overlays.
+    *   **Recommendation:** Extract `OnboardingInterviewContainer` logic (the window/chrome management) from the actual `InterviewContent`. Move the "Resume/Start Over" logic into the ViewModel.
+
+---
+
+### 4. Medium Priority (Duplication & Code Quality)
+
+1.  **File:** `Sprung/Onboarding/Services/GitIngestionKernel.swift`
+    *   **Issue:** Hardcoded Binary Paths.
+    *   **Description:** The code assumes git is located at `/usr/bin/git`. While standard on macOS, it might vary or be managed by Xcode/Homebrew.
+    *   **Code:**
+        ```swift
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        ```
+    *   **Recommendation:** Use `/usr/bin/env git` or configuration to find the git executable.
+
+2.  **File:** `Sprung/Onboarding/Tools/Shared/MiscSchemas.swift` vs. Tool Definitions
+    *   **Issue:** JSON Schema Definition Duplication.
+    *   **Description:** Schemas are defined in `MiscSchemas`, `ArtifactSchemas`, `UserInteractionSchemas`, and sometimes inline in Tools.
+    *   **Recommendation:** The `SchemaBuilder` in `SchemaGenerator.swift` is a great start. Standardize *all* tools to use `SchemaBuilder` to define their parameters, making them type-safe(r) and easier to read than raw Dictionaries/`JSONSchema` initializers.
+
+3.  **File:** `Sprung/Onboarding/Services/DocumentProcessingService.swift`
+    *   **Issue:** Hardcoded Model IDs.
+    *   **Description:** Fallback model IDs are hardcoded in multiple places.
+    *   **Code:**
+        ```swift
+        let modelId = UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId") ?? "google/gemini-2.0-flash-001"
+        ```
+    *   **Recommendation:** Centralize all model ID constants in `OnboardingModelConfig`.
+
+---
+
+### 5. Low Priority / Suggestions
+
+1.  **File:** `Sprung/Onboarding/Models/Extensions/JSONViewHelpers.swift`
+    *   **Suggestion:** The extension on `JSON` (SwiftyJSON) adds UI formatting logic (`formattedLocation`, `formattedDateRange`).
+    *   **Refinement:** Move this logic to a specific `ResumeFormatter` or `TimelineViewModel`. Extending a generic library type like `JSON` with domain-specific UI logic pollutes the namespace.
+
+2.  **File:** `Sprung/Onboarding/Services/GitAgent/GitAnalysisAgent.swift`
+    *   **Suggestion:** The `run()` method is very long (cyclomatic complexity).
+    *   **Refinement:** Extract the tool execution loop and the response parsing logic into separate private methods.
+
+3.  **File:** `Sprung/Onboarding/Core/StreamQueueManager.swift`
+    *   **Suggestion:** `instanceId` is generated but rarely used except for logging.
+    *   **Refinement:** Ensure loggers actually use it to trace specific stream sessions, otherwise it's noise.
+
+### Summary of Refactoring Steps
+
+1.  **Phase 1 (Safety):** Fix the `nonisolated(unsafe)` properties in `ArtifactRepository` and the synchronous I/O in `UploadInteractionHandler`.
+2.  **Phase 2 (Cleanup):** Remove `InterviewSubphase` and refactor `ToolBundlePolicy` to use `Phase` + `ObjectiveStatus` directly. Delete the empty stubs in `ConversationContextAssembler`.
+3.  **Phase 3 (Architecture):** Decouple `OnboardingInterviewCoordinator`. Make Views call `coordinator.tools.upload...` instead of `coordinator.completeUpload...`. Remove the forwarding methods from the main coordinator.

@@ -29,7 +29,7 @@ final class AppDependencies {
     let onboardingSessionStore: OnboardingSessionStore
     let documentExtractionService: DocumentExtractionService
     let onboardingCoordinator: OnboardingInterviewCoordinator
-    private let llmService: _LLMService
+    private let llmService: OpenRouterServiceBackend
     let reasoningStreamManager: ReasoningStreamManager
     let resumeReviseViewModel: ResumeReviseViewModel
     let searchOpsCoordinator: SearchOpsCoordinator

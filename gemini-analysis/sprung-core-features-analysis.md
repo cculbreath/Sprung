@@ -1,128 +1,184 @@
 # Code Analysis: sprung-core-features.swift.txt
 
-Based on the provided codebase, here is a comprehensive code review focusing on dead code, anti-patterns, duplication, and legacy cleanup.
+Here is the comprehensive code review for the **Sprung** codebase.
 
-### Critical (Fix Immediately)
+Based on the provided files, the application has recently undergone significant architectural changes, particularly in the AI/LLM layer (moving to a Facade pattern) and the modularization of features (SearchOps). However, there are significant remnants of previous architectures and incomplete refactoring efforts.
 
-**1. Hardcoded Executable Paths (Crash Risk/Functionality Failure)**
-*   **File:** `Sprung/Export/NativePDFGenerator.swift`
-*   **Issue Type:** Anti-Pattern / Brittleness
-*   **Description:** The PDF generator relies on finding a specific Chrome or Chromium executable at hardcoded paths. If the user installs Chrome in a non-standard location or uses a different Chromium-based browser (Brave, Edge, etc. not listed), PDF export will fail silently or throw a generic error.
-*   **Code Snippet:**
-    ```swift
-    let chromePaths = [
-        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-        "/Applications/Chromium.app/Contents/MacOS/Chromium",
-        // ...
-    ]
-    ```
-*   **Recommendation:** Use `NSWorkspace.shared.urlForApplication(withBundleIdentifier:)` to dynamically locate "com.google.Chrome" or allow the user to select their browser path in Settings if the default check fails.
+---
 
-**2. Legacy Data Model Retention (Data Integrity Risk)**
-*   **File:** `Sprung/SearchOps/Models/JobLead.swift` & `Sprung/DataManagers/SchemaVersioning.swift`
-*   **Issue Type:** Legacy Cruft
-*   **Description:** `JobLead` is marked `@available(*, deprecated, message: "Use JobApp instead...")`. However, it is still included in `SprungSchema.models`, meaning it is still creating tables in the database. Furthermore, `SearchOpsPipelineCoordinator` initializes a `JobLeadStore`. If the app writes to `JobLead` instead of `JobApp` in specific SearchOps flows, data will be fragmented between the old and new models.
-*   **Code Snippet:**
-    ```swift
-    // Sprung/SearchOps/Services/SearchOpsPipelineCoordinator.swift
-    self.jobLeadStore = JobLeadStore(context: modelContext) // Initializes deprecated store
-    ```
-*   **Recommendation:**
-    1.  Create a migration to move any existing `JobLead` data to `JobApp`.
-    2.  Remove `JobLead` from `SprungSchema`.
-    3.  Remove `JobLeadStore`.
-    4.  Update `SearchOpsPipelineCoordinator` to use `JobAppStore` exclusively.
+### 1. Critical (Fix Immediately)
 
-### High Priority
+**Issue**: Unsafe Shell Execution & Hardcoded Paths
+**File**: `Sprung/Export/NativePDFGenerator.swift`
+**Description**: The PDF generator attempts to find a Chrome binary by checking hardcoded paths (e.g., `/opt/homebrew/bin/chrome`). It then uses `Process()` to execute it. This is brittle, insecure, and will likely fail on user machines without Chrome installed in specific locations or in sandboxed App Store environments.
+**Code Snippet**:
+```swift
+let binaryPaths = [
+    "/opt/homebrew/bin/chromium",
+    "/usr/local/bin/chromium", // ...
+]
+// ...
+process.executableURL = URL(fileURLWithPath: chromePath)
+```
+**Recommendation**: Embed a specific version of Chromium/Headless shell within the app bundle (as hinted at in the code but implemented alongside hardcoded system paths), or switch to `PDFKit` / `WKWebView`'s native PDF export which doesn't require external binaries. If external binaries are required, proper checking and error handling for missing binaries are needed to prevent crashes/silent failures.
 
-**1. Confusing AI Service Layer Architecture (Complexity)**
-*   **File:** `Sprung/Shared/AI/Models/Services/LLMFacade.swift` vs `_LLMService.swift`
-*   **Issue Type:** Anti-Pattern / Over-Engineering
-*   **Description:** The architecture involves `LLMFacade`, `_LLMService`, `_LLMRequestExecutor`, and `LLMClient`. `LLMFacade` wraps `_LLMService` for some things (like streaming setup) but wraps `LLMClient` for others. `_LLMService` appears to be an internal implementation detail that leaked out or wasn't fully encapsulated. The naming convention `_ClassName` usually implies private/internal, but it is exposed publicly in `AppDependencies`.
-*   **Recommendation:** Consolidate `_LLMService` functionality into `LLMFacade`. Remove the distinction or make `_LLMService` truly private/internal to the module. Ensure one clear entry point for all LLM interactions.
+**Issue**: Force Unwraps in UI Binding Logic
+**File**: `Sprung/Resumes/AI/Views/PhaseReviewBundledView.swift`
+**Description**: The binding logic assumes arrays are in sync. If the underlying data changes while the view is rendering, `currentReview.items[index]` could crash with an index out of bounds.
+**Code Snippet**:
+```swift
+get: {
+    guard let review = viewModel.phaseReviewState.currentReview,
+          index < review.items.count else {
+        // Returns dummy item
+        return PhaseReviewItem(...)
+    }
+    return review.items[index]
+}
+```
+**Recommendation**: Use `Safe` array indexing or refactor the view to iterate over `Identifiable` items rather than indices to generate Bindings safely.
 
-**2. Duplicate Resume Review Logic**
-*   **File:** `Sprung/Resumes/AI/Services/ResumeReviewService.swift` vs `Sprung/Resumes/AI/Services/ResumeReviseViewModel.swift`
-*   **Issue Type:** Duplication / Inconsistent Patterns
-*   **Description:** There are two distinct ways to review a resume.
-    1.  `ResumeReviewService` (used by the "Optimize" button) handles "Assess Quality", "Fix Overflow", and "Reorder Skills".
-    2.  `ResumeReviseViewModel` (used by the "Customize" button) handles "Customize", "Clarify", and "Phase Review".
-    Both construct prompts, handle LLM responses, and modify the resume, but they use different prompt builders (`ResumeReviewQuery` vs `ResumeApiQuery`) and different response handlers.
-*   **Recommendation:** Merge these services. The "Fix Overflow" and "Reorder" logic should likely become workflows within `ResumeReviseViewModel` or tools within the `ToolConversationRunner`, unifying the prompt building and execution strategies.
+---
 
-**3. Massive View Model**
-*   **File:** `Sprung/Resumes/AI/Services/ResumeReviseViewModel.swift`
-*   **Issue Type:** God Object
-*   **Description:** Despite delegating some logic to `PhaseReviewManager` and `RevisionNavigationManager`, this class acts as a massive central hub. It exposes 30+ properties and functions, mixing UI state (`showResumeRevisionSheet`), business logic (`submitSkillExperienceResults`), and data flow (`updateNodes`).
-*   **Recommendation:** Continue the refactoring pattern seen with `PhaseReviewManager`. Move the "Tools" logic (`showSkillExperiencePicker`, `pendingSkillQueries`) entirely into a `ToolsViewModel` or similar, exposing only a clean state object to the View.
+### 2. High Priority (Architectural & Quality)
 
-### Medium Priority
+**Issue**: Incomplete Service Refactoring (God Object)
+**File**: `Sprung/Resumes/AI/Services/ResumeReviewService.swift`
+**Description**: Attempts were made to extract logic into `FixOverflowService` and `ReorderSkillsService`. However, `ResumeReviewService` still retains specific networking methods for those features (`sendFixFitsRequest`, `sendReorderSkillsRequest`). This creates a tight coupling where the "specialized" services depend on the "generic" service to do their specific work.
+**Code Snippet**:
+```swift
+// In ResumeReviewService.swift
+func sendFixFitsRequest(...) { ... }
+func sendReorderSkillsRequest(...) { ... }
 
-**1. Redundant HTML Fetchers**
-*   **File:** `Sprung/JobApplications/Utilities/WebViewHTMLFetcher.swift` vs `Sprung/JobApplications/Utilities/HTMLFetcher.swift`
-*   **Issue Type:** Duplication
-*   **Description:** There are two separate mechanisms for fetching HTML. `HTMLFetcher` uses `URLSession` with headers. `WebViewHTMLFetcher` uses a headless `WKWebView`. `JobApp.importFromIndeed` attempts one, then falls back to the other.
-*   **Recommendation:** Consolidate these into a single `WebResourceService` that handles the strategy pattern (try simple HTTP first, fall back to headless browser) internally, rather than exposing both implementations to the call sites.
+// In FixOverflowService.swift
+init(reviewService: ResumeReviewService, ...) { ... }
+```
+**Recommendation**: Move `sendFixFitsRequest` logic entirely into `FixOverflowService` and `sendReorderSkillsRequest` into `ReorderSkillsService`. Make `ResumeReviewService` purely for the generic review types, or refactor the networking layer to be generic enough that it doesn't need specific methods for each feature.
 
-**2. Unsafe Stringly-Typed Manifests**
-*   **File:** `Sprung/Templates/Utilities/TemplateManifestDefaults.swift`
-*   **Issue Type:** Anti-Pattern
-*   **Description:** The template system relies heavily on string keys (`"work"`, `"summary"`, `"styling"`, etc.). While mapped to enums in some places, `TemplateManifestDefaults` uses raw string arrays and dictionaries extensively. A typo in `defaultSectionOrder` or `recommendedFontSizes` keys would silently fail or cause UI bugs.
-*   **Recommendation:** Define static constants or an Enum for standard section keys (e.g., `StandardSection.work.rawValue`) and use them throughout the manifest defaults to ensure compile-time safety.
+**Issue**: Duplicate Tool Definitions (Hardcoded vs Loaded)
+**File**: `Sprung/SearchOps/Tools/SearchOpsToolExecutor.swift` vs `Sprung/SearchOps/Tools/Schemas/SearchOpsToolSchemas.swift`
+**Description**: Tools are defined **twice**.
+1. `SearchOpsToolSchemas.swift` loads schemas from JSON resources via `SchemaLoader`.
+2. `SearchOpsToolExecutor.swift` has a massive `buildAllToolsStatic()` function with hardcoded schemas inside the code.
+The executor currently uses `buildAllToolsStatic`, meaning the JSON files and `SchemaLoader` are likely dead code or the hardcoded static methods are legacy cruft.
+**Recommendation**: Delete the hardcoded static builder methods in `SearchOpsToolExecutor` and switch it to use the `SearchOpsToolSchemas` loaded from JSON. This reduces file size and centralizes schema definitions.
 
-**3. Forced Unwrapping / Silent Failures in Scraping**
-*   **File:** `Sprung/JobApplications/Models/AppleJobScrape.swift`
-*   **Issue Type:** Anti-Pattern
-*   **Description:** The parsing logic relies on specific HTML IDs (`#jobdetails-postingtitle`) and assumes `first()` returns valid elements. While inside a `try` block, it swallows errors via `Logger.error` and returns void, giving the user no feedback if parsing fails partially.
-*   **Recommendation:** The parsing functions should `throw` specific errors (e.g., `ParsingError.titleNotFound`) so the UI can inform the user *why* the import failed, rather than just failing silently or logging to console.
+**Issue**: Massive View Controller (ViewModel)
+**File**: `Sprung/Resumes/AI/Services/ResumeReviseViewModel.swift`
+**Description**: This class acts as a massive coordinator. It forwards calls to `NavigationManager`, `PhaseReviewManager`, `WorkflowOrchestrator`, `ToolRunner`, etc. It has over 300 lines of pass-through properties and methods.
+**Recommendation**: The view (`RevisionReviewView`) should likely depend directly on `PhaseReviewManager` or `RevisionNavigationManager` for specific states rather than proxying everything through `ResumeReviseViewModel`.
 
-### Legacy Cleanup (Dedicated Section)
+---
 
-This section identifies artifacts from the recent refactor that should be removed or finalized.
+### 3. Medium Priority (Anti-Patterns & Duplication)
 
-#### Safe to Delete Immediately
-1.  **File:** `Sprung/SearchOps/Models/JobLead.swift`
-    *   **Item:** `class JobLead`
-    *   **Reason:** Deprecated in favor of `JobApp`.
-2.  **File:** `Sprung/SearchOps/Stores/JobLeadStore.swift`
-    *   **Item:** `class JobLeadStore`
-    *   **Reason:** Supports the deprecated model.
-3.  **File:** `Sprung/Resumes/AI/Types/ResumeQuery.swift`
-    *   **Item:** `ResumeApiQuery` -> `clarifyingQuestionsSchema` (static property)
-    *   **Reason:** Appears to be duplicated/redefined in `SearchOpsToolSchemas` or handled dynamically in `ClarifyingQuestionsViewModel` via `ResumeApiQuery` (Checking usage: It is used in `ClarifyingQuestionsViewModel`, so **Keep** for now, but mark for unification with the Tool registry).
-4.  **File:** `Sprung/CoverLetters/AI/Services/CoverLetterService.swift`
-    *   **Item:** `extractCoverLetterContent`
-    *   **Reason:** This logic (JSON extraction) is duplicated in `LLMResponseParser.extractJSONFromText`. Use the shared utility instead.
+**Issue**: Stringly-Typed Logic
+**File**: `Sprung/ResumeTree/Models/TreeNodeModel.swift`
+**Description**: `schemaValidationRule` is a String, but there is logic checking for specific values like "regex", "email", etc.
+**Code Snippet**:
+```swift
+var schemaValidationRule: String?
+// ... later ...
+switch rule {
+case "minLength": ...
+case "regex": ...
+}
+```
+**Recommendation**: Use the `Validation.Rule` enum defined in `TemplateManifest.swift` instead of raw strings to ensure type safety.
 
-#### Requires Verification
-1.  **File:** `Sprung/Shared/AI/Models/Services/OpenAIResponsesConversationService.swift`
-    *   **Item:** `onboardingToolSchemas` property (returns empty array).
-    *   **Reason:** If this service is used for onboarding, it might need actual tools. If not, it's dead code.
-2.  **File:** `Sprung/Shared/AI/Models/LLM/LLMVendorMapper.swift`
-    *   **Item:** `streamChunkDTO(from: ChatCompletionChunkObject)`
-    *   **Reason:** Maps `reasoningContent`. Verify OpenRouter/SwiftOpenAI actually returns this field in the chunk object (it's a relatively new/vendor-specific feature).
+**Issue**: Retain Cycle Risk in Closures
+**File**: `Sprung/Shared/AI/Models/Services/LLMFacade.swift`
+**Description**: `makeStreamingHandle` creates a cancel closure that captures `self` weakly, but then executes a Task on MainActor.
+**Code Snippet**:
+```swift
+let cancelClosure: @Sendable () -> Void = { [weak self] in
+    Task { @MainActor in
+        self?.cancelStreaming(handleId: handleId)
+    }
+}
+```
+**Recommendation**: While `[weak self]` is present, the logic involving `activeStreamingTasks` management across actor boundaries is complex. Ensure `cancelStreaming` handles `self` being nil gracefully (it seems to, but verify thread safety of `activeStreamingTasks` dictionary access).
 
-#### Needs Migration Completion
-1.  **SearchOps Integration:**
-    *   `SearchOpsPipelineCoordinator` currently initializes `JobLeadStore`. Change this to `JobAppStore`.
-    *   Update `SprungSchema.models` to remove `JobLead.self`.
-2.  **Settings Migration:**
-    *   `DatabaseMigrationCoordinator` handles model capabilities. Ensure it also handles the migration of any data stored in `JobLead` tables to `JobApp` tables if the user updates the app.
+**Issue**: Duplicated HTML/Text Parsing Logic
+**File**: `Sprung/Shared/Utilities/TextFormatHelpers.swift`
+**Description**: Methods like `stripTags` use `NSAttributedString` to strip HTML. This logic is repeated or similar to logic found in `NativePDFGenerator` (e.g., `fixFontReferences`).
+**Recommendation**: Consolidate HTML cleaning/manipulation logic into a single `HTMLUtility` class.
 
-### Dead Code Detection
+---
 
-1.  **Unused View:** `TemplateEditorOverlayOptionsView`
-    *   **File:** `Sprung/App/Views/TemplateEditor/TemplateEditorOverlayOptionsView.swift`
-    *   **Status:** It is referenced in `TemplateEditorView`, so it is *not* dead, but the logic inside `loadOverlayPDF` (security scoped resource handling) suggests it might be handling file permissions that aren't persisted, making the feature flaky across restarts.
-2.  **Unused Filter:** `TemplateFilters.htmlStripFilter`
-    *   **File:** `Sprung/Templates/Utilities/TemplateData/TemplateFilters.swift`
-    *   **Status:** Logic exists, but search for usage in default templates. If no template uses `{{ htmlStrip ... }}`, it's dead logic.
-3.  **Deprecated Logic:** `TextResumeGenerator.convertEmploymentToArray`
-    *   **File:** `Sprung/Export/TextResumeGenerator.swift`
-    *   **Status:** Contains logic for tree-based resumes AND flat dictionaries. Since `Resume` always has a `rootNode` (via `ResStore.create`), the flat dictionary fallback might be dead code from before the Tree structure was mandatory.
+### 4. Legacy Cleanup & Incomplete Migrations
 
-### Low Priority Suggestions
+This is the most critical section for this specific codebase review.
 
-*   **View Modifiers:** In `AppSheets.swift`, the `AppSheetsModifier` is very large. Break this down into smaller, domain-specific modifiers (e.g., `ResumeSheets`, `NetworkingSheets`).
-*   **Magic Strings:** `SearchOpsToolName` enums use raw strings like "discover_job_sources". These match the JSON schema filenames. A unit test should ensure the Enum raw values match the file names in the bundle to prevent crashes if a file is renamed.
-*   **Logging:** `Logger` uses `OSLoggerBackend`. Ensure `subsystem` is unique per module if you want easier filtering in Console.app (e.g. `com.sprung.ai`, `com.sprung.data`).
+#### A. Internal/Underscore Classes (Safe to Refactor)
+**File**: `Sprung/Shared/AI/Models/Services/LLMService.swift`
+**Finding**: `_LLMService`, `_LLMRequestExecutor`, `_SwiftOpenAIClient`.
+**Analysis**: The underscore prefix suggests these were internal implementation details intended to be hidden behind `LLMFacade`.
+**Recommendation**: Rename these to remove the underscore (e.g., `OpenRouterServiceBackend`, `LLMRequestExecutor`) and ensure `LLMFacade` is the *only* public consumer.
+
+#### B. OpenAI Backend Shim
+**File**: `Sprung/Shared/AI/Models/Services/OpenAIResponsesConversationService.swift`
+**Finding**: This class exists to force the generic OpenAI Responses API to behave like a conversation service.
+**Analysis**: It maintains local state (`conversations` dict) to mimic a persistent conversation because the underlying API might be stateless or handle it differently.
+**Action**: Verify if `LLMConversationService` protocol conformance is actually used for OpenAI backends. If `LLMFacade` primarily uses OpenRouter (which it seems to default to), this might be dead code if the "OpenAI Direct" feature isn't active.
+
+#### C. SearchOps Tool Schemas (Duplicate Truth)
+**File**: `Sprung/SearchOps/Tools/SearchOpsToolExecutor.swift`
+**Finding**: `buildGenerateDailyTasksToolStatic()` and similar methods.
+**Status**: **Legacy Cruft / Incomplete Migration**.
+**Recommendation**: The app seems to have moved *towards* using JSON files (`SchemaLoader`), but the code still executes the hardcoded static methods.
+**Action**:
+1. Verify `SchemaLoader` works correctly.
+2. Update `SearchOpsToolExecutor` to use `SearchOpsToolSchemas`.
+3. **Delete** all `build...Static` methods in `SearchOpsToolExecutor`.
+
+#### D. Resume Review Networking
+**File**: `Sprung/Resumes/AI/Services/ResumeReviewService.swift`
+**Finding**: Methods `sendFixFitsRequest` and `sendReorderSkillsRequest`.
+**Status**: **Incomplete Migration**.
+**Analysis**: The logic for handling the response and prompting resides here, but the *business logic* for what to do with that response has moved to `FixOverflowService` and `ReorderSkillsService`.
+**Action**: Move the networking/prompt construction logic into the specific service classes. `ResumeReviewService` should likely be renamed to `GeneralResumeReviewService` and only handle the `.assessQuality`, `.assessFit`, etc., types.
+
+#### E. Experience Defaults "Draft" Pattern
+**File**: `Sprung/Experience/Models/ExperienceDrafts.swift`
+**Finding**: `ExperienceDefaultsDraft`, `WorkExperienceDraft`, etc.
+**Status**: **Potentially Redundant**.
+**Analysis**: These structs map 1:1 to `ExperienceDefaults` (SwiftData models).
+**Recommendation**: While this isn't strictly "legacy", using `Codable` structs to edit SwiftData models is a valid pattern (Data Transfer Object). However, ensure that the mapping logic in `ExperienceDefaultsDraft.init(model:)` and `apply(to:)` is kept in sync. If the SwiftData models are not shared across threads, binding directly to the model in the UI might be simpler, removing this entire file.
+
+---
+
+### 5. Dead Code Candidates
+
+*   **`Sprung/Shared/AI/Models/LLM/LLMVendorMapper.swift`**:
+    *   Method `makeImageDetail` creates a data URL from Data. This is used, but verify if `LLMAttachment` struct is actually used anywhere other than mapping.
+*   **`Sprung/Templates/Utilities/TemplateData/TemplateFilters.swift`**:
+    *   Filter `htmlStripFilter` appears to be registered but check if Mustache templates actually use `{{ htmlStrip ... }}`.
+*   **`Sprung/Shared/UIComponents/WindowDragHandle.swift`**:
+    *   `WindowDragHandleView` and `WindowDragHandle`. Check if these are actually used in `BorderlessOverlayWindow`. The window sets `isMovableByWindowBackground = false`, implying it might need this, but `OnboardingInterviewView` (not included) might be the only consumer.
+*   **`Sprung/JobApplications/Models/IndeedJobScrape.swift`**:
+    *   The `importFromIndeed` function relies on `WebResourceService`. If `CloudflareChallengeView` (which handles Indeed challenges) is the primary way Indeed is loaded, the direct scraping logic in `importFromIndeed` might be unreachable or broken due to anti-bot measures.
+
+### 6. Unnecessary Duplication
+
+1.  **Model Definitions**:
+    *   `OpenRouterModel` (Shared) vs `EnabledLLM` (DataManagers). They store almost identical data (ID, name, capabilities). `EnabledLLM` acts as a local cache/settings object, but fields like `contextLength` and `pricingTier` are duplicated.
+
+2.  **Prompt Building**:
+    *   `ResumeReviewQuery.swift` and `ResumeApiQuery.swift` (in `Shared/AI/Types` and `Resumes/AI/Types`). Both build prompts for resume analysis. `ResumeApiQuery` seems to be the "New" structured approach, while `ResumeReviewQuery` handles the "Old" text-based reviews.
+    *   **Recommendation**: Merge these. `ResumeReviewService` should likely use `ResumeApiQuery`.
+
+3.  **Parsers**:
+    *   `LLMResponseParser.swift` (Shared) vs `_JSONResponseParser` (Shared).
+    *   `LLMResponseParser` parses JSON from strings (handling markdown blocks).
+    *   `_JSONResponseParser` does... essentially the same thing but specifically for `LLMResponseDTO`.
+    *   **Recommendation**: Merge into a single robust JSON extraction/parsing utility.
+
+### Summary Plan
+
+1.  **Refactor SearchOps Tools**: Switch `SearchOpsToolExecutor` to use `SearchOpsToolSchemas` and delete the hardcoded static methods (~200 lines of code).
+2.  **Clean up Resume Services**: Move networking logic from `ResumeReviewService` into `FixOverflowService` and `ReorderSkillsService`.
+3.  **Consolidate Parsers**: Merge `LLMResponseParser` and `_JSONResponseParser`.
+4.  **Fix PDF Generator**: Remove hardcoded paths to Chrome; implement a safe fallback or bundle check.
+5.  **Rename Internal Services**: Rename `_LLMService` to `LLMServiceBackend` and make it private to the module if possible, exposing only `LLMFacade`.
