@@ -192,7 +192,9 @@ extension Statuses {
         }
         return descriptionParts.joined(separator: "\n")
     }
-    // UI helpers have been moved to SwiftUI‑only extension (ViewExtensions).
+
+    // MARK: - Initializers
+
     init(
         jobPosition: String = "",
         jobLocation: String = "",
