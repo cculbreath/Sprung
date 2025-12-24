@@ -94,7 +94,13 @@ struct ProposeCardAssignmentsTool: InterviewTool {
         await coordinator.state.storeCardProposals(proposalsToStore)
 
         // Gate dispatch_kc_agents until user approves assignments
-        await coordinator.state.excludeTool(OnboardingToolName.dispatchKCAgents.rawValue)
+        // BUT only if user hasn't already clicked "Generate Cards" (which would have ungated it)
+        let isAlreadyGenerating = await MainActor.run { coordinator.ui.isGeneratingCards }
+        if !isAlreadyGenerating {
+            await coordinator.state.excludeTool(OnboardingToolName.dispatchKCAgents.rawValue)
+        } else {
+            Logger.info("📋 Skipping dispatch_kc_agents gating - user already approved generation", category: .ai)
+        }
 
         // Emit event for UI/coordinator awareness
         await coordinator.eventBus.publish(.cardAssignmentsProposed(
@@ -204,7 +210,13 @@ struct ProposeCardAssignmentsTool: InterviewTool {
         await coordinator.state.storeCardProposals(proposals)
 
         // Gate dispatch_kc_agents until user approves
-        await coordinator.state.excludeTool(OnboardingToolName.dispatchKCAgents.rawValue)
+        // BUT only if user hasn't already clicked "Generate Cards" (which would have ungated it)
+        let isAlreadyGenerating = await MainActor.run { coordinator.ui.isGeneratingCards }
+        if !isAlreadyGenerating {
+            await coordinator.state.excludeTool(OnboardingToolName.dispatchKCAgents.rawValue)
+        } else {
+            Logger.info("📋 Skipping dispatch_kc_agents gating (auto-assign) - user already approved generation", category: .ai)
+        }
 
         // Emit event for UI
         await coordinator.eventBus.publish(.cardAssignmentsProposed(
