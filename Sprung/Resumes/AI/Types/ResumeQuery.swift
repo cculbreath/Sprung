@@ -203,15 +203,33 @@ import SwiftUI
         )
     }()
     /// System prompt using the native SwiftOpenAI message format
-    let genericSystemMessage = LLMMessage.text(
-        role: .system,
-        content: """
-        You are an expert career coach with a specialization in crafting and refining technical resumes to optimize them for job applications. \
-        With extensive experience in helping candidates secure interviews at top companies, you understand the importance of aligning resume content with job descriptions and the subtleties of tailoring resumes to specific roles. \
-        Your goal is to propose revisions that truthfully showcase the candidate's relevant achievements, experiences, and skills. \
-        Make the resume compelling, concise, and closely aligned with the target job posting, without adding any fabricated details.
-        """
-    )
+    let genericSystemMessage: LLMMessage = {
+        let content = loadPromptTemplate(named: "searchops_generic_system")
+        return LLMMessage.text(role: .system, content: content)
+    }()
+
+    // MARK: - Prompt Loading
+
+    private static func loadPromptTemplate(named name: String) -> String {
+        guard let url = Bundle.main.url(forResource: name, withExtension: "txt", subdirectory: "Resources/Prompts"),
+              let content = try? String(contentsOf: url, encoding: .utf8) else {
+            Logger.error("Failed to load prompt template: \(name)", category: .ai)
+            return "Error loading prompt template"
+        }
+        return content
+    }
+
+    private func loadPromptTemplate(named name: String) -> String {
+        Self.loadPromptTemplate(named: name)
+    }
+
+    private func loadPromptTemplateWithSubstitutions(named name: String, substitutions: [String: String]) -> String {
+        var template = loadPromptTemplate(named: name)
+        for (key, value) in substitutions {
+            template = template.replacingOccurrences(of: "{\(key)}", with: value)
+        }
+        return template
+    }
     // Make this var instead of let so it can be updated
     var applicant: Applicant
     var queryString: String = ""
@@ -282,72 +300,17 @@ import SwiftUI
     func wholeResumeQueryString() async -> String {
         // Ensure the resume's rendered text is up-to-date by awaiting the export/render process.
         try? await exportCoordinator.ensureFreshRenderedText(for: res)
-        // Build the improved prompt
-        let prompt = """
-        ================================================================================
-        LATEST RÉSUMÉ (PLAIN TEXT):
-        \(resumeText)
-        ================================================================================
-        This is the most recent version of \(applicant.name)'s résumé in plain text, generated from the following JSON data using a templating system. \
-        This system also builds HTML and PDF outputs from the same JSON.
-        RÉSUMÉ SOURCE JSON:
-        \(resumeJson)
-        ================================================================================
-        ================================================================================
-        GOAL:
-        Our objective is to secure \(applicant.name) an interview for the following position:
-        JOB LISTING:
-        \(jobListing)
-        TASK:
-        - Review \(applicant.name)’s latest résumé and background documents.
-        - Propose revisions that align with the listed job requirements, reflect the key responsibilities and skills mentioned, and truthfully enhance the resume’s impact.
-        - Incorporate relevant keywords from the job listing to help pass automated screeners.
-        - Ensure you do not introduce any fabricated experience.
-        - Provide all revisions as structured data in an array of RevNodes (RevArray) matching the schema below.
-        IMPORTANT:
-        1. Only modify the fields in the EditableNodes array below.
-        2. For each field that needs no change, set newValue to "" and valueChanged to false.
-        3. For each field that requires a change, propose newValue, set valueChanged to true, and include a “why” explanation if non-trivial.
-        4. The final resume must remain truthful, but should strongly emphasize relevant achievements and mirror the language of the job listing where appropriate.
-        5. Avoid redundant phrasing among bullet points; keep language varied if multiple items share similar responsibilities or skills.
-        6. Safeguard the broader skill set if it is relevant to roles beyond the target position, but do prioritize clarity and relevance to this specific job.
-        7. Keep formatting cues consistent with the style implied by the existing resume content.
-        8. CRITICAL: Replacement content should be roughly the same length as the original to accommodate fixed text-box-sized layouts. \
-        Aim to match character count within ±10% when possible.
-        ================================================================================
-        EDITABLE NODES:
-        \(updatableFieldsString)
-        ================================================================================
-        BACKGROUND DOCUMENTS:
-        \(backgroundDocs)
-        ================================================================================
-        OUTPUT INSTRUCTIONS:
-        - Return your proposed revisions as JSON matching the RevNode array schema provided.
-        - For each original EditableNode, include exactly one RevNode in the RevArray.
 
-        GROUPED NODES (isGrouped=true):
-        - These nodes represent multiple items (e.g., bullet points for a job, keywords for a skill category).
-        - Input provides: "oldValueArray" (array of current items) and "value" (items joined by newlines).
-        - Your response MUST include "newValueArray" with your proposed items as an array.
-        - You MAY add new items, remove items, reorder items, or modify individual items.
-        - Set "newValue" to the items joined by newlines (for display purposes).
-        - Set "isGrouped": true in your response.
+        // Build the prompt from template
+        let prompt = loadPromptTemplateWithSubstitutions(named: "resume_whole_resume_query", substitutions: [
+            "resumeText": resumeText,
+            "applicantName": applicant.name,
+            "resumeJson": resumeJson,
+            "jobListing": jobListing,
+            "updatableFieldsString": updatableFieldsString,
+            "backgroundDocs": backgroundDocs
+        ])
 
-        SCALAR NODES (isGrouped=false or not present):
-        - These are single-value fields (e.g., job title, company name).
-        - Use standard "oldValue" and "newValue" strings.
-        - Do NOT include array fields for scalar nodes.
-
-        FOR ALL NODES:
-        - If no change is required, set "newValue" to "" and "valueChanged" to false.
-        - The "why" field can be empty if the reason is self-explanatory.
-        - Do NOT modify "id" or "treePath" - return them exactly as received.
-        SUMMARY:
-        Make the resume as compelling and accurate as possible for the target job. \
-        Keep it honest, relevant, and ensure that any additions or modifications support \(applicant.name)’s candidacy for the role. \
-        Use strategic language to highlight achievements, mirror core keywords from the job posting, and present a polished, stand-out resume.
-        ================================================================================
-        """
         // If debug flag is set, save the prompt to a text file in the user's Downloads folder.
         if saveDebugPrompt {
             savePromptToDownloads(content: prompt, fileName: "promptDebug.txt")
@@ -361,26 +324,7 @@ import SwiftUI
         // Get resume context WITHOUT editable nodes (clarifying questions don't need them)
         let resumeContextOnly = await clarifyingQuestionsContextString()
         // Add clarifying questions instruction
-        let clarifyingQuestionsInstruction = """
-        ================================================================================
-        CLARIFYING QUESTIONS MODE
-        ================================================================================
-        Before proposing revisions, you have two options:
-        1. **Ask Clarifying Questions** (up to 3): If you need more information to provide better, more targeted revisions
-        2. **Proceed Directly**: If you have sufficient information to proceed with revisions
-        Consider asking about:
-        - Specific skills or experiences to emphasize for this role
-        - Achievements that could be quantified or better highlighted
-        - Technologies, methodologies, or certifications to prioritize
-        - Industry-specific terminology or focus areas
-        - Career trajectory or role-specific accomplishments
-        If you choose to ask questions, they should be:
-        - Specific and actionable
-        - Focused on improving relevance to this particular job
-        - Designed to gather information not already clear from the resume and job listing
-        Respond with either clarifying questions OR set proceedWithRevisions to true.
-        ================================================================================
-        """
+        let clarifyingQuestionsInstruction = loadPromptTemplate(named: "resume_clarifying_questions_instructions")
         return resumeContextOnly + clarifyingQuestionsInstruction
     }
     /// Generate resume context for clarifying questions (excludes editable nodes and JSON)
@@ -391,26 +335,15 @@ import SwiftUI
     func clarifyingQuestionsContextString() async -> String {
         // Ensure the resume's rendered text is up-to-date
         try? await exportCoordinator.ensureFreshRenderedText(for: res)
-        // Build context prompt without JSON or editable nodes
-        let prompt = """
-        ================================================================================
-        LATEST RÉSUMÉ (PLAIN TEXT):
-        \(resumeText)
-        ================================================================================
-        GOAL:
-        Our objective is to secure \(applicant.name) an interview for the following position:
-        JOB LISTING:
-        \(jobListing)
-        CONTEXT:
-        - Review \(applicant.name)'s résumé and the job listing
-        - Consider what additional information would help provide better, more targeted revisions
-        - Focus on understanding the candidate's experience, achievements, and how to best position them for this role
-        - Background documents provide additional context about the candidate's experience
-        ================================================================================
-        BACKGROUND DOCUMENTS:
-        \(backgroundDocs)
-        ================================================================================
-        """
+
+        // Build context prompt from template
+        let prompt = loadPromptTemplateWithSubstitutions(named: "resume_clarifying_questions_context", substitutions: [
+            "resumeText": resumeText,
+            "applicantName": applicant.name,
+            "jobListing": jobListing,
+            "backgroundDocs": backgroundDocs
+        ])
+
         // If debug flag is set, save the prompt to a text file in the user's Downloads folder.
         if saveDebugPrompt {
             savePromptToDownloads(content: prompt, fileName: "clarifyingQuestionsDebug.txt")
@@ -423,27 +356,12 @@ import SwiftUI
     func multiTurnRevisionPrompt() async -> String {
         // Ensure the resume's rendered text is up-to-date
         try? await exportCoordinator.ensureFreshRenderedText(for: res)
-        // Build prompt with only editable nodes and instructions (context already established)
-        let prompt = """
-        Based on our discussion, please provide revision suggestions for the resume. Here are the editable nodes that can be modified:
-        ================================================================================
-        EDITABLE NODES:
-        \(updatableFieldsString)
-        ================================================================================
-        TASK:
-        - Propose revisions that align with the job requirements and incorporate the information from our discussion
-        - Provide all revisions as structured data in an array of RevNodes (RevArray) matching the schema
-        - For each field that needs no change, set newValue to "" and valueChanged to false
-        - For each field that requires a change, propose newValue, set valueChanged to true, and include a "why" explanation if non-trivial
-        - Do **not** modify the "id" or "treePath" fields. Always return the exact same values you received for those fields for each node
-        - CRITICAL: Replacement content should be roughly the same length as the original to accommodate fixed text-box-sized layouts. \
-        Aim to match character count within ±10% when possible
-        OUTPUT INSTRUCTIONS:
-        - Return your proposed revisions as JSON matching the RevNode array schema provided
-        - For each original EditableNode, include exactly one RevNode in the RevArray
-        - If no change is required for a given node, set "newValue" to "" and "valueChanged" to false
-        - The "why" field can be an empty string if the reason is self-explanatory
-        """
+
+        // Build prompt from template
+        let prompt = loadPromptTemplateWithSubstitutions(named: "resume_multi_turn_revision", substitutions: [
+            "updatableFieldsString": updatableFieldsString
+        ])
+
         // If debug flag is set, save the prompt to a text file
         if saveDebugPrompt {
             savePromptToDownloads(content: prompt, fileName: "multiTurnRevisionDebug.txt")
@@ -499,72 +417,20 @@ import SwiftUI
             ? "All items are presented together for holistic review. Consider relationships between items."
             : "Each item should be reviewed individually based on relevance to the target job."
 
-        let prompt = """
-        ================================================================================
-        PHASE \(phaseNumber) REVIEW: \(section.uppercased()) - \(fieldPath)
-        ================================================================================
-
-        CONTEXT:
-        We are customizing \(applicant.name)'s resume for the following position:
-
-        JOB LISTING:
-        \(jobListing)
-
-        ITEMS TO REVIEW:
-        [
-            \(nodesJson)
-        ]
-
-        REVIEW MODE:
-        \(bundleDescription)
-
-        ITEM TYPE:
-        \(itemTypeDescription)
-
-        PATH CONTEXT:
-        The "path" field shows the hierarchical location of each item (e.g., "Acme Corp.highlights" means
-        these are highlights for the job at Acme Corp). Use this context to ensure changes are relevant
-        to that specific parent item.
-
-        TASK:
-        Review each item and propose changes to better align with the target job.
-        For each item, decide whether to:
-        - **keep**: No change needed (value is appropriate for this role)
-        - **modify**: Change the value to better match job requirements
-        - **remove**: Remove this item (not relevant for this role)
-        - **add**: Suggest a new item that should be added
-
-        For container items (those with childValues):
-        - proposedChildren should contain the final list of child values
-        - You can add, remove, or reorder children as needed
-
-        IMPORTANT GUIDELINES:
-        1. Prioritize content that directly matches job requirements
-        2. Don't remove content that showcases relevant breadth
-        3. Modifications should align terminology with job posting language
-        4. Only add content genuinely supported by the background documents
-        5. Consider ATS (Applicant Tracking System) keyword matching
-        6. Ensure consistent formatting within lists:
-           - Use consistent capitalization (e.g., all sentence case or all title case)
-           - Use consistent punctuation (e.g., all items end with periods, or none do)
-           - Bullet points/highlights typically start with action verbs and no trailing periods
-           - Skills/keywords typically use title case without punctuation
-
-        BACKGROUND DOCUMENTS:
-        \(backgroundDocs)
-
-        OUTPUT:
-        Return your proposals as JSON matching the phaseReview schema.
-        Required fields in response:
-        - section: "\(section)"
-        - phase: \(phaseNumber)
-        - field: "\(fieldPath)"
-        - bundled: \(isBundled)
-        - items: array of review proposals
-
-        Include a clear "reason" explanation for any non-keep actions.
-        ================================================================================
-        """
+        // Build prompt from template with substitutions
+        let prompt = loadPromptTemplateWithSubstitutions(named: "resume_phase_review", substitutions: [
+            "phaseNumber": String(phaseNumber),
+            "sectionUppercase": section.uppercased(),
+            "fieldPath": fieldPath,
+            "applicantName": applicant.name,
+            "jobListing": jobListing,
+            "nodesJson": nodesJson,
+            "bundleDescription": bundleDescription,
+            "itemTypeDescription": itemTypeDescription,
+            "backgroundDocs": backgroundDocs,
+            "section": section,
+            "isBundled": String(isBundled)
+        ])
 
         if saveDebugPrompt {
             savePromptToDownloads(content: prompt, fileName: "phaseReviewPrompt_\(section)_phase\(phaseNumber).txt")
@@ -620,49 +486,17 @@ import SwiftUI
             return json
         }.joined(separator: ",\n    ")
 
-        let prompt = """
-        ================================================================================
-        PHASE \(phaseNumber) RESUBMISSION: \(section.uppercased()) - \(fieldPath)
-        ================================================================================
-
-        CONTEXT:
-        The user has rejected some of your previous proposals. Please provide revised suggestions
-        for the items below. Pay close attention to any user feedback provided.
-
-        TARGET POSITION:
-        \(jobListing)
-
-        REJECTED ITEMS REQUIRING NEW PROPOSALS:
-        [
-            \(itemsJson)
-        ]
-
-        INSTRUCTIONS:
-        1. For items rejected WITH feedback: Carefully incorporate the user's feedback into your new proposal
-        2. For items rejected WITHOUT feedback: The user disagreed with your approach - try a different strategy
-        3. Consider alternative phrasings, different emphasis, or modified content
-        4. Maintain consistency with items the user already accepted in this phase
-        5. Keep formatting consistent (capitalization, punctuation style)
-
-        For container items (those with children):
-        - proposedChildren should contain the revised list of child values
-        - Consider the user's feedback when adding, removing, or modifying children
-
-        BACKGROUND DOCUMENTS:
-        \(backgroundDocs)
-
-        OUTPUT:
-        Return your revised proposals as JSON matching the phaseReview schema.
-        Only include the items listed above - do not re-propose items that were already accepted.
-
-        Required fields:
-        - section: "\(section)"
-        - phase: \(phaseNumber)
-        - field: "\(fieldPath)"
-        - bundled: \(isBundled)
-        - items: array of revised proposals (only for the rejected items above)
-        ================================================================================
-        """
+        // Build prompt from template with substitutions
+        let prompt = loadPromptTemplateWithSubstitutions(named: "resume_phase_resubmission", substitutions: [
+            "phaseNumber": String(phaseNumber),
+            "sectionUppercase": section.uppercased(),
+            "fieldPath": fieldPath,
+            "jobListing": jobListing,
+            "itemsJson": itemsJson,
+            "backgroundDocs": backgroundDocs,
+            "section": section,
+            "isBundled": String(isBundled)
+        ])
 
         if saveDebugPrompt {
             savePromptToDownloads(content: prompt, fileName: "phaseResubmissionPrompt_\(section)_phase\(phaseNumber).txt")

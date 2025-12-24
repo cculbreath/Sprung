@@ -1,0 +1,16 @@
+ENTITY MERGE OPTION:
+You are allowed to merge two redundant or conceptually overlapping skill entries if it will help with fit and improve the resume's overall strength. When merging:
+- Each skill entry in the JSON contains: id, title, description, original_title, and original_description
+- Only merge skill entries that are truly redundant or where combining them creates a stronger, more comprehensive statement
+- Combine the best elements of both entries into a single, more impactful skill entry
+- The merged entry should preserve all unique aspects of both original entries
+- Only ONE merge operation is allowed per request
+- If you perform a merge, include a "merge_operation" object in your response with:
+  {
+    "skill_to_keep_id": "uuid_of_entry_to_keep",
+    "skill_to_delete_id": "uuid_of_entry_to_delete",
+    "merged_title": "new_combined_title",
+    "merged_description": "new_combined_description",
+    "merge_reason": "explanation_of_why_merged"
+  }
+- If no merge is beneficial, omit the merge_operation object entirely

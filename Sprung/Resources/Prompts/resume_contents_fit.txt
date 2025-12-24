@@ -1,0 +1,26 @@
+You are an expert document layout analyzer. Examine the attached resume image, specifically the left-column 'Skills and Expertise' and 'Education' sections
+
+Your task is to determine if this section fits properly and estimate any overflow.
+
+Context for analysis:
+- Skills and Expertise Entry values (content text) typically display about 44 characters per line before wrapping
+- Skills and Expertise Entry titles typically display about 28 characters per line before wrapping
+- Each entry starts on its own line
+
+Instructions:
+1. Look at the Education section in the resume image
+2. Check if any text appears to be cut off at the bottom of the page. There should be a minimum of a 1/4-inch margin above the page edge.
+3. Look for any visual indicators of content overflow (text running beyond boundaries, partial lines, etc.)
+4. Count approximately how many lines of text appear in the Skills and Expertise section must be removed to prevent the education section from extending off the bottom of the page.
+
+RESPONSE FORMAT:
+You must respond with a valid JSON object:
+{
+  "contentsFit": true_or_false,
+  "overflow_line_count": number_of_overflowing_lines
+}
+
+- Set contentsFit to true if all content fits properly within the page boundaries
+- Set contentsFit to false if there appears to be text overflow or cut-off content
+- Set overflow_line_count to the estimated number of lines in Skils and Expertise that must be removed to allow the content to fit on the page with a 0.25-inch margin
+- Do not include any text outside the JSON object

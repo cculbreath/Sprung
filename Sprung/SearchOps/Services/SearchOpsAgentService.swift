@@ -43,6 +43,17 @@ actor SearchOpsAgentService {
         }
     }
 
+    // MARK: - Prompt Loading
+
+    private func loadPromptTemplate(named name: String) -> String {
+        guard let url = Bundle.main.url(forResource: name, withExtension: "txt", subdirectory: "Resources/Prompts"),
+              let content = try? String(contentsOf: url, encoding: .utf8) else {
+            Logger.error("Failed to load prompt template: \(name)", category: .ai)
+            return "Error loading prompt template"
+        }
+        return content
+    }
+
     // MARK: - Public API: Agent Conversations
 
     /// Run a conversational agent that can use tools to complete a task
@@ -137,28 +148,7 @@ actor SearchOpsAgentService {
 
     /// Generate daily tasks using the agent
     func generateDailyTasks(focusArea: String = "balanced") async throws -> DailyTasksResult {
-        let systemPrompt = """
-            You are a job search coach helping generate today's prioritized action items.
-            Focus on high-impact activities that move the job search forward.
-            Priority order: follow-ups > applications > networking > lead gathering.
-            Be specific and actionable. Each task should be completable in one sitting.
-
-            When you receive context from the generate_daily_tasks tool, analyze it and return
-            your final response as a JSON object with:
-            {
-                "tasks": [
-                    {
-                        "task_type": "gather|customize|apply|follow_up|networking|event_prep|debrief",
-                        "title": "Short actionable title",
-                        "description": "Brief context or instructions",
-                        "priority": 0-2 (higher = more important),
-                        "estimated_minutes": 15-60,
-                        "related_id": "UUID if related to a specific source/event/contact"
-                    }
-                ],
-                "summary": "Brief summary of today's focus"
-            }
-            """
+        let systemPrompt = loadPromptTemplate(named: "searchops_generate_daily_tasks")
 
         let userMessage = "Generate today's job search tasks. Focus area: \(focusArea)"
 
@@ -172,32 +162,7 @@ actor SearchOpsAgentService {
 
     /// Discover job sources using the agent
     func discoverJobSources(sectors: [String], location: String) async throws -> JobSourcesResult {
-        let systemPrompt = """
-            You are an expert job search researcher. Generate high-quality job sources
-            tailored to the candidate's target sectors and location.
-
-            Include a mix of:
-            - Local job boards and tech community sites
-            - Industry-specific boards
-            - Company career pages for target employers
-            - Startup-focused boards
-            - Professional networking resources
-
-            IMPORTANT: Only include sources with REAL, verifiable URLs. Do not make up URLs.
-
-            After using the discover_job_sources tool, return your findings as:
-            {
-                "sources": [
-                    {
-                        "name": "Source name",
-                        "url": "Full URL",
-                        "category": "local|industry|company_direct|aggregator|startup|staffing|networking",
-                        "relevance_reason": "Why this is relevant",
-                        "recommended_cadence_days": 3-7
-                    }
-                ]
-            }
-            """
+        let systemPrompt = loadPromptTemplate(named: "searchops_discover_job_sources")
 
         let userMessage = "Discover job sources for sectors: \(sectors.joined(separator: ", ")) in \(location)"
 
@@ -211,34 +176,7 @@ actor SearchOpsAgentService {
 
     /// Discover networking events using the agent
     func discoverNetworkingEvents(sectors: [String], location: String, daysAhead: Int = 14) async throws -> NetworkingEventsResult {
-        let systemPrompt = """
-            You are a networking coach helping find relevant professional events.
-
-            Search for:
-            - Meetups and tech community events
-            - Industry conferences and workshops
-            - Company-hosted events and open houses
-            - Career fairs and networking mixers
-            - Virtual events if relevant
-
-            After using the discover_networking_events tool, return findings as:
-            {
-                "events": [
-                    {
-                        "name": "Event name",
-                        "date": "ISO8601 date",
-                        "time": "Event time",
-                        "location": "Venue or 'Virtual'",
-                        "url": "Event URL",
-                        "event_type": "meetup|happy_hour|conference|workshop|tech_talk|open_house|career_fair|panel_discussion|hackathon|virtual_event",
-                        "organizer": "Organizer name",
-                        "estimated_attendance": "intimate|small|medium|large|massive",
-                        "cost": "Free or cost",
-                        "relevance_reason": "Why this is relevant"
-                    }
-                ]
-            }
-            """
+        let systemPrompt = loadPromptTemplate(named: "searchops_discover_networking_events")
 
         let userMessage = "Find networking events for sectors: \(sectors.joined(separator: ", ")) in \(location) for the next \(daysAhead) days"
 
@@ -252,22 +190,7 @@ actor SearchOpsAgentService {
 
     /// Evaluate an event for attendance
     func evaluateEvent(eventId: UUID) async throws -> EventEvaluationResult {
-        let systemPrompt = """
-            You are a strategic networking advisor. Evaluate events based on:
-            - Relevance to target sectors and companies
-            - Expected networking value (quality of attendees)
-            - Time investment vs. potential return
-            - Historical outcomes from similar events
-
-            After using the evaluate_networking_event tool, return:
-            {
-                "recommendation": "strong_yes|yes|maybe|skip",
-                "rationale": "Detailed explanation",
-                "expected_value": "What you might gain",
-                "concerns": ["Any concerns"],
-                "preparation_tips": ["Tips if attending"]
-            }
-            """
+        let systemPrompt = loadPromptTemplate(named: "searchops_evaluate_event")
 
         let userMessage = "Evaluate event \(eventId.uuidString) for attendance"
 
@@ -281,18 +204,7 @@ actor SearchOpsAgentService {
 
     /// Prepare for an upcoming event
     func prepareForEvent(eventId: UUID, focusCompanies: [String] = [], goals: String? = nil) async throws -> EventPrepResult {
-        let systemPrompt = """
-            You are a networking coach helping prepare for an event.
-            Create comprehensive preparation materials including:
-            - A clear goal for the event
-            - An elevator pitch tailored to the audience
-            - Talking points with relevance to your background
-            - Research on target companies
-            - Conversation starters
-            - Things to avoid
-
-            After using the prepare_for_event tool, return preparation materials as JSON.
-            """
+        let systemPrompt = loadPromptTemplate(named: "searchops_prepare_for_event")
 
         var userMessage = "Prepare me for event \(eventId.uuidString)"
         if !focusCompanies.isEmpty {
@@ -312,17 +224,7 @@ actor SearchOpsAgentService {
 
     /// Generate weekly reflection
     func generateWeeklyReflection() async throws -> String {
-        let systemPrompt = """
-            You are a supportive job search coach providing a weekly reflection.
-            Be encouraging but honest. Focus on:
-            - What went well
-            - Areas for improvement
-            - Specific, actionable suggestions for next week
-
-            Keep it concise (2-3 paragraphs). Be personal and motivating.
-
-            After using the generate_weekly_reflection tool, provide the reflection directly.
-            """
+        let systemPrompt = loadPromptTemplate(named: "searchops_generate_weekly_reflection")
 
         let userMessage = "Generate my weekly job search reflection"
 
@@ -334,28 +236,7 @@ actor SearchOpsAgentService {
 
     /// Suggest networking actions
     func suggestNetworkingActions(focus: String = "balanced") async throws -> NetworkingActionsResult {
-        let systemPrompt = """
-            You are a relationship management advisor. Suggest specific networking actions.
-            Consider:
-            - Contacts whose warmth is decaying
-            - Pending follow-ups
-            - Upcoming events to leverage
-            - Opportunities to strengthen key relationships
-
-            After using suggest_networking_actions, return:
-            {
-                "actions": [
-                    {
-                        "contact_name": "Name",
-                        "contact_id": "UUID",
-                        "action_type": "reach_out|follow_up|reconnect|invite_to_event",
-                        "action_description": "Specific action",
-                        "urgency": "high|medium|low",
-                        "suggested_opener": "Message opener"
-                    }
-                ]
-            }
-            """
+        let systemPrompt = loadPromptTemplate(named: "searchops_suggest_networking_actions")
 
         let userMessage = "Suggest networking actions. Focus: \(focus)"
 
@@ -369,21 +250,7 @@ actor SearchOpsAgentService {
 
     /// Draft an outreach message
     func draftOutreachMessage(contactId: UUID, purpose: String, channel: String, tone: String = "professional") async throws -> OutreachMessageResult {
-        let systemPrompt = """
-            You are a professional communication coach. Draft personalized outreach messages.
-            Consider:
-            - The relationship history
-            - The purpose of the outreach
-            - The appropriate tone for the channel
-            - Best practices for professional networking
-
-            After using draft_outreach_message, return:
-            {
-                "subject": "Subject line (for email)",
-                "message": "The draft message",
-                "notes": "Tips for sending"
-            }
-            """
+        let systemPrompt = loadPromptTemplate(named: "searchops_draft_outreach_message")
 
         let userMessage = "Draft a \(channel) message to contact \(contactId.uuidString). Purpose: \(purpose). Tone: \(tone)"
 

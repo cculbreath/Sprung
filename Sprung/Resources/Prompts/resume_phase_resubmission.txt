@@ -1,0 +1,39 @@
+================================================================================
+PHASE {phaseNumber} RESUBMISSION: {sectionUppercase} - {fieldPath}
+================================================================================
+
+CONTEXT:
+The user has rejected some of your previous proposals. Please provide revised suggestions
+for the items below. Pay close attention to any user feedback provided.
+
+TARGET POSITION:
+{jobListing}
+
+REJECTED ITEMS REQUIRING NEW PROPOSALS:
+{itemsJson}
+
+INSTRUCTIONS:
+1. For items rejected WITH feedback: Carefully incorporate the user's feedback into your new proposal
+2. For items rejected WITHOUT feedback: The user disagreed with your approach - try a different strategy
+3. Consider alternative phrasings, different emphasis, or modified content
+4. Maintain consistency with items the user already accepted in this phase
+5. Keep formatting consistent (capitalization, punctuation style)
+
+For container items (those with children):
+- proposedChildren should contain the revised list of child values
+- Consider the user's feedback when adding, removing, or modifying children
+
+BACKGROUND DOCUMENTS:
+{backgroundDocs}
+
+OUTPUT:
+Return your revised proposals as JSON matching the phaseReview schema.
+Only include the items listed above - do not re-propose items that were already accepted.
+
+Required fields:
+- section: "{section}"
+- phase: {phaseNumber}
+- field: "{fieldPath}"
+- bundled: {isBundled}
+- items: array of revised proposals (only for the rejected items above)
+================================================================================

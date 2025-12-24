@@ -1,0 +1,19 @@
+================================================================================
+LATEST RÉSUMÉ (PLAIN TEXT):
+{resumeText}
+================================================================================
+GOAL:
+Our objective is to secure {applicantName} an interview for the following position:
+
+JOB LISTING:
+{jobListing}
+
+CONTEXT:
+- Review {applicantName}'s résumé and the job listing
+- Consider what additional information would help provide better, more targeted revisions
+- Focus on understanding the candidate's experience, achievements, and how to best position them for this role
+- Background documents provide additional context about the candidate's experience
+================================================================================
+BACKGROUND DOCUMENTS:
+{backgroundDocs}
+================================================================================
