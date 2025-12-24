@@ -310,13 +310,6 @@ extension Statuses {
         }
     }
 
-    var displayTitle: String {
-        if !jobPosition.isEmpty {
-            return "\(jobPosition) at \(companyName)"
-        }
-        return companyName
-    }
-
     // MARK: - Conversion from JobLead (Legacy)
 
     /// Initialize JobApp from legacy JobLead model
