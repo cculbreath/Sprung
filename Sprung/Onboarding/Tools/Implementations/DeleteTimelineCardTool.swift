@@ -1,6 +1,7 @@
 import Foundation
 import SwiftyJSON
 import SwiftOpenAI
+
 struct DeleteTimelineCardTool: InterviewTool {
     private static let schema: JSONSchema = JSONSchema(
         type: .object,
@@ -18,17 +19,21 @@ struct DeleteTimelineCardTool: InterviewTool {
         required: ["id"],
         additionalProperties: false
     )
+
     private unowned let coordinator: OnboardingInterviewCoordinator
+
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
+
     var name: String { OnboardingToolName.deleteTimelineCard.rawValue }
     var description: String { "Remove timeline card by ID. Returns {success, id}. Use when user wants to remove an entry." }
     var parameters: JSONSchema { Self.schema }
+
     func execute(_ params: JSON) async throws -> ToolResult {
-        guard let id = params["id"].string, !id.isEmpty else {
-            throw ToolError.invalidParameters("id must be provided")
-        }
+        // Validate card ID
+        let id = try ToolResultHelpers.requireString(params["id"].string, named: "id")
+
         // Delete timeline card via coordinator (which emits events)
         let result = await coordinator.deleteTimelineCard(id: id)
         return .immediate(result)

@@ -30,11 +30,17 @@ struct CreateTimelineCardTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
-        guard let fields = params["fields"].dictionary else {
-            throw ToolError.invalidParameters("fields must be provided")
-        }
+        // Validate fields parameter exists
+        _ = try ToolResultHelpers.requireObject(params["fields"].dictionary, named: "fields")
+
+        let fields = JSON(params["fields"].dictionary!)
+
+        // Validate required fields for new card creation
+        try TimelineValidation.validateNewCardFields(fields)
+
         // Normalize fields for Phase 1 skeleton timeline constraints
-        let normalizedFields = TimelineCardSchema.normalizePhaseOneFields(JSON(fields), includeExperienceType: true)
+        let normalizedFields = TimelineCardSchema.normalizePhaseOneFields(fields, includeExperienceType: true)
+
         // Create timeline card via coordinator (which emits events)
         let result = await coordinator.createTimelineCard(fields: normalizedFields)
         return .immediate(result)

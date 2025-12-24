@@ -33,14 +33,20 @@ struct UpdateTimelineCardTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
-        guard let id = params["id"].string, !id.isEmpty else {
-            throw ToolError.invalidParameters("id must be provided")
-        }
-        guard let fields = params["fields"].dictionary else {
-            throw ToolError.invalidParameters("fields must be provided")
-        }
+        // Validate card ID
+        let id = try ToolResultHelpers.requireString(params["id"].string, named: "id")
+
+        // Validate fields parameter exists
+        _ = try ToolResultHelpers.requireObject(params["fields"].dictionary, named: "fields")
+
+        let fields = JSON(params["fields"].dictionary!)
+
+        // Validate that at least one field is provided for update
+        try TimelineValidation.validateUpdateFields(fields)
+
         // Normalize fields for Phase 1 skeleton timeline constraints (don't override experience_type on update)
-        let normalizedFields = TimelineCardSchema.normalizePhaseOneFields(JSON(fields), includeExperienceType: false)
+        let normalizedFields = TimelineCardSchema.normalizePhaseOneFields(fields, includeExperienceType: false)
+
         // Update timeline card via coordinator (which emits events)
         let result = await coordinator.updateTimelineCard(id: id, fields: normalizedFields)
         return .immediate(result)
