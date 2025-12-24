@@ -13,6 +13,7 @@ struct OnboardingInterviewStepProgressView: View {
                 OnboardingStepProgressItem(title: step.title, status: status)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 }
 private struct OnboardingStepProgressItem: View {
@@ -76,7 +77,6 @@ private struct OnboardingStepProgressItem: View {
         }
         .frame(width: currentWidth, height: capsuleHeight)
         .glassEffect(.regular, in: .capsule)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             StepLabelWidthReader(text: title, font: font, width: $measuredLabelWidth)
         )
