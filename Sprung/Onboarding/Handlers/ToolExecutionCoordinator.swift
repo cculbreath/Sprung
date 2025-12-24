@@ -53,46 +53,25 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
     // MARK: - Tool Execution
     /// Execute a tool call
     private func handleToolCall(_ call: ToolCall) async {
-        // First, check if we're in a waiting state
-        let waitingState = await stateCoordinator.waitingState
-        if let waitingState = waitingState {
-            // Allow timeline tools during validation state (for real-time card creation)
-            let timelineTools = ["create_timeline_card", "update_timeline_card", "delete_timeline_card", "reorder_timeline_cards"]
-            let isTimelineTool = timelineTools.contains(call.name)
-            let isValidationState = waitingState == .validation
-            let isExtractionState = waitingState == .extraction
+        // Validate tool availability using centralized gating logic
+        let availability = await stateCoordinator.checkToolAvailability(call.name)
 
-            // Allow ALL tools during extraction state (for dossier question collection)
-            if isExtractionState {
-                Logger.info("✅ Tool '\(call.name)' allowed during extraction state (dossier collection)", category: .ai)
-            } else if isTimelineTool && isValidationState {
-                // Allow timeline tools during validation state
-                Logger.info("✅ Timeline tool '\(call.name)' allowed during validation state", category: .ai)
-            } else {
-                // Block tools during other waiting states
-                Logger.warning("🚫 Tool call '\(call.name)' blocked - system in waiting state: \(waitingState.rawValue)", category: .ai)
-                await emitToolError(
-                    callId: call.callId,
-                    message: "Cannot execute tools while waiting for user input (state: \(waitingState.rawValue)). Please respond to the pending request first."
-                )
-                return
+        switch availability {
+        case .available:
+            // Tool is available - proceed with execution
+            Logger.debug("🔧 Executing tool: \(call.name)", category: .ai)
+            do {
+                let result = try await toolExecutor.handleToolCall(call)
+                await handleToolResult(result, callId: call.callId, toolName: call.name)
+            } catch {
+                Logger.error("Tool execution failed: \(error)", category: .ai)
+                await emitToolError(callId: call.callId, message: "Tool execution failed: \(error.localizedDescription)")
             }
-        }
-        // Validate against allowed tools
-        let allowedTools = await stateCoordinator.getAllowedToolsForCurrentPhase()
-        guard allowedTools.contains(call.name) else {
-            Logger.warning("🚫 Tool '\(call.name)' not allowed in current phase", category: .ai)
-            await emitToolError(callId: call.callId, message: "Tool '\(call.name)' is not available in the current phase")
-            return
-        }
-        // Execute tool
-        Logger.debug("🔧 Executing tool: \(call.name)", category: .ai)
-        do {
-            let result = try await toolExecutor.handleToolCall(call)
-            await handleToolResult(result, callId: call.callId, toolName: call.name)
-        } catch {
-            Logger.error("Tool execution failed: \(error)", category: .ai)
-            await emitToolError(callId: call.callId, message: "Tool execution failed: \(error.localizedDescription)")
+
+        case .blocked(let reason):
+            // Tool is blocked - emit error
+            Logger.warning("🚫 Tool call '\(call.name)' blocked: \(reason)", category: .ai)
+            await emitToolError(callId: call.callId, message: reason)
         }
     }
     /// Handle tool execution result

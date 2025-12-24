@@ -247,13 +247,9 @@ actor StateCoordinator: OnboardingEventEmitter {
                 if let pendingPayloads = await llmStateManager.getPendingToolResponsesForRetry() {
                     // Retry pending tool responses instead of reverting
                     Logger.warning("🔄 Stream error recovery: retrying \(pendingPayloads.count) pending tool response(s)", category: .ai)
-                    // Use exponential backoff delay before retry
-                    try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 second delay
-                    if pendingPayloads.count == 1 {
-                        await eventBus.publish(.llmExecuteToolResponse(payload: pendingPayloads[0]))
-                    } else {
-                        await eventBus.publish(.llmExecuteBatchedToolResponses(payloads: pendingPayloads))
-                    }
+                    // Exponential backoff is handled by LLMStateManager's retry counter
+                    // which tracks retries and returns nil when max retries exceeded
+                    await retryToolResponses(pendingPayloads)
                 } else if let cleanId = await llmStateManager.getLastCleanResponseId() {
                     // No pending tool responses (or max retries exceeded) - revert to clean state
                     await llmStateManager.setLastResponseId(cleanId)
@@ -468,6 +464,30 @@ actor StateCoordinator: OnboardingEventEmitter {
             break
         }
     }
+    // MARK: - Retry Logic with Exponential Backoff
+
+    /// Retry tool responses with exponential backoff based on retry attempt
+    /// Implements: 2s → 4s → 8s progression with max 3 retries
+    private func retryToolResponses(_ payloads: [JSON]) async {
+        // Get current retry count from LLMStateManager to calculate delay
+        let retryCount = await llmStateManager.getPendingToolResponseRetryCount()
+
+        // Calculate exponential backoff delay: 2^(retryCount) seconds
+        // Retry 1: 2s, Retry 2: 4s, Retry 3: 8s
+        let delaySeconds = pow(2.0, Double(retryCount))
+        let delayNanoseconds = UInt64(delaySeconds * 1_000_000_000)
+
+        Logger.info("⏱️ Stream error retry #\(retryCount + 1): waiting \(delaySeconds)s before retry", category: .ai)
+        try? await Task.sleep(nanoseconds: delayNanoseconds)
+
+        // Publish retry event
+        if payloads.count == 1 {
+            await eventBus.publish(.llmExecuteToolResponse(payload: payloads[0]))
+        } else {
+            await eventBus.publish(.llmExecuteBatchedToolResponses(payloads: payloads))
+        }
+    }
+
     // MARK: - Stream Queue Management (Delegated to StreamQueueManager)
     /// Mark stream as completed - emits event to ensure proper ordering with pending tool calls
     /// This method should be called by LLMMessenger when a stream finishes
@@ -548,6 +568,10 @@ actor StateCoordinator: OnboardingEventEmitter {
     /// Returns nil if max retries exceeded (caller should revert to clean state)
     func getPendingToolResponsesForRetry() async -> [JSON]? {
         await llmStateManager.getPendingToolResponsesForRetry()
+    }
+    /// Get the current retry count for pending tool responses (for exponential backoff)
+    func getPendingToolResponseRetryCount() async -> Int {
+        await llmStateManager.getPendingToolResponseRetryCount()
     }
 
     // MARK: - Pending UI Tool Call (Codex Paradigm)
@@ -916,6 +940,21 @@ actor StateCoordinator: OnboardingEventEmitter {
         let phaseTools = phasePolicy.allowedTools[phase] ?? []
         return phaseTools.subtracting(excludedTools)
     }
+
+    /// Check tool availability using centralized gating logic
+    /// - Parameter toolName: Name of the tool to check
+    /// - Returns: Availability status with reason if blocked
+    func checkToolAvailability(_ toolName: String) async -> ToolAvailability {
+        let waitingState = await uiState.getWaitingState()
+        let phaseTools = phasePolicy.allowedTools[phase] ?? []
+        return ToolGating.availability(
+            for: toolName,
+            waitingState: waitingState,
+            phaseAllowedTools: phaseTools,
+            excludedTools: excludedTools
+        )
+    }
+
     /// Remove a tool from the allowed tools list (e.g., after one-time use)
     func excludeTool(_ toolName: String) async {
         excludedTools.insert(toolName)

@@ -1,5 +1,105 @@
 import Foundation
 import SwiftyJSON
+
+// MARK: - Tool Gating Pure Function
+
+/// Availability state for a specific tool
+enum ToolAvailability {
+    case available
+    case blocked(reason: String)
+}
+
+/// Centralized tool gating logic (pure function - no side effects)
+struct ToolGating {
+    /// Timeline tools that can operate during validation state for real-time card editing
+    private static let timelineTools: Set<String> = [
+        "create_timeline_card",
+        "update_timeline_card",
+        "delete_timeline_card",
+        "reorder_timeline_cards"
+    ]
+
+    /// Determine tool availability based on session state
+    /// - Parameters:
+    ///   - toolName: Name of the tool to check
+    ///   - waitingState: Current waiting state (nil if not waiting)
+    ///   - phaseAllowedTools: Set of tools allowed in current phase
+    ///   - excludedTools: Set of tools explicitly excluded (e.g., bootstrap tools)
+    /// - Returns: Availability status with reason if blocked
+    static func availability(
+        for toolName: String,
+        waitingState: SessionUIState.WaitingState?,
+        phaseAllowedTools: Set<String>,
+        excludedTools: Set<String>
+    ) -> ToolAvailability {
+        // Check if tool is excluded (e.g., one-time bootstrap tools)
+        if excludedTools.contains(toolName) {
+            return .blocked(reason: "Tool '\(toolName)' has been excluded")
+        }
+
+        // Check if tool is allowed in current phase
+        guard phaseAllowedTools.contains(toolName) else {
+            return .blocked(reason: "Tool '\(toolName)' is not available in the current phase")
+        }
+
+        // Handle waiting states
+        if let waitingState = waitingState {
+            switch waitingState {
+            case .extraction:
+                // During extraction, ALL phase-allowed tools remain enabled
+                // This allows dossier question collection during PDF processing
+                return .available
+
+            case .validation:
+                // During validation, only timeline tools are allowed for real-time card editing
+                if timelineTools.contains(toolName) {
+                    return .available
+                } else {
+                    return .blocked(reason: "Cannot execute non-timeline tools while waiting for validation (state: \(waitingState.rawValue))")
+                }
+
+            case .selection, .upload, .processing:
+                // All tools blocked during these waiting states
+                return .blocked(reason: "Cannot execute tools while waiting for user input (state: \(waitingState.rawValue))")
+            }
+        }
+
+        // No waiting state - tool is available
+        return .available
+    }
+
+    /// Get the set of available tools based on current state
+    /// - Parameters:
+    ///   - waitingState: Current waiting state (nil if not waiting)
+    ///   - phaseAllowedTools: Set of tools allowed in current phase
+    ///   - excludedTools: Set of tools explicitly excluded
+    /// - Returns: Set of tool names that are currently available
+    static func availableTools(
+        waitingState: SessionUIState.WaitingState?,
+        phaseAllowedTools: Set<String>,
+        excludedTools: Set<String>
+    ) -> Set<String> {
+        // Fast path: if no waiting state, return phase tools minus exclusions
+        guard let waitingState = waitingState else {
+            return phaseAllowedTools.subtracting(excludedTools)
+        }
+
+        switch waitingState {
+        case .extraction:
+            // During extraction, all phase-allowed tools remain enabled (minus exclusions)
+            return phaseAllowedTools.subtracting(excludedTools)
+
+        case .validation:
+            // During validation, only timeline tools are available
+            return timelineTools.intersection(phaseAllowedTools).subtracting(excludedTools)
+
+        case .selection, .upload, .processing:
+            // All tools blocked during these waiting states
+            return []
+        }
+    }
+}
+
 /// Domain service for UI state and tool gating logic.
 /// Owns all waiting states, pending prompts, and publishes tool permissions.
 /// KEY INNOVATION: The service that owns waiting state also publishes tool permissions.
@@ -172,32 +272,33 @@ actor SessionUIState: OnboardingEventEmitter {
     // MARK: - Tool Gating Logic
     // Tool Gating Strategy:
     // When the system enters a waiting state (upload, selection, validation, processing),
-    // ALL tools are gated (empty tool set) to prevent the LLM from calling tools while waiting for
-    // user input. This ensures:
+    // tools are gated to prevent the LLM from calling tools while waiting for user input.
+    // This ensures:
     // 1. The LLM cannot make progress until the user responds
     // 2. Tool calls don't interfere with the UI continuation flow
     // 3. Clear state boundaries between AI processing and user interaction
     //
-    // EXCEPTION: During extraction (.extraction state), tools remain ENABLED to allow
-    // dossier question collection during the "dead time" of PDF extraction (2+ minutes).
+    // EXCEPTIONS:
+    // - During extraction (.extraction state), tools remain ENABLED to allow
+    //   dossier question collection during the "dead time" of PDF extraction (2+ minutes).
+    // - During validation (.validation state), timeline tools remain ENABLED to allow
+    //   real-time card creation/editing while user reviews other content.
     //
     // The gating is enforced at two levels:
     // 1. LLMMessenger: Filters tool schemas based on allowedTools from .stateAllowedToolsUpdated events
-    // 2. ToolExecutionCoordinator: Validates waiting state before executing any tool call
+    // 2. ToolExecutionCoordinator: Validates tool availability before executing any tool call
     //
     // When the waiting state is cleared, normal phase-based tool permissions are restored.
     /// Publish tool permissions based on current waiting state and phase
     /// KEY METHOD: This is where SessionUIState publishes tool permissions
     private func publishToolPermissions() async {
-        let tools: Set<String>
-        if let waitingState = waitingState, waitingState != .extraction {
-            // During waiting states (except extraction), restrict to empty set
-            // Extraction is special: tools stay enabled for dossier question collection
-            tools = []
-        } else {
-            // No waiting state OR extraction state - use normal phase-based tools
-            tools = getAllowedToolsForCurrentPhase()
-        }
+        // Use centralized tool gating logic
+        let phaseTools = phasePolicy.allowedTools[currentPhase] ?? []
+        let tools = ToolGating.availableTools(
+            waitingState: waitingState,
+            phaseAllowedTools: phaseTools,
+            excludedTools: excludedTools
+        )
 
         // Avoid duplicate emissions - only publish if tools actually changed
         if tools == lastPublishedTools {
@@ -208,20 +309,24 @@ actor SessionUIState: OnboardingEventEmitter {
         await emit(.stateAllowedToolsUpdated(tools: tools))
 
         // Log after emitting
-        if let waitingState = waitingState, waitingState != .extraction {
-            Logger.info("🚫 ALL TOOLS GATED - Waiting for user input (state: \(waitingState.rawValue))", category: .ai)
-            let normalTools = getAllowedToolsForCurrentPhase()
-            if !normalTools.isEmpty {
-                Logger.info("   ⛔️ Blocked tools (\(normalTools.count)): \(normalTools.sorted().joined(separator: ", "))", category: .ai)
+        if let waitingState = waitingState {
+            if tools.isEmpty {
+                Logger.info("🚫 ALL TOOLS GATED - Waiting for user input (state: \(waitingState.rawValue))", category: .ai)
+                if !phaseTools.isEmpty {
+                    Logger.info("   ⛔️ Blocked tools (\(phaseTools.count)): \(phaseTools.sorted().joined(separator: ", "))", category: .ai)
+                }
+            } else if waitingState == .extraction {
+                Logger.info("🔧 Tools enabled during extraction (\(tools.count)): allowing dossier questions", category: .ai)
+            } else if waitingState == .validation {
+                Logger.info("🔧 Timeline tools enabled during validation (\(tools.count)): allowing real-time card editing", category: .ai)
             }
         } else if tools.isEmpty {
             Logger.info("🔧 No tools available in current phase", category: .ai)
-        } else if waitingState == .extraction {
-            Logger.info("🔧 Tools enabled during extraction (\(tools.count)): allowing dossier questions", category: .ai)
         } else {
             Logger.info("🔧 Tools enabled (\(tools.count)): \(tools.sorted().joined(separator: ", "))", category: .ai)
         }
     }
+
     /// Get allowed tools for the current phase, minus any excluded tools
     private func getAllowedToolsForCurrentPhase() -> Set<String> {
         let phaseTools = phasePolicy.allowedTools[currentPhase] ?? []
@@ -236,10 +341,12 @@ actor SessionUIState: OnboardingEventEmitter {
     /// This is used during session resume to avoid relying on `stateAllowedToolsUpdated`
     /// events that may have been emitted before subscribers were attached.
     func getEffectiveAllowedToolsSnapshot() -> Set<String> {
-        if let waitingState = waitingState, waitingState != .extraction {
-            return []
-        }
-        return getAllowedToolsForCurrentPhase()
+        let phaseTools = phasePolicy.allowedTools[currentPhase] ?? []
+        return ToolGating.availableTools(
+            waitingState: waitingState,
+            phaseAllowedTools: phaseTools,
+            excludedTools: excludedTools
+        )
     }
     /// Update excluded tools and republish permissions
     func setExcludedTools(_ tools: Set<String>) async {
