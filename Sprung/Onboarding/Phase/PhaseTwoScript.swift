@@ -37,7 +37,8 @@ struct PhaseTwoScript: PhaseScript {
 
         // Phase management
         .setObjectiveStatus,
-        .nextPhase
+        .nextPhase,
+        .askUserSkipToNextPhase  // For when KC generation fails
     ])
     var objectiveWorkflows: [String: ObjectiveWorkflow] {
         [

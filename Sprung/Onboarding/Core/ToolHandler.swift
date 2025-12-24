@@ -137,7 +137,7 @@ final class ToolHandler {
     func clearChoicePrompt() {
         promptHandler.clearChoicePrompt()
     }
-    func resolveChoice(selectionIds: [String]) -> JSON? {
+    func resolveChoice(selectionIds: [String]) -> (payload: JSON, source: String?)? {
         promptHandler.resolveChoice(selectionIds: selectionIds)
     }
     func cancelChoicePrompt(reason: String) -> JSON? {

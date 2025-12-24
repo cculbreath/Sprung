@@ -67,16 +67,17 @@ final class PhaseScriptRegistry {
     func validateTransition(
         from currentPhase: InterviewPhase,
         coordinator: OnboardingInterviewCoordinator,
-        dataStore: InterviewDataStore,
-        confirmSkip: Bool
+        dataStore: InterviewDataStore
     ) async -> PhaseTransitionValidation {
         switch currentPhase {
         case .phase1CoreFacts:
             return await validatePhaseOneToTwo(coordinator: coordinator)
         case .phase2DeepDive:
+            // Check user approval flag from StateCoordinator
+            let userApproved = await coordinator.state.userApprovedKCSkip
             return await validatePhaseTwoToThree(
                 dataStore: dataStore,
-                confirmSkip: confirmSkip
+                userApprovedSkip: userApproved
             )
         case .phase3WritingCorpus:
             return await validatePhaseThreeToComplete(dataStore: dataStore)
@@ -112,30 +113,40 @@ final class PhaseScriptRegistry {
 
     private func validatePhaseTwoToThree(
         dataStore: InterviewDataStore,
-        confirmSkip: Bool
+        userApprovedSkip: Bool
     ) async -> PhaseTransitionValidation {
-        // VALIDATION: Warn if no evidence documents were uploaded
-        let artifacts = await dataStore.list(dataType: "artifact")
+        // VALIDATION: Require knowledge cards OR explicit user approval
+        // Having uploaded artifacts is NOT sufficient - KC generation must succeed
         let knowledgeCards = await dataStore.list(dataType: "knowledge_card")
 
-        if artifacts.isEmpty && knowledgeCards.isEmpty {
-            Logger.warning("⚠️ next_phase warning: no evidence documents or knowledge cards", category: .ai)
-
-            if !confirmSkip {
-                return .requiresConfirmation(
-                    warning: "no_evidence_collected",
-                    message: """
-                        No evidence documents were uploaded and no knowledge cards were generated. \
-                        This will result in generic resume content without specific achievements. \
-                        Are you sure you want to proceed to Phase 3? If so, call next_phase again with \
-                        confirm_skip=true. Otherwise, use open_document_collection to upload evidence.
-                        """
-                )
+        if knowledgeCards.isEmpty {
+            // If user has explicitly approved skipping via UI, allow it
+            if userApprovedSkip {
+                Logger.info("✅ User approved skip to Phase 3 without knowledge cards (via UI)", category: .ai)
+                return .allowed
             }
 
-            Logger.info("✅ User confirmed skip to Phase 3 without evidence", category: .ai)
+            Logger.warning("⚠️ next_phase blocked: no knowledge cards generated", category: .ai)
+
+            // BLOCKED: Require knowledge cards or explicit user approval via UI
+            return .blocked(
+                reason: "no_knowledge_cards",
+                message: """
+                    Cannot advance to Phase 3: No knowledge cards were generated. \
+                    Knowledge cards are required to create tailored resume content.
+
+                    OPTIONS:
+                    1. If KC agents failed, use submit_knowledge_card to create cards manually
+                    2. Use dispatch_kc_agents to retry agent-based generation
+                    3. Use submit_for_validation with validation_type="skip_kc_approval" to ask user \
+                       if they want to proceed without knowledge cards
+
+                    The user must explicitly approve via the UI before phase advance is allowed.
+                    """
+            )
         }
 
+        Logger.info("✅ Phase 2→3 validated: \(knowledgeCards.count) knowledge cards exist", category: .ai)
         return .allowed
     }
 

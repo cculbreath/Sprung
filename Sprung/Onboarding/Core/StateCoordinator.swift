@@ -34,6 +34,13 @@ actor StateCoordinator: OnboardingEventEmitter {
     /// Included in working memory so LLM can reference prior notes.
     /// Persisted with snapshot so notes survive session resume.
     private(set) var dossierNotes: String = ""
+
+    // MARK: - User Approval Flags
+    /// Set to true when user explicitly approves skipping KC generation.
+    /// Only set via user UI interaction (submit_for_validation approval), never by LLM.
+    /// Checked by phase 2→3 validation. Reset when entering new phase.
+    private(set) var userApprovedKCSkip: Bool = false
+
     // MARK: - Wizard Progress (Computed from ObjectiveStore)
     enum WizardStep: String, CaseIterable {
         case introduction
@@ -80,10 +87,21 @@ actor StateCoordinator: OnboardingEventEmitter {
     ]
     func setPhase(_ phase: InterviewPhase) async {
         self.phase = phase
+        // Reset user approval flags when entering new phase
+        userApprovedKCSkip = false
         Logger.info("📍 Phase changed to: \(phase)", category: .ai)
         await objectiveStore.registerDefaultObjectives(for: phase)
         await uiState.setPhase(phase)
         await updateWizardProgress()
+    }
+
+    /// Set user approval for skipping KC generation.
+    /// Only call this when user explicitly approves via UI interaction.
+    func setUserApprovedKCSkip(_ approved: Bool) {
+        userApprovedKCSkip = approved
+        if approved {
+            Logger.info("✅ User approved skipping KC generation", category: .ai)
+        }
     }
     func advanceToNextPhase() async -> InterviewPhase? {
         guard await canAdvancePhase() else { return nil }

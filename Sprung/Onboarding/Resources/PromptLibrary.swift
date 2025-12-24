@@ -98,8 +98,9 @@ enum PromptLibrary {
     /// - Returns: The prompt content as a string
     private static func loadPrompt(named name: String) -> String {
         // Try .txt first, then .md
+        // Prompts are in Resources/Prompts (consolidated location for all prompts)
         for ext in ["txt", "md"] {
-            if let url = Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "Onboarding/Resources/Prompts"),
+            if let url = Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "Prompts"),
                let content = try? String(contentsOf: url, encoding: .utf8) {
                 return content
             }

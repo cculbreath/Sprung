@@ -24,7 +24,14 @@ final class UIResponseCoordinator {
     }
     // MARK: - Choice Selection
     func submitChoiceSelection(_ selectionIds: [String]) async {
-        guard toolRouter.resolveChoice(selectionIds: selectionIds) != nil else { return }
+        guard let result = toolRouter.resolveChoice(selectionIds: selectionIds) else { return }
+
+        // Handle special skip phase approval
+        if result.source == "skip_phase_approval" {
+            let approved = selectionIds.contains("approve")
+            await state.setUserApprovedKCSkip(approved)
+            Logger.info("📋 Skip phase approval: \(approved ? "approved" : "rejected")", category: .ai)
+        }
 
         // Clear the choice prompt and waiting state
         await eventBus.publish(.choicePromptCleared)
@@ -32,8 +39,17 @@ final class UIResponseCoordinator {
         // Complete pending UI tool call (Codex paradigm)
         // No separate user message needed - tool response contains the selection info
         var output = JSON()
-        output["message"].string = "User selected option(s): \(selectionIds.joined(separator: ", "))"
-        output["status"].string = "completed"
+        // For skip phase approval, provide clear feedback on user decision
+        if result.source == "skip_phase_approval" {
+            let approved = selectionIds.contains("approve")
+            output["status"].string = approved ? "approved" : "rejected"
+            output["message"].string = approved
+                ? "User approved skipping to next phase. You may now call next_phase."
+                : "User rejected skip request. Continue working on current phase objectives."
+        } else {
+            output["message"].string = "User selected option(s): \(selectionIds.joined(separator: ", "))"
+            output["status"].string = "completed"
+        }
         await completePendingUIToolCall(output: output)
         Logger.info("✅ Choice selection - info included in tool response", category: .ai)
     }

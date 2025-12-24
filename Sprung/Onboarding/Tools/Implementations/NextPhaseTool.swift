@@ -36,14 +36,13 @@ struct NextPhaseTool: InterviewTool {
     func execute(_ params: JSON) async throws -> ToolResult {
         let currentPhase = await coordinator.currentPhase
         let missingObjectives = await coordinator.timeline.missingObjectives()
-        let confirmSkip = params["confirm_skip"].boolValue
 
         // Validate the transition using the registry
+        // Note: User approval flags are checked via coordinator.state, not via LLM parameter
         let validation = await registry.validateTransition(
             from: currentPhase,
             coordinator: coordinator,
-            dataStore: dataStore,
-            confirmSkip: confirmSkip
+            dataStore: dataStore
         )
 
         // Handle validation results

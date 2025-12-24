@@ -26,6 +26,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
+				"Resources/chromium-headless-shell",
 			);
 			target = 570FEC672C855BF50074D1E0 /* Sprung */;
 		};
@@ -36,6 +37,12 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				57F856C92E98390D0048FBA1 /* Exceptions for "Sprung" folder in "Sprung" target */,
+			);
+			explicitFolders = (
+				"Resources/chromium-headless-shell",
+				Resources/Prompts,
+				Resources/SearchOpsSchemas,
+				Resources/TemplateDefaults,
 			);
 			path = Sprung;
 			sourceTree = "<group>";

@@ -53,13 +53,13 @@ final class ToolInteractionCoordinator {
         return result
     }
     func submitChoice(optionId: String) -> JSON? {
-        let result = toolRouter.promptHandler.resolveChoice(selectionIds: [optionId])
-        if result != nil {
-            Task {
-                await eventBus.publish(.choicePromptCleared)
-            }
+        guard let result = toolRouter.promptHandler.resolveChoice(selectionIds: [optionId]) else {
+            return nil
         }
-        return result
+        Task {
+            await eventBus.publish(.choicePromptCleared)
+        }
+        return result.payload
     }
     func submitValidationResponse(
         status: String,

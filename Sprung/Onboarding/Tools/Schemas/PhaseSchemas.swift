@@ -52,20 +52,18 @@ enum PhaseSchemas {
         JSONSchema(
             type: .object,
             description: """
-                Skip to the next interview phase. Use when user wants to skip or when stuck.
+                Advance to the next interview phase. Use when user wants to skip or when objectives are complete.
                 Normal progression uses phase-specific tools (dispatch_kc_agents, submit_knowledge_card, etc.).
                 RETURNS:
                 - { "status": "completed", "new_phase": "...", "next_required_tool": "..." }
                 - If objectives skipped: includes "skipped_objectives" array
-                - Phase 2→3 with no evidence: { "status": "warning", "warning": "no_evidence_collected" } - call again with confirm_skip=true to proceed
+                - Phase 2→3 requires knowledge cards OR user approval via submit_for_validation
                 - Phase 3→Complete without experience_defaults: { "error": true, "reason": "missing_experience_defaults" }
+                BLOCKING: If blocked due to missing knowledge cards, use submit_for_validation with \
+                validation_type="skip_kc_approval" to ask user for explicit approval. Only user UI \
+                approval can ungate phase transition.
                 """,
-            properties: [
-                "confirm_skip": JSONSchema(
-                    type: .boolean,
-                    description: "Set to true to confirm skipping when warned about missing evidence/data"
-                )
-            ],
+            properties: [:],
             required: [],
             additionalProperties: false
         )

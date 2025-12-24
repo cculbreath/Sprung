@@ -45,6 +45,7 @@ enum OnboardingToolName: String, CaseIterable {
     case getContextPack = "get_context_pack"
     case requestRawFile = "request_raw_file"
     case nextPhase = "next_phase"
+    case askUserSkipToNextPhase = "ask_user_skip_to_next_phase"
     // Phase 2 Tools
     case startPhaseTwo = "start_phase_two"
     case getTimelineEntries = "get_timeline_entries"

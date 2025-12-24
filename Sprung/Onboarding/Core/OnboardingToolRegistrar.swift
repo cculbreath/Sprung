@@ -54,6 +54,7 @@ final class OnboardingToolRegistrar {
         toolRegistry.register(PersistDataTool(dataStore: dataStore, eventBus: eventBus))
         toolRegistry.register(SetObjectiveStatusTool(coordinator: coordinator))
         toolRegistry.register(NextPhaseTool(coordinator: coordinator, dataStore: dataStore, registry: phaseRegistry))
+        toolRegistry.register(AskUserSkipToNextPhaseTool(coordinator: coordinator))
         toolRegistry.register(ValidateApplicantProfileTool(coordinator: coordinator))
         toolRegistry.register(GetValidatedApplicantProfileTool(coordinator: coordinator))
         toolRegistry.register(ConfigureEnabledSectionsTool(coordinator: coordinator))

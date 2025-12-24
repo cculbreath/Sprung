@@ -1,0 +1,11 @@
+## Skill Card Guidance
+
+For skill "{SKILL_NAME}", focus on:
+- **Proficiency level**: beginner, intermediate, advanced, expert
+- **Years of experience** with this skill
+- **Projects or contexts** where this skill was applied
+- **Related technologies** or complementary skills
+- **Certifications or training** related to this skill
+- **Notable outcomes** achieved using this skill
+
+The prose should explain how the applicant developed and applied this skill, with specific examples.

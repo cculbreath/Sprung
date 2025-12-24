@@ -56,18 +56,23 @@ struct OnboardingChoicePrompt: Identifiable, Codable {
     let options: [OnboardingChoiceOption]
     let selectionStyle: OnboardingSelectionStyle
     let required: Bool
+    /// Optional source identifier for special handling (e.g., "skip_phase_approval")
+    let source: String?
+
     init(
         id: UUID = UUID(),
         prompt: String,
         options: [OnboardingChoiceOption],
         selectionStyle: OnboardingSelectionStyle,
-        required: Bool
+        required: Bool,
+        source: String? = nil
     ) {
         self.id = id
         self.prompt = prompt
         self.options = options
         self.selectionStyle = selectionStyle
         self.required = required
+        self.source = source
     }
 }
 enum OnboardingWizardStep: String, CaseIterable, Hashable, Codable {

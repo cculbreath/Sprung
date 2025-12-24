@@ -31,6 +31,26 @@ struct StartPhaseThreeTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
+        // VALIDATION: Must be in Phase 3 to call this tool
+        // The LLM must use next_phase to transition first, which validates the transition
+        let currentPhase = await coordinator.currentPhase
+        if currentPhase != .phase3WritingCorpus {
+            Logger.warning(
+                "⚠️ start_phase_three rejected: current phase is \(currentPhase.rawValue), not phase3",
+                category: .ai
+            )
+            var error = JSON()
+            error["error"].bool = true
+            error["reason"].string = "wrong_phase"
+            error["current_phase"].string = currentPhase.rawValue
+            error["message"].string = """
+                Cannot call start_phase_three: you are still in \(currentPhase.rawValue). \
+                Use next_phase to transition to Phase 3 first. The next_phase tool will \
+                validate that sufficient evidence has been collected.
+                """
+            return .immediate(error)
+        }
+
         // Get knowledge cards from Phase 2
         let knowledgeCards = await coordinator.state.artifacts.knowledgeCards
         let cardCount = knowledgeCards.count

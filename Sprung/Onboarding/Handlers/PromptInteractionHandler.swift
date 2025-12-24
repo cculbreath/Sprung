@@ -16,16 +16,18 @@ final class PromptInteractionHandler {
     func clearChoicePrompt() {
         pendingChoicePrompt = nil
     }
-    func resolveChoice(selectionIds: [String]) -> JSON? {
-        guard pendingChoicePrompt != nil, !selectionIds.isEmpty else {
+    /// Returns (payload, source) tuple. Source identifies special prompts like "skip_phase_approval".
+    func resolveChoice(selectionIds: [String]) -> (payload: JSON, source: String?)? {
+        guard let prompt = pendingChoicePrompt, !selectionIds.isEmpty else {
             Logger.warning("⚠️ Attempted to resolve choice prompt without selections", category: .ai)
             return nil
         }
         var payload = JSON()
         payload["selectedIds"] = JSON(selectionIds)
+        let source = prompt.source
         pendingChoicePrompt = nil
-        Logger.info("✅ Choice prompt resolved (ids: \(selectionIds.joined(separator: ", ")))", category: .ai)
-        return payload
+        Logger.info("✅ Choice prompt resolved (ids: \(selectionIds.joined(separator: ", ")), source: \(source ?? "none"))", category: .ai)
+        return (payload, source)
     }
     func cancelChoicePrompt(reason: String) -> JSON? {
         guard pendingChoicePrompt != nil else { return nil }
