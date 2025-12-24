@@ -42,8 +42,24 @@ struct SearchOpsMainView: View {
     @Environment(SearchOpsCoordinator.self) private var coordinator
     @State private var selectedSection: SearchOpsSection = .daily
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var showOnboarding: Bool = false
 
     var body: some View {
+        Group {
+            if showOnboarding || coordinator.needsOnboarding {
+                SearchOpsOnboardingView(coordinator: coordinator) {
+                    showOnboarding = false
+                }
+            } else {
+                mainContent
+            }
+        }
+        .onAppear {
+            showOnboarding = coordinator.needsOnboarding
+        }
+    }
+
+    private var mainContent: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             // Sidebar
             List(selection: $selectedSection) {
