@@ -66,7 +66,7 @@ struct LLMResponseParser {
     /// Uses multiple fallback strategies for robust extraction
     /// - Parameter text: Raw text potentially containing JSON
     /// - Returns: Extracted JSON string
-    private static func extractJSONFromText(_ text: String) -> String {
+    static func extractJSONFromText(_ text: String) -> String {
         // Strategy 1: Look for JSON between markdown code blocks (```json...```)
         if let range = text.range(of: "```json") {
             let afterStart = text[range.upperBound...]

@@ -127,7 +127,7 @@ final class CoverLetterService {
             response = initialResponse
         }
         // Extract cover letter content from response
-        let content = extractCoverLetterContent(from: response)
+        let content = extractCoverLetterContent(from: response, modelId: modelId)
         // Update cover letter
         updateCoverLetter(coverLetter, with: content, modelId: modelId, isRevision: false)
         return content
@@ -194,57 +194,53 @@ final class CoverLetterService {
             response = initialResponse
         }
         // Extract cover letter content from response
-        let content = extractCoverLetterContent(from: response)
+        let content = extractCoverLetterContent(from: response, modelId: modelId)
         // Update cover letter
         updateCoverLetter(coverLetter, with: content, modelId: modelId, isRevision: true)
         return content
     }
     // MARK: - Conversation Management
     // MARK: - Helper Methods
-    /// Extract cover letter content from response, handling Gemini and Claude JSON formats
-    internal func extractCoverLetterContent(from text: String) -> String {
-        // Check if the response contains curly braces (indicating JSON)
-        if text.contains("{") && text.contains("}") {
-            // Find the JSON portion (from first { to last })
-            if let jsonStart = text.range(of: "{"),
-               let jsonEnd = text.range(of: "}", options: .backwards),
-               jsonStart.lowerBound <= jsonEnd.lowerBound {
-                // Safely extract the substring using indices
-                let startIndex = jsonStart.lowerBound
-                let endIndex = text.index(after: jsonEnd.lowerBound) // Include the closing brace
-                // Ensure we don't go past the end of the string
-                guard endIndex <= text.endIndex else {
-                    return text // Return original text if indices are invalid
-                }
-                let jsonSubstring = String(text[startIndex..<endIndex])
-                // Try to parse the JSON
-                if let data = jsonSubstring.data(using: .utf8),
-                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                    // First check for known field names
-                    let knownKeys = ["cover_letter_body", "body_content", "cover_letter", "letter", "content", "text"]
-                    for key in knownKeys {
-                        if let value = json[key] as? String {
-                            return value
-                        }
-                    }
-                    // If no known keys found, look for any string value that looks like cover letter content
-                    // (long enough to be a cover letter, contains multiple sentences/paragraphs)
-                    for (_, value) in json {
-                        if let stringValue = value as? String,
-                           stringValue.count > 100,  // At least 100 characters
-                           stringValue.contains(".") || stringValue.contains("\n") {  // Has sentences or paragraphs
-                            return stringValue
-                        }
-                    }
-                    // If JSON has only one key-value pair with a string value, use it
-                    if json.count == 1,
-                       let firstValue = json.values.first as? String {
-                        return firstValue
-                    }
+    /// Extract cover letter content from response, handling various JSON formats and reasoning models
+    internal func extractCoverLetterContent(from text: String, modelId: String) -> String {
+        // Reasoning models (o1) return plain text directly, not JSON
+        if isReasoningModel(modelId) {
+            return text.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        // Use shared JSON extraction logic from LLMResponseParser
+        let extractedJSON = LLMResponseParser.extractJSONFromText(text)
+
+        // If we got the same text back, it's not JSON - return as-is
+        if extractedJSON == text {
+            return text
+        }
+
+        // Try to parse the extracted JSON
+        if let data = extractedJSON.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            // Check for known field names in priority order
+            let knownKeys = ["cover_letter_body", "body_content", "cover_letter", "letter", "content", "text"]
+            for key in knownKeys {
+                if let value = json[key] as? String {
+                    return value
                 }
             }
+            // If no known keys found, look for any string value that looks like cover letter content
+            for (_, value) in json {
+                if let stringValue = value as? String,
+                   stringValue.count > 100,  // At least 100 characters
+                   stringValue.contains(".") || stringValue.contains("\n") {  // Has sentences or paragraphs
+                    return stringValue
+                }
+            }
+            // If JSON has only one key-value pair with a string value, use it
+            if json.count == 1, let firstValue = json.values.first as? String {
+                return firstValue
+            }
         }
-        // If no JSON detected or parsing failed, return as-is
+
+        // Fallback: return original text if JSON parsing failed
         return text
     }
     /// Update cover letter with generated content
