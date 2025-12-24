@@ -143,8 +143,32 @@ struct KnowledgeCardPlanItem: Identifiable, Equatable, Codable {
     let title: String
     let type: ItemType
     let description: String?
-    let status: Status
+    var status: Status
     let timelineEntryId: String?
+    /// Artifact IDs assigned to this card (set by propose_card_assignments)
+    var assignedArtifactIds: [String]
+    /// Brief summaries of assigned artifacts for UI display
+    var assignedArtifactSummaries: [String]
+
+    init(
+        id: String,
+        title: String,
+        type: ItemType,
+        description: String? = nil,
+        status: Status = .pending,
+        timelineEntryId: String? = nil,
+        assignedArtifactIds: [String] = [],
+        assignedArtifactSummaries: [String] = []
+    ) {
+        self.id = id
+        self.title = title
+        self.type = type
+        self.description = description
+        self.status = status
+        self.timelineEntryId = timelineEntryId
+        self.assignedArtifactIds = assignedArtifactIds
+        self.assignedArtifactSummaries = assignedArtifactSummaries
+    }
 
     func toJSON() -> JSON {
         var json = JSON()
@@ -158,6 +182,23 @@ struct KnowledgeCardPlanItem: Identifiable, Equatable, Codable {
         if let timelineEntryId = timelineEntryId {
             json["timeline_entry_id"].string = timelineEntryId
         }
+        if !assignedArtifactIds.isEmpty {
+            json["assigned_artifact_ids"].arrayObject = assignedArtifactIds
+        }
         return json
+    }
+
+    /// Create a copy with updated artifact assignments
+    func withAssignments(artifactIds: [String], summaries: [String]) -> KnowledgeCardPlanItem {
+        KnowledgeCardPlanItem(
+            id: id,
+            title: title,
+            type: type,
+            description: description,
+            status: status,
+            timelineEntryId: timelineEntryId,
+            assignedArtifactIds: artifactIds,
+            assignedArtifactSummaries: summaries
+        )
     }
 }

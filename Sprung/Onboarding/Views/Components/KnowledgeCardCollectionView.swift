@@ -116,7 +116,8 @@ struct KnowledgeCardCollectionView: View {
                 ForEach(planItems) { item in
                     KnowledgeCardPlanRow(
                         item: item,
-                        isGenerating: isGenerating
+                        isGenerating: isGenerating,
+                        showAssignments: isReadyForGeneration
                     )
                 }
             }
@@ -188,30 +189,61 @@ struct KnowledgeCardCollectionView: View {
 private struct KnowledgeCardPlanRow: View {
     let item: KnowledgeCardPlanItem
     let isGenerating: Bool
+    let showAssignments: Bool
 
     var body: some View {
-        HStack(alignment: .center, spacing: 8) {
-            statusIcon
-                .frame(width: 20)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .center, spacing: 8) {
+                statusIcon
+                    .frame(width: 20)
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack {
-                    Text(item.title)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(item.status == .completed ? .secondary : .primary)
-                        .lineLimit(1)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack {
+                        Text(item.title)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(item.status == .completed ? .secondary : .primary)
+                            .lineLimit(1)
 
-                    Spacer()
+                        Spacer()
 
-                    typeTag
+                        typeTag
+                    }
+
+                    if let description = item.description {
+                        Text(description)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
+            }
 
-                if let description = item.description {
-                    Text(description)
+            // Show assigned artifacts when assignments are ready
+            if showAssignments && !item.assignedArtifactSummaries.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(item.assignedArtifactSummaries, id: \.self) { summary in
+                        HStack(spacing: 4) {
+                            Image(systemName: "doc.text.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Text(summary)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+                .padding(.leading, 28)
+            } else if showAssignments && item.assignedArtifactIds.isEmpty {
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.triangle.fill")
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .foregroundStyle(.orange)
+                    Text("No documents assigned")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
                 }
+                .padding(.leading, 28)
             }
         }
         .padding(.horizontal, 8)

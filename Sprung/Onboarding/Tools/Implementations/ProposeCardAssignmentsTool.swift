@@ -93,6 +93,9 @@ struct ProposeCardAssignmentsTool: InterviewTool {
         // Store proposals in state for dispatch_kc_agents to use
         await coordinator.state.storeCardProposals(proposalsToStore)
 
+        // Update UI plan items with artifact assignments
+        await updatePlanItemsWithAssignments(proposals: proposalsToStore)
+
         // Gate dispatch_kc_agents until user approves assignments
         // BUT only if user hasn't already clicked "Generate Cards" (which would have ungated it)
         let isAlreadyGenerating = await MainActor.run { coordinator.ui.isGeneratingCards }
@@ -209,6 +212,9 @@ struct ProposeCardAssignmentsTool: InterviewTool {
         // Store proposals for dispatch_kc_agents
         await coordinator.state.storeCardProposals(proposals)
 
+        // Update UI plan items with artifact assignments
+        await updatePlanItemsWithAssignments(proposals: proposals)
+
         // Gate dispatch_kc_agents until user approves
         // BUT only if user hasn't already clicked "Generate Cards" (which would have ungated it)
         let isAlreadyGenerating = await MainActor.run { coordinator.ui.isGeneratingCards }
@@ -324,4 +330,66 @@ struct ProposeCardAssignmentsTool: InterviewTool {
         return message
     }
 
+    // MARK: - UI Plan Update
+
+    /// Update the UI's knowledgeCardPlan with artifact assignments from proposals
+    private func updatePlanItemsWithAssignments(proposals: JSON) async {
+        // Get current plan items and artifact summaries
+        let currentPlanItems = await MainActor.run { coordinator.ui.knowledgeCardPlan }
+        let artifactSummaries = await coordinator.artifactQueries.listArtifactSummaries()
+
+        // Build lookup from artifact ID to summary text
+        var artifactSummaryLookup: [String: String] = [:]
+        for summary in artifactSummaries {
+            if let id = summary["id"].string {
+                let filename = summary["filename"].string ?? "Document"
+                let brief = summary["brief_description"].string ?? summary["summary"].string
+                if let brief = brief, !brief.isEmpty {
+                    artifactSummaryLookup[id] = "\(filename): \(brief.prefix(60))..."
+                } else {
+                    artifactSummaryLookup[id] = filename
+                }
+            }
+        }
+
+        // Update plan items with their assignments
+        var updatedPlanItems: [KnowledgeCardPlanItem] = []
+
+        for planItem in currentPlanItems {
+            // Find matching proposal by card_id or timeline_entry_id
+            var matchedProposal: JSON?
+            for proposal in proposals.arrayValue {
+                let proposalCardId = proposal["card_id"].string
+                let proposalTimelineId = proposal["timeline_entry_id"].string
+
+                if proposalCardId == planItem.id ||
+                   (proposalTimelineId != nil && proposalTimelineId == planItem.timelineEntryId) {
+                    matchedProposal = proposal
+                    break
+                }
+            }
+
+            if let proposal = matchedProposal {
+                // Extract artifact IDs and build summaries
+                let artifactIds = proposal["assigned_artifact_ids"].arrayValue.compactMap { $0.string }
+                let summaries = artifactIds.compactMap { artifactSummaryLookup[$0] }
+
+                let updatedItem = planItem.withAssignments(artifactIds: artifactIds, summaries: summaries)
+                updatedPlanItems.append(updatedItem)
+            } else {
+                // No assignment found - keep original (with empty assignments)
+                let updatedItem = planItem.withAssignments(artifactIds: [], summaries: [])
+                updatedPlanItems.append(updatedItem)
+            }
+        }
+
+        // Update the coordinator's plan
+        await coordinator.updateKnowledgeCardPlan(
+            items: updatedPlanItems,
+            currentFocus: coordinator.getCurrentPlanItemFocus(),
+            message: "Review artifact assignments below"
+        )
+
+        Logger.info("📋 Updated \(updatedPlanItems.count) plan items with artifact assignments", category: .ai)
+    }
 }
