@@ -99,15 +99,15 @@ actor StateCoordinator: OnboardingEventEmitter {
     // MARK: - Wizard Progress (Queries ObjectiveStore)
     private func updateWizardProgress() async {
         // Phase 1 objectives
-        let hasProfile = await objectiveStore.getObjectiveStatus("applicant_profile") == .completed
-        let hasTimeline = await objectiveStore.getObjectiveStatus("skeleton_timeline") == .completed
-        let hasSections = await objectiveStore.getObjectiveStatus("enabled_sections") == .completed
+        let hasProfile = await objectiveStore.getObjectiveStatus(OnboardingObjectiveId.applicantProfile.rawValue) == .completed
+        let hasTimeline = await objectiveStore.getObjectiveStatus(OnboardingObjectiveId.skeletonTimeline.rawValue) == .completed
+        let hasSections = await objectiveStore.getObjectiveStatus(OnboardingObjectiveId.enabledSections.rawValue) == .completed
         // Phase 2 objectives (updated for evidence-based flow)
-        let hasEvidenceAudit = await objectiveStore.getObjectiveStatus("evidence_audit_completed") == .completed
-        let hasCardsGenerated = await objectiveStore.getObjectiveStatus("cards_generated") == .completed
+        let hasEvidenceAudit = await objectiveStore.getObjectiveStatus(OnboardingObjectiveId.evidenceAuditCompleted.rawValue) == .completed
+        let hasCardsGenerated = await objectiveStore.getObjectiveStatus(OnboardingObjectiveId.cardsGenerated.rawValue) == .completed
         // Phase 3 objectives
-        let hasWriting = await objectiveStore.getObjectiveStatus("one_writing_sample") == .completed
-        let hasDossier = await objectiveStore.getObjectiveStatus("dossier_complete") == .completed
+        let hasWriting = await objectiveStore.getObjectiveStatus(OnboardingObjectiveId.oneWritingSample.rawValue) == .completed
+        let hasDossier = await objectiveStore.getObjectiveStatus(OnboardingObjectiveId.dossierComplete.rawValue) == .completed
         // Start from introduction
         if currentWizardStep == .introduction {
             let allObjectives = await objectiveStore.getAllObjectives()
@@ -689,30 +689,30 @@ actor StateCoordinator: OnboardingEventEmitter {
     private func backfillObjectiveStatuses(snapshot: StateSnapshot) async {
         let restoredObjectives = snapshot.objectives
         // contact_source_selected: completed if applicant_profile was completed
-        if let applicantProfile = restoredObjectives["applicant_profile"],
+        if let applicantProfile = restoredObjectives[OnboardingObjectiveId.applicantProfile.rawValue],
            applicantProfile.status == .completed {
             await objectiveStore.setObjectiveStatus(
-                "contact_source_selected",
+                OnboardingObjectiveId.contactSourceSelected.rawValue,
                 status: .completed,
                 source: "migration",
                 notes: "Backfilled based on applicant_profile completion"
             )
         }
         // contact_data_collected: completed if applicant_profile.contact_intake.persisted was completed
-        if let contactPersisted = restoredObjectives["applicant_profile.contact_intake.persisted"],
+        if let contactPersisted = restoredObjectives[OnboardingObjectiveId.applicantProfileContactIntakePersisted.rawValue],
            contactPersisted.status == .completed {
             await objectiveStore.setObjectiveStatus(
-                "contact_data_collected",
+                OnboardingObjectiveId.contactDataCollected.rawValue,
                 status: .completed,
                 source: "migration",
                 notes: "Backfilled based on contact_intake.persisted completion"
             )
         }
         // contact_data_validated: completed if applicant_profile.contact_intake.persisted was completed
-        if let contactPersisted = restoredObjectives["applicant_profile.contact_intake.persisted"],
+        if let contactPersisted = restoredObjectives[OnboardingObjectiveId.applicantProfileContactIntakePersisted.rawValue],
            contactPersisted.status == .completed {
             await objectiveStore.setObjectiveStatus(
-                "contact_data_validated",
+                OnboardingObjectiveId.contactDataValidated.rawValue,
                 status: .completed,
                 source: "migration",
                 notes: "Backfilled based on contact_intake.persisted completion"

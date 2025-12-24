@@ -76,47 +76,47 @@ actor ObjectiveStore: OnboardingEventEmitter {
     private static let objectiveMetadata: [InterviewPhase: [(id: String, label: String, parentId: String?)]] = [
         .phase1CoreFacts: [
             // applicant_profile (top-level)
-            ("applicant_profile", "Applicant profile", nil),
-            ("applicant_profile.contact_intake", "Contact information intake", "applicant_profile"),
-            ("applicant_profile.contact_intake.activate_card", "Activate applicant profile card", "applicant_profile.contact_intake"),
-            ("applicant_profile.contact_intake.persisted", "ApplicantProfile updated with user-validated data", "applicant_profile.contact_intake"),
-            ("applicant_profile.profile_photo", "Optional profile photo", "applicant_profile"),
-            ("applicant_profile.profile_photo.retrieve_profile", "Retrieve ApplicantProfile", "applicant_profile.profile_photo"),
-            ("applicant_profile.profile_photo.evaluate_need", "Check if photo upload required", "applicant_profile.profile_photo"),
-            ("applicant_profile.profile_photo.collect_upload", "Activate photo upload card", "applicant_profile.profile_photo"),
+            (OnboardingObjectiveId.applicantProfile.rawValue, "Applicant profile", nil),
+            (OnboardingObjectiveId.applicantProfileContactIntake.rawValue, "Contact information intake", OnboardingObjectiveId.applicantProfile.rawValue),
+            (OnboardingObjectiveId.applicantProfileContactIntakeActivateCard.rawValue, "Activate applicant profile card", OnboardingObjectiveId.applicantProfileContactIntake.rawValue),
+            (OnboardingObjectiveId.applicantProfileContactIntakePersisted.rawValue, "ApplicantProfile updated with user-validated data", OnboardingObjectiveId.applicantProfileContactIntake.rawValue),
+            (OnboardingObjectiveId.applicantProfileProfilePhoto.rawValue, "Optional profile photo", OnboardingObjectiveId.applicantProfile.rawValue),
+            (OnboardingObjectiveId.applicantProfileProfilePhotoRetrieveProfile.rawValue, "Retrieve ApplicantProfile", OnboardingObjectiveId.applicantProfileProfilePhoto.rawValue),
+            (OnboardingObjectiveId.applicantProfileProfilePhotoEvaluateNeed.rawValue, "Check if photo upload required", OnboardingObjectiveId.applicantProfileProfilePhoto.rawValue),
+            (OnboardingObjectiveId.applicantProfileProfilePhotoCollectUpload.rawValue, "Activate photo upload card", OnboardingObjectiveId.applicantProfileProfilePhoto.rawValue),
             // skeleton_timeline (top-level)
-            ("skeleton_timeline", "Skeleton timeline", nil),
-            ("skeleton_timeline.intake_artifacts", "Use get_user_upload and chat interview to gather timeline data", "skeleton_timeline"),
-            ("skeleton_timeline.timeline_editor", "Use TimelineEntry UI to collaborate with user", "skeleton_timeline"),
-            ("skeleton_timeline.context_interview", "Use chat interview to understand gaps and narrative structure", "skeleton_timeline"),
-            ("skeleton_timeline.completeness_signal", "Set status when skeleton timeline data gathering is complete", "skeleton_timeline"),
+            (OnboardingObjectiveId.skeletonTimeline.rawValue, "Skeleton timeline", nil),
+            (OnboardingObjectiveId.skeletonTimelineIntakeArtifacts.rawValue, "Use get_user_upload and chat interview to gather timeline data", OnboardingObjectiveId.skeletonTimeline.rawValue),
+            (OnboardingObjectiveId.skeletonTimelineTimelineEditor.rawValue, "Use TimelineEntry UI to collaborate with user", OnboardingObjectiveId.skeletonTimeline.rawValue),
+            (OnboardingObjectiveId.skeletonTimelineContextInterview.rawValue, "Use chat interview to understand gaps and narrative structure", OnboardingObjectiveId.skeletonTimeline.rawValue),
+            (OnboardingObjectiveId.skeletonTimelineCompletenessSignal.rawValue, "Set status when skeleton timeline data gathering is complete", OnboardingObjectiveId.skeletonTimeline.rawValue),
             // enabled_sections (top-level)
-            ("enabled_sections", "Enabled sections", nil),
+            (OnboardingObjectiveId.enabledSections.rawValue, "Enabled sections", nil),
             // dossier_seed (top-level)
-            ("dossier_seed", "Dossier seed questions", nil),
-            ("contact_source_selected", "Contact source selected", nil),
-            ("contact_data_collected", "Contact data collected", nil),
-            ("contact_data_validated", "Contact data validated", nil),
-            ("contact_photo_collected", "Contact photo collected", nil)
+            (OnboardingObjectiveId.dossierSeed.rawValue, "Dossier seed questions", nil),
+            (OnboardingObjectiveId.contactSourceSelected.rawValue, "Contact source selected", nil),
+            (OnboardingObjectiveId.contactDataCollected.rawValue, "Contact data collected", nil),
+            (OnboardingObjectiveId.contactDataValidated.rawValue, "Contact data validated", nil),
+            (OnboardingObjectiveId.contactPhotoCollected.rawValue, "Contact photo collected", nil)
         ],
         .phase2DeepDive: [
-            ("interviewed_one_experience", "Experience interview completed", nil),
-            ("interviewed_one_experience.prep_selection", "Select and frame experience to explore", "interviewed_one_experience"),
-            ("interviewed_one_experience.discovery_interview", "Conduct structured deep-dive interview", "interviewed_one_experience"),
-            ("interviewed_one_experience.capture_notes", "Summarize interview takeaways for cards", "interviewed_one_experience"),
-            ("one_card_generated", "Knowledge card generated", nil),
-            ("one_card_generated.draft", "Draft knowledge card content", "one_card_generated"),
-            ("one_card_generated.validation", "Review card with user via validation UI", "one_card_generated"),
-            ("one_card_generated.persisted", "Persist approved knowledge card", "one_card_generated")
+            (OnboardingObjectiveId.interviewedOneExperience.rawValue, "Experience interview completed", nil),
+            (OnboardingObjectiveId.interviewedOneExperiencePrepSelection.rawValue, "Select and frame experience to explore", OnboardingObjectiveId.interviewedOneExperience.rawValue),
+            (OnboardingObjectiveId.interviewedOneExperienceDiscoveryInterview.rawValue, "Conduct structured deep-dive interview", OnboardingObjectiveId.interviewedOneExperience.rawValue),
+            (OnboardingObjectiveId.interviewedOneExperienceCaptureNotes.rawValue, "Summarize interview takeaways for cards", OnboardingObjectiveId.interviewedOneExperience.rawValue),
+            (OnboardingObjectiveId.oneCardGenerated.rawValue, "Knowledge card generated", nil),
+            (OnboardingObjectiveId.oneCardGeneratedDraft.rawValue, "Draft knowledge card content", OnboardingObjectiveId.oneCardGenerated.rawValue),
+            (OnboardingObjectiveId.oneCardGeneratedValidation.rawValue, "Review card with user via validation UI", OnboardingObjectiveId.oneCardGenerated.rawValue),
+            (OnboardingObjectiveId.oneCardGeneratedPersisted.rawValue, "Persist approved knowledge card", OnboardingObjectiveId.oneCardGenerated.rawValue)
         ],
         .phase3WritingCorpus: [
-            ("one_writing_sample", "Writing sample collected", nil),
-            ("one_writing_sample.collection_setup", "Request writing sample and capture preferences", "one_writing_sample"),
-            ("one_writing_sample.ingest_sample", "Collect/upload at least one writing sample", "one_writing_sample"),
-            ("dossier_complete", "Dossier completed", nil),
-            ("dossier_complete.compile_assets", "Compile applicant assets into dossier", "dossier_complete"),
-            ("dossier_complete.validation", "Present dossier summary for validation", "dossier_complete"),
-            ("dossier_complete.persisted", "Persist final dossier and confirm wrap-up", "dossier_complete")
+            (OnboardingObjectiveId.oneWritingSample.rawValue, "Writing sample collected", nil),
+            (OnboardingObjectiveId.oneWritingSampleCollectionSetup.rawValue, "Request writing sample and capture preferences", OnboardingObjectiveId.oneWritingSample.rawValue),
+            (OnboardingObjectiveId.oneWritingSampleIngestSample.rawValue, "Collect/upload at least one writing sample", OnboardingObjectiveId.oneWritingSample.rawValue),
+            (OnboardingObjectiveId.dossierComplete.rawValue, "Dossier completed", nil),
+            (OnboardingObjectiveId.dossierCompleteCompileAssets.rawValue, "Compile applicant assets into dossier", OnboardingObjectiveId.dossierComplete.rawValue),
+            (OnboardingObjectiveId.dossierCompleteValidation.rawValue, "Present dossier summary for validation", OnboardingObjectiveId.dossierComplete.rawValue),
+            (OnboardingObjectiveId.dossierCompletePersisted.rawValue, "Persist final dossier and confirm wrap-up", OnboardingObjectiveId.dossierComplete.rawValue)
         ],
         .complete: []
     ]

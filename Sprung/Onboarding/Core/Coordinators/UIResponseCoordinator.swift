@@ -226,21 +226,21 @@ final class UIResponseCoordinator {
         // Mark objective chain complete to trigger photo follow-up workflow
         // The objectives must be completed in dependency order
         await eventBus.publish(.objectiveStatusUpdateRequested(
-            id: "contact_source_selected",
+            id: OnboardingObjectiveId.contactSourceSelected.rawValue,
             status: "completed",
             source: "ui_profile_confirmed",
             notes: "Profile confirmed via intake card",
             details: ["method": "intake_card"]
         ))
         await eventBus.publish(.objectiveStatusUpdateRequested(
-            id: "contact_data_collected",
+            id: OnboardingObjectiveId.contactDataCollected.rawValue,
             status: "completed",
             source: "ui_profile_confirmed",
             notes: "Profile confirmed via intake card",
             details: ["method": "intake_card"]
         ))
         await eventBus.publish(.objectiveStatusUpdateRequested(
-            id: "contact_data_validated",
+            id: OnboardingObjectiveId.contactDataValidated.rawValue,
             status: "completed",
             source: "ui_profile_confirmed",
             notes: "Profile confirmed via intake card",
@@ -248,7 +248,7 @@ final class UIResponseCoordinator {
         ))
         // Mark the main applicant_profile objective as complete
         await eventBus.publish(.objectiveStatusUpdateRequested(
-            id: "applicant_profile",
+            id: OnboardingObjectiveId.applicantProfile.rawValue,
             status: "completed",
             source: "ui_profile_confirmed",
             notes: "Applicant profile validated and saved",
@@ -309,28 +309,28 @@ final class UIResponseCoordinator {
         ui.lastApplicantProfileSummary = profileJSON
         // Mark objectives complete
         await eventBus.publish(.objectiveStatusUpdateRequested(
-            id: "contact_source_selected",
+            id: OnboardingObjectiveId.contactSourceSelected.rawValue,
             status: "completed",
             source: "ui_profile_draft",
             notes: "Profile submitted via \(source == .contacts ? "contacts" : "manual")",
             details: ["source": source == .contacts ? "contacts" : "manual"]
         ))
         await eventBus.publish(.objectiveStatusUpdateRequested(
-            id: "contact_data_collected",
+            id: OnboardingObjectiveId.contactDataCollected.rawValue,
             status: "completed",
             source: "ui_profile_draft",
             notes: "Profile data collected",
             details: nil
         ))
         await eventBus.publish(.objectiveStatusUpdateRequested(
-            id: "contact_data_validated",
+            id: OnboardingObjectiveId.contactDataValidated.rawValue,
             status: "completed",
             source: "ui_profile_draft",
             notes: "Profile validated via intake UI",
             details: nil
         ))
         await eventBus.publish(.objectiveStatusUpdateRequested(
-            id: "applicant_profile",
+            id: OnboardingObjectiveId.applicantProfile.rawValue,
             status: "completed",
             source: "ui_profile_draft",
             notes: "Applicant profile validated and saved",

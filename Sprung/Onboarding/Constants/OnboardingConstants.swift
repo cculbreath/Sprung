@@ -77,6 +77,9 @@ enum OnboardingObjectiveId: String, CaseIterable {
     case applicantProfileContactIntakeActivateCard = "applicant_profile.contact_intake.activate_card"
     case applicantProfileContactIntakePersisted = "applicant_profile.contact_intake.persisted"
     case applicantProfileProfilePhoto = "applicant_profile.profile_photo"
+    case applicantProfileProfilePhotoRetrieveProfile = "applicant_profile.profile_photo.retrieve_profile"
+    case applicantProfileProfilePhotoEvaluateNeed = "applicant_profile.profile_photo.evaluate_need"
+    case applicantProfileProfilePhotoCollectUpload = "applicant_profile.profile_photo.collect_upload"
     // Contact Flow
     case contactSourceSelected = "contact_source_selected"
     case contactDataCollected = "contact_data_collected"
@@ -84,6 +87,10 @@ enum OnboardingObjectiveId: String, CaseIterable {
     case contactPhotoCollected = "contact_photo_collected"
     // Skeleton Timeline
     case skeletonTimeline = "skeleton_timeline"
+    case skeletonTimelineIntakeArtifacts = "skeleton_timeline.intake_artifacts"
+    case skeletonTimelineTimelineEditor = "skeleton_timeline.timeline_editor"
+    case skeletonTimelineContextInterview = "skeleton_timeline.context_interview"
+    case skeletonTimelineCompletenessSignal = "skeleton_timeline.completeness_signal"
     // Enabled Sections
     case enabledSections = "enabled_sections"
     // Dossier Seed (optional)
@@ -99,7 +106,13 @@ enum OnboardingObjectiveId: String, CaseIterable {
     case cardsGeneratedPersist = "cards_generated.persist"
     // Legacy Phase 2 (may still be referenced)
     case interviewedOneExperience = "interviewed_one_experience"
+    case interviewedOneExperiencePrepSelection = "interviewed_one_experience.prep_selection"
+    case interviewedOneExperienceDiscoveryInterview = "interviewed_one_experience.discovery_interview"
+    case interviewedOneExperienceCaptureNotes = "interviewed_one_experience.capture_notes"
     case oneCardGenerated = "one_card_generated"
+    case oneCardGeneratedDraft = "one_card_generated.draft"
+    case oneCardGeneratedValidation = "one_card_generated.validation"
+    case oneCardGeneratedPersisted = "one_card_generated.persisted"
     // MARK: Phase 3 Objectives
     // Writing Sample
     case oneWritingSample = "one_writing_sample"

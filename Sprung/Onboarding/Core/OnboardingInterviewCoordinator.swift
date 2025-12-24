@@ -255,7 +255,7 @@ final class OnboardingInterviewCoordinator {
 
         // Mark dossier objective as completed if not already
         await eventBus.publish(.objectiveStatusUpdateRequested(
-            id: "dossier_complete",
+            id: OnboardingObjectiveId.dossierComplete.rawValue,
             status: "completed",
             source: "user_action",
             notes: "User clicked 'End Interview' button",
@@ -281,7 +281,7 @@ final class OnboardingInterviewCoordinator {
 
         // Mark the writing samples objective as completed
         await eventBus.publish(.objectiveStatusUpdateRequested(
-            id: "one_writing_sample",
+            id: OnboardingObjectiveId.oneWritingSample.rawValue,
             status: "completed",
             source: "user_action",
             notes: "User clicked 'Done with Writing Samples' button",
