@@ -2,18 +2,22 @@ import SwiftUI
 struct OnboardingInterviewStepProgressView: View {
     @Bindable var coordinator: OnboardingInterviewCoordinator
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            // Note: Wizard step status tracking is handled by WizardProgressTracker
-            // This view shows the actual progress from the tracker
-            let tracker = coordinator.wizardTracker
-            ForEach(OnboardingWizardStep.allCases, id: \.self) { step in
-                let status = tracker.stepStatuses[step]
-                    ?? (tracker.currentStep == step ? .current
-                        : (tracker.completedSteps.contains(step) ? .completed : .pending))
-                OnboardingStepProgressItem(title: step.title, status: status)
+        GeometryReader { geometry in
+            HStack(alignment: .center, spacing: 16) {
+                // Note: Wizard step status tracking is handled by WizardProgressTracker
+                // This view shows the actual progress from the tracker
+                let tracker = coordinator.wizardTracker
+                ForEach(OnboardingWizardStep.allCases, id: \.self) { step in
+                    let status = tracker.stepStatuses[step]
+                        ?? (tracker.currentStep == step ? .current
+                            : (tracker.completedSteps.contains(step) ? .completed : .pending))
+                    OnboardingStepProgressItem(title: step.title, status: status)
+                }
             }
+            .frame(width: geometry.size.width * 0.8)
+            .frame(maxWidth: .infinity, alignment: .center)
         }
-        .frame(maxWidth: .infinity, alignment: .center)
+        .frame(height: 44)
     }
 }
 private struct OnboardingStepProgressItem: View {
@@ -21,11 +25,11 @@ private struct OnboardingStepProgressItem: View {
     let status: OnboardingWizardStepStatus
     @State private var measuredLabelWidth: CGFloat = 0
     @State private var animatedProgress: CGFloat = 0
-    private let bubbleSize: CGFloat = 18
-    private let capsuleHeight: CGFloat = 30
-    private let horizontalPadding: CGFloat = 16
-    private let verticalPadding: CGFloat = 8
-    private let contentSpacing: CGFloat = 8
+    private let bubbleSize: CGFloat = 24
+    private let capsuleHeight: CGFloat = 40
+    private let horizontalPadding: CGFloat = 20
+    private let verticalPadding: CGFloat = 10
+    private let contentSpacing: CGFloat = 10
     var body: some View {
         let font = status == .current ? Font.headline : Font.subheadline
         let textColor: Color = status == .pending ? .secondary : .primary
@@ -52,7 +56,7 @@ private struct OnboardingStepProgressItem: View {
                             .fill(bubbleColor.gradient)
                         if status == .completed {
                             Image(systemName: "checkmark")
-                                .font(.footnote.weight(.semibold))
+                                .font(.caption.weight(.bold))
                                 .foregroundStyle(.white)
                         }
                     }
