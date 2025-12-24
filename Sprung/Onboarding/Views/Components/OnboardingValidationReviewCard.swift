@@ -72,61 +72,48 @@ struct OnboardingValidationReviewCard: View {
         }
     }
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Header
-            Text("Review \(displayTitle)")
-                .font(.headline)
-            if let message = prompt.message, !message.isEmpty {
-                Text(message)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-
-            // Scrollable content area
-            ScrollView {
-                contentView
-            }
-            .frame(maxHeight: 280)
-
-            // Sticky footer - always visible
+        ReviewCard(
+            title: "Review \(displayTitle)",
+            subtitle: prompt.message,
+            contentMaxHeight: 280,
+            onCancel: onCancel
+        ) {
             VStack(alignment: .leading, spacing: 12) {
-                Picker("Decision", selection: $decision) {
-                    ForEach(Decision.allCases) { option in
-                        Text(option.label).tag(option)
+                contentView
+
+                // Decision picker and footer controls
+                VStack(alignment: .leading, spacing: 12) {
+                    Picker("Decision", selection: $decision) {
+                        ForEach(Decision.allCases) { option in
+                            Text(option.label).tag(option)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    if shouldShowRawEditor {
+                        rawJSONEditor
+                    } else if decision == .modified {
+                        Text("Changes will be sent back to the interviewer when you submit.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    notesEditor
+
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
                     }
                 }
-                .pickerStyle(.segmented)
-
-                if shouldShowRawEditor {
-                    rawJSONEditor
-                } else if decision == .modified {
-                    Text("Changes will be sent back to the interviewer when you submit.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-
-                notesEditor
-
-                if let errorMessage {
-                    Text(errorMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.red)
-                }
-
-                HStack {
-                    Button("Cancel", action: onCancel)
-                    Spacer()
-                    Button("Submit Decision", action: submit)
-                        .buttonStyle(.borderedProminent)
-                        .disabled(disableSubmit)
-                }
             }
+        } actions: {
+            AnyView(
+                Button("Submit Decision", action: submit)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(disableSubmit)
+            )
         }
-        .padding(18)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(nsColor: .underPageBackgroundColor))
-        )
         .onChange(of: applicantDraft) { _, _ in
             guard isApplicantProfile, decision == .modified else { return }
             let normalized = Self.normalizedJSONString(from: applicantDraft.toJSON())
