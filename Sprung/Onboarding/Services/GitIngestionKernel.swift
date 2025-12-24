@@ -87,7 +87,7 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
 
         // Register agent after creating task (so we can associate the task with it)
         if let tracker = agentActivityTracker {
-            await MainActor.run {
+            _ = await MainActor.run {
                 tracker.trackAgent(
                     id: agentId,
                     type: .gitIngestion,

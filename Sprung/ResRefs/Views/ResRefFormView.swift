@@ -143,7 +143,9 @@ struct ResRefFormView: View {
                         }
                     } catch {
                         Logger.error("❌ Failed to load dropped file as UTF-8 text: \(error.localizedDescription)")
-                        showDropError("Could not read the file using UTF-8 encoding.")
+                        await MainActor.run {
+                            self.showDropError("Could not read the file using UTF-8 encoding.")
+                        }
                     }
                 }
             }

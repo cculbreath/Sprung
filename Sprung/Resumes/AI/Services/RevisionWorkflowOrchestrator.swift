@@ -11,6 +11,7 @@ import SwiftUI
 import SwiftData
 
 /// Protocol for receiving workflow orchestration callbacks
+@MainActor
 protocol RevisionWorkflowOrchestratorDelegate: AnyObject {
     func setupRevisionsForReview(_ revisions: [ProposedRevisionNode]) async
     func handleResubmissionResults(validatedRevisions: [ProposedRevisionNode], resubmittedNodeIds: Set<String>)
