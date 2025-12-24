@@ -136,9 +136,6 @@ extension Statuses {
     /// Source where the lead was discovered (e.g., LinkedIn, Indeed)
     var source: String?
 
-    /// URL to the application form
-    var applicationUrl: String?
-
     // MARK: - Pipeline Dates
 
     var createdAt: Date = Date()
@@ -303,7 +300,6 @@ extension Statuses {
         self.priority = jobLead.priority
         self.stage = jobLead.stage
         self.source = jobLead.source
-        self.applicationUrl = jobLead.applicationUrl
         self.notes = jobLead.notes ?? ""
 
         // Map dates
