@@ -61,7 +61,7 @@ extension Statuses {
         }
     }
 }
-@Model class JobApp: Equatable, Identifiable, Decodable, Hashable {
+@Model class JobApp: Equatable, Identifiable, Hashable {
     @Attribute(.unique) var id: UUID = UUID()
     static func == (lhs: JobApp, rhs: JobApp) -> Bool {
         lhs.id == rhs.id
@@ -165,24 +165,8 @@ extension Statuses {
     var fitScore: Double?
     var llmAssessment: String?
 
-    enum CodingKeys: String, CodingKey {
-        case jobPosition = "job_position"
-        case jobLocation = "job_location"
-        case companyName = "company_name"
-        case companyLinkedinId = "company_linkedin_id"
-        case jobPostingTime = "job_posting_time"
-        case jobDescription = "job_description"
-        case seniorityLevel = "seniority_level"
-        case employmentType = "employment_type"
-        case jobFunction = "job_function"
-        case industries
-        case jobApplyLink = "job_apply_link"
-        case resumes
-        case coverLetters
-        case selectedRes
-        case status
-        case postingURL = "posting_url"
-    }
+    // MARK: - Computed Properties
+
     var jobListingString: String {
         var descriptionParts: [String] = []
         descriptionParts.append("Job Position: \(jobPosition)")
@@ -265,22 +249,7 @@ extension Statuses {
         }
         // No else branch needed - if selectedRes != candidate, we don't need to change selection
     }
-    required init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        jobPosition = try container.decode(String.self, forKey: .jobPosition)
-        jobLocation = try container.decode(String.self, forKey: .jobLocation)
-        companyName = try container.decode(String.self, forKey: .companyName)
-        companyLinkedinId = try container.decodeIfPresent(String.self, forKey: .companyLinkedinId) ?? ""
-        jobPostingTime = try container.decodeIfPresent(String.self, forKey: .jobPostingTime) ?? ""
-        jobDescription = try container.decode(String.self, forKey: .jobDescription)
-        seniorityLevel = try container.decodeIfPresent(String.self, forKey: .seniorityLevel) ?? ""
-        employmentType = try container.decodeIfPresent(String.self, forKey: .employmentType) ?? ""
-        jobFunction = try container.decodeIfPresent(String.self, forKey: .jobFunction) ?? ""
-        industries = try container.decodeIfPresent(String.self, forKey: .industries) ?? ""
-        jobApplyLink = try container.decodeIfPresent(String.self, forKey: .jobApplyLink) ?? ""
-        status = try container.decodeIfPresent(Statuses.self, forKey: .status) ?? .new
-        resumes = []
-    }
+
     func replaceUUIDsWithLetterNames(in text: String) -> String {
         var result = text
         for letter in self.coverLetters {
