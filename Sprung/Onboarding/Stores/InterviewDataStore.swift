@@ -9,10 +9,15 @@ import SwiftyJSON
 actor InterviewDataStore {
     private let baseURL: URL
     init() {
-        let appSupport = FileManager.default.urls(
+        guard let appSupport = FileManager.default.urls(
             for: .applicationSupportDirectory,
             in: .userDomainMask
-        )[0]
+        ).first else {
+            Logger.error("Failed to locate application support directory for onboarding data")
+            // Fallback to temporary directory
+            baseURL = FileManager.default.temporaryDirectory.appendingPathComponent("Onboarding/Data", isDirectory: true)
+            return
+        }
         let directory = appSupport.appendingPathComponent("Onboarding/Data", isDirectory: true)
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
