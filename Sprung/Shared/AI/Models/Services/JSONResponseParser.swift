@@ -8,7 +8,7 @@ import Foundation
 ///
 /// - Important: This is an internal implementation type. Use `LLMFacade` as the
 ///   public entry point for LLM operations.
-struct _JSONResponseParser {
+struct JSONResponseParser {
     /// Parse structured response with fallback strategies
     static func parseStructured<T: Codable>(_ response: LLMResponseDTO, as type: T.Type) throws -> T {
         guard let content = response.choices.first?.message?.text else {

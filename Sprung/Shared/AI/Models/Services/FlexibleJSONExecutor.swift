@@ -8,7 +8,7 @@
 //    public entry point for LLM operations.
 //
 import Foundation
-final class _FlexibleJSONExecutor {
+final class FlexibleJSONExecutor {
     private let requestExecutor: LLMRequestExecutor
     init(requestExecutor: LLMRequestExecutor) {
         self.requestExecutor = requestExecutor
@@ -24,7 +24,7 @@ final class _FlexibleJSONExecutor {
         recordSchemaSuccess: @escaping () async -> Void,
         recordSchemaFailure: @escaping (_ reason: String) async -> Void
     ) async throws -> T {
-        let parameters = _LLMRequestBuilder.buildFlexibleJSONRequest(
+        let parameters = LLMRequestBuilder.buildFlexibleJSONRequest(
             prompt: prompt,
             modelId: modelId,
             responseType: responseType,
@@ -35,8 +35,8 @@ final class _FlexibleJSONExecutor {
         )
         do {
             let response = try await requestExecutor.execute(parameters: parameters)
-            let dto = _LLMVendorMapper.responseDTO(from: response)
-            let result = try _JSONResponseParser.parseFlexible(from: dto, as: responseType)
+            let dto = LLMVendorMapper.responseDTO(from: response)
+            let result = try JSONResponseParser.parseFlexible(from: dto, as: responseType)
             if supportsStructuredOutput && !shouldAvoidJSONSchema && jsonSchema != nil {
                 await recordSchemaSuccess()
                 Logger.info("✅ JSON schema validation successful for model: \(modelId)")

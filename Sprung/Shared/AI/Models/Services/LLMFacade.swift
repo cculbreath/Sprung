@@ -571,7 +571,7 @@ final class LLMFacade {
     ) async throws -> ChatCompletionObject {
         try await validate(modelId: modelId, requires: [])
 
-        let parameters = _LLMRequestBuilder.buildToolRequest(
+        let parameters = LLMRequestBuilder.buildToolRequest(
             messages: messages,
             modelId: modelId,
             tools: tools,

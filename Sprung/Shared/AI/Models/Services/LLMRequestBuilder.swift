@@ -29,7 +29,7 @@ struct OpenRouterReasoning: Codable {
 ///
 /// - Important: This is an internal implementation type. Use `LLMFacade` as the
 ///   public entry point for LLM operations.
-struct _LLMRequestBuilder {
+struct LLMRequestBuilder {
     /// Build parameters for a simple text request
     static func buildTextRequest(
         prompt: String,
@@ -56,7 +56,7 @@ struct _LLMRequestBuilder {
         ]
         // Add images
         for imageData in images {
-            guard let imageDetail = _LLMVendorMapper.makeImageDetail(from: imageData) else {
+            guard let imageDetail = LLMVendorMapper.makeImageDetail(from: imageData) else {
                 Logger.warning("⚠️ Skipping image attachment: failed to create data URL", category: .networking)
                 continue
             }
@@ -119,7 +119,7 @@ struct _LLMRequestBuilder {
         ]
         // Add images
         for imageData in images {
-            guard let imageDetail = _LLMVendorMapper.makeImageDetail(from: imageData) else {
+            guard let imageDetail = LLMVendorMapper.makeImageDetail(from: imageData) else {
                 Logger.warning("⚠️ Skipping image attachment: failed to create data URL", category: .networking)
                 continue
             }
@@ -190,7 +190,7 @@ struct _LLMRequestBuilder {
         modelId: String,
         temperature: Double
     ) -> ChatCompletionParameters {
-        let vendorMessages = _LLMVendorMapper.vendorMessages(from: messages)
+        let vendorMessages = LLMVendorMapper.vendorMessages(from: messages)
         return ChatCompletionParameters(
             messages: vendorMessages,
             model: .custom(modelId),
@@ -205,7 +205,7 @@ struct _LLMRequestBuilder {
         temperature: Double,
         jsonSchema: JSONSchema? = nil
     ) -> ChatCompletionParameters {
-        let vendorMessages = _LLMVendorMapper.vendorMessages(from: messages)
+        let vendorMessages = LLMVendorMapper.vendorMessages(from: messages)
         if let schema = jsonSchema {
             let responseFormatSchema = JSONSchemaResponseFormat(
                 name: String(describing: responseType).lowercased(),

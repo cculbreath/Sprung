@@ -124,34 +124,34 @@ final class SwiftOpenAIClientWrapper: LLMClient {
         }
     }
     func executeText(prompt: String, modelId: String, temperature: Double? = nil) async throws -> String {
-        let params = _LLMRequestBuilder.buildTextRequest(
+        let params = LLMRequestBuilder.buildTextRequest(
             prompt: prompt,
             modelId: modelId,
             temperature: temperature ?? defaultTemperature
         )
         let response = try await executor.execute(parameters: params)
-        let dto = _LLMVendorMapper.responseDTO(from: response)
+        let dto = LLMVendorMapper.responseDTO(from: response)
         guard let content = dto.choices.first?.message?.text else {
             throw LLMError.unexpectedResponseFormat
         }
         return content
     }
     func executeTextWithImages(prompt: String, modelId: String, images: [Data], temperature: Double? = nil) async throws -> String {
-        let params = _LLMRequestBuilder.buildVisionRequest(
+        let params = LLMRequestBuilder.buildVisionRequest(
             prompt: prompt,
             modelId: modelId,
             images: images,
             temperature: temperature ?? defaultTemperature
         )
         let response = try await executor.execute(parameters: params)
-        let dto = _LLMVendorMapper.responseDTO(from: response)
+        let dto = LLMVendorMapper.responseDTO(from: response)
         guard let content = dto.choices.first?.message?.text else {
             throw LLMError.unexpectedResponseFormat
         }
         return content
     }
     func executeTextWithPDF(prompt: String, modelId: String, pdfData: Data, temperature: Double? = nil, maxTokens: Int? = nil) async throws -> String {
-        let params = _LLMRequestBuilder.buildPDFRequest(
+        let params = LLMRequestBuilder.buildPDFRequest(
             prompt: prompt,
             modelId: modelId,
             pdfData: pdfData,
@@ -159,14 +159,14 @@ final class SwiftOpenAIClientWrapper: LLMClient {
             maxTokens: maxTokens
         )
         let response = try await executor.execute(parameters: params)
-        let dto = _LLMVendorMapper.responseDTO(from: response)
+        let dto = LLMVendorMapper.responseDTO(from: response)
         guard let content = dto.choices.first?.message?.text else {
             throw LLMError.unexpectedResponseFormat
         }
         return content
     }
     func executeStructured<T: Codable & Sendable>(prompt: String, modelId: String, as: T.Type, temperature: Double? = nil) async throws -> T {
-        let params = _LLMRequestBuilder.buildStructuredRequest(
+        let params = LLMRequestBuilder.buildStructuredRequest(
             prompt: prompt,
             modelId: modelId,
             responseType: T.self,
@@ -174,11 +174,11 @@ final class SwiftOpenAIClientWrapper: LLMClient {
             jsonSchema: nil
         )
         let response = try await executor.execute(parameters: params)
-        let dto = _LLMVendorMapper.responseDTO(from: response)
-        return try _JSONResponseParser.parseStructured(dto, as: T.self)
+        let dto = LLMVendorMapper.responseDTO(from: response)
+        return try JSONResponseParser.parseStructured(dto, as: T.self)
     }
     func executeStructuredWithImages<T: Codable & Sendable>(prompt: String, modelId: String, images: [Data], as: T.Type, temperature: Double? = nil) async throws -> T {
-        let params = _LLMRequestBuilder.buildStructuredVisionRequest(
+        let params = LLMRequestBuilder.buildStructuredVisionRequest(
             prompt: prompt,
             modelId: modelId,
             images: images,
@@ -186,7 +186,7 @@ final class SwiftOpenAIClientWrapper: LLMClient {
             temperature: temperature ?? defaultTemperature
         )
         let response = try await executor.execute(parameters: params)
-        let dto = _LLMVendorMapper.responseDTO(from: response)
-        return try _JSONResponseParser.parseStructured(dto, as: T.self)
+        let dto = LLMVendorMapper.responseDTO(from: response)
+        return try JSONResponseParser.parseStructured(dto, as: T.self)
     }
 }

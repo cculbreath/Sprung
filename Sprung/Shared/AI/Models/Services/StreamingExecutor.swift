@@ -8,7 +8,7 @@
 //    public entry point for LLM operations.
 //
 import Foundation
-final class _StreamingExecutor {
+final class StreamingExecutor {
     private let requestExecutor: LLMRequestExecutor
     init(requestExecutor: LLMRequestExecutor) {
         self.requestExecutor = requestExecutor
@@ -57,7 +57,7 @@ final class _StreamingExecutor {
                             cancelled = true
                             break
                         }
-                        let dto = _LLMVendorMapper.streamChunkDTO(from: chunk)
+                        let dto = LLMVendorMapper.streamChunkDTO(from: chunk)
                         if accumulateContent, let content = dto.content {
                             accumulated? += content
                         }
