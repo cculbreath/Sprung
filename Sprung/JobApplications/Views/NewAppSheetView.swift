@@ -172,17 +172,17 @@ struct NewAppSheetView: View {
                 isLoading = true
                 Task {
                     do {
-                        let htmlContent = try await JobApp.fetchHTMLContent(from: urlText)
-                        JobApp.parseAppleJobListing(
+                        let htmlContent = try await WebResourceService.fetchHTML(from: url)
+                        try JobApp.parseAppleJobListing(
                             jobAppStore: jobAppStore, html: htmlContent, url: urlText
                         )
                         Logger.info("✅ Successfully imported job from Apple")
                         isLoading = false
                         isPresented = false
                     } catch {
-                        Logger.error("🚨 Apple job fetch error: \(error)")
+                        Logger.error("🚨 Apple job import error: \(error)")
                         await MainActor.run {
-                            errorMessage = "Failed to fetch Apple job listing: \(error.localizedDescription)"
+                            errorMessage = "Failed to import Apple job listing: \(error.localizedDescription)"
                             showError = true
                             isLoading = false
                         }

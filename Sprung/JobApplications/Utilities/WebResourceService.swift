@@ -1,26 +1,24 @@
 //
-//  WebViewHTMLFetcher.swift
+//  WebResourceService.swift
 //  Sprung
 //
-//
-//  A shared utility for loading URLs via WKWebView to bypass Cloudflare
-//  challenges or extract rendered HTML. Supports both hidden (headless) and
-//  visible modes with configurable timeouts and success detection.
 //
 import Foundation
 import WebKit
 
+/// Unified service for fetching web resources (HTML, etc.) with automatic
+/// fallback strategies for Cloudflare-protected sites and JavaScript-rendered pages.
 @MainActor
-final class WebViewHTMLFetcher: NSObject, WKNavigationDelegate {
+final class WebResourceService {
 
     // MARK: - Configuration
 
-    /// Configuration options for WebView fetching behavior
+    /// Configuration options for HTML fetching behavior
     struct Configuration {
         /// Maximum time to wait before timing out (in seconds)
         var timeout: TimeInterval = 20
 
-        /// Custom user agent string (nil uses default)
+        /// Custom user agent string (nil uses default desktop UA)
         var userAgent: String? = nil
 
         /// Optional JavaScript to evaluate on page load to detect success
@@ -38,36 +36,123 @@ final class WebViewHTMLFetcher: NSObject, WKNavigationDelegate {
 
         /// Maximum number of polling attempts for success detection
         var maxPollAttempts: Int = 30
+
+        /// Maximum number of retry attempts when Cloudflare challenge is detected
+        var maxRetryAttempts: Int = 4
     }
+
+    // MARK: - Constants
+
+    private static let desktopUA =
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+    private static let acceptHdr = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+    private static let langHdr = "en-US,en;q=0.5"
+
+    /// Cloudflare challenge indicators
+    private static let cloudflareIndicators = [
+        "Attention Required! | Cloudflare",
+        "Just a moment…",
+        "Just a moment...",
+        "Checking if the site connection is secure",
+        "cf-browser-verification",
+        "Request Blocked",
+        "You have been blocked",
+        "Blocked - Indeed.com",
+        "Security Check - Indeed.com",
+        "Additional Verification Required"
+    ]
 
     // MARK: - Public API
 
-    /// Loads the given URL in a hidden WKWebView and returns the page's outer HTML
-    /// once navigation completes.
+    /// Fetches HTML content from the given URL with automatic fallback strategies.
+    /// Tries URLSession first for performance, falls back to WKWebView if needed.
     /// - Parameters:
-    ///   - url: The URL to load
+    ///   - url: The URL to fetch
     ///   - config: Configuration options for the fetch operation
-    /// - Returns: The page's HTML content
+    /// - Returns: The HTML content as a string
     /// - Throws: URLError or navigation errors
-    static func html(for url: URL, config: Configuration = .init()) async throws -> String {
-        let fetcher = WebViewHTMLFetcher(url: url, config: config)
-        return try await fetcher.fetch()
+    static func fetchHTML(from url: URL, config: Configuration = .init()) async throws -> String {
+        Logger.verbose("🔍 [WebResourceService] Starting HTML fetch for: \(url.absoluteString)")
+
+        // Strategy 1: Try URLSession first (fast path)
+        if let html = try? await fetchHTMLViaURLSession(url: url, config: config) {
+            Logger.info("✅ [WebResourceService] Successfully fetched HTML via URLSession")
+            return html
+        }
+
+        Logger.info("⚠️ [WebResourceService] URLSession fetch failed, falling back to WKWebView")
+
+        // Strategy 2: Fall back to WKWebView (handles JS-rendered pages)
+        let html = try await fetchHTMLViaWebView(url: url, config: config)
+        Logger.info("✅ [WebResourceService] Successfully fetched HTML via WKWebView")
+        return html
     }
 
-    // MARK: - Internal Properties
+    // MARK: - Private Implementation
+
+    /// Fetches HTML using URLSession with Cloudflare cookie handling and retry logic
+    private static func fetchHTMLViaURLSession(url: URL, config: Configuration) async throws -> String {
+        var attempt = 0
+
+        while attempt < config.maxRetryAttempts {
+            attempt += 1
+
+            var request = URLRequest(url: url)
+            request.setValue(config.userAgent ?? desktopUA, forHTTPHeaderField: "User-Agent")
+            request.setValue(acceptHdr, forHTTPHeaderField: "Accept")
+            request.setValue(langHdr, forHTTPHeaderField: "Accept-Language")
+            request.timeoutInterval = config.timeout
+
+            // Attach cf_clearance cookie if available
+            if let cookie = await CloudflareCookieManager.clearance(for: url) {
+                let cookieHeader = "\(cookie.name)=\(cookie.value)"
+                request.setValue(cookieHeader, forHTTPHeaderField: "Cookie")
+            }
+
+            // Perform request
+            let (data, _) = try await URLSession.shared.data(for: request)
+            guard let htmlContent = String(data: data, encoding: .utf8) else {
+                throw URLError(.cannotDecodeContentData)
+            }
+
+            // Detect Cloudflare challenge pages
+            if cloudflareIndicators.contains(where: { htmlContent.contains($0) }) {
+                Logger.warning("⚠️ [WebResourceService] Cloudflare challenge detected (attempt \(attempt)/\(config.maxRetryAttempts))")
+
+                // Refresh clearance cookie via interactive challenge
+                _ = await CloudflareCookieManager.refreshClearance(for: url)
+                continue // retry
+            }
+
+            return htmlContent
+        }
+
+        throw URLError(.badServerResponse)
+    }
+
+    /// Fetches HTML using WKWebView for JavaScript-rendered pages
+    private static func fetchHTMLViaWebView(url: URL, config: Configuration) async throws -> String {
+        let fetcher = WebViewFetcher(url: url, config: config)
+        return try await fetcher.fetch()
+    }
+}
+
+// MARK: - WebView Implementation
+
+@MainActor
+private final class WebViewFetcher: NSObject, WKNavigationDelegate {
 
     private let url: URL
-    private let config: Configuration
+    private let config: WebResourceService.Configuration
     private var continuation: CheckedContinuation<String, Error>?
     private var webView: WKWebView!
-    private var selfRetain: WebViewHTMLFetcher?
+    private var selfRetain: WebViewFetcher?
     private var timeoutTask: DispatchWorkItem?
     private var startTime = Date()
     private var pollAttempts = 0
 
-    // MARK: - Initialization
-
-    private init(url: URL, config: Configuration) {
+    init(url: URL, config: WebResourceService.Configuration) {
         self.url = url
         self.config = config
         super.init()
@@ -88,9 +173,7 @@ final class WebViewHTMLFetcher: NSObject, WKNavigationDelegate {
         }
     }
 
-    // MARK: - Fetch Operation
-
-    private func fetch() async throws -> String {
+    func fetch() async throws -> String {
         try await withCheckedThrowingContinuation { cont in
             continuation = cont
             start()
@@ -133,7 +216,6 @@ final class WebViewHTMLFetcher: NSObject, WKNavigationDelegate {
 
     // MARK: - Success Detection
 
-    /// Poll for success condition using the configured JavaScript
     private func pollForSuccessCondition(_ script: String) {
         webView.evaluateJavaScript(script) { [weak self] result, error in
             guard let self else { return }
@@ -184,7 +266,6 @@ final class WebViewHTMLFetcher: NSObject, WKNavigationDelegate {
 
     // MARK: - Cookie Management
 
-    /// Store Cloudflare clearance cookie for future use
     private func storeClearanceCookie() {
         WKWebsiteDataStore.default().httpCookieStore.getAllCookies { [weak self] cookies in
             guard let self else { return }

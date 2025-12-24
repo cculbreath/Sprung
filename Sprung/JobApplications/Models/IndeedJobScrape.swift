@@ -218,19 +218,17 @@ extension JobApp {
         urlString: String,
         jobAppStore: JobAppStore
     ) async -> JobApp? {
-        let html: String?
-        if let primary = try? await JobApp.fetchHTMLContent(from: urlString) {
-            html = primary
-        } else if let url = URL(string: urlString),
-                  let webHTML = try? await WebViewHTMLFetcher.html(for: url) {
-            // Fallback: load the same desktop URL in a hidden WKWebView.
-            html = webHTML
-        } else {
-            html = nil
-        }
-        guard let html else {
+        guard let url = URL(string: urlString) else {
+            Logger.error("🚨 [IndeedJobScrape] Invalid URL: \(urlString)")
             return nil
         }
+
+        // Use WebResourceService which handles URLSession + WebView fallback automatically
+        guard let html = try? await WebResourceService.fetchHTML(from: url) else {
+            Logger.error("🚨 [IndeedJobScrape] Failed to fetch HTML from: \(urlString)")
+            return nil
+        }
+
         return JobApp.parseIndeedJobListing(jobAppStore: jobAppStore, html: html, url: urlString)
     }
 }

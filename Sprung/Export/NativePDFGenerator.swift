@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import Mustache
 
 @MainActor
@@ -28,20 +29,40 @@ class NativePDFGenerator: ObservableObject {
                 return shellURL.path
             }
         }
-        // Fall back to system installations
-        let chromePaths = [
-            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-            "/Applications/Chromium.app/Contents/MacOS/Chromium",
-            "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
-            "/opt/homebrew/bin/chromium",
-            "/usr/local/bin/chromium"
+
+        // Use NSWorkspace to find system-installed Chrome/Chromium apps
+        let bundleIdentifiers = [
+            "com.google.Chrome",
+            "org.chromium.Chromium",
+            "com.google.Chrome.canary"
         ]
-        for path in chromePaths {
+
+        for identifier in bundleIdentifiers {
+            if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: identifier) {
+                // Extract executable path from app bundle
+                let executableName = appURL.deletingPathExtension().lastPathComponent
+                let chromePath = appURL.appendingPathComponent("Contents/MacOS/\(executableName)").path
+                if FileManager.default.isExecutableFile(atPath: chromePath) {
+                    Logger.debug("NativePDFGenerator: Using system Chrome at \(chromePath) (bundle: \(identifier))")
+                    return chromePath
+                }
+            }
+        }
+
+        // Fallback: check common binary paths (Homebrew, etc.)
+        let binaryPaths = [
+            "/opt/homebrew/bin/chromium",
+            "/usr/local/bin/chromium",
+            "/opt/homebrew/bin/chrome",
+            "/usr/local/bin/chrome"
+        ]
+        for path in binaryPaths {
             if FileManager.default.isExecutableFile(atPath: path) {
-                Logger.debug("NativePDFGenerator: Using system Chrome at \(path)")
+                Logger.debug("NativePDFGenerator: Using Chrome binary at \(path)")
                 return path
             }
         }
+
         return nil
     }
 
