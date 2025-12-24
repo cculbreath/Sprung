@@ -36,8 +36,12 @@ struct SetCurrentKnowledgeCardTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
-        guard let itemId = params["item_id"].string, !itemId.isEmpty else {
-            return .error(.invalidParameters("item_id is required"))
+        // Validate required parameters using helpers
+        let itemId: String
+        do {
+            itemId = try ToolResultHelpers.requireString(params["item_id"].string, named: "item_id")
+        } catch {
+            return .error(error as! ToolError)
         }
 
         let message = params["message"].string
@@ -70,7 +74,7 @@ struct SetCurrentKnowledgeCardTool: InterviewTool {
         }
 
         guard let item = item else {
-            return .error(.invalidParameters("No plan item found with id '\(itemId)'. Call display_knowledge_card_plan first."))
+            return ToolResultHelpers.invalidParameters("No plan item found with id '\(itemId)'. Call display_knowledge_card_plan first.")
         }
 
         // Update UI state with new focus
@@ -86,15 +90,15 @@ struct SetCurrentKnowledgeCardTool: InterviewTool {
             await eventBus.publish(.toolGatingRequested(toolName: OnboardingToolName.submitKnowledgeCard.rawValue, exclude: true))
         }
 
-        // Build response
-        var response = JSON()
-        response["status"].string = "completed"
-        response["current_item_id"].string = itemId
-        response["current_item_title"].string = item.title
-        response["ui_message"].string = "User now sees '\(item.title)' highlighted with 'Done with this card' button"
+        // Build additional data for response
+        var additionalData = JSON()
+        additionalData["current_item_id"].string = itemId
+        additionalData["current_item_title"].string = item.title
+        additionalData["ui_message"].string = "User now sees '\(item.title)' highlighted with 'Done with this card' button"
+
         if isNewItem {
-            response["tool_gating"].string = "submit_knowledge_card is GATED until user clicks 'Done with this card'"
-            response["next_action"].string = """
+            additionalData["tool_gating"].string = "submit_knowledge_card is GATED until user clicks 'Done with this card'"
+            additionalData["next_action"].string = """
                 The user can now:
                 1. Upload documents via the drop zone
                 2. Add a git repository
@@ -104,12 +108,15 @@ struct SetCurrentKnowledgeCardTool: InterviewTool {
                 IMPORTANT: You CANNOT call submit_knowledge_card until the user clicks "Done with this card".
                 """
         } else {
-            response["tool_gating"].string = "submit_knowledge_card remains UNGATED (same item)"
-            response["next_action"].string = """
+            additionalData["tool_gating"].string = "submit_knowledge_card remains UNGATED (same item)"
+            additionalData["next_action"].string = """
                 Same item re-selected. You may continue submitting cards for this evidence batch.
                 """
         }
 
-        return .immediate(response)
+        return ToolResultHelpers.statusResponse(
+            status: "completed",
+            additionalData: additionalData
+        )
     }
 }

@@ -40,13 +40,16 @@ struct DisplayKnowledgeCardPlanTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
-        let items = params["items"].arrayValue
+        // Validate required parameters using helpers
+        let items: [JSON]
+        do {
+            items = try ToolResultHelpers.requireNonEmptyArray(params["items"].array, named: "items")
+        } catch {
+            return .error(error as! ToolError)
+        }
+
         let currentFocus = params["current_focus"].string
         let message = params["message"].string
-
-        guard !items.isEmpty else {
-            return .error(.invalidParameters("items array is required and must not be empty"))
-        }
 
         // Build plan items
         var planItems: [KnowledgeCardPlanItem] = []
@@ -78,34 +81,32 @@ struct DisplayKnowledgeCardPlanTool: InterviewTool {
             message: message
         )
 
-        // Build response
-        var response = JSON()
-        response["status"].string = "completed"
-        response["item_count"].int = planItems.count
-        response["pending_count"].int = planItems.filter { $0.status == .pending }.count
-        response["in_progress_count"].int = planItems.filter { $0.status == .inProgress }.count
-        response["completed_count"].int = planItems.filter { $0.status == .completed }.count
-
-        if let currentFocus = currentFocus {
-            response["current_focus"].string = currentFocus
-        }
-
         // Determine next action based on plan state
         let pendingItems = planItems.filter { $0.status == .pending }
         let completedCount = planItems.filter { $0.status == .completed }.count
         let allComplete = pendingItems.isEmpty && completedCount == planItems.count
 
+        // Build additional data for response
+        var additionalData = JSON()
+        additionalData["item_count"].int = planItems.count
+        additionalData["pending_count"].int = pendingItems.count
+        additionalData["in_progress_count"].int = planItems.filter { $0.status == .inProgress }.count
+        additionalData["completed_count"].int = completedCount
+
+        if let currentFocus = currentFocus {
+            additionalData["current_focus"].string = currentFocus
+        }
+
         if allComplete {
             // All items are completed - no chaining needed
-            response["next_action"].string = """
+            additionalData["next_action"].string = """
                 All knowledge cards are complete! \
                 Ready to proceed to Phase 3 or review/refine existing cards.
                 """
         } else {
             // Multi-agent workflow: chain to open_document_collection
-            // This shows the document collection UI for user to upload supporting docs
-            response["next_required_tool"].string = OnboardingToolName.openDocumentCollection.rawValue
-            response["next_action"].string = """
+            additionalData["next_required_tool"].string = OnboardingToolName.openDocumentCollection.rawValue
+            additionalData["next_action"].string = """
                 Plan displayed with \(planItems.count) card(s) (\(pendingItems.count) pending).
 
                 You MUST now call `open_document_collection` to:
@@ -117,7 +118,10 @@ struct DisplayKnowledgeCardPlanTool: InterviewTool {
                 """
         }
 
-        return .immediate(response)
+        return ToolResultHelpers.statusResponse(
+            status: "completed",
+            additionalData: additionalData
+        )
     }
 }
 

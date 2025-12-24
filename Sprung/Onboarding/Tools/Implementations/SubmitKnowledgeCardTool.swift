@@ -62,10 +62,10 @@ struct SubmitKnowledgeCardTool: InterviewTool {
         // Check if batch upload is in progress - reject to prevent interrupting uploads
         let hasBatchInProgress = await MainActor.run { coordinator.ui.hasBatchUploadInProgress }
         if hasBatchInProgress {
-            return .error(.executionFailed(
+            return ToolResultHelpers.executionFailed(
                 "Cannot submit knowledge card while document uploads are in progress. " +
                 "Wait for the user to finish uploading evidence documents and click 'Done with this card' before resubmitting."
-            ))
+            )
         }
 
         // Resolve card: prefer card_id (from pending storage), fall back to full card object
@@ -75,88 +75,87 @@ struct SubmitKnowledgeCardTool: InterviewTool {
         if let cardId = pendingCardId {
             // Retrieve from pending storage (Milestone 7: KC content not in main thread)
             guard let pendingCard = await coordinator.state.getPendingCard(id: cardId) else {
-                return .error(.invalidParameters(
+                return ToolResultHelpers.invalidParameters(
                     "No pending card found for card_id '\(cardId)'. " +
                     "Ensure dispatch_kc_agents was called and the card_id matches a successful result."
-                ))
+                )
             }
             card = pendingCard
             Logger.info("📦 Retrieved pending card: \(cardId)", category: .ai)
         } else if params["card"] != .null {
             card = params["card"]
         } else {
-            return .error(.invalidParameters(
+            return ToolResultHelpers.invalidParameters(
                 "Either 'card_id' (preferred) or 'card' object is required. " +
                 "Use card_id from dispatch_kc_agents results when available."
-            ))
+            )
         }
 
-        // Validate required fields
-        guard let cardId = card["id"].string, !cardId.isEmpty else {
-            return .error(.invalidParameters("card.id is required (use a UUID)"))
-        }
+        // Validate required fields using helpers
+        let cardId: String
+        let title: String
+        let content: String
+        let sources: [JSON]
+        let summary: String
 
-        guard let title = card["title"].string, !title.isEmpty else {
-            return .error(.invalidParameters("card.title is required"))
-        }
+        do {
+            cardId = try ToolResultHelpers.requireString(card["id"].string, named: "card.id")
+            title = try ToolResultHelpers.requireString(card["title"].string, named: "card.title")
 
-        // Validate prose content
-        guard let content = card["content"].string, !content.isEmpty else {
-            return .error(.invalidParameters(
-                "card.content is REQUIRED and must be a comprehensive prose summary (500-2000+ words). " +
-                "This narrative will be the primary source for resume customization."
-            ))
-        }
+            // Validate prose content
+            content = try ToolResultHelpers.requireString(card["content"].string, named: "card.content")
 
-        // Check minimum content length (roughly 500 words = ~3000 characters)
-        if content.count < 1000 {
-            return .error(.invalidParameters(
-                "card.content is too short (\(content.count) characters). " +
-                "Knowledge cards must be comprehensive prose summaries (500-2000+ words, ~3000+ characters minimum). " +
-                "Include ALL relevant details - this will replace the source documents for resume generation."
-            ))
-        }
+            // Check minimum content length (roughly 500 words = ~3000 characters)
+            if content.count < 1000 {
+                throw ToolError.invalidParameters(
+                    "card.content is too short (\(content.count) characters). " +
+                    "Knowledge cards must be comprehensive prose summaries (500-2000+ words, ~3000+ characters minimum). " +
+                    "Include ALL relevant details - this will replace the source documents for resume generation."
+                )
+            }
 
-        // Validate sources
-        guard let sources = card["sources"].array, !sources.isEmpty else {
-            return .error(.invalidParameters(
-                "card.sources is REQUIRED and must contain at least one source. " +
-                "Every knowledge card must be backed by evidence. " +
-                "Use list_artifacts to get artifact IDs, or quote specific chat excerpts."
-            ))
+            // Validate sources with custom error message
+            guard let sourcesArray = card["sources"].array, !sourcesArray.isEmpty else {
+                throw ToolError.invalidParameters(
+                    "card.sources is REQUIRED and must contain at least one source. " +
+                    "Every knowledge card must be backed by evidence. " +
+                    "Use list_artifacts to get artifact IDs, or quote specific chat excerpts."
+                )
+            }
+            sources = sourcesArray
+
+            // Extract summary
+            summary = try ToolResultHelpers.requireString(params["summary"].string, named: "summary")
+        } catch {
+            return .error(error as! ToolError)
         }
 
         // Validate each source has required fields based on type
         for (index, source) in sources.enumerated() {
             guard let sourceType = source["type"].string else {
-                return .error(.invalidParameters("sources[\(index)].type is required ('artifact' or 'chat')"))
+                return ToolResultHelpers.invalidParameters("sources[\(index)].type is required ('artifact' or 'chat')")
             }
 
             switch sourceType {
             case "artifact":
                 guard let artifactId = source["artifact_id"].string, !artifactId.isEmpty else {
-                    return .error(.invalidParameters(
+                    return ToolResultHelpers.invalidParameters(
                         "sources[\(index)].artifact_id is required for artifact sources. " +
                         "Call list_artifacts to get available artifact IDs."
-                    ))
+                    )
                 }
             case "chat":
                 guard let excerpt = source["chat_excerpt"].string, !excerpt.isEmpty else {
-                    return .error(.invalidParameters(
+                    return ToolResultHelpers.invalidParameters(
                         "sources[\(index)].chat_excerpt is required for chat sources. " +
                         "Quote the exact user statement from the conversation."
-                    ))
+                    )
                 }
             default:
-                return .error(.invalidParameters(
+                return ToolResultHelpers.invalidParameters(
                     "sources[\(index)].type must be 'artifact' or 'chat', got '\(sourceType)'"
-                ))
+                )
             }
-        }
-
-        // Extract summary
-        guard let summary = params["summary"].string, !summary.isEmpty else {
-            return .error(.invalidParameters("summary is required for the approval UI"))
         }
 
         // Get the current plan item focus (if any)
