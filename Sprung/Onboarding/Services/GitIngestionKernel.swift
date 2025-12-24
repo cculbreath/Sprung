@@ -330,8 +330,8 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
         // Run process in detached task to avoid blocking the actor
         try await Task.detached {
             let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-            process.arguments = args
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            process.arguments = ["git"] + args
             process.currentDirectoryURL = URL(fileURLWithPath: directory)
 
             let pipe = Pipe()

@@ -298,18 +298,7 @@ actor ObjectiveStore: OnboardingEventEmitter {
             objectives[objectiveId]?.status == .skipped
         }
     }
-    // MARK: - Scratchpad Summary
-    /// Build a condensed scratchpad summary for LLM metadata
-    func scratchpadSummary(for phase: InterviewPhase) -> String {
-        let phaseObjectives = getObjectivesForPhase(phase)
-            .sorted { $0.id < $1.id }
-            .map { "\($0.id)=\($0.status.rawValue)" }
-        if phaseObjectives.isEmpty {
-            return "objectives[\(phase.rawValue)]=none"
-        } else {
-            return "objectives[\(phase.rawValue)]=\(phaseObjectives.joined(separator: ", "))"
-        }
-    }
+
     // MARK: - State Management
     /// Restore objectives from snapshot
     func restore(objectives: [String: ObjectiveEntry]) {
