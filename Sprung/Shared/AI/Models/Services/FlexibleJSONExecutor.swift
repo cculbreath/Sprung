@@ -9,8 +9,8 @@
 //
 import Foundation
 final class _FlexibleJSONExecutor {
-    private let requestExecutor: _LLMRequestExecutor
-    init(requestExecutor: _LLMRequestExecutor) {
+    private let requestExecutor: LLMRequestExecutor
+    init(requestExecutor: LLMRequestExecutor) {
         self.requestExecutor = requestExecutor
     }
     func execute<T: Codable>(

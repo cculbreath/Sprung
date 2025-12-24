@@ -19,10 +19,6 @@ actor SearchOpsToolExecutor {
 
     private let contextProvider: SearchOpsContextProvider
 
-    // MARK: - Tool Cache (nonisolated since schemas are static)
-
-    nonisolated private static let toolSchemas: [ChatCompletionParameters.Tool] = buildAllToolsStatic()
-
     // MARK: - Initialization
 
     init(contextProvider: SearchOpsContextProvider) {
@@ -33,7 +29,7 @@ actor SearchOpsToolExecutor {
 
     /// Get all tool schemas for LLM (nonisolated - schemas are static data)
     nonisolated func getToolSchemas() -> [ChatCompletionParameters.Tool] {
-        return Self.toolSchemas
+        return SearchOpsToolSchemas.allTools
     }
 
     /// Execute a tool by name with JSON arguments

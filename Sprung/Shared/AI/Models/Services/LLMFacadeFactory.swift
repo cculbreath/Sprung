@@ -28,7 +28,7 @@ struct LLMFacadeFactory {
         enabledLLMStore: EnabledLLMStore?,
         modelValidationService: ModelValidationService
     ) -> (facade: LLMFacade, llmService: OpenRouterServiceBackend) {
-        let requestExecutor = _LLMRequestExecutor()
+        let requestExecutor = LLMRequestExecutor()
         let llmService = OpenRouterServiceBackend(requestExecutor: requestExecutor)
         let client = _SwiftOpenAIClient(executor: requestExecutor)
 

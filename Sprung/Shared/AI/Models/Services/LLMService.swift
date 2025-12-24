@@ -57,13 +57,13 @@ final class OpenRouterServiceBackend {
     private var enabledLLMStore: EnabledLLMStore?
     private var openRouterService: OpenRouterService?
     // Components
-    private let requestExecutor: _LLMRequestExecutor
+    private let requestExecutor: LLMRequestExecutor
     private let streamingExecutor: _StreamingExecutor
     private let flexibleJSONExecutor: _FlexibleJSONExecutor
     private var conversationCoordinator: ConversationCoordinator
     // Configuration
     private let defaultTemperature: Double = 1.0
-    init(requestExecutor: _LLMRequestExecutor = _LLMRequestExecutor()) {
+    init(requestExecutor: LLMRequestExecutor = LLMRequestExecutor()) {
         self.requestExecutor = requestExecutor
         self.streamingExecutor = _StreamingExecutor(requestExecutor: requestExecutor)
         self.flexibleJSONExecutor = _FlexibleJSONExecutor(requestExecutor: requestExecutor)

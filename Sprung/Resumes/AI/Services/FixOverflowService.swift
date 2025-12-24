@@ -454,6 +454,67 @@ class FixOverflowService {
             return "Fix Overflow operation did not complete as expected. Please review."
         }
     }
+
+    // MARK: - Private Streaming Methods
+    /// Stream Grok Fix Fits request with reasoning support (text-only)
+    private func streamGrokFixFitsRequest(
+        skillsJsonString: String,
+        overflowLineCount: Int,
+        allowEntityMerge: Bool,
+        modelId: String,
+        onReasoningUpdate: ((String) -> Void)?
+    ) async throws -> FixFitsResponseContainer {
+        // Grok uses text-only approach
+        let prompt = query.buildGrokFixFitsPrompt(
+            skillsJsonString: skillsJsonString,
+            overflowLineCount: overflowLineCount,
+            allowEntityMerge: allowEntityMerge
+        )
+        // Configure reasoning parameters
+        let reasoning = OpenRouterReasoning(
+            effort: "high",
+            includeReasoning: true
+        )
+        // Start streaming
+        activeStreamingHandle?.cancel()
+        let handle = try await llm.executeStructuredStreaming(
+            prompt: prompt,
+            modelId: modelId,
+            as: FixFitsResponseContainer.self,
+            reasoning: reasoning
+        )
+        activeStreamingHandle = handle
+        defer { activeStreamingHandle = nil }
+        return try await processStream(handle.stream, onReasoningUpdate: onReasoningUpdate)
+    }
+
+    /// Process streaming response and extract structured data
+    private func processStream<T: Codable>(
+        _ stream: AsyncThrowingStream<LLMStreamChunkDTO, Error>,
+        onReasoningUpdate: ((String) -> Void)?
+    ) async throws -> T {
+        var fullResponse = ""
+        var collectingJSON = false
+        var jsonResponse = ""
+        for try await chunk in stream {
+            // Handle reasoning content (supports both legacy and new reasoning_details format)
+            if let reasoningContent = chunk.allReasoningText {
+                onReasoningUpdate?(reasoningContent)
+            }
+            // Collect regular content
+            if let content = chunk.content {
+                fullResponse += content
+                // Try to extract JSON from the response
+                if content.contains("{") || collectingJSON {
+                    collectingJSON = true
+                    jsonResponse += content
+                }
+            }
+        }
+        // Parse the JSON response using shared parser
+        let responseText = jsonResponse.isEmpty ? fullResponse : jsonResponse
+        return try LLMResponseParser.parseJSON(responseText, as: T.self)
+    }
 }
 // MARK: - Error Types
 enum FixOverflowError: LocalizedError {

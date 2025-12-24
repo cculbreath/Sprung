@@ -9,8 +9,8 @@
 //
 import Foundation
 final class _StreamingExecutor {
-    private let requestExecutor: _LLMRequestExecutor
-    init(requestExecutor: _LLMRequestExecutor) {
+    private let requestExecutor: LLMRequestExecutor
+    init(requestExecutor: LLMRequestExecutor) {
         self.requestExecutor = requestExecutor
     }
     func applyReasoning(_ reasoning: OpenRouterReasoning?, to parameters: inout ChatCompletionParameters) {

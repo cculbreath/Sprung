@@ -6,10 +6,11 @@ struct ReorderSkillsStatus {
 }
 @MainActor
 class ReorderSkillsService {
-    private let reviewService: ResumeReviewService
+    private let llm: LLMFacade
     private let exportCoordinator: ResumeExportCoordinator
-    init(reviewService: ResumeReviewService, exportCoordinator: ResumeExportCoordinator) {
-        self.reviewService = reviewService
+
+    init(llm: LLMFacade, exportCoordinator: ResumeExportCoordinator) {
+        self.llm = llm
         self.exportCoordinator = exportCoordinator
     }
     func performReorderSkills(
@@ -37,7 +38,7 @@ class ReorderSkillsService {
         onStatusUpdate(ReorderSkillsStatus(statusMessage: "Applying new skill order...", changeMessage: ""))
         let (statusMessage, changeMessage) = generateOrderingMessages(resume: resume, reorderResponse: reorderResponse)
         // Apply the reordering to the actual tree nodes
-        let success = reviewService.applySkillReordering(resume: resume, reorderedNodes: reorderResponse.reorderedSkillsAndExpertise)
+        let success = applySkillReordering(resume: resume, reorderedNodes: reorderResponse.reorderedSkillsAndExpertise)
         if success {
             // Re-render the resume with the new order
             onStatusUpdate(ReorderSkillsStatus(statusMessage: "Re-rendering resume with new skill order...", changeMessage: changeMessage))
@@ -56,7 +57,7 @@ class ReorderSkillsService {
     // MARK: - Private Helper Methods
     private func getReorderSuggestions(resume: Resume, selectedModel: String) async -> Result<ReorderSkillsResponse, Error> {
         await withCheckedContinuation { continuation in
-            reviewService.sendReorderSkillsRequest(
+            sendReorderSkillsRequest(
                 resume: resume,
                 modelId: selectedModel,
                 onComplete: { result in

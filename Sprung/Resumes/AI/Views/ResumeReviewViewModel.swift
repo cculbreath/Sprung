@@ -26,12 +26,8 @@ class ResumeReviewViewModel {
         self.reasoningStreamManager = reasoningStreamManager
         self.openRouterService = openRouterService
         reviewService = ResumeReviewService(llmFacade: llmFacade)
-        if let svc = reviewService {
-            fixOverflowService = FixOverflowService(reviewService: svc, exportCoordinator: exportCoordinator)
-            reorderSkillsService = ReorderSkillsService(reviewService: svc, exportCoordinator: exportCoordinator)
-        } else {
-            Logger.error("ResumeReviewViewModel: reviewService not initialized; dependent services unavailable")
-        }
+        fixOverflowService = FixOverflowService(llm: llmFacade, exportCoordinator: exportCoordinator)
+        reorderSkillsService = ReorderSkillsService(llm: llmFacade, exportCoordinator: exportCoordinator)
         resetChangeMessage()
     }
     // MARK: - Public Methods

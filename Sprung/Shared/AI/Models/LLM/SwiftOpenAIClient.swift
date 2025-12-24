@@ -26,7 +26,7 @@ private class SprungOpenAILogger: OpenAILoggerProtocol {
 ///   of `LLMFacadeFactory`.
 final class _SwiftOpenAIClient: LLMClient {
     // Reuse existing request executor and builders
-    private let executor: _LLMRequestExecutor
+    private let executor: LLMRequestExecutor
     private let defaultTemperature: Double = 1.0
     // Class-level flag to ensure logger is only injected once
     private static var loggerInjected = false
@@ -107,7 +107,7 @@ final class _SwiftOpenAIClient: LLMClient {
         }
         return false
     }
-    init(executor: _LLMRequestExecutor = _LLMRequestExecutor()) {
+    init(executor: LLMRequestExecutor = LLMRequestExecutor()) {
         self.executor = executor
         // Inject Sprung's Logger into SwiftOpenAI for unified logging with timestamps
         // Only inject once to avoid repeated initialization

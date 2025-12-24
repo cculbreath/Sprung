@@ -10,7 +10,7 @@ import SwiftOpenAI
 /// - Important: This is an internal implementation type. Use `LLMFacade` as the
 ///   public entry point for LLM operations. Do not instantiate directly outside
 ///   of `LLMFacadeFactory`.
-actor _LLMRequestExecutor {
+actor LLMRequestExecutor {
     // OpenRouter client
     private var openRouterClient: OpenAIService?
     // Request management
