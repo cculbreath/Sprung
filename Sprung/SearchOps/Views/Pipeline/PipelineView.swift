@@ -16,7 +16,7 @@ struct PipelineView: View {
 
     private var stages: [(ApplicationStage, [JobApp])] {
         ApplicationStage.allCases.compactMap { stage in
-            let leads = coordinator.jobLeadStore.leads(forStage: stage)
+            let leads = coordinator.jobAppStore.jobApps(forStage: stage)
             guard !leads.isEmpty || stage == .identified else { return nil }
             return (stage, leads)
         }
@@ -28,7 +28,7 @@ struct PipelineView: View {
                 ForEach(ApplicationStage.allCases, id: \.self) { stage in
                     PipelineStageColumn(
                         stage: stage,
-                        leads: coordinator.jobLeadStore.leads(forStage: stage),
+                        leads: coordinator.jobAppStore.jobApps(forStage: stage),
                         onAdvance: { lead in advanceLead(lead) },
                         onReject: { lead in rejectLead(lead) }
                     )
@@ -49,7 +49,7 @@ struct PipelineView: View {
             ToolbarItem(placement: .secondaryAction) {
                 Menu {
                     ForEach(ApplicationStage.allCases, id: \.self) { stage in
-                        let count = coordinator.jobLeadStore.leads(forStage: stage).count
+                        let count = coordinator.jobAppStore.jobApps(forStage: stage).count
                         Text("\(stage.rawValue): \(count)")
                     }
                 } label: {
@@ -63,11 +63,11 @@ struct PipelineView: View {
     }
 
     private func advanceLead(_ lead: JobApp) {
-        coordinator.jobLeadStore.advanceStage(lead)
+        coordinator.jobAppStore.advanceStage(lead)
     }
 
     private func rejectLead(_ lead: JobApp) {
-        coordinator.jobLeadStore.reject(lead, reason: nil)
+        coordinator.jobAppStore.reject(lead, reason: nil)
     }
 }
 
@@ -282,7 +282,7 @@ struct AddLeadView: View {
         if !notes.isEmpty {
             lead.notes = notes
         }
-        coordinator.jobLeadStore.add(lead)
+        coordinator.jobAppStore.addToPipeline(lead)
     }
 }
 

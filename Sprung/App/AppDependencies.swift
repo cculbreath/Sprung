@@ -29,7 +29,7 @@ final class AppDependencies {
     let onboardingSessionStore: OnboardingSessionStore
     let documentExtractionService: DocumentExtractionService
     let onboardingCoordinator: OnboardingInterviewCoordinator
-    let llmService: _LLMService
+    private let llmService: _LLMService
     let reasoningStreamManager: ReasoningStreamManager
     let resumeReviseViewModel: ResumeReviseViewModel
     let searchOpsCoordinator: SearchOpsCoordinator
@@ -144,7 +144,7 @@ final class AppDependencies {
         self.onboardingCoordinator = onboardingCoordinator
 
         // SearchOps Coordinator
-        let searchOpsCoordinator = SearchOpsCoordinator(modelContext: modelContext)
+        let searchOpsCoordinator = SearchOpsCoordinator(modelContext: modelContext, jobAppStore: jobAppStore)
         searchOpsCoordinator.configureLLMService(llmFacade: llmFacade)
         self.searchOpsCoordinator = searchOpsCoordinator
 

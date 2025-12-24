@@ -16,7 +16,7 @@ final class SearchOpsPipelineCoordinator {
 
     let preferencesStore: SearchPreferencesStore
     let settingsStore: SearchOpsSettingsStore
-    let jobLeadStore: JobLeadStore
+    let jobAppStore: JobAppStore
     let dailyTaskStore: DailyTaskStore
     let timeEntryStore: TimeEntryStore
     let weeklyGoalStore: WeeklyGoalStore
@@ -32,10 +32,10 @@ final class SearchOpsPipelineCoordinator {
 
     // MARK: - Initialization
 
-    init(modelContext: ModelContext) {
+    init(modelContext: ModelContext, jobAppStore: JobAppStore) {
         self.preferencesStore = SearchPreferencesStore(context: modelContext)
         self.settingsStore = SearchOpsSettingsStore(context: modelContext)
-        self.jobLeadStore = JobLeadStore(context: modelContext)
+        self.jobAppStore = jobAppStore
         self.dailyTaskStore = DailyTaskStore(context: modelContext)
         self.timeEntryStore = TimeEntryStore(context: modelContext)
         self.weeklyGoalStore = WeeklyGoalStore(context: modelContext)

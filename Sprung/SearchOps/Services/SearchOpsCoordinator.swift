@@ -22,7 +22,7 @@ final class SearchOpsCoordinator {
     var preferencesStore: SearchPreferencesStore { pipelineCoordinator.preferencesStore }
     var settingsStore: SearchOpsSettingsStore { pipelineCoordinator.settingsStore }
     var jobSourceStore: JobSourceStore { networkingCoordinator.jobSourceStore }
-    var jobLeadStore: JobLeadStore { pipelineCoordinator.jobLeadStore }
+    var jobAppStore: JobAppStore { pipelineCoordinator.jobAppStore }
     var dailyTaskStore: DailyTaskStore { pipelineCoordinator.dailyTaskStore }
     var timeEntryStore: TimeEntryStore { pipelineCoordinator.timeEntryStore }
     var weeklyGoalStore: WeeklyGoalStore { pipelineCoordinator.weeklyGoalStore }
@@ -44,8 +44,8 @@ final class SearchOpsCoordinator {
 
     // MARK: - Initialization
 
-    init(modelContext: ModelContext) {
-        self.pipelineCoordinator = SearchOpsPipelineCoordinator(modelContext: modelContext)
+    init(modelContext: ModelContext, jobAppStore: JobAppStore) {
+        self.pipelineCoordinator = SearchOpsPipelineCoordinator(modelContext: modelContext, jobAppStore: jobAppStore)
         self.networkingCoordinator = SearchOpsNetworkingCoordinator(modelContext: modelContext)
     }
 
