@@ -21,11 +21,11 @@ class ResumeReviseViewModel {
     private let exportCoordinator: ResumeExportCoordinator
     let openRouterService: OpenRouterService
 
-    // MARK: - Specialized Services
+    // MARK: - Specialized Services (Public for direct access)
     let toolRunner: ToolConversationRunner
     let navigationManager: RevisionNavigationManager
     let phaseReviewManager: PhaseReviewManager
-    private let workflowOrchestrator: RevisionWorkflowOrchestrator
+    let workflowOrchestrator: RevisionWorkflowOrchestrator
 
     // MARK: - State
     let workflowState = RevisionWorkflowState()

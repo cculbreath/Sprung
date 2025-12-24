@@ -147,7 +147,7 @@ final class OpenRouterServiceBackend {
             Task {
                 do {
                     try await self.ensureInitialized()
-                    var parameters = _LLMRequestBuilder.buildStructuredRequest(
+                    var parameters = LLMRequestBuilder.buildStructuredRequest(
                         prompt: prompt,
                         modelId: modelId,
                         responseType: responseType,
@@ -188,7 +188,7 @@ final class OpenRouterServiceBackend {
         }
         messages.append(makeUserMessage(userMessage, images: []))
         await persistConversation(conversationId: conversationId, messages: messages)
-        var parameters = _LLMRequestBuilder.buildConversationRequest(
+        var parameters = LLMRequestBuilder.buildConversationRequest(
             messages: messages,
             modelId: modelId,
             temperature: temperature ?? defaultTemperature
@@ -243,7 +243,7 @@ final class OpenRouterServiceBackend {
                     messages.append(self.makeUserMessage(userMessage, images: images))
                     await self.persistConversation(conversationId: conversationId, messages: messages)
                     let seededMessages = messages
-                    var parameters = _LLMRequestBuilder.buildConversationRequest(
+                    var parameters = LLMRequestBuilder.buildConversationRequest(
                         messages: messages,
                         modelId: modelId,
                         temperature: temperature ?? self.defaultTemperature
@@ -301,13 +301,13 @@ final class OpenRouterServiceBackend {
             messages.append(.text(systemPrompt, role: .system))
         }
         messages.append(makeUserMessage(userMessage, images: []))
-        let parameters = _LLMRequestBuilder.buildConversationRequest(
+        let parameters = LLMRequestBuilder.buildConversationRequest(
             messages: messages,
             modelId: modelId,
             temperature: temperature ?? defaultTemperature
         )
         let response = try await requestExecutor.execute(parameters: parameters)
-        let dto = _LLMVendorMapper.responseDTO(from: response)
+        let dto = LLMVendorMapper.responseDTO(from: response)
         let responseText = try parseResponseText(from: dto)
         messages.append(assistantMessage(from: responseText))
         let conversationId = UUID()
@@ -325,13 +325,13 @@ final class OpenRouterServiceBackend {
         try await ensureInitialized()
         var messages = await loadMessages(conversationId: conversationId)
         messages.append(self.makeUserMessage(userMessage, images: images))
-        let parameters = _LLMRequestBuilder.buildConversationRequest(
+        let parameters = LLMRequestBuilder.buildConversationRequest(
             messages: messages,
             modelId: modelId,
             temperature: temperature ?? defaultTemperature
         )
         let response = try await requestExecutor.execute(parameters: parameters)
-        let dto = _LLMVendorMapper.responseDTO(from: response)
+        let dto = LLMVendorMapper.responseDTO(from: response)
         let responseText = try parseResponseText(from: dto)
         messages.append(self.assistantMessage(from: responseText))
         await persistConversation(conversationId: conversationId, messages: messages)
@@ -350,7 +350,7 @@ final class OpenRouterServiceBackend {
         try await ensureInitialized()
         var messages = await loadMessages(conversationId: conversationId)
         messages.append(self.makeUserMessage(userMessage, images: images))
-        let parameters = _LLMRequestBuilder.buildStructuredConversationRequest(
+        let parameters = LLMRequestBuilder.buildStructuredConversationRequest(
             messages: messages,
             modelId: modelId,
             responseType: responseType,
@@ -358,8 +358,8 @@ final class OpenRouterServiceBackend {
             jsonSchema: jsonSchema
         )
         let response = try await requestExecutor.execute(parameters: parameters)
-        let dto = _LLMVendorMapper.responseDTO(from: response)
-        let result = try _JSONResponseParser.parseStructured(dto, as: responseType)
+        let dto = LLMVendorMapper.responseDTO(from: response)
+        let result = try JSONResponseParser.parseStructured(dto, as: responseType)
         let responseText: String
         if let data = try? JSONEncoder().encode(result) {
             responseText = String(data: data, encoding: .utf8) ?? "Structured response"
