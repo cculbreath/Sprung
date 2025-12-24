@@ -333,6 +333,7 @@ struct ProposeCardAssignmentsTool: InterviewTool {
     // MARK: - UI Plan Update
 
     /// Update the UI's knowledgeCardPlan with artifact assignments from proposals
+    /// If no plan items exist, creates them from the proposals
     private func updatePlanItemsWithAssignments(proposals: JSON) async {
         // Get current plan items and artifact summaries
         let currentPlanItems = await MainActor.run { coordinator.ui.knowledgeCardPlan }
@@ -352,34 +353,60 @@ struct ProposeCardAssignmentsTool: InterviewTool {
             }
         }
 
-        // Update plan items with their assignments
         var updatedPlanItems: [KnowledgeCardPlanItem] = []
 
-        for planItem in currentPlanItems {
-            // Find matching proposal by card_id or timeline_entry_id
-            var matchedProposal: JSON?
+        // If no plan items exist, create them from proposals
+        if currentPlanItems.isEmpty {
+            Logger.info("📋 No existing plan items - creating from proposals", category: .ai)
             for proposal in proposals.arrayValue {
-                let proposalCardId = proposal["card_id"].string
-                let proposalTimelineId = proposal["timeline_entry_id"].string
+                let cardId = proposal["card_id"].string ?? UUID().uuidString
+                let title = proposal["title"].string ?? "Knowledge Card"
+                let cardType = proposal["card_type"].string ?? "job"
+                let timelineEntryId = proposal["timeline_entry_id"].string
 
-                if proposalCardId == planItem.id ||
-                   (proposalTimelineId != nil && proposalTimelineId == planItem.timelineEntryId) {
-                    matchedProposal = proposal
-                    break
-                }
-            }
-
-            if let proposal = matchedProposal {
-                // Extract artifact IDs and build summaries
                 let artifactIds = proposal["assigned_artifact_ids"].arrayValue.compactMap { $0.string }
                 let summaries = artifactIds.compactMap { artifactSummaryLookup[$0] }
 
-                let updatedItem = planItem.withAssignments(artifactIds: artifactIds, summaries: summaries)
-                updatedPlanItems.append(updatedItem)
-            } else {
-                // No assignment found - keep original (with empty assignments)
-                let updatedItem = planItem.withAssignments(artifactIds: [], summaries: [])
-                updatedPlanItems.append(updatedItem)
+                let planItem = KnowledgeCardPlanItem(
+                    id: cardId,
+                    title: title,
+                    type: cardType == "skill" ? .skill : .job,
+                    description: nil,
+                    status: .pending,
+                    timelineEntryId: timelineEntryId,
+                    assignedArtifactIds: artifactIds,
+                    assignedArtifactSummaries: summaries
+                )
+                updatedPlanItems.append(planItem)
+            }
+        } else {
+            // Update existing plan items with their assignments
+            for planItem in currentPlanItems {
+                // Find matching proposal by card_id or timeline_entry_id
+                var matchedProposal: JSON?
+                for proposal in proposals.arrayValue {
+                    let proposalCardId = proposal["card_id"].string
+                    let proposalTimelineId = proposal["timeline_entry_id"].string
+
+                    if proposalCardId == planItem.id ||
+                       (proposalTimelineId != nil && proposalTimelineId == planItem.timelineEntryId) {
+                        matchedProposal = proposal
+                        break
+                    }
+                }
+
+                if let proposal = matchedProposal {
+                    // Extract artifact IDs and build summaries
+                    let artifactIds = proposal["assigned_artifact_ids"].arrayValue.compactMap { $0.string }
+                    let summaries = artifactIds.compactMap { artifactSummaryLookup[$0] }
+
+                    let updatedItem = planItem.withAssignments(artifactIds: artifactIds, summaries: summaries)
+                    updatedPlanItems.append(updatedItem)
+                } else {
+                    // No assignment found - keep original (with empty assignments)
+                    let updatedItem = planItem.withAssignments(artifactIds: [], summaries: [])
+                    updatedPlanItems.append(updatedItem)
+                }
             }
         }
 
