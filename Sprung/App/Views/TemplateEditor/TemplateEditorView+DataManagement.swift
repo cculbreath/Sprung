@@ -72,7 +72,7 @@ extension TemplateEditorView {
     }
     static func emptyManifest(slug: String = "") -> String {
         let overrides = TemplateManifestOverrides(
-            sectionOrder: TemplateManifestDefaults.defaultSectionOrder,
+            sectionOrder: Array(StandardSection.allCases),
             styling: TemplateManifestOverrides.Styling(
                 fontSizes: TemplateManifestDefaults.recommendedFontSizes,
                 pageMargins: TemplateManifestDefaults.recommendedPageMargins,

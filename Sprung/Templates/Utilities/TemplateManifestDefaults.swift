@@ -1,5 +1,25 @@
 import Foundation
 import OrderedCollections
+
+/// Standard resume section identifiers used throughout the template system.
+/// Provides type safety for section references and ensures consistency.
+enum StandardSection: String, CaseIterable, Codable {
+    case summary
+    case work
+    case volunteer
+    case education
+    case projects
+    case skills
+    case awards
+    case certificates
+    case publications
+    case languages
+    case interests
+    case references
+    case custom
+    case styling
+}
+
 struct TemplateManifestOverrides: Codable {
     struct Styling: Codable {
         var fontSizes: [String: String]?
@@ -29,6 +49,8 @@ struct TemplateManifestOverrides: Codable {
         var type: String?
         var hiddenFields: [String]?
     }
+    /// Section order override. Can contain standard sections or custom section names.
+    /// Use StandardSection enum for type-safe access to standard sections.
     var sectionOrder: [String]?
     var styling: Styling?
     var custom: Custom?
@@ -40,6 +62,33 @@ struct TemplateManifestOverrides: Codable {
     var defaultAIFields: [String]?
     var listContainers: [String]?
     var reviewPhases: [String: [TemplateManifest.ReviewPhaseConfig]]?
+
+    /// Initialize with type-safe StandardSection array
+    init(
+        sectionOrder: [StandardSection]? = nil,
+        styling: Styling? = nil,
+        custom: Custom? = nil,
+        sections: [String: SectionOverride]? = nil,
+        sectionVisibility: [String: Bool]? = nil,
+        sectionVisibilityLabels: [String: String]? = nil,
+        keysInEditor: [String]? = nil,
+        editorLabels: [String: String]? = nil,
+        defaultAIFields: [String]? = nil,
+        listContainers: [String]? = nil,
+        reviewPhases: [String: [TemplateManifest.ReviewPhaseConfig]]? = nil
+    ) {
+        self.sectionOrder = sectionOrder?.map(\.rawValue)
+        self.styling = styling
+        self.custom = custom
+        self.sections = sections
+        self.sectionVisibility = sectionVisibility
+        self.sectionVisibilityLabels = sectionVisibilityLabels
+        self.keysInEditor = keysInEditor
+        self.editorLabels = editorLabels
+        self.defaultAIFields = defaultAIFields
+        self.listContainers = listContainers
+        self.reviewPhases = reviewPhases
+    }
     enum CodingKeys: String, CodingKey {
         case sectionOrder
         case styling
@@ -56,21 +105,21 @@ struct TemplateManifestOverrides: Codable {
 }
 enum TemplateManifestDefaults {
     // MARK: - Public API
-    static let defaultSectionOrder: [String] = [
-        "summary",
-        "work",
-        "volunteer",
-        "education",
-        "projects",
-        "skills",
-        "awards",
-        "certificates",
-        "publications",
-        "languages",
-        "interests",
-        "references",
-        "custom",
-        "styling"
+    static let defaultSectionOrder: [StandardSection] = [
+        .summary,
+        .work,
+        .volunteer,
+        .education,
+        .projects,
+        .skills,
+        .awards,
+        .certificates,
+        .publications,
+        .languages,
+        .interests,
+        .references,
+        .custom,
+        .styling
     ]
     static let defaultSectionVisibilityDefaults: [String: Bool] = [
         "work": true,
@@ -128,10 +177,10 @@ enum TemplateManifestDefaults {
         TemplateManifest(
             slug: slug,
             schemaVersion: TemplateManifest.currentSchemaVersion,
-            sectionOrder: defaultSectionOrder,
+            sectionOrder: defaultSectionOrder.map(\.rawValue),
             sections: baseSections,
             editorLabels: nil,
-            keysInEditor: defaultSectionOrder,
+            keysInEditor: defaultSectionOrder.map(\.rawValue),
             sectionVisibilityDefaults: defaultSectionVisibilityDefaults,
             sectionVisibilityLabels: defaultSectionVisibilityLabels
         )
