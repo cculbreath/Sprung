@@ -1,80 +1,83 @@
 # Code Analysis: sprung-onboarding-grade.swift.txt
 
-# AI-Assisted Development Quality Assessment
+### AI-ASSISTED DEVELOPMENT QUALITY ASSESSMENT
 
-## Executive Summary
+**Module:** Sprung/Onboarding
+**Overall Grade:** B
 
-The **Onboarding** module of Sprung is a sophisticated, highly stateful implementation of an LLM-driven workflow. It is **not** generic "AI slop." It represents a complex architecture ("Orchestrator-Tool" pattern) that has been implemented with significant rigor.
+### Executive Summary
+The Onboarding module represents a sophisticated, modern Swift/SwiftUI implementation that leverages AI orchestration to drive a complex user interview process. The human developer has successfully used AI to generate a large volume of boilerplate (tools, schemas, views) while injecting high-quality, domain-specific logic into the system prompts and state management.
 
-The codebase demonstrates high human oversight in the prompt engineering and state management logic, but suffers from typical AI-assistance pitfalls: verbosity, reliance on "God Objects" (Coordinators) to manage complexity, and manual JSON wrangling that a human might have abstracted away more aggressively. The architecture is robust but heavy; it uses an Event Bus pattern that decouples components but makes the control flow difficult to trace statically.
-
-**Overall Grade: B+**
-
----
-
-## Individual Grades
-
-### 1. Signal-to-Noise Ratio (Weight: 25%)
-**Grade: B-**
-
-The code is functional and explicit, but highly verbose.
-*   **Boilerplate Tool Logic:** Every tool implementation (e.g., `GetUserUploadTool`, `SubmitKnowledgeCardTool`) repeats the same pattern of JSON schema definition, manual parameter extraction from `SwiftyJSON`, validation, and execution. A human architect might have used property wrappers or Swift macros to synthesize the schemas and decoding logic from `Codable` structs to reduce this noise.
-*   **Event Enum Explosion:** `OnboardingEvent` contains ~50 cases carrying various payloads. While comprehensive, it creates massive switch statements in `EventCoordinator` and `CoordinatorEventRouter`, diluting the core business logic with routing mechanics.
-*   **Redundant Coordinators:** There is significant "trampolining" of methods between `OnboardingInterviewCoordinator`, `CoordinatorEventRouter`, and `ToolHandler`. Many functions simply pass data from one class to another without transformation.
-
-### 2. Consistency (Weight: 20%)
-**Grade: A-**
-
-The codebase is remarkably consistent, suggesting either a single author or a very strict context window/prompt strategy.
-*   **Uniform Tool Structure:** Every tool follows the `InterviewTool` protocol and implements `parameters` and `execute` identically.
-*   **Modern Concurrency:** The use of `async/await` and `Task` is uniform. `MainActor` annotations are used consistently on UI-facing classes.
-*   **UI Patterns:** The Views consistently use the Coordinator pattern (`@Bindable var coordinator`) and Observation framework.
-*   *Minor Deducton:* There is a mix of state management strategies. Some state lives in `SessionUIState` (actor), some in `OnboardingUIState` (observable), and some in `StateCoordinator`.
-
-### 3. Appropriate Abstraction (Weight: 20%)
-**Grade: B**
-
-The abstractions chosen are powerful but heavy-handed.
-*   **The Event Bus:** The `EventCoordinator` using `AsyncStream` is a robust way to handle the asynchronous nature of LLM streaming and tool execution. However, applying it to *everything* (including simple UI state changes) makes the logic flow non-linear and harder to debug.
-*   **Tool Protocol:** The `InterviewTool` abstraction is solid. It decouples the LLM capability from the execution logic effectively.
-*   **Dependency Injection:** `OnboardingDependencyContainer` is a manual DI implementation. It works, but it's rigid. A lightweight DI library might have cleaned up the initialization logic significantly.
-
-### 4. Human Oversight Evidence (Weight: 20%)
-**Grade: A+**
-
-This is the strongest aspect of the codebase. The "brains" of the operation—the prompts and the phase logic—show deep human domain expertise.
-*   **Detailed Prompts:** `KCAgentPrompts` contains highly specific instructions ("CRITICAL: You are a TRANSCRIBER, not a SUMMARIZER", pronoun handling logic). This is not generic GPT output; it is carefully crafted prompt engineering.
-*   **Phase Logic:** The `PhaseScript` architecture (defining dependencies between objectives like `applicant_profile` -> `skeleton_timeline`) is complex business logic that ensures the AI follows a strict process.
-*   **Guardrails:** Tools like `NextPhaseTool` contain specific checks (`if experiences.isEmpty { ... }`) to prevent the LLM from hallucinating progress. This defensive coding is a hallmark of human curation.
-
-### 5. Technical Debt Awareness (Weight: 15%)
-**Grade: C+**
-
-The architecture has painted itself into a corner regarding coupling.
-*   **The God Object:** `OnboardingInterviewCoordinator` is passed into almost every tool (`private unowned let coordinator: OnboardingInterviewCoordinator`). This circular dependency makes the tools impossible to test in isolation and tightly couples the tool implementation to the specific UI coordinator.
-*   **Schema Duplication:** JSON Schemas are defined as static dictionaries inside tools. If the internal data models change, these schemas must be updated manually. There is no type-safety link between the `JSONSchema` definition and the code that parses the parameters.
-*   **SwiftyJSON Dependency:** The heavy reliance on `SwiftyJSON` rather than `Codable` throughout the networking and persistence layers adds fragility. Typos in string keys (`"card_id"`) will cause runtime failures rather than compile-time errors.
+The architecture relies heavily on an **Event Bus** pattern and **SwiftyJSON** for loose coupling. While this likely made it easier for the AI to generate isolated components without compilation errors, it has resulted in a system where control flow is difficult to trace statically. The codebase is "fresh" (modern concurrency, SwiftData, Observation framework), showing no signs of legacy debt, but it is accumulating "complexity debt" via the massive event enum and loosely typed JSON payloads.
 
 ---
 
-## AI Slop Index: 3/10
-**(3 = Well-managed AI development, minor tells)**
+### Individual Grades
 
-This code is **not** slop. It is a functional, complex application. The "AI tells" are primarily in the verbosity of the boilerplate (AI doesn't mind typing out long JSON parsing routines) and the tendency to solve coupling problems by passing the "Coordinator" everywhere. However, the logic is sound, the prompts are expert-level, and the state machine is robust.
+#### 1. Signal-to-Noise Ratio: C+
+**Examples:**
+1.  **`OnboardingEvent` Enum:** This enum contains over 70 cases. While comprehensive, it conflates UI events, LLM streaming events, state mutations, and error handling into a single massive channel.
+2.  **`EventCoordinator` Debug Logic:** The `#if DEBUG` block contains a massive `stripHeavyPayloads` function that manually reconstructs every event case just to strip JSON for logging. This is classic "AI labor"—writing verbose code to solve a simple problem (logging noise) that creates maintenance drag.
+3.  **`ToolResultHelpers`:** A utility struct used to wrap JSON responses. While helpful, it indicates a verbose pattern of manual JSON construction rather than using Codable structs for tool outputs.
+
+**Explanation:** The code is functional but verbose. The reliance on loosely typed JSON necessitates a lot of manual parsing and construction code (noise) that obscures the business logic (signal).
+
+#### 2. Consistency: B+
+**Examples:**
+1.  **UI Components:** The views (`KnowledgeCardDeckView`, `AgentTranscriptView`, `DocumentCollectionView`) share a very consistent styling and structure, likely due to effective AI prompting or context feeding.
+2.  **Tool Implementation:** The `InterviewTool` protocol is implemented consistently across dozens of tools. The pattern of defining a schema, `execute`, and returning `ToolResult` is uniform.
+3.  **Naming:** Naming is generally good, though there is some ambiguity between `OnboardingUIState` (View Model) and `SessionUIState` (Logic/Permissions).
+
+**Explanation:** The codebase feels like it was written by one author (or one AI session with good context). The patterns for tools and views are highly consistent, making it easy to add new ones.
+
+#### 3. Appropriate Abstraction: C
+**Examples:**
+1.  **The Event Bus (`EventCoordinator`):** This is the primary architectural weakness. By decoupling *everything* through a central bus, the code avoids tight coupling but introduces "action at a distance." Tracing the flow from a button click to a tool execution to a state update involves jumping through multiple handlers (`CoordinatorEventRouter`, `UIStateUpdateHandler`, `ToolExecutionCoordinator`).
+2.  **`SwiftyJSON` usage:** Instead of defining Codable structs for internal data passing (e.g., `TimelineCard`), the code passes raw `JSON` objects everywhere. This is "under-abstraction." It avoids defining types but loses type safety.
+3.  **`PhaseScript`:** A strong abstraction. It encapsulates the prompt logic, required objectives, and workflows for each interview phase cleanly.
+
+**Explanation:** The architecture is a "God Coordinator" managing a "God Event Bus." While flexible, it relies too heavily on runtime string/JSON checking rather than compile-time safety.
+
+#### 4. Human Oversight Evidence: A
+**Examples:**
+1.  **Prompt Engineering:** The prompts in `PhaseOneScript` and `GitAgentPrompts` are exceptional. They contain specific behavioral instructions ("BE PROACTIVE," "DO NOT echo back") that clearly come from human iteration and domain expertise, not generic AI generation.
+2.  **`GitAnalysisAgent` logic:** The step-by-step breakdown of the git analysis (Reconnaissance -> Quality -> AI Indicators -> Skills) demonstrates a human-designed algorithm executed by AI tools.
+3.  **Logging:** The explicit categorization in `Logger.info(..., category: .ai)` suggests a human is actively debugging and tracing the system.
+
+**Explanation:** The "brain" of the application (the prompts and workflows) is clearly human-designed and high-quality. The AI was used to build the plumbing (the Swift code) to execute that logic.
+
+#### 5. Technical Debt Awareness: C-
+**Examples:**
+1.  **Loose Typing:** The pervasive use of `SwiftyJSON` means that a key typo in a string literal (e.g., "experience_type" vs "experienceType") will cause runtime failures rather than compile-time errors. This is significant debt.
+2.  **`CoordinatorEventRouter`:** This class is a massive switch statement that routes events. As the app grows, this file will become unmanageable.
+3.  **Hardcoded Strings:** Tool names and objective IDs are defined as enums, but often used as raw strings in JSON payloads or switch statements, bypassing the type safety the enums were meant to provide.
+
+**Explanation:** The decision to use loose JSON objects for internal state passing allows for rapid development (AI is good at generating JSON handlers) but creates a fragile codebase that will be hard to refactor safely.
+
+#### 6. Migration Completeness: A
+**Examples:**
+1.  **Modern Stack:** Use of `SwiftData` and `@Observable` indicates a greenfield approach or a complete migration. There are no `NSManagedObject` or `Combine` remnants visible.
+2.  **`M0` Comments:** Comments like `Logger.debug("Extraction confirmation is not implemented in milestone M0.")` show clear awareness of the current development stage.
+3.  **No Dead Code:** The codebase seems self-contained. There are no obvious "TODO: Remove this legacy handler" blocks.
+
+**Explanation:** The codebase feels fresh and cohesive, using the latest Apple frameworks without legacy baggage.
 
 ---
 
-## The Good
-1.  **Phase/Objective Architecture**: The `PhaseScriptRegistry` and `ObjectiveWorkflowEngine` provide a fantastic structure for constraining an LLM. It forces the probabilistic AI to adhere to a deterministic business process.
-2.  **Prompt Engineering**: The prompts are embedded directly in the code (`GitAgentPrompts`, `DocumentExtractionPrompts`) and are excellent. They handle edge cases, tone, and specific data formatting requirements.
-3.  **UI Feedback Loop**: The system handles "Streaming" states, "Tool" states, and "Reasoning" states visually. The `StreamQueueManager` logic to handle batched tool calls shows a deep understanding of LLM latency issues.
+### AI Slop Index: 4/10
+*(1 = Pristine, 10 = Unusable Garbage)*
+The code is functional and follows consistent patterns, but it is verbose. The definitions of JSON schemas in Swift code (e.g., `SchemaBuilder`, `PhaseSchemas`) are tedious and take up huge amounts of space—a hallmark of code that is easy for AI to generate but annoying for humans to read. The Event Bus consolidation logic in the debug view is also "clever but messy."
 
-## The Concerning
-1.  **Coordinator Coupling**: `OnboardingInterviewCoordinator` does too much. It manages UI state, acts as a delegate for tools, manages persistence, and handles navigation. It is a classic "Massive View Controller" in Coordinator clothing.
-2.  **Stringly-Typed Logic**: Too much reliance on string identifiers (`"applicant_profile"`, `"skeleton_timeline"`) scattered across the app. A typo in an Objective ID string could silently break the workflow logic.
-3.  **Event Traceability**: Debugging a flow where `EventCoordinator` broadcasts an event, `StateCoordinator` updates a model, and `CoordinatorEventRouter` triggers a side effect will be difficult due to the async hop logic.
+### Legacy Debt Score: 1/10
+*(1 = None, 10 = High)*
+This is clearly a new or fully rewritten module. It uses `SwiftData` and `@Observable`, placing it firmly in the post-2023 modern Swift era.
 
-## Recommendations
-1.  **Refactor Tools to be Pure**: Stop passing `OnboardingInterviewCoordinator` into tools. Instead, have tools return a `ToolResult` enum that describes the *intent* (e.g., `.requestUI(payload)`, `.updateData(data)`), and let the `ToolExecutor` apply those changes. This breaks the circular dependency.
-2.  **Adopt Codable for Tools**: Replace manual `SwiftyJSON` parsing in `execute(_ params: JSON)` with `Codable` structs. Use a helper to generate the OpenAI `JSONSchema` directly from the Swift types to ensure they never drift.
-3.  **Typed Identifiers**: Replace raw strings for Objectives and Phases with strong Enums throughout the persistence layer to prevent runtime errors.
+---
+
+### Recommendations
+
+1.  **Refactor `SwiftyJSON` to `Codable`:** Define native Swift structs for `TimelineEntry`, `ApplicantProfile`, and `KnowledgeCard`. Use `JSONDecoder`/`JSONEncoder` at the tool boundary. Passing raw JSON through the app logic is a bug waiting to happen.
+2.  **Segment the Event Bus:** Instead of one global `OnboardingEvent` with 70 cases, define specific enums for specific channels (e.g., `LLMEvent`, `UIEvent`, `DataEvent`). This will make the `EventCoordinator` logic easier to reason about.
+3.  **Externalize Prompts & Schemas:** Move the massive `schema` definitions and `systemPrompt` strings into separate `.json` or `.txt` resource files. This will reduce the Swift file sizes significantly and separate configuration from logic.
+4.  **Consolidate State:** Merge `OnboardingUIState` and `SessionUIState` or clearly define their boundaries. Currently, they both seem to manage aspects of "is the UI busy?" and "what card is showing?", leading to potential race conditions.
+5.  **Simplify Tool Registration:** The `ToolRegistry` and `OnboardingToolRegistrar` are good, but the dependency injection into every single tool (`init(coordinator: ...)`) creates a retain cycle risk and tight coupling. Consider passing the coordinator context into the `execute` method instead of holding it as a property.

@@ -1,179 +1,258 @@
-# Onboarding Module Refactoring Plan (Parallelized)
+# Onboarding Module Refactoring Plan
 
-Based on architectural review (Grade: B+, AI Slop Index: 3/10)
+## Overview
 
-## Phase 1: Critical Fixes (3 Parallel Agents)
+This plan addresses issues identified in the Onboarding module analysis and quality assessment. The refactoring emphasizes **complete implementation** with no stubs, placeholders, or backwards compatibility shims.
 
-| Agent | Task | Files | Dependencies |
-|-------|------|-------|--------------|
-| **Agent A** | Fix synchronous file I/O on Main Actor | `UploadInteractionHandler.swift` | None |
-| **Agent B** | Fix unsafe force unwrapping of file paths | `OnboardingUploadStorage.swift`, `InterviewDataStore.swift` | None |
-| **Agent C** | Fix blocking Git process + Add retry limits | `GitIngestionKernel.swift`, `StateCoordinator.swift` | None |
-
-**Status:** ✅ All 3 can run in parallel
+**Guiding Principle:** If adopting a new paradigm, fully implement it. Delete old code completely. No data migration is required.
 
 ---
 
-## Phase 2: Infrastructure Improvements (2 Parallel Agents)
+## Work Streams (Parallelizable)
 
-| Agent | Task | Files | Dependencies |
-|-------|------|-------|--------------|
-| **Agent D** | Reduce event history size + strip heavy payloads | `OnboardingEvents.swift` | None |
-| **Agent E** | Centralize tool gating logic into pure function | `SessionUIState.swift`, `LLMStateManager.swift` | None |
+The refactoring is organized into **5 independent work streams** that can be executed in parallel by AI subagents. Each stream has clear boundaries and minimal dependencies on other streams.
 
-**Status:** ✅ Both can run in parallel
+### Work Stream 1: Type Safety & Codable Migration
 
----
+**Scope:** Replace SwiftyJSON with native Swift Codable types throughout the onboarding module.
 
-## Phase 3: Tool Architecture Refactor (Sequential then Parallel)
+**Files Affected:**
+- `Sprung/Onboarding/Models/*.swift`
+- `Sprung/Onboarding/Tools/Implementations/*.swift`
+- `Sprung/Onboarding/Core/*.swift`
 
-**Step 1: Create shared infrastructure (1 Agent, blocking)**
+**Tasks:**
 
-| Agent | Task | Files |
-|-------|------|-------|
-| **Agent F** | Create `ToolResult` enum and `TimelineToolSchema` shared types | New: `Tools/Shared/ToolResult.swift`, `Tools/Shared/TimelineToolSchema.swift` |
+1. **Create Codable structs for all internal data types**
+   - `TimelineEntry` struct with full Codable conformance
+   - `KnowledgeCard` struct with full Codable conformance
+   - `ApplicantProfileData` struct (distinct from the SwiftData model)
+   - `ToolResponse` generic wrapper for typed responses
 
-**Step 2: Refactor tools (3 Parallel Agents) - after Step 1 completes**
+2. **Migrate Tool implementations to use Codable**
+   - Replace `JSON(params["fields"].dictionary!)` patterns with proper decoding
+   - Use `JSONDecoder` at tool boundary, pass typed structs internally
+   - Remove all force unwrapping after helper checks
 
-| Agent | Task | Files | Dependencies |
-|-------|------|-------|--------------|
-| **Agent G** | Refactor Timeline tools to use shared schema + return `ToolResult` | `CreateTimelineCardTool.swift`, `UpdateTimelineCardTool.swift`, `DeleteTimelineCardTool.swift` | Agent F |
-| **Agent H** | Refactor Knowledge Card tools to return `ToolResult` | `SubmitKnowledgeCardTool.swift`, `UpdateKnowledgeCardTool.swift` | Agent F |
-| **Agent I** | Refactor remaining tools to return `ToolResult` | All other `Tools/Implementations/*.swift` | Agent F |
+3. **Delete `TimelineEntryDraft.swift`**
+   - Consolidate to `TimelineCard` struct and `TimelineCardViewModel`
+   - Update `TimelineCardAdapter` to remove conversion boilerplate
+   - Update `TimelineCardEditorView` to use consolidated types
 
----
+4. **Fix force unwrapping in tool execution**
+   - `CreateTimelineCardTool.swift`: Bind `requireObject` result directly
+   - Apply same pattern to all tools using `ToolResultHelpers`
 
-## Phase 4: Type Safety (2 Parallel Agents)
-
-| Agent | Task | Files | Dependencies |
-|-------|------|-------|--------------|
-| **Agent J** | Replace string objective IDs with typed enums | `OnboardingConstants.swift`, `PhaseScript` files, `ObjectiveWorkflowEngine.swift` | None |
-| **Agent K** | Implement Codable → JSONSchema generator | New: `Tools/Shared/SchemaGenerator.swift`, update tool schemas | None |
-
-**Status:** ✅ Both can run in parallel
-
----
-
-## Phase 5: Extract Resources (2 Parallel Agents)
-
-| Agent | Task | Files | Dependencies |
-|-------|------|-------|--------------|
-| **Agent L** | Extract prompts to resource files | `Phase/*Script.swift`, `KCAgentPrompts.swift`, `GitAgentPrompts.swift` → new `.txt` files | None |
-| **Agent M** | Consolidate validation views into generic `ReviewCard<Content>` | `KnowledgeCardReviewCard.swift`, `ApplicantProfileReviewCard.swift` | None |
-
-**Status:** ✅ Both can run in parallel
+**Commit Cadence:** Commit after each major type migration (one commit per model type, one commit per tool file updated).
 
 ---
 
-## Phase 6: Coordinator Refactor (Sequential)
+### Work Stream 2: Event Bus Segmentation
 
-⚠️ **Must complete after Phases 3-5** - depends on tools being decoupled
+**Scope:** Refactor the monolithic `OnboardingEvent` enum into domain-specific event channels.
 
-| Agent | Task | Files |
-|-------|------|-------|
-| **Agent N** | Audit `.arch-spec`, then refactor `OnboardingInterviewCoordinator` to expose sub-services | `OnboardingInterviewCoordinator.swift`, `.arch-spec` |
+**Files Affected:**
+- `Sprung/Onboarding/Core/Events/OnboardingEvent.swift`
+- `Sprung/Onboarding/Core/Events/EventCoordinator.swift`
+- `Sprung/Onboarding/Core/Coordinators/CoordinatorEventRouter.swift`
+- All event subscribers
+
+**Tasks:**
+
+1. **Define segmented event enums**
+   ```swift
+   enum LLMStreamEvent { case chunkReceived, streamComplete, streamError }
+   enum UIEvent { case sheetPresented, sheetDismissed, viewTransition }
+   enum DataEvent { case artifactCreated, artifactUpdated, profileMerged }
+   enum ToolEvent { case toolStarted, toolCompleted, toolFailed }
+   enum PhaseEvent { case phaseStarted, phaseCompleted, objectiveUpdated }
+   ```
+
+2. **Create typed event bus channels**
+   - `LLMEventChannel` for streaming events
+   - `UIEventChannel` for view state changes
+   - `DataEventChannel` for data mutations
+   - `ToolEventChannel` for tool lifecycle
+   - `PhaseEventChannel` for interview phase transitions
+
+3. **Migrate subscribers to appropriate channels**
+   - Update `CoordinatorEventRouter` to handle segmented events
+   - Remove the massive switch statement, replace with focused handlers
+   - Delete `stripHeavyPayloads` debug function entirely
+
+4. **Use typed enum values instead of strings**
+   - Replace `if id == "applicant_profile"` with `if id == OnboardingObjectiveId.applicantProfile`
+   - Apply throughout `CoordinatorEventRouter`
+
+**Commit Cadence:** Commit after defining each event enum, commit after migrating each subscriber group.
 
 ---
 
-## Phase 7: Dead Code Cleanup (1 Agent)
+### Work Stream 3: UI Component Extraction & State Consolidation
 
-| Agent | Task | Files |
-|-------|------|-------|
-| **Agent O** | Remove unused enum cases, constants, and misplaced types | `ToolHandler.swift`, `OnboardingConstants.swift`, `PersistentUploadDropZone.swift` |
+**Scope:** Extract massive view bodies into focused components, consolidate UI state management.
+
+**Files Affected:**
+- `Sprung/Onboarding/Views/Components/OnboardingInterviewChatPanel.swift`
+- `Sprung/Onboarding/Views/OnboardingInterviewView.swift`
+- `Sprung/Onboarding/Views/OnboardingCompletionReviewSheet.swift`
+- `Sprung/Onboarding/Core/OnboardingUIState.swift`
+- `Sprung/Onboarding/Core/SessionUIState.swift`
+
+**Tasks:**
+
+1. **Extract chat panel components**
+   - Create `ComposerView.swift` - input field and send button
+   - Create `BannerView.swift` - status banners and notifications
+   - Create `MessageListView.swift` - scrolling message container
+   - Update `OnboardingInterviewChatPanel` to compose these components
+
+2. **Create focused ViewModels for sub-views**
+   - `DocumentCollectionViewModel` - document management state
+   - `TimelineViewModel` - timeline editing state
+   - `ChatPanelViewModel` - message input and display state
+   - Each ViewModel exposes only what its view needs
+
+3. **Consolidate `OnboardingUIState` and `SessionUIState`**
+   - Audit both classes for overlapping responsibilities
+   - Create single `OnboardingSessionState` with clear sections:
+     - UI visibility state (sheets, alerts)
+     - Processing state (loading, busy)
+     - Permission state (tool gating)
+
+4. **Implement ExtractionReviewSheet confirmation**
+   - Delete stub: `Logger.debug("Extraction confirmation is not implemented...")`
+   - Implement merge logic for extraction JSON into ApplicantProfile
+   - Or remove the sheet entirely if handled by `DocumentArtifactHandler`
+
+5. **Remove developer meta-commentary**
+   - Delete `OnboardingCompletionReviewSheet.swift` placeholder text
+   - Implement proper completion review UI or simplify
+
+**Commit Cadence:** Commit after each extracted component, commit after ViewModel creation, commit after state consolidation.
 
 ---
 
-## Execution Flow Diagram
+### Work Stream 4: Configuration Externalization
 
-```
-Phase 1: ──┬── Agent A (file I/O)
-           ├── Agent B (force unwrap)
-           └── Agent C (git + retry)
-                    │
-Phase 2: ──┬── Agent D (event history)
-           └── Agent E (tool gating)
-                    │
-Phase 3: ──── Agent F (shared infra) ──┬── Agent G (timeline tools)
-                                       ├── Agent H (KC tools)
-                                       └── Agent I (other tools)
-                    │
-Phase 4: ──┬── Agent J (typed enums)
-           └── Agent K (schema generator)
-                    │
-Phase 5: ──┬── Agent L (extract prompts)
-           └── Agent M (generic ReviewCard)
-                    │
-Phase 6: ──── Agent N (coordinator refactor)
-                    │
-Phase 7: ──── Agent O (dead code cleanup)
-```
+**Scope:** Move hardcoded values, prompts, and schemas to external configuration.
 
-## Issue Details
+**Files Affected:**
+- `Sprung/Onboarding/Tools/Implementations/NextPhaseTool.swift`
+- `Sprung/Onboarding/Scripts/*.swift`
+- `Sprung/Onboarding/Services/DocumentExtractionService.swift`
+- `Sprung/Onboarding/Core/SessionUIState.swift`
 
-### Critical Issues
+**Tasks:**
 
-**1.1. Synchronous File I/O on Main Actor**
-- **File:** `Sprung/Onboarding/Handlers/UploadInteractionHandler.swift`
-- **Problem:** `Data(contentsOf:)` called on `@MainActor` class freezes UI for large files
-- **Fix:** Move to `Task.detached` before returning to MainActor
+1. **Externalize phase transition logic**
+   - Move `switch currentPhase` from `NextPhaseTool` to `PhaseScriptRegistry`
+   - `NextPhaseTool` becomes generic trigger calling `registry.nextPhase(after:)`
+   - Delete all hardcoded phase transitions in tool implementations
 
-**1.2. Unsafe Force Unwrapping of File Paths**
-- **Files:** `OnboardingUploadStorage.swift`, `InterviewDataStore.swift`
-- **Problem:** `FileManager.urls(...)[0]` crashes if array empty
-- **Fix:** Use `guard let first = urls.first else { throw ... }`
+2. **Centralize model configuration**
+   - Create `OnboardingModelConfig.swift` (or extend existing)
+   - Move `defaultModelId = "gemini-2.0-flash"` to config
+   - Move all `UserDefaults` model ID lookups to config
+   - Delete hardcoded model IDs from `DocumentExtractionService`
 
-**1.3. Potential Infinite Loop in Tool Recovery**
-- **File:** `StateCoordinator.swift`
-- **Problem:** Stream error retry can loop indefinitely with 2s sleep
-- **Fix:** Implement exponential backoff (2s → 4s → 8s) with max 3 retries
+3. **Create unified `PromptLibrary`**
+   - Move prompts from `PhaseOneScript`, `KCAgentPrompts`, `DocumentExtractionPrompts`, `AgentReadyTool`
+   - Organize by domain: interview prompts, extraction prompts, agent prompts
+   - Use resource files (`.txt` or `.json`) for large prompts
 
-**1.4. Git Process Blocking Actor**
-- **File:** `GitIngestionKernel.swift`
-- **Problem:** `Process.run()` + `waitUntilExit()` blocks actor
-- **Fix:** Wrap in `Task.detached`
+4. **Centralize tool groupings**
+   - Move `ToolGating.timelineTools` Set to `OnboardingToolName.timelineTools`
+   - Reuse in `PhaseScript` definitions
+   - Delete duplicate tool set definitions
 
-### High Priority Issues
+5. **Create `DocumentTypePolicy` struct**
+   - Consolidate extension sets from:
+     - `DropZoneHandler.acceptedExtensions`
+     - `DocumentArtifactMessenger.extractableExtensions`
+     - `DocumentArtifactHandler.extractableExtensions`
+     - `DocumentExtractionService` extension checks
+   - Single source of truth for accepted/extractable/image extensions
 
-**2.1. God Object Pattern: OnboardingInterviewCoordinator**
-- **File:** `OnboardingInterviewCoordinator.swift`
-- **Problem:** Proxies dozens of methods to underlying services
-- **Fix:** Expose sub-services directly (e.g., `coordinator.timeline.update(...)`)
-- **Note:** Audit `.arch-spec` first to check if boundaries need redefining
+**Commit Cadence:** Commit after each configuration externalization (prompts, models, tool groups, document types).
 
-**2.2. Unbounded Event History Growth**
-- **File:** `OnboardingEvents.swift`
-- **Problem:** 10,000 event cap with heavy payloads (Base64) consumes memory
-- **Fix:** Reduce to 1,000; strip heavy payloads; wrap in `#if DEBUG`
+---
 
-**2.3. Tool Coupling via Coordinator**
-- **Files:** All `Tools/Implementations/*.swift`
-- **Problem:** Tools call coordinator directly, creating circular dependency
-- **Fix:** Return `ToolResult` enum instead (`.requestUI(payload)`, `.updateData(data)`)
+### Work Stream 5: Actor Isolation & Concurrency Fixes
 
-### Medium Priority Issues
+**Scope:** Fix race conditions and actor isolation issues, remove unsafe patterns.
 
-**3.1. Tool Definition Duplication**
-- **Files:** `CreateTimelineCardTool.swift`, `UpdateTimelineCardTool.swift`, `DeleteTimelineCardTool.swift`
-- **Fix:** Create shared `TimelineToolSchema` or consolidate into `TimelineActionTool`
+**Files Affected:**
+- `Sprung/Onboarding/Core/ArtifactRepository.swift`
+- `Sprung/Onboarding/Core/AgentActivityTracker.swift`
+- Various coordinator files
 
-**3.2. Manual JSON Schema Definitions**
-- **Files:** `Tools/Schemas/*.swift`
-- **Fix:** Implement Codable → JSONSchema generator
+**Tasks:**
 
-**3.3. Hardcoded Prompt Strings**
-- **Files:** `Phase/*Script.swift`, `KCAgentPrompts.swift`
-- **Fix:** Move to external `.txt` resource files
+1. **Remove `nonisolated(unsafe)` from ArtifactRepository**
+   - Delete `nonisolated(unsafe) private(set) var artifactRecordsSync`
+   - Use `@MainActor` on `OnboardingUIState` for view-safe data
+   - Implement async event emission for UI state updates
+   - Ensure actor boundaries are respected
 
-### Dead Code
+2. **Audit and fix all actor isolation warnings**
+   - Review all `@MainActor` annotations
+   - Ensure services that don't need UI thread access don't have `@MainActor`
+   - Use `Task { @MainActor in }` for callback assignments
 
-**4.1. Unused Tool Identifier Case**
-- `OnboardingToolIdentifier.getMacOSContactCard` - not registered in `OnboardingToolRegistrar`
+3. **Fix unused/misused properties in AgentActivityTracker**
+   - Clarify `cachedTokens` vs `totalTokens` semantics
+   - Either factor cached tokens into total or remove the property
+   - Update UI display to reflect accurate token accounting
 
-**4.2. Unused Sub-Objectives**
-- `OnboardingObjectiveId` nested cases like `applicantProfileProfilePhoto.evaluate_need`
+4. **Fix Git agent author filter logic**
+   - `AgentPrompts.authorFilter` currently locks to first contributor
+   - Implement proper author selection or remove filter if not needed
 
-**4.3. Unused Property**
-- `OnboardingModelConfig.userDefaultsKey` not used consistently
+**Commit Cadence:** Commit after each actor isolation fix, commit after tracker cleanup.
 
-**4.4. Misplaced Enum**
-- `LargePDFExtractionMethod` in `PersistentUploadDropZone.swift` should be in `Models/`
+---
+
+## Sequential Dependencies
+
+While work streams are mostly parallel, observe these dependencies:
+
+1. **Stream 1 (Codable) should complete before Stream 2 (Events)** can fully migrate event payloads to typed data
+2. **Stream 3 (UI)** can start immediately but final state consolidation should wait for **Stream 2** event refactoring
+3. **Stream 4 (Config)** is fully independent
+4. **Stream 5 (Concurrency)** is fully independent
+
+**Recommended execution order:**
+- Start immediately: Streams 1, 3 (component extraction only), 4, 5
+- After Stream 1 completes: Stream 2, Stream 3 (state consolidation)
+
+---
+
+## Deleted Items Checklist
+
+The following MUST be deleted (not commented out, not deprecated—deleted):
+
+- [ ] `TimelineEntryDraft.swift` - entire file
+- [ ] `Logger.debug("Extraction confirmation is not implemented in milestone M0.")` - stub
+- [ ] `Text("This screen is a first pass...")` - placeholder UI text
+- [ ] `nonisolated(unsafe)` declarations
+- [ ] `stripHeavyPayloads` debug function
+- [ ] Hardcoded phase transitions in `NextPhaseTool`
+- [ ] Hardcoded model IDs in services
+- [ ] Duplicate extension sets across files
+- [ ] `OnboardingToolName.getUserOption` if unused
+
+---
+
+## Verification Criteria
+
+After refactoring, verify:
+
+1. **No SwiftyJSON in business logic** - only at API boundaries
+2. **No force unwraps** after helper validation calls
+3. **No massive switch statements** - event routing is segmented
+4. **No duplicate type definitions** - one source of truth per model
+5. **No UI stubs or placeholders** - all features implemented or removed
+6. **No `nonisolated(unsafe)`** - proper actor isolation
+7. **No hardcoded configuration** - all externalized
+8. **Build succeeds** with no warnings related to actor isolation

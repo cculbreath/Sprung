@@ -324,9 +324,9 @@ class BatchCoverLetterGenerator {
             }
         }
         // Extract cover letter content from response
-        let content = coverLetterService.extractCoverLetterContent(from: responseText)
+        let content = coverLetterService.extractCoverLetterContent(from: responseText, modelId: model)
         // Validate that the content is not empty
-        guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        guard !content.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty else {
             throw NSError(domain: "BatchGeneration", code: 1, userInfo: [NSLocalizedDescriptionKey: "Empty response from AI model"])
         }
         // Now create the actual letter object that will be persisted
