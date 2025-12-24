@@ -77,6 +77,11 @@ final class TimeEntryStore: SwiftDataStore {
         entriesForCurrentWeek().reduce(0) { $0 + $1.durationMinutes }
     }
 
+    /// Convenience computed property for this week's total
+    var totalMinutesThisWeek: Int {
+        totalMinutesForCurrentWeek()
+    }
+
     func breakdownByActivity(for entries: [TimeEntry]) -> [ActivityType: Int] {
         var breakdown: [ActivityType: Int] = [:]
         for entry in entries {

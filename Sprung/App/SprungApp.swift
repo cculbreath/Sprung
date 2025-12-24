@@ -216,6 +216,18 @@ struct SprungApp: App {
             }
         }
         .commands {
+            CommandMenu("Search Ops") {
+                Button("Open Job Search Operations") {
+                    Logger.info("🔍 Menu command requested SearchOps window", category: .ui)
+                    if !NSApp.sendAction(#selector(AppDelegate.showSearchOpsWindow), to: nil, from: nil),
+                       let delegate = NSApplication.shared.delegate as? AppDelegate {
+                        delegate.showSearchOpsWindow()
+                    }
+                }
+                .keyboardShortcut("j", modifiers: [.command, .shift, .option])
+            }
+        }
+        .commands {
             CommandMenu("Application") {
             Button("New Job Application") {
                 NotificationCenter.default.post(name: .newJobApp, object: nil)

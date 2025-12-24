@@ -378,4 +378,19 @@ class WeeklyGoal: Identifiable {
         let actualHours = Double(actualMinutes) / 60.0
         return min(1.0, actualHours / targetHours)
     }
+
+    // Convenience aliases for cleaner access
+    var applicationsSubmitted: Int { applicationActual }
+    var applicationsTarget: Int { applicationTarget }
+    var eventsAttended: Int { eventsAttendedActual }
+    var eventsTarget: Int { eventsAttendedTarget }
+    var newContacts: Int { newContactsActual }
+    var followUpsSent: Int { followUpsSentActual }
+    var followUpsTarget: Int { followUpsSentTarget }
+
+    /// Reflection notes (stored in userNotes)
+    var reflectionNotes: String? {
+        get { userNotes }
+        set { userNotes = newValue }
+    }
 }

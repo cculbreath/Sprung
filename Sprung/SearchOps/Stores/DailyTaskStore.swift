@@ -123,4 +123,16 @@ final class DailyTaskStore: SwiftDataStore {
     func tasks(forEventId eventId: UUID) -> [DailyTask] {
         todaysTasks.filter { $0.relatedEventId == eventId }
     }
+
+    /// Get completed tasks this week
+    func completedThisWeek() -> [DailyTask] {
+        let calendar = Calendar.current
+        let weekStart = calendar.date(
+            from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())
+        ) ?? Date()
+
+        return allTasks.filter { task in
+            task.isCompleted && task.createdAt >= weekStart
+        }
+    }
 }

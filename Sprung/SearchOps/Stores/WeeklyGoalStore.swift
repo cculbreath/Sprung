@@ -23,6 +23,18 @@ final class WeeklyGoalStore: SwiftDataStore {
         )) ?? []
     }
 
+    /// Get current week's goal if it exists (nil if not created yet)
+    func currentWeekGoal() -> WeeklyGoal? {
+        let calendar = Calendar.current
+        let weekStart = calendar.date(
+            from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())
+        ) ?? Date()
+
+        return allGoals.first(where: {
+            calendar.isDate($0.weekStartDate, equalTo: weekStart, toGranularity: .weekOfYear)
+        })
+    }
+
     /// Get or create current week's goal
     func currentWeek() -> WeeklyGoal {
         let calendar = Calendar.current
@@ -131,5 +143,19 @@ final class WeeklyGoalStore: SwiftDataStore {
         guard !recent.isEmpty else { return 0 }
         let total = recent.reduce(0) { $0 + $1.actualMinutes }
         return total / recent.count
+    }
+
+    /// Reset current week's progress (keeps targets)
+    func resetCurrentWeek() {
+        let goal = currentWeek()
+        goal.applicationActual = 0
+        goal.eventsAttendedActual = 0
+        goal.newContactsActual = 0
+        goal.followUpsSentActual = 0
+        goal.actualMinutes = 0
+        goal.userNotes = nil
+        goal.llmReflection = nil
+        goal.reflectionGeneratedAt = nil
+        saveContext()
     }
 }

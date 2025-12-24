@@ -36,6 +36,7 @@ enum SprungSchema {
         SearchPreferences.self,
         SearchOpsSettings.self,
         JobSource.self,
+        JobLead.self,
         DailyTask.self,
         TimeEntry.self,
         WeeklyGoal.self,

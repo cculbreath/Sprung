@@ -112,4 +112,17 @@ final class JobSourceStore: SwiftDataStore {
             .prefix(limit)
             .map { $0 }
     }
+
+    /// Get sources that were checked this week
+    func checkedThisWeek() -> [JobSource] {
+        let calendar = Calendar.current
+        let weekStart = calendar.date(
+            from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())
+        ) ?? Date()
+
+        return sources.filter { source in
+            guard let lastVisited = source.lastVisitedAt else { return false }
+            return lastVisited >= weekStart
+        }
+    }
 }
