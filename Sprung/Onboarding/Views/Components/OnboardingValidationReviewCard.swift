@@ -42,7 +42,7 @@ struct OnboardingValidationReviewCard: View {
         _notes = State(initialValue: "")
         _updatedPayloadText = State(initialValue: "")
         _errorMessage = State(initialValue: nil)
-        if prompt.dataType == "applicant_profile" {
+        if prompt.dataType == OnboardingDataType.applicantProfile.rawValue {
             let draft = ApplicantProfileDraft(json: prompt.payload)
             _applicantDraft = State(initialValue: draft)
             _baselineApplicantDraft = State(initialValue: draft)
@@ -55,7 +55,7 @@ struct OnboardingValidationReviewCard: View {
             _applicantHasChanges = State(initialValue: false)
             baselineApplicantJSON = ""
         }
-        if prompt.dataType == "skeleton_timeline" {
+        if prompt.dataType == OnboardingDataType.skeletonTimeline.rawValue {
             let draft = ExperienceDefaultsDecoder.draft(from: prompt.payload)
             _timelineDraft = State(initialValue: draft)
             _baselineTimelineDraft = State(initialValue: draft)
@@ -208,10 +208,10 @@ struct OnboardingValidationReviewCard: View {
         !isStructuredType && decision == .modified
     }
     private var isApplicantProfile: Bool {
-        prompt.dataType == "applicant_profile"
+        prompt.dataType == OnboardingDataType.applicantProfile.rawValue
     }
     private var isSkeletonTimeline: Bool {
-        prompt.dataType == "skeleton_timeline"
+        prompt.dataType == OnboardingDataType.skeletonTimeline.rawValue
     }
     private var isStructuredType: Bool {
         isApplicantProfile || isSkeletonTimeline

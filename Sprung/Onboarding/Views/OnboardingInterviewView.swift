@@ -431,13 +431,13 @@ private struct ValidationPromptSheet: View {
 
     private var headerTitle: String {
         switch validation.dataType {
-        case "skeleton_timeline":
+        case OnboardingDataType.skeletonTimeline.rawValue:
             return "Review Timeline"
-        case "knowledge_card":
+        case OnboardingDataType.knowledgeCard.rawValue:
             return "Review Knowledge Card"
-        case "applicant_profile":
+        case OnboardingDataType.applicantProfile.rawValue:
             return "Review Profile"
-        case "experience_defaults":
+        case OnboardingDataType.experienceDefaults.rawValue:
             return "Review Experience Defaults"
         default:
             return "Review Required"
@@ -446,7 +446,7 @@ private struct ValidationPromptSheet: View {
 
     @ViewBuilder
     private var validationContent: some View {
-        if validation.dataType == "skeleton_timeline" {
+        if validation.dataType == OnboardingDataType.skeletonTimeline.rawValue {
             TimelineCardEditorView(
                 timeline: validation.payload,
                 coordinator: coordinator,

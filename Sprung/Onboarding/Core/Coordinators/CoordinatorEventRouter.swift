@@ -76,7 +76,7 @@ final class CoordinatorEventRouter {
             Logger.debug("📊 CoordinatorEventRouter: objectiveStatusChanged received - id=\(id), newStatus=\(newStatus)", category: .ai)
             // Update UI state for views to track objective progress
             ui.objectiveStatuses[id] = newStatus
-            if id == "applicant_profile" && newStatus == "completed" {
+            if id == OnboardingObjectiveId.applicantProfile.rawValue && newStatus == "completed" {
                 Logger.info("📊 CoordinatorEventRouter: Dismissing profile summary for applicant_profile completion", category: .ai)
                 toolRouter.profileHandler.dismissProfileSummary()
             }

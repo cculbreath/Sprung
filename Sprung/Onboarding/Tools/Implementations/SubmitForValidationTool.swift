@@ -78,7 +78,7 @@ struct SubmitForValidationTool: InterviewTool {
     func execute(_ params: JSON) async throws -> ToolResult {
         var payload = try ValidationPayload(json: params)
         // Auto-fetch current data from coordinator for certain validation types
-        if payload.validationType == "skeleton_timeline" {
+        if payload.validationType == OnboardingDataType.skeletonTimeline.rawValue {
             // Use the coordinator's current skeleton timeline as the data payload
             let currentTimeline = await MainActor.run {
                 coordinator.ui.skeletonTimeline ?? JSON()
@@ -88,7 +88,7 @@ struct SubmitForValidationTool: InterviewTool {
                 data: currentTimeline,
                 summary: payload.summary
             )
-        } else if payload.validationType == "experience_defaults" {
+        } else if payload.validationType == OnboardingDataType.experienceDefaults.rawValue {
             // Use the coordinator's current ExperienceDefaultsDraft as the data payload.
             // Data is optional for this type; we always auto-fetch to ensure consistency.
             let currentDefaults = await coordinator.currentExperienceDefaultsForValidation()
@@ -113,15 +113,16 @@ private struct ValidationPayload {
         guard let type = json["validation_type"].string, !type.isEmpty else {
             throw ToolError.invalidParameters("validation_type must be provided")
         }
-        let validTypes = ["applicant_profile", "skeleton_timeline", "enabled_sections", "knowledge_card", "candidate_dossier", "experience_defaults"]
-        guard validTypes.contains(type) else {
-            throw ToolError.invalidParameters("validation_type must be one of: \(validTypes.joined(separator: ", "))")
+        let validTypes: [OnboardingDataType] = [.applicantProfile, .skeletonTimeline, .enabledSections, .knowledgeCard, .candidateDossier, .experienceDefaults]
+        let validTypeStrings = validTypes.map(\.rawValue)
+        guard validTypeStrings.contains(type) else {
+            throw ToolError.invalidParameters("validation_type must be one of: \(validTypeStrings.joined(separator: ", "))")
         }
         self.validationType = type
         // For skeleton_timeline, data is optional (will be auto-fetched from coordinator)
         // For experience_defaults, data may be empty (auto-fetched from ExperienceDefaultsStore)
         // For other types, data must be provided
-        if type == "skeleton_timeline" || type == "experience_defaults" {
+        if type == OnboardingDataType.skeletonTimeline.rawValue || type == OnboardingDataType.experienceDefaults.rawValue {
             self.data = json["data"]
         } else {
             guard let data = json["data"].dictionary, !data.isEmpty else {

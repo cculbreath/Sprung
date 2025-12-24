@@ -71,17 +71,17 @@ struct PersistDataTool: InterviewTool {
     /// Emit domain-specific events based on dataType to update StateCoordinator
     private func emitDomainEvent(for dataType: String, payload: JSON) async {
         switch dataType {
-        case "applicant_profile":
+        case OnboardingDataType.applicantProfile.rawValue:
             // Extract the profile data and emit event
             let profileData = payload
             await eventBus.publish(.applicantProfileStored(profileData))
             Logger.info("📤 Emitted .applicantProfileStored event", category: .ai)
-        case "skeleton_timeline":
+        case OnboardingDataType.skeletonTimeline.rawValue:
             // Normalize timeline data and emit event
             let normalizedTimeline = TimelineCardAdapter.normalizedTimeline(payload)
             await eventBus.publish(.skeletonTimelineStored(normalizedTimeline))
             Logger.info("📤 Emitted .skeletonTimelineStored event", category: .ai)
-        case "experience_defaults":
+        case OnboardingDataType.experienceDefaults.rawValue:
             // Check if this is full experience defaults (has work/education/skills arrays) or just enabled sections
             if payload["work"].exists() || payload["education"].exists() || payload["skills"].exists() || payload["projects"].exists() {
                 // Full experience defaults from LLM - emit event to populate ExperienceDefaults store
@@ -92,13 +92,13 @@ struct PersistDataTool: InterviewTool {
                 await eventBus.publish(.enabledSectionsUpdated(sections))
                 Logger.info("📤 Emitted .enabledSectionsUpdated event with \(sections.count) sections", category: .ai)
             }
-        case "enabled_sections":
+        case OnboardingDataType.enabledSections.rawValue:
             // Extract enabled sections and emit event
             if let sections = extractEnabledSections(from: payload) {
                 await eventBus.publish(.enabledSectionsUpdated(sections))
                 Logger.info("📤 Emitted .enabledSectionsUpdated event with \(sections.count) sections", category: .ai)
             }
-        case "candidate_dossier_entry":
+        case OnboardingDataType.candidateDossierEntry.rawValue:
             // Emit dossier field collected event for tracking
             if let fieldType = payload["field_type"].string {
                 await eventBus.publish(.dossierFieldCollected(field: fieldType))
@@ -106,15 +106,15 @@ struct PersistDataTool: InterviewTool {
             } else {
                 Logger.info("💾 Persisted candidate_dossier_entry (no field_type for tracking)", category: .ai)
             }
-        case "knowledge_card":
+        case OnboardingDataType.knowledgeCard.rawValue:
             // Optional: emit knowledge card persisted event
             await eventBus.publish(.knowledgeCardPersisted(card: payload))
             Logger.info("📤 Emitted .knowledgeCardPersisted event", category: .ai)
-        case "writing_sample":
+        case OnboardingDataType.writingSample.rawValue:
             // Emit writing sample persisted event
             await eventBus.publish(.writingSamplePersisted(sample: payload))
             Logger.info("📤 Emitted .writingSamplePersisted event", category: .ai)
-        case "candidate_dossier":
+        case OnboardingDataType.candidateDossier.rawValue:
             // Emit candidate dossier persisted event
             await eventBus.publish(.candidateDossierPersisted(dossier: payload))
             Logger.info("📤 Emitted .candidateDossierPersisted event", category: .ai)

@@ -31,12 +31,12 @@ struct WritingCorpusCollectionView: View {
 
     /// Check if writing samples collection is complete (based on objective status)
     private var writingSamplesComplete: Bool {
-        coordinator.ui.objectiveStatuses["one_writing_sample"] == "completed"
+        coordinator.ui.objectiveStatuses[OnboardingObjectiveId.oneWritingSample.rawValue] == "completed"
     }
 
     /// Check if dossier is complete (based on objective status)
     private var dossierComplete: Bool {
-        coordinator.ui.objectiveStatuses["dossier_complete"] == "completed"
+        coordinator.ui.objectiveStatuses[OnboardingObjectiveId.dossierComplete.rawValue] == "completed"
     }
 
     var body: some View {

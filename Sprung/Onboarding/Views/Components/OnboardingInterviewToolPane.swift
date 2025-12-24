@@ -194,13 +194,13 @@ struct OnboardingInterviewToolPane: View {
 
     @ViewBuilder
     private func validationContent(_ validation: OnboardingValidationPrompt) -> some View {
-        if validation.dataType == "knowledge_card" {
+        if validation.dataType == OnboardingDataType.knowledgeCard.rawValue {
             KnowledgeCardValidationHost(
                 prompt: validation,
                 artifactsJSON: coordinator.ui.artifactRecords,
                 coordinator: coordinator
             )
-        } else if validation.dataType == "skeleton_timeline" {
+        } else if validation.dataType == OnboardingDataType.skeletonTimeline.rawValue {
             TimelineCardEditorView(
                 timeline: validation.payload,
                 coordinator: coordinator,
