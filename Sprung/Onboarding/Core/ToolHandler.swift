@@ -5,9 +5,7 @@ import SwiftyJSON
 enum OnboardingToolIdentifier: String, CaseIterable {
     case getUserOption = "get_user_option"
     case getUserUpload = "get_user_upload"
-    case getMacOSContactCard = "get_macos_contact_card"
     case getApplicantProfile = "get_applicant_profile"
-    case extractDocument = "extract_document"
     case submitForValidation = "submit_for_validation"
 }
 /// Canonical status values surfaced to the LLM runtime.
@@ -258,11 +256,6 @@ final class ToolHandler {
             },
             .getUserUpload: { [unowned self] in
                 uploadHandler.pendingUploadRequests.isEmpty ? .ready : .waitingForUser
-            },
-            .getMacOSContactCard: { [unowned self] in
-                guard let intake = profileHandler.pendingApplicantProfileIntake else { return .ready }
-                if case .loading = intake.mode { return .processing }
-                return .ready
             },
             .getApplicantProfile: { [unowned self] in
     if let intake = profileHandler.pendingApplicantProfileIntake {

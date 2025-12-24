@@ -9,26 +9,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Extraction method for PDFs
-enum LargePDFExtractionMethod: String, CaseIterable {
-    case chunkedNative = "chunked"
-    case textExtract = "text_extract"
-
-    var displayName: String {
-        switch self {
-        case .chunkedNative: return "Native PDF"
-        case .textExtract: return "Text extraction"
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .chunkedNative: return "Best quality - sends PDF directly to AI"
-        case .textExtract: return "Faster - extracts text locally first"
-        }
-    }
-}
-
 struct PersistentUploadDropZone: View {
     let onDropFiles: ([URL], LargePDFExtractionMethod?) -> Void
     let onSelectFiles: () -> Void
