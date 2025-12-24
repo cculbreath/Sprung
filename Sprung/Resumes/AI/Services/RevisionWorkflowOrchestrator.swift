@@ -13,7 +13,7 @@ import SwiftData
 /// Protocol for receiving workflow orchestration callbacks
 protocol RevisionWorkflowOrchestratorDelegate: AnyObject {
     func setupRevisionsForReview(_ revisions: [ProposedRevisionNode]) async
-    func handleResubmissionResults(validatedRevisions: [ProposedRevisionNode], resubmittedNodeIds: Set<UUID>)
+    func handleResubmissionResults(validatedRevisions: [ProposedRevisionNode], resubmittedNodeIds: Set<String>)
     var showResumeRevisionSheet: Bool { get set }
 }
 

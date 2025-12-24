@@ -19,6 +19,7 @@ import SwiftyJSON
 class ResumeReviseViewModel {
     // MARK: - Dependencies
     private let exportCoordinator: ResumeExportCoordinator
+    let openRouterService: OpenRouterService
 
     // MARK: - Specialized Services
     let toolRunner: ToolConversationRunner
@@ -145,6 +146,7 @@ class ResumeReviseViewModel {
         toolRegistry: ResumeToolRegistry? = nil
     ) {
         self.exportCoordinator = exportCoordinator
+        self.openRouterService = openRouterService
         let validationSvc = validationService ?? RevisionValidationService()
         let streaming = streamingService ?? RevisionStreamingService(
             llm: llmFacade,
@@ -417,6 +419,8 @@ extension ResumeReviseViewModel: RevisionNavigationDelegate {
 }
 
 // MARK: - PhaseReviewDelegate
+// Note: showReviewSheet, hideReviewSheet, setWorkflowCompleted are implemented
+// in RevisionNavigationDelegate extension and satisfy both protocol requirements.
 
 extension ResumeReviseViewModel: PhaseReviewDelegate {
     func setConversationContext(conversationId: UUID, modelId: String) {
@@ -443,7 +447,7 @@ extension ResumeReviseViewModel: RevisionWorkflowOrchestratorDelegate {
         markWorkflowCompleted(reset: false)
     }
 
-    func handleResubmissionResults(validatedRevisions: [ProposedRevisionNode], resubmittedNodeIds: Set<UUID>) {
+    func handleResubmissionResults(validatedRevisions: [ProposedRevisionNode], resubmittedNodeIds: Set<String>) {
         navigationManager.handleResubmissionResults(
             validatedRevisions: validatedRevisions,
             resubmittedNodeIds: resubmittedNodeIds
