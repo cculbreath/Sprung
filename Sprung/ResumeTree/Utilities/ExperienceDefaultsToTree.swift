@@ -78,50 +78,50 @@ final class ExperienceDefaultsToTree {
 
     private func isSectionEnabled(_ key: String) -> Bool {
         switch key {
-        case "summary": return !experienceDefaults.summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        case "work": return experienceDefaults.isWorkEnabled && !experienceDefaults.work.isEmpty
-        case "volunteer": return experienceDefaults.isVolunteerEnabled && !experienceDefaults.volunteer.isEmpty
-        case "education": return experienceDefaults.isEducationEnabled && !experienceDefaults.education.isEmpty
-        case "projects": return experienceDefaults.isProjectsEnabled && !experienceDefaults.projects.isEmpty
-        case "skills": return experienceDefaults.isSkillsEnabled && !experienceDefaults.skills.isEmpty
-        case "awards": return experienceDefaults.isAwardsEnabled && !experienceDefaults.awards.isEmpty
-        case "certificates": return experienceDefaults.isCertificatesEnabled && !experienceDefaults.certificates.isEmpty
-        case "publications": return experienceDefaults.isPublicationsEnabled && !experienceDefaults.publications.isEmpty
-        case "languages": return experienceDefaults.isLanguagesEnabled && !experienceDefaults.languages.isEmpty
-        case "interests": return experienceDefaults.isInterestsEnabled && !experienceDefaults.interests.isEmpty
-        case "references": return experienceDefaults.isReferencesEnabled && !experienceDefaults.references.isEmpty
-        case "custom": return experienceDefaults.isCustomEnabled && !experienceDefaults.customFields.isEmpty
+        case ExperienceSectionKey.summary.rawValue: return !experienceDefaults.summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case ExperienceSectionKey.work.rawValue: return experienceDefaults.isWorkEnabled && !experienceDefaults.work.isEmpty
+        case ExperienceSectionKey.volunteer.rawValue: return experienceDefaults.isVolunteerEnabled && !experienceDefaults.volunteer.isEmpty
+        case ExperienceSectionKey.education.rawValue: return experienceDefaults.isEducationEnabled && !experienceDefaults.education.isEmpty
+        case ExperienceSectionKey.projects.rawValue: return experienceDefaults.isProjectsEnabled && !experienceDefaults.projects.isEmpty
+        case ExperienceSectionKey.skills.rawValue: return experienceDefaults.isSkillsEnabled && !experienceDefaults.skills.isEmpty
+        case ExperienceSectionKey.awards.rawValue: return experienceDefaults.isAwardsEnabled && !experienceDefaults.awards.isEmpty
+        case ExperienceSectionKey.certificates.rawValue: return experienceDefaults.isCertificatesEnabled && !experienceDefaults.certificates.isEmpty
+        case ExperienceSectionKey.publications.rawValue: return experienceDefaults.isPublicationsEnabled && !experienceDefaults.publications.isEmpty
+        case ExperienceSectionKey.languages.rawValue: return experienceDefaults.isLanguagesEnabled && !experienceDefaults.languages.isEmpty
+        case ExperienceSectionKey.interests.rawValue: return experienceDefaults.isInterestsEnabled && !experienceDefaults.interests.isEmpty
+        case ExperienceSectionKey.references.rawValue: return experienceDefaults.isReferencesEnabled && !experienceDefaults.references.isEmpty
+        case ExperienceSectionKey.custom.rawValue: return experienceDefaults.isCustomEnabled && !experienceDefaults.customFields.isEmpty
         default: return true // Allow manifest-defined sections we don't have explicit data for
         }
     }
 
     private func buildSection(key: String, parent: TreeNode) {
         switch key {
-        case "summary":
+        case ExperienceSectionKey.summary.rawValue:
             buildSummarySection(parent: parent)
-        case "work":
+        case ExperienceSectionKey.work.rawValue:
             buildWorkSection(parent: parent)
-        case "volunteer":
+        case ExperienceSectionKey.volunteer.rawValue:
             buildVolunteerSection(parent: parent)
-        case "education":
+        case ExperienceSectionKey.education.rawValue:
             buildEducationSection(parent: parent)
-        case "projects":
+        case ExperienceSectionKey.projects.rawValue:
             buildProjectsSection(parent: parent)
-        case "skills":
+        case ExperienceSectionKey.skills.rawValue:
             buildSkillsSection(parent: parent)
-        case "awards":
+        case ExperienceSectionKey.awards.rawValue:
             buildAwardsSection(parent: parent)
-        case "certificates":
+        case ExperienceSectionKey.certificates.rawValue:
             buildCertificatesSection(parent: parent)
-        case "publications":
+        case ExperienceSectionKey.publications.rawValue:
             buildPublicationsSection(parent: parent)
-        case "languages":
+        case ExperienceSectionKey.languages.rawValue:
             buildLanguagesSection(parent: parent)
-        case "interests":
+        case ExperienceSectionKey.interests.rawValue:
             buildInterestsSection(parent: parent)
-        case "references":
+        case ExperienceSectionKey.references.rawValue:
             buildReferencesSection(parent: parent)
-        case "custom":
+        case ExperienceSectionKey.custom.rawValue:
             buildCustomSection(parent: parent)
         default:
             break // Unknown section
@@ -134,15 +134,15 @@ final class ExperienceDefaultsToTree {
         let summary = experienceDefaults.summary.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !summary.isEmpty else { return }
 
-        let section = manifest.section(for: "summary")
+        let section = manifest.section(for: ExperienceSectionKey.summary.rawValue)
         let node = parent.addChild(TreeNode(
-            name: "summary",
+            name: ExperienceSectionKey.summary.rawValue,
             value: summary,
             inEditor: true,
             status: .saved,
             resume: resume
         ))
-        applyEditorLabel(to: node, for: "summary")
+        applyEditorLabel(to: node, for: ExperienceSectionKey.summary.rawValue)
         if let descriptor = section?.fields.first {
             node.applyDescriptor(descriptor)
         }
@@ -151,17 +151,17 @@ final class ExperienceDefaultsToTree {
     // MARK: - Work Section
 
     private func buildWorkSection(parent: TreeNode) {
-        let section = manifest.section(for: "work")
+        let section = manifest.section(for: ExperienceSectionKey.work.rawValue)
         let entryDescriptor = section?.fields.first(where: { $0.key == "*" })
 
         let container = parent.addChild(TreeNode(
-            name: "work",
+            name: ExperienceSectionKey.work.rawValue,
             value: "",
             inEditor: true,
             status: .isNotLeaf,
             resume: resume
         ))
-        applyEditorLabel(to: container, for: "work")
+        applyEditorLabel(to: container, for: ExperienceSectionKey.work.rawValue)
         container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
         container.schemaAllowsNodeDeletion = entryDescriptor?.allowsManualMutations ?? false
 
@@ -192,17 +192,17 @@ final class ExperienceDefaultsToTree {
     // MARK: - Volunteer Section
 
     private func buildVolunteerSection(parent: TreeNode) {
-        let section = manifest.section(for: "volunteer")
+        let section = manifest.section(for: ExperienceSectionKey.volunteer.rawValue)
         let entryDescriptor = section?.fields.first(where: { $0.key == "*" })
 
         let container = parent.addChild(TreeNode(
-            name: "volunteer",
+            name: ExperienceSectionKey.volunteer.rawValue,
             value: "",
             inEditor: true,
             status: .isNotLeaf,
             resume: resume
         ))
-        applyEditorLabel(to: container, for: "volunteer")
+        applyEditorLabel(to: container, for: ExperienceSectionKey.volunteer.rawValue)
         container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
 
         for (index, volunteer) in experienceDefaults.volunteer.enumerated() {
@@ -231,17 +231,17 @@ final class ExperienceDefaultsToTree {
     // MARK: - Education Section
 
     private func buildEducationSection(parent: TreeNode) {
-        let section = manifest.section(for: "education")
+        let section = manifest.section(for: ExperienceSectionKey.education.rawValue)
         let entryDescriptor = section?.fields.first(where: { $0.key == "*" })
 
         let container = parent.addChild(TreeNode(
-            name: "education",
+            name: ExperienceSectionKey.education.rawValue,
             value: "",
             inEditor: true,
             status: .isNotLeaf,
             resume: resume
         ))
-        applyEditorLabel(to: container, for: "education")
+        applyEditorLabel(to: container, for: ExperienceSectionKey.education.rawValue)
         container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
 
         for (index, education) in experienceDefaults.education.enumerated() {
@@ -271,17 +271,17 @@ final class ExperienceDefaultsToTree {
     // MARK: - Projects Section
 
     private func buildProjectsSection(parent: TreeNode) {
-        let section = manifest.section(for: "projects")
+        let section = manifest.section(for: ExperienceSectionKey.projects.rawValue)
         let entryDescriptor = section?.fields.first(where: { $0.key == "*" })
 
         let container = parent.addChild(TreeNode(
-            name: "projects",
+            name: ExperienceSectionKey.projects.rawValue,
             value: "",
             inEditor: true,
             status: .isNotLeaf,
             resume: resume
         ))
-        applyEditorLabel(to: container, for: "projects")
+        applyEditorLabel(to: container, for: ExperienceSectionKey.projects.rawValue)
         container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
 
         for (index, project) in experienceDefaults.projects.enumerated() {
@@ -313,17 +313,17 @@ final class ExperienceDefaultsToTree {
     // MARK: - Skills Section
 
     private func buildSkillsSection(parent: TreeNode) {
-        let section = manifest.section(for: "skills")
+        let section = manifest.section(for: ExperienceSectionKey.skills.rawValue)
         let entryDescriptor = section?.fields.first(where: { $0.key == "*" })
 
         let container = parent.addChild(TreeNode(
-            name: "skills",
+            name: ExperienceSectionKey.skills.rawValue,
             value: "",
             inEditor: true,
             status: .isNotLeaf,
             resume: resume
         ))
-        applyEditorLabel(to: container, for: "skills")
+        applyEditorLabel(to: container, for: ExperienceSectionKey.skills.rawValue)
         container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
 
         for (index, skill) in experienceDefaults.skills.enumerated() {
@@ -348,17 +348,17 @@ final class ExperienceDefaultsToTree {
     // MARK: - Awards Section
 
     private func buildAwardsSection(parent: TreeNode) {
-        let section = manifest.section(for: "awards")
+        let section = manifest.section(for: ExperienceSectionKey.awards.rawValue)
         let entryDescriptor = section?.fields.first(where: { $0.key == "*" })
 
         let container = parent.addChild(TreeNode(
-            name: "awards",
+            name: ExperienceSectionKey.awards.rawValue,
             value: "",
             inEditor: true,
             status: .isNotLeaf,
             resume: resume
         ))
-        applyEditorLabel(to: container, for: "awards")
+        applyEditorLabel(to: container, for: ExperienceSectionKey.awards.rawValue)
         container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
 
         for (index, award) in experienceDefaults.awards.enumerated() {
@@ -384,17 +384,17 @@ final class ExperienceDefaultsToTree {
     // MARK: - Certificates Section
 
     private func buildCertificatesSection(parent: TreeNode) {
-        let section = manifest.section(for: "certificates")
+        let section = manifest.section(for: ExperienceSectionKey.certificates.rawValue)
         let entryDescriptor = section?.fields.first(where: { $0.key == "*" })
 
         let container = parent.addChild(TreeNode(
-            name: "certificates",
+            name: ExperienceSectionKey.certificates.rawValue,
             value: "",
             inEditor: true,
             status: .isNotLeaf,
             resume: resume
         ))
-        applyEditorLabel(to: container, for: "certificates")
+        applyEditorLabel(to: container, for: ExperienceSectionKey.certificates.rawValue)
         container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
 
         for (index, cert) in experienceDefaults.certificates.enumerated() {
@@ -420,17 +420,17 @@ final class ExperienceDefaultsToTree {
     // MARK: - Publications Section
 
     private func buildPublicationsSection(parent: TreeNode) {
-        let section = manifest.section(for: "publications")
+        let section = manifest.section(for: ExperienceSectionKey.publications.rawValue)
         let entryDescriptor = section?.fields.first(where: { $0.key == "*" })
 
         let container = parent.addChild(TreeNode(
-            name: "publications",
+            name: ExperienceSectionKey.publications.rawValue,
             value: "",
             inEditor: true,
             status: .isNotLeaf,
             resume: resume
         ))
-        applyEditorLabel(to: container, for: "publications")
+        applyEditorLabel(to: container, for: ExperienceSectionKey.publications.rawValue)
         container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
 
         for (index, pub) in experienceDefaults.publications.enumerated() {
@@ -457,17 +457,17 @@ final class ExperienceDefaultsToTree {
     // MARK: - Languages Section
 
     private func buildLanguagesSection(parent: TreeNode) {
-        let section = manifest.section(for: "languages")
+        let section = manifest.section(for: ExperienceSectionKey.languages.rawValue)
         let entryDescriptor = section?.fields.first(where: { $0.key == "*" })
 
         let container = parent.addChild(TreeNode(
-            name: "languages",
+            name: ExperienceSectionKey.languages.rawValue,
             value: "",
             inEditor: true,
             status: .isNotLeaf,
             resume: resume
         ))
-        applyEditorLabel(to: container, for: "languages")
+        applyEditorLabel(to: container, for: ExperienceSectionKey.languages.rawValue)
         container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
 
         for (index, language) in experienceDefaults.languages.enumerated() {
@@ -491,17 +491,17 @@ final class ExperienceDefaultsToTree {
     // MARK: - Interests Section
 
     private func buildInterestsSection(parent: TreeNode) {
-        let section = manifest.section(for: "interests")
+        let section = manifest.section(for: ExperienceSectionKey.interests.rawValue)
         let entryDescriptor = section?.fields.first(where: { $0.key == "*" })
 
         let container = parent.addChild(TreeNode(
-            name: "interests",
+            name: ExperienceSectionKey.interests.rawValue,
             value: "",
             inEditor: true,
             status: .isNotLeaf,
             resume: resume
         ))
-        applyEditorLabel(to: container, for: "interests")
+        applyEditorLabel(to: container, for: ExperienceSectionKey.interests.rawValue)
         container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
 
         for (index, interest) in experienceDefaults.interests.enumerated() {
@@ -525,17 +525,17 @@ final class ExperienceDefaultsToTree {
     // MARK: - References Section
 
     private func buildReferencesSection(parent: TreeNode) {
-        let section = manifest.section(for: "references")
+        let section = manifest.section(for: ExperienceSectionKey.references.rawValue)
         let entryDescriptor = section?.fields.first(where: { $0.key == "*" })
 
         let container = parent.addChild(TreeNode(
-            name: "references",
+            name: ExperienceSectionKey.references.rawValue,
             value: "",
             inEditor: true,
             status: .isNotLeaf,
             resume: resume
         ))
-        applyEditorLabel(to: container, for: "references")
+        applyEditorLabel(to: container, for: ExperienceSectionKey.references.rawValue)
         container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
 
         for (index, ref) in experienceDefaults.references.enumerated() {
@@ -562,11 +562,11 @@ final class ExperienceDefaultsToTree {
     /// Custom fields are wrapped in a "custom" container for path matching (e.g., custom.objective).
     /// The view flattens this container - children appear at the same level as other content nodes.
     private func buildCustomSection(parent: TreeNode) {
-        let section = manifest.section(for: "custom")
+        let section = manifest.section(for: ExperienceSectionKey.custom.rawValue)
 
         // Create custom container for path matching (view flattens it for display)
         let customContainer = parent.addChild(TreeNode(
-            name: "custom",
+            name: ExperienceSectionKey.custom.rawValue,
             value: "",
             inEditor: true,
             status: .isNotLeaf,

@@ -36,6 +36,12 @@ struct ExperienceDefaultsDraft: Codable, Equatable {
     var languages: [LanguageExperienceDraft] = []
     var interests: [InterestExperienceDraft] = []
     var references: [ReferenceExperienceDraft] = []
+
+    /// Computed property for summary section enabled state (based on whether summary has content)
+    var isSummaryEnabled: Bool {
+        get { !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        set { if !newValue { summary = "" } }
+    }
 }
 extension ExperienceDefaultsDraft {
     /// Initialize draft from model - now a direct copy since model stores Draft structs
