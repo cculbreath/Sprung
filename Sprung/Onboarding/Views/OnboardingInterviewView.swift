@@ -128,33 +128,6 @@ struct OnboardingInterviewView: View {
                 }
             }
         let withSheets = withLifecycle
-            .sheet(isPresented: Binding(
-                get: { coordinator.ui.pendingExtraction != nil },
-                set: { newValue in
-                    if !newValue {
-                        coordinator.extraction.setExtractionStatus(nil)
-                    }
-                }
-            )) {
-                if let pending = coordinator.ui.pendingExtraction {
-                    ExtractionReviewSheet(
-                        extraction: pending,
-                        onConfirm: { _, _ in
-                            // FEATURE REQUEST: Extraction confirmation and editing
-                            // Status: Deferred to post-M0 milestone
-                            // The UI for reviewing and editing extracted data exists, but the confirmation
-                            // flow is not yet implemented. When implemented, this should:
-                            // 1. Apply user edits to the extracted data
-                            // 2. Update StateCoordinator with revised extraction
-                            // 3. Resume tool continuation with updated payload
-                            Logger.debug("Extraction confirmation is not implemented in milestone M0.")
-                        },
-                        onCancel: {
-                            coordinator.extraction.setExtractionStatus(nil)
-                        }
-                    )
-                }
-            }
             .sheet(isPresented: $showCompletionReview) {
                 OnboardingCompletionReviewSheet(
                     coordinator: interviewCoordinator,

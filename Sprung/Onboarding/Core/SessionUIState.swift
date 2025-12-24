@@ -11,14 +11,6 @@ enum ToolAvailability {
 
 /// Centralized tool gating logic (pure function - no side effects)
 struct ToolGating {
-    /// Timeline tools that can operate during validation state for real-time card editing
-    private static let timelineTools: Set<String> = [
-        "create_timeline_card",
-        "update_timeline_card",
-        "delete_timeline_card",
-        "reorder_timeline_cards"
-    ]
-
     /// Determine tool availability based on session state
     /// - Parameters:
     ///   - toolName: Name of the tool to check
@@ -52,7 +44,7 @@ struct ToolGating {
 
             case .validation:
                 // During validation, only timeline tools are allowed for real-time card editing
-                if timelineTools.contains(toolName) {
+                if OnboardingToolName.timelineTools.contains(toolName) {
                     return .available
                 } else {
                     return .blocked(reason: "Cannot execute non-timeline tools while waiting for validation (state: \(waitingState.rawValue))")
@@ -91,7 +83,7 @@ struct ToolGating {
 
         case .validation:
             // During validation, only timeline tools are available
-            return timelineTools.intersection(phaseAllowedTools).subtracting(excludedTools)
+            return OnboardingToolName.timelineTools.intersection(phaseAllowedTools).subtracting(excludedTools)
 
         case .selection, .upload, .processing:
             // All tools blocked during these waiting states
@@ -137,11 +129,6 @@ actor SessionUIState: OnboardingEventEmitter {
     private(set) var pendingKCValidationQueue: [String] = []
     /// Whether current validation is from KC auto-queue (vs tool-initiated)
     private(set) var isAutoValidation: Bool = false
-    // MARK: - Synchronous Caches (for SwiftUI)
-    nonisolated(unsafe) private(set) var isProcessingSync = false
-    nonisolated(unsafe) private(set) var isActiveSync = false
-    nonisolated(unsafe) private(set) var pendingExtractionSync: OnboardingPendingExtraction?
-    nonisolated(unsafe) private(set) var pendingStreamingStatusSync: String?
     // MARK: - Initialization
     init(eventBus: EventCoordinator, phasePolicy: PhasePolicy, initialPhase: InterviewPhase) {
         self.eventBus = eventBus
@@ -161,7 +148,6 @@ actor SessionUIState: OnboardingEventEmitter {
     func setProcessingState(_ processing: Bool, emitEvent: Bool = true) async {
         let didChange = isProcessing != processing
         isProcessing = processing
-        isProcessingSync = processing
         guard emitEvent, didChange else { return }
         // Emit event for other coordinators only when the value changes
         await emit(.processingStateChanged(processing))
@@ -169,7 +155,6 @@ actor SessionUIState: OnboardingEventEmitter {
     /// Set active state
     func setActiveState(_ active: Bool) async {
         isActive = active
-        isActiveSync = active
     }
     // MARK: - Waiting State Management
     /// Set waiting state and publish tool permissions
@@ -258,7 +243,6 @@ actor SessionUIState: OnboardingEventEmitter {
     /// Set pending extraction
     func setPendingExtraction(_ extraction: OnboardingPendingExtraction?) async {
         pendingExtraction = extraction
-        pendingExtractionSync = extraction
         let newWaitingState: WaitingState? = extraction != nil ? .extraction : nil
         await setWaitingState(newWaitingState)
         // Emit event
@@ -267,7 +251,6 @@ actor SessionUIState: OnboardingEventEmitter {
     /// Set streaming status
     func setStreamingStatus(_ status: String?) {
         pendingStreamingStatus = status
-        pendingStreamingStatusSync = status
     }
     // MARK: - Tool Gating Logic
     // Tool Gating Strategy:
@@ -378,11 +361,6 @@ actor SessionUIState: OnboardingEventEmitter {
         // Reset KC validation queue
         pendingKCValidationQueue = []
         isAutoValidation = false
-        // Reset sync caches
-        isProcessingSync = false
-        isActiveSync = false
-        pendingExtractionSync = nil
-        pendingStreamingStatusSync = nil
         Logger.info("🔄 SessionUIState reset", category: .ai)
     }
 }

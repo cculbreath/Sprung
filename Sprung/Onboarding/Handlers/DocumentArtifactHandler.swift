@@ -68,18 +68,15 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
             return
         }
 
-        // Categorize files by type
-        let extractableExtensions = Set(["pdf", "docx", "html", "htm", "txt", "rtf"])
-        let imageExtensions = Set(["png", "jpg", "jpeg", "gif", "webp", "heic", "tiff", "bmp"])
-
+        // Categorize files by type using centralized policy
         let extractableFiles = files.filter { file in
             let ext = file.storageURL.pathExtension.lowercased()
-            return extractableExtensions.contains(ext)
+            return DocumentTypePolicy.isExtractable(ext)
         }
 
         let imageFiles = files.filter { file in
             let ext = file.storageURL.pathExtension.lowercased()
-            return imageExtensions.contains(ext)
+            return DocumentTypePolicy.isImage(ext)
         }
 
         guard !extractableFiles.isEmpty || !imageFiles.isEmpty else {

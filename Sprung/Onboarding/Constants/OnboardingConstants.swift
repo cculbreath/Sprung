@@ -189,6 +189,55 @@ enum InterviewSubphase: String, CaseIterable, Codable {
     }
 }
 
+// MARK: - Document Type Policy
+
+/// Centralized file extension definitions for document handling.
+/// Single source of truth for accepted/extractable/image extensions.
+struct DocumentTypePolicy {
+    /// All file extensions accepted for drops in the onboarding dropzone.
+    static let acceptedExtensions = Set([
+        "pdf", "docx", "txt", "png", "jpg", "jpeg", "md", "json", "gif", "webp", "heic", "html", "htm", "rtf"
+    ])
+
+    /// File extensions that can have text extracted (for LLM context).
+    static let extractableExtensions = Set([
+        "pdf", "txt", "docx", "html", "htm", "md", "rtf"
+    ])
+
+    /// Image file extensions (for visual artifacts).
+    static let imageExtensions = Set([
+        "png", "jpg", "jpeg", "gif", "webp", "heic", "tiff", "bmp"
+    ])
+
+    /// Check if a file extension is accepted for drops.
+    static func isAccepted(_ ext: String) -> Bool {
+        acceptedExtensions.contains(ext.lowercased())
+    }
+
+    /// Check if a file extension can have text extracted.
+    static func isExtractable(_ ext: String) -> Bool {
+        extractableExtensions.contains(ext.lowercased())
+    }
+
+    /// Check if a file extension is an image.
+    static func isImage(_ ext: String) -> Bool {
+        imageExtensions.contains(ext.lowercased())
+    }
+}
+
+// MARK: - Tool Groupings
+
+extension OnboardingToolName {
+    /// Timeline tools that can operate during validation state for real-time card editing.
+    /// Used by ToolGating to allow these tools while waiting for validation input.
+    static let timelineTools: Set<String> = Set([
+        OnboardingToolName.createTimelineCard,
+        OnboardingToolName.updateTimelineCard,
+        OnboardingToolName.deleteTimelineCard,
+        OnboardingToolName.reorderTimelineCards
+    ].map(\.rawValue))
+}
+
 // MARK: - Convenience Extensions
 extension OnboardingToolName {
     /// Convert an array of tool name enums to their raw string values.

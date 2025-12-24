@@ -128,10 +128,6 @@ struct OnboardingCompletionReviewSheet: View {
             Text("3. Customize a resume for a target job and export.")
 
             Spacer()
-
-            Text("This screen is a first pass to avoid abrupt endings; we can expand it into a tabbed, per-asset feedback workflow.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
         }
     }
 

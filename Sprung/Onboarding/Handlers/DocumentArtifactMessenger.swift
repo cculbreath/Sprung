@@ -87,10 +87,9 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
                 return
             }
             // Count extractable document files (PDFs and text files)
-            let extractableExtensions = Set(["pdf", "txt", "docx", "html", "htm", "md", "rtf"])
             let extractableCount = files.filter { file in
                 let ext = file.filename.lowercased().split(separator: ".").last.map(String.init) ?? ""
-                return extractableExtensions.contains(ext)
+                return DocumentTypePolicy.isExtractable(ext)
             }.count
             if extractableCount > 0 {
                 await startBatch(expectedCount: extractableCount)
