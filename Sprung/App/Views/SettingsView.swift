@@ -573,7 +573,8 @@ private extension SettingsView {
         if isGPT5BaseModel {
             return reasoningOptions.filter { $0.value != "none" }
         } else {
-            return reasoningOptions.filter { $0.value != "none" && $0.value != "minimal" }
+            // GPT-5.1+ supports "none" as lowest reasoning level
+            return reasoningOptions.filter { $0.value != "minimal" }
         }
     }
 
@@ -604,9 +605,9 @@ private extension SettingsView {
             .pickerStyle(.menu)
             .onChange(of: onboardingModelId) { _, _ in
                 if isGPT5BaseModel && onboardingHardTaskReasoningEffort == "none" {
-                    onboardingHardTaskReasoningEffort = "medium"
+                    onboardingHardTaskReasoningEffort = "minimal"
                 } else if supportsNoneReasoning && onboardingHardTaskReasoningEffort == "minimal" {
-                    onboardingHardTaskReasoningEffort = "medium"
+                    onboardingHardTaskReasoningEffort = "none"
                 }
             }
             Text("Used for knowledge card generation and profile validation.")

@@ -42,7 +42,10 @@ final class AppDependencies {
     init(modelContext: ModelContext) {
         let debugSettingsStore = DebugSettingsStore()
         self.debugSettingsStore = debugSettingsStore
-        Logger.debug("🏗️ AppDependencies: initializing with shared ModelContext", category: .appLifecycle)
+        #if DEBUG
+        print("🚀 [STARTUP] Logger minimumLevel: \(Logger.minimumLevel), debugSettingsStore.logLevelSetting: \(debugSettingsStore.logLevelSetting)")
+        #endif
+        Logger.info("🏗️ AppDependencies: initializing with shared ModelContext", category: .appLifecycle)
         // Base stores
         let templateStore = TemplateStore(context: modelContext)
         self.templateStore = templateStore

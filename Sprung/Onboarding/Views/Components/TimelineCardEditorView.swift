@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftyJSON
 struct TimelineCardEditorView: View {
     enum Mode {
-        case editor      // Save/Discard buttons, auto-sync with coordinator
+        case editor      // Save/Discard/Done buttons, auto-sync with coordinator
         case validation  // Confirm/Reject buttons, final approval
     }
     let timeline: JSON
@@ -10,6 +10,7 @@ struct TimelineCardEditorView: View {
     var mode: Mode = .editor
     var onValidationSubmit: ((String) -> Void)?  // Callback for validation mode: "confirmed" or "confirmed_with_changes"
     var onSubmitChangesOnly: (() -> Void)?  // Callback for "Submit Changes Only" - saves and lets LLM reassess
+    var onDoneWithTimeline: (() -> Void)?  // Callback for "Done with Timeline" - saves and forces validation
     @State private var drafts: [TimelineEntryDraft] = []
     @State private var baselineCards: [TimelineCard] = []
     @State private var previousDraftIds: Set<String> = []  // Track IDs to detect deletions
@@ -159,16 +160,26 @@ struct TimelineCardEditorView: View {
             }
             HStack(spacing: 12) {
                 if mode == .editor {
-                    // Editor mode: Save/Discard
-                    Button("Discard Changes", role: .cancel, action: discardChanges)
-                        .disabled(!hasChanges || isSaving)
+                    // Editor mode: Save Changes / Done with Timeline
+                    if hasChanges {
+                        Button("Discard Changes", role: .cancel, action: discardChanges)
+                            .disabled(isSaving)
+                        Button {
+                            saveChanges()
+                        } label: {
+                            Label(isSaving ? "Saving…" : "Save Changes", systemImage: "tray.and.arrow.down")
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(isSaving)
+                    }
+                    Spacer()
                     Button {
-                        saveChanges()
+                        doneWithTimeline()
                     } label: {
-                        Label(isSaving ? "Saving…" : "Save Timeline", systemImage: "tray.and.arrow.down")
+                        Label(isSaving ? "Saving…" : "Done with Timeline", systemImage: "checkmark.circle")
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(!hasChanges || isSaving)
+                    .disabled(isSaving || drafts.isEmpty)
                 } else {
                     // Validation mode: Always show reject option, plus confirm buttons
                     Button("Reject", role: .destructive) {
@@ -269,6 +280,28 @@ struct TimelineCardEditorView: View {
                 // Notify callback that changes were submitted
                 onSubmitChangesOnly?()
             }
+        }
+    }
+
+    private func doneWithTimeline() {
+        guard !isSaving else { return }
+        isSaving = true
+        errorMessage = nil
+
+        // Save any pending changes first
+        let updatedCards = TimelineCardAdapter.cards(from: drafts)
+        let diff = TimelineDiffBuilder.diff(original: baselineCards, updated: updatedCards)
+
+        Task { @MainActor in
+            // Save changes if any
+            if !diff.isEmpty {
+                await coordinator.applyUserTimelineUpdate(cards: updatedCards, meta: meta, diff: diff)
+                baselineCards = updatedCards
+                hasChanges = false
+            }
+            isSaving = false
+            // Notify callback to trigger validation
+            onDoneWithTimeline?()
         }
     }
 }

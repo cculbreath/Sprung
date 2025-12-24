@@ -10,6 +10,7 @@ final class ExperienceDefaults {
     var summary: String = ""
 
     // Section enablement flags
+    var isSummaryEnabled: Bool = false
     var isWorkEnabled: Bool = false
     var isVolunteerEnabled: Bool = false
     var isEducationEnabled: Bool = false
@@ -40,6 +41,7 @@ final class ExperienceDefaults {
     init(
         id: UUID = UUID(),
         summary: String = "",
+        isSummaryEnabled: Bool = false,
         isWorkEnabled: Bool = false,
         isVolunteerEnabled: Bool = false,
         isEducationEnabled: Bool = false,
@@ -67,6 +69,7 @@ final class ExperienceDefaults {
     ) {
         self.id = id
         self.summary = summary
+        self.isSummaryEnabled = isSummaryEnabled
         self.isWorkEnabled = isWorkEnabled
         self.isVolunteerEnabled = isVolunteerEnabled
         self.isEducationEnabled = isEducationEnabled

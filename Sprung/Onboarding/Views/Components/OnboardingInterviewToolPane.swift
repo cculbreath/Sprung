@@ -221,6 +221,11 @@ struct OnboardingInterviewToolPane: View {
                             message: "User made changes to the timeline cards and submitted them for review. Please reassess the updated timeline, ask any clarifying questions if needed, or submit for validation again when ready."
                         )
                     }
+                } : nil,
+                onDoneWithTimeline: validation.mode == .editor ? {
+                    Task {
+                        await coordinator.completeTimelineEditingAndRequestValidation()
+                    }
                 } : nil
             )
         } else {

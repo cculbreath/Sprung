@@ -550,6 +550,12 @@ final class OnboardingInterviewCoordinator {
         await uiResponseCoordinator.clearValidationPromptAndNotifyLLM(message: message)
     }
 
+    /// Called when user clicks "Done with Timeline" in the editor.
+    /// Closes the editor and forces the LLM to call submit_for_validation.
+    func completeTimelineEditingAndRequestValidation() async {
+        await uiResponseCoordinator.completeTimelineEditingAndRequestValidation()
+    }
+
     /// Returns the current experience defaults as JSON for validation UI.
     /// Used by SubmitForValidationTool when validation_type="experience_defaults".
     func currentExperienceDefaultsForValidation() async -> JSON {

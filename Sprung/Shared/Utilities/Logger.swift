@@ -158,10 +158,8 @@ final class Logger {
         let timestamp = timeFormatter.string(from: Date())
         let formattedMessage = "[\(timestamp)] \(level.emoji) [\(level.label)] [\(category.rawValue)] [\(fileName):\(line)] \(function): \(sanitizedMessage)"
 #if DEBUG
-        let shouldPrint = configurationQueue.sync { configuration.enableConsoleOutput }
-        if shouldPrint {
-            print(formattedMessage)
-        }
+        // Always print to console in DEBUG builds
+        print(formattedMessage)
 #endif
         let backend = currentBackend()
         backend.log(
@@ -239,8 +237,11 @@ final class Logger {
     private static func makeDefaultConfiguration() -> Configuration {
 #if DEBUG
         let defaults = UserDefaults.standard
-        let storedLevel = defaults.integer(forKey: DefaultsKeys.debugLogLevel)
-        let minimumLevel = mapStoredLevel(storedLevel)
+        // Check if key exists - if not, default to .info (not quiet)
+        let hasStoredLevel = defaults.object(forKey: DefaultsKeys.debugLogLevel) != nil
+        let minimumLevel: Level = hasStoredLevel
+            ? mapStoredLevel(defaults.integer(forKey: DefaultsKeys.debugLogLevel))
+            : .info  // Default to info when not configured
         let fileLogging = defaults.bool(forKey: DefaultsKeys.saveDebugPrompts)
 #else
         let minimumLevel: Level = .info
@@ -250,7 +251,7 @@ final class Logger {
         return Configuration(
             minimumLevel: minimumLevel,
             enableFileLogging: fileLogging,
-            enableConsoleOutput: false,
+            enableConsoleOutput: true,
             subsystem: subsystem
         )
     }

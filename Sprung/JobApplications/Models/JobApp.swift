@@ -128,10 +128,24 @@ extension Statuses {
     // MARK: - SearchOps Pipeline Properties
 
     /// Priority level for the application (SearchOps Kanban)
-    var priority: JobLeadPriority = JobLeadPriority.medium
+    /// Stored as optional for migration compatibility with existing records
+    private var _priority: JobLeadPriority?
 
     /// Current stage in the application pipeline (SearchOps Kanban)
-    var stage: ApplicationStage = ApplicationStage.identified
+    /// Stored as optional for migration compatibility with existing records
+    private var _stage: ApplicationStage?
+
+    /// Priority level accessor (defaults to .medium for existing records)
+    var priority: JobLeadPriority {
+        get { _priority ?? .medium }
+        set { _priority = newValue }
+    }
+
+    /// Stage accessor (defaults to .identified for existing records)
+    var stage: ApplicationStage {
+        get { _stage ?? .identified }
+        set { _stage = newValue }
+    }
 
     /// Source where the lead was discovered (e.g., LinkedIn, Indeed)
     var source: String?

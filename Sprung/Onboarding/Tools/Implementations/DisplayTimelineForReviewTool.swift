@@ -40,12 +40,21 @@ struct DisplayTimelineForReviewTool: InterviewTool {
             message: summary,
             mode: .editor  // Editor mode: allows tools, shows Save button
         )
+        // Mark timeline_editor sub-objective as in_progress
+        // This gates submit_for_validation(skeleton_timeline) - it can only be called after the editor is displayed
+        await coordinator.eventBus.publish(.objectiveStatusUpdateRequested(
+            id: OnboardingObjectiveId.skeletonTimelineTimelineEditor.rawValue,
+            status: "in_progress",
+            source: "display_timeline_tool",
+            notes: "Timeline editor activated",
+            details: nil
+        ))
         // Emit UI request to show the validation prompt
         await coordinator.eventBus.publish(.validationPromptRequested(prompt: validationPrompt))
         // Return completed - the tool's job is to activate UI, which it has done
         // Timeline cards created afterward will appear in this UI automatically
         var response = JSON()
-        response["message"].string = "Timeline review UI activated. Cards will appear as you create them."
+        response["message"].string = "Timeline editor activated. User can now edit cards. Call submit_for_validation(skeleton_timeline) when user clicks 'Done with Timeline'."
         response["status"].string = "completed"
         return .immediate(response)
     }

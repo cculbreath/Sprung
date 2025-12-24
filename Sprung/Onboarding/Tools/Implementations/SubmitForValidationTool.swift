@@ -79,6 +79,21 @@ struct SubmitForValidationTool: InterviewTool {
         var payload = try ValidationPayload(json: params)
         // Auto-fetch current data from coordinator for certain validation types
         if payload.validationType == OnboardingDataType.skeletonTimeline.rawValue {
+            // Gate: user must have clicked "Done with Timeline" in the editor
+            let editorStatus = await coordinator.state.getObjectiveStatus(
+                OnboardingObjectiveId.skeletonTimelineTimelineEditor.rawValue
+            )
+            guard editorStatus == .completed else {
+                var response = JSON()
+                response["error"].string = "User has not completed timeline editing"
+                response["message"].string = """
+                    Cannot submit timeline for validation yet. The user must click "Done with Timeline" \
+                    in the timeline editor before validation can proceed. Wait for the user to signal \
+                    they are finished editing.
+                    """
+                response["status"].string = "waiting_for_user"
+                return .immediate(response)
+            }
             // Use the coordinator's current skeleton timeline as the data payload
             let currentTimeline = await MainActor.run {
                 coordinator.ui.skeletonTimeline ?? JSON()
