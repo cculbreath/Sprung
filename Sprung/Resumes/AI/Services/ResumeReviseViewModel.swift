@@ -17,11 +17,6 @@ import SwiftyJSON
 @MainActor
 @Observable
 class ResumeReviseViewModel {
-    enum RevisionWorkflowKind {
-        case customize
-        case clarifying
-    }
-
     // MARK: - Dependencies
     private let llm: LLMFacade
     let openRouterService: OpenRouterService
@@ -38,6 +33,9 @@ class ResumeReviseViewModel {
     let navigationManager: RevisionNavigationManager
     let phaseReviewManager: PhaseReviewManager
 
+    // MARK: - State
+    let workflowState = RevisionWorkflowState()
+
     // MARK: - UI State
     var showResumeRevisionSheet: Bool = false {
         didSet {
@@ -48,14 +46,25 @@ class ResumeReviseViewModel {
         }
     }
 
-    var aiResubmit: Bool = false
-    private(set) var activeWorkflow: RevisionWorkflowKind?
-    private var workflowInProgress: Bool = false
+    // MARK: - Convenience Accessors (for backward compatibility)
 
-    // MARK: - Business Logic State
-    private(set) var currentConversationId: UUID?
-    var currentModelId: String?
-    private(set) var isProcessingRevisions: Bool = false
+    var aiResubmit: Bool {
+        get { workflowState.aiResubmit }
+        set { workflowState.aiResubmit = newValue }
+    }
+
+    var currentConversationId: UUID? {
+        workflowState.currentConversationId
+    }
+
+    var currentModelId: String? {
+        get { workflowState.currentModelId }
+        set { workflowState.currentModelId = newValue }
+    }
+
+    var isProcessingRevisions: Bool {
+        workflowState.isProcessingRevisions
+    }
 
     // MARK: - Forwarded Properties (for view compatibility)
 
@@ -185,21 +194,16 @@ class ResumeReviseViewModel {
 
     // MARK: - Workflow State
 
-    func isWorkflowBusy(_ kind: RevisionWorkflowKind) -> Bool {
-        guard activeWorkflow == kind else { return false }
-        return workflowInProgress || aiResubmit
+    func isWorkflowBusy(_ kind: RevisionWorkflowState.WorkflowKind) -> Bool {
+        workflowState.isWorkflowBusy(kind)
     }
 
-    private func markWorkflowStarted(_ kind: RevisionWorkflowKind) {
-        activeWorkflow = kind
-        workflowInProgress = true
+    private func markWorkflowStarted(_ kind: RevisionWorkflowState.WorkflowKind) {
+        workflowState.markWorkflowStarted(kind)
     }
 
     private func markWorkflowCompleted(reset: Bool) {
-        workflowInProgress = false
-        if reset {
-            activeWorkflow = nil
-        }
+        workflowState.markWorkflowCompleted(reset: reset)
     }
 
     // MARK: - Public Interface
@@ -208,7 +212,7 @@ class ResumeReviseViewModel {
     func startFreshRevisionWorkflow(
         resume: Resume,
         modelId: String,
-        workflow: RevisionWorkflowKind
+        workflow: RevisionWorkflowState.WorkflowKind
     ) async throws {
         // Use two-round review workflow:
         // Round 1: Phase 1 items from configured sections (e.g., skill category names)
@@ -225,7 +229,7 @@ class ResumeReviseViewModel {
         markWorkflowStarted(workflow)
         navigationManager.reset()
         aiResubmit = false
-        isProcessingRevisions = true
+        workflowState.setProcessingRevisions(true)
 
         do {
             let query = ResumeApiQuery(
@@ -328,7 +332,7 @@ class ResumeReviseViewModel {
             await setupRevisionsForReview(validatedRevisions)
 
         } catch {
-            isProcessingRevisions = false
+            workflowState.setProcessingRevisions(false)
             markWorkflowCompleted(reset: true)
             throw error
         }
@@ -341,9 +345,8 @@ class ResumeReviseViewModel {
         modelId: String
     ) async throws {
         markWorkflowStarted(.clarifying)
-        currentConversationId = conversationId
-        currentModelId = modelId
-        isProcessingRevisions = true
+        workflowState.setConversationContext(conversationId: conversationId, modelId: modelId)
+        workflowState.setProcessingRevisions(true)
 
         do {
             let query = ResumeApiQuery(
@@ -402,7 +405,7 @@ class ResumeReviseViewModel {
 
         } catch {
             Logger.error("Error continuing conversation for revisions: \(error.localizedDescription)")
-            isProcessingRevisions = false
+            workflowState.setProcessingRevisions(false)
             markWorkflowCompleted(reset: true)
             throw error
         }
@@ -418,7 +421,7 @@ class ResumeReviseViewModel {
         reasoningStreamManager.hideAndClear()
         Logger.debug("🔍 [ResumeReviseViewModel] Setting showResumeRevisionSheet = true")
         showResumeRevisionSheet = true
-        isProcessingRevisions = false
+        workflowState.setProcessingRevisions(false)
         markWorkflowCompleted(reset: false)
     }
 
@@ -574,7 +577,7 @@ extension ResumeReviseViewModel: RevisionNavigationDelegate {
     func startAIResubmission(feedbackNodes: [FeedbackNode], resume: Resume) {
         feedbackIndex = 0
         aiResubmit = true
-        workflowInProgress = true
+        workflowState.workflowInProgress = true
 
         Task {
             do {
@@ -585,7 +588,7 @@ extension ResumeReviseViewModel: RevisionNavigationDelegate {
             } catch {
                 Logger.debug("Error rendering resume for AI resubmission: \(error)")
                 aiResubmit = false
-                workflowInProgress = false
+                workflowState.workflowInProgress = false
             }
         }
     }
@@ -635,7 +638,7 @@ extension ResumeReviseViewModel: RevisionNavigationDelegate {
             guard case .requiresResubmission(_, let revisionPrompt) = result else {
                 Logger.error("Expected resubmission result but got finished")
                 aiResubmit = false
-                workflowInProgress = false
+                workflowState.workflowInProgress = false
                 showResumeRevisionSheet = true
                 return
             }
@@ -676,7 +679,7 @@ extension ResumeReviseViewModel: RevisionNavigationDelegate {
             )
 
             aiResubmit = false
-            workflowInProgress = false
+            workflowState.workflowInProgress = false
 
             if !resumeRevisions.isEmpty {
                 if supportsReasoning {
@@ -692,7 +695,7 @@ extension ResumeReviseViewModel: RevisionNavigationDelegate {
         } catch {
             Logger.error("Error in AI resubmission: \(error.localizedDescription)")
             aiResubmit = false
-            workflowInProgress = false
+            workflowState.workflowInProgress = false
             showResumeRevisionSheet = true
         }
     }
@@ -702,12 +705,11 @@ extension ResumeReviseViewModel: RevisionNavigationDelegate {
 
 extension ResumeReviseViewModel: PhaseReviewDelegate {
     func setConversationContext(conversationId: UUID, modelId: String) {
-        self.currentConversationId = conversationId
-        self.currentModelId = modelId
+        workflowState.setConversationContext(conversationId: conversationId, modelId: modelId)
     }
 
     func setProcessingRevisions(_ processing: Bool) {
-        isProcessingRevisions = processing
+        workflowState.setProcessingRevisions(processing)
     }
 
     func markWorkflowStarted() {
