@@ -18,20 +18,13 @@ import SwiftyJSON
 @Observable
 class ResumeReviseViewModel {
     // MARK: - Dependencies
-    private let llm: LLMFacade
-    let openRouterService: OpenRouterService
-    private let reasoningStreamManager: ReasoningStreamManager
     private let exportCoordinator: ResumeExportCoordinator
-    private let validationService: RevisionValidationService
-    private let streamingService: RevisionStreamingService
-    private let completionService: RevisionCompletionService
-    private let applicantProfileStore: ApplicantProfileStore
-    private let resRefStore: ResRefStore
 
     // MARK: - Specialized Services
     let toolRunner: ToolConversationRunner
     let navigationManager: RevisionNavigationManager
     let phaseReviewManager: PhaseReviewManager
+    private let workflowOrchestrator: RevisionWorkflowOrchestrator
 
     // MARK: - State
     let workflowState = RevisionWorkflowState()
@@ -151,19 +144,13 @@ class ResumeReviseViewModel {
         completionService: RevisionCompletionService? = nil,
         toolRegistry: ResumeToolRegistry? = nil
     ) {
-        self.llm = llmFacade
-        self.openRouterService = openRouterService
-        self.reasoningStreamManager = reasoningStreamManager
         self.exportCoordinator = exportCoordinator
-        self.validationService = validationService ?? RevisionValidationService()
+        let validationSvc = validationService ?? RevisionValidationService()
         let streaming = streamingService ?? RevisionStreamingService(
             llm: llmFacade,
             reasoningStreamManager: reasoningStreamManager
         )
-        self.streamingService = streaming
-        self.completionService = completionService ?? RevisionCompletionService()
-        self.applicantProfileStore = applicantProfileStore
-        self.resRefStore = resRefStore
+        let completionSvc = completionService ?? RevisionCompletionService()
 
         // Initialize specialized services
         self.toolRunner = ToolConversationRunner(
@@ -172,7 +159,7 @@ class ResumeReviseViewModel {
         )
 
         self.navigationManager = RevisionNavigationManager(
-            completionService: self.completionService,
+            completionService: completionSvc,
             exportCoordinator: exportCoordinator
         )
 
@@ -187,9 +174,25 @@ class ResumeReviseViewModel {
             toolRunner: self.toolRunner
         )
 
+        self.workflowOrchestrator = RevisionWorkflowOrchestrator(
+            llm: llmFacade,
+            openRouterService: openRouterService,
+            reasoningStreamManager: reasoningStreamManager,
+            exportCoordinator: exportCoordinator,
+            validationService: validationSvc,
+            streamingService: streaming,
+            completionService: completionSvc,
+            applicantProfileStore: applicantProfileStore,
+            resRefStore: resRefStore,
+            toolRunner: self.toolRunner,
+            phaseReviewManager: self.phaseReviewManager,
+            workflowState: self.workflowState
+        )
+
         // Set up delegates
         navigationManager.delegate = self
         phaseReviewManager.delegate = self
+        workflowOrchestrator.delegate = self
     }
 
     // MARK: - Workflow State
@@ -214,126 +217,13 @@ class ResumeReviseViewModel {
         modelId: String,
         workflow: RevisionWorkflowState.WorkflowKind
     ) async throws {
-        // Use two-round review workflow:
-        // Round 1: Phase 1 items from configured sections (e.g., skill category names)
-        // Round 2: Everything else (phase 2+ items + all other AI-selected nodes)
-        let (phase1Nodes, phase2Nodes) = phaseReviewManager.buildReviewRounds(for: resume)
-
-        if !phase1Nodes.isEmpty || !phase2Nodes.isEmpty {
-            Logger.info("🎯 Starting two-round review workflow")
-            Logger.info("📋 Round 1: \(phase1Nodes.count) nodes, Round 2: \(phase2Nodes.count) nodes")
-            try await phaseReviewManager.startTwoRoundReview(resume: resume, modelId: modelId)
-            return
-        }
-
-        markWorkflowStarted(workflow)
         navigationManager.reset()
-        aiResubmit = false
-        workflowState.setProcessingRevisions(true)
-
-        do {
-            let query = ResumeApiQuery(
-                resume: resume,
-                exportCoordinator: exportCoordinator,
-                applicantProfile: applicantProfileStore.currentProfile(),
-                allResRefs: resRefStore.resRefs,
-                saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
-            )
-
-            let systemPrompt = query.genericSystemMessage.textContent
-            let userPrompt = await query.wholeResumeQueryString()
-
-            let model = openRouterService.findModel(id: modelId)
-            let supportsReasoning = model?.supportsReasoning ?? false
-
-            Logger.debug("🤖 [startFreshRevisionWorkflow] Model: \(modelId)")
-            Logger.debug("🤖 [startFreshRevisionWorkflow] Supports reasoning: \(supportsReasoning)")
-
-            let useTools = toolRunner.shouldUseTools(modelId: modelId, openRouterService: openRouterService)
-            Logger.debug("🤖 [startFreshRevisionWorkflow] Use tools: \(useTools)")
-
-            if !supportsReasoning {
-                reasoningStreamManager.hideAndClear()
-            }
-
-            let revisions: RevisionsContainer
-
-            if useTools && !supportsReasoning {
-                Logger.info("🔧 [Tools] Using tool-enabled conversation for revision generation: \(modelId)")
-                self.currentModelId = modelId
-
-                let toolSystemPrompt = systemPrompt + """
-
-                    You have access to the `query_user_experience_level` tool.
-                    Use this tool when you encounter skills in the job description that are adjacent to
-                    the user's background but not explicitly mentioned in their resume. For example,
-                    if the user has React experience and the job mentions React Native, query their
-                    React Native experience level before making assumptions.
-
-                    If the tool returns an error indicating the user skipped the query, proceed with
-                    your best judgment based on available information.
-
-                    After gathering any needed information via tools, provide your revision suggestions
-                    in the specified JSON format.
-                    """
-
-                let finalResponse = try await toolRunner.runConversation(
-                    systemPrompt: toolSystemPrompt,
-                    userPrompt: userPrompt + "\n\nPlease provide the revision suggestions in the specified JSON format.",
-                    modelId: modelId,
-                    resume: resume,
-                    jobApp: nil
-                )
-
-                revisions = try toolRunner.parseRevisionsFromResponse(finalResponse)
-
-            } else if supportsReasoning {
-                Logger.info("🧠 Using streaming with reasoning for revision generation: \(modelId)")
-                let userEffort = UserDefaults.standard.string(forKey: "reasoningEffort") ?? "medium"
-                let reasoning = OpenRouterReasoning(
-                    effort: userEffort,
-                    includeReasoning: true
-                )
-
-                let result = try await streamingService.startConversationStreaming(
-                    systemPrompt: systemPrompt,
-                    userMessage: userPrompt,
-                    modelId: modelId,
-                    reasoning: reasoning,
-                    jsonSchema: ResumeApiQuery.revNodeArraySchema
-                )
-
-                workflowState.setConversationContext(conversationId: result.conversationId, modelId: modelId)
-                revisions = result.revisions
-
-            } else {
-                Logger.info("📝 Using non-streaming structured output for revision generation: \(modelId)")
-
-                let (conversationId, _) = try await llm.startConversation(
-                    systemPrompt: systemPrompt,
-                    userMessage: userPrompt,
-                    modelId: modelId
-                )
-
-                workflowState.setConversationContext(conversationId: conversationId, modelId: modelId)
-
-                revisions = try await llm.continueConversationStructured(
-                    userMessage: "Please provide the revision suggestions in the specified JSON format.",
-                    modelId: modelId,
-                    conversationId: conversationId,
-                    as: RevisionsContainer.self,
-                    jsonSchema: ResumeApiQuery.revNodeArraySchema
-                )
-            }
-
-            let validatedRevisions = validationService.validateRevisions(revisions.revArray, for: resume)
-            await setupRevisionsForReview(validatedRevisions)
-
-        } catch {
-            workflowState.setProcessingRevisions(false)
-            markWorkflowCompleted(reset: true)
-            throw error
-        }
+        workflowState.aiResubmit = false
+        try await workflowOrchestrator.startFreshRevisionWorkflow(
+            resume: resume,
+            modelId: modelId,
+            workflow: workflow
+        )
     }
 
     /// Continue an existing conversation and generate revisions
@@ -342,85 +232,11 @@ class ResumeReviseViewModel {
         resume: Resume,
         modelId: String
     ) async throws {
-        markWorkflowStarted(.clarifying)
-        workflowState.setConversationContext(conversationId: conversationId, modelId: modelId)
-        workflowState.setProcessingRevisions(true)
-
-        do {
-            let query = ResumeApiQuery(
-                resume: resume,
-                exportCoordinator: exportCoordinator,
-                applicantProfile: applicantProfileStore.currentProfile(),
-                allResRefs: resRefStore.resRefs,
-                saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
-            )
-
-            let revisionRequestPrompt = await query.multiTurnRevisionPrompt()
-
-            let model = openRouterService.findModel(id: modelId)
-            let supportsReasoning = model?.supportsReasoning ?? false
-
-            Logger.debug("🤖 [continueConversationAndGenerateRevisions] Model: \(modelId)")
-            Logger.debug("🤖 [continueConversationAndGenerateRevisions] Supports reasoning: \(supportsReasoning)")
-
-            if supportsReasoning {
-                reasoningStreamManager.startReasoning(modelName: modelId)
-            } else {
-                reasoningStreamManager.hideAndClear()
-            }
-
-            let revisions: RevisionsContainer
-
-            if supportsReasoning {
-                Logger.info("🧠 Using streaming with reasoning for revision continuation: \(modelId)")
-                let userEffort = UserDefaults.standard.string(forKey: "reasoningEffort") ?? "medium"
-                let reasoning = OpenRouterReasoning(
-                    effort: userEffort,
-                    includeReasoning: true
-                )
-
-                revisions = try await streamingService.continueConversationStreaming(
-                    userMessage: revisionRequestPrompt,
-                    modelId: modelId,
-                    conversationId: conversationId,
-                    reasoning: reasoning,
-                    jsonSchema: ResumeApiQuery.revNodeArraySchema
-                )
-            } else {
-                Logger.info("📝 Using non-streaming structured output for revision continuation: \(modelId)")
-                revisions = try await llm.continueConversationStructured(
-                    userMessage: revisionRequestPrompt,
-                    modelId: modelId,
-                    conversationId: conversationId,
-                    as: RevisionsContainer.self,
-                    jsonSchema: ResumeApiQuery.revNodeArraySchema
-                )
-            }
-
-            let validatedRevisions = validationService.validateRevisions(revisions.revArray, for: resume)
-            await setupRevisionsForReview(validatedRevisions)
-            Logger.debug("✅ Conversation handoff complete: \(validatedRevisions.count) revisions ready for review")
-
-        } catch {
-            Logger.error("Error continuing conversation for revisions: \(error.localizedDescription)")
-            workflowState.setProcessingRevisions(false)
-            markWorkflowCompleted(reset: true)
-            throw error
-        }
-    }
-
-    /// Set up revisions for UI review
-    @MainActor
-    private func setupRevisionsForReview(_ revisions: [ProposedRevisionNode]) async {
-        Logger.debug("🔍 [ResumeReviseViewModel] setupRevisionsForReview called with \(revisions.count) revisions")
-
-        navigationManager.setupRevisionsForReview(revisions)
-
-        reasoningStreamManager.hideAndClear()
-        Logger.debug("🔍 [ResumeReviseViewModel] Setting showResumeRevisionSheet = true")
-        showResumeRevisionSheet = true
-        workflowState.setProcessingRevisions(false)
-        markWorkflowCompleted(reset: false)
+        try await workflowOrchestrator.continueConversationAndGenerateRevisions(
+            conversationId: conversationId,
+            resume: resume,
+            modelId: modelId
+        )
     }
 
     // MARK: - Forwarded Navigation Methods
@@ -574,7 +390,7 @@ extension ResumeReviseViewModel: RevisionNavigationDelegate {
 
     func startAIResubmission(feedbackNodes: [FeedbackNode], resume: Resume) {
         feedbackIndex = 0
-        aiResubmit = true
+        workflowState.aiResubmit = true
         workflowState.workflowInProgress = true
 
         Task {
@@ -582,10 +398,14 @@ extension ResumeReviseViewModel: RevisionNavigationDelegate {
                 Logger.debug("Starting PDF re-rendering for AI resubmission...")
                 try await exportCoordinator.ensureFreshRenderedText(for: resume)
                 Logger.debug("PDF rendering complete for AI resubmission")
-                await performAIResubmission(with: resume)
+                await workflowOrchestrator.performAIResubmission(
+                    with: resume,
+                    feedbackNodes: feedbackNodes,
+                    exportCoordinator: exportCoordinator
+                )
             } catch {
                 Logger.debug("Error rendering resume for AI resubmission: \(error)")
-                aiResubmit = false
+                workflowState.aiResubmit = false
                 workflowState.workflowInProgress = false
             }
         }
@@ -593,109 +413,6 @@ extension ResumeReviseViewModel: RevisionNavigationDelegate {
 
     func setWorkflowCompleted() {
         markWorkflowCompleted(reset: true)
-    }
-
-    /// Perform the actual AI resubmission with feedback nodes requiring revision
-    @MainActor
-    private func performAIResubmission(with resume: Resume) async {
-        guard let conversationId = currentConversationId else {
-            Logger.error("No conversation ID available for AI resubmission")
-            aiResubmit = false
-            return
-        }
-
-        guard let modelId = currentModelId else {
-            Logger.error("No model available for AI resubmission")
-            aiResubmit = false
-            return
-        }
-
-        let model = openRouterService.findModel(id: modelId)
-        let supportsReasoning = model?.supportsReasoning ?? false
-
-        if supportsReasoning {
-            Logger.debug("🔍 Temporarily hiding review sheet for reasoning modal")
-            showResumeRevisionSheet = false
-        }
-
-        do {
-            let nodesToResubmit = feedbackNodes.filter { node in
-                let aiActions: Set<PostReviewAction> = [.revise, .mandatedChange, .mandatedChangeNoComment, .rewriteNoComment]
-                return aiActions.contains(node.actionRequested)
-            }
-
-            Logger.debug("🔄 Resubmitting \(nodesToResubmit.count) nodes to AI")
-
-            let result = completionService.completeReviewWorkflow(
-                feedbackNodes: nodesToResubmit,
-                approvedFeedbackNodes: [],
-                resume: resume,
-                exportCoordinator: exportCoordinator
-            )
-
-            guard case .requiresResubmission(_, let revisionPrompt) = result else {
-                Logger.error("Expected resubmission result but got finished")
-                aiResubmit = false
-                workflowState.workflowInProgress = false
-                showResumeRevisionSheet = true
-                return
-            }
-
-            let revisions: RevisionsContainer
-
-            if supportsReasoning {
-                Logger.info("🧠 Using streaming with reasoning for AI resubmission: \(modelId)")
-                let userEffort = UserDefaults.standard.string(forKey: "reasoningEffort") ?? "medium"
-                let reasoning = OpenRouterReasoning(
-                    effort: userEffort,
-                    includeReasoning: true
-                )
-
-                revisions = try await streamingService.continueConversationStreaming(
-                    userMessage: revisionPrompt,
-                    modelId: modelId,
-                    conversationId: conversationId,
-                    reasoning: reasoning,
-                    jsonSchema: ResumeApiQuery.revNodeArraySchema
-                )
-            } else {
-                revisions = try await llm.continueConversationStructured(
-                    userMessage: revisionPrompt,
-                    modelId: modelId,
-                    conversationId: conversationId,
-                    as: RevisionsContainer.self,
-                    jsonSchema: ResumeApiQuery.revNodeArraySchema
-                )
-            }
-
-            let validatedRevisions = validationService.validateRevisions(revisions.revArray, for: resume)
-            let resubmittedNodeIds = Set(nodesToResubmit.map { $0.id })
-
-            navigationManager.handleResubmissionResults(
-                validatedRevisions: validatedRevisions,
-                resubmittedNodeIds: resubmittedNodeIds
-            )
-
-            aiResubmit = false
-            workflowState.workflowInProgress = false
-
-            if !resumeRevisions.isEmpty {
-                if supportsReasoning {
-                    Logger.debug("🔍 Showing review sheet again after reasoning modal")
-                } else {
-                    Logger.debug("🔍 Reopening review sheet after resubmission (non-reasoning model)")
-                }
-                showResumeRevisionSheet = true
-            }
-
-            Logger.debug("✅ AI resubmission complete: \(validatedRevisions.count) new revisions ready for review")
-
-        } catch {
-            Logger.error("Error in AI resubmission: \(error.localizedDescription)")
-            aiResubmit = false
-            workflowState.workflowInProgress = false
-            showResumeRevisionSheet = true
-        }
     }
 }
 
@@ -712,5 +429,24 @@ extension ResumeReviseViewModel: PhaseReviewDelegate {
 
     func markWorkflowStarted() {
         markWorkflowStarted(.customize)
+    }
+}
+
+// MARK: - RevisionWorkflowOrchestratorDelegate
+
+extension ResumeReviseViewModel: RevisionWorkflowOrchestratorDelegate {
+    func setupRevisionsForReview(_ revisions: [ProposedRevisionNode]) async {
+        Logger.debug("🔍 [ResumeReviseViewModel] setupRevisionsForReview called with \(revisions.count) revisions")
+        navigationManager.setupRevisionsForReview(revisions)
+        showResumeRevisionSheet = true
+        workflowState.setProcessingRevisions(false)
+        markWorkflowCompleted(reset: false)
+    }
+
+    func handleResubmissionResults(validatedRevisions: [ProposedRevisionNode], resubmittedNodeIds: Set<UUID>) {
+        navigationManager.handleResubmissionResults(
+            validatedRevisions: validatedRevisions,
+            resubmittedNodeIds: resubmittedNodeIds
+        )
     }
 }
