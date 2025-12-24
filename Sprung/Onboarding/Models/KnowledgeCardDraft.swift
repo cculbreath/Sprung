@@ -2,12 +2,20 @@ import Foundation
 import SwiftyJSON
 
 /// A source reference linking a knowledge card to evidence
-struct KnowledgeCardSource: Identifiable, Equatable {
+struct KnowledgeCardSource: Identifiable, Equatable, Codable {
     var id: UUID
     var type: String  // "artifact" or "chat"
     var artifactId: String?
     var chatExcerpt: String?
     var chatContext: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case type
+        case artifactId = "artifact_id"
+        case chatExcerpt = "chat_excerpt"
+        case chatContext = "chat_context"
+    }
 
     init(
         id: UUID = UUID(),
@@ -49,7 +57,7 @@ struct KnowledgeCardSource: Identifiable, Equatable {
 }
 
 /// Knowledge card containing a comprehensive prose summary
-struct KnowledgeCardDraft: Identifiable, Equatable {
+struct KnowledgeCardDraft: Identifiable, Equatable, Codable {
     var id: UUID
     var title: String
     var cardType: String?        // "job", "skill", "education", "project"
@@ -58,6 +66,17 @@ struct KnowledgeCardDraft: Identifiable, Equatable {
     var timePeriod: String?
     var organization: String?
     var location: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case cardType = "type"
+        case content
+        case sources
+        case timePeriod = "time_period"
+        case organization
+        case location
+    }
 
     init(
         id: UUID = UUID(),
@@ -122,11 +141,19 @@ struct KnowledgeCardDraft: Identifiable, Equatable {
         content.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
     }
 }
-struct EvidenceItem: Equatable {
+struct EvidenceItem: Equatable, Codable {
     var quote: String
     var source: String
     var locator: String?
     var artifactSHA: String?
+
+    enum CodingKeys: String, CodingKey {
+        case quote
+        case source
+        case locator
+        case artifactSHA = "artifact_sha"
+    }
+
     init(
         quote: String,
         source: String,
@@ -157,7 +184,7 @@ struct EvidenceItem: Equatable {
         return json
     }
 }
-struct ArtifactRecord: Identifiable, Equatable {
+struct ArtifactRecord: Identifiable, Equatable, Codable {
     var id: String
     var filename: String
     var title: String?
@@ -168,6 +195,19 @@ struct ArtifactRecord: Identifiable, Equatable {
     var summary: String?
     var briefDescription: String?
     var metadata: JSON
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case filename
+        case title
+        case contentType = "content_type"
+        case sizeInBytes = "size_bytes"
+        case sha256
+        case extractedContent = "extracted_text"
+        case summary
+        case briefDescription = "brief_description"
+        case metadata
+    }
 
     /// Display name for the artifact (title if available, otherwise filename)
     var displayName: String {

@@ -105,10 +105,10 @@ enum ToolResultHelpers {
     /// - Returns: The validated dictionary
     /// - Throws: ToolError.invalidParameters if validation fails
     static func requireObject(_ value: [String: JSON]?, named name: String) throws -> [String: JSON] {
-        guard let value = value else {
+        guard let validatedValue = value else {
             throw ToolError.invalidParameters("\(name) is required and must be an object")
         }
-        return value
+        return validatedValue
     }
 
     // MARK: - Response Building Helpers

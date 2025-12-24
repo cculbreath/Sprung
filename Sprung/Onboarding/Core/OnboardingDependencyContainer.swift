@@ -437,7 +437,8 @@ final class OnboardingDependencyContainer {
             coordinator: coordinator,
             toolRegistry: toolRegistry,
             dataStore: dataStore,
-            eventBus: eventBus
+            eventBus: eventBus,
+            phaseRegistry: phaseRegistry
         )
         // Register tools
         toolRegistrar.registerTools(

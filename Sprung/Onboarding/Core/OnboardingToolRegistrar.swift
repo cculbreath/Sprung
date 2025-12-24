@@ -6,16 +6,20 @@ final class OnboardingToolRegistrar {
     private let toolRegistry: ToolRegistry
     private let dataStore: InterviewDataStore
     private let eventBus: EventCoordinator
+    private let phaseRegistry: PhaseScriptRegistry
+
     init(
         coordinator: OnboardingInterviewCoordinator,
         toolRegistry: ToolRegistry,
         dataStore: InterviewDataStore,
-        eventBus: EventCoordinator
+        eventBus: EventCoordinator,
+        phaseRegistry: PhaseScriptRegistry
     ) {
         self.coordinator = coordinator
         self.toolRegistry = toolRegistry
         self.dataStore = dataStore
         self.eventBus = eventBus
+        self.phaseRegistry = phaseRegistry
     }
     func registerTools(
         documentExtractionService: DocumentExtractionService,
@@ -49,7 +53,7 @@ final class OnboardingToolRegistrar {
         toolRegistry.register(UpdateArtifactMetadataTool(coordinator: coordinator))
         toolRegistry.register(PersistDataTool(dataStore: dataStore, eventBus: eventBus))
         toolRegistry.register(SetObjectiveStatusTool(coordinator: coordinator))
-        toolRegistry.register(NextPhaseTool(coordinator: coordinator, dataStore: dataStore))
+        toolRegistry.register(NextPhaseTool(coordinator: coordinator, dataStore: dataStore, registry: phaseRegistry))
         toolRegistry.register(ValidateApplicantProfileTool(coordinator: coordinator))
         toolRegistry.register(GetValidatedApplicantProfileTool(coordinator: coordinator))
         toolRegistry.register(ConfigureEnabledSectionsTool(coordinator: coordinator))

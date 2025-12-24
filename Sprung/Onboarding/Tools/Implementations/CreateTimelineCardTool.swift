@@ -30,16 +30,49 @@ struct CreateTimelineCardTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
-        // Validate fields parameter exists
-        _ = try ToolResultHelpers.requireObject(params["fields"].dictionary, named: "fields")
+        // Decode at the boundary: Use JSONDecoder for type-safe parsing
+        guard let fieldsDict = params["fields"].dictionary else {
+            throw ToolError.invalidParameters("fields is required and must be an object")
+        }
 
-        let fields = JSON(params["fields"].dictionary!)
+        // Convert SwiftyJSON dictionary to Data for decoding
+        let fieldsData = try JSONSerialization.data(withJSONObject: fieldsDict.mapValues { $0.object })
+        let decoder = JSONDecoder()
 
-        // Validate required fields for new card creation
-        try TimelineValidation.validateNewCardFields(fields)
+        // Decode to typed struct
+        let input: CreateTimelineCardInput
+        do {
+            input = try decoder.decode(CreateTimelineCardInput.self, from: fieldsData)
+        } catch {
+            throw ToolError.invalidParameters("Invalid fields format: \(error.localizedDescription)")
+        }
 
-        // Normalize fields for Phase 1 skeleton timeline constraints
-        let normalizedFields = TimelineCardSchema.normalizePhaseOneFields(fields, includeExperienceType: true)
+        // Validate required fields using typed properties
+        guard !input.title.isEmpty else {
+            throw ToolError.invalidParameters("Card title is required for new timeline cards")
+        }
+        guard !input.organization.isEmpty else {
+            throw ToolError.invalidParameters("Organization name is required for new timeline cards")
+        }
+        guard !input.start.isEmpty else {
+            throw ToolError.invalidParameters("Start date is required for new timeline cards (e.g., 'January 2020', 'March 2019', '2018')")
+        }
+
+        // Build normalized fields JSON for backward compatibility with existing service layer
+        var normalizedFields = JSON()
+        normalizedFields["experience_type"].string = input.experienceType?.rawValue ?? "work"
+        normalizedFields["title"].string = input.title
+        normalizedFields["organization"].string = input.organization
+        if let location = input.location {
+            normalizedFields["location"].string = location
+        }
+        normalizedFields["start"].string = input.start
+        if let end = input.end {
+            normalizedFields["end"].string = end
+        }
+        if let url = input.url {
+            normalizedFields["url"].string = url
+        }
 
         // Create timeline card via timeline service (which emits events)
         let result = await coordinator.timeline.createTimelineCard(fields: normalizedFields)

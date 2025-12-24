@@ -36,16 +36,57 @@ struct UpdateTimelineCardTool: InterviewTool {
         // Validate card ID
         let id = try ToolResultHelpers.requireString(params["id"].string, named: "id")
 
-        // Validate fields parameter exists
-        _ = try ToolResultHelpers.requireObject(params["fields"].dictionary, named: "fields")
+        // Decode at the boundary: Use JSONDecoder for type-safe parsing
+        guard let fieldsDict = params["fields"].dictionary else {
+            throw ToolError.invalidParameters("fields is required and must be an object")
+        }
 
-        let fields = JSON(params["fields"].dictionary!)
+        // Convert SwiftyJSON dictionary to Data for decoding
+        let fieldsData = try JSONSerialization.data(withJSONObject: fieldsDict.mapValues { $0.object })
+        let decoder = JSONDecoder()
+
+        // Decode to typed struct (all fields optional for PATCH semantics)
+        let input: UpdateTimelineCardInput
+        do {
+            input = try decoder.decode(UpdateTimelineCardInput.self, from: fieldsData)
+        } catch {
+            throw ToolError.invalidParameters("Invalid fields format: \(error.localizedDescription)")
+        }
 
         // Validate that at least one field is provided for update
-        try TimelineValidation.validateUpdateFields(fields)
+        let hasAtLeastOneField = input.experienceType != nil ||
+                                  input.title != nil ||
+                                  input.organization != nil ||
+                                  input.location != nil ||
+                                  input.start != nil ||
+                                  input.end != nil ||
+                                  input.url != nil
 
-        // Normalize fields for Phase 1 skeleton timeline constraints (don't override experience_type on update)
-        let normalizedFields = TimelineCardSchema.normalizePhaseOneFields(fields, includeExperienceType: false)
+        guard hasAtLeastOneField else {
+            throw ToolError.invalidParameters("At least one field must be provided for updates")
+        }
+
+        // Build normalized fields JSON for backward compatibility with existing service layer
+        // Phase 1: Don't override experience_type on update
+        var normalizedFields = JSON()
+        if let title = input.title {
+            normalizedFields["title"].string = title
+        }
+        if let organization = input.organization {
+            normalizedFields["organization"].string = organization
+        }
+        if let location = input.location {
+            normalizedFields["location"].string = location
+        }
+        if let start = input.start {
+            normalizedFields["start"].string = start
+        }
+        if let end = input.end {
+            normalizedFields["end"].string = end
+        }
+        if let url = input.url {
+            normalizedFields["url"].string = url
+        }
 
         // Update timeline card via coordinator (which emits events)
         let result = await coordinator.timeline.updateTimelineCard(id: id, fields: normalizedFields)

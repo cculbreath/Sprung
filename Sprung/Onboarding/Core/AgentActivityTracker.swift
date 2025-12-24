@@ -107,6 +107,9 @@ struct TrackedAgent: Identifiable, Codable {
     var outputTokens: Int = 0
     var cachedTokens: Int = 0
 
+    /// Total tokens processed (input + output only).
+    /// Note: cachedTokens are already included in inputTokens by the API,
+    /// so we don't add them separately to avoid double-counting.
     var totalTokens: Int { inputTokens + outputTokens }
 
     /// Duration in seconds (nil if still running)

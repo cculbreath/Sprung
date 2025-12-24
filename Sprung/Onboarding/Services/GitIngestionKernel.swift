@@ -362,8 +362,10 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
         let modelId = UserDefaults.standard.string(forKey: "onboardingGitIngestModelId") ?? "anthropic/claude-haiku-4.5"
         Logger.info("🔬 [GitIngest] Using model: \(modelId)", category: .ai)
 
-        // Get optional author filter from git data
-        let authorFilter: String? = gitData["contributors"].array?.first?["name"].string
+        // Note: Author filtering removed - this app analyzes the user's own repositories,
+        // so there's no need to filter by a specific contributor. The agent will analyze
+        // the entire codebase to extract the user's skills and contributions.
+        let authorFilter: String? = nil
 
         Logger.info("🤖 Starting multi-turn git analysis agent with model: \(modelId)", category: .ai)
 
