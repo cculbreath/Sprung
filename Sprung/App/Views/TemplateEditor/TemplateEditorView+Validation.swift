@@ -45,14 +45,27 @@ extension TemplateEditorView {
             customFieldWarningMessage = "Text template omits custom fields: \(list). They will be missing from plain-text resumes and LLM outputs."
         }
     }
-    private static let customFieldReferenceRegex: NSRegularExpression = {
-        let pattern = #"custom(?:\.[A-Za-z0-9_\-]+)+"#
-        // swiftlint:disable:next force_try
-        return try! NSRegularExpression(pattern: pattern, options: [])
+    /// Pattern for matching custom field references in templates (e.g., "custom.field.name")
+    private static let customFieldReferencePattern = #"custom(?:\.[A-Za-z0-9_\-]+)+"#
+
+    /// Regex for extracting custom field references from template strings
+    /// Returns nil if the pattern fails to compile (should never happen with the validated pattern)
+    private static let customFieldReferenceRegex: NSRegularExpression? = {
+        do {
+            return try NSRegularExpression(pattern: customFieldReferencePattern, options: [])
+        } catch {
+            Logger.error("Failed to compile custom field reference regex: \(error)")
+            return nil
+        }
     }()
+
     static func extractCustomFieldReferences(from template: String) -> Set<String> {
+        guard let regex = customFieldReferenceRegex else {
+            Logger.warning("Custom field reference regex unavailable, returning empty set")
+            return []
+        }
         let range = NSRange(template.startIndex..<template.endIndex, in: template)
-        let matches = customFieldReferenceRegex.matches(in: template, options: [], range: range)
+        let matches = regex.matches(in: template, options: [], range: range)
         return Set(matches.compactMap { match in
             guard let matchRange = Range(match.range, in: template) else { return nil }
             return String(template[matchRange])
