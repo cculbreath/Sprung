@@ -338,14 +338,11 @@ struct SearchOpsOnboardingView: View {
     private var setupStep: some View {
         VStack(spacing: 24) {
             if isDiscovering {
-                ProgressView()
-                    .scaleEffect(1.5)
+                AnimatedThinkingText(statusMessage: "Discovering job sources and generating tasks...")
 
-                Text("Setting up your job search...")
+                Text("Setting up your job search")
                     .font(.title3)
-
-                Text("Discovering job sources and generating tasks")
-                    .foregroundStyle(.secondary)
+                    .padding(.top, 8)
             } else if let error = discoveryError {
                 Image(systemName: "exclamationmark.triangle")
                     .font(.system(size: 48))
