@@ -13,7 +13,7 @@ import SwiftOpenAI
 /// - Important: This is an internal implementation type. Use `LLMFacade` as the
 ///   public entry point for LLM operations. Do not instantiate directly outside
 ///   of `LLMFacadeFactory`.
-final class _OpenAIResponsesClient: LLMClient {
+final class OpenAIResponsesClient: LLMClient {
     private let service: OpenAIService
     private let defaultTemperature: Double = 1.0
     private let decoder = JSONDecoder()

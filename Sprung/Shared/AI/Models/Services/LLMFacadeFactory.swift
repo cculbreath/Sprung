@@ -96,10 +96,10 @@ struct LLMFacadeFactory {
             debugEnabled: debugEnabled
         )
 
-        let client = _OpenAIResponsesClient(service: openAIService)
+        let client = OpenAIResponsesClient(service: openAIService)
         facade.registerClient(client, for: .openAI)
 
-        let conversationService = _OpenAIResponsesConversationService(service: openAIService)
+        let conversationService = OpenAIResponsesConversationService(service: openAIService)
         facade.registerConversationService(conversationService, for: .openAI)
 
         Logger.info("✅ OpenAI backend registered via LLMFacadeFactory", category: .appLifecycle)
