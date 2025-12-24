@@ -1,0 +1,22 @@
+## Card Assignment
+
+**Card Type**: {CARD_TYPE}
+**Title**: {TITLE}
+{TIMELINE_ENTRY}
+{NOTES}
+
+## Assigned Artifacts (Full Summaries)
+These artifacts have been specifically assigned to this card. Read them thoroughly using `get_artifact`.
+{ASSIGNED_SUMMARIES}
+{CHAT_EXCERPTS}
+## Other Available Artifacts
+Brief descriptions only. Use `get_artifact` if you need more detail from any of these.
+{OTHER_ARTIFACTS}
+
+## Instructions
+1. Start by reading the full content of your assigned artifacts using `get_artifact`
+2. If assigned artifacts are insufficient, review other artifacts that might be relevant
+{CHAT_INSTRUCTIONS}Synthesize the information into a cohesive knowledge card
+{FINAL_STEP}Call `return_result` with your completed card
+
+Begin by reading your assigned artifacts.

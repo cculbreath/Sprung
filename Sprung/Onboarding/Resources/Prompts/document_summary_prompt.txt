@@ -1,0 +1,52 @@
+Analyze this document and provide a structured summary for job application context.
+Document filename: {FILENAME}
+
+--- DOCUMENT CONTENT ---
+{CONTENT}
+--- END DOCUMENT ---
+
+Output as JSON with this exact structure:
+{
+  "document_type": "resume|performance_review|project_doc|job_description|letter_of_recommendation|certificate|transcript|portfolio|other",
+  "brief_description": "10-word max one-liner describing document content (e.g., 'Resume covering 5 years at tech startups')",
+  "summary": "~500 word narrative summary covering: what the document contains, key information relevant to job applications, notable details that stand out",
+  "time_period": "YYYY-YYYY" or null if not applicable,
+  "companies": ["Company A", "Company B"],
+  "roles": ["Role 1", "Role 2"],
+  "skills": ["Swift", "Python", "Leadership"],
+  "achievements": ["Led team of 5", "Shipped 3 products"],
+  "relevance_hints": "Brief note about what types of knowledge cards this doc could support"
+}
+
+BRIEF DESCRIPTION: A quick glance identifier (max 10 words). Examples:
+- "Resume: Senior engineer at Acme Corp, 2019-2023"
+- "Performance review: Q4 2022 exceeds expectations rating"
+- "Project doc: Microservices migration architecture proposal"
+
+DOCUMENT TYPE GUIDANCE:
+- resume: A CV or resume document showing work history, education, and skills
+- performance_review: Employee performance evaluation, 360 feedback, or annual review
+- project_doc: Technical documentation, design docs, project reports, or presentations
+- job_description: Job posting, role description, or position requirements
+- letter_of_recommendation: Reference letter or recommendation
+- certificate: Professional certification, award, or credential
+- transcript: Academic transcript or course record
+- portfolio: Collection of work samples or project showcase
+- other: Document that doesn't fit the above categories
+
+SUMMARY GUIDELINES:
+- Be thorough - this summary is the ONLY context the main LLM coordinator will see
+- Include specific details: company names, job titles, dates, technologies, metrics
+- Extract quantitative achievements when available (e.g., "increased revenue by 40%")
+- Note leadership scope (team sizes, budget responsibility, geographic span)
+- Identify key technical skills and domain expertise
+- Preserve important quotes or specific phrases that capture accomplishments
+
+RELEVANCE HINTS:
+- Identify which knowledge card types this document could inform:
+  - "job" cards: Work experience, roles, responsibilities
+  - "skill" cards: Technical competencies, soft skills, domain expertise
+  - "project" cards: Specific projects, initiatives, or accomplishments
+- Note any gaps or areas where additional documentation might be needed
+
+Return ONLY valid JSON. Do not include markdown code fences or explanatory text.

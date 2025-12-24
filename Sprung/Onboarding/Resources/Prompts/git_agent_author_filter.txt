@@ -1,0 +1,13 @@
+
+---
+
+## Author Focus
+
+You are specifically analyzing the contributions of: **{AUTHOR}**
+
+When examining files, consider:
+- Files this author has modified (you can infer from commit history context if provided)
+- Code patterns and style that may be attributable to this author
+- Focus on demonstrating THIS person's skills, not the entire team's
+
+If this is a multi-contributor repository, be clear about which skills are demonstrated by {AUTHOR} specifically versus the team overall.
