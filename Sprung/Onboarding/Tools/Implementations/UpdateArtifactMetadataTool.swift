@@ -25,7 +25,7 @@ struct UpdateArtifactMetadataTool: InterviewTool {
             throw ToolError.invalidParameters("metadata_updates must be a non-empty object")
         }
         // Validate that the artifact exists
-        let existingArtifact = await coordinator.getArtifactRecord(id: artifactId)
+        let existingArtifact = await coordinator.artifactQueries.getArtifactRecord(id: artifactId)
         guard existingArtifact != nil else {
             throw ToolError.invalidParameters("Artifact not found: \(artifactId)")
         }
@@ -47,7 +47,7 @@ struct UpdateArtifactMetadataTool: InterviewTool {
         }
         // Emit metadata update request
         let updates = JSON(metadataUpdates)
-        await coordinator.requestArtifactMetadataUpdate(artifactId: artifactId, updates: updates)
+        await coordinator.artifactQueries.requestMetadataUpdate(artifactId: artifactId, updates: updates)
         // Return success response
         var result = JSON()
         result["status"].string = "completed"

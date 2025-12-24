@@ -50,7 +50,7 @@ struct CancelUserUploadTool: InterviewTool {
             return .immediate(response)
         }
         // Cancel upload via coordinator (which emits event)
-        await coordinator.cancelUploadRequest(id: firstRequest.id)
+        await coordinator.artifactQueries.cancelUploadRequest(id: firstRequest.id)
         // Build response
         var response = JSON()
         response["status"].string = "completed"

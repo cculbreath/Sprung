@@ -35,7 +35,7 @@ struct DeleteTimelineCardTool: InterviewTool {
         let id = try ToolResultHelpers.requireString(params["id"].string, named: "id")
 
         // Delete timeline card via coordinator (which emits events)
-        let result = await coordinator.deleteTimelineCard(id: id)
+        let result = await coordinator.timeline.deleteTimelineCard(id: id)
         return .immediate(result)
     }
 }

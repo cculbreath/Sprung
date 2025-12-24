@@ -132,7 +132,7 @@ struct OnboardingInterviewView: View {
                 get: { coordinator.ui.pendingExtraction != nil },
                 set: { newValue in
                     if !newValue {
-                        coordinator.setExtractionStatus(nil)
+                        coordinator.extraction.setExtractionStatus(nil)
                     }
                 }
             )) {
@@ -150,7 +150,7 @@ struct OnboardingInterviewView: View {
                             Logger.debug("Extraction confirmation is not implemented in milestone M0.")
                         },
                         onCancel: {
-                            coordinator.setExtractionStatus(nil)
+                            coordinator.extraction.setExtractionStatus(nil)
                         }
                     )
                 }

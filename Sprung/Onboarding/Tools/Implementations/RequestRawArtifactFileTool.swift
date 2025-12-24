@@ -18,7 +18,7 @@ struct RequestRawArtifactFileTool: InterviewTool {
         )
 
         // Get the artifact record to find the file URL
-        guard let artifact = await coordinator.getArtifactRecord(id: artifactId) else {
+        guard let artifact = await coordinator.artifactQueries.getArtifactRecord(id: artifactId) else {
             var additionalData = JSON()
             additionalData["error"].bool = true
             additionalData["artifact_id"].string = artifactId

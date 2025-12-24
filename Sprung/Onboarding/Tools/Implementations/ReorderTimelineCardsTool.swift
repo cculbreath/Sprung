@@ -41,7 +41,7 @@ struct ReorderTimelineCardsTool: InterviewTool {
         }
 
         // Reorder timeline cards via coordinator (which emits events)
-        let result = await coordinator.reorderTimelineCards(orderedIds: orderedIds)
+        let result = await coordinator.timeline.reorderTimelineCards(orderedIds: orderedIds)
         return .immediate(result)
     }
 }

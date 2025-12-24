@@ -41,8 +41,8 @@ struct CreateTimelineCardTool: InterviewTool {
         // Normalize fields for Phase 1 skeleton timeline constraints
         let normalizedFields = TimelineCardSchema.normalizePhaseOneFields(fields, includeExperienceType: true)
 
-        // Create timeline card via coordinator (which emits events)
-        let result = await coordinator.createTimelineCard(fields: normalizedFields)
+        // Create timeline card via timeline service (which emits events)
+        let result = await coordinator.timeline.createTimelineCard(fields: normalizedFields)
         return .immediate(result)
     }
 }

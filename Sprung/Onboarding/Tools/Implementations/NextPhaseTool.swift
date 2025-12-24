@@ -28,7 +28,7 @@ struct NextPhaseTool: InterviewTool {
     func execute(_ params: JSON) async throws -> ToolResult {
         // Check if we can advance to the next phase
         let currentPhase = await coordinator.currentPhase
-        let missingObjectives = await coordinator.missingObjectives()
+        let missingObjectives = await coordinator.timeline.missingObjectives()
         // Determine the next phase
         let nextPhase: InterviewPhase
         switch currentPhase {
@@ -107,7 +107,7 @@ struct NextPhaseTool: InterviewTool {
         // Transition immediately, regardless of objectives
         // If objectives are missing, include them in the response so LLM can inform user
         let reason = missingObjectives.isEmpty ? "All objectives completed" : "User requested advancement"
-        await coordinator.requestPhaseTransition(
+        await coordinator.timeline.requestPhaseTransition(
             from: currentPhase.rawValue,
             to: nextPhase.rawValue,
             reason: reason

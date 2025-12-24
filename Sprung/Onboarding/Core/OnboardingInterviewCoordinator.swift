@@ -18,24 +18,28 @@ final class OnboardingInterviewCoordinator {
     var ui: OnboardingUIState { container.ui }
     var conversationLogStore: ConversationLogStore { container.conversationLogStore }
     var chatTranscriptStore: ChatTranscriptStore { container.chatTranscriptStore }
+    // MARK: - Public Sub-Services (Direct Access)
+    // Timeline Management
+    var timeline: TimelineManagementService { container.timelineManagementService }
+    // Artifact Queries
+    var artifactQueries: ArtifactQueryCoordinator { container.artifactQueryCoordinator }
+    // Extraction Management
+    var extraction: ExtractionManagementService { container.extractionManagementService }
+    // Tool Interaction
+    var tools: ToolInteractionCoordinator { container.toolInteractionCoordinator }
+    // Phase & Objective Management
+    var phases: PhaseTransitionController { container.phaseTransitionController }
+
     // MARK: - Private Accessors (for internal use)
     // Session & Lifecycle
     private var sessionCoordinator: InterviewSessionCoordinator { container.sessionCoordinator }
     private var lifecycleController: InterviewLifecycleController { container.lifecycleController }
-    // Query Coordinators
-    private var artifactQueryCoordinator: ArtifactQueryCoordinator { container.artifactQueryCoordinator }
     // UI State
     private var uiStateUpdateHandler: UIStateUpdateHandler { container.uiStateUpdateHandler }
     private var uiResponseCoordinator: UIResponseCoordinator { container.uiResponseCoordinator }
     private var coordinatorEventRouter: CoordinatorEventRouter { container.coordinatorEventRouter }
-    // Phase & Objective Management
-    private var phaseTransitionController: PhaseTransitionController { container.phaseTransitionController }
-    // Services
-    private var extractionManagementService: ExtractionManagementService { container.extractionManagementService }
-    private var timelineManagementService: TimelineManagementService { container.timelineManagementService }
+    // Profile Persistence
     private var profilePersistenceHandler: ProfilePersistenceHandler { container.profilePersistenceHandler }
-    // Tool Interaction
-    private var toolInteractionCoordinator: ToolInteractionCoordinator { container.toolInteractionCoordinator }
     // Data Stores (used for data existence checks and reset)
     private var applicantProfileStore: ApplicantProfileStore { container.getApplicantProfileStore() }
     private var resRefStore: ResRefStore { container.getResRefStore() }
@@ -304,14 +308,14 @@ final class OnboardingInterviewCoordinator {
     }
     // MARK: - Phase Management
     func advancePhase() async -> InterviewPhase? {
-        let newPhase = await phaseTransitionController.advancePhase()
+        let newPhase = await phases.advancePhase()
         let completedSteps = await state.completedWizardSteps
         let currentStep = await state.currentWizardStep
         synchronizeWizardTracker(currentStep: currentStep, completedSteps: completedSteps)
         return newPhase
     }
     func getCompletedObjectiveIds() async -> Set<String> {
-        await phaseTransitionController.getCompletedObjectiveIds()
+        await phases.getCompletedObjectiveIds()
     }
     // MARK: - Objective Management
     func updateObjectiveStatus(
@@ -334,19 +338,11 @@ final class OnboardingInterviewCoordinator {
         result["new_status"].stringValue = status.lowercased()
         return result
     }
-    // MARK: - Timeline Management (Delegated to TimelineManagementService)
+    // MARK: - Timeline Management
     func applyUserTimelineUpdate(cards: [TimelineCard], meta: JSON?, diff: TimelineDiff) async {
         await uiResponseCoordinator.applyUserTimelineUpdate(cards: cards, meta: meta, diff: diff)
     }
-    func createTimelineCard(fields: JSON) async -> JSON {
-        await timelineManagementService.createTimelineCard(fields: fields)
-    }
-    func updateTimelineCard(id: String, fields: JSON) async -> JSON {
-        await timelineManagementService.updateTimelineCard(id: id, fields: fields)
-    }
-    func deleteTimelineCard(id: String) async -> JSON {
-        await timelineManagementService.deleteTimelineCard(id: id)
-    }
+
     /// Delete a timeline card initiated from the UI (immediately syncs to coordinator state)
     /// This ensures the deletion persists even if the LLM updates other cards before user saves
     func deleteTimelineCardFromUI(id: String) async {
@@ -363,52 +359,18 @@ final class OnboardingInterviewCoordinator {
         // Pass fromUI: true so CoordinatorEventRouter doesn't re-increment the UI token
         await eventBus.publish(.timelineCardDeleted(id: id, fromUI: true))
     }
-    func reorderTimelineCards(orderedIds: [String]) async -> JSON {
-        await timelineManagementService.reorderTimelineCards(orderedIds: orderedIds)
-    }
-    func requestPhaseTransition(from: String, to: String, reason: String?) async {
-        await timelineManagementService.requestPhaseTransition(from: from, to: to, reason: reason)
-    }
-    func missingObjectives() async -> [String] {
-        await timelineManagementService.missingObjectives()
-    }
-    // MARK: - Artifact Queries (Delegated to ArtifactQueryCoordinator)
-    func listArtifactSummaries() async -> [JSON] {
-        await artifactQueryCoordinator.listArtifactSummaries()
-    }
-    func listArtifactRecords() async -> [JSON] {
-        await artifactQueryCoordinator.listArtifactRecords()
-    }
-    func getArtifactRecord(id: String) async -> JSON? {
-        await artifactQueryCoordinator.getArtifactRecord(id: id)
-    }
-    func requestArtifactMetadataUpdate(artifactId: String, updates: JSON) async {
-        await artifactQueryCoordinator.requestMetadataUpdate(artifactId: artifactId, updates: updates)
-    }
-    func getArtifact(id: String) async -> JSON? {
-        await artifactQueryCoordinator.getArtifact(id: id)
-    }
-    func cancelUploadRequest(id: UUID) async {
-        await artifactQueryCoordinator.cancelUploadRequest(id: id)
-    }
+    // MARK: - Artifact Queries
+    // Removed trampolining methods - use coordinator.artifacts directly
     func nextPhase() async -> InterviewPhase? {
-        await phaseTransitionController.nextPhase()
+        await phases.nextPhase()
     }
-    // MARK: - Extraction Management (Delegated to ExtractionManagementService)
-    func setExtractionStatus(_ extraction: OnboardingPendingExtraction?) {
-        extractionManagementService.setExtractionStatus(extraction)
-    }
-    func updateExtractionProgress(with update: ExtractionProgressUpdate) {
-        extractionManagementService.updateExtractionProgress(with: update)
-    }
-    func setStreamingStatus(_ status: String?) async {
-        await extractionManagementService.setStreamingStatus(status)
-    }
+    // MARK: - Extraction Management
+    // Internal helper for wizard tracker synchronization
     private func synchronizeWizardTracker(
         currentStep: StateCoordinator.WizardStep,
         completedSteps: Set<StateCoordinator.WizardStep>
     ) {
-        extractionManagementService.synchronizeWizardTracker(
+        extraction.synchronizeWizardTracker(
             currentStep: currentStep,
             completedSteps: completedSteps
         )
@@ -475,22 +437,22 @@ final class OnboardingInterviewCoordinator {
 
     // MARK: - Tool Management (Delegated to ToolInteractionCoordinator)
     func presentUploadRequest(_ request: OnboardingUploadRequest) {
-        toolInteractionCoordinator.presentUploadRequest(request)
+        tools.presentUploadRequest(request)
     }
     func completeUpload(id: UUID, fileURLs: [URL]) async -> JSON? {
-        await toolInteractionCoordinator.completeUpload(id: id, fileURLs: fileURLs)
+        await tools.completeUpload(id: id, fileURLs: fileURLs)
     }
     func skipUpload(id: UUID) async -> JSON? {
-        await toolInteractionCoordinator.skipUpload(id: id)
+        await tools.skipUpload(id: id)
     }
     func presentChoicePrompt(_ prompt: OnboardingChoicePrompt) {
-        toolInteractionCoordinator.presentChoicePrompt(prompt)
+        tools.presentChoicePrompt(prompt)
     }
     func submitChoice(optionId: String) -> JSON? {
-        toolInteractionCoordinator.submitChoice(optionId: optionId)
+        tools.submitChoice(optionId: optionId)
     }
     func presentValidationPrompt(_ prompt: OnboardingValidationPrompt) {
-        toolInteractionCoordinator.presentValidationPrompt(prompt)
+        tools.presentValidationPrompt(prompt)
     }
     func submitValidationResponse(
         status: String,
@@ -498,7 +460,7 @@ final class OnboardingInterviewCoordinator {
         changes: JSON?,
         notes: String?
     ) async -> JSON? {
-        await toolInteractionCoordinator.submitValidationResponse(
+        await tools.submitValidationResponse(
             status: status,
             updatedData: updatedData,
             changes: changes,
@@ -507,20 +469,20 @@ final class OnboardingInterviewCoordinator {
     }
     // MARK: - Applicant Profile Intake Facade Methods (Delegated to ToolInteractionCoordinator)
     func beginProfileUpload() {
-        let request = toolInteractionCoordinator.beginProfileUpload()
+        let request = tools.beginProfileUpload()
         presentUploadRequest(request)
     }
     func beginProfileURLEntry() {
-        toolInteractionCoordinator.beginProfileURLEntry()
+        tools.beginProfileURLEntry()
     }
     func beginProfileContactsFetch() {
-        toolInteractionCoordinator.beginProfileContactsFetch()
+        tools.beginProfileContactsFetch()
     }
     func beginProfileManualEntry() {
-        toolInteractionCoordinator.beginProfileManualEntry()
+        tools.beginProfileManualEntry()
     }
     func resetProfileIntakeToOptions() {
-        toolInteractionCoordinator.resetProfileIntakeToOptions()
+        tools.resetProfileIntakeToOptions()
     }
     func submitProfileDraft(draft: ApplicantProfileDraft, source: OnboardingApplicantProfileIntakeState.Source) async {
         await uiResponseCoordinator.submitProfileDraft(draft: draft, source: source)
@@ -859,7 +821,7 @@ final class OnboardingInterviewCoordinator {
         ChatTranscriptFormatter.format(messages: ui.messages)
     }
     func buildSystemPrompt(for phase: InterviewPhase) -> String {
-        phaseTransitionController.buildSystemPrompt(for: phase)
+        phases.buildSystemPrompt(for: phase)
     }
     #if DEBUG
     // MARK: - Debug Event Diagnostics

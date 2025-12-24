@@ -12,11 +12,11 @@ struct ListArtifactsTool: InterviewTool {
     var description: String { "List artifacts with pagination. Returns {total, artifacts: [{id, filename, content_type}]}." }
     var parameters: JSONSchema { Self.schema }
     func isAvailable() async -> Bool {
-        let summaries = await coordinator.listArtifactSummaries()
+        let summaries = await coordinator.artifactQueries.listArtifactSummaries()
         return !summaries.isEmpty
     }
     func execute(_ params: JSON) async throws -> ToolResult {
-        let allSummaries = await coordinator.listArtifactSummaries()
+        let allSummaries = await coordinator.artifactQueries.listArtifactSummaries()
 
         // Parse pagination parameters
         let limit = min(params["limit"].int ?? 10, 50)  // Default 10, max 50

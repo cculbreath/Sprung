@@ -48,7 +48,7 @@ struct UpdateTimelineCardTool: InterviewTool {
         let normalizedFields = TimelineCardSchema.normalizePhaseOneFields(fields, includeExperienceType: false)
 
         // Update timeline card via coordinator (which emits events)
-        let result = await coordinator.updateTimelineCard(id: id, fields: normalizedFields)
+        let result = await coordinator.timeline.updateTimelineCard(id: id, fields: normalizedFields)
         return .immediate(result)
     }
 }

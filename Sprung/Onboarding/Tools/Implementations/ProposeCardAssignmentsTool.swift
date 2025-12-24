@@ -153,7 +153,7 @@ struct ProposeCardAssignmentsTool: InterviewTool {
         }
 
         // Get artifact summaries
-        let summaries = await coordinator.listArtifactSummaries()
+        let summaries = await coordinator.artifactQueries.listArtifactSummaries()
 
         // Auto-generate card proposals from timeline entries
         var proposals = JSON([])
