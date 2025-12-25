@@ -447,29 +447,30 @@ private struct ValidationPromptSheet: View {
     @ViewBuilder
     private var validationContent: some View {
         if validation.dataType == OnboardingDataType.skeletonTimeline.rawValue {
-            TimelineCardEditorView(
-                timeline: validation.payload,
-                coordinator: coordinator,
-                mode: .validation,
-                onValidationSubmit: { status in
-                    Task {
-                        await coordinator.submitValidationAndResume(
-                            status: status,
-                            updatedData: nil,
-                            changes: nil,
-                            notes: nil
-                        )
+            ScrollView {
+                TimelineTabContent(
+                    coordinator: coordinator,
+                    mode: .validation,
+                    onValidationSubmit: { status in
+                        Task {
+                            await coordinator.submitValidationAndResume(
+                                status: status,
+                                updatedData: nil,
+                                changes: nil,
+                                notes: nil
+                            )
+                        }
+                    },
+                    onSubmitChangesOnly: {
+                        Task {
+                            await coordinator.clearValidationPromptAndNotifyLLM(
+                                message: "User made changes to the timeline cards and submitted them for review. Please reassess the updated timeline, ask any clarifying questions if needed, or submit for validation again when ready."
+                            )
+                        }
                     }
-                },
-                onSubmitChangesOnly: {
-                    Task {
-                        await coordinator.clearValidationPromptAndNotifyLLM(
-                            message: "User made changes to the timeline cards and submitted them for review. Please reassess the updated timeline, ask any clarifying questions if needed, or submit for validation again when ready."
-                        )
-                    }
-                }
-            )
-            .padding(16)
+                )
+                .padding(16)
+            }
         } else if validation.dataType == "knowledge_card" {
             KnowledgeCardValidationSheetContent(
                 prompt: validation,

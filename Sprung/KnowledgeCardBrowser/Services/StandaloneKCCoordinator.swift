@@ -493,8 +493,7 @@ class StandaloneKCCoordinator {
         let systemPrompt = KCAgentPrompts.systemPrompt(
             cardType: metadata.cardType,
             title: metadata.title,
-            candidateName: nil,
-            pronouns: nil
+            candidateName: nil
         )
 
         // Build artifact summaries for the initial prompt

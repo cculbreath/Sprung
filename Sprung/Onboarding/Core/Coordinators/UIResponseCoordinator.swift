@@ -231,7 +231,10 @@ final class UIResponseCoordinator {
     /// Called when user clicks "Done with Timeline" in the editor.
     /// Clears the editor and forces the LLM to call submit_for_validation.
     func completeTimelineEditingAndRequestValidation() async {
-        // Clear the validation/editor prompt
+        // Deactivate the timeline editor mode
+        ui.isTimelineEditorActive = false
+
+        // Clear the validation/editor prompt (legacy, may not be set)
         toolRouter.clearValidationPrompt()
         await eventBus.publish(.validationPromptCleared)
 

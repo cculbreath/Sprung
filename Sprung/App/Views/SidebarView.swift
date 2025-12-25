@@ -7,8 +7,8 @@ import SwiftData
 import SwiftUI
 struct SidebarView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
-    // Live query – any insertion / deletion in SwiftData refreshes the list
-    @Query(sort: \JobApp.jobPosition) private var jobApps: [JobApp]
+    // Live query – sorted by creation time (oldest first) within each status group
+    @Query(sort: \JobApp.createdAt, order: .forward) private var jobApps: [JobApp]
     @Binding var tabRefresh: Bool // Pass down if needed by DraggableSlidingSourceListView
     // Binding for the main list selection
     @Binding var selectedApp: JobApp?

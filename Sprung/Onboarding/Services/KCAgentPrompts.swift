@@ -20,38 +20,11 @@ enum KCAgentPrompts {
     ///   - cardType: "job" or "skill"
     ///   - title: Card title (e.g., "Senior Engineer at Company X")
     ///   - candidateName: The candidate's first name for prose references
-    ///   - pronouns: Pronouns to use (e.g., "he/him", "she/her", "they/them")
     static func systemPrompt(
         cardType: String,
         title: String,
-        candidateName: String? = nil,
-        pronouns: String? = nil
+        candidateName: String? = nil
     ) -> String {
-        // Determine pronoun usage
-        let pronounGuide: String
-        let pronounExample1: String
-        let pronounExample2: String
-
-        if let pronouns = pronouns?.lowercased() {
-            if pronouns.contains("he") {
-                pronounGuide = "he/him/his (e.g., \"He led the team...\", \"His contributions...\")"
-                pronounExample1 = "He"
-                pronounExample2 = "His"
-            } else if pronouns.contains("she") {
-                pronounGuide = "she/her/hers (e.g., \"She led the team...\", \"Her contributions...\")"
-                pronounExample1 = "She"
-                pronounExample2 = "Her"
-            } else {
-                pronounGuide = "they/them/their (e.g., \"They led the team...\", \"Their contributions...\")"
-                pronounExample1 = "They"
-                pronounExample2 = "Their"
-            }
-        } else {
-            pronounGuide = "they/them/their (e.g., \"They led the team...\", \"Their contributions...\")"
-            pronounExample1 = "They"
-            pronounExample2 = "Their"
-        }
-
         let nameRef = candidateName ?? "the candidate"
 
         return PromptLibrary.substitute(
@@ -59,10 +32,7 @@ enum KCAgentPrompts {
             replacements: [
                 "TITLE": title,
                 "CARD_TYPE": cardType,
-                "NAME_REF": nameRef,
-                "PRONOUN_GUIDE": pronounGuide,
-                "PRONOUN_EXAMPLE_1": pronounExample1,
-                "PRONOUN_EXAMPLE_2": pronounExample2
+                "NAME_REF": nameRef
             ]
         )
     }

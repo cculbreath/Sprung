@@ -23,6 +23,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var careerKeywordStore: CareerKeywordStore?
     var searchOpsCoordinator: SearchOpsCoordinator?
     var coverRefStore: CoverRefStore?
+    var jobAppStore: JobAppStore?
     func applicationDidFinishLaunching(_: Notification) {
         // Wait until the app is fully loaded before modifying the menu
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
@@ -378,7 +379,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     @MainActor @objc func showSearchOpsWindow() {
-        Logger.info("🔍 showSearchOpsWindow invoked", category: .ui)
+        showSearchOpsWindow(section: nil, startOnboarding: false, triggerDiscovery: false, triggerEventDiscovery: false, triggerTaskGeneration: false, triggerWeeklyReflection: false)
+    }
+
+    @MainActor func showSearchOpsWindow(
+        section: SearchOpsSection? = nil,
+        startOnboarding: Bool = false,
+        triggerDiscovery: Bool = false,
+        triggerEventDiscovery: Bool = false,
+        triggerTaskGeneration: Bool = false,
+        triggerWeeklyReflection: Bool = false
+    ) {
+        Logger.info("🔍 showSearchOpsWindow invoked (section: \(section?.rawValue ?? "nil"), onboarding: \(startOnboarding))", category: .ui)
         if let window = searchOpsWindow, !window.isVisible {
             searchOpsWindow = nil
         }
@@ -410,14 +422,42 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 defer: false
             )
             searchOpsWindow?.contentView = hostingView
-            searchOpsWindow?.title = "Job Search Operations"
+            searchOpsWindow?.title = "Discovery"
             searchOpsWindow?.isReleasedWhenClosed = false
             searchOpsWindow?.center()
             searchOpsWindow?.minSize = NSSize(width: 700, height: 500)
         }
         searchOpsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        Logger.info("✅ SearchOps window presented", category: .ui)
+
+        // Post notifications for navigation and AI actions after window is shown
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            if startOnboarding {
+                NotificationCenter.default.post(name: .discoveryStartOnboarding, object: nil)
+            }
+            if let section {
+                NotificationCenter.default.post(name: .discoveryNavigateToSection, object: nil, userInfo: ["section": section])
+            }
+            if triggerDiscovery {
+                NotificationCenter.default.post(name: .discoveryTriggerSourceDiscovery, object: nil)
+            }
+            if triggerEventDiscovery {
+                NotificationCenter.default.post(name: .discoveryTriggerEventDiscovery, object: nil)
+            }
+            if triggerTaskGeneration {
+                NotificationCenter.default.post(name: .discoveryTriggerTaskGeneration, object: nil)
+            }
+            if triggerWeeklyReflection, let coordinator = self?.searchOpsCoordinator {
+                Task {
+                    do {
+                        try await coordinator.generateWeeklyReflection()
+                    } catch {
+                        Logger.error("Failed to generate weekly reflection: \(error)", category: .ai)
+                    }
+                }
+            }
+        }
+        Logger.info("✅ Discovery window presented", category: .ui)
     }
     @objc func showExperienceEditorWindow() {
         if let window = experienceEditorWindow, !window.isVisible {
@@ -478,4 +518,46 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         experienceEditorWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
+
+    // MARK: - URL Scheme Handling
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            handleIncomingURL(url)
+        }
+    }
+
+    private func handleIncomingURL(_ url: URL) {
+        guard url.scheme == "sprung" else { return }
+
+        Logger.info("📥 Received URL: \(url.absoluteString)", category: .appLifecycle)
+
+        switch url.host {
+        case "capture-job":
+            // Extract the job URL from query parameters
+            if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+               let jobURLString = components.queryItems?.first(where: { $0.name == "url" })?.value {
+                // Post notification to open New Job App sheet with URL
+                NotificationCenter.default.post(
+                    name: .captureJobFromURL,
+                    object: nil,
+                    userInfo: ["url": jobURLString]
+                )
+                NSApp.activate(ignoringOtherApps: true)
+            } else {
+                Logger.warning("⚠️ capture-job URL missing 'url' parameter", category: .appLifecycle)
+            }
+
+        default:
+            Logger.warning("⚠️ Unknown URL host: \(url.host ?? "nil")", category: .appLifecycle)
+        }
+    }
+}
+
+// MARK: - Notifications
+
+extension Notification.Name {
+    static let captureJobFromURL = Notification.Name("captureJobFromURL")
+    // Relay notification sent after sheet is shown, so the view can receive it
+    static let captureJobURLReady = Notification.Name("captureJobURLReady")
 }

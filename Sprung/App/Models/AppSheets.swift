@@ -22,6 +22,10 @@ struct AppSheets {
     var showKnowledgeCardsBrowser = false
     // Writing context browser (CoverRefs: dossier + writing samples + background facts)
     var showWritingContextBrowser = false
+    // Setup wizard (first-run configuration)
+    var showSetupWizard = false
+    // Job capture from URL scheme (sprung://capture-job?url=...)
+    var capturedJobURL: String?
 }
 // MARK: - Sheet Presentation ViewModifier
 struct AppSheetsModifier: ViewModifier {
@@ -55,9 +59,35 @@ struct AppSheetsModifier: ViewModifier {
     }
     func body(content: Content) -> some View {
         content
-            .sheet(isPresented: $sheets.showNewJobApp) {
-                NewAppSheetView(isPresented: $sheets.showNewJobApp)
+            .sheet(isPresented: $sheets.showNewJobApp, onDismiss: {
+                // Clear captured URL when sheet closes
+                sheets.capturedJobURL = nil
+            }) {
+                NewAppSheetView(
+                    isPresented: $sheets.showNewJobApp,
+                    initialURL: sheets.capturedJobURL
+                )
                 .environment(jobAppStore)
+                .id(sheets.capturedJobURL ?? "default")
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .captureJobFromURL)) { notification in
+                if let urlString = notification.userInfo?["url"] as? String {
+                    Logger.info("📥 [AppSheets] Received job capture URL: \(urlString)", category: .ui)
+                    sheets.capturedJobURL = urlString
+                    // Show sheet first
+                    DispatchQueue.main.async {
+                        sheets.showNewJobApp = true
+                        // Relay notification after sheet has time to mount and subscribe
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                            Logger.info("📤 [AppSheets] Posting captureJobURLReady relay notification", category: .ui)
+                            NotificationCenter.default.post(
+                                name: .captureJobURLReady,
+                                object: nil,
+                                userInfo: ["url": urlString]
+                            )
+                        }
+                    }
+                }
             }
             .sheet(isPresented: $sheets.showCreateResume) {
                 if let selApp = jobAppStore.selectedApp {
@@ -145,6 +175,11 @@ struct AppSheetsModifier: ViewModifier {
             .sheet(isPresented: $sheets.showWritingContextBrowser) {
                 WritingContextBrowserSheet(isPresented: $sheets.showWritingContextBrowser)
                     .environment(coverRefStore)
+            }
+            .sheet(isPresented: $sheets.showSetupWizard) {
+                SetupWizardView {
+                    sheets.showSetupWizard = false
+                }
             }
             .sheet(isPresented: skillExperiencePickerBinding) {
                 SkillExperiencePickerSheet(

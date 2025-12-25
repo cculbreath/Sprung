@@ -10,6 +10,13 @@ import SwiftUI
 
 struct EventsView: View {
     let coordinator: SearchOpsCoordinator
+    @Binding var triggerEventDiscovery: Bool
+    @State private var isDiscovering = false
+
+    init(coordinator: SearchOpsCoordinator, triggerEventDiscovery: Binding<Bool> = .constant(false)) {
+        self.coordinator = coordinator
+        self._triggerEventDiscovery = triggerEventDiscovery
+    }
 
     var body: some View {
         VStack(spacing: 20) {
@@ -25,9 +32,11 @@ struct EventsView: View {
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: 400)
 
-            if coordinator.eventStore.allEvents.isEmpty {
+            if isDiscovering {
+                ProgressView("Discovering events...")
+            } else if coordinator.eventStore.allEvents.isEmpty {
                 Button("Discover Events") {
-                    // TODO: Trigger LLM event discovery
+                    Task { await discoverEvents() }
                 }
                 .buttonStyle(.borderedProminent)
             } else {
@@ -52,6 +61,22 @@ struct EventsView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("Events")
+        .onChange(of: triggerEventDiscovery) { _, newValue in
+            if newValue {
+                triggerEventDiscovery = false
+                Task { await discoverEvents() }
+            }
+        }
+    }
+
+    private func discoverEvents() async {
+        isDiscovering = true
+        defer { isDiscovering = false }
+        do {
+            try await coordinator.discoverNetworkingEvents()
+        } catch {
+            Logger.error("Failed to discover events: \(error)", category: .ai)
+        }
     }
 }
 

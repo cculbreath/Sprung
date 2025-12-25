@@ -159,13 +159,19 @@ actor SessionUIState: OnboardingEventEmitter {
     // MARK: - Waiting State Management
     /// Set waiting state and publish tool permissions
     /// KEY: This service owns waiting state AND publishes tool permissions
-    func setWaitingState(_ state: WaitingState?) async {
+    /// - Parameters:
+    ///   - state: The waiting state, or nil to clear
+    ///   - emitEvent: Whether to emit the waitingStateChanged event (default true).
+    ///                Pass false when called from StateCoordinator event handler to avoid infinite loop.
+    func setWaitingState(_ state: WaitingState?, emitEvent: Bool = true) async {
         let previousState = waitingState
         waitingState = state
         // Publish tool permissions based on new waiting state
         await publishToolPermissions()
-        // Emit waiting state change event
-        await emit(.waitingStateChanged(state?.rawValue))
+        // Emit waiting state change event only if requested
+        if emitEvent {
+            await emit(.waitingStateChanged(state?.rawValue))
+        }
         // Log state transition
         if let state = state {
             Logger.info("⏸️  ENTERING WAITING STATE: \(state.rawValue)", category: .ai)
@@ -241,11 +247,16 @@ actor SessionUIState: OnboardingEventEmitter {
         Logger.info("🗑️ KC validation queue cleared", category: .ai)
     }
     /// Set pending extraction
-    func setPendingExtraction(_ extraction: OnboardingPendingExtraction?) async {
+    /// - Parameters:
+    ///   - extraction: The pending extraction state, or nil to clear
+    ///   - emitEvent: Whether to emit the pendingExtractionUpdated event (default true).
+    ///                Pass false when called from StateCoordinator event handler to avoid infinite loop.
+    func setPendingExtraction(_ extraction: OnboardingPendingExtraction?, emitEvent: Bool = true) async {
         pendingExtraction = extraction
         let newWaitingState: WaitingState? = extraction != nil ? .extraction : nil
-        await setWaitingState(newWaitingState)
-        // Emit event
+        await setWaitingState(newWaitingState, emitEvent: emitEvent)
+        // Emit event only if requested (avoid loop when called from event handler)
+        guard emitEvent else { return }
         await emit(.pendingExtractionUpdated(extraction))
     }
     /// Set streaming status

@@ -32,7 +32,7 @@ enum PromptLibrary {
     // MARK: - Knowledge Card Agent Prompts
 
     /// System prompt template for Knowledge Card generation agents.
-    /// Contains placeholders: {TITLE}, {CARD_TYPE}, {NAME_REF}, {PRONOUN_GUIDE}, {PRONOUN_EXAMPLE_1}, {PRONOUN_EXAMPLE_2}
+    /// Contains placeholders: {TITLE}, {CARD_TYPE}, {NAME_REF}
     static let kcAgentSystemPromptTemplate: String = {
         loadPrompt(named: "kc_agent_system_prompt")
     }()

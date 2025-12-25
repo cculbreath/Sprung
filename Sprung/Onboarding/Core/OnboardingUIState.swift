@@ -33,6 +33,10 @@ final class OnboardingUIState {
     var skeletonTimeline: JSON?
     /// UI-only counter for SwiftUI change detection when timeline updates occur
     var timelineUIChangeToken: Int = 0
+    /// True when LLM has activated the timeline editor (via display_timeline_entries_for_review)
+    var isTimelineEditorActive: Bool = false
+    /// ID of the currently expanded/editing timeline entry (nil = all collapsed)
+    var editingTimelineEntryId: String?
     // MARK: - Wizard State
     var wizardStep: StateCoordinator.WizardStep = .introduction
     var completedWizardSteps: Set<StateCoordinator.WizardStep> = []

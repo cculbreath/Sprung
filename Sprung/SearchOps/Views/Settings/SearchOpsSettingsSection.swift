@@ -7,18 +7,46 @@
 //
 
 import SwiftUI
+import SwiftOpenAI
 
 struct SearchOpsSettingsSection: View {
     @Bindable var coordinator: SearchOpsCoordinator
-    @Environment(EnabledLLMStore.self) private var enabledLLMStore
 
     @State private var isRefreshingSources = false
     @State private var showResetConfirmation = false
     @State private var sourceRefreshError: String?
     @State private var llmModelId: String = ""
+    @State private var reasoningEffort: String = "low"
+    @State private var openAIModels: [ModelObject] = []
+    @State private var isLoadingModels = false
+    @State private var modelError: String?
+
+    private let reasoningOptions = [
+        (value: "low", label: "Low"),
+        (value: "medium", label: "Medium"),
+        (value: "high", label: "High")
+    ]
 
     private var settings: SearchOpsSettings {
         coordinator.settingsStore.current()
+    }
+
+    private var openaiAPIKey: String {
+        APIKeyManager.get(.openAI) ?? ""
+    }
+
+    private var hasOpenAIKey: Bool {
+        !openaiAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Filtered models: gpt-4o*, gpt-5*, gpt-6*, gpt-7* (for Responses API compatibility)
+    private var filteredModels: [ModelObject] {
+        openAIModels
+            .filter { model in
+                let id = model.id.lowercased()
+                return id.hasPrefix("gpt-4o") || id.hasPrefix("gpt-5") || id.hasPrefix("gpt-6") || id.hasPrefix("gpt-7")
+            }
+            .sorted { $0.id < $1.id }
     }
 
     var body: some View {
@@ -44,7 +72,7 @@ struct SearchOpsSettingsSection: View {
             // Actions
             actionButtons
         } header: {
-            SettingsSectionHeader(title: "Search Operations", systemImage: "magnifyingglass.circle.fill")
+            SettingsSectionHeader(title: "Discovery", systemImage: "magnifyingglass.circle.fill")
         }
     }
 
@@ -52,38 +80,106 @@ struct SearchOpsSettingsSection: View {
 
     private var llmModelPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if enabledLLMStore.enabledModels.isEmpty {
-                Label("Enable models in AI Options first", systemImage: "exclamationmark.triangle.fill")
+            if !hasOpenAIKey {
+                Label("Add OpenAI API key in API Keys settings first", systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
                     .font(.callout)
-            } else {
-                Picker("AI Model", selection: $llmModelId) {
-                    ForEach(sortedModels, id: \.modelId) { model in
-                        Text(model.displayName.isEmpty ? model.modelId : model.displayName)
-                            .tag(model.modelId)
+            } else if isLoadingModels {
+                HStack {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Loading models...")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            } else if let error = modelError {
+                HStack {
+                    Label(error, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .font(.callout)
+                    Button("Retry") {
+                        Task { await loadOpenAIModels() }
                     }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
-                .pickerStyle(.menu)
-                .task {
-                    llmModelId = settings.llmModelId
+            } else if filteredModels.isEmpty {
+                HStack {
+                    Text("No GPT-4o/5/6/7 models available")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    Button("Refresh") {
+                        Task { await loadOpenAIModels() }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
-                .onChange(of: llmModelId) { _, newValue in
-                    guard !newValue.isEmpty, settings.llmModelId != newValue else { return }
-                    settings.llmModelId = newValue
-                    coordinator.settingsStore.update(settings)
+            } else {
+                HStack {
+                    Picker("AI Model", selection: $llmModelId) {
+                        ForEach(filteredModels, id: \.id) { model in
+                            Text(model.id).tag(model.id)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    Picker("Reasoning", selection: $reasoningEffort) {
+                        ForEach(reasoningOptions, id: \.value) { option in
+                            Text(option.label).tag(option.value)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .frame(width: 120)
                 }
-                Text("Model used for generating daily tasks, source discovery, and networking prep.")
+                Text("Model and reasoning effort for source discovery and daily tasks.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
         }
+        .task {
+            llmModelId = settings.llmModelId
+            reasoningEffort = settings.reasoningEffort
+            if hasOpenAIKey && openAIModels.isEmpty {
+                await loadOpenAIModels()
+            }
+        }
+        .onChange(of: llmModelId) { _, newValue in
+            guard !newValue.isEmpty, settings.llmModelId != newValue else { return }
+            settings.llmModelId = newValue
+            coordinator.settingsStore.update(settings)
+        }
+        .onChange(of: reasoningEffort) { _, newValue in
+            guard settings.reasoningEffort != newValue else { return }
+            settings.reasoningEffort = newValue
+            coordinator.settingsStore.update(settings)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .apiKeysChanged)) { _ in
+            if hasOpenAIKey && openAIModels.isEmpty {
+                Task { await loadOpenAIModels() }
+            }
+        }
     }
 
-    private var sortedModels: [EnabledLLM] {
-        enabledLLMStore.enabledModels.sorted { lhs, rhs in
-            let lhsName = lhs.displayName.isEmpty ? lhs.modelId : lhs.displayName
-            let rhsName = rhs.displayName.isEmpty ? rhs.modelId : rhs.displayName
-            return lhsName < rhsName
+    private func loadOpenAIModels() async {
+        guard hasOpenAIKey else { return }
+        isLoadingModels = true
+        modelError = nil
+        defer { isLoadingModels = false }
+
+        do {
+            let service = OpenAIServiceFactory.service(apiKey: openaiAPIKey)
+            let response = try await service.listModels()
+            openAIModels = response.data
+            // Validate current selection is still available
+            if !filteredModels.contains(where: { $0.id == llmModelId }) {
+                if let first = filteredModels.first {
+                    llmModelId = first.id
+                    settings.llmModelId = first.id
+                    coordinator.settingsStore.update(settings)
+                }
+            }
+        } catch {
+            modelError = error.localizedDescription
         }
     }
 
@@ -271,13 +367,13 @@ struct SearchOpsSettingsSection: View {
             }
             .buttonStyle(.bordered)
         }
-        .alert("Reset Search Preferences?", isPresented: $showResetConfirmation) {
+        .alert("Reset Discovery Preferences?", isPresented: $showResetConfirmation) {
             Button("Cancel", role: .cancel) {}
             Button("Reset", role: .destructive) {
                 resetPreferences()
             }
         } message: {
-            Text("This will clear your target sectors, location, and restart the SearchOps module onboarding. Your job sources, tasks, and contacts will be preserved.")
+            Text("This will clear your target sectors, location, and restart Discovery onboarding. Your job sources, tasks, and contacts will be preserved.")
         }
     }
 

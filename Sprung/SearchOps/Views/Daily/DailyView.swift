@@ -10,8 +10,14 @@ import SwiftUI
 
 struct DailyView: View {
     let coordinator: SearchOpsCoordinator
+    @Binding var triggerTaskGeneration: Bool
 
     @State private var isRefreshing = false
+
+    init(coordinator: SearchOpsCoordinator, triggerTaskGeneration: Binding<Bool> = .constant(false)) {
+        self.coordinator = coordinator
+        self._triggerTaskGeneration = triggerTaskGeneration
+    }
 
     private var summary: SearchOpsCoordinator.DailySummary {
         coordinator.todaysSummary()
@@ -80,6 +86,12 @@ struct DailyView: View {
                     }
                 }
                 .disabled(isRefreshing)
+            }
+        }
+        .onChange(of: triggerTaskGeneration) { _, newValue in
+            if newValue {
+                triggerTaskGeneration = false
+                Task { await refreshTasks() }
             }
         }
     }

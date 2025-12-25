@@ -40,6 +40,25 @@ final class JobAppStore: SwiftDataStore {
         selectedApp = jobApp
         return jobApp
     }
+
+    /// Creates a new blank job application for manual entry
+    func createManualEntry() -> JobApp {
+        let jobApp = JobApp()
+        jobApp.jobPosition = "New Position"
+        jobApp.companyName = "Company Name"
+        jobApp.status = .new
+        jobApp.stage = .identified
+        jobApp.identifiedDate = Date()
+        jobApp.source = "Manual Entry"
+        modelContext.insert(jobApp)
+        saveContext()
+        selectedApp = jobApp
+        // Enable edit mode via form
+        editWithForm()
+        Logger.info("📝 [JobAppStore] Created manual entry job app", category: .data)
+        return jobApp
+    }
+
     func deleteSelected() {
         guard let deleteMe = selectedApp else {
             Logger.error("No job application available to delete.")

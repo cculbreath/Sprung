@@ -13,12 +13,17 @@ import Foundation
 final class JobSourceStore: SwiftDataStore {
     unowned let modelContext: ModelContext
 
+    /// Version counter to trigger SwiftUI updates when sources change
+    private(set) var version: Int = 0
+
     init(context: ModelContext) {
         modelContext = context
     }
 
     var sources: [JobSource] {
-        (try? modelContext.fetch(
+        // Access version to establish dependency for SwiftUI
+        _ = version
+        return (try? modelContext.fetch(
             FetchDescriptor<JobSource>(sortBy: [SortDescriptor(\.name)])
         )) ?? []
     }
@@ -38,6 +43,7 @@ final class JobSourceStore: SwiftDataStore {
     func add(_ source: JobSource) {
         modelContext.insert(source)
         saveContext()
+        version += 1
     }
 
     func addMultiple(_ sources: [JobSource]) {
@@ -45,22 +51,32 @@ final class JobSourceStore: SwiftDataStore {
             modelContext.insert(source)
         }
         saveContext()
+        version += 1
     }
 
     func markVisited(_ source: JobSource) {
         source.lastVisitedAt = Date()
         source.totalVisits += 1
         saveContext()
+        version += 1
     }
 
     func incrementOpeningsCaptured(_ source: JobSource) {
         source.openingsCaptured += 1
         saveContext()
+        version += 1
     }
 
     func delete(_ source: JobSource) {
         modelContext.delete(source)
         saveContext()
+        version += 1
+    }
+
+    func updateCadence(_ source: JobSource, days: Int) {
+        source.recommendedCadenceDays = days
+        saveContext()
+        version += 1
     }
 
     func source(byId id: UUID) -> JobSource? {
@@ -102,6 +118,7 @@ final class JobSourceStore: SwiftDataStore {
         }
 
         saveContext()
+        version += 1
     }
 
     /// Get top sources by effectiveness

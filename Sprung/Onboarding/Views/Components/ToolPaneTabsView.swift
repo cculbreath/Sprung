@@ -45,6 +45,14 @@ struct ToolPaneTabsView<InterviewContent: View>: View {
             // Tab content
             tabContent
         }
+        // Auto-switch to Timeline tab when LLM activates editor
+        .onChange(of: coordinator.ui.isTimelineEditorActive) { _, isActive in
+            if isActive && selectedTab != .timeline {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedTab = .timeline
+                }
+            }
+        }
     }
 
     private func tabButton(for tab: Tab) -> some View {
@@ -129,8 +137,16 @@ struct ToolPaneTabsView<InterviewContent: View>: View {
                 .padding(.horizontal, 4)
         case .timeline:
             ScrollView {
-                TimelineTabContent(coordinator: coordinator)
-                    .padding(.horizontal, 4)
+                TimelineTabContent(
+                    coordinator: coordinator,
+                    mode: coordinator.ui.isTimelineEditorActive ? .editor : .browse,
+                    onDoneWithTimeline: {
+                        Task {
+                            await coordinator.completeTimelineEditingAndRequestValidation()
+                        }
+                    }
+                )
+                .padding(.horizontal, 4)
             }
         case .artifacts:
             ScrollView {

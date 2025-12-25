@@ -52,6 +52,14 @@ class MenuNotificationHandler {
             self?.sheets?.wrappedValue.showNewJobApp = true
         }
         NotificationCenter.default.addObserver(
+            forName: .manualJobAppCreated,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            // Switch to listing tab for manual entry editing
+            self?.selectedTab?.wrappedValue = .listing
+        }
+        NotificationCenter.default.addObserver(
             forName: .bestJob,
             object: nil,
             queue: .main
@@ -249,6 +257,145 @@ class MenuNotificationHandler {
                 Logger.debug("🎯 Dispatching to AppDelegate.showOnboardingInterviewWindow", category: .ui)
                 Task { @MainActor in
                     appDelegate.showOnboardingInterviewWindow()
+                }
+            }
+        }
+        // Create New Resume
+        NotificationCenter.default.addObserver(
+            forName: .createNewResume,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.sheets?.wrappedValue.showCreateResume = true
+        }
+        // Setup Wizard
+        NotificationCenter.default.addObserver(
+            forName: .showSetupWizard,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.sheets?.wrappedValue.showSetupWizard = true
+        }
+        // Discovery Commands
+        NotificationCenter.default.addObserver(
+            forName: .showDiscovery,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
+                    appDelegate.showSearchOpsWindow()
+                }
+            }
+        }
+        NotificationCenter.default.addObserver(
+            forName: .startDiscoveryInterview,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
+                    appDelegate.showSearchOpsWindow(startOnboarding: true)
+                }
+            }
+        }
+        NotificationCenter.default.addObserver(
+            forName: .discoverJobSources,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
+                    appDelegate.showSearchOpsWindow(section: .sources, triggerDiscovery: true)
+                }
+            }
+        }
+        NotificationCenter.default.addObserver(
+            forName: .discoverNetworkingEvents,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
+                    appDelegate.showSearchOpsWindow(section: .events, triggerEventDiscovery: true)
+                }
+            }
+        }
+        NotificationCenter.default.addObserver(
+            forName: .generateDailyTasks,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
+                    appDelegate.showSearchOpsWindow(section: .daily, triggerTaskGeneration: true)
+                }
+            }
+        }
+        NotificationCenter.default.addObserver(
+            forName: .generateWeeklyReflection,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
+                    appDelegate.showSearchOpsWindow(triggerWeeklyReflection: true)
+                }
+            }
+        }
+        NotificationCenter.default.addObserver(
+            forName: .showDiscoveryJobSources,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
+                    appDelegate.showSearchOpsWindow(section: .sources)
+                }
+            }
+        }
+        NotificationCenter.default.addObserver(
+            forName: .showDiscoveryContacts,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
+                    appDelegate.showSearchOpsWindow(section: .contacts)
+                }
+            }
+        }
+        NotificationCenter.default.addObserver(
+            forName: .showDiscoveryEvents,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
+                    appDelegate.showSearchOpsWindow(section: .events)
+                }
+            }
+        }
+        NotificationCenter.default.addObserver(
+            forName: .showDiscoveryDailyBriefing,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
+                    appDelegate.showSearchOpsWindow(section: .daily)
+                }
+            }
+        }
+        NotificationCenter.default.addObserver(
+            forName: .showDiscoveryWeeklyReview,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
+                    // Weekly review is typically shown from Daily view, so open that
+                    appDelegate.showSearchOpsWindow(section: .daily)
                 }
             }
         }

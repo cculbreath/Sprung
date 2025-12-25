@@ -4,5 +4,16 @@
 <dict>
 	<key>NSContactsUsageDescription</key>
 	<string>Sprung uses your contacts to prefill your applicant profile.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.physicscloud.sprung</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>sprung</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

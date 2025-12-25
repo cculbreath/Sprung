@@ -9,6 +9,44 @@
 import Foundation
 import SwiftData
 
+// MARK: - Discovery Status
+
+enum DiscoveryStatus: Equatable {
+    case idle
+    case starting
+    case webSearching
+    case webSearchComplete
+    case validatingURLs(count: Int)
+    case complete(added: Int, filtered: Int)
+    case error(String)
+
+    var message: String {
+        switch self {
+        case .idle: return ""
+        case .starting: return "Starting discovery..."
+        case .webSearching: return "Searching the web for job sources..."
+        case .webSearchComplete: return "Processing search results..."
+        case .validatingURLs(let count): return "Validating \(count) URLs..."
+        case .complete(let added, let filtered):
+            if added == 0 && filtered == 0 {
+                return "No new sources found"
+            } else if filtered > 0 {
+                return "Added \(added) sources (\(filtered) invalid filtered)"
+            } else {
+                return "Added \(added) sources"
+            }
+        case .error(let msg): return msg
+        }
+    }
+
+    var isActive: Bool {
+        switch self {
+        case .idle, .complete, .error: return false
+        default: return true
+        }
+    }
+}
+
 @Observable
 @MainActor
 final class SearchOpsCoordinator {
@@ -16,6 +54,14 @@ final class SearchOpsCoordinator {
 
     let pipelineCoordinator: SearchOpsPipelineCoordinator
     let networkingCoordinator: SearchOpsNetworkingCoordinator
+
+    // MARK: - Discovery Status
+
+    private(set) var discoveryStatus: DiscoveryStatus = .idle
+
+    func updateDiscoveryStatus(_ status: DiscoveryStatus) {
+        self.discoveryStatus = status
+    }
 
     // MARK: - Convenience Store Access (delegated to sub-coordinators)
 
@@ -205,12 +251,23 @@ final class SearchOpsCoordinator {
         guard let agent = agentService else {
             throw SearchOpsLLMError.toolExecutionFailed("Agent service not configured")
         }
-        let prefs = preferencesStore.current()
-        try await networkingCoordinator.discoverJobSources(
-            using: agent,
-            sectors: prefs.targetSectors,
-            location: prefs.primaryLocation
-        )
+
+        discoveryStatus = .starting
+
+        do {
+            let prefs = preferencesStore.current()
+            try await networkingCoordinator.discoverJobSources(
+                using: agent,
+                sectors: prefs.targetSectors,
+                location: prefs.primaryLocation,
+                statusCallback: { @MainActor [weak self] status in
+                    self?.discoveryStatus = status
+                }
+            )
+        } catch {
+            discoveryStatus = .error(error.localizedDescription)
+            throw error
+        }
     }
 
     /// Discover networking events using LLM agent

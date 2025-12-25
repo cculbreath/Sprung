@@ -3,7 +3,7 @@
 //  Sprung
 //
 //  Actor-based agent service for SearchOps LLM interactions.
-//  Runs agentic loops with tool calling using LLMFacade + ChatCompletions.
+//  Uses OpenAI Responses API with web_search for discovery tasks.
 //  Per SEARCHOPS_AMENDMENT: Uses local context management, NOT server-managed.
 //
 
@@ -20,6 +20,7 @@ actor SearchOpsAgentService {
     private let llmFacade: LLMFacade
     private let toolExecutor: SearchOpsToolExecutor
     private let settingsStore: SearchOpsSettingsStore
+    private let openAIAPIKey: () -> String
 
     // MARK: - Configuration
 
@@ -27,10 +28,16 @@ actor SearchOpsAgentService {
 
     // MARK: - Initialization
 
-    init(llmFacade: LLMFacade, contextProvider: SearchOpsContextProvider, settingsStore: SearchOpsSettingsStore) {
+    init(
+        llmFacade: LLMFacade,
+        contextProvider: SearchOpsContextProvider,
+        settingsStore: SearchOpsSettingsStore,
+        openAIAPIKey: @escaping () -> String = { APIKeyManager.get(.openAI) ?? "" }
+    ) {
         self.llmFacade = llmFacade
         self.toolExecutor = SearchOpsToolExecutor(contextProvider: contextProvider)
         self.settingsStore = settingsStore
+        self.openAIAPIKey = openAIAPIKey
     }
 
     // MARK: - Model Configuration
@@ -39,6 +46,14 @@ actor SearchOpsAgentService {
         get async {
             await MainActor.run {
                 settingsStore.current().llmModelId
+            }
+        }
+    }
+
+    private var reasoningEffort: String {
+        get async {
+            await MainActor.run {
+                settingsStore.current().reasoningEffort
             }
         }
     }
@@ -160,18 +175,132 @@ actor SearchOpsAgentService {
         return try parseTasksResponse(response)
     }
 
-    /// Discover job sources using the agent
-    func discoverJobSources(sectors: [String], location: String) async throws -> JobSourcesResult {
+    /// Discover job sources using Responses API with web search
+    func discoverJobSources(
+        sectors: [String],
+        location: String,
+        statusCallback: (@MainActor @Sendable (DiscoveryStatus) -> Void)? = nil
+    ) async throws -> JobSourcesResult {
         let systemPrompt = loadPromptTemplate(named: "searchops_discover_job_sources")
-
         let userMessage = "Discover job sources for sectors: \(sectors.joined(separator: ", ")) in \(location)"
+        let model = await modelId
+        let reasoning = await reasoningEffort
 
-        let response = try await runAgent(
+        let response = try await runWithWebSearch(
             systemPrompt: systemPrompt,
-            userMessage: userMessage
+            userMessage: userMessage,
+            modelId: model,
+            reasoningEffort: reasoning,
+            userLocation: location,
+            statusCallback: statusCallback
         )
 
         return try parseSourcesResponse(response)
+    }
+
+    // MARK: - Responses API with Web Search
+
+    /// Run a request using OpenAI Responses API with web_search tool enabled (streaming to avoid timeout)
+    private func runWithWebSearch(
+        systemPrompt: String,
+        userMessage: String,
+        modelId: String,
+        reasoningEffort: String = "low",
+        userLocation: String? = nil,
+        statusCallback: (@MainActor @Sendable (DiscoveryStatus) -> Void)? = nil
+    ) async throws -> String {
+        let apiKey = openAIAPIKey()
+        guard !apiKey.isEmpty else {
+            throw SearchOpsAgentError.missingAPIKey
+        }
+
+        // Strip OpenRouter prefix if present (e.g., "openai/gpt-5.2" -> "gpt-5.2")
+        let openAIModelId = modelId.hasPrefix("openai/") ? String(modelId.dropFirst(7)) : modelId
+
+        let service = OpenAIServiceFactory.service(apiKey: apiKey)
+
+        // Build input with system prompt as developer message + user message
+        let developerMessage = InputMessage(role: "developer", content: .text(systemPrompt))
+        let userInputMessage = InputMessage(role: "user", content: .text(userMessage))
+        let inputItems: [InputItem] = [
+            .message(developerMessage),
+            .message(userInputMessage)
+        ]
+
+        // Configure web search tool with optional user location
+        let webSearchUserLocation: Tool.UserLocation? = userLocation.map { loc in
+            Tool.UserLocation(city: loc, country: "US")
+        }
+        let webSearchTool = Tool.webSearch(Tool.WebSearchTool(
+            type: .webSearch,
+            userLocation: webSearchUserLocation
+        ))
+
+        // Configure reasoning effort (low, medium, high, minimal)
+        let reasoning = Reasoning(effort: reasoningEffort)
+
+        let parameters = ModelResponseParameter(
+            input: .array(inputItems),
+            model: .custom(openAIModelId),
+            reasoning: reasoning,
+            store: false,
+            stream: true,
+            toolChoice: .auto,
+            tools: [webSearchTool]
+        )
+
+        Logger.info("🔍 Running Responses API stream with web_search (model: \(openAIModelId), reasoning: \(reasoningEffort))", category: .ai)
+
+        // Use streaming to avoid timeout during web search
+        var finalResponse: ResponseModel?
+        let stream = try await service.responseCreateStream(parameters)
+
+        for try await event in stream {
+            switch event {
+            case .responseCompleted(let completed):
+                finalResponse = completed.response
+                Logger.debug("📡 Stream completed", category: .ai)
+            case .webSearchCallSearching:
+                Logger.debug("🌐 Web search searching...", category: .ai)
+                await statusCallback?(.webSearching)
+            case .webSearchCallCompleted:
+                Logger.debug("🌐 Web search completed", category: .ai)
+            case .outputTextDelta(let delta):
+                Logger.verbose("📝 Text delta: \(delta.delta.count) chars", category: .ai)
+            default:
+                break
+            }
+        }
+
+        guard let response = finalResponse,
+              let outputText = extractResponseText(from: response) else {
+            throw SearchOpsAgentError.noResponse
+        }
+
+        Logger.info("✅ Responses API returned \(outputText.count) chars", category: .ai)
+        return outputText
+    }
+
+    /// Extract text from ResponseModel output
+    private func extractResponseText(from response: ResponseModel) -> String? {
+        // Try outputText convenience property first
+        if let text = response.outputText?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !text.isEmpty {
+            return text
+        }
+
+        // Fall back to iterating through output items
+        for item in response.output {
+            if case let .message(message) = item {
+                for content in message.content {
+                    if case let .outputText(output) = content,
+                       !output.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        return output.text
+                    }
+                }
+            }
+        }
+        return nil
     }
 
     /// Discover networking events using the agent
@@ -698,11 +827,14 @@ enum SearchOpsAgentError: Error, LocalizedError {
     case toolLoopExceeded
     case invalidResponse
     case toolExecutionFailed(String)
+    case missingAPIKey
 
     var errorDescription: String? {
         switch self {
         case .noResponse:
             return "No response from LLM"
+        case .missingAPIKey:
+            return "OpenAI API key is required for job source discovery"
         case .toolLoopExceeded:
             return "Tool call loop exceeded maximum iterations"
         case .invalidResponse:

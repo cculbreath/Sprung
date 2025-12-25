@@ -15,7 +15,11 @@ struct JobAppDescriptionSection: View {
             @Bindable var boundSelApp = selApp
             Section {
                 if buttons.edit {
-                    TextField("", text: $boundSelApp.jobDescription, axis: .vertical)
+                    // Bind to form when editing so saveForm() works correctly
+                    TextField("", text: Binding(
+                        get: { jobAppStore.form.jobDescription },
+                        set: { jobAppStore.form.jobDescription = $0 }
+                    ), axis: .vertical)
                         .lineLimit(15 ... 20)
                         .padding(.all, 3)
                 } else if useMarkdownForJobDescription {

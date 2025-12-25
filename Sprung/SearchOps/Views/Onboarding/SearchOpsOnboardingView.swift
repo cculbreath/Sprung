@@ -117,7 +117,7 @@ struct SearchOpsOnboardingView: View {
                 .font(.system(size: 64))
                 .foregroundStyle(.blue)
 
-            Text("Welcome to Search Ops")
+            Text("Welcome to Discovery")
                 .font(.largeTitle)
                 .fontWeight(.bold)
 

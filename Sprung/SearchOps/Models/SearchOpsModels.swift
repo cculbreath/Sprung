@@ -57,7 +57,8 @@ class SearchOpsSettings {
     @Attribute(.unique) var id: UUID = UUID()
 
     // LLM Configuration
-    var llmModelId: String = "anthropic/claude-3.5-sonnet"
+    var llmModelId: String = "gpt-4o"
+    var reasoningEffort: String = "low"  // none, low, medium, high
 
     // Calendar Configuration
     var useJobSearchCalendar: Bool = false
@@ -117,7 +118,7 @@ class JobSource: Identifiable {
     var category: SourceCategory = SourceCategory.aggregator
     var isActive: Bool = true
 
-    var recommendedCadenceDays: Int = 3
+    var recommendedCadenceDays: Int = 7
     var lastVisitedAt: Date?
 
     var totalVisits: Int = 0

@@ -201,33 +201,10 @@ struct OnboardingInterviewToolPane: View {
                 coordinator: coordinator
             )
         } else if validation.dataType == OnboardingDataType.skeletonTimeline.rawValue {
-            TimelineCardEditorView(
-                timeline: validation.payload,
-                coordinator: coordinator,
-                mode: validation.mode == .editor ? .editor : .validation,
-                onValidationSubmit: validation.mode == .validation ? { status in
-                    Task {
-                        await coordinator.submitValidationAndResume(
-                            status: status,
-                            updatedData: nil,
-                            changes: nil,
-                            notes: nil
-                        )
-                    }
-                } : nil,
-                onSubmitChangesOnly: validation.mode == .validation ? {
-                    Task {
-                        await coordinator.clearValidationPromptAndNotifyLLM(
-                            message: "User made changes to the timeline cards and submitted them for review. Please reassess the updated timeline, ask any clarifying questions if needed, or submit for validation again when ready."
-                        )
-                    }
-                } : nil,
-                onDoneWithTimeline: validation.mode == .editor ? {
-                    Task {
-                        await coordinator.completeTimelineEditingAndRequestValidation()
-                    }
-                } : nil
-            )
+            // Timeline editor mode is now handled by the Timeline tab directly
+            // This branch should not be reached for editor mode (isTimelineEditorActive handles it)
+            // Validation mode is handled by modal sheet in OnboardingInterviewView
+            EmptyView()
         } else {
             OnboardingValidationReviewCard(
                 prompt: validation,
@@ -473,7 +450,12 @@ struct OnboardingInterviewToolPane: View {
         if coordinator.pendingChoicePrompt != nil { return true }
         // Only editor mode validations count as occupying tool pane
         // Validation mode prompts are shown as modal sheets
-        if coordinator.pendingValidationPrompt?.mode == .editor { return true }
+        // Skip skeleton_timeline - it's now handled by the Timeline tab
+        if let validation = coordinator.pendingValidationPrompt,
+           validation.mode == .editor,
+           validation.dataType != OnboardingDataType.skeletonTimeline.rawValue {
+            return true
+        }
         if coordinator.pendingApplicantProfileRequest != nil { return true }
         if coordinator.pendingSectionToggleRequest != nil { return true }
         return false

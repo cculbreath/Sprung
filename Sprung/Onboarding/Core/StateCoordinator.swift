@@ -141,17 +141,22 @@ actor StateCoordinator: OnboardingEventEmitter {
             currentWizardStep = .wrapUp
         }
 
-        // Second: Mark steps as completed based on objective completion
-        // Resume Intake completed when Phase 1 objectives are done
-        if hasProfile && hasTimeline && hasSections {
+        // Second: Mark steps as completed based on phase progression
+        // If we've advanced past a phase, mark its wizard step as complete
+        // (handles "proceed anyway" scenarios where objectives may be skipped)
+
+        // Resume Intake: complete if objectives done OR we've moved past Phase 1
+        if (hasProfile && hasTimeline && hasSections) ||
+           phase == .phase2DeepDive || phase == .phase3WritingCorpus || phase == .complete {
             completedWizardSteps.insert(.resumeIntake)
         }
-        // Artifact Discovery completed when Phase 2 objectives are done
-        if hasEvidenceAudit && hasCardsGenerated {
+        // Artifact Discovery: complete if objectives done OR we've moved past Phase 2
+        if (hasEvidenceAudit && hasCardsGenerated) ||
+           phase == .phase3WritingCorpus || phase == .complete {
             completedWizardSteps.insert(.artifactDiscovery)
         }
-        // Writing Corpus completed when Phase 3 objectives are done
-        if hasWriting && hasDossier {
+        // Writing Corpus: complete if objectives done OR interview is complete
+        if (hasWriting && hasDossier) || phase == .complete {
             completedWizardSteps.insert(.writingCorpus)
         }
         // Wrap Up completed when interview is complete
@@ -257,7 +262,9 @@ actor StateCoordinator: OnboardingEventEmitter {
             // SessionUIState handles this internally, just log
             Logger.debug("Waiting state changed: \(waiting ?? "nil")", category: .ai)
         case .pendingExtractionUpdated(let extraction, _):
-            await uiState.setPendingExtraction(extraction)
+            // Pass emitEvent: false to avoid infinite loop
+            // (this event was already emitted by the original source)
+            await uiState.setPendingExtraction(extraction, emitEvent: false)
         case .streamingStatusUpdated(let status, _):
             await uiState.setStreamingStatus(status)
         case .errorOccurred(let error):

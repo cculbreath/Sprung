@@ -67,22 +67,22 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 .buttonStyle(.automatic)
                 .help("Launch onboarding interview")
             }
-            ToolbarItem(id: "searchOps", placement: .navigation, showsByDefault: true) {
+            ToolbarItem(id: "discovery", placement: .navigation, showsByDefault: true) {
                 Button(action: {
                     Task { @MainActor in
-                        Logger.info("🔍 Toolbar SearchOps button tapped", category: .ui)
-                        NotificationCenter.default.post(name: .showSearchOps, object: nil)
+                        Logger.info("🔍 Toolbar Discovery button tapped", category: .ui)
+                        NotificationCenter.default.post(name: .showDiscovery, object: nil)
                         if !NSApp.sendAction(#selector(AppDelegate.showSearchOpsWindow), to: nil, from: nil),
                            let delegate = NSApplication.shared.delegate as? AppDelegate {
                             delegate.showSearchOpsWindow()
                         }
                     }
                 }, label: {
-                    Label("Search Ops", systemImage: "magnifyingglass.circle")
+                    Label("Discovery", systemImage: "magnifyingglass.circle")
                         .font(.system(size: 14, weight: .light))
                 })
                 .buttonStyle(.automatic)
-                .help("Open Job Search Operations")
+                .help("Open Discovery")
             }
         }}
     private var mainButtonsGroup: some CustomizableToolbarContent {

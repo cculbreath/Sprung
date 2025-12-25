@@ -37,6 +37,7 @@ struct KnowledgeCardsMenuItem: View {
 extension Notification.Name {
     // Job Application Commands
     static let newJobApp = Notification.Name("newJobApp")
+    static let manualJobAppCreated = Notification.Name("manualJobAppCreated")
     static let bestJob = Notification.Name("bestJob")
     static let toggleKnowledgeCards = Notification.Name("toggleKnowledgeCards")
     // Resume Commands
@@ -59,8 +60,20 @@ extension Notification.Name {
     static let analyzeApplication = Notification.Name("analyzeApplication")
     // Interview Commands
     static let startOnboardingInterview = Notification.Name("startOnboardingInterview")
-    // SearchOps Commands
-    static let showSearchOps = Notification.Name("showSearchOps")
+    // Discovery Commands (renamed from SearchOps)
+    static let showDiscovery = Notification.Name("showDiscovery")
+    static let startDiscoveryInterview = Notification.Name("startDiscoveryInterview")
+    static let discoverJobSources = Notification.Name("discoverJobSources")
+    static let discoverNetworkingEvents = Notification.Name("discoverNetworkingEvents")
+    static let generateDailyTasks = Notification.Name("generateDailyTasks")
+    static let generateWeeklyReflection = Notification.Name("generateWeeklyReflection")
+    static let showDiscoveryJobSources = Notification.Name("showDiscoveryJobSources")
+    static let showDiscoveryContacts = Notification.Name("showDiscoveryContacts")
+    static let showDiscoveryEvents = Notification.Name("showDiscoveryEvents")
+    static let showDiscoveryDailyBriefing = Notification.Name("showDiscoveryDailyBriefing")
+    static let showDiscoveryWeeklyReview = Notification.Name("showDiscoveryWeeklyReview")
+    // Legacy alias for compatibility
+    static let showSearchOps = Notification.Name("showDiscovery")
     // Window Commands (for toolbar buttons)
     static let showSettings = Notification.Name("showSettings")
     static let showApplicantProfile = Notification.Name("showApplicantProfile")
@@ -87,4 +100,13 @@ extension Notification.Name {
     static let exportApplicationPacket = Notification.Name("exportApplicationPacket")
     // Settings/Configuration
     static let apiKeysChanged = Notification.Name("apiKeysChanged")
+    static let showSetupWizard = Notification.Name("showSetupWizard")
+    // Resume Creation
+    static let createNewResume = Notification.Name("createNewResume")
+    // Internal Discovery Window Notifications (for navigation and AI triggers)
+    static let discoveryStartOnboarding = Notification.Name("discoveryStartOnboarding")
+    static let discoveryNavigateToSection = Notification.Name("discoveryNavigateToSection")
+    static let discoveryTriggerSourceDiscovery = Notification.Name("discoveryTriggerSourceDiscovery")
+    static let discoveryTriggerEventDiscovery = Notification.Name("discoveryTriggerEventDiscovery")
+    static let discoveryTriggerTaskGeneration = Notification.Name("discoveryTriggerTaskGeneration")
 }

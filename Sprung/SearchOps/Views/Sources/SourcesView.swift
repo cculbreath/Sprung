@@ -10,7 +10,17 @@ import SwiftUI
 
 struct SourcesView: View {
     let coordinator: SearchOpsCoordinator
-    @State private var isDiscovering = false
+    @Binding var triggerDiscovery: Bool
+    @State private var showingAddSheet = false
+
+    init(coordinator: SearchOpsCoordinator, triggerDiscovery: Binding<Bool> = .constant(false)) {
+        self.coordinator = coordinator
+        self._triggerDiscovery = triggerDiscovery
+    }
+
+    private var isDiscovering: Bool {
+        coordinator.discoveryStatus.isActive
+    }
 
     var body: some View {
         VStack(spacing: 20) {
@@ -29,25 +39,46 @@ struct SourcesView: View {
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: 400)
 
-                Button {
-                    Task { await discoverSources() }
-                } label: {
-                    if isDiscovering {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
+                // Discovery status display
+                if isDiscovering {
+                    AnimatedThinkingText(statusMessage: coordinator.discoveryStatus.message)
+                        .padding(.vertical, 8)
+                } else if case .complete = coordinator.discoveryStatus {
+                    Text(coordinator.discoveryStatus.message)
+                        .font(.callout)
+                        .foregroundStyle(.green)
+                        .padding(.vertical, 8)
+                } else if case .error(let msg) = coordinator.discoveryStatus {
+                    Label(msg, systemImage: "exclamationmark.triangle.fill")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                        .padding(.vertical, 8)
+                }
+
+                HStack(spacing: 12) {
+                    Button {
+                        Task { await discoverSources() }
+                    } label: {
                         Text("Discover Sources")
                     }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isDiscovering)
+
+                    Button("Add Manually") {
+                        showingAddSheet = true
+                    }
+                    .buttonStyle(.bordered)
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(isDiscovering)
 
                 Spacer()
             } else {
                 List {
                     Section {
                         ForEach(coordinator.jobSourceStore.dueSources) { source in
-                            SourceRowView(source: source, coordinator: coordinator)
+                            SourceRowView(source: source, store: coordinator.jobSourceStore)
+                        }
+                        .onDelete { indexSet in
+                            deleteFromDue(at: indexSet)
                         }
                     } header: {
                         if !coordinator.jobSourceStore.dueSources.isEmpty {
@@ -57,55 +88,132 @@ struct SourcesView: View {
 
                     Section("All Sources") {
                         ForEach(coordinator.jobSourceStore.sources) { source in
-                            SourceRowView(source: source, coordinator: coordinator)
+                            SourceRowView(source: source, store: coordinator.jobSourceStore)
+                        }
+                        .onDelete { indexSet in
+                            deleteFromAll(at: indexSet)
                         }
                     }
                 }
                 .toolbar {
                     ToolbarItem(placement: .primaryAction) {
-                        Button {
-                            Task { await discoverSources() }
-                        } label: {
+                        HStack(spacing: 8) {
+                            // Status message when active
                             if isDiscovering {
-                                ProgressView()
-                                    .controlSize(.small)
-                            } else {
+                                HStack(spacing: 6) {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                    Text(coordinator.discoveryStatus.message)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+
+                            Button {
+                                openAllDueSources()
+                            } label: {
+                                Image(systemName: "safari")
+                            }
+                            .help("Open all due sources in browser tabs")
+                            .disabled(coordinator.jobSourceStore.dueSources.isEmpty)
+
+                            Button {
+                                showingAddSheet = true
+                            } label: {
                                 Image(systemName: "plus")
                             }
+
+                            Button {
+                                Task { await discoverSources() }
+                            } label: {
+                                Image(systemName: "sparkles")
+                            }
+                            .disabled(isDiscovering)
                         }
-                        .disabled(isDiscovering)
                     }
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("Job Sources")
+        .toolbarBackground(.visible, for: .windowToolbar)
+        .sheet(isPresented: $showingAddSheet) {
+            AddSourceSheet(store: coordinator.jobSourceStore)
+        }
+        .onChange(of: triggerDiscovery) { _, newValue in
+            if newValue {
+                triggerDiscovery = false
+                Task { await discoverSources() }
+            }
+        }
     }
 
     private func discoverSources() async {
-        isDiscovering = true
-        defer { isDiscovering = false }
-
         do {
             try await coordinator.discoverJobSources()
         } catch {
             Logger.error("Failed to discover sources: \(error)", category: .ai)
         }
     }
+
+    private func openAllDueSources() {
+        let dueSources = coordinator.jobSourceStore.dueSources
+        let urls = dueSources.compactMap { URL(string: $0.url) }
+
+        guard !urls.isEmpty else { return }
+
+        // Open all URLs in the default browser as tabs
+        for url in urls {
+            NSWorkspace.shared.open(url)
+        }
+
+        // Mark all as visited
+        for source in dueSources {
+            coordinator.jobSourceStore.markVisited(source)
+        }
+    }
+
+    private func deleteFromDue(at indexSet: IndexSet) {
+        let sources = coordinator.jobSourceStore.dueSources
+        for index in indexSet {
+            coordinator.jobSourceStore.delete(sources[index])
+        }
+    }
+
+    private func deleteFromAll(at indexSet: IndexSet) {
+        let sources = coordinator.jobSourceStore.sources
+        for index in indexSet {
+            coordinator.jobSourceStore.delete(sources[index])
+        }
+    }
 }
 
 struct SourceRowView: View {
     let source: JobSource
-    let coordinator: SearchOpsCoordinator
+    let store: JobSourceStore
+    @State private var showingCadencePopover = false
 
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text(source.name)
-                    .font(.headline)
-                Text(source.category.rawValue)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    Text(source.name)
+                        .font(.headline)
+                    if !source.urlValid {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                            .font(.caption)
+                            .help("URL validation failed")
+                    }
+                }
+                HStack(spacing: 8) {
+                    Text(source.category.rawValue)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("Every \(source.recommendedCadenceDays)d")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
             }
 
             Spacer()
@@ -126,7 +234,7 @@ struct SourceRowView: View {
             }
 
             Button("Visit") {
-                coordinator.visitSource(source)
+                store.markVisited(source)
                 if let url = URL(string: source.url) {
                     NSWorkspace.shared.open(url)
                 }
@@ -134,5 +242,116 @@ struct SourceRowView: View {
             .buttonStyle(.bordered)
         }
         .padding(.vertical, 4)
+        .contextMenu {
+            Button {
+                if let url = URL(string: source.url) {
+                    NSWorkspace.shared.open(url)
+                }
+            } label: {
+                Label("Open in Browser", systemImage: "safari")
+            }
+
+            Divider()
+
+            Menu("Reminder Frequency") {
+                ForEach([1, 2, 3, 5, 7, 14], id: \.self) { days in
+                    Button {
+                        store.updateCadence(source, days: days)
+                    } label: {
+                        HStack {
+                            Text(days == 1 ? "Daily" : "Every \(days) days")
+                            if source.recommendedCadenceDays == days {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            }
+
+            Divider()
+
+            Button(role: .destructive) {
+                store.delete(source)
+            } label: {
+                Label("Remove", systemImage: "trash")
+            }
+        }
+    }
+}
+
+// MARK: - Add Source Sheet
+
+struct AddSourceSheet: View {
+    let store: JobSourceStore
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var name = ""
+    @State private var url = ""
+    @State private var category: SourceCategory = .aggregator
+    @State private var cadenceDays = 7
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Button("Cancel") {
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+
+                Spacer()
+
+                Text("Add Job Source")
+                    .font(.headline)
+
+                Spacer()
+
+                Button("Add") {
+                    addSource()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(name.isEmpty || url.isEmpty)
+            }
+            .padding()
+
+            Divider()
+
+            // Form
+            Form {
+                TextField("Name", text: $name)
+                    .textFieldStyle(.roundedBorder)
+
+                TextField("URL", text: $url)
+                    .textFieldStyle(.roundedBorder)
+
+                Picker("Category", selection: $category) {
+                    ForEach(SourceCategory.allCases, id: \.self) { cat in
+                        Text(cat.rawValue).tag(cat)
+                    }
+                }
+
+                Picker("Reminder Frequency", selection: $cadenceDays) {
+                    Text("Daily").tag(1)
+                    Text("Every 2 days").tag(2)
+                    Text("Every 3 days").tag(3)
+                    Text("Every 5 days").tag(5)
+                    Text("Every 7 days").tag(7)
+                    Text("Every 14 days").tag(14)
+                }
+            }
+            .padding()
+        }
+        .frame(width: 400, height: 280)
+        .onChange(of: category) { _, newCategory in
+            cadenceDays = newCategory.defaultCadenceDays
+        }
+    }
+
+    private func addSource() {
+        let source = JobSource(name: name, url: url, category: category)
+        source.recommendedCadenceDays = cadenceDays
+        source.isLLMGenerated = false
+        store.add(source)
+        dismiss()
     }
 }

@@ -165,20 +165,52 @@ final class SearchOpsNetworkingCoordinator {
     // MARK: - LLM Agent Operations
 
     /// Discover new job sources using LLM agent
-    func discoverJobSources(using agentService: SearchOpsAgentService, sectors: [String], location: String) async throws {
+    func discoverJobSources(
+        using agentService: SearchOpsAgentService,
+        sectors: [String],
+        location: String,
+        statusCallback: (@MainActor @Sendable (DiscoveryStatus) -> Void)? = nil
+    ) async throws {
         let result = try await agentService.discoverJobSources(
             sectors: sectors,
-            location: location
+            location: location,
+            statusCallback: statusCallback
         )
 
-        // Filter duplicates and add new sources
-        let newSources = result.sources.filter { generated in
+        await statusCallback?(.webSearchComplete)
+
+        // Filter duplicates
+        let candidateSources = result.sources.filter { generated in
             !jobSourceStore.exists(url: generated.url)
-        }.map { $0.toJobSource() }
+        }
 
-        jobSourceStore.addMultiple(newSources)
+        guard !candidateSources.isEmpty else {
+            Logger.info("📋 No new sources to validate", category: .ai)
+            await statusCallback?(.complete(added: 0, filtered: 0))
+            return
+        }
 
-        Logger.info("✅ Discovered \(newSources.count) new job sources", category: .ai)
+        // Validate URLs before adding
+        await statusCallback?(.validatingURLs(count: candidateSources.count))
+        Logger.info("🔍 Validating \(candidateSources.count) candidate sources", category: .ai)
+        let urls = candidateSources.map { $0.url }
+        let validationResults = await urlValidationService.validateBatch(urls)
+
+        // Create a set of valid URLs for fast lookup
+        let validUrls = Set(validationResults.filter { $0.isValid }.map { $0.url })
+
+        // Filter to only valid sources and convert
+        let validSources = candidateSources.filter { validUrls.contains($0.url) }.map { $0.toJobSource() }
+        let invalidCount = candidateSources.count - validSources.count
+
+        if invalidCount > 0 {
+            Logger.warning("⚠️ Filtered out \(invalidCount) sources with invalid URLs", category: .ai)
+        }
+
+        jobSourceStore.addMultiple(validSources)
+
+        await statusCallback?(.complete(added: validSources.count, filtered: invalidCount))
+        Logger.info("✅ Discovered \(validSources.count) new job sources", category: .ai)
     }
 
     /// Discover networking events using LLM agent

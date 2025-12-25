@@ -28,18 +28,12 @@ struct DisplayTimelineForReviewTool: InterviewTool {
     var description: String { "Activate timeline EDITOR UI before creating cards. User can edit/save changes. NOT final approval - use submit_for_validation afterward." }
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {
-        // Get current timeline from coordinator (may be nil or empty - that's OK!)
-        let timelineJSON = await coordinator.state.artifacts.skeletonTimeline ?? JSON()
-        // Get optional summary message
-        let summary = params["summary"].string ?? "Timeline review activated. Cards will appear here as you create them."
-        // Build editor prompt - even if timeline is empty, we activate the UI
-        // Cards created afterward will appear in this UI in real-time
-        let validationPrompt = OnboardingValidationPrompt(
-            dataType: "skeleton_timeline",
-            payload: timelineJSON,
-            message: summary,
-            mode: .editor  // Editor mode: allows tools, shows Save button
-        )
+        // Activate the timeline editor in the Timeline tab
+        // The Timeline tab will auto-switch and show in editor mode
+        await MainActor.run {
+            coordinator.ui.isTimelineEditorActive = true
+        }
+
         // Mark timeline_editor sub-objective as in_progress
         // This gates submit_for_validation(skeleton_timeline) - it can only be called after the editor is displayed
         await coordinator.eventBus.publish(.objectiveStatusUpdateRequested(
@@ -49,12 +43,11 @@ struct DisplayTimelineForReviewTool: InterviewTool {
             notes: "Timeline editor activated",
             details: nil
         ))
-        // Emit UI request to show the validation prompt
-        await coordinator.eventBus.publish(.validationPromptRequested(prompt: validationPrompt))
+
         // Return completed - the tool's job is to activate UI, which it has done
-        // Timeline cards created afterward will appear in this UI automatically
+        // Timeline cards created afterward will appear in the Timeline tab automatically
         var response = JSON()
-        response["message"].string = "Timeline editor activated. User can now edit cards. Call submit_for_validation(skeleton_timeline) when user clicks 'Done with Timeline'."
+        response["message"].string = "Timeline editor activated. User can now edit cards in the Timeline tab. Call submit_for_validation(skeleton_timeline) when user clicks 'Done with Timeline'."
         response["status"].string = "completed"
         return .immediate(response)
     }
