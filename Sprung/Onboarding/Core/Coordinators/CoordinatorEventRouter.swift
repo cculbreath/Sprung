@@ -462,7 +462,8 @@ final class CoordinatorEventRouter {
         let cardTitle = cardData["title"].stringValue
         let cardId = cardData["id"].stringValue
 
-        // Persist to ResRef
+        // Persist to ResRef (SwiftData) - this is the authoritative source for knowledge cards
+        // Phase transition validation queries ResRefStore directly
         persistToResRef(card: cardData)
 
         // Clear pending card

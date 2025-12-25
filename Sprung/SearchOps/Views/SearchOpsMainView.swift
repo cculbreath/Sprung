@@ -40,6 +40,8 @@ enum SearchOpsSection: String, CaseIterable, Identifiable {
 
 struct SearchOpsMainView: View {
     @Environment(SearchOpsCoordinator.self) private var coordinator
+    @Environment(CoverRefStore.self) private var coverRefStore
+    @Environment(ApplicantProfileStore.self) private var applicantProfileStore
     @State private var selectedSection: SearchOpsSection = .daily
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var showOnboarding: Bool = false
@@ -47,7 +49,11 @@ struct SearchOpsMainView: View {
     var body: some View {
         Group {
             if showOnboarding || coordinator.needsOnboarding {
-                SearchOpsOnboardingView(coordinator: coordinator) {
+                SearchOpsOnboardingView(
+                    coordinator: coordinator,
+                    coverRefStore: coverRefStore,
+                    applicantProfileStore: applicantProfileStore
+                ) {
                     showOnboarding = false
                 }
             } else {

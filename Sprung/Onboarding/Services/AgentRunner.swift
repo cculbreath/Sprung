@@ -32,6 +32,7 @@ struct AgentConfiguration {
     let maxTurns: Int
     let timeoutSeconds: TimeInterval
     let temperature: Double
+    let reasoningEffort: String?
 
     init(
         agentId: String = UUID().uuidString,
@@ -42,7 +43,8 @@ struct AgentConfiguration {
         initialUserMessage: String,
         maxTurns: Int = 30,
         timeoutSeconds: TimeInterval = 300,
-        temperature: Double = 0.3
+        temperature: Double = 0.3,
+        reasoningEffort: String? = nil
     ) {
         self.agentId = agentId
         self.agentType = agentType
@@ -53,6 +55,7 @@ struct AgentConfiguration {
         self.maxTurns = maxTurns
         self.timeoutSeconds = timeoutSeconds
         self.temperature = temperature
+        self.reasoningEffort = reasoningEffort
     }
 }
 
@@ -184,7 +187,8 @@ actor AgentRunner {
                     tools: tools,
                     toolChoice: .auto,
                     modelId: config.modelId,
-                    temperature: config.temperature
+                    temperature: config.temperature,
+                    reasoningEffort: config.reasoningEffort
                 )
 
                 // Emit token usage event if available
@@ -534,6 +538,10 @@ extension AgentRunner {
         eventBus: EventCoordinator? = nil,
         tracker: AgentActivityTracker?
     ) -> AgentRunner {
+        // Read hard task reasoning effort from settings (used for KC generation)
+        let reasoningEffort = UserDefaults.standard.string(forKey: "onboardingInterviewHardTaskReasoningEffort")
+        Logger.info("🧠 KC Agent '\(cardTitle)' using reasoning effort: \(reasoningEffort ?? "default")", category: .ai)
+
         let config = AgentConfiguration(
             agentId: agentId,
             agentType: .knowledgeCard,
@@ -543,7 +551,8 @@ extension AgentRunner {
             initialUserMessage: initialPrompt,
             maxTurns: 30,
             timeoutSeconds: 300,
-            temperature: 0.3
+            temperature: 0.3,
+            reasoningEffort: reasoningEffort
         )
 
         return AgentRunner(

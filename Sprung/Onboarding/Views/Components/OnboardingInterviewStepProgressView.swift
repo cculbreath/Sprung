@@ -3,15 +3,18 @@ struct OnboardingInterviewStepProgressView: View {
     @Bindable var coordinator: OnboardingInterviewCoordinator
     var body: some View {
         GeometryReader { geometry in
-            HStack(alignment: .center, spacing: 16) {
+            HStack(alignment: .center, spacing: 0) {
                 // Note: Wizard step status tracking is handled by WizardProgressTracker
                 // This view shows the actual progress from the tracker
                 let tracker = coordinator.wizardTracker
-                ForEach(OnboardingWizardStep.allCases, id: \.self) { step in
+                ForEach(Array(OnboardingWizardStep.allCases.enumerated()), id: \.element) { index, step in
                     let status = tracker.stepStatuses[step]
                         ?? (tracker.currentStep == step ? .current
                             : (tracker.completedSteps.contains(step) ? .completed : .pending))
                     OnboardingStepProgressItem(title: step.title, status: status)
+                    if index < OnboardingWizardStep.allCases.count - 1 {
+                        Spacer()
+                    }
                 }
             }
             .frame(width: geometry.size.width * 0.8)
@@ -73,6 +76,8 @@ private struct OnboardingStepProgressItem: View {
                 Text(title)
                     .font(font)
                     .foregroundStyle(textColor)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
                     .frame(maxWidth: .infinity, alignment: animatedProgress > 0 ? .leading : .center)
             }
             .padding(.horizontal, horizontalPadding / 2)

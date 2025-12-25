@@ -40,35 +40,37 @@ struct WritingCorpusCollectionView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if !writingSamplesComplete {
-                // Phase 3.1: Writing Sample Collection
-                headerSection
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                if !writingSamplesComplete {
+                    // Phase 3.1: Writing Sample Collection
+                    headerSection
 
-                // Upload drop zone for writing samples
-                WritingSampleDropZone(
-                    onDropFiles: onDropFiles,
-                    onSelectFiles: onSelectFiles
-                )
+                    // Upload drop zone for writing samples
+                    WritingSampleDropZone(
+                        onDropFiles: onDropFiles,
+                        onSelectFiles: onSelectFiles
+                    )
 
-                // List of collected samples
-                if !writingSamples.isEmpty {
-                    collectedSamplesList
+                    // List of collected samples
+                    if !writingSamples.isEmpty {
+                        collectedSamplesList
+                    }
+
+                    // Simple sample count indicator
+                    sampleStatusSection
+
+                    // "Done with Writing Samples" button
+                    if !writingSamples.isEmpty {
+                        doneWithSamplesButton
+                    }
+                } else {
+                    // Phase 3.2: Dossier Finalization
+                    dossierSection
                 }
-
-                // Simple sample count indicator
-                sampleStatusSection
-
-                // "Done with Writing Samples" button
-                if !writingSamples.isEmpty {
-                    doneWithSamplesButton
-                }
-            } else {
-                // Phase 3.2: Dossier Finalization
-                dossierSection
             }
+            .padding(12)
         }
-        .padding(12)
         .background(Color(nsColor: .controlBackgroundColor))
         .cornerRadius(12)
         .overlay(

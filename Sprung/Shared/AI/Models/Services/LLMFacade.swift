@@ -567,7 +567,8 @@ final class LLMFacade {
         tools: [ChatCompletionParameters.Tool],
         toolChoice: ToolChoice? = .auto,
         modelId: String,
-        temperature: Double? = nil
+        temperature: Double? = nil,
+        reasoningEffort: String? = nil
     ) async throws -> ChatCompletionObject {
         try await validate(modelId: modelId, requires: [])
 
@@ -576,7 +577,8 @@ final class LLMFacade {
             modelId: modelId,
             tools: tools,
             toolChoice: toolChoice,
-            temperature: temperature ?? 0.7
+            temperature: temperature ?? 0.7,
+            reasoningEffort: reasoningEffort
         )
 
         return try await llmService.executeToolRequest(parameters: parameters)

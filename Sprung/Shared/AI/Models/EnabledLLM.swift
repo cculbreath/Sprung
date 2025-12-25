@@ -39,27 +39,22 @@ class EnabledLLM {
         lastJSONSchemaFailure = Date()
         consecutiveFailures += 1
         lastFailureReason = reason
-        // If we've had multiple failures, disable JSON schema support
-        if jsonSchemaFailureCount >= 2 {
-            supportsJSONSchema = false
-            Logger.debug("🚫 Disabled JSON schema support for \(modelId) after \(jsonSchemaFailureCount) failures")
-        }
+        Logger.debug("⚠️ JSON schema failure #\(consecutiveFailures) for \(modelId): \(reason)")
     }
-    /// Mark successful JSON schema usage
+    /// Mark successful JSON schema usage - clears failure tracking
     func recordJSONSchemaSuccess() {
         consecutiveFailures = 0
         lastFailureReason = nil
-        supportsJSONSchema = true
         lastUsed = Date()
     }
-    /// Check if we should avoid JSON schema for this model
+    /// Check if we should temporarily avoid JSON schema for this model
+    /// Blocked for 1 hour after 2+ consecutive failures, then falls back to OpenRouter-reported support
     var shouldAvoidJSONSchema: Bool {
-        // Avoid if we've had recent failures
         if let lastFailure = lastJSONSchemaFailure,
-           Date().timeIntervalSince(lastFailure) < 3600, // 1 hour
+           Date().timeIntervalSince(lastFailure) < 3600,
            consecutiveFailures >= 2 {
             return true
         }
-        return !supportsJSONSchema
+        return false  // Default to OpenRouter-reported capability
     }
 }

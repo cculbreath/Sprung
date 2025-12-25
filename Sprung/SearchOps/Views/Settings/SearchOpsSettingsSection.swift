@@ -15,6 +15,7 @@ struct SearchOpsSettingsSection: View {
     @State private var isRefreshingSources = false
     @State private var showResetConfirmation = false
     @State private var sourceRefreshError: String?
+    @State private var llmModelId: String = ""
 
     private var settings: SearchOpsSettings {
         coordinator.settingsStore.current()
@@ -56,19 +57,21 @@ struct SearchOpsSettingsSection: View {
                     .foregroundStyle(.orange)
                     .font(.callout)
             } else {
-                Picker("AI Model", selection: Binding(
-                    get: { settings.llmModelId },
-                    set: { newValue in
-                        settings.llmModelId = newValue
-                        coordinator.settingsStore.update(settings)
-                    }
-                )) {
+                Picker("AI Model", selection: $llmModelId) {
                     ForEach(sortedModels, id: \.modelId) { model in
                         Text(model.displayName.isEmpty ? model.modelId : model.displayName)
                             .tag(model.modelId)
                     }
                 }
                 .pickerStyle(.menu)
+                .task {
+                    llmModelId = settings.llmModelId
+                }
+                .onChange(of: llmModelId) { _, newValue in
+                    guard !newValue.isEmpty, settings.llmModelId != newValue else { return }
+                    settings.llmModelId = newValue
+                    coordinator.settingsStore.update(settings)
+                }
                 Text("Model used for generating daily tasks, source discovery, and networking prep.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)

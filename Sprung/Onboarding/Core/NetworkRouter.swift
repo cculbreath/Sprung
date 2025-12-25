@@ -181,15 +181,17 @@ actor NetworkRouter: OnboardingEventEmitter {
     private func processCompletedResponse(_ response: ResponseModel) async {
         // Extract message content and tool calls from the completed response
         var completeText = ""
+        var allAnnotations: [OutputItem.ContentItem.Annotation] = []
         var toolCalls: [OnboardingMessage.ToolCallInfo] = []
         // Process all output items
         for outputItem in response.output {
             switch outputItem {
             case .message(let message):
-                // Extract the complete text from the message
+                // Extract the complete text and annotations from the message
                 for contentItem in message.content {
                     if case .outputText(let outputText) = contentItem {
                         completeText += outputText.text
+                        allAnnotations.append(contentsOf: outputText.annotations)
                     }
                 }
             case .functionCall(let toolCall):

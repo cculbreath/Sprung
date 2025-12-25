@@ -33,7 +33,8 @@ struct PhaseOneScript: PhaseScript {
         .getArtifact,
         .getContextPack,
         .requestRawFile,
-        .nextPhase
+        .nextPhase,
+        .askUserSkipToNextPhase  // Escape hatch for blocked transitions
     ])
     var objectiveWorkflows: [String: ObjectiveWorkflow] {
         [

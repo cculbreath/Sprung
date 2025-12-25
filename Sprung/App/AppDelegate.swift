@@ -22,6 +22,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var experienceDefaultsStore: ExperienceDefaultsStore?
     var careerKeywordStore: CareerKeywordStore?
     var searchOpsCoordinator: SearchOpsCoordinator?
+    var coverRefStore: CoverRefStore?
     func applicationDidFinishLaunching(_: Notification) {
         // Wait until the app is fully loaded before modifying the menu
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
@@ -386,12 +387,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let hostingView: NSHostingView<AnyView>
             if let modelContainer,
                let appEnvironment,
-               let searchOpsCoordinator {
+               let searchOpsCoordinator,
+               let coverRefStore,
+               let applicantProfileStore {
                 let root = searchOpsView
                     .modelContainer(modelContainer)
                     .environment(appEnvironment)
                     .environment(appEnvironment.appState)
                     .environment(searchOpsCoordinator)
+                    .environment(coverRefStore)
+                    .environment(applicantProfileStore)
                 hostingView = NSHostingView(rootView: AnyView(root))
             } else if let modelContainer {
                 hostingView = NSHostingView(rootView: AnyView(searchOpsView.modelContainer(modelContainer)))

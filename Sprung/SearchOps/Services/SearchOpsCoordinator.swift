@@ -303,6 +303,179 @@ final class SearchOpsCoordinator {
         )
     }
 
+    // MARK: - Role Suggestion (Onboarding)
+
+    /// Response structure for role suggestions
+    struct RoleSuggestionsResult: Codable {
+        let suggestedRoles: [String]
+        let reasoning: String?
+    }
+
+    /// Generate target role suggestions based on user's dossier (knowledge cards)
+    /// - Parameters:
+    ///   - dossierSummary: Summary of user's background from ResRefs
+    ///   - existingRoles: Any roles the user has already selected/added
+    ///   - keywords: Optional keywords/topics the user wants to explore (e.g., "AI, healthcare, startups")
+    /// - Returns: List of suggested role titles
+    func suggestTargetRoles(
+        dossierSummary: String,
+        existingRoles: [String] = [],
+        keywords: String? = nil
+    ) async throws -> [String] {
+        guard let llm = llmService else {
+            throw SearchOpsLLMError.toolExecutionFailed("LLM service not configured")
+        }
+
+        let existingContext = existingRoles.isEmpty
+            ? ""
+            : "\n\nThe user has already indicated interest in: \(existingRoles.joined(separator: ", ")). Suggest additional complementary roles they might not have considered."
+
+        let keywordsContext: String
+        if let keywords = keywords, !keywords.isEmpty {
+            keywordsContext = "\n\nKEYWORDS TO EXPLORE:\nThe user is particularly interested in roles related to: \(keywords). Prioritize suggestions that connect their background to these areas, industries, or themes."
+        } else {
+            keywordsContext = ""
+        }
+
+        let prompt = """
+            Based on the following professional background, suggest 5-8 specific job roles/titles this person should target in their job search.
+
+            BACKGROUND:
+            \(dossierSummary)
+            \(existingContext)\(keywordsContext)
+
+            Return a JSON object with:
+            - suggestedRoles: array of specific job title strings (e.g., "Senior Software Engineer", "Engineering Manager", "Staff Developer")
+            - reasoning: brief explanation of why these roles fit (optional)
+
+            Focus on:
+            1. Roles that match their experience level
+            2. Both obvious fits and adjacent opportunities they might not have considered
+            3. Specific titles, not broad categories
+            \(keywords != nil ? "4. Roles that connect to the specified keywords/interests" : "")
+            """
+
+        let result = try await llm.executeStructured(
+            prompt: prompt,
+            systemPrompt: "You are a career advisor helping someone identify job roles to target. Be specific with job titles.",
+            as: RoleSuggestionsResult.self,
+            temperature: 0.7
+        )
+
+        return result.suggestedRoles
+    }
+
+    // MARK: - Location Preference Extraction (Onboarding)
+
+    /// Response structure for location preferences extraction
+    struct LocationPreferencesResult: Codable {
+        let location: String?
+        let workArrangement: String?
+        let remoteAcceptable: Bool?
+        let companySize: String?
+    }
+
+    /// Extracted location preferences with parsed enums
+    struct ExtractedLocationPreferences {
+        let location: String?
+        let workArrangement: WorkArrangement?
+        let remoteAcceptable: Bool?
+        let companySize: CompanySizePreference?
+    }
+
+    /// Extract location and work arrangement preferences from profile and dossier
+    func extractLocationPreferences(
+        profileInfo: String,
+        dossierSummary: String
+    ) async throws -> ExtractedLocationPreferences {
+        guard let llm = llmService else {
+            throw SearchOpsLLMError.toolExecutionFailed("LLM service not configured")
+        }
+
+        let prompt = """
+            Extract job search preferences from the following sources.
+
+            APPLICANT PROFILE:
+            \(profileInfo)
+
+            BACKGROUND/DOSSIER:
+            \(dossierSummary)
+
+            Infer from context clues like mentions of relocating, working from home, commuting preferences, company culture preferences, etc.
+            """
+
+        // Build JSON schema for strict structured output
+        // Use .optional() to allow null values for fields that can't be determined
+        let schema = JSONSchema(
+            type: .object,
+            properties: [
+                "location": JSONSchema(
+                    type: .optional(.string),
+                    description: "Primary job search location (e.g., 'San Francisco Bay Area', 'Austin, TX'). Null if not determinable."
+                ),
+                "workArrangement": JSONSchema(
+                    type: .optional(.string),
+                    description: "Work arrangement preference: remote, hybrid, or onsite",
+                    enum: ["remote", "hybrid", "onsite"]
+                ),
+                "remoteAcceptable": JSONSchema(
+                    type: .optional(.boolean),
+                    description: "True if open to remote work, false if prefers in-person"
+                ),
+                "companySize": JSONSchema(
+                    type: .optional(.string),
+                    description: "Preferred company size",
+                    enum: ["startup", "small", "mid", "enterprise", "any"]
+                )
+            ],
+            required: ["location", "workArrangement", "remoteAcceptable", "companySize"],
+            additionalProperties: false
+        )
+
+        let result = try await llm.executeFlexibleJSON(
+            prompt: prompt,
+            systemPrompt: "Extract job search preferences from the provided profile and background. Return null for fields that cannot be determined.",
+            as: LocationPreferencesResult.self,
+            jsonSchema: schema,
+            temperature: 0.3
+        )
+
+        // Parse work arrangement string to enum
+        let arrangement: WorkArrangement?
+        if let arrangementStr = result.workArrangement?.lowercased() {
+            switch arrangementStr {
+            case "remote": arrangement = .remote
+            case "hybrid": arrangement = .hybrid
+            case "onsite", "on-site", "in-office": arrangement = .onsite
+            default: arrangement = nil
+            }
+        } else {
+            arrangement = nil
+        }
+
+        // Parse company size string to enum
+        let companySize: CompanySizePreference?
+        if let sizeStr = result.companySize?.lowercased() {
+            switch sizeStr {
+            case "startup": companySize = .startup
+            case "small": companySize = .small
+            case "mid", "mid-size", "midsize": companySize = .mid
+            case "enterprise", "large": companySize = .enterprise
+            case "any": companySize = .any
+            default: companySize = nil
+            }
+        } else {
+            companySize = nil
+        }
+
+        return ExtractedLocationPreferences(
+            location: result.location,
+            workArrangement: arrangement,
+            remoteAcceptable: result.remoteAcceptable,
+            companySize: companySize
+        )
+    }
+
     // MARK: - Contact Workflow Helpers (delegated to networking coordinator)
 
     func recordContactInteraction(

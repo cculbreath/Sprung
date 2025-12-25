@@ -211,7 +211,7 @@ import SwiftUI
     // MARK: - Prompt Loading
 
     private static func loadPromptTemplate(named name: String) -> String {
-        guard let url = Bundle.main.url(forResource: name, withExtension: "txt", subdirectory: "Resources/Prompts"),
+        guard let url = Bundle.main.url(forResource: name, withExtension: "txt", subdirectory: "Prompts"),
               let content = try? String(contentsOf: url, encoding: .utf8) else {
             Logger.error("Failed to load prompt template: \(name)", category: .ai)
             return "Error loading prompt template"

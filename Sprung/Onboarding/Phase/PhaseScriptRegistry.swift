@@ -76,7 +76,7 @@ final class PhaseScriptRegistry {
             // Check user approval flag from StateCoordinator
             let userApproved = await coordinator.state.userApprovedKCSkip
             return await validatePhaseTwoToThree(
-                dataStore: dataStore,
+                coordinator: coordinator,
                 userApprovedSkip: userApproved
             )
         case .phase3WritingCorpus:
@@ -112,12 +112,15 @@ final class PhaseScriptRegistry {
     }
 
     private func validatePhaseTwoToThree(
-        dataStore: InterviewDataStore,
+        coordinator: OnboardingInterviewCoordinator,
         userApprovedSkip: Bool
     ) async -> PhaseTransitionValidation {
         // VALIDATION: Require knowledge cards OR explicit user approval
         // Having uploaded artifacts is NOT sufficient - KC generation must succeed
-        let knowledgeCards = await dataStore.list(dataType: "knowledge_card")
+        // Query ResRefStore (SwiftData) for onboarding knowledge cards - this is the authoritative source
+        let knowledgeCards = await MainActor.run {
+            coordinator.getResRefStore().resRefs.filter { $0.isFromOnboarding }
+        }
 
         if knowledgeCards.isEmpty {
             // If user has explicitly approved skipping via UI, allow it

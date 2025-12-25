@@ -126,33 +126,35 @@ actor StateCoordinator: OnboardingEventEmitter {
         // Phase 3 objectives
         let hasWriting = await objectiveStore.getObjectiveStatus(OnboardingObjectiveId.oneWritingSample.rawValue) == .completed
         let hasDossier = await objectiveStore.getObjectiveStatus(OnboardingObjectiveId.dossierComplete.rawValue) == .completed
-        // Start from introduction
-        if currentWizardStep == .introduction {
+
+        // First: Set current wizard step based on actual phase (handles "proceed anyway" scenarios)
+        switch phase {
+        case .phase1CoreFacts:
+            // Check if we've started (objectives registered)
             let allObjectives = await objectiveStore.getAllObjectives()
-            if !allObjectives.isEmpty {
-                currentWizardStep = .resumeIntake
-            }
-        }
-        // Resume Intake (Phase 1)
-        if hasProfile && hasTimeline && hasSections {
-            completedWizardSteps.insert(.resumeIntake)
-            if phase == .phase2DeepDive || phase == .phase3WritingCorpus || phase == .complete {
-                currentWizardStep = .artifactDiscovery
-            }
-        }
-        // Artifact Discovery (Phase 2) - now based on evidence audit and card generation
-        if hasEvidenceAudit && hasCardsGenerated {
-            completedWizardSteps.insert(.artifactDiscovery)
-            if phase == .phase3WritingCorpus || phase == .complete {
-                currentWizardStep = .writingCorpus
-            }
-        }
-        // Writing Corpus (Phase 3)
-        if hasWriting && hasDossier {
-            completedWizardSteps.insert(.writingCorpus)
+            currentWizardStep = allObjectives.isEmpty ? .introduction : .resumeIntake
+        case .phase2DeepDive:
+            currentWizardStep = .artifactDiscovery
+        case .phase3WritingCorpus:
+            currentWizardStep = .writingCorpus
+        case .complete:
             currentWizardStep = .wrapUp
         }
-        // Wrap Up
+
+        // Second: Mark steps as completed based on objective completion
+        // Resume Intake completed when Phase 1 objectives are done
+        if hasProfile && hasTimeline && hasSections {
+            completedWizardSteps.insert(.resumeIntake)
+        }
+        // Artifact Discovery completed when Phase 2 objectives are done
+        if hasEvidenceAudit && hasCardsGenerated {
+            completedWizardSteps.insert(.artifactDiscovery)
+        }
+        // Writing Corpus completed when Phase 3 objectives are done
+        if hasWriting && hasDossier {
+            completedWizardSteps.insert(.writingCorpus)
+        }
+        // Wrap Up completed when interview is complete
         if phase == .complete {
             completedWizardSteps.insert(.wrapUp)
         }

@@ -268,10 +268,11 @@ struct LLMRequestBuilder {
         modelId: String,
         tools: [ChatCompletionParameters.Tool],
         toolChoice: ToolChoice?,
-        temperature: Double
+        temperature: Double,
+        reasoningEffort: String? = nil
     ) -> ChatCompletionParameters {
-        Logger.debug("🔧 Building tool request with \(tools.count) tools for model: \(modelId)")
-        return ChatCompletionParameters(
+        Logger.debug("🔧 Building tool request with \(tools.count) tools for model: \(modelId), reasoning: \(reasoningEffort ?? "default")")
+        var params = ChatCompletionParameters(
             messages: messages,
             model: .custom(modelId),
             toolChoice: toolChoice,
@@ -280,5 +281,9 @@ struct LLMRequestBuilder {
             temperature: temperature,
             usage: .init(include: true)  // Enable OpenRouter token tracking
         )
+        if let effort = reasoningEffort {
+            params.reasoningEffort = effort
+        }
+        return params
     }
 }

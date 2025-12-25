@@ -239,10 +239,11 @@ actor SubAgentToolExecutor {
                 "excerpt": JSONSchema(type: .string, description: "Direct quote from the user"),
                 "context": JSONSchema(type: .string, description: "Why this excerpt matters / what it supports")
             ],
-            required: ["excerpt"],
+            required: ["excerpt", "context"],  // OpenAI strict mode requires all properties in required
             additionalProperties: false
         )
 
+        // OpenAI strict mode requires ALL properties to be in required array
         let resultSchema = JSONSchema(
             type: .object,
             description: "Knowledge card generation output",
@@ -267,14 +268,14 @@ actor SubAgentToolExecutor {
                 ),
                 "chat_sources": JSONSchema(
                     type: .array,
-                    description: "Optional conversation excerpts used as evidence",
+                    description: "Conversation excerpts used as evidence (can be empty array)",
                     items: chatSourceSchema
                 ),
-                "time_period": JSONSchema(type: .string, description: "Optional date range"),
-                "organization": JSONSchema(type: .string, description: "Optional organization"),
-                "location": JSONSchema(type: .string, description: "Optional location/remote")
+                "time_period": JSONSchema(type: .string, description: "Date range (empty string if not applicable)"),
+                "organization": JSONSchema(type: .string, description: "Organization name (empty string if not applicable)"),
+                "location": JSONSchema(type: .string, description: "Location/remote (empty string if not applicable)")
             ],
-            required: ["card_type", "title", "prose", "sources"],
+            required: ["card_type", "title", "prose", "highlights", "skills", "metrics", "sources", "chat_sources", "time_period", "organization", "location"],
             additionalProperties: false
         )
 
