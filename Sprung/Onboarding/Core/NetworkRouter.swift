@@ -223,10 +223,13 @@ actor NetworkRouter: OnboardingEventEmitter {
         // Only emit message events if there's actual text content
         // Tool-only responses shouldn't create empty chat bubbles
         if !completeText.isEmpty {
+            // Apply URL citations as markdown links
+            let annotatedText = applyURLCitations(to: completeText, annotations: allAnnotations)
             let messageId = UUID()
-            await emit(.streamingMessageBegan(id: messageId, text: completeText, reasoningExpected: false))
-            await emit(.streamingMessageFinalized(id: messageId, finalText: completeText, toolCalls: toolCalls.isEmpty ? nil : toolCalls))
-            Logger.info("📝 Extracted complete message (\(completeText.count) chars, \(toolCalls.count) tool calls) from completed response", category: .ai)
+            await emit(.streamingMessageBegan(id: messageId, text: annotatedText, reasoningExpected: false))
+            await emit(.streamingMessageFinalized(id: messageId, finalText: annotatedText, toolCalls: toolCalls.isEmpty ? nil : toolCalls))
+            let citationCount = allAnnotations.filter { $0.isURLCitation }.count
+            Logger.info("📝 Extracted complete message (\(completeText.count) chars, \(toolCalls.count) tool calls, \(citationCount) citations) from completed response", category: .ai)
         } else if !toolCalls.isEmpty {
             Logger.info("🔧 Tool-only response (\(toolCalls.count) tool calls, no text) from completed response", category: .ai)
         } else {
@@ -320,5 +323,48 @@ actor NetworkRouter: OnboardingEventEmitter {
         // Emit the complete text for sidebar display
         await emit(.llmReasoningSummaryComplete(text: event.text))
         Logger.info("🧠 Reasoning summary complete (\(event.text.count) chars)", category: .ai)
+    }
+
+    // MARK: - URL Citation Processing
+
+    /// Apply URL citations from web search as markdown links
+    /// Transforms citation markers in text to clickable markdown links
+    private func applyURLCitations(to text: String, annotations: [OutputItem.ContentItem.Annotation]) -> String {
+        // Filter to only URL citations and sort by start index descending
+        // (Process from end to start so indices remain valid during replacement)
+        let urlCitations = annotations
+            .filter { $0.isURLCitation }
+            .sorted { $0.startIndex > $1.startIndex }
+
+        guard !urlCitations.isEmpty else { return text }
+
+        var result = text
+        for citation in urlCitations {
+            guard let url = citation.url else { continue }
+
+            let startIndex = citation.startIndex
+            let endIndex = citation.endIndex
+
+            // Validate indices are within bounds
+            guard startIndex >= 0,
+                  endIndex <= result.count,
+                  startIndex < endIndex else { continue }
+
+            // Convert string indices
+            let start = result.index(result.startIndex, offsetBy: startIndex)
+            let end = result.index(result.startIndex, offsetBy: endIndex)
+
+            // Get the original text at this range (e.g., "[1]" or the cited text)
+            let originalText = String(result[start..<end])
+
+            // Create markdown link with title or original text as link text
+            let linkText = citation.title ?? originalText
+            let markdownLink = "[\(linkText)](\(url))"
+
+            // Replace the original text with the markdown link
+            result.replaceSubrange(start..<end, with: markdownLink)
+        }
+
+        return result
     }
 }
