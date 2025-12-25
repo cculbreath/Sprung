@@ -275,6 +275,9 @@ struct OnboardingInterviewToolPane: View {
                     onSelectFiles: { openDirectUploadPanel() },
                     onSelectGitRepo: { repoURL in
                         Task { await coordinator.startGitRepoAnalysis(repoURL) }
+                    },
+                    onFetchURL: { urlString in
+                        await coordinator.fetchURLForArtifact(urlString)
                     }
                 )
             } else {

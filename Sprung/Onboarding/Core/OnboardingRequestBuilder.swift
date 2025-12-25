@@ -476,8 +476,13 @@ struct OnboardingRequestBuilder {
             return []
         }
 
-        let schemas = await toolRegistry.toolSchemas(filteredBy: bundledNames)
-        Logger.debug("🔧 Tool bundling: subphase=\(subphase.rawValue), toolPane=\(toolPaneCard.rawValue), sending \(schemas.count) tools: \(bundledNames.sorted().joined(separator: ", "))", category: .ai)
+        var schemas = await toolRegistry.toolSchemas(filteredBy: bundledNames)
+
+        // Add web_search hosted tool (available in all phases)
+        // This is a built-in OpenAI tool, not a function tool from ToolRegistry
+        schemas.append(.webSearch(Tool.WebSearchTool(type: .webSearch)))
+
+        Logger.debug("🔧 Tool bundling: subphase=\(subphase.rawValue), toolPane=\(toolPaneCard.rawValue), sending \(schemas.count) tools (incl. web_search): \(bundledNames.sorted().joined(separator: ", "))", category: .ai)
 
         return schemas
     }

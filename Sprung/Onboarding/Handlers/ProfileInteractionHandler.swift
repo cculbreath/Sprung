@@ -61,7 +61,46 @@ final class ProfileInteractionHandler {
         // Show the profile summary card in the tool pane
         // @Observable will handle UI updates automatically
         showProfileSummary(profile: enriched)
+
+        // Trigger automatic URL fetch for profile URLs
+        Task {
+            await triggerProfileURLFetch(draft: draft)
+        }
+
         return payload
+    }
+
+    /// Extracts URLs from validated profile and instructs agent to visit them
+    private func triggerProfileURLFetch(draft: ApplicantProfileDraft) async {
+        var urlsToVisit: [String] = []
+
+        // Check main website
+        if !draft.website.isEmpty {
+            urlsToVisit.append(draft.website)
+        }
+
+        // Check social profiles (LinkedIn, GitHub, etc.)
+        for socialProfile in draft.socialProfiles {
+            if !socialProfile.url.isEmpty {
+                urlsToVisit.append(socialProfile.url)
+            }
+        }
+
+        guard !urlsToVisit.isEmpty else { return }
+
+        Logger.info("🌐 Profile contains \(urlsToVisit.count) URL(s) to visit", category: .ai)
+
+        // Build developer message instructing agent to fetch these URLs
+        let urlList = urlsToVisit.joined(separator: ", ")
+        var payload = JSON()
+        payload["text"].string = """
+            The user's profile includes the following URLs: \(urlList).
+            Use web_search to visit these sites and gather relevant information about the user's background.
+            If you find valuable content (portfolio projects, LinkedIn achievements, GitHub contributions, etc.),
+            use create_web_artifact to save it for later use in building their resume.
+            """
+
+        await eventBus.publish(.llmExecuteDeveloperMessage(payload: payload))
     }
     /// Rejects an applicant profile validation.
     func rejectProfile(reason: String) -> JSON? {

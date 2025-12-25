@@ -51,6 +51,7 @@ final class OnboardingToolRegistrar {
         toolRegistry.register(GetContextPackTool(coordinator: coordinator))
         toolRegistry.register(RequestRawArtifactFileTool(coordinator: coordinator))
         toolRegistry.register(UpdateArtifactMetadataTool(coordinator: coordinator))
+        toolRegistry.register(CreateWebArtifactTool(coordinator: coordinator, eventBus: eventBus))
         toolRegistry.register(PersistDataTool(dataStore: dataStore, eventBus: eventBus))
         toolRegistry.register(SetObjectiveStatusTool(coordinator: coordinator))
         toolRegistry.register(NextPhaseTool(coordinator: coordinator, dataStore: dataStore, registry: phaseRegistry))

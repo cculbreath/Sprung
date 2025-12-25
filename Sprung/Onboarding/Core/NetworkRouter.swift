@@ -68,6 +68,8 @@ actor NetworkRouter: OnboardingEventEmitter {
                 }
             case .reasoning(let reasoning):
                 await processReasoningItem(reasoning)
+            case .webSearchCall(let webSearch):
+                await processWebSearchCall(webSearch)
             default:
                 break
             }
@@ -113,6 +115,8 @@ actor NetworkRouter: OnboardingEventEmitter {
                     await processMessageContent(message)
                 case .reasoning(let reasoning):
                     await processReasoningItem(reasoning)
+                case .webSearchCall(let webSearch):
+                    await processWebSearchCall(webSearch)
                 default:
                     break
                 }
@@ -283,6 +287,17 @@ actor NetworkRouter: OnboardingEventEmitter {
         await emit(.toolCallRequested(call, statusMessage: "Processing \(functionName)..."))
         Logger.info("🔧 Tool call received: \(functionName)", category: .ai)
     }
+    // MARK: - Web Search Support
+
+    /// Process web search tool call from output
+    /// Web search is a hosted tool - results are automatically included in the model's response
+    private func processWebSearchCall(_ webSearch: OutputItem.WebSearchToolCall) async {
+        // Web search results are automatically included in the model's response text
+        // The annotations in the message will contain URL citations
+        // No explicit action needed here - just log for debugging
+        Logger.info("🌐 Web search completed: id=\(webSearch.id), status=\(webSearch.status ?? "unknown")", category: .ai)
+    }
+
     // MARK: - Reasoning Support
     /// Process reasoning item from output (indicates reasoning is present)
     private func processReasoningItem(_ reasoning: OutputItem.Reasoning) async {

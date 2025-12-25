@@ -61,6 +61,9 @@ enum OnboardingToolName: String, CaseIterable {
     case proposeCardAssignments = "propose_card_assignments"
     case dispatchKCAgents = "dispatch_kc_agents"
 
+    // Web Browsing Tools
+    case createWebArtifact = "create_web_artifact"
+
     // Phase 3 Tools
     case startPhaseThree = "start_phase_three"
     case ingestWritingSample = "ingest_writing_sample"

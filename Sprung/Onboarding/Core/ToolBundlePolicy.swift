@@ -18,7 +18,8 @@ struct ToolBundlePolicy {
     /// NOTE: get_user_option removed - it was causing the model to prefer generic tools
     /// over specialized ones. It's now explicitly included only in bundles that need it.
     static let safeEscapeTools: Set<String> = [
-        OnboardingToolName.updateDossierNotes.rawValue  // Scratchpad always available
+        OnboardingToolName.updateDossierNotes.rawValue,  // Scratchpad always available
+        OnboardingToolName.askUserSkipToNextPhase.rawValue  // Escape hatch for blocked transitions
     ]
 
     // MARK: - Artifact Access Tools
@@ -28,7 +29,8 @@ struct ToolBundlePolicy {
         OnboardingToolName.listArtifacts.rawValue,
         OnboardingToolName.getArtifact.rawValue,
         OnboardingToolName.getContextPack.rawValue,
-        OnboardingToolName.requestRawFile.rawValue
+        OnboardingToolName.requestRawFile.rawValue,
+        OnboardingToolName.createWebArtifact.rawValue  // For saving web_search content
     ]
 
     // MARK: - Subphase Tool Bundles
@@ -42,7 +44,8 @@ struct ToolBundlePolicy {
             OnboardingToolName.getUserOption.rawValue,
             OnboardingToolName.getUserUpload.rawValue,  // For contacts import
             OnboardingToolName.validateApplicantProfile.rawValue,
-            OnboardingToolName.validatedApplicantProfileData.rawValue
+            OnboardingToolName.validatedApplicantProfileData.rawValue,
+            OnboardingToolName.createWebArtifact.rawValue  // For saving web_search content from profile URLs
         ],
         .p1_photoCollection: [
             OnboardingToolName.getUserUpload.rawValue,

@@ -412,6 +412,18 @@ final class OnboardingInterviewCoordinator {
         )
     }
 
+    /// Fetch URL content and create artifact via agent web search
+    func fetchURLForArtifact(_ urlString: String) async {
+        Logger.info("🌐 Requesting URL fetch for artifact: \(urlString)", category: .ai)
+        var payload = JSON()
+        payload["text"].string = """
+            The user wants to add content from this URL: \(urlString)
+            Use web_search to fetch the content, then use create_web_artifact
+            to save it as an artifact for document collection.
+            """
+        await container.eventBus.publish(.llmExecuteDeveloperMessage(payload: payload))
+    }
+
     /// Ingest document files using the async ingestion pipeline
     func ingestDocuments(_ fileURLs: [URL]) async {
         let currentPlanItemId = ui.knowledgeCardPlanFocus

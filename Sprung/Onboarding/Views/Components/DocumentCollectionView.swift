@@ -17,11 +17,13 @@ struct DocumentCollectionView: View {
     let onDropFiles: ([URL], LargePDFExtractionMethod?) -> Void
     let onSelectFiles: () -> Void
     let onSelectGitRepo: (URL) -> Void
+    let onFetchURL: (String) async -> Void
 
     @State private var isDropTargeted = false
     @State private var showGitRepoPicker = false
     @State private var showActiveAgentsAlert = false
     @State private var showArchivedArtifactsPicker = false
+    @State private var showURLEntry = false
 
     /// Number of archived artifacts available for reuse
     private var archivedArtifactCount: Int {
@@ -96,6 +98,16 @@ struct DocumentCollectionView: View {
             ArchivedArtifactsPickerSheet(
                 coordinator: coordinator,
                 onDismiss: { showArchivedArtifactsPicker = false }
+            )
+        }
+        .sheet(isPresented: $showURLEntry) {
+            URLEntrySheet(
+                onSubmit: { url in
+                    Task {
+                        await onFetchURL(url)
+                    }
+                },
+                onDismiss: { showURLEntry = false }
             )
         }
     }
@@ -186,6 +198,13 @@ struct DocumentCollectionView: View {
                             showGitRepoPicker = true
                         } label: {
                             Label("Add Git Repo", systemImage: "terminal")
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button {
+                            showURLEntry = true
+                        } label: {
+                            Label("Add URL", systemImage: "link")
                         }
                         .buttonStyle(.bordered)
                     }
@@ -544,5 +563,115 @@ private struct ArchivedArtifactPickerRow: View {
         return Image(systemName: iconName)
             .font(.body)
             .foregroundStyle(iconColor)
+    }
+}
+
+// MARK: - URL Entry Sheet
+
+/// Sheet for entering a URL to fetch and create an artifact from
+struct URLEntrySheet: View {
+    let onSubmit: (String) -> Void
+    let onDismiss: () -> Void
+
+    @State private var urlString: String = ""
+    @State private var errorMessage: String?
+    @FocusState private var isURLFieldFocused: Bool
+
+    private var isValidURL: Bool {
+        guard !urlString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Allow URLs with or without scheme - we'll normalize later
+        let urlWithScheme = trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://")
+            ? trimmed
+            : "https://\(trimmed)"
+        return URL(string: urlWithScheme) != nil
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Image(systemName: "link")
+                    .foregroundStyle(.blue)
+                Text("Add URL")
+                    .font(.headline)
+                Spacer()
+                Button("Cancel") {
+                    onDismiss()
+                }
+                .buttonStyle(.bordered)
+            }
+            .padding()
+
+            Divider()
+
+            // URL entry
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Enter a URL to fetch and add as an artifact:")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                TextField("https://example.com/portfolio", text: $urlString)
+                    .textFieldStyle(.roundedBorder)
+                    .focused($isURLFieldFocused)
+                    .onSubmit {
+                        if isValidURL {
+                            submitURL()
+                        }
+                    }
+
+                if let error = errorMessage {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+
+                Text("The agent will visit this URL and extract relevant content to create an artifact.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding()
+
+            Spacer()
+
+            Divider()
+
+            // Footer
+            HStack {
+                Text("Supported: Portfolio sites, LinkedIn profiles, GitHub, company pages, articles")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Button("Fetch URL") {
+                    submitURL()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!isValidURL)
+            }
+            .padding()
+        }
+        .frame(width: 450, height: 250)
+        .onAppear {
+            isURLFieldFocused = true
+        }
+    }
+
+    private func submitURL() {
+        let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Normalize URL (add https:// if missing)
+        let normalizedURL = trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://")
+            ? trimmed
+            : "https://\(trimmed)"
+
+        guard URL(string: normalizedURL) != nil else {
+            errorMessage = "Please enter a valid URL"
+            return
+        }
+
+        onSubmit(normalizedURL)
+        onDismiss()
     }
 }

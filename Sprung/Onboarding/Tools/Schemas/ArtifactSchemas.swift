@@ -125,4 +125,37 @@ enum ArtifactSchemas {
             additionalProperties: false
         )
     }
+
+    /// Complete schema for create_web_artifact tool
+    static var createWebArtifact: JSONSchema {
+        JSONSchema(
+            type: .object,
+            description: "Create an artifact from web content after using web_search. Use when the searched content is valuable for the user's profile.",
+            properties: [
+                "url": JSONSchema(
+                    type: .string,
+                    description: "The URL of the web page that was searched"
+                ),
+                "title": JSONSchema(
+                    type: .string,
+                    description: "A descriptive title for the artifact (e.g., 'Portfolio - John Doe', 'LinkedIn Profile')"
+                ),
+                "content": JSONSchema(
+                    type: .string,
+                    description: "The relevant extracted text content from the web page (key information, achievements, project details)"
+                ),
+                "document_type": JSONSchema(
+                    type: .string,
+                    description: "Type of web content",
+                    enum: ["portfolio", "linkedin", "github", "company_page", "project_page", "article", "other"]
+                ),
+                "summary": JSONSchema(
+                    type: .string,
+                    description: "A brief 1-2 sentence summary of what this artifact contains"
+                )
+            ],
+            required: ["url", "title", "content", "document_type"],
+            additionalProperties: false
+        )
+    }
 }
