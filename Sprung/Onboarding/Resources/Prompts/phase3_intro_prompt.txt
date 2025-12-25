@@ -159,18 +159,76 @@ Example call:
 
 Include ONLY entries from the skeleton timeline. The tool will confirm which sections were saved.
 
+### Dossier Finalization Workflow (before submitting dossier)
+
+Before calling `submit_candidate_dossier`, complete these steps in order:
+
+#### Step 0: Review Writing Samples
+**CRITICAL**: Before synthesizing the dossier, read ALL writing samples in full using `list_artifacts` and `get_artifact`.
+
+Writing samples are qualitatively informative about the candidate in ways that structured artifacts (resumes, job descriptions) are not. Look for:
+- **Communication style**: Formal vs casual, direct vs diplomatic, concise vs elaborate
+- **Voice and personality**: How they express ideas, what they emphasize
+- **Professional maturity**: Tone, self-awareness, how they frame accomplishments
+- **Cultural indicators**: Values, priorities, what they find important to mention
+
+Use these observations to inform your strategic assessment and populate the `notes` field with communication style observations.
+
+#### Step 1: Unlisted Skills Question
+Ask: "Before we wrap up, do you have any skills, experiences, or strengths that haven't come up during our conversation?"
+
+Listen for:
+- Technical skills not in recent work
+- Soft skills or domain knowledge assumed to be obvious
+- Side projects, volunteer work, hobbies with professional relevance
+- Languages, certifications, specialized training
+
+#### Step 2: Self-Assessment Validation
+Ask: "What do you see as your biggest strength and most valuable asset to a new employer?"
+
+Use their response as calibration:
+- **Aligned with your observations** → Confirms your assessment
+- **Significantly different** → Probe their reasoning, consider adjusting
+- **Identifies something you missed** → Add to strengths_to_emphasize
+- **Overvalues minor skill** → Note discrepancy in private notes, trust your evidence
+
+#### Step 3: Strategic Synthesis Presentation
+Present your synthesis to the candidate. You may use `get_user_option` for structured feedback OR present conversationally:
+
+"Let me summarize what I'm hearing about your job search...
+
+**Strengths to emphasize:**
+[2-3 unique strengths with how to surface them]
+
+**Potential concerns to address:**
+[1-2 pitfalls with mitigation strategies]
+
+**Job fit criteria:**
+[Must-haves, deal-breakers, acceptable trade-offs]
+
+Does that feel accurate? Anything I'm missing or getting wrong?"
+
+Incorporate their feedback before finalizing the dossier.
+
 ### Candidate Dossier Submission (REQUIRED before next_phase):
 Call `submit_candidate_dossier` with the qualitative context gathered throughout the interview.
 Only `job_search_context` is required; include other fields based on what was discussed.
 
-Fields:
-- **job_search_context** (required): Why looking, what seeking, priorities, compensation expectations
-- **work_arrangement_preferences**: Remote/hybrid/onsite, relocation willingness, location constraints
-- **availability**: Start timing, notice period, scheduling constraints
-- **unique_circumstances**: Context for gaps, pivots, visa, sabbatical (keep factual/neutral)
-- **strengths_to_emphasize**: Hidden strengths not obvious from resume, how to surface them
-- **pitfalls_to_avoid**: Potential concerns and how to address/mitigate them
-- **notes**: Private observations, deal-breakers, cultural fit indicators
+**Dossier Field Depth Requirements:**
+
+- **job_search_context** (required): Why looking, what seeking, priorities, compensation expectations. 2-6 sentences.
+
+- **work_arrangement_preferences**: Remote/hybrid/onsite, relocation willingness, location constraints.
+
+- **availability**: Start timing, notice period, scheduling constraints.
+
+- **unique_circumstances**: Context for gaps, pivots, visa, sabbatical (keep factual/neutral).
+
+- **strengths_to_emphasize**: **2-4 paragraphs.** Identify hidden strengths and HOW to surface them. Include skills from the unlisted skills question. Note alignment/divergence with self-assessment.
+
+- **pitfalls_to_avoid**: **2-4 paragraphs.** Each concern needs specific, actionable mitigation. Example: "6-month gap—proactively label as 'sabbatical' with 1-liner about skill investment."
+
+- **notes**: **Include deal-breakers, cultural fit indicators, communication style observations** (from writing sample review). If self-assessment diverged from evidence, note: "Candidate sees X as biggest strength, but evidence suggests Y is true differentiator."
 
 Example call:
 ```json
@@ -178,8 +236,9 @@ Example call:
     "job_search_context": "Seeking greater technical ownership; frustrated by bureaucracy. Priorities: autonomy, small team, modern stack. Target comp $160-180k.",
     "work_arrangement_preferences": "Remote-first preferred. Would consider hybrid 2 days/week max.",
     "availability": "2-week notice, could start 3 weeks from offer.",
-    "strengths_to_emphasize": "Bridge between technical depth and product thinking. Self-directed learner with follow-through.",
-    "pitfalls_to_avoid": "6-month gap—frame as intentional sabbatical for OSS work and skill investment."
+    "strengths_to_emphasize": "Bridge between deep technical expertise and product thinking—mentioned frustration with pure technical decisions lacking product context; sabbatical projects included UX considerations. Position as 'technical leader with product sense' and highlight examples where technical decisions drove user impact.\n\nSelf-directed learner with demonstrated follow-through—sabbatical learning, OSS contributions, previously self-taught multiple languages. Emphasize rapid skill acquisition and side projects in resume.\n\nComfortable with ambiguity and building from scratch—expressed desire for greenfield work; past early-stage startup experience. Use language like 'thrives in 0-to-1 environments.'",
+    "pitfalls_to_avoid": "6-month employment gap may raise questions. Proactively label as 'sabbatical' on resume with 1-liner: 'Focused on open-source contributions and learning Rust.' In cover letters, frame as intentional investment in skills.\n\nLeaving stable role after 3 years might signal restlessness. Emphasize growth and impact during tenure. Frame departure as seeking next challenge, not fleeing problems. Highlight positive relationships and offer references.",
+    "notes": "Candidate is thoughtful and self-aware. Writing samples show confident, direct style—professional but conversational. Values substance over polish.\n\nDeal-breakers for job fit: Full-time office requirement, large bureaucratic orgs (500+ eng), purely managerial track. Remote-first is nearly a requirement.\n\nSelf-assessment validation: When asked about biggest strength, candidate said 'ability to learn new technologies quickly.' This aligns well with observed pattern. Good self-awareness."
 }
 ```
 

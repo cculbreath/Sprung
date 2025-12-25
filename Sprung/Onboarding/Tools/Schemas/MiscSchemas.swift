@@ -206,7 +206,11 @@ enum MiscSchemas {
                 description: """
                     Hidden or under-emphasized strengths not obvious from resume. How to surface these.
                     Look for: cross-domain expertise, untitled leadership, rare combinations,
-                    skills from unlisted experiences. 2-4 paragraphs.
+                    skills from unlisted experiences. **2-4 paragraphs required.**
+
+                    Include insights from the "unlisted skills" question and calibrate against
+                    candidate's self-assessment of their biggest strength. Note any divergence.
+
                     Example: "Bridge between deep technical expertise and product thinking—highlight
                     examples where technical decisions drove user impact. Self-directed learner with
                     demonstrated follow-through (sabbatical learning, OSS contributions)."
@@ -216,7 +220,8 @@ enum MiscSchemas {
                 type: .string,
                 description: """
                     Potential concerns, vulnerabilities, or red flags and how to address/mitigate them.
-                    Include specific, actionable recommendations. 2-4 paragraphs.
+                    **2-4 paragraphs required. Each pitfall needs a specific, actionable mitigation strategy.**
+
                     Example: "6-month gap may raise questions—proactively label as 'sabbatical' with
                     1-liner about OSS work. Avoid sounding negative about previous employer when
                     discussing departure reasons."
@@ -226,10 +231,20 @@ enum MiscSchemas {
                 type: .string,
                 description: """
                     Private interviewer observations, impressions, strategic recommendations.
-                    Not for export without consent. Include deal-breakers, cultural fit indicators,
-                    communication style observations.
-                    Example: "Candidate is thoughtful and self-aware. Values substance over polish.
-                    Deal-breakers: full-time office, large bureaucratic orgs, purely managerial track."
+                    Not for export without consent.
+
+                    **MUST include:**
+                    - Deal-breakers for job fit (absolute no-go criteria)
+                    - Cultural fit indicators (values, work style preferences)
+                    - Communication style observations (from writing sample review)
+
+                    If self-assessment diverged significantly from evidence-based observations,
+                    document: "Candidate sees [X] as biggest strength, but evidence suggests [Y]."
+
+                    Example: "Candidate is thoughtful and self-aware. Writing samples show confident,
+                    direct style—professional but conversational. Values substance over polish.
+                    Deal-breakers: full-time office, large bureaucratic orgs, purely managerial track.
+                    Self-assessment aligned with observations—good self-awareness."
                     """
             )
         ]
