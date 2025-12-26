@@ -87,6 +87,18 @@ extension JobApp {
 
             // Parse the HTML using SwiftSoup
             if let jobApp = parseLinkedInJobListing(html: html, url: urlString) {
+                // Check for duplicates before adding
+                if let existingJob = jobAppStore.jobApps.first(where: { existingApp in
+                    // Match by posting URL (normalize by removing query params)
+                    let existingBase = existingApp.postingURL.components(separatedBy: "?").first ?? existingApp.postingURL
+                    let newBase = urlString.components(separatedBy: "?").first ?? urlString
+                    return existingBase == newBase
+                }) {
+                    Logger.info("📋 [LinkedIn Scraper] Job already exists, selecting existing: \(existingJob.jobPosition)")
+                    jobAppStore.selectedApp = existingJob
+                    return existingJob
+                }
+
                 jobAppStore.selectedApp = jobAppStore.addJobApp(jobApp)
                 Logger.info("✅ Successfully extracted LinkedIn job: \(jobApp.jobPosition)")
                 return jobApp
