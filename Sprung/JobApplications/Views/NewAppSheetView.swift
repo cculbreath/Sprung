@@ -489,9 +489,10 @@ struct NewAppSheetView: View {
             jobApp.jobApplyLink = sourceURL
         }
 
-        // Add salary to description if present
-        if let salary = json["salary"] as? String, !salary.isEmpty {
-            jobApp.jobDescription += "\n\nCompensation: \(salary)"
+        // Extract salary to dedicated field
+        if let salary = json["salary"] as? String, !salary.isEmpty, salary != "Not specified" {
+            jobApp.salary = salary
+            Logger.debug("💰 [LLM] Extracted salary: \(salary)", category: .ai)
         }
 
         // Add workplace type to employment type if present

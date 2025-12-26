@@ -32,6 +32,10 @@ struct JobAppPostingDetailsSection: View {
                 leading: "Job Posting Time", trailingKeys: \JobApp.jobPostingTime,
                 formTrailingKeys: \JobAppForm.jobPostingTime, isEditing: $buttons.edit
             )
+            Cell(
+                leading: "Salary", trailingKeys: \JobApp.salary,
+                formTrailingKeys: \JobAppForm.salary, isEditing: $buttons.edit
+            )
         }
         .insetGroupedStyle(header: Text("Posting Details"))
     }

@@ -122,6 +122,8 @@ extension Statuses {
     var jobApplyLink: String = ""
     @Attribute(originalName: "posting_url")
     var postingURL: String = ""
+    /// Salary range or compensation details (e.g., "$150K - $200K/yr")
+    var salary: String = ""
     var status: Statuses = Statuses.new
     var notes: String = ""
 

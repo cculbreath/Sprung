@@ -17,6 +17,7 @@ import SwiftData
     var industries: String = ""
     var jobApplyLink: String = ""
     var postingURL: String = ""
+    var salary: String = ""
     init() {}
     func populateFormFromObj(_ source: JobApp) {
         jobPosition = source.jobPosition
@@ -31,5 +32,6 @@ import SwiftData
         industries = source.industries
         jobApplyLink = source.jobApplyLink
         postingURL = source.postingURL
+        salary = source.salary
     }
 }
