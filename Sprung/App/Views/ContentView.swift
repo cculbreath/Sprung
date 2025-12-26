@@ -73,7 +73,7 @@ struct ContentView: View {
             }
             .frame(minWidth: 200, maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             // Main application toolbar is attached here to be visible regardless of job app selection
-            .toolbar(id: "mainToolbarV2") {
+            .toolbar(id: "sprungMainToolbar") {
                 buildUnifiedToolbar(
                     selectedTab: $navigationState.selectedTab,
                     listingButtons: $listingButtons,

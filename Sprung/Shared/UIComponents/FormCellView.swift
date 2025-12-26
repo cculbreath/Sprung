@@ -34,20 +34,40 @@ struct Cell: View {
                     if let app = jobAppStore?.selectedApp {
                         let value = app[keyPath: trailingKeys]
                         let isLink = isValidURL(value)
-                        Text(value.isEmpty ? "none listed" : value)
-                            .foregroundColor(isLink ? .accentColor : .secondary)
-                            .italic(value.isEmpty)
-                            .lineLimit(1)
                         if isLink {
+                            // Clickable link text
                             Button(action: {
                                 if let url = URL(string: value) {
                                     openURL(url)
                                 }
                             }) {
-                                Image(systemName: "arrow.up.right.square")
+                                Text(value)
                                     .foregroundColor(.accentColor)
+                                    .lineLimit(1)
+                                    .underline()
                             }
                             .buttonStyle(PlainButtonStyle())
+                            .help("Click to open in browser, right-click to copy")
+                            .contextMenu {
+                                Button("Copy URL") {
+                                    NSPasteboard.general.clearContents()
+                                    NSPasteboard.general.setString(value, forType: .string)
+                                }
+                                Button("Open in Browser") {
+                                    if let url = URL(string: value) {
+                                        openURL(url)
+                                    }
+                                }
+                            }
+                            Image(systemName: "arrow.up.right.square")
+                                .foregroundColor(.accentColor)
+                                .font(.caption)
+                        } else {
+                            Text(value.isEmpty ? "none listed" : value)
+                                .foregroundColor(.secondary)
+                                .italic(value.isEmpty)
+                                .lineLimit(1)
+                                .textSelection(.enabled)
                         }
                     } else {
                         Text("No app selected")
@@ -58,9 +78,11 @@ struct Cell: View {
         }
     }
     private func isValidURL(_ urlString: String) -> Bool {
-        if let url = URL(string: urlString) {
-            return NSWorkspace.shared.urlForApplication(toOpen: url) != nil
+        guard !urlString.isEmpty,
+              let url = URL(string: urlString),
+              let scheme = url.scheme?.lowercased() else {
+            return false
         }
-        return false
+        return scheme == "http" || scheme == "https"
     }
 }
