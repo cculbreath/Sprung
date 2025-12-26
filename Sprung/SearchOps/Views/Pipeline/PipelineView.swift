@@ -11,8 +11,19 @@ import SwiftUI
 struct PipelineView: View {
     let coordinator: SearchOpsCoordinator
 
+    @Environment(ResRefStore.self) private var resRefStore
+    @Environment(CoverRefStore.self) private var coverRefStore
+
     @State private var selectedStage: ApplicationStage? = nil
     @State private var showingAddLead = false
+    @State private var isChoosing = false
+    @State private var selectionResult: JobSelectionsResult?
+    @State private var selectionError: String?
+    @State private var showingSelectionReport = false
+
+    private var identifiedCount: Int {
+        coordinator.jobAppStore.jobApps(forStage: .identified).count
+    }
 
     private var stages: [(ApplicationStage, [JobApp])] {
         ApplicationStage.allCases.compactMap { stage in
@@ -46,6 +57,21 @@ struct PipelineView: View {
                 }
             }
 
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    Task { await chooseBestJobs() }
+                } label: {
+                    if isChoosing {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Label("Choose Best", systemImage: "trophy")
+                    }
+                }
+                .disabled(identifiedCount < 1 || isChoosing)
+                .help("Select best \(min(5, identifiedCount)) jobs from \(identifiedCount) identified")
+            }
+
             ToolbarItem(placement: .secondaryAction) {
                 Menu {
                     ForEach(ApplicationStage.allCases, id: \.self) { stage in
@@ -60,6 +86,48 @@ struct PipelineView: View {
         .sheet(isPresented: $showingAddLead) {
             AddLeadView(coordinator: coordinator)
         }
+        .sheet(isPresented: $showingSelectionReport) {
+            if let result = selectionResult {
+                SelectionReportSheet(result: result)
+            } else if let error = selectionError {
+                SelectionErrorSheet(error: error)
+            }
+        }
+    }
+
+    private func chooseBestJobs() async {
+        isChoosing = true
+        selectionError = nil
+
+        // TODO: Context source choice - may revisit (currently using knowledge cards + dossier)
+        // Build knowledge context from ResRefs
+        let knowledgeContext = resRefStore.resRefs
+            .map { ref in
+                let typeLabel = ref.cardType.map { "[\($0)]" } ?? "[general]"
+                return "\(typeLabel) \(ref.name):\n\(ref.content)"
+            }
+            .joined(separator: "\n\n")
+
+        // Build dossier context from CoverRefs marked as dossier
+        let dossierContext = coverRefStore.storedCoverRefs
+            .filter { $0.isDossier }
+            .map { "\($0.name):\n\($0.content)" }
+            .joined(separator: "\n\n")
+
+        do {
+            let result = try await coordinator.chooseBestJobs(
+                knowledgeContext: knowledgeContext,
+                dossierContext: dossierContext,
+                count: 5
+            )
+            selectionResult = result
+            showingSelectionReport = true
+        } catch {
+            selectionError = error.localizedDescription
+            showingSelectionReport = true
+        }
+
+        isChoosing = false
     }
 
     private func advanceLead(_ lead: JobApp) {
@@ -326,5 +394,166 @@ extension ApplicationStage {
 
     var canAdvance: Bool {
         !isTerminal
+    }
+}
+
+// MARK: - Selection Report Sheet
+
+struct SelectionReportSheet: View {
+    let result: JobSelectionsResult
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Top \(result.selections.count) Job Matches")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    Text("Selected and moved to Researching stage")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+            .padding()
+            .background(Color(.windowBackgroundColor))
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Selections
+                    ForEach(Array(result.selections.enumerated()), id: \.element.jobId) { index, selection in
+                        SelectionCard(selection: selection, rank: index + 1)
+                    }
+
+                    // Overall Analysis
+                    if !result.overallAnalysis.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Analysis Summary")
+                                .font(.headline)
+                            Text(result.overallAnalysis)
+                                .font(.body)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding()
+                        .background(Color(.controlBackgroundColor))
+                        .cornerRadius(8)
+                    }
+
+                    // Considerations
+                    if !result.considerations.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Things to Consider")
+                                .font(.headline)
+                            ForEach(result.considerations, id: \.self) { consideration in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Image(systemName: "lightbulb")
+                                        .foregroundStyle(.yellow)
+                                    Text(consideration)
+                                        .font(.body)
+                                }
+                            }
+                        }
+                        .padding()
+                        .background(Color(.controlBackgroundColor))
+                        .cornerRadius(8)
+                    }
+                }
+                .padding()
+            }
+        }
+        .frame(width: 600, height: 700)
+    }
+}
+
+struct SelectionCard: View {
+    let selection: JobSelection
+    let rank: Int
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            // Rank badge
+            Text("#\(rank)")
+                .font(.headline)
+                .foregroundStyle(.white)
+                .frame(width: 36, height: 36)
+                .background(rankColor)
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 8) {
+                // Company and role
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(selection.company)
+                            .font(.headline)
+                        Text(selection.role)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    // Match score
+                    Text("\(Int(selection.matchScore * 100))%")
+                        .font(.title3)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(scoreColor)
+                }
+
+                // Reasoning
+                Text(selection.reasoning)
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding()
+        .background(Color(.controlBackgroundColor))
+        .cornerRadius(8)
+    }
+
+    private var rankColor: Color {
+        switch rank {
+        case 1: return .yellow
+        case 2: return .gray
+        case 3: return .orange
+        default: return .blue
+        }
+    }
+
+    private var scoreColor: Color {
+        if selection.matchScore >= 0.9 { return .green }
+        if selection.matchScore >= 0.7 { return .blue }
+        return .orange
+    }
+}
+
+struct SelectionErrorSheet: View {
+    let error: String
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 48))
+                .foregroundStyle(.red)
+
+            Text("Selection Failed")
+                .font(.title2)
+                .fontWeight(.semibold)
+
+            Text(error)
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+
+            Button("Dismiss") { dismiss() }
+                .keyboardShortcut(.defaultAction)
+        }
+        .padding(40)
+        .frame(width: 400)
     }
 }

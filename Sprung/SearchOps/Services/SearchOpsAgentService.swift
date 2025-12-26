@@ -179,7 +179,7 @@ actor SearchOpsAgentService {
     func discoverJobSources(
         sectors: [String],
         location: String,
-        statusCallback: (@MainActor @Sendable (DiscoveryStatus) -> Void)? = nil
+        statusCallback: (@MainActor @Sendable (DiscoveryStatus) async -> Void)? = nil
     ) async throws -> JobSourcesResult {
         let systemPrompt = loadPromptTemplate(named: "searchops_discover_job_sources")
         let userMessage = "Discover job sources for sectors: \(sectors.joined(separator: ", ")) in \(location)"
@@ -207,7 +207,8 @@ actor SearchOpsAgentService {
         modelId: String,
         reasoningEffort: String = "low",
         userLocation: String? = nil,
-        statusCallback: (@MainActor @Sendable (DiscoveryStatus) -> Void)? = nil
+        statusCallback: (@MainActor @Sendable (DiscoveryStatus) async -> Void)? = nil,
+        reasoningCallback: (@MainActor @Sendable (String) async -> Void)? = nil
     ) async throws -> String {
         let apiKey = openAIAPIKey()
         guard !apiKey.isEmpty else {
@@ -265,8 +266,13 @@ actor SearchOpsAgentService {
                 await statusCallback?(.webSearching)
             case .webSearchCallCompleted:
                 Logger.debug("🌐 Web search completed", category: .ai)
+                await statusCallback?(.webSearchComplete)
             case .outputTextDelta(let delta):
                 Logger.verbose("📝 Text delta: \(delta.delta.count) chars", category: .ai)
+                await reasoningCallback?(delta.delta)
+            case .reasoningSummaryTextDelta(let delta):
+                Logger.verbose("🧠 Reasoning delta: \(delta.delta.count) chars", category: .ai)
+                await reasoningCallback?(delta.delta)
             default:
                 break
             }
@@ -303,15 +309,27 @@ actor SearchOpsAgentService {
         return nil
     }
 
-    /// Discover networking events using the agent
-    func discoverNetworkingEvents(sectors: [String], location: String, daysAhead: Int = 14) async throws -> NetworkingEventsResult {
+    /// Discover networking events using Responses API with web search
+    func discoverNetworkingEvents(
+        sectors: [String],
+        location: String,
+        daysAhead: Int = 14,
+        statusCallback: (@MainActor @Sendable (DiscoveryStatus) async -> Void)? = nil,
+        reasoningCallback: (@MainActor @Sendable (String) async -> Void)? = nil
+    ) async throws -> NetworkingEventsResult {
         let systemPrompt = loadPromptTemplate(named: "searchops_discover_networking_events")
-
         let userMessage = "Find networking events for sectors: \(sectors.joined(separator: ", ")) in \(location) for the next \(daysAhead) days"
+        let model = await modelId
+        let reasoning = await reasoningEffort
 
-        let response = try await runAgent(
+        let response = try await runWithWebSearch(
             systemPrompt: systemPrompt,
-            userMessage: userMessage
+            userMessage: userMessage,
+            modelId: model,
+            reasoningEffort: reasoning,
+            userLocation: location,
+            statusCallback: statusCallback,
+            reasoningCallback: reasoningCallback
         )
 
         return try parseEventsResponse(response)
@@ -349,6 +367,67 @@ actor SearchOpsAgentService {
         )
 
         return try parsePrepResponse(response)
+    }
+
+    /// Generate debrief outcomes and suggested next steps
+    func generateDebriefOutcomes(
+        eventName: String,
+        eventType: String,
+        keyInsights: String,
+        contactsMade: [String],
+        notes: String
+    ) async throws -> DebriefOutcomesResult {
+        let systemPrompt = """
+        You are a career networking coach analyzing a post-event debrief. Based on the information provided about the networking event, generate actionable outcomes and next steps.
+
+        Return your response as JSON with this structure:
+        {
+            "summary": "Brief 1-2 sentence summary of the event outcomes",
+            "key_takeaways": ["Insight 1", "Insight 2", "Insight 3"],
+            "follow_up_actions": [
+                {
+                    "contact_name": "Person's name",
+                    "action": "What to do",
+                    "deadline": "within 24 hours / within 1 week / within 2 weeks",
+                    "priority": "high / medium / low"
+                }
+            ],
+            "opportunities_identified": ["Potential opportunity 1", "Potential opportunity 2"],
+            "next_steps": ["Concrete next step 1", "Concrete next step 2", "Concrete next step 3"]
+        }
+
+        Guidelines:
+        - Follow-up actions should be specific and actionable
+        - Prioritize warm leads and time-sensitive opportunities
+        - Suggest LinkedIn connection requests within 24-48 hours of meeting
+        - Identify any job leads, referral opportunities, or informational interview possibilities
+        - Be concrete and specific in next steps
+        """
+
+        var contextParts: [String] = []
+        contextParts.append("Event: \(eventName) (\(eventType))")
+
+        if !contactsMade.isEmpty {
+            contextParts.append("Contacts made: \(contactsMade.joined(separator: ", "))")
+        }
+
+        if !keyInsights.isEmpty {
+            contextParts.append("Key insights: \(keyInsights)")
+        }
+
+        if !notes.isEmpty {
+            contextParts.append("Additional notes: \(notes)")
+        }
+
+        let userMessage = contextParts.joined(separator: "\n\n")
+
+        let response = try await runAgent(
+            systemPrompt: systemPrompt,
+            userMessage: userMessage,
+            enableTools: false
+        )
+
+        return try parseDebriefOutcomesResponse(response)
     }
 
     /// Generate weekly reflection
@@ -389,6 +468,114 @@ actor SearchOpsAgentService {
         )
 
         return try parseOutreachResponse(response)
+    }
+
+    /// Choose best jobs from identified pool based on user's knowledge and dossier
+    /// - Parameters:
+    ///   - jobs: Array of job descriptions with IDs
+    ///   - knowledgeContext: User's knowledge cards (skills, experience)
+    ///   - dossierContext: User's dossier (job search context, preferences)
+    ///   - count: Number of jobs to select (default 5)
+    /// - Returns: Selection result with reasoning
+    // TODO: Context source choice - may revisit (currently using knowledge cards + dossier)
+    func chooseBestJobs(
+        jobs: [(id: UUID, company: String, role: String, description: String)],
+        knowledgeContext: String,
+        dossierContext: String,
+        count: Int = 5
+    ) async throws -> JobSelectionsResult {
+        let systemPrompt = loadPromptTemplate(named: "searchops_choose_best_jobs")
+        let model = await modelId
+        let reasoning = await reasoningEffort
+
+        // Build user message with all context
+        var userMessage = "Please select the top \(count) jobs from the following opportunities.\n\n"
+
+        userMessage += "## CANDIDATE KNOWLEDGE CARDS\n\(knowledgeContext)\n\n"
+        userMessage += "## CANDIDATE DOSSIER\n\(dossierContext)\n\n"
+        userMessage += "## JOB OPPORTUNITIES\n"
+
+        for job in jobs {
+            userMessage += """
+            ---
+            ID: \(job.id.uuidString)
+            Company: \(job.company)
+            Role: \(job.role)
+            Description: \(job.description)
+
+            """
+        }
+
+        let response = try await runDirectOpenAI(
+            systemPrompt: systemPrompt,
+            userMessage: userMessage,
+            modelId: model,
+            reasoningEffort: reasoning
+        )
+
+        return try parseJobSelectionsResponse(response)
+    }
+
+    // MARK: - Direct OpenAI API (no web search)
+
+    /// Run a request using OpenAI Responses API without tools (for analysis tasks)
+    private func runDirectOpenAI(
+        systemPrompt: String,
+        userMessage: String,
+        modelId: String,
+        reasoningEffort: String = "low"
+    ) async throws -> String {
+        let apiKey = openAIAPIKey()
+        guard !apiKey.isEmpty else {
+            throw SearchOpsAgentError.missingAPIKey
+        }
+
+        // Strip OpenRouter prefix if present (e.g., "openai/gpt-5.2" -> "gpt-5.2")
+        let openAIModelId = modelId.hasPrefix("openai/") ? String(modelId.dropFirst(7)) : modelId
+
+        let service = OpenAIServiceFactory.service(apiKey: apiKey)
+
+        // Build input with system prompt as developer message + user message
+        let developerMessage = InputMessage(role: "developer", content: .text(systemPrompt))
+        let userInputMessage = InputMessage(role: "user", content: .text(userMessage))
+        let inputItems: [InputItem] = [
+            .message(developerMessage),
+            .message(userInputMessage)
+        ]
+
+        // Configure reasoning effort
+        let reasoning = Reasoning(effort: reasoningEffort)
+
+        let parameters = ModelResponseParameter(
+            input: .array(inputItems),
+            model: .custom(openAIModelId),
+            reasoning: reasoning,
+            store: false,
+            stream: true
+        )
+
+        Logger.info("🎯 Running direct OpenAI request (model: \(openAIModelId), reasoning: \(reasoningEffort))", category: .ai)
+
+        var finalResponse: ResponseModel?
+        let stream = try await service.responseCreateStream(parameters)
+
+        for try await event in stream {
+            switch event {
+            case .responseCompleted(let completed):
+                finalResponse = completed.response
+                Logger.debug("📡 Stream completed", category: .ai)
+            default:
+                break
+            }
+        }
+
+        guard let response = finalResponse,
+              let outputText = extractResponseText(from: response) else {
+            throw SearchOpsAgentError.noResponse
+        }
+
+        Logger.info("✅ Direct OpenAI returned \(outputText.count) chars", category: .ai)
+        return outputText
     }
 
     // MARK: - Response Parsing
@@ -520,6 +707,30 @@ actor SearchOpsAgentService {
         )
     }
 
+    private func parseDebriefOutcomesResponse(_ response: String) throws -> DebriefOutcomesResult {
+        guard let jsonData = extractJSON(from: response),
+              let data = jsonData.data(using: .utf8) else {
+            throw SearchOpsAgentError.invalidResponse
+        }
+
+        let json = try JSON(data: data)
+
+        return DebriefOutcomesResult(
+            summary: json["summary"].stringValue,
+            keyTakeaways: json["key_takeaways"].arrayValue.map { $0.stringValue },
+            followUpActions: json["follow_up_actions"].arrayValue.map {
+                DebriefFollowUpAction(
+                    contactName: $0["contact_name"].stringValue,
+                    action: $0["action"].stringValue,
+                    deadline: $0["deadline"].stringValue,
+                    priority: $0["priority"].stringValue
+                )
+            },
+            opportunitiesIdentified: json["opportunities_identified"].arrayValue.map { $0.stringValue },
+            nextSteps: json["next_steps"].arrayValue.map { $0.stringValue }
+        )
+    }
+
     private func parseActionsResponse(_ response: String) throws -> NetworkingActionsResult {
         guard let jsonData = extractJSON(from: response),
               let data = jsonData.data(using: .utf8) else {
@@ -554,6 +765,36 @@ actor SearchOpsAgentService {
             subject: json["subject"].string,
             message: json["message"].stringValue,
             notes: json["notes"].string
+        )
+    }
+
+    private func parseJobSelectionsResponse(_ response: String) throws -> JobSelectionsResult {
+        guard let jsonData = extractJSON(from: response),
+              let data = jsonData.data(using: .utf8) else {
+            throw SearchOpsAgentError.invalidResponse
+        }
+
+        let json = try JSON(data: data)
+        var selections: [JobSelection] = []
+
+        for selectionJson in json["selections"].arrayValue {
+            guard let jobId = UUID(uuidString: selectionJson["job_id"].stringValue) else {
+                continue
+            }
+            let selection = JobSelection(
+                jobId: jobId,
+                company: selectionJson["company"].stringValue,
+                role: selectionJson["role"].stringValue,
+                matchScore: selectionJson["match_score"].doubleValue,
+                reasoning: selectionJson["reasoning"].stringValue
+            )
+            selections.append(selection)
+        }
+
+        return JobSelectionsResult(
+            selections: selections,
+            overallAnalysis: json["overall_analysis"].stringValue,
+            considerations: json["considerations"].arrayValue.map { $0.stringValue }
         )
     }
 
@@ -595,6 +836,20 @@ struct JobSourcesResult {
 
 struct NetworkingEventsResult {
     let events: [GeneratedNetworkingEvent]
+}
+
+struct JobSelectionsResult {
+    let selections: [JobSelection]
+    let overallAnalysis: String
+    let considerations: [String]
+}
+
+struct JobSelection {
+    let jobId: UUID
+    let company: String
+    let role: String
+    let matchScore: Double
+    let reasoning: String
 }
 
 // MARK: - Generated Types (from LLM responses)
@@ -714,9 +969,7 @@ struct GeneratedNetworkingEvent {
     func toNetworkingEventOpportunity() -> NetworkingEventOpportunity {
         let event = NetworkingEventOpportunity()
         event.name = name
-        if let parsedDate = ISO8601DateFormatter().date(from: date) {
-            event.date = parsedDate
-        }
+        event.date = parseEventDate(date) ?? Date()
         event.time = time
         event.location = location
         event.url = url
@@ -727,6 +980,37 @@ struct GeneratedNetworkingEvent {
         event.relevanceReason = relevanceReason
         event.discoveredVia = .webSearch
         return event
+    }
+
+    private func parseEventDate(_ dateString: String) -> Date? {
+        // Try ISO8601 with time first
+        let iso8601Formatter = ISO8601DateFormatter()
+        if let date = iso8601Formatter.date(from: dateString) {
+            return date
+        }
+
+        // Try date-only format (YYYY-MM-DD)
+        let dateOnlyFormatter = DateFormatter()
+        dateOnlyFormatter.dateFormat = "yyyy-MM-dd"
+        dateOnlyFormatter.timeZone = TimeZone.current
+        if let date = dateOnlyFormatter.date(from: dateString) {
+            return date
+        }
+
+        // Try common US format (MM/DD/YYYY)
+        dateOnlyFormatter.dateFormat = "MM/dd/yyyy"
+        if let date = dateOnlyFormatter.date(from: dateString) {
+            return date
+        }
+
+        // Try natural language formats (e.g., "January 6, 2026")
+        dateOnlyFormatter.dateFormat = "MMMM d, yyyy"
+        if let date = dateOnlyFormatter.date(from: dateString) {
+            return date
+        }
+
+        Logger.warning("⚠️ Could not parse event date: \(dateString)", category: .ai)
+        return nil
     }
 
     private func parseEventType(_ type: String) -> NetworkingEventType {
@@ -771,6 +1055,21 @@ struct EventPrepResult {
     let targetCompanies: [TargetCompanyResult]
     let conversationStarters: [String]
     let thingsToAvoid: [String]
+}
+
+struct DebriefOutcomesResult {
+    let summary: String
+    let keyTakeaways: [String]
+    let followUpActions: [DebriefFollowUpAction]
+    let opportunitiesIdentified: [String]
+    let nextSteps: [String]
+}
+
+struct DebriefFollowUpAction {
+    let contactName: String
+    let action: String
+    let deadline: String
+    let priority: String
 }
 
 struct TalkingPointResult {

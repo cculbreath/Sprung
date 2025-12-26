@@ -329,30 +329,54 @@ struct EventPrepView: View {
     // MARK: - Action Buttons
 
     private var actionButtonsSection: some View {
-        HStack {
-            Button {
-                markAsPlanned()
-            } label: {
-                Label("Mark as Planned", systemImage: "checkmark.circle")
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(event.status == .planned)
+        VStack(spacing: 12) {
+            HStack {
+                if event.status == .planned {
+                    Button {
+                        markAsAttended()
+                    } label: {
+                        Label("I Attended This Event", systemImage: "checkmark.seal.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
+                } else {
+                    Button {
+                        markAsPlanned()
+                    } label: {
+                        Label("Mark as Planned", systemImage: "checkmark.circle")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(event.status == .planned)
+                }
 
-            Button {
-                skipEvent()
-            } label: {
-                Label("Skip Event", systemImage: "xmark.circle")
-            }
-            .buttonStyle(.bordered)
-            .disabled(event.status == .skipped)
-
-            Spacer()
-
-            if let urlStr = URL(string: event.url) {
-                Link(destination: urlStr) {
-                    Label("Open Event Page", systemImage: "safari")
+                Button {
+                    skipEvent()
+                } label: {
+                    Label("Skip Event", systemImage: "xmark.circle")
                 }
                 .buttonStyle(.bordered)
+                .disabled(event.status == .skipped)
+
+                Spacer()
+
+                if let urlStr = URL(string: event.url) {
+                    Link(destination: urlStr) {
+                        Label("Open Event Page", systemImage: "safari")
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+
+            // Show debrief prompt for attended events
+            if event.attended && event.status != .debriefed {
+                NavigationLink {
+                    DebriefView(event: event, coordinator: coordinator)
+                } label: {
+                    Label("Complete Debrief", systemImage: "doc.text.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.orange)
             }
         }
     }
@@ -406,6 +430,13 @@ struct EventPrepView: View {
 
     private func markAsPlanned() {
         event.status = .planned
+        coordinator.eventStore.update(event)
+    }
+
+    private func markAsAttended() {
+        event.status = .attended
+        event.attended = true
+        event.attendedAt = Date()
         coordinator.eventStore.update(event)
     }
 

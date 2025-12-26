@@ -23,6 +23,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var careerKeywordStore: CareerKeywordStore?
     var searchOpsCoordinator: SearchOpsCoordinator?
     var coverRefStore: CoverRefStore?
+    var resRefStore: ResRefStore?
     var jobAppStore: JobAppStore?
     func applicationDidFinishLaunching(_: Notification) {
         // Wait until the app is fully loaded before modifying the menu
@@ -401,6 +402,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                let appEnvironment,
                let searchOpsCoordinator,
                let coverRefStore,
+               let resRefStore,
                let applicantProfileStore {
                 let root = searchOpsView
                     .modelContainer(modelContainer)
@@ -408,6 +410,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(appEnvironment.appState)
                     .environment(searchOpsCoordinator)
                     .environment(coverRefStore)
+                    .environment(resRefStore)
                     .environment(applicantProfileStore)
                 hostingView = NSHostingView(rootView: AnyView(root))
             } else if let modelContainer {

@@ -271,7 +271,10 @@ final class SearchOpsCoordinator {
     }
 
     /// Discover networking events using LLM agent
-    func discoverNetworkingEvents(daysAhead: Int = 14) async throws {
+    func discoverNetworkingEvents(
+        daysAhead: Int = 14,
+        streamCallback: (@MainActor @Sendable (DiscoveryStatus, String?) async -> Void)? = nil
+    ) async throws {
         guard let agent = agentService else {
             throw SearchOpsLLMError.toolExecutionFailed("Agent service not configured")
         }
@@ -280,8 +283,63 @@ final class SearchOpsCoordinator {
             using: agent,
             sectors: prefs.targetSectors,
             location: prefs.primaryLocation,
-            daysAhead: daysAhead
+            daysAhead: daysAhead,
+            streamCallback: streamCallback
         )
+    }
+
+    /// Choose best jobs from identified pool using LLM agent
+    /// - Parameters:
+    ///   - knowledgeContext: User's knowledge cards as text
+    ///   - dossierContext: User's dossier entries as text
+    ///   - count: Number of jobs to select (default 5)
+    /// - Returns: Selection result with reasoning, and advances selected jobs to researching
+    // TODO: Context source choice - may revisit (currently using knowledge cards + dossier)
+    func chooseBestJobs(
+        knowledgeContext: String,
+        dossierContext: String,
+        count: Int = 5
+    ) async throws -> JobSelectionsResult {
+        guard let agent = agentService else {
+            throw SearchOpsLLMError.toolExecutionFailed("Agent service not configured")
+        }
+
+        // Get all jobs in identified stage
+        let identifiedJobs = jobAppStore.jobApps(forStage: .identified)
+        guard !identifiedJobs.isEmpty else {
+            throw SearchOpsLLMError.toolExecutionFailed("No jobs in Identified stage to choose from")
+        }
+
+        // Build job tuples for agent
+        let jobTuples = identifiedJobs.map { job in
+            (
+                id: job.id,
+                company: job.companyName,
+                role: job.jobPosition,
+                description: job.jobDescription
+            )
+        }
+
+        Logger.info("🎯 Choosing best \(count) jobs from \(identifiedJobs.count) identified", category: .ai)
+
+        // Call agent to select best jobs
+        let result = try await agent.chooseBestJobs(
+            jobs: jobTuples,
+            knowledgeContext: knowledgeContext,
+            dossierContext: dossierContext,
+            count: count
+        )
+
+        // Advance selected jobs to researching stage
+        for selection in result.selections {
+            if let job = identifiedJobs.first(where: { $0.id == selection.jobId }) {
+                jobAppStore.setStage(job, to: .researching)
+                Logger.info("📋 Advanced '\(job.jobPosition)' at \(job.companyName) to Researching", category: .ai)
+            }
+        }
+
+        Logger.info("✅ Selected \(result.selections.count) jobs for application", category: .ai)
+        return result
     }
 
     /// Evaluate an event for attendance using LLM agent
@@ -310,6 +368,25 @@ final class SearchOpsCoordinator {
             focusCompanies: focusCompanies,
             goals: goals,
             using: agent
+        )
+    }
+
+    /// Generate debrief outcomes and suggested next steps using LLM agent
+    func generateDebriefOutcomes(
+        event: NetworkingEventOpportunity,
+        keyInsights: String,
+        contactsMade: [String],
+        notes: String
+    ) async throws -> DebriefOutcomesResult {
+        guard let agent = agentService else {
+            throw SearchOpsLLMError.toolExecutionFailed("Agent service not configured")
+        }
+        return try await agent.generateDebriefOutcomes(
+            eventName: event.name,
+            eventType: event.eventType.rawValue,
+            keyInsights: keyInsights,
+            contactsMade: contactsMade,
+            notes: notes
         )
     }
 

@@ -169,7 +169,7 @@ final class SearchOpsNetworkingCoordinator {
         using agentService: SearchOpsAgentService,
         sectors: [String],
         location: String,
-        statusCallback: (@MainActor @Sendable (DiscoveryStatus) -> Void)? = nil
+        statusCallback: (@MainActor @Sendable (DiscoveryStatus) async -> Void)? = nil
     ) async throws {
         let result = try await agentService.discoverJobSources(
             sectors: sectors,
@@ -214,11 +214,23 @@ final class SearchOpsNetworkingCoordinator {
     }
 
     /// Discover networking events using LLM agent
-    func discoverNetworkingEvents(using agentService: SearchOpsAgentService, sectors: [String], location: String, daysAhead: Int = 14) async throws {
+    func discoverNetworkingEvents(
+        using agentService: SearchOpsAgentService,
+        sectors: [String],
+        location: String,
+        daysAhead: Int = 14,
+        streamCallback: (@MainActor @Sendable (DiscoveryStatus, String?) async -> Void)? = nil
+    ) async throws {
         let result = try await agentService.discoverNetworkingEvents(
             sectors: sectors,
             location: location,
-            daysAhead: daysAhead
+            daysAhead: daysAhead,
+            statusCallback: { status in
+                await streamCallback?(status, nil)
+            },
+            reasoningCallback: { text in
+                await streamCallback?(.webSearching, text)
+            }
         )
 
         // Filter duplicates and add new events
@@ -227,6 +239,8 @@ final class SearchOpsNetworkingCoordinator {
         )
 
         eventStore.addMultiple(newEvents)
+
+        await streamCallback?(.complete(added: newEvents.count, filtered: result.events.count - newEvents.count), nil)
 
         Logger.info("✅ Discovered \(newEvents.count) new events", category: .ai)
     }

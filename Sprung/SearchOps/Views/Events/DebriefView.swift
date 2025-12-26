@@ -21,6 +21,8 @@ struct DebriefView: View {
     @State private var rating: Int = 3
     @State private var wouldRecommend = true
     @State private var isSaving = false
+    @State private var isGeneratingOutcomes = false
+    @State private var generatedOutcomes: DebriefOutcomesResult?
 
     var body: some View {
         ScrollView {
@@ -52,6 +54,11 @@ struct DebriefView: View {
 
                 // Notes
                 notesSection
+
+                Divider()
+
+                // AI-Generated Outcomes
+                outcomesSection
 
                 // Submit
                 submitSection
@@ -228,6 +235,169 @@ struct DebriefView: View {
         }
     }
 
+    // MARK: - Outcomes Section
+
+    private var outcomesSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("AI-SUGGESTED OUTCOMES")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Button {
+                    Task { await generateOutcomes() }
+                } label: {
+                    if isGeneratingOutcomes {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Label("Generate", systemImage: "sparkles")
+                    }
+                }
+                .buttonStyle(.bordered)
+                .disabled(isGeneratingOutcomes || (keyInsights.isEmpty && newContacts.isEmpty && overallNotes.isEmpty))
+            }
+
+            if let outcomes = generatedOutcomes {
+                // Summary
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(outcomes.summary)
+                        .font(.body)
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.accentColor.opacity(0.1))
+                        .cornerRadius(8)
+                }
+
+                // Key Takeaways
+                if !outcomes.keyTakeaways.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Key Takeaways")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+
+                        ForEach(outcomes.keyTakeaways, id: \.self) { takeaway in
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: "lightbulb.fill")
+                                    .foregroundStyle(.yellow)
+                                    .font(.caption)
+                                Text(takeaway)
+                                    .font(.callout)
+                            }
+                        }
+                    }
+                    .padding()
+                    .background(Color(.windowBackgroundColor).opacity(0.5))
+                    .cornerRadius(8)
+                }
+
+                // Follow-up Actions
+                if !outcomes.followUpActions.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Follow-up Actions")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+
+                        ForEach(outcomes.followUpActions, id: \.contactName) { action in
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: priorityIcon(action.priority))
+                                    .foregroundStyle(priorityColor(action.priority))
+                                    .font(.caption)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(action.contactName)
+                                        .fontWeight(.medium)
+                                    Text(action.action)
+                                        .font(.callout)
+                                        .foregroundStyle(.secondary)
+                                    Text(action.deadline)
+                                        .font(.caption)
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                    .padding()
+                    .background(Color(.windowBackgroundColor).opacity(0.5))
+                    .cornerRadius(8)
+                }
+
+                // Opportunities
+                if !outcomes.opportunitiesIdentified.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Opportunities Identified")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+
+                        ForEach(outcomes.opportunitiesIdentified, id: \.self) { opportunity in
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: "star.fill")
+                                    .foregroundStyle(.orange)
+                                    .font(.caption)
+                                Text(opportunity)
+                                    .font(.callout)
+                            }
+                        }
+                    }
+                    .padding()
+                    .background(Color(.windowBackgroundColor).opacity(0.5))
+                    .cornerRadius(8)
+                }
+
+                // Next Steps
+                if !outcomes.nextSteps.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Recommended Next Steps")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+
+                        ForEach(Array(outcomes.nextSteps.enumerated()), id: \.offset) { index, step in
+                            HStack(alignment: .top, spacing: 8) {
+                                Text("\(index + 1).")
+                                    .font(.callout)
+                                    .fontWeight(.medium)
+                                    .foregroundStyle(Color.accentColor)
+                                Text(step)
+                                    .font(.callout)
+                            }
+                        }
+                    }
+                    .padding()
+                    .background(Color(.windowBackgroundColor).opacity(0.5))
+                    .cornerRadius(8)
+                }
+            } else {
+                Text("Add some notes or contacts above, then tap 'Generate' to get AI-suggested follow-ups and next steps.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(Color(.windowBackgroundColor).opacity(0.5))
+                    .cornerRadius(8)
+            }
+        }
+    }
+
+    private func priorityIcon(_ priority: String) -> String {
+        switch priority.lowercased() {
+        case "high": return "exclamationmark.circle.fill"
+        case "medium": return "arrow.right.circle.fill"
+        case "low": return "minus.circle.fill"
+        default: return "circle.fill"
+        }
+    }
+
+    private func priorityColor(_ priority: String) -> Color {
+        switch priority.lowercased() {
+        case "high": return .red
+        case "medium": return .orange
+        case "low": return .gray
+        default: return .secondary
+        }
+    }
+
     // MARK: - Submit Section
 
     private var submitSection: some View {
@@ -305,6 +475,33 @@ struct DebriefView: View {
         Logger.info("Completed debrief for \(event.name) with \(newContacts.count) new contacts", category: .ai)
 
         dismiss()
+    }
+
+    private func generateOutcomes() async {
+        isGeneratingOutcomes = true
+        defer { isGeneratingOutcomes = false }
+
+        let contactNames = newContacts.filter { !$0.name.isEmpty }.map { entry in
+            var description = entry.name
+            if !entry.company.isEmpty {
+                description += " (\(entry.company))"
+            }
+            if !entry.notes.isEmpty {
+                description += " - \(entry.notes)"
+            }
+            return description
+        }
+
+        do {
+            generatedOutcomes = try await coordinator.generateDebriefOutcomes(
+                event: event,
+                keyInsights: keyInsights,
+                contactsMade: contactNames,
+                notes: overallNotes
+            )
+        } catch {
+            Logger.error("Failed to generate debrief outcomes: \(error)", category: .ai)
+        }
     }
 }
 
