@@ -14,6 +14,7 @@ enum SearchOpsSection: String, CaseIterable, Identifiable {
     case sources = "Sources"
     case events = "Events"
     case contacts = "Contacts"
+    case weeklyReview = "Weekly Review"
 
     var id: String { rawValue }
 
@@ -24,6 +25,7 @@ enum SearchOpsSection: String, CaseIterable, Identifiable {
         case .sources: return "link.circle"
         case .events: return "calendar"
         case .contacts: return "person.2"
+        case .weeklyReview: return "chart.bar.doc.horizontal"
         }
     }
 
@@ -34,6 +36,7 @@ enum SearchOpsSection: String, CaseIterable, Identifiable {
         case .sources: return "Job boards and career sites"
         case .events: return "Networking events pipeline"
         case .contacts: return "Professional contacts CRM"
+        case .weeklyReview: return "Goals progress and reflection"
         }
     }
 }
@@ -134,6 +137,8 @@ struct SearchOpsMainView: View {
             EventsView(coordinator: coordinator, triggerEventDiscovery: $triggerEventDiscovery)
         case .contacts:
             ContactsView(coordinator: coordinator)
+        case .weeklyReview:
+            WeeklyReviewView(coordinator: coordinator)
         }
     }
 }

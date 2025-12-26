@@ -394,8 +394,7 @@ class MenuNotificationHandler {
         ) { _ in
             Task { @MainActor in
                 if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
-                    // Weekly review is typically shown from Daily view, so open that
-                    appDelegate.showSearchOpsWindow(section: .daily)
+                    appDelegate.showSearchOpsWindow(section: .weeklyReview)
                 }
             }
         }
