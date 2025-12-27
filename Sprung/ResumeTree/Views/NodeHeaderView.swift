@@ -31,14 +31,21 @@ struct NodeHeaderView: View {
 
     // MARK: - AI Mode Detection
 
-    /// Current AI review mode for this node
+    /// Whether this collection has BOTH bundle and iterate modes (mixed mode)
+    private var hasMixedModes: Bool {
+        node.bundledAttributes?.isEmpty == false && node.enumeratedAttributes?.isEmpty == false
+    }
+
+    /// Current AI review mode for this node (primary mode if mixed)
     private var aiMode: AIReviewMode {
         if node.bundledAttributes?.isEmpty == false {
             return .bundle
         } else if node.enumeratedAttributes?.isEmpty == false {
             return .iterate
         } else if node.status == .aiToReplace {
-            return .iterate // Default for simple AI-enabled nodes
+            return .solo  // Solo mode for directly marked nodes
+        } else if node.aiStatusChildren > 0 {
+            return .solo  // Show solo indicator when children have AI status
         }
         return .off
     }
@@ -66,7 +73,8 @@ struct NodeHeaderView: View {
         let attr = attributeName
         if grandparent.bundledAttributes?.contains(attr) == true { return true }
         if grandparent.enumeratedAttributes?.contains(attr) == true { return true }
-        // Fall back to structural check
+        // Fall back to structural check - but exclude root (grandparent must have a parent)
+        guard grandparent.parent != nil else { return false }
         return grandparent.isCollectionNode
     }
 
@@ -81,13 +89,33 @@ struct NodeHeaderView: View {
         guard let grandparent = grandparentNode else { return .off }
         let attr = attributeName
         if grandparent.bundledAttributes?.contains(attr) == true {
-            return .bundle
+            return .bundle  // Purple - 1 revnode total (all entries combined)
         } else if grandparent.enumeratedAttributes?.contains(attr) == true {
-            return .iterate
+            return .iterate  // Cyan - N revnodes (1 per entry)
         } else if node.status == .aiToReplace {
-            return .solo  // Just this single node marked for review
+            return .solo  // Orange - just this single node
         }
         return .off
+    }
+
+    /// Whether this attribute is extracted per-entry (vs all-combined)
+    private var isPerEntryExtraction: Bool {
+        guard let grandparent = grandparentNode else { return false }
+        return grandparent.enumeratedAttributes?.contains(attributeName) == true
+    }
+
+    /// Generate the path pattern for this node's review configuration
+    private var pathPattern: String? {
+        guard let grandparent = grandparentNode else { return nil }
+        let attr = attributeName
+        let collectionName = grandparent.name.isEmpty ? grandparent.displayLabel : grandparent.name
+
+        if grandparent.bundledAttributes?.contains(attr) == true {
+            return "\(collectionName.lowercased()).*.\(attr)"  // e.g., skills.*.name
+        } else if grandparent.enumeratedAttributes?.contains(attr) == true {
+            return "\(collectionName.lowercased())[].\(attr)"  // e.g., skills[].keywords
+        }
+        return nil
     }
 
     /// Whether this node is a child of a container being reviewed (bundle/iterate)
@@ -106,14 +134,35 @@ struct NodeHeaderView: View {
         return false
     }
 
-    /// Whether to show the AI mode indicator
+    /// Whether this node is an entry under a collection with review config
+    /// e.g., "Software Engineering" is an entry under "Skills" which has enumeratedAttributes
+    private var isEntryUnderReviewedCollection: Bool {
+        guard let parent = node.parent else { return false }
+        // Exclude container enumerate children - they get icon + background, not outline
+        if parent.enumeratedAttributes?.contains("*") == true { return false }
+        return parent.bundledAttributes?.isEmpty == false || parent.enumeratedAttributes?.isEmpty == false
+    }
+
+    /// Whether this node is a child of a container enumerate pattern (parent has enumeratedAttributes: ["*"])
+    /// e.g., "Physicist" under "Job Titles" where jobTitles[] is configured
+    private var isContainerEnumerateChild: Bool {
+        guard let parent = node.parent else { return false }
+        return parent.enumeratedAttributes?.contains("*") == true
+    }
+
+    /// Whether to show the AI mode indicator (icon badge)
     private var showAIModeIndicator: Bool {
-        node.parent != nil && (
+        // Entry nodes get outline instead of icon - never show icon
+        if isEntryUnderReviewedCollection { return false }
+
+        return node.parent != nil && (
             node.status == .aiToReplace ||
             node.aiStatusChildren > 0 ||
             node.hasAttributeReviewModes ||
+            isContainerEnumerateNode ||
             isAttributeOfCollectionEntry ||
             isChildOfReviewedContainer ||
+            isContainerEnumerateChild ||
             isHoveringHeader
         )
     }
@@ -124,11 +173,29 @@ struct NodeHeaderView: View {
         isAttributeOfCollectionEntry && !isChildOfReviewedContainer
     }
 
+    /// Whether this node is itself a container enumerate node (has enumeratedAttributes["*"])
+    private var isContainerEnumerateNode: Bool {
+        node.enumeratedAttributes?.contains("*") == true
+    }
+
     /// The mode to display for this node
     private var displayMode: AIReviewMode {
+        // Container enumerate node (e.g., jobTitles with enumeratedAttributes["*"])
+        // Shows cyan iterate icon (the container itself, not children)
+        if isContainerEnumerateNode {
+            return .iterate
+        }
+        // Container enumerate children get iterate mode (cyan icon + background)
+        if isContainerEnumerateChild {
+            return .iterate
+        }
         // Check if this is a child of a reviewed container first
         if isChildOfReviewedContainer {
             return .included
+        }
+        // Entry under reviewed collection (e.g., Software Engineering under Skills)
+        if isEntryUnderReviewedCollection {
+            return .included  // Show included indicator (but no icon, just outline)
         }
         if isAttributeOfCollectionEntry {
             return attributeMode
@@ -136,43 +203,122 @@ struct NodeHeaderView: View {
         return aiMode
     }
 
+    /// Background color for the entire row based on AI review mode
+    private var rowBackgroundColor: Color {
+        // Entry nodes under mixed mode collections get purple background (checked before showAIModeIndicator)
+        if isEntryUnderReviewedCollection {
+            if let parent = node.parent,
+               parent.bundledAttributes?.isEmpty == false,
+               parent.enumeratedAttributes?.isEmpty == false {
+                return .purple.opacity(0.15)  // Mixed mode: purple background
+            }
+            return .clear  // Single mode: outline only
+        }
+
+        guard showAIModeIndicator else { return .clear }
+
+        // Container enumerate nodes get icon only, no background (children are the revnodes)
+        if isContainerEnumerateNode {
+            return .clear
+        }
+
+        // Collection nodes with mixed mode get purple background
+        if isCollectionNode && hasMixedModes {
+            return .purple.opacity(0.15)
+        }
+        // Collection nodes with single mode get no background (icon only)
+        if isCollectionNode && (node.bundledAttributes?.isEmpty == false || node.enumeratedAttributes?.isEmpty == false) {
+            return .clear
+        }
+
+        let mode = displayMode
+        guard mode != .off else { return .clear }
+        return mode.color.opacity(0.15)
+    }
+
+    /// Outline color for entry nodes
+    private var entryOutlineColor: Color {
+        guard isEntryUnderReviewedCollection, let parent = node.parent else { return .clear }
+        let hasBundled = parent.bundledAttributes?.isEmpty == false
+        let hasEnumerated = parent.enumeratedAttributes?.isEmpty == false
+
+        // Mixed mode: cyan outline (purple shown via background)
+        if hasBundled && hasEnumerated {
+            return .cyan.opacity(0.5)
+        }
+        // Single mode: outline matches the mode
+        if hasBundled {
+            return .purple.opacity(0.5)
+        } else if hasEnumerated {
+            return .cyan.opacity(0.5)
+        }
+        return .clear
+    }
+
     var body: some View {
         HStack {
             ToggleChevronView(isExpanded: isExpanded)
 
-            // Node label
+            // Node label - use .saved for parent nodes since background color shows AI status
             if node.parent == nil {
                 HeaderTextRow()
             } else {
                 AlignedTextRow(
                     leadingText: node.isTitleNode && !node.name.isEmpty ? node.name : node.displayLabel,
-                    trailingText: nil,
-                    nodeStatus: node.status
+                    trailingText: nil
                 )
             }
 
             Spacer()
 
-            // AI mode indicator with sparkle
+            // AI mode indicator(s)
             if showAIModeIndicator {
-                AIModeIndicator(mode: displayMode, isCollection: isCollectionNode || isAttributeOfCollectionEntry)
-                    .onTapGesture {
-                        guard isAIModeInteractive else { return }
-                        toggleAttributeMode()
+                HStack(spacing: 4) {
+                    // Show both icons for mixed mode collections (bundle + iterate)
+                    if hasMixedModes && isCollectionNode {
+                        AIModeIndicator(
+                            mode: .bundle,
+                            isCollection: true,
+                            pathPattern: nil,
+                            isPerEntry: false
+                        )
+                        AIModeIndicator(
+                            mode: .iterate,
+                            isCollection: true,
+                            pathPattern: nil,
+                            isPerEntry: true
+                        )
+                    } else {
+                        AIModeIndicator(
+                            mode: displayMode,
+                            isCollection: isCollectionNode || isAttributeOfCollectionEntry,
+                            pathPattern: pathPattern,
+                            isPerEntry: isPerEntryExtraction
+                        )
+                        .onTapGesture {
+                            guard isAIModeInteractive else { return }
+                            toggleAttributeMode()
+                        }
+                        .opacity(isAIModeInteractive ? 1.0 : 0.6)
                     }
-                    .opacity(isAIModeInteractive ? 1.0 : 0.6)  // Dimmer when read-only
+                }
             }
 
             // Expanded controls
             if vm.isExpanded(node) && node.parent != nil && !node.orderedChildren.isEmpty {
                 expandedControls
             }
-
-            StatusBadgeView(node: node, isExpanded: vm.isExpanded(node))
         }
-        .padding(.horizontal, 10)
-        .padding(.leading, CGFloat(max(0, node.depth - depthOffset) * 20))
+        .padding(.leading, CGFloat(max(0, node.depth - depthOffset) * 20) + 10)
+        .padding(.trailing, 10)
         .padding(.vertical, 5)
+        .background(rowBackgroundColor)
+        .cornerRadius(6)
+        .overlay(
+            // Outline for entry nodes under reviewed collection
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(entryOutlineColor, lineWidth: 1.5)
+        )
         .contentShape(Rectangle())
         .onTapGesture {
             vm.toggleExpansion(for: node)
@@ -381,7 +527,7 @@ enum AIReviewMode {
     case bundle   // Purple - all together across entries
     case iterate  // Cyan - each entry separately
     case solo     // Orange - just this single node
-    case included // Teal - child of a reviewed container (part of parent's RevNode)
+    case included // Cyan - child of a reviewed container (uses same color as iterate)
     case off      // Gray - disabled
 
     var color: Color {
@@ -389,7 +535,7 @@ enum AIReviewMode {
         case .bundle: return .purple
         case .iterate: return .cyan
         case .solo: return .orange
-        case .included: return .teal
+        case .included: return .cyan  // Same as iterate - children inherit parent's color
         case .off: return .gray
         }
     }
@@ -398,8 +544,8 @@ enum AIReviewMode {
         switch self {
         case .bundle: return "square.stack.3d.up.fill"
         case .iterate: return "list.bullet"
-        case .solo: return "scope"
-        case .included: return "circle.fill"
+        case .solo: return "sparkles"  // Use sparkles for solo - consistent with SparkleButton
+        case .included: return "sparkles"
         case .off: return "sparkles"
         }
     }
@@ -410,24 +556,42 @@ enum AIReviewMode {
 struct AIModeIndicator: View {
     let mode: AIReviewMode
     let isCollection: Bool
+    var pathPattern: String?
+    var isPerEntry: Bool = false
 
     var body: some View {
         Image(systemName: mode == .off ? "sparkles" : mode.icon)
-            .foregroundColor(mode.color)
+            .foregroundColor(mode == .off ? .gray : .white)  // White icon for contrast
             .font(.system(size: 12))
+            .fontWeight(.semibold)
             .padding(4)
-            .background(mode.color.opacity(0.15))
+            .background(mode == .off ? Color.gray.opacity(0.15) : mode.color.opacity(0.85))
             .cornerRadius(4)
             .help(helpText)
     }
 
     private var helpText: String {
+        var text: String
         switch mode {
-        case .bundle: return "Bundle: All items reviewed together"
-        case .iterate: return "Iterate: Each item reviewed separately"
-        case .solo: return "Solo: Just this one item"
-        case .included: return "Included in parent's review"
-        case .off: return "Click to enable AI review"
+        case .bundle:
+            if isPerEntry {
+                text = "Extracted per entry (bundled within each)"
+            } else {
+                text = "Bundle: All entries combined into 1 review"
+            }
+        case .iterate:
+            text = "Iterate: N reviews (one per entry)"
+        case .solo:
+            text = "Solo: Just this one item"
+        case .included:
+            text = "Included in parent's review"
+        case .off:
+            text = "Click to enable AI review"
         }
+
+        if let pattern = pathPattern {
+            text += "\nPath: \(pattern)"
+        }
+        return text
     }
 }

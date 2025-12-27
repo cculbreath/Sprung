@@ -299,13 +299,13 @@ class PhaseReviewManager {
     /// Build the two-round review structure from TreeNode state.
     ///
     /// TreeNode is the single source of truth for AI review configuration:
-    /// - `bundledAttributes`: Attributes to bundle into 1 RevNode (Phase 1)
-    /// - `enumeratedAttributes`: Attributes to enumerate as N RevNodes (Phase 2)
+    /// - `bundledAttributes`: Attributes to bundle into 1 RevNode
+    /// - `enumeratedAttributes`: Attributes to enumerate as N RevNodes
     /// - `status == .aiToReplace`: Scalar nodes or container items to review
     ///
-    /// Phase assignment:
-    /// - Phase 1: All bundled patterns (from bundledAttributes)
-    /// - Phase 2: All enumerated patterns + scalars + container items
+    /// Phase assignments come from `resume.phaseAssignments` (populated from manifest defaults
+    /// at tree creation time, then editable via Phase Assignments panel).
+    /// Fallback: bundle=1, enumerate/scalar=2
     func buildReviewRounds(for resume: Resume) -> (phase1: [ExportedReviewNode], phase2: [ExportedReviewNode]) {
         guard let rootNode = resume.rootNode else {
             Logger.warning("⚠️ [buildReviewRounds] No rootNode")
@@ -316,10 +316,33 @@ class PhaseReviewManager {
         var phase2Nodes: [ExportedReviewNode] = []
         var processedPaths = Set<String>()
 
+        // Phase assignments: key exists = phase 1, absent = phase 2 (default)
+        let phase1Keys = Set(resume.phaseAssignments.keys)
+
+        /// Get phase for a section+attribute combination
+        /// Key present in phaseAssignments = phase 1, absent = phase 2
+        func phaseFor(section: String, attr: String) -> Int {
+            let groupKey = "\(section)-\(attr)"
+            return phase1Keys.contains(groupKey) ? 1 : 2
+        }
+
+        /// Add nodes to appropriate phase
+        func addToPhase(_ nodes: [ExportedReviewNode], phase: Int, pattern: String) {
+            if phase == 1 {
+                phase1Nodes.append(contentsOf: nodes)
+                Logger.debug("📋 [buildReviewRounds] '\(pattern)' → \(nodes.count) Phase 1 RevNodes")
+            } else {
+                phase2Nodes.append(contentsOf: nodes)
+                Logger.debug("📋 [buildReviewRounds] '\(pattern)' → \(nodes.count) Phase 2 RevNodes")
+            }
+        }
+
         // Walk tree and collect patterns from TreeNode state
-        func processNode(_ node: TreeNode, parentPath: String) {
+        func processNode(_ node: TreeNode, parentPath: String, sectionName: String) {
             let nodeName = node.name.isEmpty ? node.value : node.name
             let currentPath = parentPath.isEmpty ? nodeName : "\(parentPath).\(nodeName)"
+            // Capitalize section name to match manifest key format (e.g., "Skills-name")
+            let currentSection = (sectionName.isEmpty ? nodeName : sectionName).capitalized
 
             // Check for collection patterns (bundled/enumerated attributes)
             if let bundled = node.bundledAttributes, !bundled.isEmpty {
@@ -328,40 +351,34 @@ class PhaseReviewManager {
                     if !processedPaths.contains(pattern) {
                         processedPaths.insert(pattern)
                         let nodes = TreeNode.exportNodesMatchingPath(pattern, from: rootNode)
-                        phase1Nodes.append(contentsOf: nodes)
-                        Logger.debug("📋 [buildReviewRounds] Bundle pattern '\(pattern)' → \(nodes.count) Phase 1 RevNodes")
+                        let phase = phaseFor(section: currentSection, attr: attr)
+                        addToPhase(nodes, phase: phase, pattern: pattern)
                     }
                 }
             }
 
             if let enumerated = node.enumeratedAttributes, !enumerated.isEmpty {
                 for attr in enumerated {
+                    // Skip container enumerate marker
+                    guard attr != "*" else { continue }
                     let pattern = "\(currentPath)[].\(attr)"
                     if !processedPaths.contains(pattern) {
                         processedPaths.insert(pattern)
                         let nodes = TreeNode.exportNodesMatchingPath(pattern, from: rootNode)
-                        phase2Nodes.append(contentsOf: nodes)
-                        Logger.debug("📋 [buildReviewRounds] Enumerate pattern '\(pattern)' → \(nodes.count) Phase 2 RevNodes")
+                        let phase = phaseFor(section: currentSection, attr: attr)
+                        addToPhase(nodes, phase: phase, pattern: pattern)
                     }
                 }
             }
 
-            // Check for container enumerate (all children marked AI)
-            // This handles patterns like custom.jobTitles[] where the container itself is AI-enabled
-            // and all its children are simple values
-            let isContainerEnumerate = node.status == .aiToReplace &&
-                                       node.bundledAttributes == nil &&
-                                       node.enumeratedAttributes == nil &&
-                                       !node.orderedChildren.isEmpty &&
-                                       node.orderedChildren.allSatisfy { $0.status == .aiToReplace }
-
-            if isContainerEnumerate {
+            // Check for container enumerate (enumeratedAttributes contains "*")
+            if node.enumeratedAttributes?.contains("*") == true {
                 let pattern = "\(currentPath)[]"
                 if !processedPaths.contains(pattern) {
                     processedPaths.insert(pattern)
                     let nodes = TreeNode.exportNodesMatchingPath(pattern, from: rootNode)
-                    phase2Nodes.append(contentsOf: nodes)
-                    Logger.debug("📋 [buildReviewRounds] Container enumerate '\(pattern)' → \(nodes.count) Phase 2 RevNodes")
+                    let phase = phaseFor(section: currentSection, attr: "*")
+                    addToPhase(nodes, phase: phase, pattern: pattern)
                 }
             }
 
@@ -374,19 +391,19 @@ class PhaseReviewManager {
             if isScalar && !processedPaths.contains(currentPath) {
                 processedPaths.insert(currentPath)
                 let nodes = TreeNode.exportNodesMatchingPath(currentPath, from: rootNode)
-                phase2Nodes.append(contentsOf: nodes)
-                Logger.debug("📋 [buildReviewRounds] Scalar '\(currentPath)' → \(nodes.count) Phase 2 RevNodes")
+                // Scalar nodes default to phase 2
+                addToPhase(nodes, phase: 2, pattern: currentPath)
             }
 
             // Recurse into children
             for child in node.orderedChildren {
-                processNode(child, parentPath: currentPath)
+                processNode(child, parentPath: currentPath, sectionName: currentSection)
             }
         }
 
         // Start from root's children (skip root itself)
         for section in rootNode.orderedChildren {
-            processNode(section, parentPath: "")
+            processNode(section, parentPath: "", sectionName: "")
         }
 
         Logger.info("📋 Review rounds: Phase 1 has \(phase1Nodes.count) nodes, Phase 2 has \(phase2Nodes.count) nodes")

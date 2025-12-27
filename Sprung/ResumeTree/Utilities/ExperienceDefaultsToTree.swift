@@ -90,7 +90,11 @@ final class ExperienceDefaultsToTree {
         case ExperienceSectionKey.languages.rawValue: return experienceDefaults.isLanguagesEnabled && !experienceDefaults.languages.isEmpty
         case ExperienceSectionKey.interests.rawValue: return experienceDefaults.isInterestsEnabled && !experienceDefaults.interests.isEmpty
         case ExperienceSectionKey.references.rawValue: return experienceDefaults.isReferencesEnabled && !experienceDefaults.references.isEmpty
-        case ExperienceSectionKey.custom.rawValue: return experienceDefaults.isCustomEnabled && !experienceDefaults.customFields.isEmpty
+        case ExperienceSectionKey.custom.rawValue:
+            // Include custom section if user has data OR manifest defines custom fields
+            let hasUserData = !experienceDefaults.customFields.isEmpty
+            let hasManifestFields = !(manifest.section(for: key)?.fields.isEmpty ?? true)
+            return hasUserData || hasManifestFields
         default: return true // Allow manifest-defined sections we don't have explicit data for
         }
     }
@@ -573,7 +577,70 @@ final class ExperienceDefaultsToTree {
             resume: resume
         ))
 
+        // Build a lookup of user data by normalized key
+        var userDataByKey: [String: CustomFieldValue] = [:]
         for field in experienceDefaults.customFields {
+            let normalizedKey = field.key.lowercased().filter { $0.isLetter || $0.isNumber }
+            userDataByKey[normalizedKey] = field
+        }
+
+        // Get manifest-defined custom fields
+        let manifestFields = section?.fields ?? []
+        Logger.info("🎯 [buildCustomSection] Manifest custom fields: \(manifestFields.map { $0.key })")
+        Logger.info("🎯 [buildCustomSection] User custom fields: \(experienceDefaults.customFields.map { $0.key })")
+
+        // Track which keys we've processed (to avoid duplicates)
+        var processedKeys: Set<String> = []
+
+        // First, create nodes for all manifest-defined custom fields
+        for manifestField in manifestFields {
+            let fieldKey = manifestField.key
+            let normalizedKey = fieldKey.lowercased().filter { $0.isLetter || $0.isNumber }
+            processedKeys.insert(normalizedKey)
+
+            // Find matching user data
+            let userData = userDataByKey[normalizedKey]
+            let values = userData?.values ?? []
+
+            let fieldNode = customContainer.addChild(TreeNode(
+                name: fieldKey,  // Use manifest key for consistency with patterns
+                value: "",
+                inEditor: true,
+                status: .isNotLeaf,
+                resume: resume
+            ))
+            Logger.info("🎯 [buildCustomSection] Created node name='\(fieldKey)' from manifest (userData: \(userData?.key ?? "none"))")
+
+            // Apply editor labels
+            applyEditorLabel(to: fieldNode, for: fieldKey)
+            if fieldNode.editorLabel == nil {
+                applyEditorLabel(to: fieldNode, for: "custom.\(fieldKey)")
+            }
+
+            // Check if this is an array field or single value
+            if values.count > 1 || manifestField.repeatable == true {
+                // Array of values
+                for value in values {
+                    _ = fieldNode.addChild(TreeNode(
+                        name: "",
+                        value: value,
+                        inEditor: true,
+                        status: .saved,
+                        resume: resume
+                    ))
+                }
+            } else if let firstValue = values.first {
+                // Single value - make the field node itself the leaf
+                fieldNode.value = firstValue
+                fieldNode.status = .saved
+            }
+        }
+
+        // Then, add any user-defined fields not in the manifest
+        for field in experienceDefaults.customFields {
+            let normalizedKey = field.key.lowercased().filter { $0.isLetter || $0.isNumber }
+            guard !processedKeys.contains(normalizedKey) else { continue }
+
             let fieldNode = customContainer.addChild(TreeNode(
                 name: field.key,
                 value: "",
@@ -581,15 +648,14 @@ final class ExperienceDefaultsToTree {
                 status: .isNotLeaf,
                 resume: resume
             ))
-            // Try both direct key and custom-prefixed path for editor labels
+
             applyEditorLabel(to: fieldNode, for: field.key)
             if fieldNode.editorLabel == nil {
                 applyEditorLabel(to: fieldNode, for: "custom.\(field.key)")
             }
 
-            // Check if this is an array field or single value
-            if field.values.count > 1 || section?.fields.first(where: { $0.key == field.key })?.repeatable == true {
-                // Array of values
+            let isRepeatable = section?.fields.first(where: { $0.key == field.key })?.repeatable == true
+            if field.values.count > 1 || isRepeatable {
                 for value in field.values {
                     _ = fieldNode.addChild(TreeNode(
                         name: "",
@@ -600,7 +666,6 @@ final class ExperienceDefaultsToTree {
                     ))
                 }
             } else if let firstValue = field.values.first {
-                // Single value - make the field node itself the leaf
                 fieldNode.value = firstValue
                 fieldNode.status = .saved
             }
@@ -986,8 +1051,8 @@ final class ExperienceDefaultsToTree {
             collectionNode.bundledAttributes = bundled
         }
 
-        // Mark collection as AI-enabled
-        collectionNode.status = .aiToReplace
+        // Note: Don't set .aiToReplace on collection - bundledAttributes is the source of truth
+        // Visual indicators come from row background color based on bundledAttributes
 
         Logger.info("🎯 [applyBundlePattern] Set bundledAttributes[\(attrName)] on '\(collectionNode.name)'")
     }
@@ -1015,15 +1080,14 @@ final class ExperienceDefaultsToTree {
             collectionNode.enumeratedAttributes = enumerated
         }
 
-        // Mark all entry children as AI-enabled (for enumerate mode)
-        for entry in collectionNode.orderedChildren {
-            entry.status = .aiToReplace
-        }
+        // Note: Don't set .aiToReplace on entries - enumeratedAttributes is the source of truth
+        // Visual indicators come from row background color based on enumeratedAttributes
 
-        Logger.info("🎯 [applyEnumeratePattern] Set enumeratedAttributes[\(attrName)] on '\(collectionNode.name)', marked \(collectionNode.orderedChildren.count) entries")
+        Logger.info("🎯 [applyEnumeratePattern] Set enumeratedAttributes[\(attrName)] on '\(collectionNode.name)'")
     }
 
     /// Apply container enumerate pattern (section.container[]) - marks each child of container
+    /// Uses enumeratedAttributes with "*" to indicate "enumerate all children"
     private func applyContainerEnumeratePattern(components: [String], to root: TreeNode) {
         // Navigate to container node (all components except final [])
         let pathToContainer = Array(components.dropLast())
@@ -1032,13 +1096,15 @@ final class ExperienceDefaultsToTree {
             return
         }
 
-        // Mark container and all children as AI-enabled
-        containerNode.status = .aiToReplace
-        for child in containerNode.orderedChildren {
-            child.status = .aiToReplace
+        // Use enumeratedAttributes with "*" to indicate container enumerate mode
+        // This distinguishes from solo (.aiToReplace) for visual indicators
+        var enumerated = containerNode.enumeratedAttributes ?? []
+        if !enumerated.contains("*") {
+            enumerated.append("*")
+            containerNode.enumeratedAttributes = enumerated
         }
 
-        Logger.info("🎯 [applyContainerEnumeratePattern] Marked container '\(containerNode.name)' and \(containerNode.orderedChildren.count) children for AI")
+        Logger.info("🎯 [applyContainerEnumeratePattern] Set enumeratedAttributes[*] on '\(containerNode.name)' for container enumerate")
     }
 
     /// Apply scalar pattern (section.field) - marks specific node
@@ -1057,10 +1123,13 @@ final class ExperienceDefaultsToTree {
         var current = root
         for component in path {
             guard let child = current.findChildByName(component) else {
+                let childNames = current.orderedChildren.map { $0.name }
+                Logger.debug("🎯 [findNode] Could not find '\(component)' in '\(current.name)'. Available: \(childNames)")
                 return nil
             }
             current = child
         }
+        Logger.debug("🎯 [findNode] Found node at path: \(path) -> '\(current.name)'")
         return current
     }
 }

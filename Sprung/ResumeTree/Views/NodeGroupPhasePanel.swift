@@ -93,31 +93,38 @@ struct NodeGroupPhasePanelPopover: View {
     }
 
     /// Save a phase assignment to the resume
+    /// Only phase 1 assignments are stored; phase 2 is the default (absence = phase 2)
     private func savePhaseAssignment(groupId: String, phase: Int) {
         var assignments = resume.phaseAssignments
-        assignments[groupId] = phase
+        if phase == 1 {
+            assignments[groupId] = 1
+        } else {
+            assignments.removeValue(forKey: groupId)  // Phase 2 is default, no need to store
+        }
         resume.phaseAssignments = assignments
-        Logger.debug("📋 Saved phase assignment: \(groupId) → Phase \(phase)")
+        Logger.debug("📋 Phase assignment: \(groupId) → Phase \(phase)")
     }
 
     /// Load node groups from the resume tree based on configured AI attributes.
-    /// Uses the new `bundledAttributes` and `enumeratedAttributes` properties on collection nodes.
+    /// Uses `bundledAttributes` and `enumeratedAttributes` properties on collection nodes.
+    /// Phase assignments: key exists in phaseAssignments = phase 1, absent = phase 2 (default)
     private func loadNodeGroups() {
         guard let rootNode = resume.rootNode else { return }
 
         var groups: [NodeGroup] = []
-        let savedAssignments = resume.phaseAssignments
+        let phase1Keys = Set(resume.phaseAssignments.keys)
 
         // Traverse sections to find collections with AI attributes configured
         for sectionNode in rootNode.orderedChildren {
-            let sectionName = sectionNode.name.isEmpty ? sectionNode.value : sectionNode.name
-            guard !sectionName.isEmpty else { continue }
+            let rawSectionName = sectionNode.name.isEmpty ? sectionNode.value : sectionNode.name
+            guard !rawSectionName.isEmpty else { continue }
+            let sectionName = rawSectionName.capitalized  // Match manifest key format
 
             // Check for bundled attributes (Together mode)
             if let bundled = sectionNode.bundledAttributes {
                 for attrName in bundled {
                     let groupKey = "\(sectionName)-\(attrName)"
-                    let phase = savedAssignments[groupKey] ?? 2
+                    let phase = phase1Keys.contains(groupKey) ? 1 : 2
                     groups.append(NodeGroup(
                         id: groupKey,
                         sectionName: sectionName,
@@ -130,10 +137,12 @@ struct NodeGroupPhasePanelPopover: View {
             // Check for enumerated attributes (Separately mode)
             if let enumerated = sectionNode.enumeratedAttributes {
                 for attrName in enumerated {
+                    // Skip container enumerate marker
+                    guard attrName != "*" else { continue }
                     let groupKey = "\(sectionName)-\(attrName)"
-                    // Skip if already added from bundled (shouldn't happen but safety check)
+                    // Skip if already added from bundled
                     guard !groups.contains(where: { $0.id == groupKey }) else { continue }
-                    let phase = savedAssignments[groupKey] ?? 2
+                    let phase = phase1Keys.contains(groupKey) ? 1 : 2
                     groups.append(NodeGroup(
                         id: groupKey,
                         sectionName: sectionName,
@@ -141,6 +150,18 @@ struct NodeGroupPhasePanelPopover: View {
                         phase: phase
                     ))
                 }
+            }
+
+            // Check for container enumerate (e.g., jobTitles with "*")
+            if sectionNode.enumeratedAttributes?.contains("*") == true {
+                let groupKey = "\(sectionName)-*"
+                let phase = phase1Keys.contains(groupKey) ? 1 : 2
+                groups.append(NodeGroup(
+                    id: groupKey,
+                    sectionName: sectionName,
+                    attributeName: "(all items)",
+                    phase: phase
+                ))
             }
         }
 

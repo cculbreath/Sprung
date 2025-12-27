@@ -53,7 +53,8 @@ class ResumeExportService: ObservableObject {
         throw ResumeExportError.noTemplatesConfigured
     }
 
-    /// Apply manifest's reviewPhases defaults to resume.phaseAssignments (only if not already set)
+    /// Apply manifest's reviewPhases defaults to resume.phaseAssignments
+    /// Only phase 1 assignments are stored; phase 2 is the default (absence = phase 2)
     private func applyManifestPhaseDefaults(to resume: Resume, from template: Template) {
         guard let manifest = TemplateManifestLoader.manifest(for: template),
               let reviewPhases = manifest.reviewPhases else { return }
@@ -64,9 +65,9 @@ class ResumeExportService: ObservableObject {
                 // Extract attribute name from field pattern (e.g., "skills.*.name" -> "name")
                 let attrName = phaseConfig.field.split(separator: ".").last.map(String.init) ?? phaseConfig.field
                 let key = "\(section.capitalized)-\(attrName)"
-                // Only set if not already assigned by user
-                if assignments[key] == nil {
-                    assignments[key] = phaseConfig.phase
+                // Only store phase 1 assignments; phase 2 is the default
+                if phaseConfig.phase == 1 {
+                    assignments[key] = 1
                 }
             }
         }

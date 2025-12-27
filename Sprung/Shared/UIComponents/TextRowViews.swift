@@ -4,6 +4,7 @@
 //
 //
 import SwiftUI
+
 struct HeaderTextRow: View {
     var body: some View {
         HStack {
@@ -14,24 +15,25 @@ struct HeaderTextRow: View {
         .padding(.vertical, 2)
     }
 }
+
+/// Single-line text row with leading/trailing text
+/// Background color indicates AI status, not text color
 struct AlignedTextRow: View {
     let leadingText: String
     let trailingText: String?
-    let nodeStatus: LeafStatus
+
     var body: some View {
         let indent: CGFloat = 100.0
         HStack {
             Text(leadingText)
-                .foregroundColor(nodeStatus == .aiToReplace ? .accentColor : .secondary)
-                .fontWeight(nodeStatus == .aiToReplace ? .medium : .regular)
+                .foregroundColor(.secondary)
                 .frame(
                     width: ((trailingText?.isEmpty ?? true) ? nil : (leadingText.isEmpty ? 15 : indent)),
                     alignment: .leading
                 )
             if let trailingText = trailingText, !trailingText.isEmpty {
                 Text(trailingText)
-                    .foregroundColor(nodeStatus == .aiToReplace ? .accentColor : .secondary)
-                    .fontWeight(.regular)
+                    .foregroundColor(.primary)
                     .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             }
         }
@@ -39,20 +41,22 @@ struct AlignedTextRow: View {
         .padding(.vertical, 2)
     }
 }
+
+/// Two-line text row with title and description
+/// Background color indicates AI status, not text color
 struct StackedTextRow: View {
     let title: String
     let description: String
-    let nodeStatus: LeafStatus
+
     var body: some View {
         let indent: CGFloat = 100.0
         VStack(alignment: .leading) {
             Text(title)
-                .foregroundColor(nodeStatus == .aiToReplace ? .accentColor : .secondary)
-                .fontWeight(nodeStatus == .aiToReplace ? .semibold : .medium)
+                .foregroundColor(.secondary)
+                .fontWeight(.medium)
                 .frame(minWidth: indent, maxWidth: .infinity, alignment: .leading)
             Text(description)
-                .foregroundColor(nodeStatus == .aiToReplace ? .accentColor : .secondary)
-                .fontWeight(nodeStatus == .aiToReplace ? .regular : .light)
+                .foregroundColor(.primary)
                 .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
         }
         .cornerRadius(5)

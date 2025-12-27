@@ -92,9 +92,24 @@ struct ResumeDetailView: View {
                     }
                 }
 
-                // Phase assignment configuration button
+                // Revnode count and phase assignment configuration
                 HStack {
+                    // Revnode count indicator
+                    if let root = vm.rootNode {
+                        let count = root.revnodeCount
+                        if count > 0 {
+                            HStack(spacing: 4) {
+                                Image(systemName: "sparkles")
+                                    .foregroundColor(.orange)
+                                Text("\(count) review item\(count == 1 ? "" : "s")")
+                            }
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        }
+                    }
+
                     Spacer()
+
                     Button(action: { showNodeGroupPhasePopover.toggle() }) {
                         HStack(spacing: 4) {
                             Image(systemName: "list.number")
@@ -148,21 +163,43 @@ private struct RootLeafDisclosureView: View {
     private var effectiveDepth: Int {
         max(0, node.depth - depthOffset)
     }
+
+    /// Whether this node should show an AI indicator (solo mode for leaf nodes)
+    private var showAIIndicator: Bool {
+        node.status == .aiToReplace
+    }
+
+    /// Background color for solo mode nodes
+    private var rowBackgroundColor: Color {
+        guard showAIIndicator else { return .clear }
+        return .orange.opacity(0.15)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 ToggleChevronView(isExpanded: expansionBinding)
                 AlignedTextRow(
                     leadingText: node.displayLabel,
-                    trailingText: nil,
-                    nodeStatus: node.status
+                    trailingText: nil
                 )
                 Spacer(minLength: 8)
-                StatusBadgeView(node: node, isExpanded: vm.isExpanded(node))
+
+                // AI mode indicator for solo mode nodes
+                if showAIIndicator {
+                    AIModeIndicator(
+                        mode: .solo,
+                        isCollection: false,
+                        pathPattern: nil,
+                        isPerEntry: false
+                    )
+                }
             }
             .padding(.horizontal, 10)
             .padding(.leading, CGFloat(effectiveDepth * 20))
             .padding(.vertical, 5)
+            .background(rowBackgroundColor)
+            .cornerRadius(6)
             .contentShape(Rectangle())
             .onTapGesture {
                 vm.toggleExpansion(for: node)

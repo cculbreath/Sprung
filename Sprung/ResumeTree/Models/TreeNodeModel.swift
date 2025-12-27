@@ -83,14 +83,6 @@ enum LeafStatus: String, Codable, Hashable {
 
     // MARK: - AI Selection Inheritance
 
-    /// ID of the collection node whose attribute picker caused this node to be group-selected.
-    /// When non-nil, this node was selected via parent's attribute picker (not direct toggle).
-    var groupSelectionSourceId: String?
-
-    /// Grouping mode for this node's AI selection: "*" (bundle) or "[]" (enumerate).
-    /// Only relevant when groupSelectionSourceId is set.
-    var groupSelectionModeRaw: String?
-
     // MARK: - Per-Attribute Review Mode (Collection Nodes)
 
     /// Attributes in "Together" mode - bundled into 1 revnode (pattern: section.*.attr)
@@ -135,20 +127,50 @@ enum LeafStatus: String, Codable, Hashable {
         !(enumeratedAttributes?.isEmpty ?? true)
     }
 
-    /// Returns true if this node was selected via a parent's attribute picker
-    /// (group-inherited selection, shown in different color, can only toggle as a group)
-    var isGroupInheritedSelection: Bool {
-        groupSelectionSourceId != nil
+    /// Total revnode count for this subtree
+    /// Counts: solo nodes, bundle attributes (1 each), iterate attributes (N each), container enumerate children
+    var revnodeCount: Int {
+        var count = 0
+
+        // Container enumerate: each child is a revnode
+        if enumeratedAttributes?.contains("*") == true {
+            count += orderedChildren.count
+        }
+        // Bundle attributes: 1 revnode per attribute (regardless of entry count)
+        else if let bundled = bundledAttributes, !bundled.isEmpty {
+            count += bundled.count
+        }
+
+        // Iterate attributes: N revnodes per attribute (1 per entry)
+        if let enumerated = enumeratedAttributes, !enumerated.isEmpty {
+            // Filter out container enumerate marker "*"
+            let iterateAttrs = enumerated.filter { $0 != "*" }
+            let entryCount = orderedChildren.count
+            count += iterateAttrs.count * entryCount
+        }
+
+        // Solo nodes: leaf with status == .aiToReplace (not already counted above)
+        if status == .aiToReplace && orderedChildren.isEmpty {
+            // Only count if not part of a container enumerate (those are counted above)
+            if parent?.enumeratedAttributes?.contains("*") != true {
+                count += 1
+            }
+        }
+
+        // Recurse into children (but skip if this is container enumerate - already counted)
+        if enumeratedAttributes?.contains("*") != true {
+            for child in orderedChildren {
+                count += child.revnodeCount
+            }
+        }
+
+        return count
     }
 
-    /// Returns true if this node uses bundle mode (* = combine all matches into 1 revnode)
-    var isBundleMode: Bool {
-        groupSelectionModeRaw == "*"
-    }
-
-    /// Returns true if this node uses enumerate mode ([] = one revnode per item)
-    var isEnumerateMode: Bool {
-        groupSelectionModeRaw == "[]" || groupSelectionModeRaw == nil
+    /// Returns true if this is a collection node (has children that are entries)
+    /// Collection nodes can have bundle/iterate modes applied
+    var isCollectionNode: Bool {
+        !orderedChildren.isEmpty && orderedChildren.first?.orderedChildren.isEmpty == false
     }
 
     /// Returns true if this node's AI selection is inherited from an ancestor
@@ -171,19 +193,46 @@ enum LeafStatus: String, Codable, Hashable {
     }
 
     /// Returns true if this node is a child of a container being reviewed in bundle/iterate mode
-    /// e.g., "Swift" is a child of "keywords" which is set to iterate under "skills"
     var isIncludedInContainerReview: Bool {
+        isIncludedInBundleReview || isIncludedInIterateReview
+    }
+
+    /// Returns true if this node is included via BUNDLE mode (purple)
+    /// e.g., "Swift" under "keywords" when skills.*.keywords is configured
+    var isIncludedInBundleReview: Bool {
         guard let containerParent = parent,
               let entry = containerParent.parent,
               let collection = entry.parent else { return false }
 
         let containerName = containerParent.name.isEmpty ? containerParent.displayLabel : containerParent.name
+        return collection.bundledAttributes?.contains(containerName) == true
+    }
 
-        // Check if collection has this container in bundle or enumerate attributes
-        if collection.bundledAttributes?.contains(containerName) == true { return true }
-        if collection.enumeratedAttributes?.contains(containerName) == true { return true }
+    /// Returns true if this node is included via ITERATE mode (cyan)
+    var isIncludedInIterateReview: Bool {
+        // Container enumerate pattern: parent has enumeratedAttributes containing "*"
+        // e.g., Physicist under Job Titles where jobTitles[] is configured
+        if parent?.enumeratedAttributes?.contains("*") == true {
+            return true
+        }
 
-        return false
+        // Iterate attribute target: this node's name is in parent's parent's enumeratedAttributes
+        // e.g., description when projects[].description is configured
+        if let collection = parent?.parent {
+            let nodeName = name.isEmpty ? displayLabel : name
+            if collection.enumeratedAttributes?.contains(nodeName) == true {
+                return true
+            }
+        }
+
+        // Child of iterate container: parent's name is in great-grandparent's enumeratedAttributes
+        // e.g., bullet under highlights when work[].highlights is configured
+        guard let containerParent = parent,
+              let entry = containerParent.parent,
+              let collection = entry.parent else { return false }
+
+        let containerName = containerParent.name.isEmpty ? containerParent.displayLabel : containerParent.name
+        return collection.enumeratedAttributes?.contains(containerName) == true
     }
 
     /// Returns true if this node should be included in AI revision
@@ -538,10 +587,20 @@ extension TreeNode {
 // MARK: - Generic Path-Based Export for Review Phases
 
 extension TreeNode {
-    /// Find a child node by name (case-insensitive)
+    /// Normalize a name for flexible matching (lowercase, remove spaces/punctuation)
+    private static func normalizedKey(_ name: String) -> String {
+        name.lowercased().filter { $0.isLetter || $0.isNumber }
+    }
+
+    /// Find a child node by name (case-insensitive, ignores spaces/punctuation)
     func findChildByName(_ name: String) -> TreeNode? {
-        let lowercasedName = name.lowercased()
-        return children?.first { $0.name.lowercased() == lowercasedName }
+        let normalizedSearch = Self.normalizedKey(name)
+        // First try exact case-insensitive match
+        if let exact = children?.first(where: { $0.name.lowercased() == name.lowercased() }) {
+            return exact
+        }
+        // Fall back to normalized match (ignores spaces/punctuation)
+        return children?.first { Self.normalizedKey($0.name) == normalizedSearch }
     }
 
     /// Export nodes matching a path pattern for LLM review.
