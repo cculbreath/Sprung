@@ -102,6 +102,7 @@ struct SourcesView: View {
                     }
                 }
                 .scrollContentBackground(.visible)
+                .scrollEdgeEffect()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -114,6 +114,7 @@ struct DiscoveryMainView: View {
                 }
             }
             .listStyle(.sidebar)
+            .scrollEdgeEffect()
             .navigationTitle("Discovery")
             .frame(minWidth: 200, idealWidth: 220)
         } detail: {

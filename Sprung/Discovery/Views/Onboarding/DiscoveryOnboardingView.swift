@@ -566,9 +566,11 @@ struct DiscoveryOnboardingView: View {
             if isDiscovering {
                 AnimatedThinkingText(statusMessage: "Discovering job sources and generating tasks...")
 
-                Text("Setting up your job search")
+                // Show dynamic status from coordinator
+                Text(coordinator.discoveryStatus.message.isEmpty ? "Setting up your job search" : coordinator.discoveryStatus.message)
                     .font(.title3)
                     .padding(.top, 8)
+                    .animation(.easeInOut(duration: 0.3), value: coordinator.discoveryStatus.message)
             } else if let error = discoveryError {
                 Image(systemName: "exclamationmark.triangle")
                     .font(.system(size: 48))

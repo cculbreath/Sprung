@@ -54,6 +54,7 @@ struct ContactsView: View {
                         }
                     }
                 }
+                .scrollEdgeEffect()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

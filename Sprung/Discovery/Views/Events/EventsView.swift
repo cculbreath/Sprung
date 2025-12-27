@@ -175,6 +175,7 @@ struct EventsView: View {
                 }
             }
         }
+        .scrollEdgeEffect()
     }
 
     @ViewBuilder
