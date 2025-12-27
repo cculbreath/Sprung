@@ -444,6 +444,7 @@ enum DiscoveryLLMError: Error, LocalizedError {
     case invalidResponse
     case toolLoopExceeded
     case toolExecutionFailed(String)
+    case modelNotConfigured
 
     var errorDescription: String? {
         switch self {
@@ -455,6 +456,8 @@ enum DiscoveryLLMError: Error, LocalizedError {
             return "Tool call loop exceeded maximum iterations"
         case .toolExecutionFailed(let reason):
             return "Tool execution failed: \(reason)"
+        case .modelNotConfigured:
+            return "No LLM model configured"
         }
     }
 }

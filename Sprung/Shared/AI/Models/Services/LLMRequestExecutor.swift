@@ -80,9 +80,13 @@ actor LLMRequestExecutor {
                 throw LLMError.clientError("Request was cancelled")
             }
             do {
-                Logger.info("🌐 Making request with model: \(parameters.model)", category: .networking)
+                let availableTools = parameters.tools?.compactMap { $0.function.name }.joined(separator: ", ") ?? ""
+                let toolInfo = availableTools.isEmpty ? "" : " (tools: \(availableTools))"
+                Logger.info("🌐 Making request with model: \(parameters.model)\(toolInfo)", category: .networking)
                 let response = try await client.startChat(parameters: parameters)
-                Logger.info("✅ Request completed successfully for model: \(parameters.model)", category: .networking)
+                let calledTools = response.choices?.first?.message?.toolCalls?.compactMap { $0.function.name } ?? []
+                let calledInfo = calledTools.isEmpty ? "" : " called: [\(calledTools.joined(separator: ", "))]"
+                Logger.info("✅ Request completed for model: \(parameters.model)\(calledInfo)", category: .networking)
                 return response
             } catch {
                 lastError = error

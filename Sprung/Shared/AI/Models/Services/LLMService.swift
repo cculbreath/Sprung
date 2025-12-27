@@ -432,7 +432,10 @@ final class OpenRouterServiceBackend {
         case .none:
             reasonString = "unknown"
         }
-        Logger.info("🔧 Tool request completed, finish reason: \(reasonString)")
+        // Extract tool names from response for logging
+        let toolNames = response.choices?.first?.message?.toolCalls?.compactMap { $0.function.name } ?? []
+        let toolInfo = toolNames.isEmpty ? "" : " tools: [\(toolNames.joined(separator: ", "))]"
+        Logger.info("🔧 Tool request completed, finish reason: \(reasonString)\(toolInfo)")
         return response
     }
 }
