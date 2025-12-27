@@ -207,7 +207,76 @@ final class SearchOpsLLMService {
         conversations.removeValue(forKey: conversationId)
     }
 
-    // MARK: - Tool Calling
+    // MARK: - Single-Turn Tool Calling (No Auto-Loop)
+
+    /// Send a message and get response with tool calls (does NOT auto-execute tools)
+    /// Returns the raw message which may contain tool calls that caller must handle
+    func sendMessageSingleTurn(
+        conversationId: UUID,
+        toolChoice: ToolChoice? = nil
+    ) async throws -> ChatCompletionObject.ChatChoice.ChatMessage {
+        guard var conversation = conversations[conversationId] else {
+            throw SearchOpsLLMError.conversationNotFound
+        }
+
+        var messages: [ChatCompletionParameters.Message] = [
+            .init(role: .system, content: .text(conversation.systemPrompt))
+        ]
+        messages.append(contentsOf: conversation.messages)
+
+        let completion = try await llmFacade.executeWithTools(
+            messages: messages,
+            tools: conversation.tools,
+            toolChoice: toolChoice ?? .auto,
+            modelId: conversation.modelId ?? modelId,
+            temperature: 0.7
+        )
+
+        guard let choices = completion.choices,
+              let choice = choices.first,
+              let message = choice.message else {
+            throw SearchOpsLLMError.invalidResponse
+        }
+
+        // Add assistant message to conversation
+        let assistantContent: ChatCompletionParameters.Message.ContentType
+        if let text = message.content {
+            assistantContent = .text(text)
+        } else {
+            assistantContent = .text("")
+        }
+        conversation.messages.append(ChatCompletionParameters.Message(
+            role: .assistant,
+            content: assistantContent,
+            toolCalls: message.toolCalls
+        ))
+        conversations[conversationId] = conversation
+
+        return message
+    }
+
+    /// Add a tool result to the conversation
+    func addToolResult(conversationId: UUID, toolCallId: String, result: String) {
+        guard var conversation = conversations[conversationId] else { return }
+        conversation.messages.append(ChatCompletionParameters.Message(
+            role: .tool,
+            content: .text(result),
+            toolCallID: toolCallId
+        ))
+        conversations[conversationId] = conversation
+    }
+
+    /// Add a user message to the conversation
+    func addUserMessage(conversationId: UUID, message: String) {
+        guard var conversation = conversations[conversationId] else { return }
+        conversation.messages.append(ChatCompletionParameters.Message(
+            role: .user,
+            content: .text(message)
+        ))
+        conversations[conversationId] = conversation
+    }
+
+    // MARK: - Tool Calling (Auto-Loop)
 
     private func executeWithToolLoop(
         conversation: inout SearchOpsConversation,
@@ -279,12 +348,6 @@ final class SearchOpsLLMService {
                         content: .text(result.rawString() ?? "{}"),
                         toolCallID: toolCallId
                     ))
-
-                    // Check if tool handler signals to pause for user input
-                    if result["_pauseForUser"].boolValue {
-                        conversations[conversation.id] = conversation
-                        throw SearchOpsLLMError.pausedForUserInput
-                    }
                 }
 
                 // Continue loop to get assistant's final response
@@ -332,7 +395,6 @@ enum SearchOpsLLMError: Error, LocalizedError {
     case invalidResponse
     case toolLoopExceeded
     case toolExecutionFailed(String)
-    case pausedForUserInput
 
     var errorDescription: String? {
         switch self {
@@ -344,8 +406,6 @@ enum SearchOpsLLMError: Error, LocalizedError {
             return "Tool call loop exceeded maximum iterations"
         case .toolExecutionFailed(let reason):
             return "Tool execution failed: \(reason)"
-        case .pausedForUserInput:
-            return "Waiting for user input"
         }
     }
 }

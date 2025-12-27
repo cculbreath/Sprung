@@ -31,6 +31,7 @@ final class CoachingService {
     private var pendingQuestions: [CoachingQuestion] = []
     private var collectedAnswers: [CoachingAnswer] = []
     private var questionIndex: Int = 0
+    private var pendingToolCallId: String?
 
     // MARK: - Initialization
 
@@ -150,6 +151,7 @@ final class CoachingService {
         currentQuestion = nil
         pendingQuestions = []
         collectedAnswers = []
+        pendingToolCallId = nil
         state = .idle
     }
 
@@ -158,101 +160,93 @@ final class CoachingService {
     private func sendInitialMessage() async throws {
         guard let convId = conversationId else { return }
 
-        let userMessage = "Please start my coaching session for today. Ask me questions to understand how I'm doing."
+        // Add initial user message
+        llmService.addUserMessage(
+            conversationId: convId,
+            message: "Please start my coaching session for today. Ask me questions to understand how I'm doing."
+        )
 
-        do {
-            // Force the LLM to call the multiple choice tool for the first question
-            let response = try await llmService.sendMessage(
-                userMessage,
-                conversationId: convId,
-                toolChoice: .function(name: CoachingToolSchemas.multipleChoiceToolName),
-                handleToolCalls: { [weak self] toolName, arguments in
-                    guard let self = self else { return JSON(["error": "Service unavailable"]) }
-                    return try await self.handleToolCall(name: toolName, arguments: arguments)
-                }
-            )
-
-            // If we got a text response without tool calls, it's the final recommendations
-            if pendingQuestions.isEmpty {
-                await handleFinalRecommendations(response)
-            }
-        } catch SearchOpsLLMError.pausedForUserInput {
-            // Expected - we displayed a question and are waiting for user input
-            Logger.debug("Coaching: paused for user input after question \(questionIndex)", category: .ai)
-        } catch {
-            Logger.error("Failed to start coaching: \(error)", category: .ai)
-            state = .error(error.localizedDescription)
-            throw error
-        }
+        // Get first response (should be a tool call for a question)
+        try await processNextResponse(forceQuestion: true)
     }
 
-    private func handleToolCall(name: String, arguments: JSON) async throws -> JSON {
-        if name == CoachingToolSchemas.multipleChoiceToolName {
-            // Parse the question from tool arguments
-            guard let question = CoachingToolSchemas.parseQuestionFromJSON(arguments) else {
-                return JSON(["error": "Failed to parse question"])
-            }
-
-            // Add to pending questions
-            pendingQuestions.append(question)
-            currentSession?.questions = (currentSession?.questions ?? []) + [question]
-
-            // Update state to present question to user
-            questionIndex += 1
-            currentQuestion = question
-            state = .askingQuestion(question: question, index: questionIndex, total: 2)
-
-            // Return acknowledgment (tool result) with pause signal
-            return JSON([
-                "status": "question_displayed",
-                "question_id": question.id.uuidString,
-                "_pauseForUser": true
-            ])
-        }
-
-        return JSON(["error": "Unknown tool: \(name)"])
-    }
-
-    private func continueWithAnswer(_ answer: CoachingAnswer) async throws {
+    /// Process the next LLM response, handling tool calls or final text
+    private func processNextResponse(forceQuestion: Bool) async throws {
         guard let convId = conversationId else { return }
 
-        state = .waitingForAnswer
-
-        // Send the answer back to the LLM
-        let answerMessage = """
-            User answered: "\(answer.selectedLabel)" (value: \(answer.selectedValue))
-            """
-
-        // Force tool call if we haven't collected 2 questions yet
-        let forceToolCall = collectedAnswers.count < 2
-        let toolChoice: ToolChoice? = forceToolCall
+        let toolChoice: ToolChoice? = forceQuestion
             ? .function(name: CoachingToolSchemas.multipleChoiceToolName)
             : nil
 
         do {
-            let response = try await llmService.sendMessage(
-                answerMessage,
+            let message = try await llmService.sendMessageSingleTurn(
                 conversationId: convId,
-                toolChoice: toolChoice,
-                handleToolCalls: { [weak self] toolName, arguments in
-                    guard let self = self else { return JSON(["error": "Service unavailable"]) }
-                    return try await self.handleToolCall(name: toolName, arguments: arguments)
-                }
+                toolChoice: toolChoice
             )
 
-            // Check if LLM asked another question (would have been handled in handleToolCall)
-            // If no new questions, this is the final recommendations
-            if currentQuestion == nil || pendingQuestions.count == collectedAnswers.count {
-                await handleFinalRecommendations(response)
+            // Check for tool calls
+            if let toolCalls = message.toolCalls, let toolCall = toolCalls.first {
+                let toolName = toolCall.function.name ?? ""
+                let toolCallId = toolCall.id ?? UUID().uuidString
+
+                if toolName == CoachingToolSchemas.multipleChoiceToolName {
+                    let arguments = JSON(parseJSON: toolCall.function.arguments)
+                    guard let question = CoachingToolSchemas.parseQuestionFromJSON(arguments) else {
+                        Logger.error("Failed to parse coaching question", category: .ai)
+                        state = .error("Failed to parse question from coach")
+                        return
+                    }
+
+                    // Store question and pending tool call
+                    pendingQuestions.append(question)
+                    currentSession?.questions = (currentSession?.questions ?? []) + [question]
+                    pendingToolCallId = toolCallId
+
+                    // Update UI state - user must answer before we continue
+                    questionIndex += 1
+                    currentQuestion = question
+                    state = .askingQuestion(question: question, index: questionIndex, total: 2)
+
+                    Logger.debug("Coaching: showing question \(questionIndex), waiting for user", category: .ai)
+                    // STOP HERE - wait for user to call submitAnswer()
+                    return
+                }
             }
-        } catch SearchOpsLLMError.pausedForUserInput {
-            // Expected - we displayed a question and are waiting for user input
-            Logger.debug("Coaching: paused for user input after question \(questionIndex)", category: .ai)
+
+            // No tool call - this is the final recommendations
+            let recommendations = message.content ?? ""
+            await handleFinalRecommendations(recommendations)
+
         } catch {
-            Logger.error("Failed to continue coaching: \(error)", category: .ai)
+            Logger.error("Failed to get coaching response: \(error)", category: .ai)
             state = .error(error.localizedDescription)
             throw error
         }
+    }
+
+    private func continueWithAnswer(_ answer: CoachingAnswer) async throws {
+        guard let convId = conversationId,
+              let toolCallId = pendingToolCallId else { return }
+
+        state = .waitingForAnswer
+        pendingToolCallId = nil
+
+        // Send tool result with user's answer as content
+        let toolResult = JSON([
+            "selected_value": answer.selectedValue,
+            "selected_label": answer.selectedLabel
+        ])
+        llmService.addToolResult(
+            conversationId: convId,
+            toolCallId: toolCallId,
+            result: toolResult.rawString() ?? "{}"
+        )
+
+        // Force another question if we haven't collected 2 yet
+        let forceQuestion = collectedAnswers.count < 2
+
+        // Get next response
+        try await processNextResponse(forceQuestion: forceQuestion)
     }
 
     private func handleFinalRecommendations(_ recommendations: String) async {
