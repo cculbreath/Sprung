@@ -35,11 +35,15 @@ final class SearchOpsLLMService {
 
     /// Execute a simple structured request without maintaining conversation state.
     /// Use for one-shot LLM calls like generating daily tasks or discovering sources.
+    /// - Parameter backend: Which LLM backend to use (.openRouter default, .openAI for web_search)
+    /// - Parameter modelId: Model ID to use (defaults to discovery model from settings)
     func executeStructured<T: Codable & Sendable>(
         prompt: String,
         systemPrompt: String? = nil,
         as type: T.Type,
-        temperature: Double = 0.7
+        temperature: Double = 0.7,
+        backend: LLMFacade.Backend = .openRouter,
+        modelId: String? = nil
     ) async throws -> T {
         var fullPrompt = prompt
         if let sys = systemPrompt {
@@ -48,19 +52,24 @@ final class SearchOpsLLMService {
 
         return try await llmFacade.executeStructured(
             prompt: fullPrompt,
-            modelId: modelId,
+            modelId: modelId ?? self.modelId,
             as: type,
-            temperature: temperature
+            temperature: temperature,
+            backend: backend
         )
     }
 
     /// Execute a flexible JSON request that can work with or without strict schema
+    /// - Parameter backend: Which LLM backend to use (.openRouter default, .openAI for web_search)
+    /// - Parameter modelId: Model ID to use (defaults to discovery model from settings)
     func executeFlexibleJSON<T: Codable & Sendable>(
         prompt: String,
         systemPrompt: String? = nil,
         as type: T.Type,
         jsonSchema: JSONSchema? = nil,
-        temperature: Double = 0.7
+        temperature: Double = 0.7,
+        backend: LLMFacade.Backend = .openRouter,
+        modelId: String? = nil
     ) async throws -> T {
         var fullPrompt = prompt
         if let sys = systemPrompt {
@@ -69,10 +78,11 @@ final class SearchOpsLLMService {
 
         return try await llmFacade.executeFlexibleJSON(
             prompt: fullPrompt,
-            modelId: modelId,
+            modelId: modelId ?? self.modelId,
             as: type,
             temperature: temperature,
-            jsonSchema: jsonSchema
+            jsonSchema: jsonSchema,
+            backend: backend
         )
     }
 

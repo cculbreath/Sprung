@@ -661,11 +661,13 @@ final class SearchOpsCoordinator {
             \(keywords != nil ? "4. Roles that connect to the specified keywords/interests" : "")
             """
 
+        // Use discovery model via OpenAI backend
         let result = try await llm.executeStructured(
             prompt: prompt,
             systemPrompt: "You are a career advisor helping someone identify job roles to target. Be specific with job titles.",
             as: RoleSuggestionsResult.self,
-            temperature: 0.7
+            temperature: 0.7,
+            backend: .openAI
         )
 
         return result.suggestedRoles
@@ -738,12 +740,14 @@ final class SearchOpsCoordinator {
             additionalProperties: false
         )
 
+        // Use discovery model via OpenAI backend
         let result = try await llm.executeFlexibleJSON(
             prompt: prompt,
             systemPrompt: "Extract job search preferences from the provided profile and background. Return null for fields that cannot be determined.",
             as: LocationPreferencesResult.self,
             jsonSchema: schema,
-            temperature: 0.3
+            temperature: 0.3,
+            backend: .openAI
         )
 
         // Parse work arrangement string to enum
