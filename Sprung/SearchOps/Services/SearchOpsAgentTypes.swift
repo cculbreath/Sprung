@@ -311,6 +311,7 @@ enum SearchOpsAgentError: Error, LocalizedError {
     case invalidResponse
     case toolExecutionFailed(String)
     case missingAPIKey
+    case llmError(String)
 
     var errorDescription: String? {
         switch self {
@@ -324,6 +325,8 @@ enum SearchOpsAgentError: Error, LocalizedError {
             return "Could not parse LLM response"
         case .toolExecutionFailed(let reason):
             return "Tool execution failed: \(reason)"
+        case .llmError(let reason):
+            return "LLM error: \(reason)"
         }
     }
 }

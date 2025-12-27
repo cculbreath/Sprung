@@ -3,7 +3,7 @@
 //  Sprung
 //
 //  Actor-based agent service for SearchOps LLM interactions.
-//  Uses OpenAI Responses API with web_search for discovery tasks.
+//  Uses LLMFacade for all LLM operations including web search.
 //  Per SEARCHOPS_AMENDMENT: Uses local context management, NOT server-managed.
 //
 
@@ -19,7 +19,6 @@ actor SearchOpsAgentService {
     private let llmFacade: LLMFacade
     private let toolExecutor: SearchOpsToolExecutor
     private let settingsStore: SearchOpsSettingsStore
-    private let openAIAPIKey: () -> String
     private let parser = SearchOpsResponseParser()
 
     // MARK: - Configuration
@@ -31,13 +30,11 @@ actor SearchOpsAgentService {
     init(
         llmFacade: LLMFacade,
         contextProvider: SearchOpsContextProvider,
-        settingsStore: SearchOpsSettingsStore,
-        openAIAPIKey: @escaping () -> String = { APIKeyManager.get(.openAI) ?? "" }
+        settingsStore: SearchOpsSettingsStore
     ) {
         self.llmFacade = llmFacade
         self.toolExecutor = SearchOpsToolExecutor(contextProvider: contextProvider)
         self.settingsStore = settingsStore
-        self.openAIAPIKey = openAIAPIKey
     }
 
     // MARK: - Model Configuration
@@ -134,7 +131,7 @@ actor SearchOpsAgentService {
         throw SearchOpsAgentError.toolLoopExceeded
     }
 
-    // MARK: - OpenAI Responses API
+    // MARK: - OpenAI Responses API (via LLMFacade)
 
     private func runOpenAIRequest(
         systemPrompt: String,
@@ -145,90 +142,27 @@ actor SearchOpsAgentService {
         statusCallback: (@MainActor @Sendable (DiscoveryStatus) async -> Void)? = nil,
         reasoningCallback: (@MainActor @Sendable (String) async -> Void)? = nil
     ) async throws -> String {
-        let apiKey = openAIAPIKey()
-        guard !apiKey.isEmpty else {
-            throw SearchOpsAgentError.missingAPIKey
+        do {
+            // LLMFacade is @MainActor - Swift handles the actor hop automatically
+            return try await llmFacade.executeWithWebSearch(
+                systemPrompt: systemPrompt,
+                userMessage: userMessage,
+                modelId: modelId,
+                reasoningEffort: reasoningEffort,
+                webSearchLocation: webSearchLocation,
+                temperature: nil,
+                onWebSearching: statusCallback.map { callback in
+                    { await callback(.webSearching) }
+                },
+                onWebSearchComplete: statusCallback.map { callback in
+                    { await callback(.webSearchComplete) }
+                },
+                onTextDelta: reasoningCallback
+            )
+        } catch let error as LLMError {
+            // Convert LLMError to SearchOpsAgentError for consistency
+            throw SearchOpsAgentError.llmError(error.localizedDescription)
         }
-
-        // Strip OpenRouter prefix if present
-        let openAIModelId = modelId.hasPrefix("openai/") ? String(modelId.dropFirst(7)) : modelId
-        let service = OpenAIServiceFactory.service(apiKey: apiKey)
-
-        let inputItems: [InputItem] = [
-            .message(InputMessage(role: "developer", content: .text(systemPrompt))),
-            .message(InputMessage(role: "user", content: .text(userMessage)))
-        ]
-
-        let reasoning = Reasoning(effort: reasoningEffort)
-
-        // Configure tools (web search if location provided)
-        var tools: [Tool]?
-        if let location = webSearchLocation {
-            let webSearchTool = Tool.webSearch(Tool.WebSearchTool(
-                type: .webSearch,
-                userLocation: Tool.UserLocation(city: location, country: "US")
-            ))
-            tools = [webSearchTool]
-        }
-
-        let parameters = ModelResponseParameter(
-            input: .array(inputItems),
-            model: .custom(openAIModelId),
-            reasoning: reasoning,
-            store: false,
-            stream: true,
-            toolChoice: tools != nil ? .auto : nil,
-            tools: tools
-        )
-
-        Logger.info("Running OpenAI request (model: \(openAIModelId), webSearch: \(webSearchLocation != nil))", category: .ai)
-
-        var finalResponse: ResponseModel?
-        let stream = try await service.responseCreateStream(parameters)
-
-        for try await event in stream {
-            switch event {
-            case .responseCompleted(let completed):
-                finalResponse = completed.response
-            case .webSearchCallSearching:
-                await statusCallback?(.webSearching)
-            case .webSearchCallCompleted:
-                await statusCallback?(.webSearchComplete)
-            case .outputTextDelta(let delta):
-                await reasoningCallback?(delta.delta)
-            case .reasoningSummaryTextDelta(let delta):
-                await reasoningCallback?(delta.delta)
-            default:
-                break
-            }
-        }
-
-        guard let response = finalResponse,
-              let outputText = extractResponseText(from: response) else {
-            throw SearchOpsAgentError.noResponse
-        }
-
-        Logger.info("OpenAI returned \(outputText.count) chars", category: .ai)
-        return outputText
-    }
-
-    private func extractResponseText(from response: ResponseModel) -> String? {
-        if let text = response.outputText?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !text.isEmpty {
-            return text
-        }
-
-        for item in response.output {
-            if case let .message(message) = item {
-                for content in message.content {
-                    if case let .outputText(output) = content,
-                       !output.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        return output.text
-                    }
-                }
-            }
-        }
-        return nil
     }
 
     // MARK: - Task Methods

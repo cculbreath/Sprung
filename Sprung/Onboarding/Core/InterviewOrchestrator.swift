@@ -2,7 +2,7 @@
 //  InterviewOrchestrator.swift
 //  Sprung
 //
-//  Coordinates the onboarding interview conversation with OpenAI's Responses API.
+//  Coordinates the onboarding interview conversation via LLMFacade.
 //  Uses event-driven architecture - no callbacks, no bidirectional dependencies.
 //
 import Foundation
@@ -17,31 +17,29 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
     private let state: StateCoordinator
     private let llmMessenger: LLMMessenger
     private let networkRouter: NetworkRouter
-    private let service: OpenAIService
     private let baseDeveloperMessage: String  // Sent once on first request, persists via previous_response_id
     private var isActive = false
     // MARK: - Initialization
     init(
-        service: OpenAIService,
+        llmFacade: LLMFacade,
         baseDeveloperMessage: String,
         eventBus: EventCoordinator,
         toolRegistry: ToolRegistry,
         state: StateCoordinator
     ) {
-        self.service = service
         self.baseDeveloperMessage = baseDeveloperMessage
         self.eventBus = eventBus
         self.state = state
         self.networkRouter = NetworkRouter(eventBus: eventBus)
         self.llmMessenger = LLMMessenger(
-            service: service,
+            llmFacade: llmFacade,
             baseDeveloperMessage: baseDeveloperMessage,
             eventBus: eventBus,
             networkRouter: networkRouter,
             toolRegistry: toolRegistry,
             state: state
         )
-        Logger.info("🎯 InterviewOrchestrator initialized", category: .ai)
+        Logger.info("🎯 InterviewOrchestrator initialized (using LLMFacade)", category: .ai)
     }
     // MARK: - Interview Control
     /// Initialize and subscribe to events, but don't send the initial message yet

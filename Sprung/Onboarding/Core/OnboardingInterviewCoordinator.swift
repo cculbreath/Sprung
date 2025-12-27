@@ -115,7 +115,6 @@ final class OnboardingInterviewCoordinator {
     }
     // MARK: - Initialization
     init(
-        openAIService: OpenAIService?,
         llmFacade: LLMFacade?,
         documentExtractionService: DocumentExtractionService,
         applicantProfileStore: ApplicantProfileStore,
@@ -128,7 +127,6 @@ final class OnboardingInterviewCoordinator {
     ) {
         // Create dependency container with all service wiring
         self.container = OnboardingDependencyContainer(
-            openAIService: openAIService,
             llmFacade: llmFacade,
             documentExtractionService: documentExtractionService,
             applicantProfileStore: applicantProfileStore,
@@ -155,13 +153,13 @@ final class OnboardingInterviewCoordinator {
         Task { await profilePersistenceHandler.start() }
     }
     // MARK: - Service Updates
-    func updateOpenAIService(_ service: OpenAIService?) {
-        container.updateOpenAIService(service)
+    func updateLLMFacade(_ facade: LLMFacade?) {
+        container.updateLLMFacade(facade)
         // Re-register tools with new agent if available
         container.reregisterTools { [weak self] message in
             self?.ui.modelAvailabilityMessage = message
         }
-        Logger.info("🔄 OpenAIService updated in Coordinator", category: .ai)
+        Logger.info("🔄 LLMFacade updated in Coordinator", category: .ai)
     }
     // MARK: - Event Subscription
     private func subscribeToEvents() async {

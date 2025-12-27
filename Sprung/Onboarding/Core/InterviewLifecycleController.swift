@@ -12,7 +12,7 @@ final class InterviewLifecycleController {
     private let chatboxHandler: ChatboxHandler
     private let toolExecutionCoordinator: ToolExecutionCoordinator
     private let toolRouter: ToolHandler
-    private var openAIService: OpenAIService?
+    private var llmFacade: LLMFacade?
     private let toolRegistry: ToolRegistry
     private let dataStore: InterviewDataStore
     // MARK: - Lifecycle State
@@ -30,7 +30,7 @@ final class InterviewLifecycleController {
         chatboxHandler: ChatboxHandler,
         toolExecutionCoordinator: ToolExecutionCoordinator,
         toolRouter: ToolHandler,
-        openAIService: OpenAIService?,
+        llmFacade: LLMFacade?,
         toolRegistry: ToolRegistry,
         dataStore: InterviewDataStore
     ) {
@@ -40,15 +40,15 @@ final class InterviewLifecycleController {
         self.chatboxHandler = chatboxHandler
         self.toolExecutionCoordinator = toolExecutionCoordinator
         self.toolRouter = toolRouter
-        self.openAIService = openAIService
+        self.llmFacade = llmFacade
         self.toolRegistry = toolRegistry
         self.dataStore = dataStore
     }
     // MARK: - Interview Lifecycle
     func startInterview(isResuming: Bool = false) async -> Bool {
         Logger.info("🚀 Starting interview (lifecycle controller, resuming: \(isResuming))", category: .ai)
-        // Verify we have an OpenAI service
-        guard let service = openAIService else {
+        // Verify we have LLMFacade configured
+        guard let facade = llmFacade else {
             await state.setActiveState(false)
             return false
         }
@@ -74,7 +74,7 @@ final class InterviewLifecycleController {
         // Build orchestrator
         let phase = await state.phase
         let baseDeveloperMessage = phaseRegistry.buildSystemPrompt(for: phase)
-        let orchestrator = makeOrchestrator(service: service, baseDeveloperMessage: baseDeveloperMessage)
+        let orchestrator = makeOrchestrator(llmFacade: facade, baseDeveloperMessage: baseDeveloperMessage)
         self.orchestrator = orchestrator
 
         // Publish phase transition BEFORE orchestrator sends initial message
@@ -115,15 +115,15 @@ final class InterviewLifecycleController {
         // so that the phase intro can be bundled with the initial "I'm ready to begin" message
         return true
     }
-    func updateOpenAIService(_ service: OpenAIService?) {
-        self.openAIService = service
-        if orchestrator != nil, service != nil {
-            // If we have an active orchestrator, we might need to update its service reference
+    func updateLLMFacade(_ facade: LLMFacade?) {
+        self.llmFacade = facade
+        if orchestrator != nil, facade != nil {
+            // If we have an active orchestrator, we might need to update its facade reference
             // However, InterviewOrchestrator holds a let reference.
             // For now, we'll just log. In a full implementation, we might need to restart the orchestrator
-            // or make its service updatable too.
+            // or make its facade updatable too.
             // Given the current architecture, a restart of the interview might be cleaner if it was already running.
-            Logger.info("🔄 OpenAIService updated in LifecycleController", category: .ai)
+            Logger.info("🔄 LLMFacade updated in LifecycleController", category: .ai)
         }
     }
     func endInterview() async {
@@ -216,11 +216,11 @@ final class InterviewLifecycleController {
     }
     // MARK: - Factory Methods
     private func makeOrchestrator(
-        service: OpenAIService,
+        llmFacade: LLMFacade,
         baseDeveloperMessage: String
     ) -> InterviewOrchestrator {
         return InterviewOrchestrator(
-            service: service,
+            llmFacade: llmFacade,
             baseDeveloperMessage: baseDeveloperMessage,
             eventBus: eventBus,
             toolRegistry: toolRegistry,

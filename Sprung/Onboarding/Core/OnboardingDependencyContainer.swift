@@ -63,7 +63,7 @@ private struct ControllerCreationParams {
     let chatboxHandler: ChatboxHandler
     let toolExecutionCoordinator: ToolExecutionCoordinator
     let toolRouter: ToolHandler
-    let openAIService: OpenAIService?
+    let llmFacade: LLMFacade?
     let toolRegistry: ToolRegistry
     let dataStore: InterviewDataStore
 }
@@ -121,7 +121,6 @@ final class OnboardingDependencyContainer {
     private let dataStore: InterviewDataStore
     let documentExtractionService: DocumentExtractionService
     // MARK: - Mutable State
-    private(set) var openAIService: OpenAIService?
     private(set) var llmFacade: LLMFacade?
     // MARK: - UI State
     let ui: OnboardingUIState
@@ -142,7 +141,6 @@ final class OnboardingDependencyContainer {
     private(set) var toolRegistrar: OnboardingToolRegistrar!
     // MARK: - Initialization
     init(
-        openAIService: OpenAIService?,
         llmFacade: LLMFacade?,
         documentExtractionService: DocumentExtractionService,
         applicantProfileStore: ApplicantProfileStore,
@@ -154,7 +152,6 @@ final class OnboardingDependencyContainer {
         preferences: OnboardingPreferences
     ) {
         // Store external dependencies
-        self.openAIService = openAIService
         self.llmFacade = llmFacade
         self.documentExtractionService = documentExtractionService
         self.applicantProfileStore = applicantProfileStore
@@ -215,7 +212,7 @@ final class OnboardingDependencyContainer {
         let controllerParams = ControllerCreationParams(
             state: state, eventBus: core.eventBus, phaseRegistry: core.phaseRegistry,
             chatboxHandler: tools.chatboxHandler, toolExecutionCoordinator: tools.toolExecutionCoordinator,
-            toolRouter: tools.toolRouter, openAIService: openAIService, toolRegistry: core.toolRegistry,
+            toolRouter: tools.toolRouter, llmFacade: llmFacade, toolRegistry: core.toolRegistry,
             dataStore: dataStore
         )
         let controllers = Self.createControllers(params: controllerParams)
@@ -376,7 +373,7 @@ final class OnboardingDependencyContainer {
             lifecycleController: InterviewLifecycleController(
                 state: params.state, eventBus: params.eventBus, phaseRegistry: params.phaseRegistry,
                 chatboxHandler: params.chatboxHandler, toolExecutionCoordinator: params.toolExecutionCoordinator,
-                toolRouter: params.toolRouter, openAIService: params.openAIService,
+                toolRouter: params.toolRouter, llmFacade: params.llmFacade,
                 toolRegistry: params.toolRegistry, dataStore: params.dataStore
             ),
             phaseTransitionController: PhaseTransitionController(
@@ -452,13 +449,9 @@ final class OnboardingDependencyContainer {
         Logger.info("🏗️ OnboardingDependencyContainer late initialization completed", category: .ai)
     }
     // MARK: - Service Updates
-    func updateOpenAIService(_ service: OpenAIService?) {
-        self.openAIService = service
-        lifecycleController.updateOpenAIService(service)
-    }
-
     func updateLLMFacade(_ facade: LLMFacade?) {
         self.llmFacade = facade
+        lifecycleController.updateLLMFacade(facade)
         Task {
             await gitIngestionKernel.updateLLMFacade(facade)
         }

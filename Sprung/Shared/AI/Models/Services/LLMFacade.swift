@@ -38,10 +38,12 @@ final class LLMFacade {
     enum Backend: CaseIterable {
         case openRouter
         case openAI
+        case gemini
         var displayName: String {
             switch self {
             case .openRouter: return "OpenRouter"
             case .openAI: return "OpenAI"
+            case .gemini: return "Gemini"
             }
         }
     }
@@ -53,6 +55,10 @@ final class LLMFacade {
     private var activeStreamingTasks: [UUID: Task<Void, Never>] = [:]
     private var backendClients: [Backend: LLMClient] = [:]
     private var conversationServices: [Backend: LLMConversationService] = [:]
+
+    // Direct service references for specialized APIs
+    private var openAIService: OpenAIService?
+    private var googleAIService: GoogleAIService?
     init(
         client: LLMClient,
         llmService: OpenRouterServiceBackend,
@@ -73,6 +79,14 @@ final class LLMFacade {
     }
     func registerConversationService(_ service: LLMConversationService, for backend: Backend) {
         conversationServices[backend] = service
+    }
+
+    func registerOpenAIService(_ service: OpenAIService) {
+        self.openAIService = service
+    }
+
+    func registerGoogleAIService(_ service: GoogleAIService) {
+        self.googleAIService = service
     }
     private func resolveClient(for backend: Backend) throws -> LLMClient {
         guard let resolved = backendClients[backend] else {
@@ -582,5 +596,133 @@ final class LLMFacade {
         )
 
         return try await llmService.executeToolRequest(parameters: parameters)
+    }
+
+    // MARK: - OpenAI Responses API with Web Search
+
+    /// Execute a request using OpenAI Responses API with optional web search.
+    /// This is used for discovery workflows that need real-time web data.
+    ///
+    /// - Parameters:
+    ///   - systemPrompt: Developer/system instructions
+    ///   - userMessage: The user's query
+    ///   - modelId: OpenAI model ID (e.g., "gpt-4o" or "openai/gpt-4o" - prefix stripped automatically)
+    ///   - reasoningEffort: Reasoning effort level ("low", "medium", "high")
+    ///   - webSearchLocation: Optional location for web search (city name). If provided, enables web search tool.
+    ///   - temperature: Sampling temperature
+    ///   - onWebSearching: Callback when web search starts
+    ///   - onWebSearchComplete: Callback when web search completes
+    ///   - onReasoningDelta: Callback for reasoning/output text deltas
+    /// - Returns: The final response text
+    func executeWithWebSearch(
+        systemPrompt: String,
+        userMessage: String,
+        modelId: String,
+        reasoningEffort: String? = nil,
+        webSearchLocation: String? = nil,
+        temperature: Double? = nil,
+        onWebSearching: (@MainActor @Sendable () async -> Void)? = nil,
+        onWebSearchComplete: (@MainActor @Sendable () async -> Void)? = nil,
+        onTextDelta: (@MainActor @Sendable (String) async -> Void)? = nil
+    ) async throws -> String {
+        guard let service = openAIService else {
+            throw LLMError.clientError("OpenAI service is not configured. Call registerOpenAIService first.")
+        }
+
+        // Strip OpenRouter prefix if present
+        let openAIModelId = modelId.hasPrefix("openai/") ? String(modelId.dropFirst(7)) : modelId
+
+        let inputItems: [InputItem] = [
+            .message(InputMessage(role: "developer", content: .text(systemPrompt))),
+            .message(InputMessage(role: "user", content: .text(userMessage)))
+        ]
+
+        let reasoning: Reasoning? = reasoningEffort.map { Reasoning(effort: $0) }
+
+        // Configure web search tool if location provided
+        var tools: [Tool]?
+        if let location = webSearchLocation {
+            let webSearchTool = Tool.webSearch(Tool.WebSearchTool(
+                type: .webSearch,
+                userLocation: Tool.UserLocation(city: location, country: "US")
+            ))
+            tools = [webSearchTool]
+        }
+
+        let parameters = ModelResponseParameter(
+            input: .array(inputItems),
+            model: .custom(openAIModelId),
+            reasoning: reasoning,
+            store: false,
+            stream: true,
+            toolChoice: tools != nil ? .auto : nil,
+            tools: tools
+        )
+
+        Logger.info("🌐 LLMFacade.executeWithWebSearch (model: \(openAIModelId), webSearch: \(webSearchLocation != nil))", category: .ai)
+
+        var finalResponse: ResponseModel?
+        let stream = try await service.responseCreateStream(parameters)
+
+        for try await event in stream {
+            switch event {
+            case .responseCompleted(let completed):
+                finalResponse = completed.response
+            case .webSearchCallSearching:
+                await onWebSearching?()
+            case .webSearchCallCompleted:
+                await onWebSearchComplete?()
+            case .outputTextDelta(let delta):
+                await onTextDelta?(delta.delta)
+            case .reasoningSummaryTextDelta(let delta):
+                await onTextDelta?(delta.delta)
+            default:
+                break
+            }
+        }
+
+        guard let response = finalResponse,
+              let outputText = extractResponseText(from: response) else {
+            throw LLMError.clientError("No response received from OpenAI")
+        }
+
+        Logger.info("✅ LLMFacade.executeWithWebSearch returned \(outputText.count) chars", category: .ai)
+        return outputText
+    }
+
+    private func extractResponseText(from response: ResponseModel) -> String? {
+        if let text = response.outputText?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !text.isEmpty {
+            return text
+        }
+
+        for item in response.output {
+            if case let .message(message) = item {
+                for content in message.content {
+                    if case let .outputText(output) = content,
+                       !output.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        return output.text
+                    }
+                }
+            }
+        }
+        return nil
+    }
+
+    // MARK: - Raw OpenAI Responses API Stream
+
+    /// Execute an OpenAI Responses API request and return the raw stream.
+    /// This is used by orchestration layers (like Onboarding) that need to process
+    /// stream events themselves while still using LLMFacade for service management.
+    ///
+    /// - Parameter parameters: The ModelResponseParameter for the request
+    /// - Returns: AsyncThrowingStream of ResponseStreamEvent events
+    func responseCreateStream(
+        parameters: ModelResponseParameter
+    ) async throws -> AsyncThrowingStream<ResponseStreamEvent, Error> {
+        guard let service = openAIService else {
+            throw LLMError.clientError("OpenAI service is not configured. Call registerOpenAIService first.")
+        }
+        return try await service.responseCreateStream(parameters)
     }
 }

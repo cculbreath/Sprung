@@ -107,10 +107,9 @@ final class AppDependencies {
         let documentExtractionService = DocumentExtractionService(llmFacade: llmFacade)
         self.documentExtractionService = documentExtractionService
         // Register OpenAI backend if API key is configured
-        var onboardingOpenAIService: OpenAIService?
         if let openAIKey = APIKeyManager.get(.openAI)?.trimmingCharacters(in: .whitespacesAndNewlines),
            !openAIKey.isEmpty {
-            onboardingOpenAIService = LLMFacadeFactory.registerOpenAI(
+            _ = LLMFacadeFactory.registerOpenAI(
                 facade: llmFacade,
                 apiKey: openAIKey,
                 debugEnabled: Logger.isVerboseEnabled
@@ -133,7 +132,6 @@ final class AppDependencies {
         let interviewDataStore = InterviewDataStore()
         let preferences = OnboardingPreferences()
         let onboardingCoordinator = OnboardingInterviewCoordinator(
-            openAIService: onboardingOpenAIService,
             llmFacade: llmFacade,
             documentExtractionService: documentExtractionService,
             applicantProfileStore: applicantProfileStore,
@@ -198,7 +196,7 @@ final class AppDependencies {
     }
     private func handleAPIKeysChanged() {
         Logger.info("🔑 API keys changed - refreshing services", category: .appLifecycle)
-        // Re-check OpenAI key
+        // Re-check OpenAI key and update facade
         if let openAIKey = APIKeyManager.get(.openAI)?.trimmingCharacters(in: .whitespacesAndNewlines),
            !openAIKey.isEmpty {
             let debugEnabled = Logger.isVerboseEnabled
@@ -213,13 +211,12 @@ final class AppDependencies {
                 httpClient: responsesHTTPClient,
                 debugEnabled: debugEnabled
             )
-            // Update Onboarding Coordinator
-            onboardingCoordinator.updateOpenAIService(openAIService)
-            Logger.info("✅ Onboarding OpenAIService updated with new key", category: .appLifecycle)
+            // Register new service with LLMFacade - all components using the facade will get the updated service
+            appEnvironment.llmFacade.registerOpenAIService(openAIService)
+            Logger.info("✅ OpenAI service registered with LLMFacade (new key)", category: .appLifecycle)
         } else {
-            // Key removed or empty
-            onboardingCoordinator.updateOpenAIService(nil)
-            Logger.info("⚠️ Onboarding OpenAIService cleared (no key)", category: .appLifecycle)
+            // Key removed or empty - components will fail gracefully when trying to use OpenAI features
+            Logger.info("⚠️ OpenAI API key not configured", category: .appLifecycle)
         }
     }
 }

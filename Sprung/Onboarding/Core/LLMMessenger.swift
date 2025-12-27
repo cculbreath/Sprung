@@ -3,6 +3,7 @@
 //  Sprung
 //
 //  LLM message orchestration (Spec §4.3)
+//  Uses LLMFacade for all LLM operations while maintaining domain orchestration.
 import AppKit
 import Foundation
 import SwiftOpenAI
@@ -16,7 +17,7 @@ import SwiftyJSON
 actor LLMMessenger: OnboardingEventEmitter {
     let eventBus: EventCoordinator
     private let networkRouter: NetworkRouter
-    private let service: OpenAIService
+    private let llmFacade: LLMFacade
     private let stateCoordinator: StateCoordinator
     private let contextAssembler: ConversationContextAssembler
     private let requestBuilder: OnboardingRequestBuilder
@@ -24,14 +25,14 @@ actor LLMMessenger: OnboardingEventEmitter {
     // Stream cancellation tracking
     private var currentStreamTask: Task<Void, Error>?
     init(
-        service: OpenAIService,
+        llmFacade: LLMFacade,
         baseDeveloperMessage: String,
         eventBus: EventCoordinator,
         networkRouter: NetworkRouter,
         toolRegistry: ToolRegistry,
         state: StateCoordinator
     ) {
-        self.service = service
+        self.llmFacade = llmFacade
         self.eventBus = eventBus
         self.networkRouter = networkRouter
         self.stateCoordinator = state
@@ -42,7 +43,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             contextAssembler: contextAssembler,
             stateCoordinator: state
         )
-        Logger.info("📬 LLMMessenger initialized", category: .ai)
+        Logger.info("📬 LLMMessenger initialized (using LLMFacade)", category: .ai)
     }
     /// Start listening to message request events
     func startEventSubscriptions() async {
@@ -120,9 +121,9 @@ actor LLMMessenger: OnboardingEventEmitter {
                 var lastError: Error?
                 while retryCount <= maxRetries {
                     do {
-                        Logger.info("🔍 About to call service.responseCreateStream, service type: \(type(of: service))", category: .ai)
+                        Logger.info("🔍 About to call llmFacade.responseCreateStream", category: .ai)
                         Logger.debug("📋 Request model: \(request.model), prevId: \(request.previousResponseId != nil), store: \(String(describing: request.store))", category: .ai)
-                        let stream = try await service.responseCreateStream(request)
+                        let stream = try await llmFacade.responseCreateStream(parameters: request)
                         for try await streamEvent in stream {
                             await networkRouter.handleResponseEvent(streamEvent)
                             // Track conversation state
@@ -253,7 +254,7 @@ actor LLMMessenger: OnboardingEventEmitter {
                 var lastError: Error?
                 while retryCount <= maxRetries {
                     do {
-                        let stream = try await service.responseCreateStream(request)
+                        let stream = try await llmFacade.responseCreateStream(parameters: request)
                         for try await streamEvent in stream {
                             await networkRouter.handleResponseEvent(streamEvent)
                             // Track conversation state
@@ -352,7 +353,7 @@ actor LLMMessenger: OnboardingEventEmitter {
                 var lastError: Error?
                 while retryCount <= maxRetries {
                     do {
-                        let stream = try await service.responseCreateStream(request)
+                        let stream = try await llmFacade.responseCreateStream(parameters: request)
                         for try await streamEvent in stream {
                             await networkRouter.handleResponseEvent(streamEvent)
                             if case .responseCompleted(let completed) = streamEvent {
@@ -430,7 +431,7 @@ actor LLMMessenger: OnboardingEventEmitter {
                 var lastError: Error?
                 while retryCount <= maxRetries {
                     do {
-                        let stream = try await service.responseCreateStream(request)
+                        let stream = try await llmFacade.responseCreateStream(parameters: request)
                         for try await streamEvent in stream {
                             await networkRouter.handleResponseEvent(streamEvent)
                             if case .responseCompleted(let completed) = streamEvent {
@@ -666,7 +667,7 @@ actor LLMMessenger: OnboardingEventEmitter {
 
         do {
             // Send the synthetic tool response
-            let stream = try await service.responseCreateStream(request)
+            let stream = try await llmFacade.responseCreateStream(parameters: request)
             for try await streamEvent in stream {
                 await networkRouter.handleResponseEvent(streamEvent)
 

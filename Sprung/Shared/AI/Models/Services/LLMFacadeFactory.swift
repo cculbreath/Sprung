@@ -102,6 +102,9 @@ struct LLMFacadeFactory {
         let conversationService = OpenAIResponsesConversationService(service: openAIService)
         facade.registerConversationService(conversationService, for: .openAI)
 
+        // Register direct service reference for specialized APIs (web search, etc.)
+        facade.registerOpenAIService(openAIService)
+
         Logger.info("✅ OpenAI backend registered via LLMFacadeFactory", category: .appLifecycle)
 
         return openAIService
