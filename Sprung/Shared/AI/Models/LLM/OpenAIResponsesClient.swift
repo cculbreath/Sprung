@@ -84,6 +84,25 @@ final class OpenAIResponsesClient: LLMClient {
         )
         return try decode(raw, as: type)
     }
+
+    func executeStructuredWithSchema<T>(
+        prompt: String,
+        modelId: String,
+        as type: T.Type,
+        schema: JSONSchema,
+        schemaName: String,
+        temperature: Double?
+    ) async throws -> T where T: Codable & Sendable {
+        let raw = try await requestStructured(
+            prompt: prompt,
+            modelId: modelId,
+            schema: schema,
+            schemaName: schemaName,
+            temperature: temperature
+        )
+        return try decode(raw, as: type)
+    }
+
     // MARK: - Private
     private func requestText(
         prompt: String,
@@ -95,7 +114,29 @@ final class OpenAIResponsesClient: LLMClient {
             prompt: prompt,
             modelId: modelId,
             images: images,
-            temperature: temperature
+            temperature: temperature,
+            textConfig: TextConfiguration(format: .text)
+        )
+        guard let text = extractText(from: response), !text.isEmpty else {
+            throw LLMError.unexpectedResponseFormat
+        }
+        return text
+    }
+
+    private func requestStructured(
+        prompt: String,
+        modelId: String,
+        schema: JSONSchema,
+        schemaName: String,
+        temperature: Double?
+    ) async throws -> String {
+        let textConfig = TextConfiguration(format: .jsonSchema(schema, name: schemaName))
+        let response = try await performRequest(
+            prompt: prompt,
+            modelId: modelId,
+            images: [],
+            temperature: temperature,
+            textConfig: textConfig
         )
         guard let text = extractText(from: response), !text.isEmpty else {
             throw LLMError.unexpectedResponseFormat
@@ -106,7 +147,8 @@ final class OpenAIResponsesClient: LLMClient {
         prompt: String,
         modelId: String,
         images: [Data],
-        temperature: Double?
+        temperature: Double?,
+        textConfig: TextConfiguration
     ) async throws -> ResponseModel {
         var content: [ContentItem] = [
             .text(TextContent(text: prompt))
@@ -126,7 +168,7 @@ final class OpenAIResponsesClient: LLMClient {
             model: .custom(modelId),
             store: true,
             temperature: temperature ?? defaultTemperature,
-            text: TextConfiguration(format: .text)
+            text: textConfig
         )
         return try await service.responseCreate(parameters)
     }

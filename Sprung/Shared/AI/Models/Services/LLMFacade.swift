@@ -279,6 +279,26 @@ final class LLMFacade {
         let altClient = try resolveClient(for: backend)
         return try await altClient.executeStructuredWithImages(prompt: prompt, modelId: modelId, images: images, as: type, temperature: temperature)
     }
+
+    /// Execute a structured request with an explicit JSON schema.
+    /// Use this for backends (like OpenAI Responses API) that require a schema for structured output.
+    func executeStructuredWithSchema<T: Codable & Sendable>(
+        prompt: String,
+        modelId: String,
+        as type: T.Type,
+        schema: JSONSchema,
+        schemaName: String,
+        temperature: Double? = nil,
+        backend: Backend = .openRouter
+    ) async throws -> T {
+        if backend == .openRouter {
+            try await validate(modelId: modelId, requires: [.structuredOutput])
+            return try await client.executeStructuredWithSchema(prompt: prompt, modelId: modelId, as: type, schema: schema, schemaName: schemaName, temperature: temperature)
+        }
+        let altClient = try resolveClient(for: backend)
+        return try await altClient.executeStructuredWithSchema(prompt: prompt, modelId: modelId, as: type, schema: schema, schemaName: schemaName, temperature: temperature)
+    }
+
     func executeFlexibleJSON<T: Codable & Sendable>(
         prompt: String,
         modelId: String,

@@ -189,4 +189,18 @@ final class SwiftOpenAIClientWrapper: LLMClient {
         let dto = LLMVendorMapper.responseDTO(from: response)
         return try JSONResponseParser.parseStructured(dto, as: T.self)
     }
+
+    func executeStructuredWithSchema<T: Codable & Sendable>(prompt: String, modelId: String, as: T.Type, schema: JSONSchema, schemaName: String, temperature: Double? = nil) async throws -> T {
+        // For OpenRouter, we use the existing structured request with the provided schema
+        let params = LLMRequestBuilder.buildStructuredRequest(
+            prompt: prompt,
+            modelId: modelId,
+            responseType: T.self,
+            temperature: temperature ?? defaultTemperature,
+            jsonSchema: schema
+        )
+        let response = try await executor.execute(parameters: params)
+        let dto = LLMVendorMapper.responseDTO(from: response)
+        return try JSONResponseParser.parseStructured(dto, as: T.self)
+    }
 }

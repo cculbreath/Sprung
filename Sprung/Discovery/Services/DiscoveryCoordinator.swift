@@ -661,13 +661,33 @@ final class DiscoveryCoordinator {
             \(keywords != nil ? "4. Roles that connect to the specified keywords/interests" : "")
             """
 
+        // Build JSON schema for OpenAI structured output
+        let schema = JSONSchema(
+            type: .object,
+            properties: [
+                "suggestedRoles": JSONSchema(
+                    type: .array,
+                    description: "List of specific job titles to target",
+                    items: JSONSchema(type: .string)
+                ),
+                "reasoning": JSONSchema(
+                    type: .optional(.string),
+                    description: "Brief explanation of why these roles fit"
+                )
+            ],
+            required: ["suggestedRoles"],
+            additionalProperties: false
+        )
+
         // Use discovery model via OpenAI backend
         let result = try await llm.executeStructured(
             prompt: prompt,
             systemPrompt: "You are a career advisor helping someone identify job roles to target. Be specific with job titles.",
             as: RoleSuggestionsResult.self,
             temperature: 0.7,
-            backend: .openAI
+            backend: .openAI,
+            schema: schema,
+            schemaName: "role_suggestions"
         )
 
         return result.suggestedRoles
@@ -747,7 +767,8 @@ final class DiscoveryCoordinator {
             as: LocationPreferencesResult.self,
             jsonSchema: schema,
             temperature: 0.3,
-            backend: .openAI
+            backend: .openAI,
+            schemaName: "location_preferences"
         )
 
         // Parse work arrangement string to enum

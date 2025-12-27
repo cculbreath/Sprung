@@ -37,17 +37,37 @@ final class DiscoveryLLMService {
     /// Use for one-shot LLM calls like generating daily tasks or discovering sources.
     /// - Parameter backend: Which LLM backend to use (.openRouter default, .openAI for web_search)
     /// - Parameter modelId: Model ID to use (defaults to discovery model from settings)
+    /// - Parameter schema: JSON schema for structured output (required for .openAI backend)
+    /// - Parameter schemaName: Name for the schema (required for .openAI backend)
     func executeStructured<T: Codable & Sendable>(
         prompt: String,
         systemPrompt: String? = nil,
         as type: T.Type,
         temperature: Double = 0.7,
         backend: LLMFacade.Backend = .openRouter,
-        modelId: String? = nil
+        modelId: String? = nil,
+        schema: JSONSchema? = nil,
+        schemaName: String? = nil
     ) async throws -> T {
         var fullPrompt = prompt
         if let sys = systemPrompt {
             fullPrompt = "\(sys)\n\n\(prompt)"
+        }
+
+        // For OpenAI backend, use schema-based structured output
+        if backend == .openAI {
+            guard let schema = schema, let schemaName = schemaName else {
+                throw DiscoveryLLMError.toolExecutionFailed("OpenAI backend requires schema and schemaName for structured output")
+            }
+            return try await llmFacade.executeStructuredWithSchema(
+                prompt: fullPrompt,
+                modelId: modelId ?? self.modelId,
+                as: type,
+                schema: schema,
+                schemaName: schemaName,
+                temperature: temperature,
+                backend: backend
+            )
         }
 
         return try await llmFacade.executeStructured(
@@ -62,6 +82,8 @@ final class DiscoveryLLMService {
     /// Execute a flexible JSON request that can work with or without strict schema
     /// - Parameter backend: Which LLM backend to use (.openRouter default, .openAI for web_search)
     /// - Parameter modelId: Model ID to use (defaults to discovery model from settings)
+    /// - Parameter schema: JSON schema for structured output (required for .openAI backend)
+    /// - Parameter schemaName: Name for the schema (required for .openAI backend)
     func executeFlexibleJSON<T: Codable & Sendable>(
         prompt: String,
         systemPrompt: String? = nil,
@@ -69,11 +91,28 @@ final class DiscoveryLLMService {
         jsonSchema: JSONSchema? = nil,
         temperature: Double = 0.7,
         backend: LLMFacade.Backend = .openRouter,
-        modelId: String? = nil
+        modelId: String? = nil,
+        schemaName: String? = nil
     ) async throws -> T {
         var fullPrompt = prompt
         if let sys = systemPrompt {
             fullPrompt = "\(sys)\n\n\(prompt)"
+        }
+
+        // For OpenAI backend, use schema-based structured output
+        if backend == .openAI {
+            guard let schema = jsonSchema, let schemaName = schemaName else {
+                throw DiscoveryLLMError.toolExecutionFailed("OpenAI backend requires jsonSchema and schemaName for structured output")
+            }
+            return try await llmFacade.executeStructuredWithSchema(
+                prompt: fullPrompt,
+                modelId: modelId ?? self.modelId,
+                as: type,
+                schema: schema,
+                schemaName: schemaName,
+                temperature: temperature,
+                backend: backend
+            )
         }
 
         return try await llmFacade.executeFlexibleJSON(
