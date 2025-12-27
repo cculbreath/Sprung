@@ -24,11 +24,12 @@ struct CoachingSectionView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Header
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 Image(systemName: "figure.mind.and.body")
-                    .font(.title2)
-                Text("COACH")
-                    .font(.headline)
+                    .font(.largeTitle)
+                Text("Career Coach")
+                    .font(.title3)
+                    .fontWeight(.semibold)
             }
             .foregroundStyle(.indigo)
 

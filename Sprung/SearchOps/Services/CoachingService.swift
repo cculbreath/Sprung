@@ -177,18 +177,18 @@ final class CoachingService {
         try await continueWithAnswer(answer)
     }
 
-    /// Regenerate recommendations (re-run coaching with same questions/answers)
+    /// Regenerate by deleting current session and re-running full coaching flow
     func regenerateRecommendations(for session: CoachingSession? = nil) async throws {
-        // Use provided session, or current session, or today's session
-        guard let targetSession = session ?? currentSession ?? todaysSession else {
-            Logger.warning("No session available for regeneration", category: .ai)
-            return
+        // Delete the existing session
+        if let targetSession = session ?? currentSession ?? todaysSession {
+            sessionStore.delete(targetSession)
         }
 
-        state = .generatingRecommendations
+        // Cancel any in-progress state
+        cancelSession()
 
-        // Re-run the final recommendation step
-        try await generateFinalRecommendations(session: targetSession)
+        // Start fresh
+        try await startSession()
     }
 
     /// Cancel the current coaching session
@@ -470,47 +470,6 @@ final class CoachingService {
         }
 
         await completeSession()
-    }
-
-    private func generateFinalRecommendations(session: CoachingSession) async throws {
-        // Build a summary of Q&A for regeneration
-        var qaContext = "Based on the user's responses:\n"
-        for (index, answer) in session.answers.enumerated() {
-            if let question = session.questions.first(where: { $0.id == answer.questionId }) {
-                qaContext += "\(index + 1). \(question.questionText)\n   Answer: \(answer.selectedLabel)\n"
-            }
-        }
-
-        let prompt = """
-            \(qaContext)
-
-            Please provide fresh, personalized coaching recommendations for today's job search activities.
-            Be specific about what actions to take, which job boards to check, and any networking follow-ups.
-            """
-
-        let systemPrompt = buildSystemPrompt(
-            activitySummary: session.activitySummary?.textSummary() ?? "No recent activity",
-            recentHistory: sessionStore.recentHistorySummary()
-        )
-
-        do {
-            let recommendations = try await llmService.executeText(
-                prompt: prompt,
-                systemPrompt: systemPrompt,
-                temperature: 0.7,
-                overrideModelId: coachingModelId
-            )
-
-            session.recommendations = recommendations
-            session.completedAt = Date()
-            sessionStore.update(session)
-
-            state = .complete(sessionId: session.id)
-        } catch {
-            Logger.error("Failed to regenerate recommendations: \(error)", category: .ai)
-            state = .error(error.localizedDescription)
-            throw error
-        }
     }
 
     // MARK: - Prompt Building
