@@ -602,20 +602,155 @@ final class LLMFacade {
         toolChoice: ToolChoice? = .auto,
         modelId: String,
         temperature: Double? = nil,
-        reasoningEffort: String? = nil
+        reasoningEffort: String? = nil,
+        backend: Backend = .openRouter
     ) async throws -> ChatCompletionObject {
-        try await validate(modelId: modelId, requires: [])
+        // For OpenRouter, use Chat Completions API
+        if backend == .openRouter {
+            try await validate(modelId: modelId, requires: [])
 
-        let parameters = LLMRequestBuilder.buildToolRequest(
-            messages: messages,
-            modelId: modelId,
-            tools: tools,
-            toolChoice: toolChoice,
+            let parameters = LLMRequestBuilder.buildToolRequest(
+                messages: messages,
+                modelId: modelId,
+                tools: tools,
+                toolChoice: toolChoice,
+                temperature: temperature ?? 0.7,
+                reasoningEffort: reasoningEffort
+            )
+
+            return try await llmService.executeToolRequest(parameters: parameters)
+        }
+
+        // For OpenAI, use Responses API with function tools
+        guard let service = openAIService else {
+            throw LLMError.clientError("OpenAI service is not configured")
+        }
+
+        // Strip OpenRouter prefix if present
+        let openAIModelId = modelId.hasPrefix("openai/") ? String(modelId.dropFirst(7)) : modelId
+
+        // Convert ChatCompletion messages to InputItems
+        var inputItems: [InputItem] = []
+        for message in messages {
+            // Map ChatCompletion roles to OpenAI Responses API roles
+            let role: String
+            switch message.role {
+            case "system": role = "developer"
+            case "user": role = "user"
+            case "assistant": role = "assistant"
+            case "tool": role = "user"  // Tool results go as user messages in Responses API
+            default: role = "user"
+            }
+
+            switch message.content {
+            case .text(let text):
+                inputItems.append(.message(InputMessage(role: role, content: .text(text))))
+            case .contentArray:
+                // Skip complex content for now
+                break
+            }
+        }
+
+        // Convert ChatCompletion tools to Responses API FunctionTools
+        let responsesTools: [Tool] = tools.compactMap { chatTool in
+            let function = chatTool.function
+            return Tool.function(Tool.FunctionTool(
+                name: function.name,
+                parameters: function.parameters ?? JSONSchema(type: .object),
+                strict: function.strict,
+                description: function.description
+            ))
+        }
+
+        // Convert toolChoice
+        let responsesToolChoice: ToolChoiceMode?
+        if let choice = toolChoice {
+            switch choice {
+            case .auto:
+                responsesToolChoice = .auto
+            case .none:
+                responsesToolChoice = ToolChoiceMode.none
+            case .required:
+                responsesToolChoice = .required
+            case .function(_, let name):
+                // Force function by name - same pattern as Onboarding uses
+                responsesToolChoice = .functionTool(FunctionTool(name: name))
+            }
+        } else {
+            responsesToolChoice = nil
+        }
+
+        let reasoning: Reasoning? = reasoningEffort.map { Reasoning(effort: $0) }
+
+        let parameters = ModelResponseParameter(
+            input: .array(inputItems),
+            model: .custom(openAIModelId),
+            reasoning: reasoning,
+            store: true,
             temperature: temperature ?? 0.7,
-            reasoningEffort: reasoningEffort
+            toolChoice: responsesToolChoice,
+            tools: responsesTools.isEmpty ? nil : responsesTools
         )
 
-        return try await llmService.executeToolRequest(parameters: parameters)
+        let response = try await service.responseCreate(parameters)
+
+        // Convert ResponseModel back to ChatCompletionObject format via JSON
+        return try convertResponseToCompletion(response)
+    }
+
+    /// Convert OpenAI Responses API ResponseModel to ChatCompletionObject format
+    /// We use JSON encoding/decoding since ChatCompletionObject is Decodable-only
+    private func convertResponseToCompletion(_ response: ResponseModel) throws -> ChatCompletionObject {
+        var toolCallsArray: [[String: Any]] = []
+        var content: String?
+
+        for item in response.output {
+            switch item {
+            case .message(let message):
+                for contentItem in message.content {
+                    if case let .outputText(textOutput) = contentItem {
+                        content = textOutput.text
+                    }
+                }
+            case .functionCall(let functionCall):
+                toolCallsArray.append([
+                    "id": functionCall.callId,
+                    "type": "function",
+                    "function": [
+                        "arguments": functionCall.arguments,
+                        "name": functionCall.name
+                    ]
+                ])
+            default:
+                break
+            }
+        }
+
+        // Build JSON structure matching ChatCompletionObject
+        var messageDict: [String: Any] = [
+            "role": "assistant"
+        ]
+        if let content = content {
+            messageDict["content"] = content
+        }
+        if !toolCallsArray.isEmpty {
+            messageDict["tool_calls"] = toolCallsArray
+        }
+
+        let json: [String: Any] = [
+            "id": response.id,
+            "object": "chat.completion",
+            "created": Int(Date().timeIntervalSince1970),
+            "model": response.model ?? "unknown",
+            "choices": [[
+                "index": 0,
+                "message": messageDict,
+                "finish_reason": toolCallsArray.isEmpty ? "stop" : "tool_calls"
+            ]]
+        ]
+
+        let jsonData = try JSONSerialization.data(withJSONObject: json)
+        return try JSONDecoder().decode(ChatCompletionObject.self, from: jsonData)
     }
 
     // MARK: - OpenAI Responses API with Web Search

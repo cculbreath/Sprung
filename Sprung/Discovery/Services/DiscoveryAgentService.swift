@@ -62,12 +62,19 @@ actor DiscoveryAgentService {
         return content
     }
 
-    // MARK: - Agent Loop (via LLMFacade/OpenRouter)
+    // MARK: - Agent Loop (via LLMFacade)
 
+    /// Run an agent loop with tool execution.
+    /// - Parameters:
+    ///   - systemPrompt: System prompt for the agent
+    ///   - userMessage: User message to process
+    ///   - enableTools: Whether to enable tool calling
+    ///   - backend: LLM backend to use (.openAI for discovery model, .openRouter for OpenRouter models)
     func runAgent(
         systemPrompt: String,
         userMessage: String,
-        enableTools: Bool = true
+        enableTools: Bool = true,
+        backend: LLMFacade.Backend = .openAI
     ) async throws -> String {
         let model = await modelId
 
@@ -87,7 +94,8 @@ actor DiscoveryAgentService {
                 tools: tools,
                 toolChoice: enableTools ? .auto : nil,
                 modelId: model,
-                temperature: 0.7
+                temperature: 0.7,
+                backend: backend
             )
 
             guard let choices = response.choices,
