@@ -134,6 +134,38 @@ class PhaseReviewManager {
             """
     }
 
+    /// Merge original values from exported nodes into review container items.
+    /// LLMs may not reliably echo back original values, so we ensure they're populated from source data.
+    private func mergeOriginalValues(
+        into container: PhaseReviewContainer,
+        from nodes: [ExportedReviewNode]
+    ) -> PhaseReviewContainer {
+        let nodeById = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, $0) })
+
+        let mergedItems = container.items.map { item -> PhaseReviewItem in
+            var merged = item
+            if let sourceNode = nodeById[item.id] {
+                // Ensure originalValue is populated
+                if merged.originalValue.isEmpty {
+                    merged.originalValue = sourceNode.value
+                }
+                // Ensure originalChildren is populated for containers
+                if merged.originalChildren == nil || merged.originalChildren?.isEmpty == true {
+                    merged.originalChildren = sourceNode.childValues
+                }
+            }
+            return merged
+        }
+
+        return PhaseReviewContainer(
+            section: container.section,
+            phaseNumber: container.phaseNumber,
+            fieldPath: container.fieldPath,
+            isBundled: container.isBundled,
+            items: mergedItems
+        )
+    }
+
     // MARK: - Phase Detection
 
     /// Find sections with review phases defined that have nodes selected for AI revision.
@@ -463,11 +495,13 @@ class PhaseReviewManager {
                 )
             }
 
-            phaseReviewState.currentReview = reviewContainer
-            Logger.info("✅ Round \(roundNumber) received \(reviewContainer.items.count) review proposals")
+            // Merge original values from source nodes (LLM may not reliably echo them back)
+            let mergedContainer = mergeOriginalValues(into: reviewContainer, from: nodes)
+            phaseReviewState.currentReview = mergedContainer
+            Logger.info("✅ Round \(roundNumber) received \(mergedContainer.items.count) review proposals")
 
             // Always unbundled - individual item review
-            phaseReviewState.pendingItemIds = reviewContainer.items.map { $0.id }
+            phaseReviewState.pendingItemIds = mergedContainer.items.map { $0.id }
             phaseReviewState.currentItemIndex = 0
 
             reasoningStreamManager.hideAndClear()
@@ -657,10 +691,12 @@ class PhaseReviewManager {
                 )
             }
 
-            phaseReviewState.currentReview = reviewContainer
+            // Merge original values from source nodes (LLM may not reliably echo them back)
+            let mergedContainer = mergeOriginalValues(into: reviewContainer, from: exportedNodes)
+            phaseReviewState.currentReview = mergedContainer
 
             if !nextPhase.bundle {
-                phaseReviewState.pendingItemIds = reviewContainer.items.map { $0.id }
+                phaseReviewState.pendingItemIds = mergedContainer.items.map { $0.id }
                 phaseReviewState.currentItemIndex = 0
             }
 

@@ -696,7 +696,9 @@ extension TreeNode {
 
     /// Export a single node to ExportedReviewNode
     private static func exportNode(_ node: TreeNode, path: String) -> ExportedReviewNode {
-        let displayName = node.name.isEmpty ? node.value : node.name
+        let nodeName = node.name.isEmpty ? node.value : node.name
+        // Build contextual display name from path (e.g., "work.Tesla.description" → "Tesla - description")
+        let displayName = buildContextualDisplayName(nodeName: nodeName, path: path)
         let hasChildren = node.children != nil && !node.orderedChildren.isEmpty
 
         if hasChildren {
@@ -727,6 +729,22 @@ extension TreeNode {
                 childCount: 0
             )
         }
+    }
+
+    /// Build a contextual display name that includes parent context.
+    /// e.g., path "work.Tesla.description" with nodeName "description" → "Tesla - description"
+    private static func buildContextualDisplayName(nodeName: String, path: String) -> String {
+        let components = path.split(separator: ".")
+        guard components.count >= 2 else { return nodeName }
+
+        // Skip section name (first component like "work", "skills") and the node name (last component)
+        // Take the middle components as context (e.g., company name, skill category)
+        let middleComponents = components.dropFirst().dropLast()
+
+        if let context = middleComponents.first, !context.isEmpty {
+            return "\(context) - \(nodeName)"
+        }
+        return nodeName
     }
 
     /// Apply review changes from a PhaseReviewContainer to the tree.
