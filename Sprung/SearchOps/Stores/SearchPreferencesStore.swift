@@ -2,36 +2,31 @@
 //  SearchPreferencesStore.swift
 //  Sprung
 //
-//  Store for managing search preferences (singleton pattern).
+//  Store for managing search preferences (UserDefaults-backed).
 //
 
-import SwiftData
 import Foundation
 
 @Observable
 @MainActor
-final class SearchPreferencesStore: SwiftDataStore {
-    unowned let modelContext: ModelContext
+final class SearchPreferencesStore {
+    private var cached: SearchPreferences?
 
-    init(context: ModelContext) {
-        modelContext = context
-    }
+    init() {}
 
-    /// Returns the singleton preferences, creating if needed
+    /// Returns the preferences, loading from UserDefaults if needed
     func current() -> SearchPreferences {
-        let existing = try? modelContext.fetch(FetchDescriptor<SearchPreferences>())
-        if let prefs = existing?.first {
-            return prefs
+        if let cached {
+            return cached
         }
-        let newPrefs = SearchPreferences()
-        modelContext.insert(newPrefs)
-        saveContext()
-        return newPrefs
+        let prefs = SearchPreferences.load()
+        cached = prefs
+        return prefs
     }
 
     func update(_ prefs: SearchPreferences) {
-        prefs.updatedAt = Date()
-        saveContext()
+        prefs.save()
+        cached = prefs
     }
 
     /// Check if preferences have been configured (not just defaults)

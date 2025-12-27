@@ -33,8 +33,8 @@ final class SearchOpsPipelineCoordinator {
     // MARK: - Initialization
 
     init(modelContext: ModelContext, jobAppStore: JobAppStore) {
-        self.preferencesStore = SearchPreferencesStore(context: modelContext)
-        self.settingsStore = SearchOpsSettingsStore(context: modelContext)
+        self.preferencesStore = SearchPreferencesStore()
+        self.settingsStore = SearchOpsSettingsStore()
         self.jobAppStore = jobAppStore
         self.dailyTaskStore = DailyTaskStore(context: modelContext)
         self.timeEntryStore = TimeEntryStore(context: modelContext)

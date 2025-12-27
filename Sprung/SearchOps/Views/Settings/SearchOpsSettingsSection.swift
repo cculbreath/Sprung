@@ -31,10 +31,6 @@ struct SearchOpsSettingsSection: View {
         (value: "high", label: "High")
     ]
 
-    private var settings: SearchOpsSettings {
-        coordinator.settingsStore.current()
-    }
-
     private var openaiAPIKey: String {
         APIKeyManager.get(.openAI) ?? ""
     }
@@ -144,21 +140,25 @@ struct SearchOpsSettingsSection: View {
             }
         }
         .task {
-            llmModelId = settings.llmModelId
-            reasoningEffort = settings.reasoningEffort
+            let s = coordinator.settingsStore.current()
+            llmModelId = s.llmModelId
+            reasoningEffort = s.reasoningEffort
             if hasOpenAIKey && openAIModels.isEmpty {
                 await loadOpenAIModels()
             }
         }
         .onChange(of: llmModelId) { _, newValue in
-            guard !newValue.isEmpty, settings.llmModelId != newValue else { return }
-            settings.llmModelId = newValue
-            coordinator.settingsStore.update(settings)
+            guard !newValue.isEmpty else { return }
+            var s = coordinator.settingsStore.current()
+            guard s.llmModelId != newValue else { return }
+            s.llmModelId = newValue
+            coordinator.settingsStore.update(s)
         }
         .onChange(of: reasoningEffort) { _, newValue in
-            guard settings.reasoningEffort != newValue else { return }
-            settings.reasoningEffort = newValue
-            coordinator.settingsStore.update(settings)
+            var s = coordinator.settingsStore.current()
+            guard s.reasoningEffort != newValue else { return }
+            s.reasoningEffort = newValue
+            coordinator.settingsStore.update(s)
         }
         .onReceive(NotificationCenter.default.publisher(for: .apiKeysChanged)) { _ in
             if hasOpenAIKey && openAIModels.isEmpty {
@@ -181,8 +181,9 @@ struct SearchOpsSettingsSection: View {
             if !filteredModels.contains(where: { $0.id == llmModelId }) {
                 if let first = filteredModels.first {
                     llmModelId = first.id
-                    settings.llmModelId = first.id
-                    coordinator.settingsStore.update(settings)
+                    var s = coordinator.settingsStore.current()
+                    s.llmModelId = first.id
+                    coordinator.settingsStore.update(s)
                 }
             }
         } catch {
@@ -234,10 +235,11 @@ struct SearchOpsSettingsSection: View {
     private var calendarSettings: some View {
         VStack(alignment: .leading, spacing: 8) {
             Toggle("Use dedicated Job Search calendar", isOn: Binding(
-                get: { settings.useJobSearchCalendar },
+                get: { coordinator.settingsStore.current().useJobSearchCalendar },
                 set: { newValue in
-                    settings.useJobSearchCalendar = newValue
-                    coordinator.settingsStore.update(settings)
+                    var s = coordinator.settingsStore.current()
+                    s.useJobSearchCalendar = newValue
+                    coordinator.settingsStore.update(s)
                     if newValue {
                         // TODO: Create/find job search calendar
                     }
@@ -252,28 +254,31 @@ struct SearchOpsSettingsSection: View {
     // MARK: - Notification Settings
 
     private var notificationSettings: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let currentSettings = coordinator.settingsStore.current()
+        return VStack(alignment: .leading, spacing: 12) {
             // Master toggle
             Toggle("Enable notifications", isOn: Binding(
-                get: { settings.notificationsEnabled },
+                get: { coordinator.settingsStore.current().notificationsEnabled },
                 set: { newValue in
-                    settings.notificationsEnabled = newValue
-                    coordinator.settingsStore.update(settings)
+                    var s = coordinator.settingsStore.current()
+                    s.notificationsEnabled = newValue
+                    coordinator.settingsStore.update(s)
                 }
             ))
 
-            if settings.notificationsEnabled {
+            if currentSettings.notificationsEnabled {
                 // Daily briefing
                 VStack(alignment: .leading, spacing: 8) {
                     Toggle("Daily briefing", isOn: Binding(
-                        get: { settings.dailyBriefingEnabled },
+                        get: { coordinator.settingsStore.current().dailyBriefingEnabled },
                         set: { newValue in
-                            settings.dailyBriefingEnabled = newValue
-                            coordinator.settingsStore.update(settings)
+                            var s = coordinator.settingsStore.current()
+                            s.dailyBriefingEnabled = newValue
+                            coordinator.settingsStore.update(s)
                         }
                     ))
 
-                    if settings.dailyBriefingEnabled {
+                    if currentSettings.dailyBriefingEnabled {
                         HStack {
                             Text("Time:")
                                 .foregroundStyle(.secondary)
@@ -290,32 +295,35 @@ struct SearchOpsSettingsSection: View {
 
                 // Follow-up reminders
                 Toggle("Follow-up reminders", isOn: Binding(
-                    get: { settings.followUpRemindersEnabled },
+                    get: { coordinator.settingsStore.current().followUpRemindersEnabled },
                     set: { newValue in
-                        settings.followUpRemindersEnabled = newValue
-                        coordinator.settingsStore.update(settings)
+                        var s = coordinator.settingsStore.current()
+                        s.followUpRemindersEnabled = newValue
+                        coordinator.settingsStore.update(s)
                     }
                 ))
 
                 // Weekly review
                 VStack(alignment: .leading, spacing: 8) {
                     Toggle("Weekly review", isOn: Binding(
-                        get: { settings.weeklyReviewEnabled },
+                        get: { coordinator.settingsStore.current().weeklyReviewEnabled },
                         set: { newValue in
-                            settings.weeklyReviewEnabled = newValue
-                            coordinator.settingsStore.update(settings)
+                            var s = coordinator.settingsStore.current()
+                            s.weeklyReviewEnabled = newValue
+                            coordinator.settingsStore.update(s)
                         }
                     ))
 
-                    if settings.weeklyReviewEnabled {
+                    if currentSettings.weeklyReviewEnabled {
                         HStack {
                             Text("Day:")
                                 .foregroundStyle(.secondary)
                             Picker("", selection: Binding(
-                                get: { settings.weeklyReviewDay },
+                                get: { coordinator.settingsStore.current().weeklyReviewDay },
                                 set: { newValue in
-                                    settings.weeklyReviewDay = newValue
-                                    coordinator.settingsStore.update(settings)
+                                    var s = coordinator.settingsStore.current()
+                                    s.weeklyReviewDay = newValue
+                                    coordinator.settingsStore.update(s)
                                 }
                             )) {
                                 Text("Sunday").tag(1)
@@ -350,16 +358,18 @@ struct SearchOpsSettingsSection: View {
     private var dailyBriefingTime: Binding<Date> {
         Binding(
             get: {
+                let s = coordinator.settingsStore.current()
                 var components = DateComponents()
-                components.hour = settings.dailyBriefingHour
-                components.minute = settings.dailyBriefingMinute
+                components.hour = s.dailyBriefingHour
+                components.minute = s.dailyBriefingMinute
                 return Calendar.current.date(from: components) ?? Date()
             },
             set: { newDate in
                 let components = Calendar.current.dateComponents([.hour, .minute], from: newDate)
-                settings.dailyBriefingHour = components.hour ?? 8
-                settings.dailyBriefingMinute = components.minute ?? 0
-                coordinator.settingsStore.update(settings)
+                var s = coordinator.settingsStore.current()
+                s.dailyBriefingHour = components.hour ?? 8
+                s.dailyBriefingMinute = components.minute ?? 0
+                coordinator.settingsStore.update(s)
             }
         )
     }
@@ -367,16 +377,18 @@ struct SearchOpsSettingsSection: View {
     private var weeklyReviewTime: Binding<Date> {
         Binding(
             get: {
+                let s = coordinator.settingsStore.current()
                 var components = DateComponents()
-                components.hour = settings.weeklyReviewHour
-                components.minute = settings.weeklyReviewMinute
+                components.hour = s.weeklyReviewHour
+                components.minute = s.weeklyReviewMinute
                 return Calendar.current.date(from: components) ?? Date()
             },
             set: { newDate in
                 let components = Calendar.current.dateComponents([.hour, .minute], from: newDate)
-                settings.weeklyReviewHour = components.hour ?? 16
-                settings.weeklyReviewMinute = components.minute ?? 0
-                coordinator.settingsStore.update(settings)
+                var s = coordinator.settingsStore.current()
+                s.weeklyReviewHour = components.hour ?? 16
+                s.weeklyReviewMinute = components.minute ?? 0
+                coordinator.settingsStore.update(s)
             }
         )
     }
@@ -441,7 +453,7 @@ struct SearchOpsSettingsSection: View {
     }
 
     private func resetPreferences() {
-        let prefs = coordinator.preferencesStore.current()
+        var prefs = coordinator.preferencesStore.current()
         prefs.targetSectors = []
         prefs.primaryLocation = ""
         prefs.remoteAcceptable = false

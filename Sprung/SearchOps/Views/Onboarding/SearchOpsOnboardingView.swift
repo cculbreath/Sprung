@@ -663,7 +663,7 @@ struct SearchOpsOnboardingView: View {
         discoveryError = nil
 
         // Save preferences
-        let prefs = coordinator.preferencesStore.current()
+        var prefs = coordinator.preferencesStore.current()
         prefs.targetSectors = Array(selectedSectors)
         prefs.primaryLocation = location
         prefs.remoteAcceptable = remoteAcceptable

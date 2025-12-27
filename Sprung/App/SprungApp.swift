@@ -329,7 +329,6 @@ private extension SprungApp {
                 TreeNode.self,
                 FontSizeNode.self,
                 CoverLetter.self,
-                MessageParams.self,
                 CoverRef.self,
                 ApplicantProfile.self,
                 ConversationContext.self,

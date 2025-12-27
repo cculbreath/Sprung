@@ -2,43 +2,39 @@
 //  SearchOpsSettingsStore.swift
 //  Sprung
 //
-//  Store for managing SearchOps module settings (singleton pattern).
+//  Store for managing SearchOps module settings (UserDefaults-backed).
 //
 
-import SwiftData
 import Foundation
 
 @Observable
 @MainActor
-final class SearchOpsSettingsStore: SwiftDataStore {
-    unowned let modelContext: ModelContext
+final class SearchOpsSettingsStore {
+    private var cached: SearchOpsSettings?
 
-    init(context: ModelContext) {
-        modelContext = context
-    }
+    init() {}
 
     func current() -> SearchOpsSettings {
-        let existing = try? modelContext.fetch(FetchDescriptor<SearchOpsSettings>())
-        if let settings = existing?.first {
-            return settings
+        if let cached {
+            return cached
         }
-        let newSettings = SearchOpsSettings()
-        modelContext.insert(newSettings)
-        saveContext()
-        return newSettings
+        let settings = SearchOpsSettings.load()
+        cached = settings
+        return settings
     }
 
     func update(_ settings: SearchOpsSettings) {
-        settings.updatedAt = Date()
-        saveContext()
+        settings.save()
+        cached = settings
     }
 
     /// Update notification fatigue tracking
     func recordNotificationClicked() {
-        let settings = current()
+        var settings = current()
         settings.lastNotificationClickedAt = Date()
         settings.notificationFatiguePauseOffered = false
-        saveContext()
+        settings.save()
+        cached = settings
     }
 
     /// Check if we should offer a notification pause due to fatigue
@@ -62,15 +58,17 @@ final class SearchOpsSettingsStore: SwiftDataStore {
     }
 
     func markFatiguePauseOffered() {
-        let settings = current()
+        var settings = current()
         settings.notificationFatiguePauseOffered = true
-        saveContext()
+        settings.save()
+        cached = settings
     }
 
     func pauseNotifications() {
-        let settings = current()
+        var settings = current()
         settings.notificationsEnabled = false
         settings.notificationsPausedAt = Date()
-        saveContext()
+        settings.save()
+        cached = settings
     }
 }

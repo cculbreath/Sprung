@@ -17,7 +17,6 @@ enum SprungSchema {
         TreeNode.self,
         FontSizeNode.self,
         CoverLetter.self,
-        MessageParams.self,
         CoverRef.self,
         ApplicantProfile.self,
         ApplicantSocialProfile.self,
@@ -32,9 +31,7 @@ enum SprungSchema {
         OnboardingArtifactRecord.self,
         OnboardingMessageRecord.self,
         OnboardingPlanItemRecord.self,
-        // SearchOps Models
-        SearchPreferences.self,
-        SearchOpsSettings.self,
+        // SearchOps Models (SearchPreferences and SearchOpsSettings moved to UserDefaults)
         JobSource.self,
         DailyTask.self,
         TimeEntry.self,

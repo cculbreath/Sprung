@@ -28,38 +28,46 @@ enum CompanySizePreference: String, Codable, CaseIterable {
     case any = "Any size"
 }
 
-// MARK: - Search Preferences
+// MARK: - Search Preferences (UserDefaults-backed)
 
-@Model
-class SearchPreferences {
-    @Attribute(.unique) var id: UUID = UUID()
-
+struct SearchPreferences: Codable {
     var targetSectors: [String] = []
     var primaryLocation: String = ""
     var remoteAcceptable: Bool = false
     var willingToRelocate: Bool = false
     var relocationTargets: [String] = []
-    var preferredArrangement: WorkArrangement = WorkArrangement.hybrid
-    var companySizePreference: CompanySizePreference = CompanySizePreference.any
+    var preferredArrangement: WorkArrangement = .hybrid
+    var companySizePreference: CompanySizePreference = .any
     var weeklyApplicationTarget: Int = 5
     var weeklyNetworkingTarget: Int = 2
-
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
 
-    init() {}
+    static let userDefaultsKey = "searchPreferences"
+
+    static func load() -> SearchPreferences {
+        guard let data = UserDefaults.standard.data(forKey: userDefaultsKey),
+              let prefs = try? JSONDecoder().decode(SearchPreferences.self, from: data) else {
+            return SearchPreferences()
+        }
+        return prefs
+    }
+
+    func save() {
+        var copy = self
+        copy.updatedAt = Date()
+        if let data = try? JSONEncoder().encode(copy) {
+            UserDefaults.standard.set(data, forKey: Self.userDefaultsKey)
+        }
+    }
 }
 
-// MARK: - Search Ops Settings
+// MARK: - Search Ops Settings (UserDefaults-backed)
 
-@Model
-class SearchOpsSettings {
-    @Attribute(.unique) var id: UUID = UUID()
-
+struct SearchOpsSettings: Codable {
     // LLM Configuration
     var llmModelId: String = "gpt-4o"
     var reasoningEffort: String = "low"  // none, low, medium, high
-    // Note: coachingModelId stored in @AppStorage("discoveryCoachingModelId")
 
     // Calendar Configuration
     var useJobSearchCalendar: Bool = false
@@ -84,7 +92,23 @@ class SearchOpsSettings {
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
 
-    init() {}
+    static let userDefaultsKey = "searchOpsSettings"
+
+    static func load() -> SearchOpsSettings {
+        guard let data = UserDefaults.standard.data(forKey: userDefaultsKey),
+              let settings = try? JSONDecoder().decode(SearchOpsSettings.self, from: data) else {
+            return SearchOpsSettings()
+        }
+        return settings
+    }
+
+    func save() {
+        var copy = self
+        copy.updatedAt = Date()
+        if let data = try? JSONEncoder().encode(copy) {
+            UserDefaults.standard.set(data, forKey: Self.userDefaultsKey)
+        }
+    }
 }
 
 // MARK: - Source Category
