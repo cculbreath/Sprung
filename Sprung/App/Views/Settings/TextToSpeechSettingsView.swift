@@ -8,6 +8,7 @@ import SwiftUI
 struct TextToSpeechSettingsView: View {
     // AppStorage properties specific to this view
     @Environment(AppState.self) private var appState
+    @Environment(LLMFacade.self) private var llmFacade
     @AppStorage("ttsEnabled") private var ttsEnabled: Bool = false
     @AppStorage("ttsVoice") private var ttsVoice: String = "nova"
     @AppStorage("ttsInstructions") private var ttsInstructions: String = ""
@@ -106,14 +107,15 @@ struct TextToSpeechSettingsView: View {
             Text(ttsError ?? "An unknown error occurred with text-to-speech.")
         }
     }
-    // Initialize or update the TTS provider
+    // Initialize or update the TTS provider using LLMFacade
     private func initializeTTSProvider() {
-        // Avoid re-initializing if the key hasn't changed
-        if let key = APIKeyManager.get(.openAI) {
-            if ttsProvider?.apiKey != key { ttsProvider = OpenAITTSProvider(apiKey: key) }
-        } else {
+        guard appState.hasValidOpenAiKey else {
             ttsProvider = nil
+            return
         }
+        // Create TTS provider using LLMFacade's TTS client
+        let ttsClient = llmFacade.createTTSClient()
+        ttsProvider = OpenAITTSProvider(ttsClient: ttsClient)
     }
     // Preview the currently selected TTS voice
     private func previewVoice() {

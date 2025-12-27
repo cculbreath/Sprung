@@ -57,7 +57,6 @@ class OpenAITTSProvider {
     /// Tracks if we're in streaming setup phase to prevent premature callbacks
     private var isInStreamSetup: Bool = false
     // MARK: - Playback State Callbacks
-    var apiKey: String?
     var onReady: (() -> Void)?
     var onFinish: (() -> Void)?
     var onError: ((Error) -> Void)?
@@ -85,24 +84,11 @@ class OpenAITTSProvider {
             }
         }
     }
-    /// Initializes a new TTS provider with a specific API key
-    /// - Parameter apiKey: The OpenAI API key to use
-    init(apiKey: String) {
-        self.apiKey = apiKey
-        // Check if API key is valid or empty
-        let cleanKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        if cleanKey.isEmpty || cleanKey == "none" {
-            Logger.warning("🚨 Creating TTS provider with empty API key - TTS will be disabled")
-            ttsClient = UnavailableTTSClient(errorMessage: "TTS service unavailable - invalid OpenAI API key")
-        } else {
-            // Create a direct OpenAI client for TTS (not OpenRouter)
-            Logger.debug("🔑 Creating dedicated OpenAI TTS client with API key: \(cleanKey.prefix(4))..., length: \(cleanKey.count)")
-            let openAIClient = OpenAIServiceFactory.service(apiKey: apiKey)
-            // Wrap the OpenAI service to make it TTSCapable
-            // Since our fork of SwiftOpenAI already has TTS methods, we just need to bridge them
-            ttsClient = OpenAIServiceTTSWrapper(service: openAIClient)
-            Logger.debug("✅ OpenAI TTS client created successfully via wrapper")
-        }
+    /// Initializes a new TTS provider with a TTSCapable client from LLMFacade
+    /// - Parameter ttsClient: A TTSCapable client (typically from LLMFacade.createTTSClient())
+    init(ttsClient: TTSCapable) {
+        self.ttsClient = ttsClient
+        Logger.debug("✅ OpenAI TTS provider initialized with injected TTSCapable client")
         streamer.onBufferingStateChanged = { [weak self] isBuffering in
             self?.setBufferingState(isBuffering)
         }

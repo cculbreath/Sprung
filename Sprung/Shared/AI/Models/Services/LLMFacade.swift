@@ -779,4 +779,18 @@ final class LLMFacade {
             modelId: modelId
         )
     }
+
+    // MARK: - Text-to-Speech
+
+    /// Creates a TTS-capable client using the registered OpenAI service.
+    /// Returns UnavailableTTSClient if no OpenAI service is configured.
+    ///
+    /// - Returns: A TTSCapable client for text-to-speech operations
+    func createTTSClient() -> TTSCapable {
+        guard let service = openAIService else {
+            Logger.warning("⚠️ No OpenAI service configured for TTS", category: .ai)
+            return UnavailableTTSClient(errorMessage: "OpenAI service is not configured for TTS")
+        }
+        return OpenAIServiceTTSWrapper(service: service)
+    }
 }

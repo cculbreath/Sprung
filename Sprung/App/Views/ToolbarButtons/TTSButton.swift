@@ -8,6 +8,7 @@ import SwiftUI
 struct TTSButton: View {
     @Environment(CoverLetterStore.self) private var coverLetterStore
     @Environment(AppState.self) private var appState
+    @Environment(LLMFacade.self) private var llmFacade
     @AppStorage("ttsEnabled") private var ttsEnabled: Bool = false
     @AppStorage("ttsVoice") private var ttsVoice: String = "nova"
     @AppStorage("ttsInstructions") private var ttsInstructions: String = ""
@@ -118,13 +119,14 @@ struct TTSButton: View {
         }
     }
     private func setupTTS() {
-        guard ttsEnabled, appState.hasValidOpenAiKey, let key = APIKeyManager.get(.openAI), !key.isEmpty else {
+        guard ttsEnabled, appState.hasValidOpenAiKey else {
             ttsProvider = nil
             ttsViewModel = nil
             return
         }
-        // Create TTS provider and view model
-        let provider = OpenAITTSProvider(apiKey: key)
+        // Create TTS provider using LLMFacade's TTS client
+        let ttsClient = llmFacade.createTTSClient()
+        let provider = OpenAITTSProvider(ttsClient: ttsClient)
         let viewModel = TTSViewModel(ttsProvider: provider)
         ttsProvider = provider
         ttsViewModel = viewModel
