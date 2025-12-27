@@ -6,6 +6,102 @@
 //  Handles phase progression, LLM interaction, and change application.
 //
 
+// MARK: - AI Review System Architecture
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+// HOW AI REVIEW WORKS - READ THIS BEFORE MODIFYING
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// The AI review system has THREE key components that MUST work together:
+//
+// 1. MANIFEST PATTERNS (Source of Truth for Available Fields)
+//    ─────────────────────────────────────────────────────────
+//    Location: `{template}.manifest.json` → `defaultAIFields` array
+//    Example:  ["skills.*.name", "skills[].keywords", "work[].highlights"]
+//
+//    These patterns define WHICH fields CAN be AI-reviewed. The syntax determines
+//    how results are grouped:
+//
+//    ┌─────────────────┬────────────────┬─────────────────────────────────────┐
+//    │ Pattern         │ Grouping       │ Result                              │
+//    ├─────────────────┼────────────────┼─────────────────────────────────────┤
+//    │ skills.*.name   │ BUNDLE (*)     │ 1 RevNode with all 5 skill names    │
+//    │ skills[].name   │ ITERATE ([])   │ 5 RevNodes, one per skill name      │
+//    │ work[].bullets  │ ITERATE ([])   │ 4 RevNodes, one per job's bullets   │
+//    └─────────────────┴────────────────┴─────────────────────────────────────┘
+//
+// 2. REVIEW PHASES (Optional Multi-Pass Workflow)
+//    ─────────────────────────────────────────────
+//    Location: `{template}.manifest.json` → `reviewPhases` dictionary
+//    Example:
+//    ```json
+//    "reviewPhases": {
+//      "skills": [
+//        { "phase": 1, "field": "skills.*.name" },
+//        { "phase": 2, "field": "skills[].keywords" }
+//      ]
+//    }
+//    ```
+//
+//    Phase 1 patterns are reviewed FIRST. After user approves Phase 1 changes,
+//    they're applied to the tree, then Phase 2 patterns are reviewed.
+//    This allows Phase 2 content to reference Phase 1 changes (e.g., keywords
+//    under renamed skill categories).
+//
+// 3. TREE NODE STATE (Runtime Selection)
+//    ────────────────────────────────────
+//    Location: `TreeNode.status == .aiToReplace`
+//
+//    Currently, defaultAIFields patterns are applied at tree creation time
+//    (see ExperienceDefaultsToTree.applyDefaultAIFieldPatterns). This marks
+//    matching nodes with aiToReplace status.
+//
+//    The tree also stores `bundledAttributes`/`enumeratedAttributes` from
+//    AttributePickerView selections, but these are NOT currently used by
+//    buildReviewRounds - it reads patterns directly from the manifest.
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+// EXPORT FLOW (How nodes become RevNodes for LLM)
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// buildReviewRounds():
+//   1. Reads `defaultAIFields` patterns from manifest
+//   2. Identifies Phase 1 patterns from `reviewPhases` config
+//   3. For EACH pattern, calls TreeNode.exportNodesMatchingPath()
+//   4. exportNodesMatchingPath handles * vs [] distinction:
+//      - * patterns: All matches bundled into 1 ExportedReviewNode
+//      - [] patterns: Each match becomes separate ExportedReviewNode
+//   5. Returns (phase1Nodes, phase2Nodes) tuple
+//
+// ExportedReviewNode contains:
+//   - id: Node ID (for applying changes back) or "bundled-{pattern}"
+//   - path: Full path like "skills.Software Engineering.keywords"
+//   - displayName: Human-readable label like "Software Engineering - keywords"
+//   - value: The content (string or comma-separated for containers)
+//   - childValues: [String]? for containers with multiple items
+//   - isBundled: true if created from * pattern
+//   - sourceNodeIds: [String]? original node IDs when bundled
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+// KNOWN ISSUES / TECH DEBT
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// 1. DUAL STATE SYSTEMS: TreeNode stores bundledAttributes/enumeratedAttributes
+//    from AttributePickerView, but buildReviewRounds ignores this and reads
+//    directly from manifest patterns. These should be unified.
+//
+// 2. RUNTIME MODE SWITCHING: Users can't easily switch between bundle/iterate
+//    at runtime. The manifest determines behavior, but UI shows AttributePicker
+//    which stores state that isn't used.
+//
+// 3. UI COMPLEXITY: AttributePickerView is confusing and may not be discoverable.
+//    Consider replacing with simpler visual indicators (colors) and context menu.
+//
+// 4. PHASE ASSIGNMENTS: Resume.phaseAssignments dictionary exists but is unused
+//    after the buildReviewRounds rewrite. Should be removed.
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+
 import Foundation
 import SwiftUI
 import SwiftData
