@@ -258,8 +258,18 @@ struct PipelineLeadCard: View {
             }
         }
         .padding(12)
-        .background(Color(.controlBackgroundColor))
-        .cornerRadius(8)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(.controlBackgroundColor))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(stage.color.opacity(0.08))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(stage.color.opacity(0.3), lineWidth: 1)
+                )
+        )
         .shadow(radius: isHovered ? 4 : 1)
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
@@ -373,7 +383,7 @@ extension ApplicationStage {
 
     var color: Color {
         switch self {
-        case .identified: return .gray
+        case .identified: return .teal
         case .researching: return .blue
         case .applying: return .indigo
         case .applied: return .purple

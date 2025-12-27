@@ -363,7 +363,7 @@ struct NewAppSheetView: View {
                 input: .array(inputItems),
                 model: .gpt5,
                 reasoning: reasoning,
-                store: false,
+                store: true,
                 stream: true,
                 text: textConfig,
                 toolChoice: .auto,

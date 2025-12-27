@@ -120,6 +120,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(appState)
                     .environment(appEnvironment.navigationState)
                     .environment(appEnvironment.onboardingCoordinator)
+                    .environment(appEnvironment.llmFacade)
                     .environment(enabledLLMStore)
                     .environment(applicantProfileStore)
                     .environment(experienceDefaultsStore)

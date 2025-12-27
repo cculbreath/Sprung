@@ -357,6 +357,13 @@ struct EventPrepView: View {
                 .buttonStyle(.bordered)
                 .disabled(event.status == .skipped)
 
+                Button(role: .destructive) {
+                    deleteEvent()
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+                .buttonStyle(.bordered)
+
                 Spacer()
 
                 if let urlStr = URL(string: event.url) {
@@ -443,6 +450,11 @@ struct EventPrepView: View {
     private func skipEvent() {
         event.status = .skipped
         coordinator.eventStore.update(event)
+    }
+
+    private func deleteEvent() {
+        coordinator.eventStore.delete(event)
+        dismiss()
     }
 
     private func addToCalendar() {

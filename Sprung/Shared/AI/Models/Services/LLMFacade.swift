@@ -653,7 +653,7 @@ final class LLMFacade {
             input: .array(inputItems),
             model: .custom(openAIModelId),
             reasoning: reasoning,
-            store: false,
+            store: true,
             stream: true,
             toolChoice: tools != nil ? .auto : nil,
             tools: tools

@@ -139,6 +139,7 @@ actor SearchOpsAgentService {
         modelId: String,
         reasoningEffort: String = "low",
         webSearchLocation: String? = nil,
+        searchContext: String = "job sources",
         statusCallback: (@MainActor @Sendable (DiscoveryStatus) async -> Void)? = nil,
         reasoningCallback: (@MainActor @Sendable (String) async -> Void)? = nil
     ) async throws -> String {
@@ -152,7 +153,7 @@ actor SearchOpsAgentService {
                 webSearchLocation: webSearchLocation,
                 temperature: nil,
                 onWebSearching: statusCallback.map { callback in
-                    { await callback(.webSearching) }
+                    { await callback(.webSearching(context: searchContext)) }
                 },
                 onWebSearchComplete: statusCallback.map { callback in
                     { await callback(.webSearchComplete) }
@@ -207,6 +208,7 @@ actor SearchOpsAgentService {
             modelId: await modelId,
             reasoningEffort: await reasoningEffort,
             webSearchLocation: location,
+            searchContext: "networking events",
             statusCallback: statusCallback,
             reasoningCallback: reasoningCallback
         )

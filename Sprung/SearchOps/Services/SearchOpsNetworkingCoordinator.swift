@@ -229,7 +229,7 @@ final class SearchOpsNetworkingCoordinator {
                 await streamCallback?(status, nil)
             },
             reasoningCallback: { text in
-                await streamCallback?(.webSearching, text)
+                await streamCallback?(.webSearching(context: "networking events"), text)
             }
         )
 

@@ -19,7 +19,7 @@ struct SourcesView: View {
     }
 
     private var isDiscovering: Bool {
-        coordinator.discoveryStatus.isActive
+        coordinator.sourcesDiscovery.isActive
     }
 
     var body: some View {
@@ -41,33 +41,39 @@ struct SourcesView: View {
 
                 // Discovery status display
                 if isDiscovering {
-                    AnimatedThinkingText(statusMessage: coordinator.discoveryStatus.message)
+                    AnimatedThinkingText(statusMessage: coordinator.sourcesDiscovery.status.message)
                         .padding(.vertical, 8)
-                } else if case .complete = coordinator.discoveryStatus {
-                    Text(coordinator.discoveryStatus.message)
+
+                    Button("Cancel") {
+                        coordinator.cancelSourcesDiscovery()
+                    }
+                    .buttonStyle(.bordered)
+                } else if case .complete = coordinator.sourcesDiscovery.status {
+                    Text(coordinator.sourcesDiscovery.status.message)
                         .font(.callout)
                         .foregroundStyle(.green)
                         .padding(.vertical, 8)
-                } else if case .error(let msg) = coordinator.discoveryStatus {
+                } else if case .error(let msg) = coordinator.sourcesDiscovery.status {
                     Label(msg, systemImage: "exclamationmark.triangle.fill")
                         .font(.callout)
                         .foregroundStyle(.orange)
                         .padding(.vertical, 8)
                 }
 
-                HStack(spacing: 12) {
-                    Button {
-                        Task { await discoverSources() }
-                    } label: {
-                        Text("Discover Sources")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(isDiscovering)
+                if !isDiscovering {
+                    HStack(spacing: 12) {
+                        Button {
+                            coordinator.startSourcesDiscovery()
+                        } label: {
+                            Text("Discover Sources")
+                        }
+                        .buttonStyle(.borderedProminent)
 
-                    Button("Add Manually") {
-                        showingAddSheet = true
+                        Button("Add Manually") {
+                            showingAddSheet = true
+                        }
+                        .buttonStyle(.bordered)
                     }
-                    .buttonStyle(.bordered)
                 }
 
                 Spacer()
@@ -95,64 +101,65 @@ struct SourcesView: View {
                         }
                     }
                 }
-                .toolbar {
-                    ToolbarItem(placement: .primaryAction) {
-                        HStack(spacing: 8) {
-                            // Status message when active
-                            if isDiscovering {
-                                HStack(spacing: 6) {
-                                    ProgressView()
-                                        .controlSize(.small)
-                                    Text(coordinator.discoveryStatus.message)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-
-                            Button {
-                                openAllDueSources()
-                            } label: {
-                                Image(systemName: "safari")
-                            }
-                            .help("Open all due sources in browser tabs")
-                            .disabled(coordinator.jobSourceStore.dueSources.isEmpty)
-
-                            Button {
-                                showingAddSheet = true
-                            } label: {
-                                Image(systemName: "plus")
-                            }
-
-                            Button {
-                                Task { await discoverSources() }
-                            } label: {
-                                Image(systemName: "sparkles")
-                            }
-                            .disabled(isDiscovering)
-                        }
-                    }
-                }
+                .scrollContentBackground(.visible)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("Job Sources")
-        .toolbarBackground(.visible, for: .windowToolbar)
+        .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                HStack(spacing: 8) {
+                    // Status message when active
+                    if isDiscovering {
+                        HStack(spacing: 6) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text(coordinator.sourcesDiscovery.status.message)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+
+                        Button {
+                            coordinator.cancelSourcesDiscovery()
+                        } label: {
+                            Image(systemName: "xmark.circle")
+                        }
+                        .help("Cancel discovery")
+                    }
+
+                    Button {
+                        openAllDueSources()
+                    } label: {
+                        Image(systemName: "safari")
+                    }
+                    .help("Open all due sources in browser tabs")
+                    .disabled(coordinator.jobSourceStore.dueSources.isEmpty)
+
+                    Button {
+                        showingAddSheet = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+
+                    Button {
+                        coordinator.startSourcesDiscovery()
+                    } label: {
+                        Image(systemName: "sparkles")
+                    }
+                    .disabled(isDiscovering)
+                }
+            }
+        }
         .sheet(isPresented: $showingAddSheet) {
             AddSourceSheet(store: coordinator.jobSourceStore)
         }
         .onChange(of: triggerDiscovery) { _, newValue in
             if newValue {
                 triggerDiscovery = false
-                Task { await discoverSources() }
+                coordinator.startSourcesDiscovery()
             }
-        }
-    }
-
-    private func discoverSources() async {
-        do {
-            try await coordinator.discoverJobSources()
-        } catch {
-            Logger.error("Failed to discover sources: \(error)", category: .ai)
         }
     }
 

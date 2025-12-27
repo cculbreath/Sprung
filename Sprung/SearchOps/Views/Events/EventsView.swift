@@ -23,9 +23,6 @@ enum EventsViewMode: String, CaseIterable {
 struct EventsView: View {
     let coordinator: SearchOpsCoordinator
     @Binding var triggerEventDiscovery: Bool
-    @State private var isDiscovering = false
-    @State private var reasoningText = ""
-    @State private var discoveryStatus: DiscoveryStatus = .idle
     @State private var viewMode: EventsViewMode = .list
 
     init(coordinator: SearchOpsCoordinator, triggerEventDiscovery: Binding<Bool> = .constant(false)) {
@@ -35,7 +32,7 @@ struct EventsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if isDiscovering {
+            if coordinator.eventsDiscovery.isActive {
                 discoveryProgressView
             } else if coordinator.eventStore.allEvents.isEmpty {
                 emptyStateView
@@ -65,9 +62,9 @@ struct EventsView: View {
             }
 
             ToolbarItem(placement: .primaryAction) {
-                if !isDiscovering && !coordinator.eventStore.allEvents.isEmpty {
+                if !coordinator.eventsDiscovery.isActive && !coordinator.eventStore.allEvents.isEmpty {
                     Button {
-                        Task { await discoverEvents() }
+                        coordinator.startEventDiscovery()
                     } label: {
                         Label("Discover More", systemImage: "magnifyingglass")
                     }
@@ -77,7 +74,7 @@ struct EventsView: View {
         .onChange(of: triggerEventDiscovery) { _, newValue in
             if newValue {
                 triggerEventDiscovery = false
-                Task { await discoverEvents() }
+                coordinator.startEventDiscovery()
             }
         }
     }
@@ -97,7 +94,7 @@ struct EventsView: View {
                 .frame(maxWidth: 400)
 
             Button("Discover Events") {
-                Task { await discoverEvents() }
+                coordinator.startEventDiscovery()
             }
             .buttonStyle(.borderedProminent)
         }
@@ -105,15 +102,13 @@ struct EventsView: View {
 
     private var discoveryProgressView: some View {
         VStack(spacing: 16) {
-            ProgressView()
-                .scaleEffect(1.5)
+            AnimatedThinkingText(
+                statusMessage: coordinator.eventsDiscovery.status.message.isEmpty ? "Discovering events..." : coordinator.eventsDiscovery.status.message
+            )
 
-            Text(discoveryStatus.message.isEmpty ? "Discovering events..." : discoveryStatus.message)
-                .font(.headline)
-
-            if !reasoningText.isEmpty {
+            if !coordinator.eventsDiscovery.reasoningText.isEmpty {
                 ScrollView {
-                    Text(reasoningText)
+                    Text(coordinator.eventsDiscovery.reasoningText)
                         .font(.system(.body, design: .monospaced))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding()
@@ -123,6 +118,11 @@ struct EventsView: View {
                 .cornerRadius(8)
                 .padding(.horizontal)
             }
+
+            Button("Cancel") {
+                coordinator.cancelEventDiscovery()
+            }
+            .buttonStyle(.bordered)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
@@ -138,6 +138,9 @@ struct EventsView: View {
                         } label: {
                             EventRowView(event: event)
                         }
+                        .contextMenu {
+                            eventContextMenu(for: event)
+                        }
                     }
                 }
             }
@@ -149,6 +152,9 @@ struct EventsView: View {
                             EventPrepView(event: event, coordinator: coordinator)
                         } label: {
                             EventRowView(event: event)
+                        }
+                        .contextMenu {
+                            eventContextMenu(for: event)
                         }
                     }
                 }
@@ -162,29 +168,32 @@ struct EventsView: View {
                         } label: {
                             EventRowView(event: event)
                         }
+                        .contextMenu {
+                            eventContextMenu(for: event)
+                        }
                     }
                 }
             }
         }
     }
 
-    private func discoverEvents() async {
-        isDiscovering = true
-        reasoningText = ""
-        discoveryStatus = .starting
-        defer {
-            isDiscovering = false
-            discoveryStatus = .idle
-        }
-        do {
-            try await coordinator.discoverNetworkingEvents { status, reasoning in
-                discoveryStatus = status
-                if let reasoning = reasoning {
-                    reasoningText += reasoning
-                }
+    @ViewBuilder
+    private func eventContextMenu(for event: NetworkingEventOpportunity) -> some View {
+        Button {
+            if let url = URL(string: event.url) {
+                NSWorkspace.shared.open(url)
             }
-        } catch {
-            Logger.error("Failed to discover events: \(error)", category: .ai)
+        } label: {
+            Label("Open Event Page", systemImage: "safari")
+        }
+        .disabled(URL(string: event.url) == nil)
+
+        Divider()
+
+        Button(role: .destructive) {
+            coordinator.eventStore.delete(event)
+        } label: {
+            Label("Delete Event", systemImage: "trash")
         }
     }
 }

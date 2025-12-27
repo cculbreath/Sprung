@@ -115,22 +115,22 @@ struct SearchOpsSettingsSection: View {
                     .controlSize(.small)
                 }
             } else {
-                HStack {
-                    Picker("AI Model", selection: $llmModelId) {
-                        ForEach(filteredModels, id: \.id) { model in
-                            Text(model.id).tag(model.id)
-                        }
+                // AI Model picker
+                Picker("AI Model", selection: $llmModelId) {
+                    ForEach(filteredModels, id: \.id) { model in
+                        Text(model.id).tag(model.id)
                     }
-                    .pickerStyle(.menu)
-
-                    Picker("Reasoning", selection: $reasoningEffort) {
-                        ForEach(reasoningOptions, id: \.value) { option in
-                            Text(option.label).tag(option.value)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .frame(width: 120)
                 }
+                .pickerStyle(.menu)
+
+                // Reasoning effort picker
+                Picker("Reasoning Effort", selection: $reasoningEffort) {
+                    ForEach(reasoningOptions, id: \.value) { option in
+                        Text(option.label).tag(option.value)
+                    }
+                }
+                .pickerStyle(.menu)
+
                 Text("Model and reasoning effort for source discovery and daily tasks.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)

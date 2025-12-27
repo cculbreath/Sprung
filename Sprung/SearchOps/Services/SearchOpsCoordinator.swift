@@ -14,7 +14,7 @@ import SwiftData
 enum DiscoveryStatus: Equatable {
     case idle
     case starting
-    case webSearching
+    case webSearching(context: String = "job sources")
     case webSearchComplete
     case validatingURLs(count: Int)
     case complete(added: Int, filtered: Int)
@@ -24,7 +24,7 @@ enum DiscoveryStatus: Equatable {
         switch self {
         case .idle: return ""
         case .starting: return "Starting discovery..."
-        case .webSearching: return "Searching the web for job sources..."
+        case .webSearching(let context): return "Searching the web for \(context)..."
         case .webSearchComplete: return "Processing search results..."
         case .validatingURLs(let count): return "Validating \(count) URLs..."
         case .complete(let added, let filtered):
@@ -47,6 +47,59 @@ enum DiscoveryStatus: Equatable {
     }
 }
 
+// MARK: - Discovery State (reusable across tabs)
+
+/// Observable state for LLM discovery operations that persists across navigation
+@Observable
+@MainActor
+final class DiscoveryState {
+    private(set) var isActive = false
+    private(set) var status: DiscoveryStatus = .idle
+    private(set) var reasoningText = ""
+    private var task: Task<Void, Never>?
+
+    var canCancel: Bool { task != nil }
+
+    func start(operation: @escaping (@escaping @MainActor (DiscoveryStatus, String?) -> Void) async throws -> Void) {
+        guard !isActive else { return }
+
+        task = Task { [weak self] in
+            guard let self = self else { return }
+
+            self.isActive = true
+            self.reasoningText = ""
+            self.status = .starting
+
+            do {
+                try await operation { [weak self] status, reasoning in
+                    guard let self = self, !Task.isCancelled else { return }
+                    self.status = status
+                    if let reasoning = reasoning {
+                        self.reasoningText += reasoning
+                    }
+                }
+            } catch {
+                if !Task.isCancelled {
+                    Logger.error("Discovery failed: \(error)", category: .ai)
+                    self.status = .error(error.localizedDescription)
+                }
+            }
+
+            self.isActive = false
+            self.status = .idle
+            self.task = nil
+        }
+    }
+
+    func cancel() {
+        task?.cancel()
+        task = nil
+        isActive = false
+        status = .idle
+        reasoningText = ""
+    }
+}
+
 @Observable
 @MainActor
 final class SearchOpsCoordinator {
@@ -62,6 +115,11 @@ final class SearchOpsCoordinator {
     func updateDiscoveryStatus(_ status: DiscoveryStatus) {
         self.discoveryStatus = status
     }
+
+    // MARK: - Discovery State (persists across navigation)
+
+    let sourcesDiscovery = DiscoveryState()
+    let eventsDiscovery = DiscoveryState()
 
     // MARK: - Convenience Store Access (delegated to sub-coordinators)
 
@@ -286,6 +344,46 @@ final class SearchOpsCoordinator {
             daysAhead: daysAhead,
             streamCallback: streamCallback
         )
+    }
+
+    /// Start event discovery with state managed by coordinator (persists across navigation)
+    func startEventDiscovery() {
+        eventsDiscovery.start { [weak self] callback in
+            guard let self = self else { return }
+            try await self.discoverNetworkingEvents { status, reasoning in
+                callback(status, reasoning)
+            }
+        }
+    }
+
+    /// Cancel ongoing event discovery
+    func cancelEventDiscovery() {
+        eventsDiscovery.cancel()
+    }
+
+    /// Start sources discovery with state managed by coordinator (persists across navigation)
+    func startSourcesDiscovery() {
+        sourcesDiscovery.start { [weak self] callback in
+            guard let self = self else { return }
+            guard let agent = self.agentService else {
+                throw SearchOpsLLMError.toolExecutionFailed("Agent service not configured")
+            }
+
+            let prefs = self.preferencesStore.current()
+            try await self.networkingCoordinator.discoverJobSources(
+                using: agent,
+                sectors: prefs.targetSectors,
+                location: prefs.primaryLocation,
+                statusCallback: { status in
+                    callback(status, nil) // Sources discovery doesn't stream reasoning
+                }
+            )
+        }
+    }
+
+    /// Cancel ongoing sources discovery
+    func cancelSourcesDiscovery() {
+        sourcesDiscovery.cancel()
     }
 
     /// Choose best jobs from identified pool using LLM agent

@@ -32,8 +32,8 @@ struct EventCalendarView: View {
 
             Divider()
 
-            // Selected date events
-            selectedDateEvents
+            // Selected week events
+            selectedWeekEvents
         }
     }
 
@@ -133,20 +133,20 @@ struct EventCalendarView: View {
         .padding(.horizontal, 4)
     }
 
-    // MARK: - Selected Date Events
+    // MARK: - Selected Week Events
 
-    private var selectedDateEvents: some View {
-        let events = eventsForDate(selectedDate)
+    private var selectedWeekEvents: some View {
+        let weekEvents = eventsForWeek(containing: selectedDate)
 
         return VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(selectedDateString)
+                Text(selectedWeekString)
                     .font(.headline)
 
                 Spacer()
 
-                if events.isEmpty {
-                    Text("No events")
+                if weekEvents.isEmpty {
+                    Text("No events this week")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -154,19 +154,30 @@ struct EventCalendarView: View {
             .padding(.horizontal)
             .padding(.top, 12)
 
-            if events.isEmpty {
+            if weekEvents.isEmpty {
                 Spacer()
             } else {
                 List {
-                    ForEach(events) { event in
-                        NavigationLink {
-                            if event.needsDebrief {
-                                DebriefView(event: event, coordinator: coordinator)
-                            } else {
-                                EventPrepView(event: event, coordinator: coordinator)
+                    ForEach(daysWithEvents(in: weekEvents), id: \.self) { day in
+                        Section(header: Text(dayHeaderString(for: day))) {
+                            ForEach(eventsForDate(day).sorted { $0.date < $1.date }) { event in
+                                NavigationLink {
+                                    if event.needsDebrief {
+                                        DebriefView(event: event, coordinator: coordinator)
+                                    } else {
+                                        EventPrepView(event: event, coordinator: coordinator)
+                                    }
+                                } label: {
+                                    EventRowView(event: event)
+                                }
+                                .contextMenu {
+                                    Button(role: .destructive) {
+                                        coordinator.eventStore.delete(event)
+                                    } label: {
+                                        Label("Delete Event", systemImage: "trash")
+                                    }
+                                }
                             }
-                        } label: {
-                            EventRowView(event: event)
                         }
                     }
                 }
@@ -176,10 +187,41 @@ struct EventCalendarView: View {
         .frame(maxHeight: .infinity)
     }
 
-    private var selectedDateString: String {
+    private var selectedWeekString: String {
+        guard let weekInterval = calendar.dateInterval(of: .weekOfYear, for: selectedDate) else {
+            return "This Week"
+        }
         let formatter = DateFormatter()
-        formatter.dateStyle = .full
-        return formatter.string(from: selectedDate)
+        formatter.dateFormat = "MMM d"
+        let start = formatter.string(from: weekInterval.start)
+        let end = formatter.string(from: calendar.date(byAdding: .day, value: -1, to: weekInterval.end) ?? weekInterval.end)
+        return "\(start) – \(end)"
+    }
+
+    private func dayHeaderString(for date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, MMM d"
+        return formatter.string(from: date)
+    }
+
+    private func eventsForWeek(containing date: Date) -> [NetworkingEventOpportunity] {
+        guard let weekInterval = calendar.dateInterval(of: .weekOfYear, for: date) else {
+            return []
+        }
+        return coordinator.eventStore.allEvents.filter { event in
+            event.date >= weekInterval.start && event.date < weekInterval.end
+        }.sorted { $0.date < $1.date }
+    }
+
+    private func daysWithEvents(in events: [NetworkingEventOpportunity]) -> [Date] {
+        var days: [Date] = []
+        for event in events {
+            let startOfDay = calendar.startOfDay(for: event.date)
+            if !days.contains(where: { calendar.isDate($0, inSameDayAs: startOfDay) }) {
+                days.append(startOfDay)
+            }
+        }
+        return days.sorted()
     }
 
     // MARK: - Helpers
