@@ -64,8 +64,13 @@ final class CoachingSessionStore: SwiftDataStore {
     }
 
     /// Get the date of the last completed coaching session
-    func lastSessionDate() -> Date? {
-        allSessions.first(where: { $0.isComplete })?.sessionDate
+    /// - Parameter before: Optional cutoff date; only returns sessions before this date
+    func lastSessionDate(before cutoff: Date? = nil) -> Date? {
+        let completed = allSessions.filter { $0.isComplete }
+        if let cutoff = cutoff {
+            return completed.first(where: { $0.sessionDate < cutoff })?.sessionDate
+        }
+        return completed.first?.sessionDate
     }
 
     // MARK: - Mutations

@@ -79,15 +79,11 @@ final class CoachingService {
         questionIndex = 0
         currentQuestion = nil
 
-        // Calculate activity window: since last coaching session or 24 hours, whichever is longer
-        // If no previous session, show all activity (first-time user)
-        let sinceDate: Date
-        if let lastSession = sessionStore.lastSessionDate() {
-            let twentyFourHoursAgo = Date().addingTimeInterval(-86400)
-            sinceDate = min(lastSession, twentyFourHoursAgo)
-        } else {
-            sinceDate = .distantPast
-        }
+        // Calculate activity window: since last session that was at least 12 hours ago
+        // Sessions within 12 hours don't reset context (allows multiple sessions per day)
+        // If no qualifying session, show all activity
+        let twelveHoursAgo = Date().addingTimeInterval(-43200)
+        let sinceDate = sessionStore.lastSessionDate(before: twelveHoursAgo) ?? .distantPast
 
         // Generate activity snapshot
         let snapshot = activityReportService.generateSnapshot(since: sinceDate)
