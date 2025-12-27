@@ -21,8 +21,6 @@ final class OnboardingInterviewCoordinator {
     // MARK: - Public Sub-Services (Direct Access)
     // Timeline Management
     var timeline: TimelineManagementService { container.timelineManagementService }
-    // Artifact Queries
-    var artifactQueries: ArtifactQueryCoordinator { container.artifactQueryCoordinator }
     // Extraction Management
     var extraction: ExtractionManagementService { container.extractionManagementService }
     // Tool Interaction
@@ -358,7 +356,27 @@ final class OnboardingInterviewCoordinator {
         await eventBus.publish(.timelineCardDeleted(id: id, fromUI: true))
     }
     // MARK: - Artifact Queries
-    // Removed trampolining methods - use coordinator.artifacts directly
+
+    /// List summaries of all artifacts.
+    func listArtifactSummaries() async -> [JSON] {
+        await state.listArtifactSummaries()
+    }
+
+    /// Get a specific artifact record by ID.
+    func getArtifactRecord(id: String) async -> JSON? {
+        await state.getArtifactRecord(id: id)
+    }
+
+    /// Request an update to artifact metadata.
+    func requestMetadataUpdate(artifactId: String, updates: JSON) async {
+        await eventBus.publish(.artifactMetadataUpdateRequested(artifactId: artifactId, updates: updates))
+    }
+
+    /// Cancel an upload request.
+    func cancelUploadRequest(id: UUID) async {
+        await eventBus.publish(.uploadRequestCancelled(id: id))
+    }
+
     func nextPhase() async -> InterviewPhase? {
         await phases.nextPhase()
     }

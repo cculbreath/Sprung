@@ -167,7 +167,7 @@ struct ProposeCardAssignmentsTool: InterviewTool {
         }
 
         // Get artifact summaries
-        let summaries = await coordinator.artifactQueries.listArtifactSummaries()
+        let summaries = await coordinator.listArtifactSummaries()
 
         // Auto-generate card proposals from timeline entries
         var proposals = JSON([])
@@ -337,7 +337,7 @@ struct ProposeCardAssignmentsTool: InterviewTool {
     private func updatePlanItemsWithAssignments(proposals: JSON) async {
         // Get current plan items and artifact summaries
         let currentPlanItems = await MainActor.run { coordinator.ui.knowledgeCardPlan }
-        let artifactSummaries = await coordinator.artifactQueries.listArtifactSummaries()
+        let artifactSummaries = await coordinator.listArtifactSummaries()
 
         // Build lookup from artifact ID to summary text
         var artifactSummaryLookup: [String: String] = [:]

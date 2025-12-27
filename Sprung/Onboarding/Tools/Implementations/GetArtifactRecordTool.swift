@@ -23,7 +23,7 @@ struct GetArtifactRecordTool: InterviewTool {
         )
 
         // Get artifact record from coordinator state
-        guard let artifact = await coordinator.artifactQueries.getArtifactRecord(id: artifactId) else {
+        guard let artifact = await coordinator.getArtifactRecord(id: artifactId) else {
             return ToolResultHelpers.executionFailed("No artifact found with ID: \(artifactId)")
         }
 

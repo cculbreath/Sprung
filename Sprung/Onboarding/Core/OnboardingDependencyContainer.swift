@@ -85,7 +85,6 @@ final class OnboardingDependencyContainer {
     let lifecycleController: InterviewLifecycleController
     let phaseTransitionController: PhaseTransitionController
     let sessionCoordinator: InterviewSessionCoordinator
-    let artifactQueryCoordinator: ArtifactQueryCoordinator
     let uiStateUpdateHandler: UIStateUpdateHandler
     // MARK: - Services
     let extractionManagementService: ExtractionManagementService
@@ -246,7 +245,6 @@ final class OnboardingDependencyContainer {
             sessionPersistenceHandler: sessionPersistenceHandler,
             chatTranscriptStore: stores.chatTranscriptStore
         )
-        self.artifactQueryCoordinator = ArtifactQueryCoordinator(state: state, eventBus: core.eventBus)
         self.uiStateUpdateHandler = UIStateUpdateHandler(ui: ui, state: state, wizardTracker: wizardTracker)
 
         // 11. Initialize artifact ingestion infrastructure

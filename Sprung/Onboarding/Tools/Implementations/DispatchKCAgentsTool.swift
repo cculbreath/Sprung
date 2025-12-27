@@ -85,7 +85,7 @@ struct DispatchKCAgentsTool: InterviewTool {
         }
 
         // Get all artifact summaries for agent reference
-        let allSummaries = await coordinator.artifactQueries.listArtifactSummaries()
+        let allSummaries = await coordinator.listArtifactSummaries()
 
         // Get the KC agent service and dispatch
         let kcAgentService = await coordinator.getKCAgentService()

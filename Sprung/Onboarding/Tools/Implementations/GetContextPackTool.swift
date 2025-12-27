@@ -92,7 +92,7 @@ struct GetContextPackTool: InterviewTool {
         var pack = JSON()
         var usedChars = 0
 
-        let summaries = await coordinator.artifactQueries.listArtifactSummaries()
+        let summaries = await coordinator.listArtifactSummaries()
 
         var artifactItems: [JSON] = []
         for summary in summaries {
@@ -145,7 +145,7 @@ struct GetContextPackTool: InterviewTool {
                     var excerpts: [JSON] = []
                     for aid in artifactIds.prefix(3) {
                         guard let id = aid.string else { continue }
-                        if let artifact = await coordinator.artifactQueries.getArtifactRecord(id: id) {
+                        if let artifact = await coordinator.getArtifactRecord(id: id) {
                             var excerpt = JSON()
                             excerpt["artifact_id"].string = id
                             excerpt["filename"].string = artifact["filename"].string
@@ -196,7 +196,7 @@ struct GetContextPackTool: InterviewTool {
         // Get card plan and proposals
         let planItems = await MainActor.run { coordinator.ui.knowledgeCardPlan }
         let proposals = await coordinator.state.getCardProposals()
-        let summaries = await coordinator.artifactQueries.listArtifactSummaries()
+        let summaries = await coordinator.listArtifactSummaries()
 
         // Find cards without sufficient documentation
         var gaps: [JSON] = []
