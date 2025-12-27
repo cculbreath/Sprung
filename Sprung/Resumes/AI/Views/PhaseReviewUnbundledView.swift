@@ -526,48 +526,90 @@ struct PhaseReviewUnbundledView: View {
     // MARK: - Edit Sheet
 
     private var editSheet: some View {
-        VStack(spacing: 20) {
-            Text("Edit Value")
-                .font(.system(.title3, design: .rounded, weight: .semibold))
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Edit Value")
+                    .font(.system(.title3, design: .rounded, weight: .semibold))
+                Spacer()
+                if isContainerItem {
+                    Button {
+                        editedChildren.append("")
+                    } label: {
+                        Label("Add Item", systemImage: "plus.circle.fill")
+                            .font(.system(.subheadline, design: .rounded))
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 20)
+            .padding(.bottom, 16)
+
+            Divider()
 
             if isContainerItem {
-                // Edit children (keywords, etc.)
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Items (one per line)")
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(.secondary)
+                // Edit children with individual rows
+                ScrollView {
+                    VStack(spacing: 8) {
+                        ForEach(editedChildren.indices, id: \.self) { index in
+                            HStack(spacing: 8) {
+                                TextField("Item \(index + 1)", text: $editedChildren[index])
+                                    .textFieldStyle(.roundedBorder)
+                                    .font(.system(.body, design: .rounded))
 
-                    TextEditor(text: Binding(
-                        get: { editedChildren.joined(separator: "\n") },
-                        set: { editedChildren = $0.split(separator: "\n").map(String.init) }
-                    ))
-                    .font(.system(.body, design: .rounded))
-                    .frame(height: 200)
-                    .padding(8)
-                    .background(Color(NSColor.textBackgroundColor))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                    )
+                                Button {
+                                    editedChildren.remove(at: index)
+                                } label: {
+                                    Image(systemName: "trash")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.red)
+                                }
+                                .buttonStyle(.plain)
+                                .help("Remove item")
+                            }
+                        }
+
+                        if editedChildren.isEmpty {
+                            Text("No items. Click \"Add Item\" to add one.")
+                                .font(.system(.callout, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .padding(.vertical, 20)
+                        }
+                    }
+                    .padding(20)
                 }
+                .frame(minHeight: 200, maxHeight: 350)
             } else {
                 // Edit scalar value
-                TextField("Value", text: $editedValue)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(.body, design: .rounded))
+                VStack(alignment: .leading, spacing: 8) {
+                    TextField("Value", text: $editedValue, axis: .vertical)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(.body, design: .rounded))
+                        .lineLimit(3...8)
+                }
+                .padding(24)
             }
 
+            Divider()
+
+            // Action buttons
             HStack(spacing: 16) {
                 Button("Cancel") {
                     showEditSheet = false
                 }
                 .buttonStyle(.bordered)
 
+                Spacer()
+
                 Button("Save & Accept") {
                     guard let resume = resume else { return }
+                    // Filter out empty items for children
+                    let filteredChildren = editedChildren.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                        .filter { !$0.isEmpty }
                     if isContainerItem {
-                        viewModel.acceptCurrentItemWithEdits(nil, editedChildren: editedChildren, resume: resume, context: modelContext)
+                        viewModel.acceptCurrentItemWithEdits(nil, editedChildren: filteredChildren, resume: resume, context: modelContext)
                     } else {
                         viewModel.acceptCurrentItemWithEdits(editedValue, editedChildren: nil, resume: resume, context: modelContext)
                     }
@@ -575,9 +617,10 @@ struct PhaseReviewUnbundledView: View {
                 }
                 .buttonStyle(.borderedProminent)
             }
+            .padding(20)
         }
-        .padding(24)
-        .frame(width: 500)
+        .frame(width: 550)
+        .background(Color(NSColor.windowBackgroundColor))
     }
 
     // MARK: - Feedback Sheet

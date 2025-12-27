@@ -789,6 +789,7 @@ extension TreeNode {
         context: ModelContext
     ) {
         for item in review.items {
+            // Only process accepted items (acceptedOriginal means keep original - no change needed)
             guard item.userDecision == .accepted else { continue }
 
             // Find the node by ID
@@ -805,14 +806,21 @@ extension TreeNode {
                 break // No action needed
 
             case .modify:
-                if let proposedChildren = item.proposedChildren {
-                    // Container modification - replace children
+                // Use user's edited value if provided, otherwise use proposed value
+                if let editedChildren = item.editedChildren {
+                    // User edited the children
+                    replaceChildValues(in: node, with: editedChildren, context: context)
+                    Logger.info("✅ Modified node with user edits: \(item.displayName)")
+                } else if let proposedChildren = item.proposedChildren {
+                    // Container modification - replace children with proposed
                     replaceChildValues(in: node, with: proposedChildren, context: context)
+                    Logger.info("✅ Modified node: \(item.displayName)")
                 } else {
-                    // Scalar modification
-                    node.value = item.proposedValue
+                    // Scalar modification - use edited value if available
+                    let newValue = item.editedValue ?? item.proposedValue
+                    node.value = newValue
+                    Logger.info("✅ Modified node\(item.editedValue != nil ? " with user edits" : ""): \(item.displayName)")
                 }
-                Logger.info("✅ Modified node: \(item.displayName)")
 
             case .remove:
                 deleteTreeNode(node: node, context: context)
