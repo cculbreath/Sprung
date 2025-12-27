@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
    LastUpgradeVersion = "2600"
-   version = "1.7">
+   version = "1.8">
    <BuildAction
       parallelizeBuildables = "YES"
       buildImplicitDependencies = "YES"
@@ -96,42 +96,6 @@
       allowLocationSimulation = "YES"
       consoleMode = "0"
       structuredConsoleMode = "1">
-      <PreActions>
-         <ExecutionAction
-            ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
-            <ActionContent
-               title = "Run Script"
-               scriptText = " #!/bin/sh&#10;&#10;  PIDFILE=&quot;$SRCROOT/Sprung/Onboarding/Logs/consolelog.pid&quot;&#10;  LOGFILE=&quot;$SRCROOT/Sprung/Onboarding/Logs/consolelog.txt&quot;&#10;&#10;  # Kill existing stream&#10;  if [ -f &quot;$PIDFILE&quot; ]; then&#10;    kill &quot;$(cat &quot;$PIDFILE&quot;)&quot; 2&gt;/dev/null || true&#10;    rm -f &quot;$PIDFILE&quot;&#10;  fi&#10;  pkill -f &apos;log stream .* subsystem == &quot;physicscloud.Sprung&quot;&apos; 2&gt;/dev/null || true&#10;&#10;  # Start new stream&#10;  mkdir -p &quot;$(dirname &quot;$LOGFILE&quot;)&quot;&#10;  log stream --predicate &apos;subsystem == &quot;physicscloud.Sprung&quot;&apos; --style compact &gt; &quot;$LOGFILE&quot; 2&gt;&amp;1 &amp;&#10;  echo $! &gt; &quot;$PIDFILE&quot;&#10;">
-               <EnvironmentBuildable>
-                  <BuildableReference
-                     BuildableIdentifier = "primary"
-                     BlueprintIdentifier = "570FEC672C855BF50074D1E0"
-                     BuildableName = "Sprung.app"
-                     BlueprintName = "Sprung"
-                     ReferencedContainer = "container:Sprung.xcodeproj">
-                  </BuildableReference>
-               </EnvironmentBuildable>
-            </ActionContent>
-         </ExecutionAction>
-      </PreActions>
-      <PostActions>
-         <ExecutionAction
-            ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
-            <ActionContent
-               title = "Run Script"
-               scriptText = " #!/bin/sh&#10;&#10;  # Detect git worktree root (works in both main repo and worktrees)&#10;  REPO_ROOT=&quot;$(git rev-parse --show-toplevel 2&gt;/dev/null)&quot;&#10;  if [ -z &quot;$REPO_ROOT&quot; ]; then&#10;    echo &quot;Error: Not in a git repository&quot;&#10;    exit 1&#10;  fi&#10;&#10;  PIDFILE=&quot;$REPO_ROOT/consolelog.pid&quot;&#10;  LOGFILE=&quot;$REPO_ROOT/Sprung/Onboarding/Logs/consolelog.txt&quot;&#10;&#10;  # Kill existing stream&#10;  if [ -f &quot;$PIDFILE&quot; ]; then&#10;    kill &quot;$(cat &quot;$PIDFILE&quot;)&quot; 2&gt;/dev/null || true&#10;    rm -f &quot;$PIDFILE&quot;&#10;  fi&#10;  pkill -f &apos;log stream .* subsystem == &quot;physicscloud.Sprung&quot;&apos; 2&gt;/dev/null || true&#10;&#10;  # Start new stream&#10;  mkdir -p &quot;$(dirname &quot;$LOGFILE&quot;)&quot;&#10;  log stream --predicate &apos;subsystem == &quot;physicscloud.Sprung&quot;&apos; --style compact &gt; &quot;$LOGFILE&quot; 2&gt;&amp;1 &amp;&#10;  echo $! &gt; &quot;$PIDFILE&quot;&#10;&#10;  echo &quot;Logging to: $LOGFILE (PID: $(cat &quot;$PIDFILE&quot;))&quot;&#10;">
-               <EnvironmentBuildable>
-                  <BuildableReference
-                     BuildableIdentifier = "primary"
-                     BlueprintIdentifier = "570FEC672C855BF50074D1E0"
-                     BuildableName = "Sprung.app"
-                     BlueprintName = "Sprung"
-                     ReferencedContainer = "container:Sprung.xcodeproj">
-                  </BuildableReference>
-               </EnvironmentBuildable>
-            </ActionContent>
-         </ExecutionAction>
-      </PostActions>
       <BuildableProductRunnable
          runnableDebuggingMode = "0">
          <BuildableReference
@@ -142,24 +106,6 @@
             ReferencedContainer = "container:Sprung.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
-      <CommandLineArguments>
-         <CommandLineArgument
-            argument = "-com.apple.CoreData.SQLDebug 1"
-            isEnabled = "NO">
-         </CommandLineArgument>
-      </CommandLineArguments>
-      <EnvironmentVariables>
-         <EnvironmentVariable
-            key = "DEBUG"
-            value = "true"
-            isEnabled = "NO">
-         </EnvironmentVariable>
-         <EnvironmentVariable
-            key = "OS_ACTIVITY_MODE"
-            value = "disable"
-            isEnabled = "NO">
-         </EnvironmentVariable>
-      </EnvironmentVariables>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"

@@ -109,6 +109,14 @@ final class Logger {
     private static var configuration: Configuration = Logger.makeDefaultConfiguration()
     private static var backend: Logging = OSLoggerBackend(subsystem: configuration.subsystem)
     private static let newlineStripper = CharacterSet.newlines
+    private static let consoleLogURL: URL? = {
+        // Path to consolelog.txt for real-time log capture
+        let path = "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Logs/consolelog.txt"
+        let url = URL(fileURLWithPath: path)
+        // Clear file on app launch
+        try? "".write(to: url, atomically: false, encoding: .utf8)
+        return url
+    }()
     // MARK: - Public Configuration Accessors
     static var minimumLevel: Level {
         configurationQueue.sync { configuration.minimumLevel }
@@ -160,6 +168,7 @@ final class Logger {
 #if DEBUG
         // Always print to console in DEBUG builds
         print(formattedMessage)
+        appendToConsoleLog(formattedMessage)
 #endif
         let backend = currentBackend()
         backend.log(
@@ -227,6 +236,16 @@ final class Logger {
         backendLock.lock()
         defer { backendLock.unlock() }
         return backend
+    }
+    private static func appendToConsoleLog(_ message: String) {
+        guard let url = consoleLogURL else { return }
+        let entry = message + "\n"
+        guard let data = entry.data(using: .utf8) else { return }
+        if let handle = try? FileHandle(forWritingTo: url) {
+            defer { try? handle.close() }
+            try? handle.seekToEnd()
+            handle.write(data)
+        }
     }
     private static func sanitize(_ message: String) -> String {
         guard message.rangeOfCharacter(from: newlineStripper) != nil else {

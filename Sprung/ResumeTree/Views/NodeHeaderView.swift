@@ -48,18 +48,9 @@ struct NodeHeaderView: View {
         node.isCollectionNode
     }
 
-    /// Whether this node is an attribute under a collection entry (e.g., "keywords" under a skill)
-    /// These are the nodes where bundle/iterate mode is configured
-    private var isAttributeOfCollectionEntry: Bool {
-        guard let parent = node.parent,
-              let grandparent = parent.parent else { return false }
-        return grandparent.isCollectionNode
-    }
-
-    /// The collection node (grandparent) when this is an attribute of a collection entry
-    private var collectionNode: TreeNode? {
-        guard isAttributeOfCollectionEntry else { return nil }
-        return node.parent?.parent
+    /// The grandparent node (collection level) if this node is an attribute under an entry
+    private var grandparentNode: TreeNode? {
+        node.parent?.parent
     }
 
     /// The attribute name for bundle/iterate configuration
@@ -67,17 +58,52 @@ struct NodeHeaderView: View {
         node.name.isEmpty ? node.displayLabel : node.name
     }
 
+    /// Whether this node is an attribute under a collection entry (e.g., "keywords" under a skill)
+    /// True if grandparent is a collection node OR has bundle/iterate settings for this attribute
+    private var isAttributeOfCollectionEntry: Bool {
+        guard let grandparent = grandparentNode else { return false }
+        // Check if grandparent has AI review settings for this attribute
+        let attr = attributeName
+        if grandparent.bundledAttributes?.contains(attr) == true { return true }
+        if grandparent.enumeratedAttributes?.contains(attr) == true { return true }
+        // Fall back to structural check
+        return grandparent.isCollectionNode
+    }
+
+    /// The collection node (grandparent) when this is an attribute of a collection entry
+    private var collectionNode: TreeNode? {
+        guard isAttributeOfCollectionEntry else { return nil }
+        return grandparentNode
+    }
+
     /// Current mode for this specific attribute across the collection
     private var attributeMode: AIReviewMode {
-        guard let collection = collectionNode else { return .off }
-        if collection.bundledAttributes?.contains(attributeName) == true {
+        guard let grandparent = grandparentNode else { return .off }
+        let attr = attributeName
+        if grandparent.bundledAttributes?.contains(attr) == true {
             return .bundle
-        } else if collection.enumeratedAttributes?.contains(attributeName) == true {
+        } else if grandparent.enumeratedAttributes?.contains(attr) == true {
             return .iterate
         } else if node.status == .aiToReplace {
             return .solo  // Just this single node marked for review
         }
         return .off
+    }
+
+    /// Whether this node is a child of a container being reviewed (bundle/iterate)
+    /// e.g., "Swift" is a child of "keywords" which is set to iterate
+    private var isChildOfReviewedContainer: Bool {
+        guard let parent = node.parent,
+              let grandparent = parent.parent,
+              let greatGrandparent = grandparent.parent else { return false }
+
+        let parentName = parent.name.isEmpty ? parent.displayLabel : parent.name
+
+        // Check if great-grandparent has parent's name in bundle/iterate
+        if greatGrandparent.bundledAttributes?.contains(parentName) == true { return true }
+        if greatGrandparent.enumeratedAttributes?.contains(parentName) == true { return true }
+
+        return false
     }
 
     /// Whether to show the AI mode indicator
@@ -87,12 +113,17 @@ struct NodeHeaderView: View {
             node.aiStatusChildren > 0 ||
             node.hasAttributeReviewModes ||
             isAttributeOfCollectionEntry ||  // Show for attribute nodes
+            isChildOfReviewedContainer ||    // Show for children of reviewed containers
             isHoveringHeader
         )
     }
 
     /// The mode to display for this node
     private var displayMode: AIReviewMode {
+        // Check if this is a child of a reviewed container first
+        if isChildOfReviewedContainer {
+            return .included
+        }
         if isAttributeOfCollectionEntry {
             return attributeMode
         }
@@ -249,6 +280,8 @@ struct NodeHeaderView: View {
             setAttributeMode(.solo)
         case .solo:
             setAttributeMode(.off)
+        case .included:
+            break  // Children of reviewed containers can't be toggled directly
         }
     }
 
@@ -295,6 +328,9 @@ struct NodeHeaderView: View {
             node.status = .saved
             // Clear solo status from all matching attribute nodes
             clearSoloStatusForAttribute(attr, in: collection)
+
+        case .included:
+            break  // Not a valid mode to set directly - it's derived from parent state
         }
 
         // Clean up empty arrays
@@ -336,6 +372,7 @@ enum AIReviewMode {
     case bundle   // Purple - all together across entries
     case iterate  // Cyan - each entry separately
     case solo     // Orange - just this single node
+    case included // Teal - child of a reviewed container (part of parent's RevNode)
     case off      // Gray - disabled
 
     var color: Color {
@@ -343,6 +380,7 @@ enum AIReviewMode {
         case .bundle: return .purple
         case .iterate: return .cyan
         case .solo: return .orange
+        case .included: return .teal
         case .off: return .gray
         }
     }
@@ -352,6 +390,7 @@ enum AIReviewMode {
         case .bundle: return "square.stack.3d.up.fill"
         case .iterate: return "list.bullet"
         case .solo: return "scope"
+        case .included: return "circle.fill"
         case .off: return "sparkles"
         }
     }
@@ -378,6 +417,7 @@ struct AIModeIndicator: View {
         case .bundle: return "Bundle: All items reviewed together"
         case .iterate: return "Iterate: Each item reviewed separately"
         case .solo: return "Solo: Just this one item"
+        case .included: return "Included in parent's review"
         case .off: return "Click to enable AI review"
         }
     }
