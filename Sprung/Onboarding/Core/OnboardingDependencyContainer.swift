@@ -253,13 +253,26 @@ final class OnboardingDependencyContainer {
             sessionUIState: sessionUIState
         )
         // 11. Initialize early coordinators (don't need coordinator reference)
+        // Create KnowledgeCardWorkflowService first (extracted from CoordinatorEventRouter)
+        let kcWorkflow = KnowledgeCardWorkflowService(
+            ui: ui,
+            state: state,
+            sessionUIState: sessionUIState,
+            toolRouter: tools.toolRouter,
+            resRefStore: resRefStore,
+            eventBus: core.eventBus
+        )
+
         self.coordinatorEventRouter = CoordinatorEventRouter(
-            ui: ui, state: state, sessionUIState: sessionUIState,
+            ui: ui,
+            state: state,
             phaseTransitionController: phaseTransitionController,
-            toolRouter: tools.toolRouter, applicantProfileStore: applicantProfileStore,
-            resRefStore: resRefStore, coverRefStore: coverRefStore,
+            toolRouter: tools.toolRouter,
+            coverRefStore: coverRefStore,
             experienceDefaultsStore: experienceDefaultsStore,
-            eventBus: core.eventBus, dataStore: dataStore
+            eventBus: core.eventBus,
+            dataStore: dataStore,
+            knowledgeCardWorkflow: kcWorkflow
         )
 
         // 12. Post-init configuration
