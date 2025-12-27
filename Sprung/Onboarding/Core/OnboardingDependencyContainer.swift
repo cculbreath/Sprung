@@ -134,7 +134,6 @@ final class OnboardingDependencyContainer {
     let tokenUsageTracker: TokenUsageTracker
 
     // MARK: - Early-Initialized Coordinators (No Coordinator Reference Needed)
-    let toolInteractionCoordinator: ToolInteractionCoordinator
     let coordinatorEventRouter: CoordinatorEventRouter
     // MARK: - Late-Initialized Components (Require Coordinator Reference)
     private(set) var toolRegistrar: OnboardingToolRegistrar!
@@ -270,9 +269,6 @@ final class OnboardingDependencyContainer {
             sessionUIState: sessionUIState
         )
         // 13. Initialize early coordinators (don't need coordinator reference)
-        self.toolInteractionCoordinator = ToolInteractionCoordinator(
-            eventBus: core.eventBus, toolRouter: tools.toolRouter
-        )
         self.coordinatorEventRouter = CoordinatorEventRouter(
             ui: ui, state: state, sessionUIState: sessionUIState,
             phaseTransitionController: controllers.phaseTransitionController,

@@ -23,8 +23,6 @@ final class OnboardingInterviewCoordinator {
     var timeline: TimelineManagementService { container.timelineManagementService }
     // Extraction Management
     var extraction: ExtractionManagementService { container.extractionManagementService }
-    // Tool Interaction
-    var tools: ToolInteractionCoordinator { container.toolInteractionCoordinator }
     // Phase & Objective Management
     var phases: PhaseTransitionController { container.phaseTransitionController }
 
@@ -463,54 +461,118 @@ final class OnboardingInterviewCoordinator {
         return await container.artifactIngestionCoordinator.getPendingStatusMessage(forPlanItem: planItemId)
     }
 
-    // MARK: - Tool Management (Delegated to ToolInteractionCoordinator)
+    // MARK: - Tool Management
+
     func presentUploadRequest(_ request: OnboardingUploadRequest) {
-        tools.presentUploadRequest(request)
+        Task {
+            await eventBus.publish(.uploadRequestPresented(request: request))
+        }
     }
+
     func completeUpload(id: UUID, fileURLs: [URL]) async -> JSON? {
-        await tools.completeUpload(id: id, fileURLs: fileURLs)
+        let result = await toolRouter.completeUpload(id: id, fileURLs: fileURLs)
+        Task {
+            await eventBus.publish(.uploadRequestCancelled(id: id))
+        }
+        return result
     }
+
     func skipUpload(id: UUID) async -> JSON? {
-        await tools.skipUpload(id: id)
+        let result = await toolRouter.skipUpload(id: id)
+        Task {
+            await eventBus.publish(.uploadRequestCancelled(id: id))
+        }
+        return result
     }
+
     func presentChoicePrompt(_ prompt: OnboardingChoicePrompt) {
-        tools.presentChoicePrompt(prompt)
+        Task {
+            await eventBus.publish(.choicePromptRequested(prompt: prompt))
+        }
     }
+
     func submitChoice(optionId: String) -> JSON? {
-        tools.submitChoice(optionId: optionId)
+        guard let result = toolRouter.promptHandler.resolveChoice(selectionIds: [optionId]) else {
+            return nil
+        }
+        Task {
+            await eventBus.publish(.choicePromptCleared)
+        }
+        return result.payload
     }
+
     func presentValidationPrompt(_ prompt: OnboardingValidationPrompt) {
-        tools.presentValidationPrompt(prompt)
+        Task {
+            await eventBus.publish(.validationPromptRequested(prompt: prompt))
+        }
     }
+
     func submitValidationResponse(
         status: String,
         updatedData: JSON?,
         changes: JSON?,
         notes: String?
     ) async -> JSON? {
-        await tools.submitValidationResponse(
+        let pendingValidation = toolRouter.pendingValidationPrompt
+
+        // Emit knowledge card persisted event for in-memory tracking
+        if let validation = pendingValidation,
+           validation.dataType == "knowledge_card",
+           let data = updatedData,
+           data != .null,
+           ["approved", "modified"].contains(status.lowercased()) {
+            await eventBus.publish(.knowledgeCardPersisted(card: data))
+        }
+
+        let result = toolRouter.submitValidationResponse(
             status: status,
             updatedData: updatedData,
             changes: changes,
             notes: notes
         )
+
+        if result != nil {
+            Task {
+                await eventBus.publish(.validationPromptCleared)
+            }
+            // Mark skeleton_timeline objective as complete when user confirms validation
+            if let validation = pendingValidation,
+               validation.dataType == "skeleton_timeline",
+               ["confirmed", "confirmed_with_changes", "approved", "modified"].contains(status.lowercased()) {
+                await eventBus.publish(.objectiveStatusUpdateRequested(
+                    id: "skeleton_timeline",
+                    status: "completed",
+                    source: "ui_timeline_validated",
+                    notes: "Timeline validated by user",
+                    details: nil
+                ))
+                Logger.info("✅ skeleton_timeline objective marked complete after validation", category: .ai)
+            }
+        }
+        return result
     }
-    // MARK: - Applicant Profile Intake Facade Methods (Delegated to ToolInteractionCoordinator)
+
+    // MARK: - Applicant Profile Intake Facade Methods
+
     func beginProfileUpload() {
-        let request = tools.beginProfileUpload()
+        let request = toolRouter.beginApplicantProfileUpload()
         presentUploadRequest(request)
     }
+
     func beginProfileURLEntry() {
-        tools.beginProfileURLEntry()
+        toolRouter.beginApplicantProfileURL()
     }
+
     func beginProfileContactsFetch() {
-        tools.beginProfileContactsFetch()
+        toolRouter.beginApplicantProfileContactsFetch()
     }
+
     func beginProfileManualEntry() {
-        tools.beginProfileManualEntry()
+        toolRouter.beginApplicantProfileManualEntry()
     }
+
     func resetProfileIntakeToOptions() {
-        tools.resetProfileIntakeToOptions()
+        toolRouter.resetApplicantProfileIntakeToOptions()
     }
     func submitProfileDraft(draft: ApplicantProfileDraft, source: OnboardingApplicantProfileIntakeState.Source) async {
         await uiResponseCoordinator.submitProfileDraft(draft: draft, source: source)
