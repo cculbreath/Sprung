@@ -8,14 +8,9 @@ struct StatusBadgeView: View {
     let node: TreeNode
     let isExpanded: Bool
 
-    /// Use smart operations count for meaningful badge display
+    /// Badge shows just the count number
     private var badgeText: String {
-        // Use descriptive label if available (e.g., "3 categories")
-        if let label = node.reviewOperationsLabel {
-            return label
-        }
-        // Fallback to simple count
-        return "\(node.reviewOperationsCount)"
+        "\(node.reviewOperationsCount)"
     }
 
     /// Whether to show the badge

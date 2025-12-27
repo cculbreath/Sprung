@@ -112,10 +112,16 @@ struct NodeHeaderView: View {
             node.status == .aiToReplace ||
             node.aiStatusChildren > 0 ||
             node.hasAttributeReviewModes ||
-            isAttributeOfCollectionEntry ||  // Show for attribute nodes
-            isChildOfReviewedContainer ||    // Show for children of reviewed containers
+            isAttributeOfCollectionEntry ||
+            isChildOfReviewedContainer ||
             isHoveringHeader
         )
+    }
+
+    /// Whether clicking the AI mode indicator should toggle mode
+    /// Only interactive on attribute nodes - collection nodes show read-only summary
+    private var isAIModeInteractive: Bool {
+        isAttributeOfCollectionEntry && !isChildOfReviewedContainer
     }
 
     /// The mode to display for this node
@@ -151,12 +157,10 @@ struct NodeHeaderView: View {
             if showAIModeIndicator {
                 AIModeIndicator(mode: displayMode, isCollection: isCollectionNode || isAttributeOfCollectionEntry)
                     .onTapGesture {
-                        if isAttributeOfCollectionEntry {
-                            toggleAttributeMode()
-                        } else {
-                            toggleAIStatus()
-                        }
+                        guard isAIModeInteractive else { return }
+                        toggleAttributeMode()
                     }
+                    .opacity(isAIModeInteractive ? 1.0 : 0.6)  // Dimmer when read-only
             }
 
             // Expanded controls
