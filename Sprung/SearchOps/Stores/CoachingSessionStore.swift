@@ -63,6 +63,11 @@ final class CoachingSessionStore: SwiftDataStore {
         return calendar.dateComponents([.day], from: lastSession.sessionDate, to: Date()).day ?? 0
     }
 
+    /// Get the date of the last completed coaching session
+    func lastSessionDate() -> Date? {
+        allSessions.first(where: { $0.isComplete })?.sessionDate
+    }
+
     // MARK: - Mutations
 
     func add(_ session: CoachingSession) {

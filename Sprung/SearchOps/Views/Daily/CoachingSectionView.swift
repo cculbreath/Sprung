@@ -155,6 +155,10 @@ struct TodaysRecommendationsView: View {
 
     @State private var isExpanded = true
 
+    private func markdownAttributedString(_ string: String) -> AttributedString {
+        (try? AttributedString(markdown: string, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(string)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Q&A Summary (collapsed by default)
@@ -180,8 +184,8 @@ struct TodaysRecommendationsView: View {
                 .font(.subheadline)
             }
 
-            // Recommendations
-            Text(session.recommendations)
+            // Recommendations (render markdown)
+            Text(markdownAttributedString(session.recommendations))
                 .font(.body)
                 .textSelection(.enabled)
 

@@ -79,8 +79,17 @@ final class CoachingService {
         questionIndex = 0
         currentQuestion = nil
 
+        // Calculate activity window: since last coaching session or 24 hours, whichever is longer
+        let twentyFourHoursAgo = Date().addingTimeInterval(-86400)
+        let sinceDate: Date
+        if let lastSession = sessionStore.lastSessionDate(), lastSession < twentyFourHoursAgo {
+            sinceDate = lastSession
+        } else {
+            sinceDate = twentyFourHoursAgo
+        }
+
         // Generate activity snapshot
-        let snapshot = activityReportService.generateSnapshot()
+        let snapshot = activityReportService.generateSnapshot(since: sinceDate)
 
         // Create new session
         let session = CoachingSession()
