@@ -205,22 +205,6 @@ struct TodaysRecommendationsView: View {
     }
 }
 
-struct LoadingStateView: View {
-    let message: String
-
-    var body: some View {
-        HStack(spacing: 12) {
-            ProgressView()
-                .scaleEffect(0.8)
-            Text(message)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 8)
-    }
-}
-
 struct ErrorStateView: View {
     let message: String
     let onRetry: () -> Void
