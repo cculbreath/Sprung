@@ -8,7 +8,22 @@ We are customizing {applicantName}'s resume for the following position:
 JOB LISTING:
 {jobListing}
 
-ITEMS TO REVIEW:
+--------------------------------------------------------------------------------
+CURRENT RESUME
+--------------------------------------------------------------------------------
+The applicant's current resume is:
+
+{resumeText}
+
+This is generated using customized values into this template:
+
+{textTemplate}
+
+--------------------------------------------------------------------------------
+VALUES REQUIRING CUSTOMIZATION
+--------------------------------------------------------------------------------
+The following values require customization:
+
 {nodesJson}
 
 REVIEW MODE:

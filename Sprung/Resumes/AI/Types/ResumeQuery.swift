@@ -417,6 +417,9 @@ import SwiftUI
             ? "All items are presented together for holistic review. Consider relationships between items."
             : "Each item should be reviewed individually based on relevance to the target job."
 
+        // Get the text template content
+        let textTemplate = res.template?.textContent ?? "(No text template available)"
+
         // Build prompt from template with substitutions
         let prompt = loadPromptTemplateWithSubstitutions(named: "resume_phase_review", substitutions: [
             "phaseNumber": String(phaseNumber),
@@ -424,6 +427,8 @@ import SwiftUI
             "fieldPath": fieldPath,
             "applicantName": applicant.name,
             "jobListing": jobListing,
+            "resumeText": resumeText,
+            "textTemplate": textTemplate,
             "nodesJson": nodesJson,
             "bundleDescription": bundleDescription,
             "itemTypeDescription": itemTypeDescription,
