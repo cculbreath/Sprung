@@ -1,0 +1,99 @@
+# macOS and tooling artifacts
+.DS_Store
+**/.DS_Store
+.AppleDouble
+.LSOverride
+
+
+# Ignore vendored and generated artifacts
+weasy-dist/
+weasy/
+.build/
+physcloudresume/scripts/
+test_*
+
+# Local tooling databases
+.opencode/
+.opencode.json
+.ignore
+.gitignore
+.geminiignore
+plans.md
+
+# Private assets and notes (relocated outside the repo)
+debug/
+draft-archer/
+Notes/
+Resources/
+.swiftpm/
+DerivedData/
+**/xcuserdata/
+old-code-reports/
+!Sprung/Resources/
+!Sprung/Resources/TemplateDefaults/
+!Sprung/Resources/TemplateDefaults/**
+!Sprung/Resources/Prompts/
+!Sprung/Resources/Prompts/**
+!Sprung/Resources/SearchOpsSchemas/
+!Sprung/Resources/SearchOpsSchemas/**
+!Sprung/Onboarding/Resources/
+!Sprung/Onboarding/Resources/**
+
+# Ignore root-level generated files
+Sprung.zip
+backup.txt
+combined_model_code.txt
+combined_output.txt
+output.txt
+CLAUDE.md
+**/CLAUDE.local.md
+build/
+clean-commit-msg.sh
+
+# Local documentation
+agents.md
+Agents.md
+Plans.md
+
+.swift-module-cache/
+.periphery.yml
+.claude
+build.log
+
+consolelog.txt
+consolelog.pid
+
+Sprung/flattened_output/
+Sprung/Onboarding/logs and docs/
+Sprung/Onboarding/Logs/
+Sprung/Onboarding/Logs/*.txt
+Sprung/Onboarding/Spec/
+Sprung/Onboarding/Spec and Docs/
+Sprung/Onboarding/Spec/Recent work (done).md
+planning/
+
+# SwiftLint reports
+swiftlint-report.txt
+swiftlint-autofix.log
+swiftlint-report-after-fix.txt
+
+# Audit reports (local only)
+onboarding_audit.md
+onboarding_audit_global.md
+onboarding_code_quality.md
+
+# Downloaded binaries (fetched by scripts/download-chromium.sh)
+Sprung/Resources/chromium-headless-shell/
+
+# Temporary files
+.gemini-clipboard/
+.gemini/
+pdfs/
+tmp_pdf_imgs/
+
+# Technical debt tracking (local only)
+technical-debt.md
+.derivedData/
+**/.derivedData/
+# Sandbox and simulator logs
+.sandboxHome/
