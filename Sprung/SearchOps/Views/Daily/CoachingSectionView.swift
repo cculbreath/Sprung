@@ -17,6 +17,10 @@ struct CoachingSectionView: View {
         coordinator.coachingService
     }
 
+    private func markdownAttributedString(_ string: String) -> AttributedString {
+        (try? AttributedString(markdown: string, options: .init(interpretedSyntax: .full))) ?? AttributedString(string)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Header
@@ -84,6 +88,51 @@ struct CoachingSectionView: View {
 
         case .generatingRecommendations:
             AnimatedThinkingText(statusMessage: "Preparing your coaching...")
+
+        case .showingRecommendations(let recommendations):
+            VStack(alignment: .leading, spacing: 12) {
+                // Show recommendations while loading follow-up
+                Text(markdownAttributedString(recommendations))
+                    .font(.body)
+                    .textSelection(.enabled)
+
+                AnimatedThinkingText(statusMessage: "Preparing follow-up options...")
+            }
+
+        case .askingFollowUp(let question):
+            VStack(alignment: .leading, spacing: 12) {
+                // Show recommendations
+                if let session = service.currentSession {
+                    Text(markdownAttributedString(session.recommendations))
+                        .font(.body)
+                        .textSelection(.enabled)
+
+                    Divider()
+                }
+
+                // Show follow-up question
+                MultipleChoiceQuestionView(
+                    question: question,
+                    questionNumber: nil,
+                    totalQuestions: nil,
+                    onSubmit: { value, label in
+                        Task {
+                            try? await service.submitFollowUpAnswer(value: value, label: label)
+                        }
+                    }
+                )
+            }
+
+        case .executingFollowUp(let action):
+            VStack(alignment: .leading, spacing: 12) {
+                if let session = service.currentSession {
+                    Text(markdownAttributedString(session.recommendations))
+                        .font(.body)
+                        .textSelection(.enabled)
+                }
+
+                AnimatedThinkingText(statusMessage: "Executing: \(action.displayName)...")
+            }
 
         case .complete(let sessionId):
             if let session = coordinator.coachingSessionStore?.session(byId: sessionId) {

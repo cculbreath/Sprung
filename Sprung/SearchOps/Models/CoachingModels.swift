@@ -244,6 +244,7 @@ enum CoachingQuestionType: String, Codable, CaseIterable, Equatable {
     case challenge = "challenge"
     case focus = "focus"
     case feedback = "feedback"
+    case followUp = "follow_up"
 
     var displayName: String {
         switch self {
@@ -251,6 +252,7 @@ enum CoachingQuestionType: String, Codable, CaseIterable, Equatable {
         case .challenge: return "Challenges"
         case .focus: return "Today's Focus"
         case .feedback: return "Feedback"
+        case .followUp: return "Next Steps"
         }
     }
 }
@@ -297,6 +299,40 @@ struct CoachingAnswer: Codable {
     }
 }
 
+// MARK: - Follow-Up Actions
+
+/// Actions the coach can offer after providing recommendations
+enum CoachingFollowUpAction: String, Codable, CaseIterable {
+    case chooseFocusJobs = "choose_focus_jobs"
+    case generateTasks = "generate_tasks"
+    case staleAppCheck = "stale_app_check"
+    case networkingSuggestions = "networking_suggestions"
+    case quickWins = "quick_wins"
+    case done = "done"
+
+    var displayName: String {
+        switch self {
+        case .chooseFocusJobs: return "Pick my focus jobs for today"
+        case .generateTasks: return "Generate my task list"
+        case .staleAppCheck: return "Check for stale applications"
+        case .networkingSuggestions: return "Suggest networking actions"
+        case .quickWins: return "Give me some quick wins"
+        case .done: return "I'm good for now"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .chooseFocusJobs: return "Select the top 5 jobs to focus on today based on fit"
+        case .generateTasks: return "Create a prioritized task list for today"
+        case .staleAppCheck: return "Find applications that need follow-up"
+        case .networkingSuggestions: return "Identify contacts to reach out to"
+        case .quickWins: return "3-5 minute tasks for quick momentum"
+        case .done: return "End the coaching session"
+        }
+    }
+}
+
 // MARK: - Coaching State
 
 enum CoachingState: Equatable {
@@ -305,12 +341,15 @@ enum CoachingState: Equatable {
     case askingQuestion(question: CoachingQuestion, index: Int, total: Int)
     case waitingForAnswer
     case generatingRecommendations
+    case showingRecommendations(recommendations: String)
+    case askingFollowUp(question: CoachingQuestion)
+    case executingFollowUp(action: CoachingFollowUpAction)
     case complete(sessionId: UUID)
     case error(String)
 
     var isLoading: Bool {
         switch self {
-        case .generatingReport, .generatingRecommendations:
+        case .generatingReport, .generatingRecommendations, .executingFollowUp:
             return true
         default:
             return false

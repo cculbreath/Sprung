@@ -9,8 +9,8 @@ import SwiftUI
 
 struct MultipleChoiceQuestionView: View {
     let question: CoachingQuestion
-    let questionNumber: Int
-    let totalQuestions: Int
+    let questionNumber: Int?
+    let totalQuestions: Int?
     let onSubmit: (Int, String) -> Void
 
     @State private var selectedOption: QuestionOption?
@@ -19,9 +19,11 @@ struct MultipleChoiceQuestionView: View {
         VStack(alignment: .leading, spacing: 16) {
             // Progress indicator
             HStack {
-                Text("Question \(questionNumber) of \(totalQuestions)+")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if let num = questionNumber, let total = totalQuestions {
+                    Text("Question \(num) of \(total)+")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
                 Text(question.questionType.displayName)
                     .font(.caption)
