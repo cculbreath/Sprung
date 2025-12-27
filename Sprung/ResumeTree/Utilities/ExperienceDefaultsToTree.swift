@@ -894,137 +894,173 @@ final class ExperienceDefaultsToTree {
 
     // MARK: - Default AI Fields
 
+    /// Apply defaultAIFields patterns to TreeNode state.
+    ///
+    /// This sets up the TreeNode as the single source of truth for AI review configuration.
+    /// Patterns determine initial state; users can modify via UI (context menu toggle).
+    ///
+    /// # Pattern Types and TreeNode State
+    ///
+    /// | Pattern | TreeNode State |
+    /// |---------|----------------|
+    /// | `section.*.attr` | `section.bundledAttributes += [attr]` |
+    /// | `section[].attr` | `section.enumeratedAttributes += [attr]` |
+    /// | `section.container[]` | Each child of container marked aiToReplace |
+    /// | `section.field` | field node marked aiToReplace (scalar) |
+    ///
+    /// # Examples
+    ///
+    /// | Pattern | Effect |
+    /// |---------|--------|
+    /// | `skills.*.name` | skills.bundledAttributes = ["name"] |
+    /// | `skills[].keywords` | skills.enumeratedAttributes = ["keywords"] |
+    /// | `custom.jobTitles[]` | Each jobTitle child marked aiToReplace |
+    /// | `custom.objective` | objective node marked aiToReplace |
+    ///
     private func applyDefaultAIFields(to root: TreeNode, patterns: [String]) {
         Logger.debug("🎯 [applyDefaultAIFields] Starting with \(patterns.count) patterns: \(patterns)")
-        applyDefaultAIFieldsRecursive(node: root, currentPath: [], patterns: patterns)
+
+        for pattern in patterns {
+            applyPattern(pattern, to: root)
+        }
     }
 
-    /// Recursively apply AI status to nodes matching defaultAIFields patterns.
-    ///
-    /// # Path Syntax
-    ///
-    /// The path syntax distinguishes between enumerate mode and bundle mode:
-    ///
-    /// - `[]` = enumerate mode - each entry reviewed separately (N rev nodes)
-    /// - `*` = bundle mode - all entries reviewed together (1 rev node)
-    /// - Plain names = schema field names (e.g., `highlights`, `name`, `keywords`)
-    ///
-    /// ## Examples
-    ///
-    /// | Pattern | Mode | Meaning |
-    /// |---------|------|---------|
-    /// | `work[].highlights` | enumerate | Each job's highlights reviewed separately |
-    /// | `work.*.highlights` | bundle | All jobs' highlights bundled together |
-    /// | `skills[].keywords` | enumerate | Each skill's keywords reviewed separately |
-    /// | `skills.*.name` | bundle | All skill names bundled together |
-    /// | `custom.jobTitles[]` | enumerate | Each job title reviewed separately |
-    ///
-    /// ## Path Building Rules
-    ///
-    /// When traversing the tree, paths are built as follows:
-    /// - Section containers use their name: `work`, `skills`, `custom`
-    /// - Object entries (display names like "Acme Corp") use `[]`
-    /// - Field nodes use their schema name: `highlights`, `keywords`, `name`
-    /// - Array leaf items use `[]`
-    ///
-    private func applyDefaultAIFieldsRecursive(node: TreeNode, currentPath: [String], patterns: [String]) {
-        let pathString = currentPath.joined(separator: ".")
-
-        if !pathString.isEmpty {
-            let matches = pathMatchesAnyPattern(path: pathString, patterns: patterns)
-            if matches {
-                Logger.debug("🎯 [applyDefaultAIFields] ✅ MATCH: '\(pathString)' -> setting aiToReplace on '\(node.name)'")
-                node.status = .aiToReplace
+    /// Apply a single pattern to the tree, setting appropriate TreeNode state.
+    private func applyPattern(_ pattern: String, to root: TreeNode) {
+        // Parse pattern into components, normalizing "field[]" to "field", "[]"
+        var components: [String] = []
+        for part in pattern.split(separator: ".") {
+            let partStr = String(part)
+            if partStr.hasSuffix("[]") {
+                let fieldName = String(partStr.dropLast(2))
+                if !fieldName.isEmpty {
+                    components.append(fieldName)
+                }
+                components.append("[]")
             } else {
-                Logger.verbose("🎯 [applyDefaultAIFields] No match: '\(pathString)' (node: '\(node.name)')")
+                components.append(partStr)
             }
         }
 
-        guard let children = node.children else { return }
-        for child in children {
-            var childPath = currentPath
+        guard !components.isEmpty else { return }
 
-            let isObj = isObjectEntry(child)
-            let isArr = isArrayLeafItem(child)
-
-            if isObj {
-                // Object entry (e.g., job "Acme Corp", skill category "Programming")
-                // Use [] for enumerate mode (each entry reviewed separately)
-                childPath.append("[]")
-                Logger.verbose("🎯 [applyDefaultAIFields] Object entry '\(child.name)' -> path component '[]'")
-            } else if isArr {
-                // Array leaf item (e.g., individual keyword, highlight bullet)
-                childPath.append("[]")
-                Logger.verbose("🎯 [applyDefaultAIFields] Array item '\(child.name)' -> path component '[]'")
+        // Identify pattern type by position of * or []
+        if let starIndex = components.firstIndex(of: "*") {
+            // Bundle pattern: section.*.attr
+            applyBundlePattern(components: components, starIndex: starIndex, to: root)
+        } else if let bracketIndex = components.firstIndex(of: "[]") {
+            // Enumerate pattern
+            if bracketIndex == components.count - 1 {
+                // Pattern ends with []: section.container[] - enumerate container children
+                applyContainerEnumeratePattern(components: components, to: root)
             } else {
-                // Schema field name (e.g., "highlights", "name", "keywords")
-                childPath.append(child.name)
-                Logger.verbose("🎯 [applyDefaultAIFields] Schema field '\(child.name)' -> path component '\(child.name)'")
+                // Pattern has [] in middle: section[].attr - enumerate with specific attribute
+                applyEnumeratePattern(components: components, bracketIndex: bracketIndex, to: root)
             }
-            applyDefaultAIFieldsRecursive(node: child, currentPath: childPath, patterns: patterns)
+        } else {
+            // Scalar pattern: section.field
+            applyScalarPattern(components: components, to: root)
         }
     }
 
-    /// Check if a node is an object entry (has display name, contains fields)
-    /// Object entries are things like job objects ("Acme Corp") or skill categories ("Programming")
-    private func isObjectEntry(_ node: TreeNode) -> Bool {
-        // Object entries have display names (not lowercase schema names)
-        // AND have children (they contain fields)
-        guard !isSchemaFieldName(node.name) else { return false }
-        return node.children != nil && !node.orderedChildren.isEmpty
-    }
-
-    /// Check if a node is an array leaf item (simple value, no children)
-    /// Array items are things like individual keywords or highlight bullets
-    private func isArrayLeafItem(_ node: TreeNode) -> Bool {
-        // Array items have display names (not lowercase schema names)
-        // AND are leaf nodes (no children with fields)
-        guard !isSchemaFieldName(node.name) else { return false }
-        return node.children == nil || node.orderedChildren.isEmpty
-    }
-
-    /// Check if a name is a schema field name (lowercase identifier without spaces)
-    /// vs a display name like "Acme Corp" or "Work 1"
-    private func isSchemaFieldName(_ name: String) -> Bool {
-        guard !name.isEmpty else { return false }
-        // Schema field names: lowercase, no spaces (e.g., "highlights", "name", "keywords")
-        // Display names: uppercase start or contain spaces (e.g., "Acme Corp", "Work 1")
-        let startsLowercase = name.first?.isLowercase ?? false
-        let hasNoSpaces = !name.contains(" ")
-        return startsLowercase && hasNoSpaces
-    }
-
-    private func pathMatchesAnyPattern(path: String, patterns: [String]) -> Bool {
-        patterns.contains { pattern in
-            pathMatchesPattern(path: path, pattern: pattern)
+    /// Apply bundle pattern (section.*.attr) - sets bundledAttributes on collection node
+    private func applyBundlePattern(components: [String], starIndex: Int, to root: TreeNode) {
+        // Navigate to collection node (components before *)
+        let pathToCollection = Array(components[0..<starIndex])
+        guard let collectionNode = findNode(path: pathToCollection, from: root) else {
+            Logger.warning("🎯 [applyBundlePattern] Collection not found for path: \(pathToCollection)")
+            return
         }
+
+        // Get attribute name (components after *)
+        guard starIndex + 1 < components.count else {
+            Logger.warning("🎯 [applyBundlePattern] No attribute after * in pattern")
+            return
+        }
+        let attrName = components[starIndex + 1]
+
+        // Add to bundled attributes
+        var bundled = collectionNode.bundledAttributes ?? []
+        if !bundled.contains(attrName) {
+            bundled.append(attrName)
+            collectionNode.bundledAttributes = bundled
+        }
+
+        // Mark collection as AI-enabled
+        collectionNode.status = .aiToReplace
+
+        Logger.info("🎯 [applyBundlePattern] Set bundledAttributes[\(attrName)] on '\(collectionNode.name)'")
     }
 
-    /// Match path against pattern.
-    ///
-    /// Supports:
-    /// - `[]` matches entries in enumerate mode (each entry separately)
-    /// - `*` matches entries in bundle mode (all entries together)
-    /// - `field[]` is normalized to `field.[]` for matching
-    ///
-    /// Example: pattern `work[].highlights` matches path `work.[].highlights`
-    /// Example: pattern `skills.*.name` matches path `skills.*.name`
-    private func pathMatchesPattern(path: String, pattern: String) -> Bool {
-        let pathComponents = path.split(separator: ".").map(String.init)
-
-        // Normalize pattern: expand "field[]" to "field.[]"
-        let normalizedPattern = pattern.replacingOccurrences(of: "[]", with: ".[]")
-        let patternComponents = normalizedPattern.split(separator: ".").map(String.init)
-
-        guard pathComponents.count == patternComponents.count else { return false }
-
-        for (pathPart, patternPart) in zip(pathComponents, patternComponents) {
-            // [] matches enumerate entries
-            if patternPart == "[]" && pathPart == "[]" { continue }
-            // * matches bundle entries
-            if patternPart == "*" && pathPart == "*" { continue }
-            if pathPart != patternPart { return false }
+    /// Apply enumerate pattern (section[].attr) - sets enumeratedAttributes on collection node
+    private func applyEnumeratePattern(components: [String], bracketIndex: Int, to root: TreeNode) {
+        // Navigate to collection node (components before [])
+        let pathToCollection = Array(components[0..<bracketIndex])
+        guard let collectionNode = findNode(path: pathToCollection, from: root) else {
+            Logger.warning("🎯 [applyEnumeratePattern] Collection not found for path: \(pathToCollection)")
+            return
         }
-        return true
+
+        // Get attribute name (components after [])
+        guard bracketIndex + 1 < components.count else {
+            Logger.warning("🎯 [applyEnumeratePattern] No attribute after [] in pattern")
+            return
+        }
+        let attrName = components[bracketIndex + 1]
+
+        // Add to enumerated attributes
+        var enumerated = collectionNode.enumeratedAttributes ?? []
+        if !enumerated.contains(attrName) {
+            enumerated.append(attrName)
+            collectionNode.enumeratedAttributes = enumerated
+        }
+
+        // Mark all entry children as AI-enabled (for enumerate mode)
+        for entry in collectionNode.orderedChildren {
+            entry.status = .aiToReplace
+        }
+
+        Logger.info("🎯 [applyEnumeratePattern] Set enumeratedAttributes[\(attrName)] on '\(collectionNode.name)', marked \(collectionNode.orderedChildren.count) entries")
+    }
+
+    /// Apply container enumerate pattern (section.container[]) - marks each child of container
+    private func applyContainerEnumeratePattern(components: [String], to root: TreeNode) {
+        // Navigate to container node (all components except final [])
+        let pathToContainer = Array(components.dropLast())
+        guard let containerNode = findNode(path: pathToContainer, from: root) else {
+            Logger.warning("🎯 [applyContainerEnumeratePattern] Container not found for path: \(pathToContainer)")
+            return
+        }
+
+        // Mark container and all children as AI-enabled
+        containerNode.status = .aiToReplace
+        for child in containerNode.orderedChildren {
+            child.status = .aiToReplace
+        }
+
+        Logger.info("🎯 [applyContainerEnumeratePattern] Marked container '\(containerNode.name)' and \(containerNode.orderedChildren.count) children for AI")
+    }
+
+    /// Apply scalar pattern (section.field) - marks specific node
+    private func applyScalarPattern(components: [String], to root: TreeNode) {
+        guard let node = findNode(path: components, from: root) else {
+            Logger.warning("🎯 [applyScalarPattern] Node not found for path: \(components)")
+            return
+        }
+
+        node.status = .aiToReplace
+        Logger.info("🎯 [applyScalarPattern] Marked scalar '\(node.name)' for AI")
+    }
+
+    /// Find a node by navigating a path of component names from root
+    private func findNode(path: [String], from root: TreeNode) -> TreeNode? {
+        var current = root
+        for component in path {
+            guard let child = current.findChildByName(component) else {
+                return nil
+            }
+            current = child
+        }
+        return current
     }
 }

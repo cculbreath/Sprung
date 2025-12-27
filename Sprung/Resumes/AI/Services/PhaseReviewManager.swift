@@ -12,93 +12,79 @@
 // HOW AI REVIEW WORKS - READ THIS BEFORE MODIFYING
 // ═══════════════════════════════════════════════════════════════════════════════
 //
-// The AI review system has THREE key components that MUST work together:
-//
-// 1. MANIFEST PATTERNS (Source of Truth for Available Fields)
-//    ─────────────────────────────────────────────────────────
-//    Location: `{template}.manifest.json` → `defaultAIFields` array
-//    Example:  ["skills.*.name", "skills[].keywords", "work[].highlights"]
-//
-//    These patterns define WHICH fields CAN be AI-reviewed. The syntax determines
-//    how results are grouped:
-//
-//    ┌─────────────────┬────────────────┬─────────────────────────────────────┐
-//    │ Pattern         │ Grouping       │ Result                              │
-//    ├─────────────────┼────────────────┼─────────────────────────────────────┤
-//    │ skills.*.name   │ BUNDLE (*)     │ 1 RevNode with all 5 skill names    │
-//    │ skills[].name   │ ITERATE ([])   │ 5 RevNodes, one per skill name      │
-//    │ work[].bullets  │ ITERATE ([])   │ 4 RevNodes, one per job's bullets   │
-//    └─────────────────┴────────────────┴─────────────────────────────────────┘
-//
-// 2. REVIEW PHASES (Optional Multi-Pass Workflow)
-//    ─────────────────────────────────────────────
-//    Location: `{template}.manifest.json` → `reviewPhases` dictionary
-//    Example:
-//    ```json
-//    "reviewPhases": {
-//      "skills": [
-//        { "phase": 1, "field": "skills.*.name" },
-//        { "phase": 2, "field": "skills[].keywords" }
-//      ]
-//    }
-//    ```
-//
-//    Phase 1 patterns are reviewed FIRST. After user approves Phase 1 changes,
-//    they're applied to the tree, then Phase 2 patterns are reviewed.
-//    This allows Phase 2 content to reference Phase 1 changes (e.g., keywords
-//    under renamed skill categories).
-//
-// 3. TREE NODE STATE (Runtime Selection)
-//    ────────────────────────────────────
-//    Location: `TreeNode.status == .aiToReplace`
-//
-//    Currently, defaultAIFields patterns are applied at tree creation time
-//    (see ExperienceDefaultsToTree.applyDefaultAIFieldPatterns). This marks
-//    matching nodes with aiToReplace status.
-//
-//    The tree also stores `bundledAttributes`/`enumeratedAttributes` from
-//    AttributePickerView selections, but these are NOT currently used by
-//    buildReviewRounds - it reads patterns directly from the manifest.
+// TreeNode is the SINGLE SOURCE OF TRUTH for AI review configuration.
+// Manifest patterns provide INITIAL DEFAULTS; users can modify via UI.
 //
 // ═══════════════════════════════════════════════════════════════════════════════
-// EXPORT FLOW (How nodes become RevNodes for LLM)
+// INITIALIZATION (Tree Creation Time)
 // ═══════════════════════════════════════════════════════════════════════════════
 //
-// buildReviewRounds():
-//   1. Reads `defaultAIFields` patterns from manifest
-//   2. Identifies Phase 1 patterns from `reviewPhases` config
-//   3. For EACH pattern, calls TreeNode.exportNodesMatchingPath()
-//   4. exportNodesMatchingPath handles * vs [] distinction:
-//      - * patterns: All matches bundled into 1 ExportedReviewNode
-//      - [] patterns: Each match becomes separate ExportedReviewNode
-//   5. Returns (phase1Nodes, phase2Nodes) tuple
+// ExperienceDefaultsToTree.applyDefaultAIFields() parses manifest patterns
+// and sets TreeNode state:
 //
-// ExportedReviewNode contains:
-//   - id: Node ID (for applying changes back) or "bundled-{pattern}"
-//   - path: Full path like "skills.Software Engineering.keywords"
-//   - displayName: Human-readable label like "Software Engineering - keywords"
-//   - value: The content (string or comma-separated for containers)
-//   - childValues: [String]? for containers with multiple items
-//   - isBundled: true if created from * pattern
-//   - sourceNodeIds: [String]? original node IDs when bundled
+// | Pattern           | TreeNode Effect                                      |
+// |-------------------|------------------------------------------------------|
+// | skills.*.name     | skills.bundledAttributes = ["name"]                  |
+// | skills[].keywords | skills.enumeratedAttributes = ["keywords"]           |
+// | custom.jobTitles[]| jobTitles.status = .aiToReplace, children marked     |
+// | custom.objective  | objective.status = .aiToReplace (scalar)             |
 //
 // ═══════════════════════════════════════════════════════════════════════════════
-// KNOWN ISSUES / TECH DEBT
+// TREE NODE STATE (Source of Truth)
 // ═══════════════════════════════════════════════════════════════════════════════
 //
-// 1. DUAL STATE SYSTEMS: TreeNode stores bundledAttributes/enumeratedAttributes
-//    from AttributePickerView, but buildReviewRounds ignores this and reads
-//    directly from manifest patterns. These should be unified.
+// Each TreeNode stores:
+// - `bundledAttributes: [String]?` — Attributes bundled into 1 RevNode (Phase 1)
+// - `enumeratedAttributes: [String]?` — Attributes as N separate RevNodes (Phase 2)
+// - `status == .aiToReplace` — Node is selected for AI review
 //
-// 2. RUNTIME MODE SWITCHING: Users can't easily switch between bundle/iterate
-//    at runtime. The manifest determines behavior, but UI shows AttributePicker
-//    which stores state that isn't used.
+// UI can modify these properties (context menu toggle, etc.) to change behavior.
 //
-// 3. UI COMPLEXITY: AttributePickerView is confusing and may not be discoverable.
-//    Consider replacing with simpler visual indicators (colors) and context menu.
+// ═══════════════════════════════════════════════════════════════════════════════
+// EXPORT FLOW (buildReviewRounds)
+// ═══════════════════════════════════════════════════════════════════════════════
 //
-// 4. PHASE ASSIGNMENTS: Resume.phaseAssignments dictionary exists but is unused
-//    after the buildReviewRounds rewrite. Should be removed.
+// buildReviewRounds() walks the tree and reads TreeNode state:
+//
+// 1. For nodes with `bundledAttributes`:
+//    → Generate pattern like "skills.*.name"
+//    → Export via TreeNode.exportNodesMatchingPath() → Phase 1 RevNodes
+//
+// 2. For nodes with `enumeratedAttributes`:
+//    → Generate pattern like "skills[].keywords"
+//    → Export via TreeNode.exportNodesMatchingPath() → Phase 2 RevNodes
+//
+// 3. For container nodes where all children are aiToReplace:
+//    → Generate pattern like "custom.jobTitles[]"
+//    → Export as container enumerate → Phase 2 RevNodes
+//
+// 4. For scalar nodes with aiToReplace and no children:
+//    → Export directly → Phase 2 RevNodes
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+// PATTERN SYNTAX (Path Specifiers)
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// | Symbol | Meaning                 | Result                              |
+// |--------|-------------------------|-------------------------------------|
+// | *      | Bundle all children     | 1 RevNode with all values combined  |
+// | []     | Iterate children        | N RevNodes, one per child           |
+// | .name  | Navigate to field       | Match specific attribute            |
+//
+// Examples:
+// - skills.*.name   → 1 RevNode: ["Programming", "Data Science", ...]
+// - skills[].name   → 5 RevNodes: "Programming", "Data Science", ...
+// - work[].bullets  → 4 RevNodes: each job's bullets array
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+// PHASE ASSIGNMENT
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// - Phase 1: bundledAttributes patterns (need holistic review first)
+// - Phase 2: Everything else (enumerated, scalars, container enumerates)
+//
+// Phase 1 changes are applied to tree before Phase 2 export, so Phase 2
+// content can reference updated names (e.g., keywords under renamed skills).
 //
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -310,50 +296,97 @@ class PhaseReviewManager {
         return result
     }
 
-    /// Build the two-round review structure using manifest patterns:
-    /// - Round 1: Patterns from reviewPhases with phase=1
-    /// - Round 2: All other defaultAIFields patterns
+    /// Build the two-round review structure from TreeNode state.
     ///
-    /// Uses TreeNode.exportNodesMatchingPath which correctly handles:
-    /// - `*` patterns: bundle all matches into 1 RevNode
-    /// - `[]` patterns: create separate RevNodes for each match
+    /// TreeNode is the single source of truth for AI review configuration:
+    /// - `bundledAttributes`: Attributes to bundle into 1 RevNode (Phase 1)
+    /// - `enumeratedAttributes`: Attributes to enumerate as N RevNodes (Phase 2)
+    /// - `status == .aiToReplace`: Scalar nodes or container items to review
+    ///
+    /// Phase assignment:
+    /// - Phase 1: All bundled patterns (from bundledAttributes)
+    /// - Phase 2: All enumerated patterns + scalars + container items
     func buildReviewRounds(for resume: Resume) -> (phase1: [ExportedReviewNode], phase2: [ExportedReviewNode]) {
-        guard let rootNode = resume.rootNode,
-              let template = resume.template,
-              let manifest = TemplateManifestLoader.manifest(for: template) else {
-            Logger.warning("⚠️ [buildReviewRounds] Missing rootNode, template, or manifest")
+        guard let rootNode = resume.rootNode else {
+            Logger.warning("⚠️ [buildReviewRounds] No rootNode")
             return ([], [])
-        }
-
-        guard let defaultAIFields = manifest.defaultAIFields, !defaultAIFields.isEmpty else {
-            Logger.warning("⚠️ [buildReviewRounds] No defaultAIFields in manifest")
-            return ([], [])
-        }
-
-        // Build set of Phase 1 patterns from reviewPhases config
-        var phase1Patterns = Set<String>()
-        if let reviewPhases = manifest.reviewPhases {
-            for (_, phases) in reviewPhases {
-                for phaseConfig in phases where phaseConfig.phase == 1 {
-                    phase1Patterns.insert(phaseConfig.field)
-                    Logger.debug("📋 [buildReviewRounds] Phase 1 pattern: \(phaseConfig.field)")
-                }
-            }
         }
 
         var phase1Nodes: [ExportedReviewNode] = []
         var phase2Nodes: [ExportedReviewNode] = []
+        var processedPaths = Set<String>()
 
-        // Export nodes for each defaultAIFields pattern
-        for pattern in defaultAIFields {
-            let nodes = TreeNode.exportNodesMatchingPath(pattern, from: rootNode)
-            Logger.debug("📋 [buildReviewRounds] Pattern '\(pattern)' → \(nodes.count) RevNodes")
+        // Walk tree and collect patterns from TreeNode state
+        func processNode(_ node: TreeNode, parentPath: String) {
+            let nodeName = node.name.isEmpty ? node.value : node.name
+            let currentPath = parentPath.isEmpty ? nodeName : "\(parentPath).\(nodeName)"
 
-            if phase1Patterns.contains(pattern) {
-                phase1Nodes.append(contentsOf: nodes)
-            } else {
-                phase2Nodes.append(contentsOf: nodes)
+            // Check for collection patterns (bundled/enumerated attributes)
+            if let bundled = node.bundledAttributes, !bundled.isEmpty {
+                for attr in bundled {
+                    let pattern = "\(currentPath).*.\(attr)"
+                    if !processedPaths.contains(pattern) {
+                        processedPaths.insert(pattern)
+                        let nodes = TreeNode.exportNodesMatchingPath(pattern, from: rootNode)
+                        phase1Nodes.append(contentsOf: nodes)
+                        Logger.debug("📋 [buildReviewRounds] Bundle pattern '\(pattern)' → \(nodes.count) Phase 1 RevNodes")
+                    }
+                }
             }
+
+            if let enumerated = node.enumeratedAttributes, !enumerated.isEmpty {
+                for attr in enumerated {
+                    let pattern = "\(currentPath)[].\(attr)"
+                    if !processedPaths.contains(pattern) {
+                        processedPaths.insert(pattern)
+                        let nodes = TreeNode.exportNodesMatchingPath(pattern, from: rootNode)
+                        phase2Nodes.append(contentsOf: nodes)
+                        Logger.debug("📋 [buildReviewRounds] Enumerate pattern '\(pattern)' → \(nodes.count) Phase 2 RevNodes")
+                    }
+                }
+            }
+
+            // Check for container enumerate (all children marked AI)
+            // This handles patterns like custom.jobTitles[] where the container itself is AI-enabled
+            // and all its children are simple values
+            let isContainerEnumerate = node.status == .aiToReplace &&
+                                       node.bundledAttributes == nil &&
+                                       node.enumeratedAttributes == nil &&
+                                       !node.orderedChildren.isEmpty &&
+                                       node.orderedChildren.allSatisfy { $0.status == .aiToReplace }
+
+            if isContainerEnumerate {
+                let pattern = "\(currentPath)[]"
+                if !processedPaths.contains(pattern) {
+                    processedPaths.insert(pattern)
+                    let nodes = TreeNode.exportNodesMatchingPath(pattern, from: rootNode)
+                    phase2Nodes.append(contentsOf: nodes)
+                    Logger.debug("📋 [buildReviewRounds] Container enumerate '\(pattern)' → \(nodes.count) Phase 2 RevNodes")
+                }
+            }
+
+            // Check for scalar node (no children, AI-enabled)
+            let isScalar = node.status == .aiToReplace &&
+                           node.orderedChildren.isEmpty &&
+                           node.bundledAttributes == nil &&
+                           node.enumeratedAttributes == nil
+
+            if isScalar && !processedPaths.contains(currentPath) {
+                processedPaths.insert(currentPath)
+                let nodes = TreeNode.exportNodesMatchingPath(currentPath, from: rootNode)
+                phase2Nodes.append(contentsOf: nodes)
+                Logger.debug("📋 [buildReviewRounds] Scalar '\(currentPath)' → \(nodes.count) Phase 2 RevNodes")
+            }
+
+            // Recurse into children
+            for child in node.orderedChildren {
+                processNode(child, parentPath: currentPath)
+            }
+        }
+
+        // Start from root's children (skip root itself)
+        for section in rootNode.orderedChildren {
+            processNode(section, parentPath: "")
         }
 
         Logger.info("📋 Review rounds: Phase 1 has \(phase1Nodes.count) nodes, Phase 2 has \(phase2Nodes.count) nodes")
