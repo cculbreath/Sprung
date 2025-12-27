@@ -662,6 +662,7 @@ final class DiscoveryCoordinator {
             """
 
         // Build JSON schema for OpenAI structured output
+        // Note: OpenAI requires ALL properties in 'required' - use nullable types for optional fields
         let schema = JSONSchema(
             type: .object,
             properties: [
@@ -675,7 +676,7 @@ final class DiscoveryCoordinator {
                     description: "Brief explanation of why these roles fit"
                 )
             ],
-            required: ["suggestedRoles"],
+            required: ["suggestedRoles", "reasoning"],
             additionalProperties: false
         )
 
