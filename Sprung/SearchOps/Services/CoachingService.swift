@@ -20,6 +20,8 @@ final class CoachingService {
     private let sessionStore: CoachingSessionStore
     private let settingsStore: SearchOpsSettingsStore
     private let preferencesStore: SearchPreferencesStore
+    private let jobAppStore: JobAppStore
+    private let interviewDataStore: InterviewDataStore
 
     // MARK: - Observable State
 
@@ -33,6 +35,10 @@ final class CoachingService {
     private var questionIndex: Int = 0
     private var pendingToolCallId: String?
 
+    // Cached context for tool calls
+    private var knowledgeCards: [KnowledgeCardDraft] = []
+    private var dossierEntries: [JSON] = []
+
     // MARK: - Initialization
 
     init(
@@ -41,7 +47,9 @@ final class CoachingService {
         activityReportService: ActivityReportService,
         sessionStore: CoachingSessionStore,
         settingsStore: SearchOpsSettingsStore,
-        preferencesStore: SearchPreferencesStore
+        preferencesStore: SearchPreferencesStore,
+        jobAppStore: JobAppStore,
+        interviewDataStore: InterviewDataStore
     ) {
         self.modelContext = modelContext
         self.llmService = llmService
@@ -49,6 +57,8 @@ final class CoachingService {
         self.sessionStore = sessionStore
         self.settingsStore = settingsStore
         self.preferencesStore = preferencesStore
+        self.jobAppStore = jobAppStore
+        self.interviewDataStore = interviewDataStore
     }
 
     // MARK: - Public API
@@ -58,17 +68,22 @@ final class CoachingService {
         sessionStore.todaysSession()
     }
 
-    /// Check if coaching should auto-start (no session in 24+ hours)
+    /// Check if coaching should auto-start (no active session and no completed session in 24+ hours)
     var shouldAutoStart: Bool {
         guard coachingModelId != nil else { return false }
 
-        // Check if there's a recent session (within 24 hours)
+        // Don't auto-start if there's already an active session in progress
+        if state.isActive {
+            return false
+        }
+
+        // Check if there's a recent completed session (within 24 hours)
         let twentyFourHoursAgo = Date().addingTimeInterval(-86400)
         if let lastSession = sessionStore.lastSessionDate(), lastSession > twentyFourHoursAgo {
             return false
         }
 
-        // No recent session, should auto-start
+        // No active session and no recent completed session, should auto-start
         return true
     }
 
@@ -77,12 +92,7 @@ final class CoachingService {
     func autoStartIfNeeded() {
         guard shouldAutoStart else { return }
 
-        // Cancel any in-progress session if we're starting fresh after 24 hours
-        if state != .idle {
-            Logger.info("🔄 Clearing stale coaching session for fresh start", category: .ai)
-            cancelSession()
-        }
-
+        // shouldAutoStart already ensures no active session, so we can start fresh
         Logger.info("🤖 Auto-starting coaching session in background", category: .ai)
 
         Task {
@@ -124,6 +134,9 @@ final class CoachingService {
         // Generate activity snapshot
         let snapshot = activityReportService.generateSnapshot(since: sinceDate)
 
+        // Load dossier and knowledge cards context
+        await loadUserContext()
+
         // Create new session
         let session = CoachingSession()
         session.activitySummary = snapshot
@@ -131,10 +144,13 @@ final class CoachingService {
         session.llmModel = coachingModelId
         currentSession = session
 
-        // Build system prompt
+        // Build system prompt with full context
         let systemPrompt = buildSystemPrompt(
             activitySummary: snapshot.textSummary(),
-            recentHistory: sessionStore.recentHistorySummary()
+            recentHistory: sessionStore.recentHistorySummary(),
+            dossierContext: buildDossierContext(),
+            knowledgeCardsList: buildKnowledgeCardsList(),
+            activeJobApps: buildActiveJobAppsList()
         )
 
         // Start conversation with coaching tools (use OpenRouter model)
@@ -151,6 +167,18 @@ final class CoachingService {
 
         // Send initial message to trigger tool calls
         try await sendInitialMessage()
+    }
+
+    /// Load user context from dossier and knowledge cards
+    private func loadUserContext() async {
+        // Load dossier entries
+        dossierEntries = await interviewDataStore.list(dataType: "candidate_dossier_entry")
+
+        // Load knowledge cards
+        let knowledgeCardJSONs = await interviewDataStore.list(dataType: "knowledge_card")
+        knowledgeCards = knowledgeCardJSONs.map { KnowledgeCardDraft(json: $0) }
+
+        Logger.debug("Coaching: loaded \(dossierEntries.count) dossier entries, \(knowledgeCards.count) knowledge cards", category: .ai)
     }
 
     /// Submit answer to current question
@@ -216,37 +244,63 @@ final class CoachingService {
             message: "Please start my coaching session for today. Ask me questions to understand how I'm doing."
         )
 
-        // Get first response (should be a tool call for a question)
-        try await processNextResponse(forceQuestion: true)
+        // Get first response - uses .auto so LLM can research before asking first question
+        try await processNextResponse()
     }
 
     /// Process the next LLM response, handling tool calls or final text
-    private func processNextResponse(forceQuestion: Bool, allowMoreQuestions: Bool = false) async throws {
+    private func processNextResponse() async throws {
         guard let convId = conversationId else { return }
 
-        // Force question for first 2, allow optional 3rd via .auto, then .none for recommendations
+        // Tool choice based on conversation phase:
+        // - 0 answers: .auto - LLM can research + ask first question
+        // - 1 answer: Force second question
+        // - 2+ answers: .auto - can ask Q3, give recommendations, or research more
         let toolChoice: ToolChoice
-        if forceQuestion {
+        switch collectedAnswers.count {
+        case 0:
+            // First call - allow research tools alongside question
+            toolChoice = .auto
+        case 1:
+            // After first answer - force second question
             toolChoice = .function(name: CoachingToolSchemas.multipleChoiceToolName)
-        } else if allowMoreQuestions {
-            toolChoice = .auto  // Model can ask another question OR give recommendations
-        } else {
-            toolChoice = .none  // Force text-only recommendations
+        default:
+            // After 2+ answers - flexible: can ask more, recommend, or research
+            toolChoice = .auto
         }
 
         do {
+            // parallelToolCalls is enabled by default in LLMRequestBuilder
             let message = try await llmService.sendMessageSingleTurn(
                 conversationId: convId,
                 toolChoice: toolChoice
             )
 
-            // Check for tool calls
-            if let toolCalls = message.toolCalls, let toolCall = toolCalls.first {
-                let toolName = toolCall.function.name ?? ""
-                let toolCallId = toolCall.id ?? UUID().uuidString
+            // Handle all tool calls (may be multiple in parallel)
+            if let toolCalls = message.toolCalls, !toolCalls.isEmpty {
+                // Process background tools first, then handle question tool
+                var questionToolCallId: String?
+                var questionToolArgs: String?
 
-                if toolName == CoachingToolSchemas.multipleChoiceToolName {
-                    let arguments = JSON(parseJSON: toolCall.function.arguments)
+                for toolCall in toolCalls {
+                    let toolName = toolCall.function.name ?? ""
+                    let toolCallId = toolCall.id ?? UUID().uuidString
+
+                    if toolName == CoachingToolSchemas.multipleChoiceToolName {
+                        // Save for after processing background tools
+                        questionToolCallId = toolCallId
+                        questionToolArgs = toolCall.function.arguments
+                    } else {
+                        // Handle background research tools immediately
+                        let result = await handleBackgroundTool(name: toolName, arguments: toolCall.function.arguments)
+                        llmService.addToolResult(conversationId: convId, toolCallId: toolCallId, result: result)
+                    }
+                }
+
+                // Now handle the question tool if present
+                if let toolCallId = questionToolCallId, let argsString = questionToolArgs {
+                    let arguments = JSON(parseJSON: argsString)
+
                     guard let question = CoachingToolSchemas.parseQuestionFromJSON(arguments) else {
                         Logger.error("Failed to parse coaching question", category: .ai)
                         state = .error("Failed to parse question from coach")
@@ -261,10 +315,15 @@ final class CoachingService {
                     // Update UI state - user must answer before we continue
                     questionIndex += 1
                     currentQuestion = question
-                    state = .askingQuestion(question: question, index: questionIndex, total: 3)  // Up to 3 questions
+                    state = .askingQuestion(question: question, index: questionIndex, total: 3)
 
                     Logger.debug("Coaching: showing question \(questionIndex), waiting for user", category: .ai)
-                    // STOP HERE - wait for user to call submitAnswer()
+                    return
+                }
+
+                // If we handled background tools but no question, continue for next response
+                if !toolCalls.isEmpty && questionToolCallId == nil {
+                    try await processNextResponse()
                     return
                 }
             }
@@ -278,6 +337,139 @@ final class CoachingService {
             state = .error(error.localizedDescription)
             throw error
         }
+    }
+
+    /// Handle background research tool calls (knowledge cards, job descriptions, resumes)
+    private func handleBackgroundTool(name: String, arguments: String) async -> String {
+        let args = JSON(parseJSON: arguments)
+
+        switch name {
+        case CoachingToolSchemas.getKnowledgeCardToolName:
+            return handleGetKnowledgeCard(args)
+
+        case CoachingToolSchemas.getJobDescriptionToolName:
+            return handleGetJobDescription(args)
+
+        case CoachingToolSchemas.getResumeToolName:
+            return await handleGetResume(args)
+
+        default:
+            return JSON(["error": "Unknown tool: \(name)"]).rawString() ?? "{}"
+        }
+    }
+
+    /// Handle get_knowledge_card tool call
+    private func handleGetKnowledgeCard(_ args: JSON) -> String {
+        let cardId = args["card_id"].stringValue
+        let startLine = args["start_line"].int
+        let endLine = args["end_line"].int
+
+        guard let card = knowledgeCards.first(where: { $0.id.uuidString == cardId }) else {
+            return JSON(["error": "Knowledge card not found: \(cardId)"]).rawString() ?? "{}"
+        }
+
+        var content = card.content
+
+        // Apply line range if specified
+        if let start = startLine, let end = endLine {
+            let lines = content.components(separatedBy: "\n")
+            let safeStart = max(0, start - 1)  // 1-indexed to 0-indexed
+            let safeEnd = min(lines.count, end)
+            if safeStart < safeEnd {
+                content = lines[safeStart..<safeEnd].joined(separator: "\n")
+            }
+        }
+
+        var result = JSON()
+        result["card_id"].string = cardId
+        result["title"].string = card.title
+        result["type"].string = card.cardType
+        result["organization"].string = card.organization
+        result["time_period"].string = card.timePeriod
+        result["content"].string = content
+        result["word_count"].int = card.wordCount
+
+        return result.rawString() ?? "{}"
+    }
+
+    /// Handle get_job_description tool call
+    private func handleGetJobDescription(_ args: JSON) -> String {
+        let jobAppId = args["job_app_id"].stringValue
+
+        guard let uuid = UUID(uuidString: jobAppId),
+              let jobApp = jobAppStore.jobApps.first(where: { $0.id == uuid }) else {
+            return JSON(["error": "Job application not found: \(jobAppId)"]).rawString() ?? "{}"
+        }
+
+        var result = JSON()
+        result["job_app_id"].string = jobAppId
+        result["company"].string = jobApp.companyName
+        result["position"].string = jobApp.jobPosition
+        result["stage"].string = jobApp.stage.rawValue
+        result["job_description"].string = jobApp.jobDescription
+        result["job_url"].string = jobApp.postingURL.isEmpty ? jobApp.jobApplyLink : jobApp.postingURL
+        result["notes"].string = jobApp.notes
+        result["applied_date"].string = jobApp.appliedDate?.ISO8601Format()
+
+        return result.rawString() ?? "{}"
+    }
+
+    /// Handle get_resume tool call
+    private func handleGetResume(_ args: JSON) async -> String {
+        let resumeId = args["resume_id"].stringValue
+        let section = args["section"].string
+
+        let descriptor = FetchDescriptor<Resume>()
+        guard let resumes = try? modelContext.fetch(descriptor),
+              let uuid = UUID(uuidString: resumeId),
+              let resume = resumes.first(where: { $0.id == uuid }) else {
+            return JSON(["error": "Resume not found: \(resumeId)"]).rawString() ?? "{}"
+        }
+
+        var result = JSON()
+        result["resume_id"].string = resumeId
+        result["template"].string = resume.template?.name ?? "Unknown Template"
+
+        // Get resume content from TreeNode
+        if let rootNode = resume.rootNode {
+            if let section = section {
+                // Get specific section
+                if let sectionNode = rootNode.children?.first(where: { $0.label == section }) {
+                    result["section"].string = section
+                    result["content"].string = extractNodeText(sectionNode)
+                }
+            } else {
+                // Get summary of all sections
+                var sections: [String] = []
+                for child in rootNode.children ?? [] {
+                    sections.append(child.label)
+                }
+                result["available_sections"].arrayObject = sections
+                if let summaryNode = resume.rootNode?.children?.first(where: { $0.label == "summary" }) {
+                    result["summary"].string = extractNodeText(summaryNode)
+                }
+            }
+        }
+
+        return result.rawString() ?? "{}"
+    }
+
+    /// Extract text content from a TreeNode and its children
+    private func extractNodeText(_ node: TreeNode) -> String {
+        var text = node.value
+        if let children = node.children {
+            for child in children.sorted(by: { $0.myIndex < $1.myIndex }) {
+                let childText = extractNodeText(child)
+                if !childText.isEmpty {
+                    if !text.isEmpty { text += "\n" }
+                    if !child.name.isEmpty {
+                        text += "\(child.name): "
+                    }
+                    text += childText
+                }
+            }
+        }
+        return text
     }
 
     private func continueWithAnswer(_ answer: CoachingAnswer) async throws {
@@ -298,12 +490,8 @@ final class CoachingService {
             result: toolResult.rawString() ?? "{}"
         )
 
-        // Force question for first 2, allow optional 3rd (use .auto after 2)
-        let forceQuestion = collectedAnswers.count < 2
-        let allowMoreQuestions = collectedAnswers.count < 3
-
-        // Get next response
-        try await processNextResponse(forceQuestion: forceQuestion, allowMoreQuestions: allowMoreQuestions)
+        // Get next response - tool choice is determined by collectedAnswers.count
+        try await processNextResponse()
     }
 
     private func handleFinalRecommendations(_ recommendations: String) async {
@@ -331,33 +519,54 @@ final class CoachingService {
         // Add a user message prompting for follow-up
         llmService.addUserMessage(
             conversationId: convId,
-            message: "Based on our conversation, what would be most helpful for me to do next? Offer me a contextual follow-up action."
+            message: "Based on our conversation, what would be most helpful for me to do next? Offer me a contextual follow-up action using the coaching_multiple_choice tool."
         )
 
         do {
-            // Force the model to use the MC tool for follow-up
+            // Use .auto to allow research tools alongside follow-up question
             let message = try await llmService.sendMessageSingleTurn(
                 conversationId: convId,
-                toolChoice: .function(name: CoachingToolSchemas.multipleChoiceToolName)
+                toolChoice: .auto
             )
 
-            // Parse the follow-up question
-            if let toolCalls = message.toolCalls, let toolCall = toolCalls.first {
-                let arguments = JSON(parseJSON: toolCall.function.arguments)
-                if var question = CoachingToolSchemas.parseQuestionFromJSON(arguments) {
-                    // Ensure it's marked as follow-up type
-                    question = CoachingQuestion(
-                        questionText: question.questionText,
-                        options: question.options,
-                        questionType: .followUp
-                    )
+            // Handle any tool calls (research tools + question tool)
+            if let toolCalls = message.toolCalls, !toolCalls.isEmpty {
+                var questionToolCallId: String?
+                var questionToolArgs: String?
 
-                    pendingToolCallId = toolCall.id ?? UUID().uuidString
-                    currentQuestion = question
-                    state = .askingFollowUp(question: question)
+                // Process background tools first
+                for toolCall in toolCalls {
+                    let toolName = toolCall.function.name ?? ""
+                    let toolCallId = toolCall.id ?? UUID().uuidString
 
-                    Logger.debug("Coaching: showing follow-up question", category: .ai)
-                    return
+                    if toolName == CoachingToolSchemas.multipleChoiceToolName {
+                        questionToolCallId = toolCallId
+                        questionToolArgs = toolCall.function.arguments
+                    } else {
+                        // Handle research tools
+                        let result = await handleBackgroundTool(name: toolName, arguments: toolCall.function.arguments)
+                        llmService.addToolResult(conversationId: convId, toolCallId: toolCallId, result: result)
+                    }
+                }
+
+                // Now handle the follow-up question if present
+                if let toolCallId = questionToolCallId, let argsString = questionToolArgs {
+                    let arguments = JSON(parseJSON: argsString)
+                    if var question = CoachingToolSchemas.parseQuestionFromJSON(arguments) {
+                        // Ensure it's marked as follow-up type
+                        question = CoachingQuestion(
+                            questionText: question.questionText,
+                            options: question.options,
+                            questionType: .followUp
+                        )
+
+                        pendingToolCallId = toolCallId
+                        currentQuestion = question
+                        state = .askingFollowUp(question: question)
+
+                        Logger.debug("Coaching: showing follow-up question", category: .ai)
+                        return
+                    }
                 }
             }
 
@@ -478,9 +687,88 @@ final class CoachingService {
         await completeSession()
     }
 
+    // MARK: - Context Building
+
+    /// Build formatted dossier context from dossier entries
+    private func buildDossierContext() -> String {
+        guard !dossierEntries.isEmpty else {
+            return "No dossier entries available yet."
+        }
+
+        var sections: [String] = []
+        for entry in dossierEntries {
+            let section = entry["section"].stringValue
+            let value = entry["value"].stringValue
+            if !section.isEmpty && !value.isEmpty {
+                sections.append("**\(section)**: \(value)")
+            }
+        }
+
+        return sections.isEmpty ? "No dossier entries available yet." : sections.joined(separator: "\n")
+    }
+
+    /// Build list of available knowledge cards with metadata
+    private func buildKnowledgeCardsList() -> String {
+        guard !knowledgeCards.isEmpty else {
+            return "No knowledge cards available."
+        }
+
+        var lines: [String] = []
+        for card in knowledgeCards {
+            var line = "- ID: `\(card.id.uuidString)` | **\(card.title)**"
+            if let cardType = card.cardType, !cardType.isEmpty {
+                line += " (\(cardType))"
+            }
+            if let organization = card.organization, !organization.isEmpty {
+                line += " @ \(organization)"
+            }
+            if let timePeriod = card.timePeriod, !timePeriod.isEmpty {
+                line += " | \(timePeriod)"
+            }
+            line += " | \(card.wordCount) words"
+            lines.append(line)
+        }
+
+        return lines.joined(separator: "\n")
+    }
+
+    /// Build list of active job applications (identified through applying stages)
+    private func buildActiveJobAppsList() -> String {
+        let activeStages: [ApplicationStage] = [.identified, .researching, .applying, .applied, .interviewing, .offer]
+        let activeApps = jobAppStore.jobApps.filter { activeStages.contains($0.stage) }
+
+        guard !activeApps.isEmpty else {
+            return "No active job applications."
+        }
+
+        var lines: [String] = []
+        for app in activeApps.prefix(20) {  // Limit to 20 to avoid overwhelming context
+            var line = "- ID: `\(app.id.uuidString)` | **\(app.companyName)** - \(app.jobPosition)"
+            line += " | Stage: \(app.stage.rawValue)"
+            if let appliedDate = app.appliedDate {
+                let formatter = DateFormatter()
+                formatter.dateStyle = .short
+                line += " | Applied: \(formatter.string(from: appliedDate))"
+            }
+            lines.append(line)
+        }
+
+        if activeApps.count > 20 {
+            lines.append("... and \(activeApps.count - 20) more active applications")
+        }
+
+        return lines.joined(separator: "\n")
+    }
+
     // MARK: - Prompt Building
 
-    private func buildSystemPrompt(activitySummary: String, recentHistory: String) -> String {
+    private func buildSystemPrompt(
+        activitySummary: String,
+        recentHistory: String,
+        dossierContext: String,
+        knowledgeCardsList: String,
+        activeJobApps: String
+    ) -> String {
         let preferences = preferencesStore.current()
 
         return """
@@ -493,6 +781,29 @@ final class CoachingService {
             - Celebrate wins enthusiastically - specific praise matters!
             - Reference the user's REAL activity data (companies, numbers, dates)
             - If they've been inactive 7+ days, offer understanding and gentle motivation
+
+            ## Understanding the Workflows
+
+            ### Job Application Workflow
+            The user follows this pipeline for job applications:
+            1. **Identified/Gathered** - Job leads are collected but no action taken yet
+            2. **Researching** - Learning about the company and role
+            3. **Applying** - Preparing materials (creating/customizing resumes and cover letters with AI assistance)
+            4. **Applied** - Application actually submitted to the company
+            5. **Interviewing** - In the interview process
+            6. **Offer** - Received an offer
+
+            IMPORTANT: "Identified" or "Gathered" means NO application has been submitted yet. These are leads to evaluate. "Applied" means they ACTUALLY submitted the application. Don't confuse gathering leads with applying!
+
+            ### Networking Event Workflow
+            The user follows this pipeline for networking events:
+            1. **Discovered** - Found an event but not yet evaluated
+            2. **Evaluating/Recommended** - Considering whether to attend
+            3. **Planned** - Committed to attend (on their calendar)
+            4. **Attended** - Actually went to the event
+            5. **Debriefed** - Captured contacts and notes after attending
+
+            IMPORTANT: "Discovered" events are NOT on their calendar - they're just leads. Only "Planned" events are committed. Don't assume discovered events are being attended!
 
             ## Activity Report (Context Period)
             \(activitySummary)
@@ -508,14 +819,42 @@ final class CoachingService {
             - Weekly Networking Target: \(preferences.weeklyNetworkingTarget)
             - Preferred Company Size: \(preferences.companySizePreference.rawValue)
 
+            ## Applicant Background (Dossier)
+            \(dossierContext)
+
+            ## Available Knowledge Cards
+            These are detailed narratives about the user's experience. You can request full content using the `get_knowledge_card` tool.
+            \(knowledgeCardsList)
+
+            ## Active Job Applications
+            The user's current job pipeline. You can get full job descriptions using the `get_job_description` tool.
+            \(activeJobApps)
+
+            ## Available Research Tools
+
+            You have access to background research tools that can be called AT ANY TIME during the coaching session:
+
+            - **`get_knowledge_card`**: Retrieve detailed content from a knowledge card to learn more about the user's specific experience, skills, or achievements. Use this when you want to give personalized advice referencing their actual work history.
+              - Parameters: `card_id` (required), `start_line` (optional), `end_line` (optional)
+
+            - **`get_job_description`**: Get the full job description for a specific application. Use this to give targeted advice about a particular role they're pursuing.
+              - Parameters: `job_app_id` (required)
+
+            - **`get_resume`**: Retrieve a user's resume content. Use this to understand what materials they've prepared.
+              - Parameters: `resume_id` (required), `section` (optional - e.g., "summary", "work", "skills")
+
+            **IMPORTANT**: You can call these research tools at any point - before asking questions, alongside questions, or before giving recommendations. Use them proactively to personalize your coaching. The tools return immediately and won't interrupt the coaching flow.
+
             ## Coaching Flow
 
             ### Phase 1: Check-In Questions (2-3 questions)
 
-            Call the `coaching_multiple_choice` tool 2-3 times to understand the user's current state:
+            You MUST call the `coaching_multiple_choice` tool 2-3 times to understand the user's current state:
             - Question 1: Energy/motivation level today
             - Question 2: Main challenge or blocker right now
             - Question 3 (optional): What they'd like to focus on, OR a clarifying question based on their answers
+
+            You MAY also call research tools (`get_knowledge_card`, `get_job_description`, `get_resume`) at any point to gather context for more personalized coaching. These can be called alongside the question tool.
 
             You MAY include brief conversational text WITH your tool call to acknowledge their previous answer or add context. Keep this text short (1-2 sentences) and ensure it flows naturally into the question.
 
@@ -550,6 +889,12 @@ final class CoachingService {
             - DO NOT be terse or overly bullet-pointed - write in warm, flowing prose
             - DO NOT end your coaching response with a question or offer to do more
             - Use markdown formatting: **bold** for emphasis, ### headers to organize longer sections
+
+            ### Output Formatting Rules
+            - Separate paragraphs with a blank line (double newline)
+            - Use markdown headers (### or **bold**) to create visual sections
+            - Each major section of your response should be separated by a blank line
+            - Don't run all your text together - give it breathing room
 
             ## Follow-Up Offers
 

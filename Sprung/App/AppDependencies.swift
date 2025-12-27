@@ -149,7 +149,11 @@ final class AppDependencies {
         self.onboardingCoordinator = onboardingCoordinator
 
         // SearchOps Coordinator
-        let searchOpsCoordinator = SearchOpsCoordinator(modelContext: modelContext, jobAppStore: jobAppStore)
+        let searchOpsCoordinator = SearchOpsCoordinator(
+            modelContext: modelContext,
+            jobAppStore: jobAppStore,
+            interviewDataStore: interviewDataStore
+        )
         searchOpsCoordinator.configureLLMService(llmFacade: llmFacade)
         self.searchOpsCoordinator = searchOpsCoordinator
 

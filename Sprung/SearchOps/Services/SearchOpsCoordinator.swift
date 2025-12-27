@@ -152,11 +152,16 @@ final class SearchOpsCoordinator {
     private(set) var isInitialized: Bool = false
     var currentTimeEntry: TimeEntry? { pipelineCoordinator.currentTimeEntry }
 
+    // MARK: - Private Dependencies
+
+    private let interviewDataStore: InterviewDataStore
+
     // MARK: - Initialization
 
-    init(modelContext: ModelContext, jobAppStore: JobAppStore) {
+    init(modelContext: ModelContext, jobAppStore: JobAppStore, interviewDataStore: InterviewDataStore) {
         self.pipelineCoordinator = SearchOpsPipelineCoordinator(modelContext: modelContext, jobAppStore: jobAppStore)
         self.networkingCoordinator = SearchOpsNetworkingCoordinator(modelContext: modelContext)
+        self.interviewDataStore = interviewDataStore
     }
 
     /// Configure the LLM service. Must be called after initialization with LLMFacade.
@@ -207,7 +212,9 @@ final class SearchOpsCoordinator {
             activityReportService: activityService,
             sessionStore: sessionStore,
             settingsStore: settingsStore,
-            preferencesStore: preferencesStore
+            preferencesStore: preferencesStore,
+            jobAppStore: jobAppStore,
+            interviewDataStore: interviewDataStore
         )
 
         Logger.info("Coaching service configured", category: .ai)

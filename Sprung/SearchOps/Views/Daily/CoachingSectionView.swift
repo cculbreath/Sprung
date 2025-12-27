@@ -99,6 +99,7 @@ struct CoachingSectionView: View {
                 // Show recommendations while loading follow-up
                 Text(markdownAttributedString(recommendations))
                     .font(.body)
+                    .lineSpacing(4)
                     .textSelection(.enabled)
 
                 AnimatedThinkingText(statusMessage: "Preparing follow-up options...")
@@ -110,6 +111,7 @@ struct CoachingSectionView: View {
                 if let session = service.currentSession {
                     Text(markdownAttributedString(session.recommendations))
                         .font(.body)
+                        .lineSpacing(4)
                         .textSelection(.enabled)
 
                     Divider()
@@ -133,6 +135,7 @@ struct CoachingSectionView: View {
                 if let session = service.currentSession {
                     Text(markdownAttributedString(session.recommendations))
                         .font(.body)
+                        .lineSpacing(4)
                         .textSelection(.enabled)
                 }
 
@@ -238,9 +241,10 @@ struct TodaysRecommendationsView: View {
                 .font(.subheadline)
             }
 
-            // Recommendations (render markdown)
+            // Recommendations (render markdown with paragraph spacing)
             Text(markdownAttributedString(session.recommendations))
                 .font(.body)
+                .lineSpacing(4)
                 .textSelection(.enabled)
 
             // Footer with regenerate button

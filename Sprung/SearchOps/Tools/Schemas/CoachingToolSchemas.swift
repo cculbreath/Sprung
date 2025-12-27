@@ -16,12 +16,23 @@ enum CoachingToolSchemas {
     // MARK: - Tool Names
 
     static let multipleChoiceToolName = "coaching_multiple_choice"
+    static let getKnowledgeCardToolName = "get_knowledge_card"
+    static let getJobDescriptionToolName = "get_job_description"
+    static let getResumeToolName = "get_resume"
 
     // MARK: - Complete Tool Definitions
 
-    /// Returns all coaching tools as ChatCompletionParameters.Tool objects
-    static let allTools: [ChatCompletionParameters.Tool] = [
+    /// Returns the question tool only (for forced tool choice)
+    static let questionTool: [ChatCompletionParameters.Tool] = [
         buildCoachingMultipleChoiceTool()
+    ]
+
+    /// Returns all coaching tools including background research tools
+    static let allTools: [ChatCompletionParameters.Tool] = [
+        buildCoachingMultipleChoiceTool(),
+        buildGetKnowledgeCardTool(),
+        buildGetJobDescriptionTool(),
+        buildGetResumeTool()
     ]
 
     // MARK: - Multiple Choice Question Tool
@@ -148,6 +159,109 @@ enum CoachingToolSchemas {
             questionText: questionText,
             options: options,
             questionType: questionType
+        )
+    }
+
+    // MARK: - Knowledge Card Tool
+
+    /// Tool to retrieve detailed content from a knowledge card
+    static func buildGetKnowledgeCardTool() -> ChatCompletionParameters.Tool {
+        let schema = JSONSchema(
+            type: .object,
+            description: """
+                Retrieve detailed content from a user's knowledge card. Use this to learn more about
+                specific work experience, skills, or projects. You can request specific line ranges
+                for targeted information.
+                """,
+            properties: [
+                "card_id": JSONSchema(
+                    type: .string,
+                    description: "The ID of the knowledge card to retrieve (from the available cards list)"
+                ),
+                "start_line": JSONSchema(
+                    type: .optional(.integer),
+                    description: "Optional: start line number for a specific excerpt (1-indexed)"
+                ),
+                "end_line": JSONSchema(
+                    type: .optional(.integer),
+                    description: "Optional: end line number for a specific excerpt"
+                )
+            ],
+            required: ["card_id"],
+            additionalProperties: false
+        )
+
+        return ChatCompletionParameters.Tool(
+            function: ChatCompletionParameters.ChatFunction(
+                name: getKnowledgeCardToolName,
+                strict: true,
+                description: "Get detailed content from a knowledge card about the user's experience",
+                parameters: schema
+            )
+        )
+    }
+
+    // MARK: - Job Description Tool
+
+    /// Tool to retrieve job description details for a specific job application
+    static func buildGetJobDescriptionTool() -> ChatCompletionParameters.Tool {
+        let schema = JSONSchema(
+            type: .object,
+            description: """
+                Retrieve the job description and details for a specific job application.
+                Use this to understand what the user is applying for and provide targeted coaching.
+                """,
+            properties: [
+                "job_app_id": JSONSchema(
+                    type: .string,
+                    description: "The UUID of the job application to retrieve details for"
+                )
+            ],
+            required: ["job_app_id"],
+            additionalProperties: false
+        )
+
+        return ChatCompletionParameters.Tool(
+            function: ChatCompletionParameters.ChatFunction(
+                name: getJobDescriptionToolName,
+                strict: true,
+                description: "Get job description and details for a specific application",
+                parameters: schema
+            )
+        )
+    }
+
+    // MARK: - Resume Tool
+
+    /// Tool to retrieve resume content for a specific resume
+    static func buildGetResumeTool() -> ChatCompletionParameters.Tool {
+        let schema = JSONSchema(
+            type: .object,
+            description: """
+                Retrieve the content of a specific resume. Use this to understand what
+                materials the user has prepared and provide feedback or suggestions.
+                """,
+            properties: [
+                "resume_id": JSONSchema(
+                    type: .string,
+                    description: "The UUID of the resume to retrieve"
+                ),
+                "section": JSONSchema(
+                    type: .optional(.string),
+                    description: "Optional: specific section to retrieve (summary, work, skills, etc.)"
+                )
+            ],
+            required: ["resume_id"],
+            additionalProperties: false
+        )
+
+        return ChatCompletionParameters.Tool(
+            function: ChatCompletionParameters.ChatFunction(
+                name: getResumeToolName,
+                strict: true,
+                description: "Get content from a specific resume",
+                parameters: schema
+            )
         )
     }
 }
