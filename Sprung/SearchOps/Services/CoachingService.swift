@@ -142,13 +142,17 @@ final class CoachingService {
     }
 
     /// Regenerate recommendations (re-run coaching with same questions/answers)
-    func regenerateRecommendations() async throws {
-        guard let session = currentSession else { return }
+    func regenerateRecommendations(for session: CoachingSession? = nil) async throws {
+        // Use provided session, or current session, or today's session
+        guard let targetSession = session ?? currentSession ?? todaysSession else {
+            Logger.warning("No session available for regeneration", category: .ai)
+            return
+        }
 
         state = .generatingRecommendations
 
         // Re-run the final recommendation step
-        try await generateFinalRecommendations(session: session)
+        try await generateFinalRecommendations(session: targetSession)
     }
 
     /// Cancel the current coaching session
@@ -307,7 +311,8 @@ final class CoachingService {
             let recommendations = try await llmService.executeText(
                 prompt: prompt,
                 systemPrompt: systemPrompt,
-                temperature: 0.7
+                temperature: 0.7,
+                overrideModelId: coachingModelId
             )
 
             session.recommendations = recommendations
