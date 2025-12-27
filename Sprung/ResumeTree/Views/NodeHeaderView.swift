@@ -202,22 +202,28 @@ struct NodeHeaderView: View {
         Button {
             setAttributeMode(.bundle)
         } label: {
-            Label("Bundle (All Together)", systemImage: "square.stack.3d.up.fill")
-            if attributeMode == .bundle { Image(systemName: "checkmark") }
+            HStack {
+                Label("Review once (all combined)", systemImage: "square.stack.3d.up.fill")
+                if attributeMode == .bundle { Image(systemName: "checkmark") }
+            }
         }
 
         Button {
             setAttributeMode(.iterate)
         } label: {
-            Label("Iterate (Each Separately)", systemImage: "list.bullet")
-            if attributeMode == .iterate { Image(systemName: "checkmark") }
+            HStack {
+                Label("Review per entry (N reviews)", systemImage: "list.bullet")
+                if attributeMode == .iterate { Image(systemName: "checkmark") }
+            }
         }
 
         Button {
             setAttributeMode(.solo)
         } label: {
-            Label("Solo (Just This One)", systemImage: "scope")
-            if attributeMode == .solo { Image(systemName: "checkmark") }
+            HStack {
+                Label("Just this entry", systemImage: "scope")
+                if attributeMode == .solo { Image(systemName: "checkmark") }
+            }
         }
 
         Divider()
@@ -225,8 +231,10 @@ struct NodeHeaderView: View {
         Button {
             setAttributeMode(.off)
         } label: {
-            Label("Off", systemImage: "xmark.circle")
-            if attributeMode == .off { Image(systemName: "checkmark") }
+            HStack {
+                Label("Off", systemImage: "xmark.circle")
+                if attributeMode == .off { Image(systemName: "checkmark") }
+            }
         }
     }
 
@@ -305,7 +313,7 @@ struct NodeHeaderView: View {
                 collection.bundledAttributes = []
             }
             collection.bundledAttributes?.append(attr)
-            collection.status = .aiToReplace
+            // Don't set collection.status - the collection itself isn't reviewed
             // Clear solo status from individual nodes
             clearSoloStatusForAttribute(attr, in: collection)
 
@@ -315,11 +323,8 @@ struct NodeHeaderView: View {
                 collection.enumeratedAttributes = []
             }
             collection.enumeratedAttributes?.append(attr)
-            collection.status = .aiToReplace
-            // Mark each entry for iteration
-            for entry in collection.orderedChildren {
-                entry.status = .aiToReplace
-            }
+            // Don't set collection.status - the collection itself isn't reviewed
+            // Don't mark entries - the attribute nodes within entries are what's reviewed
             // Clear solo status from individual nodes
             clearSoloStatusForAttribute(attr, in: collection)
 
