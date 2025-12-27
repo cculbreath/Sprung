@@ -125,6 +125,7 @@ final class SearchOpsCoordinator {
 
     private(set) var coachingSessionStore: CoachingSessionStore?
     private(set) var coachingService: CoachingService?
+    private var coachingAutoStartTimer: Timer?
 
     // MARK: - Convenience Store Access (delegated to sub-coordinators)
 
@@ -210,6 +211,29 @@ final class SearchOpsCoordinator {
         )
 
         Logger.info("Coaching service configured", category: .ai)
+    }
+
+    /// Check and auto-start coaching if discovery is complete and no recent session
+    func autoStartCoachingIfNeeded() {
+        guard !needsOnboarding else { return }
+
+        // Start hourly timer to check for new sessions (only if discovery complete)
+        startCoachingAutoCheckTimer()
+
+        coachingService?.autoStartIfNeeded()
+    }
+
+    /// Start a timer to periodically check if new coaching session should start
+    private func startCoachingAutoCheckTimer() {
+        guard coachingAutoStartTimer == nil else { return }
+
+        // Check every hour if we need to start a new session
+        coachingAutoStartTimer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self = self, !self.needsOnboarding else { return }
+                self.coachingService?.autoStartIfNeeded()
+            }
+        }
     }
 
     func initialize() {

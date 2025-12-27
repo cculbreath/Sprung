@@ -58,6 +58,42 @@ final class CoachingService {
         sessionStore.todaysSession()
     }
 
+    /// Check if coaching should auto-start (no session in 24+ hours)
+    var shouldAutoStart: Bool {
+        guard coachingModelId != nil else { return false }
+
+        // Check if there's a recent session (within 24 hours)
+        let twentyFourHoursAgo = Date().addingTimeInterval(-86400)
+        if let lastSession = sessionStore.lastSessionDate(), lastSession > twentyFourHoursAgo {
+            return false
+        }
+
+        // No recent session, should auto-start
+        return true
+    }
+
+    /// Auto-start coaching in background if conditions are met
+    /// Call this after discovery onboarding is complete
+    func autoStartIfNeeded() {
+        guard shouldAutoStart else { return }
+
+        // Cancel any in-progress session if we're starting fresh after 24 hours
+        if state != .idle {
+            Logger.info("🔄 Clearing stale coaching session for fresh start", category: .ai)
+            cancelSession()
+        }
+
+        Logger.info("🤖 Auto-starting coaching session in background", category: .ai)
+
+        Task {
+            do {
+                try await startSession()
+            } catch {
+                Logger.error("Failed to auto-start coaching: \(error)", category: .ai)
+            }
+        }
+    }
+
     /// Check if there's a completed session for today
     var hasSessionToday: Bool {
         sessionStore.hasCompletedSessionToday

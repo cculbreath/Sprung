@@ -97,6 +97,9 @@ struct DailyView: View {
                 Task { await refreshTasks() }
             }
         }
+        .onAppear {
+            coordinator.autoStartCoachingIfNeeded()
+        }
     }
 
     // MARK: - Header
