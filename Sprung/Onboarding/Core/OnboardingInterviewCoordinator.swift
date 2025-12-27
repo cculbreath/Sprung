@@ -27,8 +27,7 @@ final class OnboardingInterviewCoordinator {
     var phases: PhaseTransitionController { container.phaseTransitionController }
 
     // MARK: - Private Accessors (for internal use)
-    // Session & Lifecycle
-    private var sessionCoordinator: InterviewSessionCoordinator { container.sessionCoordinator }
+    // Lifecycle
     private var lifecycleController: InterviewLifecycleController { container.lifecycleController }
     // UI State
     private var uiStateUpdateHandler: UIStateUpdateHandler { container.uiStateUpdateHandler }
@@ -140,8 +139,8 @@ final class OnboardingInterviewCoordinator {
                 self?.ui.modelAvailabilityMessage = message
             }
         )
-        // Configure session coordinator with state update subscriber
-        container.sessionCoordinator.setStateUpdateSubscriber { [weak self] in
+        // Configure lifecycle controller with state update subscriber
+        container.lifecycleController.setStateUpdateSubscriber { [weak self] in
             self?.subscribeToStateUpdates()
         }
         Logger.info("🎯 OnboardingInterviewCoordinator initialized with event-driven architecture", category: .ai)
@@ -166,11 +165,11 @@ final class OnboardingInterviewCoordinator {
         let handlers = uiStateUpdateHandler.buildStateUpdateHandlers()
         lifecycleController.subscribeToStateUpdates(handlers)
     }
-    // MARK: - Interview Lifecycle (Delegated to InterviewSessionCoordinator)
+    // MARK: - Interview Lifecycle
     func startInterview(resumeExisting: Bool = false) async -> Bool {
         // Load archived artifacts before starting
         await loadArchivedArtifacts()
-        return await sessionCoordinator.startInterview(resumeExisting: resumeExisting)
+        return await lifecycleController.startInterview(resumeExisting: resumeExisting)
     }
 
     /// Check if there's an active session that can be resumed
@@ -897,12 +896,12 @@ final class OnboardingInterviewCoordinator {
         Logger.info("✅ Extraction agents cancelled and document upload phase finished", category: .ai)
     }
 
-    // MARK: - Data Store Management (Delegated to InterviewSessionCoordinator)
+    // MARK: - Data Store Management
     func clearArtifacts() {
-        sessionCoordinator.clearArtifacts()
+        lifecycleController.clearArtifacts()
     }
     func resetStore() async {
-        await sessionCoordinator.resetStore()
+        await lifecycleController.resetStore()
     }
     // MARK: - Utility
     func notifyInvalidModel(id: String) {

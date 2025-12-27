@@ -35,12 +35,6 @@ private struct ToolRouterComponents {
     let chatboxHandler: ChatboxHandler
 }
 
-/// Groups controller components for initialization
-private struct Controllers {
-    let lifecycleController: InterviewLifecycleController
-    let phaseTransitionController: PhaseTransitionController
-}
-
 /// Groups service components for initialization
 private struct Services {
     let extractionManagementService: ExtractionManagementService
@@ -55,18 +49,6 @@ private struct ArtifactIngestionComponents {
     let artifactIngestionCoordinator: ArtifactIngestionCoordinator
 }
 
-/// Groups parameters for controller creation
-private struct ControllerCreationParams {
-    let state: StateCoordinator
-    let eventBus: EventCoordinator
-    let phaseRegistry: PhaseScriptRegistry
-    let chatboxHandler: ChatboxHandler
-    let toolExecutionCoordinator: ToolExecutionCoordinator
-    let toolRouter: ToolHandler
-    let llmFacade: LLMFacade?
-    let toolRegistry: ToolRegistry
-    let dataStore: InterviewDataStore
-}
 
 /// Owns all service instances for the onboarding module.
 /// Extracted from OnboardingInterviewCoordinator to centralize dependency wiring.
@@ -84,7 +66,6 @@ final class OnboardingDependencyContainer {
     // MARK: - Controllers
     let lifecycleController: InterviewLifecycleController
     let phaseTransitionController: PhaseTransitionController
-    let sessionCoordinator: InterviewSessionCoordinator
     let uiStateUpdateHandler: UIStateUpdateHandler
     // MARK: - Services
     let extractionManagementService: ExtractionManagementService
@@ -206,41 +187,44 @@ final class OnboardingDependencyContainer {
         self.toolExecutionCoordinator = tools.toolExecutionCoordinator
         self.chatboxHandler = tools.chatboxHandler
 
-        // 7. Initialize controllers
-        let controllerParams = ControllerCreationParams(
-            state: state, eventBus: core.eventBus, phaseRegistry: core.phaseRegistry,
-            chatboxHandler: tools.chatboxHandler, toolExecutionCoordinator: tools.toolExecutionCoordinator,
-            toolRouter: tools.toolRouter, llmFacade: llmFacade, toolRegistry: core.toolRegistry,
-            dataStore: dataStore
+        // 7. Initialize phase transition controller first (simpler dependency chain)
+        self.phaseTransitionController = PhaseTransitionController(
+            state: state, eventBus: core.eventBus, phaseRegistry: core.phaseRegistry
         )
-        let controllers = Self.createControllers(params: controllerParams)
-        self.lifecycleController = controllers.lifecycleController
-        self.phaseTransitionController = controllers.phaseTransitionController
 
         // 8. Initialize services
         let services = Self.createServices(
             eventBus: core.eventBus, state: state, toolRouter: tools.toolRouter,
-            wizardTracker: wizardTracker, phaseTransitionController: controllers.phaseTransitionController,
+            wizardTracker: wizardTracker, phaseTransitionController: phaseTransitionController,
             dataStore: dataStore, applicantProfileStore: applicantProfileStore
         )
         self.extractionManagementService = services.extractionManagementService
         self.timelineManagementService = services.timelineManagementService
         self.dataPersistenceService = services.dataPersistenceService
 
-        // 9. Initialize session persistence handler first (needed by session coordinator)
+        // 9. Initialize session persistence handler
         self.sessionPersistenceHandler = SwiftDataSessionPersistenceHandler(
             eventBus: core.eventBus,
             sessionStore: sessionStore,
             chatTranscriptStore: stores.chatTranscriptStore
         )
 
-        // 10. Initialize session and query coordinators
-        self.sessionCoordinator = InterviewSessionCoordinator(
-            lifecycleController: controllers.lifecycleController,
-            phaseTransitionController: controllers.phaseTransitionController, state: state,
+        // 10. Initialize lifecycle controller (merged with session coordinator)
+        self.lifecycleController = InterviewLifecycleController(
+            state: state,
+            eventBus: core.eventBus,
+            phaseRegistry: core.phaseRegistry,
+            chatboxHandler: tools.chatboxHandler,
+            toolExecutionCoordinator: tools.toolExecutionCoordinator,
+            toolRouter: tools.toolRouter,
+            llmFacade: llmFacade,
+            toolRegistry: core.toolRegistry,
+            dataStore: dataStore,
+            phaseTransitionController: phaseTransitionController,
             dataPersistenceService: services.dataPersistenceService,
             documentArtifactHandler: docs.documentArtifactHandler,
-            documentArtifactMessenger: docs.documentArtifactMessenger, ui: ui,
+            documentArtifactMessenger: docs.documentArtifactMessenger,
+            ui: ui,
             sessionPersistenceHandler: sessionPersistenceHandler,
             chatTranscriptStore: stores.chatTranscriptStore
         )
@@ -268,18 +252,18 @@ final class OnboardingDependencyContainer {
             eventBus: core.eventBus, toolRouter: tools.toolRouter, state: state, ui: ui,
             sessionUIState: sessionUIState
         )
-        // 13. Initialize early coordinators (don't need coordinator reference)
+        // 11. Initialize early coordinators (don't need coordinator reference)
         self.coordinatorEventRouter = CoordinatorEventRouter(
             ui: ui, state: state, sessionUIState: sessionUIState,
-            phaseTransitionController: controllers.phaseTransitionController,
+            phaseTransitionController: phaseTransitionController,
             toolRouter: tools.toolRouter, applicantProfileStore: applicantProfileStore,
             resRefStore: resRefStore, coverRefStore: coverRefStore,
             experienceDefaultsStore: experienceDefaultsStore,
             eventBus: core.eventBus, dataStore: dataStore
         )
 
-        // 14. Post-init configuration
-        controllers.phaseTransitionController.setLifecycleController(controllers.lifecycleController)
+        // 12. Post-init configuration
+        phaseTransitionController.setLifecycleController(lifecycleController)
         tools.toolRouter.uploadHandler.updateExtractionProgressHandler { [services] update in
             Task { @MainActor in services.extractionManagementService.updateExtractionProgress(with: update) }
         }
@@ -361,20 +345,6 @@ final class OnboardingDependencyContainer {
         )
         return ToolRouterComponents(toolRouter: toolRouter, toolExecutor: toolExecutor,
                                     toolExecutionCoordinator: toolExecutionCoordinator, chatboxHandler: chatboxHandler)
-    }
-
-    private static func createControllers(params: ControllerCreationParams) -> Controllers {
-        Controllers(
-            lifecycleController: InterviewLifecycleController(
-                state: params.state, eventBus: params.eventBus, phaseRegistry: params.phaseRegistry,
-                chatboxHandler: params.chatboxHandler, toolExecutionCoordinator: params.toolExecutionCoordinator,
-                toolRouter: params.toolRouter, llmFacade: params.llmFacade,
-                toolRegistry: params.toolRegistry, dataStore: params.dataStore
-            ),
-            phaseTransitionController: PhaseTransitionController(
-                state: params.state, eventBus: params.eventBus, phaseRegistry: params.phaseRegistry
-            )
-        )
     }
 
     private static func createServices(
