@@ -185,11 +185,9 @@ final class DiscoveryCoordinator {
 
     /// Configure the coaching service
     private func configureCoachingService(llmService: DiscoveryLLMService) {
-        // Get model context from pipeline coordinator's store
-        guard let modelContext = (pipelineCoordinator.dailyTaskStore as? DailyTaskStore)?.modelContext else {
-            Logger.warning("Could not get model context for coaching service", category: .ai)
-            return
-        }
+        // Get model context and daily task store from pipeline coordinator
+        let dailyTaskStore = pipelineCoordinator.dailyTaskStore
+        let modelContext = dailyTaskStore.modelContext
 
         // Create coaching session store
         let sessionStore = CoachingSessionStore(context: modelContext)
@@ -206,17 +204,22 @@ final class DiscoveryCoordinator {
         )
 
         // Create coaching service
-        self.coachingService = CoachingService(
+        let coaching = CoachingService(
             modelContext: modelContext,
             llmService: llmService,
             activityReportService: activityService,
             sessionStore: sessionStore,
+            dailyTaskStore: dailyTaskStore,
             settingsStore: settingsStore,
             preferencesStore: preferencesStore,
             jobAppStore: jobAppStore,
             interviewDataStore: interviewDataStore
         )
 
+        // Set agent service reference for workflows like chooseBestJobs
+        coaching.agentService = agentService
+
+        self.coachingService = coaching
         Logger.info("Coaching service configured", category: .ai)
     }
 
@@ -476,10 +479,10 @@ final class DiscoveryCoordinator {
             throw DiscoveryLLMError.toolExecutionFailed("Agent service not configured")
         }
 
-        // Get all jobs in identified stage
-        let identifiedJobs = jobAppStore.jobApps(forStage: .identified)
+        // Get all jobs in new (identified) status
+        let identifiedJobs = jobAppStore.jobApps(forStatus: .new)
         guard !identifiedJobs.isEmpty else {
-            throw DiscoveryLLMError.toolExecutionFailed("No jobs in Identified stage to choose from")
+            throw DiscoveryLLMError.toolExecutionFailed("No jobs in Identified status to choose from")
         }
 
         // Build job tuples for agent
@@ -502,10 +505,10 @@ final class DiscoveryCoordinator {
             count: count
         )
 
-        // Advance selected jobs to researching stage
+        // Advance selected jobs to researching status
         for selection in result.selections {
             if let job = identifiedJobs.first(where: { $0.id == selection.jobId }) {
-                jobAppStore.setStage(job, to: .researching)
+                jobAppStore.setStatus(job, to: .researching)
                 Logger.info("📋 Advanced '\(job.jobPosition)' at \(job.companyName) to Researching", category: .ai)
             }
         }

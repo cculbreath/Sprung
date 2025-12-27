@@ -19,6 +19,8 @@ enum CoachingToolSchemas {
     static let getKnowledgeCardToolName = "get_knowledge_card"
     static let getJobDescriptionToolName = "get_job_description"
     static let getResumeToolName = "get_resume"
+    static let updateDailyTasksToolName = "update_daily_tasks"
+    static let chooseBestJobsToolName = "choose_best_jobs"
 
     // MARK: - Complete Tool Definitions
 
@@ -32,7 +34,14 @@ enum CoachingToolSchemas {
         buildCoachingMultipleChoiceTool(),
         buildGetKnowledgeCardTool(),
         buildGetJobDescriptionTool(),
-        buildGetResumeTool()
+        buildGetResumeTool(),
+        buildUpdateDailyTasksTool(),
+        buildChooseBestJobsTool()
+    ]
+
+    /// Returns just the update_daily_tasks tool (for forced tool choice at end of session)
+    static let taskUpdateTool: [ChatCompletionParameters.Tool] = [
+        buildUpdateDailyTasksTool()
     ]
 
     // MARK: - Multiple Choice Question Tool
@@ -180,14 +189,14 @@ enum CoachingToolSchemas {
                 ),
                 "start_line": JSONSchema(
                     type: .optional(.integer),
-                    description: "Optional: start line number for a specific excerpt (1-indexed)"
+                    description: "Start line number for a specific excerpt (1-indexed), or null for full content"
                 ),
                 "end_line": JSONSchema(
                     type: .optional(.integer),
-                    description: "Optional: end line number for a specific excerpt"
+                    description: "End line number for a specific excerpt, or null for full content"
                 )
             ],
-            required: ["card_id"],
+            required: ["card_id", "start_line", "end_line"],
             additionalProperties: false
         )
 
@@ -248,10 +257,10 @@ enum CoachingToolSchemas {
                 ),
                 "section": JSONSchema(
                     type: .optional(.string),
-                    description: "Optional: specific section to retrieve (summary, work, skills, etc.)"
+                    description: "Specific section to retrieve (summary, work, skills, etc.), or null for overview"
                 )
             ],
-            required: ["resume_id"],
+            required: ["resume_id", "section"],
             additionalProperties: false
         )
 
@@ -263,5 +272,208 @@ enum CoachingToolSchemas {
                 parameters: schema
             )
         )
+    }
+
+    // MARK: - Update Daily Tasks Tool
+
+    /// Tool for the LLM to output structured daily tasks at the end of a coaching session
+    static func buildUpdateDailyTasksTool() -> ChatCompletionParameters.Tool {
+        let taskSchema = JSONSchema(
+            type: .object,
+            description: "A single task to add to the user's daily task list",
+            properties: [
+                "task_type": JSONSchema(
+                    type: .string,
+                    description: "The type of task",
+                    enum: ["gather", "customize", "apply", "follow_up", "networking", "event_prep", "debrief"]
+                ),
+                "title": JSONSchema(
+                    type: .string,
+                    description: "Short, actionable title for the task (2-8 words)"
+                ),
+                "description": JSONSchema(
+                    type: .string,
+                    description: "Brief context or details about the task"
+                ),
+                "priority": JSONSchema(
+                    type: .integer,
+                    description: "Priority level: 0 (low), 1 (medium), 2 (high)"
+                ),
+                "estimated_minutes": JSONSchema(
+                    type: .integer,
+                    description: "Estimated time in minutes to complete the task"
+                ),
+                "related_id": JSONSchema(
+                    type: .optional(.string),
+                    description: "UUID of related job app, event, or contact if applicable, otherwise null"
+                )
+            ],
+            required: ["task_type", "title", "description", "priority", "estimated_minutes", "related_id"],
+            additionalProperties: false
+        )
+
+        let schema = JSONSchema(
+            type: .object,
+            description: """
+                Generate the user's daily task list based on the coaching conversation.
+                Create 3-6 specific, actionable tasks that align with what was discussed.
+                Match task count/complexity to the user's stated energy level.
+                Include tasks from multiple categories when appropriate.
+                """,
+            properties: [
+                "tasks": JSONSchema(
+                    type: .array,
+                    description: "The daily tasks to add. Generate 3-6 tasks based on the coaching conversation.",
+                    items: taskSchema
+                )
+            ],
+            required: ["tasks"],
+            additionalProperties: false
+        )
+
+        return ChatCompletionParameters.Tool(
+            function: ChatCompletionParameters.ChatFunction(
+                name: updateDailyTasksToolName,
+                strict: true,
+                description: "Set the user's daily task list based on the coaching session",
+                parameters: schema
+            )
+        )
+    }
+
+    // MARK: - Choose Best Jobs Tool
+
+    /// Tool to trigger the job selection workflow that identifies and advances top job opportunities
+    static func buildChooseBestJobsTool() -> ChatCompletionParameters.Tool {
+        let schema = JSONSchema(
+            type: .object,
+            description: """
+                Analyze all jobs in the Identified stage and select the best matches for the user.
+                This triggers the job selection workflow that:
+                1. Evaluates all pending job leads against the user's knowledge cards and dossier
+                2. Scores and ranks jobs by fit
+                3. Advances the top matches to Researching stage
+                Use this when the user has accumulated job leads and is ready to focus their efforts.
+                """,
+            properties: [
+                "count": JSONSchema(
+                    type: .integer,
+                    description: "Number of top jobs to select (1-10, default 5)"
+                ),
+                "reason": JSONSchema(
+                    type: .string,
+                    description: "Brief explanation of why you're triggering job selection now"
+                )
+            ],
+            required: ["count", "reason"],
+            additionalProperties: false
+        )
+
+        return ChatCompletionParameters.Tool(
+            function: ChatCompletionParameters.ChatFunction(
+                name: chooseBestJobsToolName,
+                strict: true,
+                description: "Analyze identified jobs and advance best matches to Researching stage",
+                parameters: schema
+            )
+        )
+    }
+
+    // MARK: - Task Regeneration Schema
+
+    /// Schema for structured task output during regeneration
+    static func buildTaskRegenerationSchema() -> JSONSchema {
+        let taskSchema = JSONSchema(
+            type: .object,
+            description: "A single task to add to the user's daily task list",
+            properties: [
+                "task_type": JSONSchema(
+                    type: .string,
+                    description: "The type of task",
+                    enum: ["gather", "customize", "apply", "follow_up", "networking", "event_prep", "debrief"]
+                ),
+                "title": JSONSchema(
+                    type: .string,
+                    description: "Short title for the task (2-8 words)"
+                ),
+                "description": JSONSchema(
+                    type: .string,
+                    description: "Brief context or details about the task"
+                ),
+                "priority": JSONSchema(
+                    type: .integer,
+                    description: "Priority level: 0 (low), 1 (medium), 2 (high)"
+                ),
+                "estimated_minutes": JSONSchema(
+                    type: .integer,
+                    description: "Estimated time in minutes to complete the task"
+                ),
+                "related_id": JSONSchema(
+                    type: .optional(.string),
+                    description: "UUID of related job app, event, or contact if applicable, otherwise null"
+                )
+            ],
+            required: ["task_type", "title", "description", "priority", "estimated_minutes", "related_id"],
+            additionalProperties: false
+        )
+
+        return JSONSchema(
+            type: .object,
+            description: "Regenerated tasks for a specific category based on user feedback",
+            properties: [
+                "tasks": JSONSchema(
+                    type: .array,
+                    description: "The regenerated tasks. Generate 2-5 tasks based on the user's feedback.",
+                    items: taskSchema
+                ),
+                "explanation": JSONSchema(
+                    type: .string,
+                    description: "Brief explanation of why these tasks were suggested based on the feedback"
+                )
+            ],
+            required: ["tasks", "explanation"],
+            additionalProperties: false
+        )
+    }
+}
+
+// MARK: - Task Category
+
+/// Categories for task sections in the Daily view
+enum TaskCategory: String, CaseIterable {
+    case networking = "networking"
+    case apply = "apply"
+    case gather = "gather"
+
+    var displayName: String {
+        switch self {
+        case .networking: return "Networking"
+        case .apply: return "Apply"
+        case .gather: return "Gather"
+        }
+    }
+
+    /// Task types that belong to this category
+    var taskTypes: [String] {
+        switch self {
+        case .networking:
+            return ["networking", "event_prep", "debrief"]
+        case .apply:
+            return ["apply", "customize"]
+        case .gather:
+            return ["gather"]
+        }
+    }
+
+    /// DailyTaskTypes that belong to this category
+    var dailyTaskTypes: [DailyTaskType] {
+        switch self {
+        case .networking:
+            return [.networking, .eventPrep, .eventDebrief]
+        case .apply:
+            return [.submitApplication, .customizeMaterials]
+        case .gather:
+            return [.gatherLeads]
+        }
     }
 }

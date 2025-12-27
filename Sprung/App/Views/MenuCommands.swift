@@ -40,6 +40,8 @@ extension Notification.Name {
     static let manualJobAppCreated = Notification.Name("manualJobAppCreated")
     static let bestJob = Notification.Name("bestJob")
     static let toggleKnowledgeCards = Notification.Name("toggleKnowledgeCards")
+    /// Posted when a job app should be selected in the main window (userInfo: ["jobAppId": UUID])
+    static let selectJobApp = Notification.Name("selectJobApp")
     // Resume Commands
     static let customizeResume = Notification.Name("customizeResume")
     static let clarifyCustomize = Notification.Name("clarifyCustomize")

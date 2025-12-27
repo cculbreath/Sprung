@@ -193,6 +193,13 @@ struct ContentView: View {
                 showSetupWizard = true
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .selectJobApp)) { notification in
+            // Select job app from Discovery pipeline
+            if let jobAppId = notification.userInfo?["jobAppId"] as? UUID,
+               let jobApp = jobAppStore.jobApps.first(where: { $0.id == jobAppId }) {
+                jobAppStore.selectedApp = jobApp
+            }
+        }
         .focusedValue(\.knowledgeCardsVisible, $showSlidingList)
         // Environment objects (like DragInfo) are inherited from ContentViewLaunch
     }
