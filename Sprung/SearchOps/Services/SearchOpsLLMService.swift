@@ -279,6 +279,12 @@ final class SearchOpsLLMService {
                         content: .text(result.rawString() ?? "{}"),
                         toolCallID: toolCallId
                     ))
+
+                    // Check if tool handler signals to pause for user input
+                    if result["_pauseForUser"].boolValue {
+                        conversations[conversation.id] = conversation
+                        throw SearchOpsLLMError.pausedForUserInput
+                    }
                 }
 
                 // Continue loop to get assistant's final response
@@ -326,6 +332,7 @@ enum SearchOpsLLMError: Error, LocalizedError {
     case invalidResponse
     case toolLoopExceeded
     case toolExecutionFailed(String)
+    case pausedForUserInput
 
     var errorDescription: String? {
         switch self {
@@ -337,6 +344,8 @@ enum SearchOpsLLMError: Error, LocalizedError {
             return "Tool call loop exceeded maximum iterations"
         case .toolExecutionFailed(let reason):
             return "Tool execution failed: \(reason)"
+        case .pausedForUserInput:
+            return "Waiting for user input"
         }
     }
 }

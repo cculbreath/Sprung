@@ -176,6 +176,9 @@ final class CoachingService {
             if pendingQuestions.isEmpty {
                 await handleFinalRecommendations(response)
             }
+        } catch SearchOpsLLMError.pausedForUserInput {
+            // Expected - we displayed a question and are waiting for user input
+            Logger.debug("Coaching: paused for user input after question \(questionIndex)", category: .ai)
         } catch {
             Logger.error("Failed to start coaching: \(error)", category: .ai)
             state = .error(error.localizedDescription)
@@ -199,11 +202,11 @@ final class CoachingService {
             currentQuestion = question
             state = .askingQuestion(question: question, index: questionIndex, total: 2)
 
-            // Return acknowledgment (tool result)
+            // Return acknowledgment (tool result) with pause signal
             return JSON([
                 "status": "question_displayed",
                 "question_id": question.id.uuidString,
-                "awaiting_user_response": true
+                "_pauseForUser": true
             ])
         }
 
@@ -242,6 +245,9 @@ final class CoachingService {
             if currentQuestion == nil || pendingQuestions.count == collectedAnswers.count {
                 await handleFinalRecommendations(response)
             }
+        } catch SearchOpsLLMError.pausedForUserInput {
+            // Expected - we displayed a question and are waiting for user input
+            Logger.debug("Coaching: paused for user input after question \(questionIndex)", category: .ai)
         } catch {
             Logger.error("Failed to continue coaching: \(error)", category: .ai)
             state = .error(error.localizedDescription)
