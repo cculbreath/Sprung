@@ -109,4 +109,19 @@ struct LLMFacadeFactory {
 
         return openAIService
     }
+
+    /// Registers Google AI (Gemini) backend with the facade.
+    ///
+    /// - Parameters:
+    ///   - facade: The facade to register with
+    /// - Returns: The GoogleAIService for additional use
+    @discardableResult
+    static func registerGemini(facade: LLMFacade) -> GoogleAIService {
+        let googleAIService = GoogleAIService()
+        facade.registerGoogleAIService(googleAIService)
+
+        Logger.info("✅ Gemini backend registered via LLMFacadeFactory", category: .appLifecycle)
+
+        return googleAIService
+    }
 }

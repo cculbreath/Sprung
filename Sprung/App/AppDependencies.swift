@@ -115,6 +115,10 @@ final class AppDependencies {
                 debugEnabled: Logger.isVerboseEnabled
             )
         }
+
+        // Register Gemini backend for document extraction
+        // GoogleAIService handles API key internally via APIKeyManager
+        _ = LLMFacadeFactory.registerGemini(facade: llmFacade)
         let coverLetterService = CoverLetterService(
             llmFacade: llmFacade,
             exportCoordinator: resumeExportCoordinator,

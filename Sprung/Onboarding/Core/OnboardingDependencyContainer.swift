@@ -191,7 +191,7 @@ final class OnboardingDependencyContainer {
         // 5. Initialize document services
         let docs = Self.createDocumentComponents(
             eventBus: core.eventBus, documentExtractionService: documentExtractionService, dataStore: dataStore,
-            stateCoordinator: state, agentTracker: agentActivityTracker
+            stateCoordinator: state, agentTracker: agentActivityTracker, llmFacade: llmFacade
         )
         self.uploadStorage = docs.uploadStorage
         self.documentProcessingService = docs.documentProcessingService
@@ -324,7 +324,7 @@ final class OnboardingDependencyContainer {
 
     private static func createDocumentComponents(
         eventBus: EventCoordinator, documentExtractionService: DocumentExtractionService, dataStore: InterviewDataStore,
-        stateCoordinator: StateCoordinator, agentTracker: AgentActivityTracker
+        stateCoordinator: StateCoordinator, agentTracker: AgentActivityTracker, llmFacade: LLMFacade?
     ) -> DocumentComponents {
         // Update the extraction service with the event bus for token tracking
         Task {
@@ -333,7 +333,8 @@ final class OnboardingDependencyContainer {
 
         let uploadStorage = OnboardingUploadStorage()
         let documentProcessingService = DocumentProcessingService(
-            documentExtractionService: documentExtractionService, uploadStorage: uploadStorage, dataStore: dataStore
+            documentExtractionService: documentExtractionService, uploadStorage: uploadStorage, dataStore: dataStore,
+            llmFacade: llmFacade
         )
         return DocumentComponents(
             uploadStorage: uploadStorage, documentProcessingService: documentProcessingService,

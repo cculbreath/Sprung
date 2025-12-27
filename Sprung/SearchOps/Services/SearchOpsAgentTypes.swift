@@ -310,15 +310,12 @@ enum SearchOpsAgentError: Error, LocalizedError {
     case toolLoopExceeded
     case invalidResponse
     case toolExecutionFailed(String)
-    case missingAPIKey
     case llmError(String)
 
     var errorDescription: String? {
         switch self {
         case .noResponse:
             return "No response from LLM"
-        case .missingAPIKey:
-            return "OpenAI API key is required for job source discovery"
         case .toolLoopExceeded:
             return "Tool call loop exceeded maximum iterations"
         case .invalidResponse:

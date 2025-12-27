@@ -725,4 +725,58 @@ final class LLMFacade {
         }
         return try await service.responseCreateStream(parameters)
     }
+
+    // MARK: - Gemini Document Extraction
+
+    /// Extract text from a PDF file using Google's Gemini Files API.
+    /// Handles large files (up to 2GB) with automatic upload/cleanup.
+    ///
+    /// - Parameters:
+    ///   - pdfData: The PDF file data
+    ///   - filename: Display name for the file
+    ///   - modelId: Gemini model ID (e.g., "gemini-2.0-flash")
+    ///   - prompt: Extraction prompt (uses default if nil)
+    ///   - maxOutputTokens: Maximum output tokens (uses default if nil)
+    /// - Returns: Tuple of (title, content, tokenUsage)
+    func extractTextFromPDF(
+        pdfData: Data,
+        filename: String,
+        modelId: String,
+        prompt: String? = nil,
+        maxOutputTokens: Int? = nil
+    ) async throws -> (title: String?, content: String, tokenUsage: GoogleAIService.GeminiTokenUsage?) {
+        guard let service = googleAIService else {
+            throw LLMError.clientError("Google AI service is not configured. Call registerGoogleAIService first.")
+        }
+        return try await service.extractTextFromPDF(
+            pdfData: pdfData,
+            filename: filename,
+            modelId: modelId,
+            prompt: prompt,
+            maxOutputTokens: maxOutputTokens
+        )
+    }
+
+    /// Generate a structured summary from document content using Gemini.
+    /// Uses Gemini Flash-Lite for cost efficiency.
+    ///
+    /// - Parameters:
+    ///   - content: The extracted document text
+    ///   - filename: The document filename
+    ///   - modelId: Gemini model ID (uses default if nil)
+    /// - Returns: Structured DocumentSummary
+    func generateDocumentSummary(
+        content: String,
+        filename: String,
+        modelId: String? = nil
+    ) async throws -> DocumentSummary {
+        guard let service = googleAIService else {
+            throw LLMError.clientError("Google AI service is not configured. Call registerGoogleAIService first.")
+        }
+        return try await service.generateSummary(
+            content: content,
+            filename: filename,
+            modelId: modelId
+        )
+    }
 }

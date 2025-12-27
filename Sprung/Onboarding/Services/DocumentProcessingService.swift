@@ -13,20 +13,24 @@ actor DocumentProcessingService {
     private let documentExtractionService: DocumentExtractionService
     private let uploadStorage: OnboardingUploadStorage
     private let dataStore: InterviewDataStore
-    private let googleAIService: GoogleAIService
+    private var llmFacade: LLMFacade?
 
     // MARK: - Initialization
     init(
         documentExtractionService: DocumentExtractionService,
         uploadStorage: OnboardingUploadStorage,
         dataStore: InterviewDataStore,
-        googleAIService: GoogleAIService = GoogleAIService()
+        llmFacade: LLMFacade? = nil
     ) {
         self.documentExtractionService = documentExtractionService
         self.uploadStorage = uploadStorage
         self.dataStore = dataStore
-        self.googleAIService = googleAIService
+        self.llmFacade = llmFacade
         Logger.info("📄 DocumentProcessingService initialized", category: .ai)
+    }
+
+    func updateLLMFacade(_ facade: LLMFacade?) {
+        self.llmFacade = facade
     }
     // MARK: - Public API
     /// Process a document file and return an artifact record
@@ -99,16 +103,21 @@ actor DocumentProcessingService {
         // Step 3: Generate summary (non-blocking - runs after extraction)
         statusCallback?("Generating summary for \(filename)...")
         var documentSummary: DocumentSummary?
-        do {
-            documentSummary = try await googleAIService.generateSummary(
-                content: extractedText,
-                filename: filename
-            )
-            Logger.info("✅ Summary generated for \(artifactId) (\(documentSummary?.summary.count ?? 0) chars)", category: .ai)
-        } catch {
-            // Summary generation failure is not fatal - log and continue
-            Logger.warning("⚠️ Summary generation failed for \(filename): \(error.localizedDescription)", category: .ai)
-            // Create a fallback summary from the extracted text
+        if let facade = llmFacade {
+            do {
+                documentSummary = try await facade.generateDocumentSummary(
+                    content: extractedText,
+                    filename: filename
+                )
+                Logger.info("✅ Summary generated for \(artifactId) (\(documentSummary?.summary.count ?? 0) chars)", category: .ai)
+            } catch {
+                // Summary generation failure is not fatal - log and continue
+                Logger.warning("⚠️ Summary generation failed for \(filename): \(error.localizedDescription)", category: .ai)
+                // Create a fallback summary from the extracted text
+                documentSummary = DocumentSummary.fallback(from: extractedText, filename: filename)
+            }
+        } else {
+            Logger.warning("⚠️ LLMFacade not configured, using fallback summary for \(filename)", category: .ai)
             documentSummary = DocumentSummary.fallback(from: extractedText, filename: filename)
         }
 

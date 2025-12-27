@@ -97,7 +97,6 @@ actor DocumentExtractionService {
 
     // MARK: - Private Properties
     private var llmFacade: LLMFacade?
-    private let googleAIService = GoogleAIService()
     private let defaultModelId = "gemini-2.0-flash"
     private var eventBus: EventCoordinator?
 
@@ -390,7 +389,10 @@ actor DocumentExtractionService {
 
         let llmStart = Date()
         do {
-            let (extractedTitle, extractedText, tokenUsage) = try await googleAIService.extractTextFromPDF(
+            guard let facade = llmFacade else {
+                throw ExtractionError.llmNotConfigured
+            }
+            let (extractedTitle, extractedText, tokenUsage) = try await facade.extractTextFromPDF(
                 pdfData: fileData,
                 filename: filename,
                 modelId: modelId,
@@ -467,6 +469,10 @@ actor DocumentExtractionService {
                 derivedSkeletonTimeline: nil,
                 persisted: false
             )
+        } catch let error as LLMError {
+            Logger.error("📄 LLMFacade PDF extraction failed: \(error.localizedDescription)", category: .ai)
+            await notifyProgress(.aiExtraction, .failed, detail: error.localizedDescription)
+            throw ExtractionError.llmFailed(error.localizedDescription)
         } catch let error as GoogleAIService.GoogleAIError {
             Logger.error("📄 Google Files API extraction failed: \(error.localizedDescription)", category: .ai)
             await notifyProgress(.aiExtraction, .failed, detail: error.localizedDescription)
