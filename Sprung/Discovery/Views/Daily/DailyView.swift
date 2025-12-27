@@ -13,6 +13,9 @@ struct DailyView: View {
     @Binding var triggerTaskGeneration: Bool
 
     @State private var isRefreshing = false
+    @State private var regeneratingCategory: TaskCategory?
+    @State private var showingFeedbackSheet = false
+    @State private var feedbackText = ""
 
     init(coordinator: DiscoveryCoordinator, triggerTaskGeneration: Binding<Bool> = .constant(false)) {
         self.coordinator = coordinator
@@ -75,6 +78,7 @@ struct DailyView: View {
             }
             .padding()
         }
+        .scrollEdgeEffect()
         .navigationTitle("Today")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -99,6 +103,23 @@ struct DailyView: View {
         }
         .onAppear {
             coordinator.autoStartCoachingIfNeeded()
+        }
+        .sheet(isPresented: $showingFeedbackSheet) {
+            if let category = regeneratingCategory {
+                TaskFeedbackSheet(
+                    category: category,
+                    feedbackText: $feedbackText,
+                    onSubmit: {
+                        showingFeedbackSheet = false
+                        Task { await regenerateTasks() }
+                    },
+                    onCancel: {
+                        showingFeedbackSheet = false
+                        regeneratingCategory = nil
+                        feedbackText = ""
+                    }
+                )
+            }
         }
     }
 
@@ -235,9 +256,12 @@ struct DailyView: View {
             tasks: coordinator.dailyTaskStore.tasks(ofType: .networking) +
                    coordinator.dailyTaskStore.tasks(ofType: .eventPrep) +
                    coordinator.dailyTaskStore.tasks(ofType: .eventDebrief),
+            category: .networking,
+            isRegenerating: regeneratingCategory == .networking,
             onComplete: { task in
                 coordinator.dailyTaskStore.complete(task)
-            }
+            },
+            onRegenerate: { startRegeneration(for: .networking) }
         )
     }
 
@@ -269,12 +293,15 @@ struct DailyView: View {
             iconColor: .blue,
             tasks: coordinator.dailyTaskStore.tasks(ofType: .submitApplication) +
                    coordinator.dailyTaskStore.tasks(ofType: .customizeMaterials),
+            category: .apply,
+            isRegenerating: regeneratingCategory == .apply,
             onComplete: { task in
                 coordinator.dailyTaskStore.complete(task)
                 if task.taskType == .submitApplication {
                     coordinator.weeklyGoalStore.incrementApplications()
                 }
-            }
+            },
+            onRegenerate: { startRegeneration(for: .apply) }
         )
     }
 
@@ -288,13 +315,16 @@ struct DailyView: View {
             icon: "magnifyingglass",
             iconColor: .green,
             tasks: coordinator.dailyTaskStore.tasks(ofType: .gatherLeads),
+            category: .gather,
+            isRegenerating: regeneratingCategory == .gather,
             onComplete: { task in
                 coordinator.dailyTaskStore.complete(task)
                 if let sourceId = task.relatedJobSourceId,
                    let source = coordinator.jobSourceStore.source(byId: sourceId) {
                     coordinator.jobSourceStore.markVisited(source)
                 }
-            }
+            },
+            onRegenerate: { startRegeneration(for: .gather) }
         )
     }
 
@@ -368,6 +398,75 @@ struct DailyView: View {
             Logger.error("Failed to generate daily tasks: \(error)", category: .ai)
         }
     }
+
+    private func startRegeneration(for category: TaskCategory) {
+        regeneratingCategory = category
+        feedbackText = ""
+        showingFeedbackSheet = true
+    }
+
+    private func regenerateTasks() async {
+        guard let category = regeneratingCategory else { return }
+
+        do {
+            try await coordinator.coachingService?.regenerateTasksForCategory(category, feedback: feedbackText)
+        } catch {
+            Logger.error("Failed to regenerate \(category.displayName) tasks: \(error)", category: .ai)
+        }
+
+        regeneratingCategory = nil
+        feedbackText = ""
+    }
+}
+
+// MARK: - Task Feedback Sheet
+
+struct TaskFeedbackSheet: View {
+    let category: TaskCategory
+    @Binding var feedbackText: String
+    let onSubmit: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("Regenerate \(category.displayName) Tasks")
+                .font(.headline)
+
+            Text("What would you like different about these suggestions?")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            TextEditor(text: $feedbackText)
+                .frame(minHeight: 100)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                )
+
+            if feedbackText.isEmpty {
+                Text("e.g., \"Focus on remote-friendly companies\" or \"I want to prioritize networking events\"")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+
+            HStack {
+                Button("Cancel") {
+                    onCancel()
+                }
+                .buttonStyle(.bordered)
+
+                Spacer()
+
+                Button("Regenerate") {
+                    onSubmit()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(feedbackText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding()
+        .frame(width: 400)
+    }
 }
 
 // MARK: - Supporting Views
@@ -377,13 +476,38 @@ struct TaskSection: View {
     let icon: String
     let iconColor: Color
     let tasks: [DailyTask]
+    var category: TaskCategory? = nil
+    var isRegenerating: Bool = false
     let onComplete: (DailyTask) -> Void
+    var onRegenerate: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label(title, systemImage: icon)
-                .font(.headline)
-                .foregroundStyle(iconColor)
+            HStack {
+                Label(title, systemImage: icon)
+                    .font(.headline)
+                    .foregroundStyle(iconColor)
+
+                Spacer()
+
+                if let onRegenerate = onRegenerate {
+                    Button {
+                        onRegenerate()
+                    } label: {
+                        if isRegenerating {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                        } else {
+                            Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
+                                .font(.caption)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .disabled(isRegenerating)
+                    .help("Regenerate \(category?.displayName ?? "") tasks")
+                }
+            }
 
             ForEach(tasks) { task in
                 DailyTaskRow(task: task, onComplete: { onComplete(task) })

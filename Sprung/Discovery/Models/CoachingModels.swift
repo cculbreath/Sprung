@@ -34,6 +34,7 @@ class CoachingSession: Identifiable {
 
     // Session metadata
     var questionCount: Int = 0
+    var generatedTaskCount: Int = 0
     var completedAt: Date?
     var llmModel: String?
 
@@ -533,7 +534,7 @@ enum CoachingFollowUpAction: String, Codable, CaseIterable {
     var displayName: String {
         switch self {
         case .chooseFocusJobs: return "Pick my focus jobs for today"
-        case .generateTasks: return "Generate my task list"
+        case .generateTasks: return "View my task list"
         case .staleAppCheck: return "Check for stale applications"
         case .networkingSuggestions: return "Suggest networking actions"
         case .quickWins: return "Give me some quick wins"
@@ -544,7 +545,7 @@ enum CoachingFollowUpAction: String, Codable, CaseIterable {
     var description: String {
         switch self {
         case .chooseFocusJobs: return "Select the top 5 jobs to focus on today based on fit"
-        case .generateTasks: return "Create a prioritized task list for today"
+        case .generateTasks: return "Tasks were auto-generated from this coaching session"
         case .staleAppCheck: return "Find applications that need follow-up"
         case .networkingSuggestions: return "Identify contacts to reach out to"
         case .quickWins: return "3-5 minute tasks for quick momentum"
@@ -583,5 +584,32 @@ enum CoachingState: Equatable {
         default:
             return true
         }
+    }
+}
+
+// MARK: - Task Regeneration Response
+
+/// Response from task regeneration LLM call
+struct TaskRegenerationResponse: Codable {
+    let tasks: [TaskJSON]
+    let explanation: String
+}
+
+/// JSON representation of a task from LLM response
+struct TaskJSON: Codable {
+    let taskType: String
+    let title: String
+    let description: String
+    let priority: Int
+    let estimatedMinutes: Int
+    let relatedId: String?
+
+    enum CodingKeys: String, CodingKey {
+        case taskType = "task_type"
+        case title
+        case description
+        case priority
+        case estimatedMinutes = "estimated_minutes"
+        case relatedId = "related_id"
     }
 }

@@ -17,10 +17,6 @@ struct CoachingSectionView: View {
         coordinator.coachingService
     }
 
-    private func markdownAttributedString(_ string: String) -> AttributedString {
-        (try? AttributedString(markdown: string, options: .init(interpretedSyntax: .full))) ?? AttributedString(string)
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Header
@@ -97,10 +93,7 @@ struct CoachingSectionView: View {
         case .showingRecommendations(let recommendations):
             VStack(alignment: .leading, spacing: 12) {
                 // Show recommendations while loading follow-up
-                Text(markdownAttributedString(recommendations))
-                    .font(.body)
-                    .lineSpacing(4)
-                    .textSelection(.enabled)
+                MarkdownTextView(text: recommendations)
 
                 AnimatedThinkingText(statusMessage: "Preparing follow-up options...")
             }
@@ -109,10 +102,7 @@ struct CoachingSectionView: View {
             VStack(alignment: .leading, spacing: 12) {
                 // Show recommendations
                 if let session = service.currentSession {
-                    Text(markdownAttributedString(session.recommendations))
-                        .font(.body)
-                        .lineSpacing(4)
-                        .textSelection(.enabled)
+                    MarkdownTextView(text: session.recommendations)
 
                     Divider()
                 }
@@ -133,10 +123,7 @@ struct CoachingSectionView: View {
         case .executingFollowUp(let action):
             VStack(alignment: .leading, spacing: 12) {
                 if let session = service.currentSession {
-                    Text(markdownAttributedString(session.recommendations))
-                        .font(.body)
-                        .lineSpacing(4)
-                        .textSelection(.enabled)
+                    MarkdownTextView(text: session.recommendations)
                 }
 
                 AnimatedThinkingText(statusMessage: "Executing: \(action.displayName)...")
@@ -212,10 +199,6 @@ struct TodaysRecommendationsView: View {
 
     @State private var isExpanded = true
 
-    private func markdownAttributedString(_ string: String) -> AttributedString {
-        (try? AttributedString(markdown: string, options: .init(interpretedSyntax: .full))) ?? AttributedString(string)
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Q&A Summary (collapsed by default)
@@ -242,10 +225,7 @@ struct TodaysRecommendationsView: View {
             }
 
             // Recommendations (render markdown with paragraph spacing)
-            Text(markdownAttributedString(session.recommendations))
-                .font(.body)
-                .lineSpacing(4)
-                .textSelection(.enabled)
+            MarkdownTextView(text: session.recommendations)
 
             // Footer with regenerate button
             HStack {
@@ -285,6 +265,33 @@ struct ErrorStateView: View {
                 Label("Try Again", systemImage: "arrow.clockwise")
             }
             .buttonStyle(.bordered)
+        }
+    }
+}
+
+/// Renders markdown text with proper paragraph spacing.
+/// Splits text by double newlines and renders each paragraph separately.
+struct MarkdownTextView: View {
+    let text: String
+
+    private var paragraphs: [String] {
+        text.components(separatedBy: "\n\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private func markdownAttributedString(_ string: String) -> AttributedString {
+        (try? AttributedString(markdown: string, options: .init(interpretedSyntax: .full))) ?? AttributedString(string)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(Array(paragraphs.enumerated()), id: \.offset) { _, paragraph in
+                Text(markdownAttributedString(paragraph))
+                    .font(.body)
+                    .lineSpacing(4)
+                    .textSelection(.enabled)
+            }
         }
     }
 }
