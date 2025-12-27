@@ -336,6 +336,11 @@ extension Statuses {
         if !resumes.contains(where: { $0.id == resume.id }) {
             resumes.append(resume)
             selectedRes = resume
+
+            // Advance to inProgress when first resume is created
+            if status == .new || status == .queued {
+                status = .inProgress
+            }
         }
         if selectedRes == nil {
             selectedRes = resume
