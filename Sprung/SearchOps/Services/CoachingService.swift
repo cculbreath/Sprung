@@ -118,6 +118,10 @@ final class CoachingService {
             return
         }
 
+        // Clear question immediately so UI shows loading
+        currentQuestion = nil
+        state = .waitingForAnswer
+
         // Record answer
         let answer = CoachingAnswer(
             questionId: question.id,

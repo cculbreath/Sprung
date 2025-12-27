@@ -65,7 +65,7 @@ struct CoachingSectionView: View {
             }
 
         case .generatingReport:
-            LoadingStateView(message: "Analyzing your activity...")
+            AnimatedThinkingText(statusMessage: "Analyzing your activity...")
 
         case .askingQuestion(let question, let index, let total):
             MultipleChoiceQuestionView(
@@ -80,23 +80,10 @@ struct CoachingSectionView: View {
             )
 
         case .waitingForAnswer:
-            if let question = service.currentQuestion {
-                MultipleChoiceQuestionView(
-                    question: question,
-                    questionNumber: 1,
-                    totalQuestions: 2,
-                    onSubmit: { value, label in
-                        Task {
-                            try? await service.submitAnswer(value: value, label: label)
-                        }
-                    }
-                )
-            } else {
-                LoadingStateView(message: "Processing your answer...")
-            }
+            AnimatedThinkingText(statusMessage: "Thinking...")
 
         case .generatingRecommendations:
-            LoadingStateView(message: "Preparing your coaching...")
+            AnimatedThinkingText(statusMessage: "Preparing your coaching...")
 
         case .complete(let sessionId):
             if let session = coordinator.coachingSessionStore?.session(byId: sessionId) {
