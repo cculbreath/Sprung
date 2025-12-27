@@ -156,7 +156,7 @@ struct TodaysRecommendationsView: View {
     @State private var isExpanded = true
 
     private func markdownAttributedString(_ string: String) -> AttributedString {
-        (try? AttributedString(markdown: string, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(string)
+        (try? AttributedString(markdown: string, options: .init(interpretedSyntax: .full))) ?? AttributedString(string)
     }
 
     var body: some View {

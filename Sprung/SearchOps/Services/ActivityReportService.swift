@@ -57,6 +57,7 @@ final class ActivityReportService {
         let coverLetterStats = getCoverLetterStatsSince(since)
         snapshot.coverLettersCreated = coverLetterStats.created
         snapshot.coverLettersModified = coverLetterStats.modified
+        snapshot.coverLetterDetails = getCoverLetterDetailsSince(since)
 
         // Networking Events
         let eventStats = getEventStatsSince(since)
@@ -134,14 +135,13 @@ final class ActivityReportService {
         }
 
         var created = 0
-        var modified = 0
+        // Resume model doesn't track modification dates, so always 0 for now
+        let modified = 0
 
         for resume in resumes {
             if resume.dateCreated >= since {
                 created += 1
             }
-            // For now, we count resumes that have been exported (pdfData exists) as "modified"
-            // A more sophisticated approach would track actual modification dates
         }
 
         return (created, modified)
@@ -160,6 +160,9 @@ final class ActivityReportService {
         var modified = 0
 
         for coverLetter in coverLetters {
+            // Skip empty/uncomposed letters
+            guard coverLetter.generated && !coverLetter.content.isEmpty else { continue }
+
             if coverLetter.createdDate >= since {
                 created += 1
             } else if coverLetter.moddedDate >= since {
@@ -168,6 +171,43 @@ final class ActivityReportService {
         }
 
         return (created, modified)
+    }
+
+    /// Get detailed cover letter info for coaching context
+    /// Excludes empty/uncomposed letters, includes full content for selected letters
+    private func getCoverLetterDetailsSince(_ since: Date) -> [ActivitySnapshot.CoverLetterDetail] {
+        let descriptor = FetchDescriptor<CoverLetter>()
+        guard let coverLetters = try? modelContext.fetch(descriptor) else {
+            return []
+        }
+
+        var details: [ActivitySnapshot.CoverLetterDetail] = []
+
+        for coverLetter in coverLetters {
+            // Skip empty/uncomposed letters
+            guard coverLetter.generated && !coverLetter.content.isEmpty else { continue }
+
+            // Only include letters created or modified within the time window
+            let isRecent = coverLetter.createdDate >= since || coverLetter.moddedDate >= since
+            guard isRecent else { continue }
+
+            guard let jobApp = coverLetter.jobApp else { continue }
+
+            let isSelected = jobApp.selectedCoverId == coverLetter.id
+
+            details.append(ActivitySnapshot.CoverLetterDetail(
+                jobAppId: jobApp.id,
+                company: jobApp.companyName,
+                position: jobApp.jobPosition,
+                letterName: coverLetter.sequencedName,
+                isSelected: isSelected,
+                // Include full content only for selected letters
+                content: isSelected ? coverLetter.content : nil,
+                generationModel: coverLetter.generationModel
+            ))
+        }
+
+        return details
     }
 
     // MARK: - Event Queries

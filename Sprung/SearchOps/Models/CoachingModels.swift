@@ -101,6 +101,20 @@ struct ActivitySnapshot: Codable {
     var coverLettersCreated: Int = 0
     var coverLettersModified: Int = 0
 
+    // Cover letter details for context (excludes empty/uncomposed letters)
+    var coverLetterDetails: [CoverLetterDetail] = []
+
+    struct CoverLetterDetail: Codable {
+        let jobAppId: UUID
+        let company: String
+        let position: String
+        let letterName: String
+        let isSelected: Bool
+        /// Full content for selected letter, nil for non-selected
+        let content: String?
+        let generationModel: String?
+    }
+
     // Networking
     var eventsAdded: Int = 0
     var eventsAttended: Int = 0
@@ -128,6 +142,7 @@ struct ActivitySnapshot: Codable {
         resumesModified > 0 ||
         coverLettersCreated > 0 ||
         coverLettersModified > 0 ||
+        !coverLetterDetails.isEmpty ||
         eventsAdded > 0 ||
         eventsAttended > 0 ||
         eventsDebriefed > 0 ||
@@ -163,6 +178,22 @@ struct ActivitySnapshot: Codable {
         }
         if coverLettersModified > 0 {
             parts.append("- Edited \(coverLettersModified) cover letter(s)")
+        }
+
+        // Cover letter content details
+        if !coverLetterDetails.isEmpty {
+            parts.append("\n### Recent Cover Letters")
+            for detail in coverLetterDetails {
+                let modelInfo = detail.generationModel.map { " (via \($0))" } ?? ""
+                let selectedMarker = detail.isSelected ? " [SELECTED]" : ""
+                parts.append("#### \(detail.company) - \(detail.position)\(selectedMarker)")
+                parts.append("Letter: \(detail.letterName)\(modelInfo)")
+                if let content = detail.content, !content.isEmpty {
+                    // Include full content for selected letters (truncate if very long)
+                    let truncated = content.count > 2000 ? String(content.prefix(2000)) + "..." : content
+                    parts.append("Content:\n\(truncated)")
+                }
+            }
         }
 
         // Networking
