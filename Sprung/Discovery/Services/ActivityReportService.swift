@@ -100,10 +100,10 @@ final class ActivityReportService {
             switch jobApp.status {
             case .new:
                 breakdown.identified += 1
-            case .researching:
-                breakdown.researching += 1
-            case .applying:
-                breakdown.applying += 1
+            case .queued:
+                breakdown.queued += 1
+            case .inProgress:
+                breakdown.inProgress += 1
             case .submitted:
                 breakdown.applied += 1
             case .interview:
@@ -116,8 +116,6 @@ final class ActivityReportService {
                 breakdown.rejected += 1
             case .withdrawn:
                 breakdown.withdrawn += 1
-            default:
-                break  // Legacy statuses
             }
         }
 
@@ -136,7 +134,7 @@ final class ActivityReportService {
                     jobAppId: jobApp.id,
                     company: jobApp.companyName,
                     position: jobApp.jobPosition,
-                    fromStage: Statuses.applying.displayName,
+                    fromStage: Statuses.inProgress.displayName,
                     toStage: Statuses.submitted.displayName
                 ))
             }

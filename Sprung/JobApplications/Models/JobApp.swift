@@ -17,21 +17,14 @@ enum JobLeadPriority: String, Codable, CaseIterable {
 /// Application status - unified pipeline for both sidebar and kanban views
 enum Statuses: String, Codable, CaseIterable {
     case new = "new"                        // Identified/gathered lead
-    case researching = "Researching"        // Learning about the company/role
-    case applying = "Applying"              // Preparing materials
+    case queued = "Queued"                  // On deck, ready to work on
+    case inProgress = "In Progress"         // Actively working on application
     case submitted = "Submitted"            // Application sent
     case interview = "Interview Pending"    // In interview process
     case offer = "Offer"                    // Received an offer
     case accepted = "Accepted"              // Accepted the offer
     case rejected = "Rejected"              // Rejected by company
     case withdrawn = "Withdrawn"            // User withdrew application
-
-    // Legacy cases for migration compatibility
-    case inProgress = "In Progress"
-    case unsubmitted = "Unsubmitted"
-    case closed = "Closed"
-    case followUp = "Follow up Required"
-    case abandonned = "Abandonned"
 }
 
 extension Statuses {
@@ -39,8 +32,6 @@ extension Statuses {
     var displayName: String {
         switch self {
         case .new: return "Identified"
-        case .abandonned: return "Abandoned"
-        case .inProgress: return "In Progress"
         default: return rawValue
         }
     }
@@ -48,15 +39,13 @@ extension Statuses {
     /// Next status in the pipeline progression
     var next: Statuses? {
         switch self {
-        case .new: return .researching
-        case .researching: return .applying
-        case .applying: return .submitted
+        case .new: return .queued
+        case .queued: return .inProgress
+        case .inProgress: return .submitted
         case .submitted: return .interview
         case .interview: return .offer
         case .offer: return .accepted
         case .accepted, .rejected, .withdrawn: return nil
-        // Legacy statuses don't have a next
-        case .inProgress, .unsubmitted, .closed, .followUp, .abandonned: return nil
         }
     }
 
@@ -66,10 +55,8 @@ extension Statuses {
     /// Whether this is a terminal status (end of pipeline)
     var isTerminal: Bool {
         switch self {
-        case .accepted, .rejected, .withdrawn, .closed, .abandonned:
-            return true
-        default:
-            return false
+        case .accepted, .rejected, .withdrawn: return true
+        default: return false
         }
     }
 
@@ -80,19 +67,14 @@ extension Statuses {
     var icon: String {
         switch self {
         case .new: return "sparkles"
-        case .researching: return "magnifyingglass"
-        case .applying: return "doc.text"
+        case .queued: return "tray.full"
+        case .inProgress: return "arrow.triangle.2.circlepath"
         case .submitted: return "paperplane.fill"
         case .interview: return "person.2"
         case .offer: return "gift"
         case .accepted: return "checkmark.seal.fill"
         case .rejected: return "xmark.circle"
         case .withdrawn: return "arrow.uturn.backward"
-        case .inProgress: return "arrow.triangle.2.circlepath"
-        case .unsubmitted: return "doc"
-        case .closed: return "archivebox"
-        case .followUp: return "bell"
-        case .abandonned: return "trash"
         }
     }
 
@@ -100,25 +82,20 @@ extension Statuses {
     var color: SwiftUI.Color {
         switch self {
         case .new: return .blue
-        case .researching: return .purple
-        case .applying: return .orange
+        case .queued: return .cyan
+        case .inProgress: return .purple
         case .submitted: return .green
         case .interview: return .teal
         case .offer: return .yellow
         case .accepted: return .mint
         case .rejected: return .red
         case .withdrawn: return .gray
-        case .inProgress: return .orange
-        case .unsubmitted: return .gray
-        case .closed: return .secondary
-        case .followUp: return .yellow
-        case .abandonned: return .gray
         }
     }
 
-    /// Pipeline statuses (excludes legacy statuses)
+    /// All pipeline statuses in order
     static var pipelineStatuses: [Statuses] {
-        [.new, .researching, .applying, .submitted, .interview, .offer, .accepted, .rejected, .withdrawn]
+        [.new, .queued, .inProgress, .submitted, .interview, .offer, .accepted, .rejected, .withdrawn]
     }
 }
 @Model class JobApp: Equatable, Identifiable, Hashable {

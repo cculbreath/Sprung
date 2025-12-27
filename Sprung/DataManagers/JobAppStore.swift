@@ -290,10 +290,10 @@ final class JobAppStore: SwiftDataStore {
             switch jobApp.status {
             case .new:
                 return (jobApp.daysSinceCreated ?? 0) > 3
-            case .researching:
+            case .queued:
+                return (jobApp.daysSinceCreated ?? 0) > 5
+            case .inProgress:
                 return (jobApp.daysSinceCreated ?? 0) > 7
-            case .applying:
-                return (jobApp.daysSinceCreated ?? 0) > 2
             case .submitted:
                 return (jobApp.daysSinceApplied ?? 0) > 14
             case .interview:

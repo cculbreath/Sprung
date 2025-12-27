@@ -505,11 +505,11 @@ final class DiscoveryCoordinator {
             count: count
         )
 
-        // Advance selected jobs to researching status
+        // Advance selected jobs to queued status
         for selection in result.selections {
             if let job = identifiedJobs.first(where: { $0.id == selection.jobId }) {
-                jobAppStore.setStatus(job, to: .researching)
-                Logger.info("📋 Advanced '\(job.jobPosition)' at \(job.companyName) to Researching", category: .ai)
+                jobAppStore.setStatus(job, to: .queued)
+                Logger.info("📋 Advanced '\(job.jobPosition)' at \(job.companyName) to Queued", category: .ai)
             }
         }
 

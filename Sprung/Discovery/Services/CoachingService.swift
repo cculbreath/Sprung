@@ -561,10 +561,10 @@ final class CoachingService {
                 count: count
             )
 
-            // Advance selected jobs to Researching status
+            // Advance selected jobs to Queued status
             for selection in result.selections {
                 if let jobApp = jobAppStore.jobApp(byId: selection.jobId) {
-                    jobAppStore.setStatus(jobApp, to: .researching)
+                    jobAppStore.setStatus(jobApp, to: .queued)
                 }
             }
 
@@ -1111,7 +1111,7 @@ final class CoachingService {
 
     /// Build list of active job applications (identified through applying stages)
     private func buildActiveJobAppsList() -> String {
-        let activeStatuses: [Statuses] = [.new, .researching, .applying, .submitted, .interview, .offer]
+        let activeStatuses: [Statuses] = [.new, .queued, .inProgress, .submitted, .interview, .offer]
         let activeApps = jobAppStore.jobApps.filter { activeStatuses.contains($0.status) }
 
         guard !activeApps.isEmpty else {

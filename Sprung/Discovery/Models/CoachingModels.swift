@@ -101,8 +101,8 @@ struct ActivitySnapshot: Codable {
 
     struct JobAppStageBreakdown: Codable {
         var identified: Int = 0      // Gathered, no action taken
-        var researching: Int = 0     // Looking into the company
-        var applying: Int = 0        // Preparing materials
+        var queued: Int = 0          // On deck, ready to work on
+        var inProgress: Int = 0      // Actively working on
         var applied: Int = 0         // Actually submitted
         var interviewing: Int = 0    // In interview process
         var offer: Int = 0           // Have an offer
@@ -111,11 +111,11 @@ struct ActivitySnapshot: Codable {
         var withdrawn: Int = 0       // User withdrew
 
         var total: Int {
-            identified + researching + applying + applied + interviewing + offer + accepted + rejected + withdrawn
+            identified + queued + inProgress + applied + interviewing + offer + accepted + rejected + withdrawn
         }
 
         var activeTotal: Int {
-            identified + researching + applying + applied + interviewing + offer
+            identified + queued + inProgress + applied + interviewing + offer
         }
 
         var submittedTotal: Int {
@@ -245,16 +245,16 @@ struct ActivitySnapshot: Codable {
             parts.append("### Job Application Pipeline Status")
             parts.append("Total applications: \(stages.total)")
             if stages.identified > 0 {
-                parts.append("- Gathered (no action yet): \(stages.identified)")
+                parts.append("- Identified (no action yet): \(stages.identified)")
             }
-            if stages.researching > 0 {
-                parts.append("- Researching: \(stages.researching)")
+            if stages.queued > 0 {
+                parts.append("- Queued (on deck): \(stages.queued)")
             }
-            if stages.applying > 0 {
-                parts.append("- Preparing to apply: \(stages.applying)")
+            if stages.inProgress > 0 {
+                parts.append("- In Progress: \(stages.inProgress)")
             }
             if stages.applied > 0 {
-                parts.append("- Actually submitted: \(stages.applied)")
+                parts.append("- Submitted: \(stages.applied)")
             }
             if stages.interviewing > 0 {
                 parts.append("- In interviews: \(stages.interviewing)")
