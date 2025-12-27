@@ -7,10 +7,11 @@ import SwiftUI
 
 /// Selection state for AI revision
 enum AISelectionState {
-    case notSelected       // Gray sparkle
-    case directlySelected  // Solid accent sparkle (purple/blue)
-    case inherited         // Dimmed/outlined sparkle (via parent selection)
-    case groupInherited    // Orange sparkle (via parent's attribute picker)
+    case notSelected        // Gray sparkle
+    case directlySelected   // Solid accent sparkle (purple/blue)
+    case inherited          // Dimmed/outlined sparkle (via parent selection)
+    case groupInherited     // Orange sparkle (via parent's attribute picker)
+    case containerIncluded  // Teal - child of bundle/iterate container
 }
 
 struct SparkleButton: View {
@@ -23,6 +24,8 @@ struct SparkleButton: View {
     private var selectionState: AISelectionState {
         if node.isGroupInheritedSelection {
             return .groupInherited
+        } else if node.isIncludedInContainerReview {
+            return .containerIncluded
         } else if node.status == .aiToReplace {
             return .directlySelected
         } else if node.isInheritedAISelection {
@@ -38,7 +41,9 @@ struct SparkleButton: View {
         case .directlySelected:
             return .accentColor
         case .groupInherited:
-            return .orange  // Different color for group-inherited
+            return .orange
+        case .containerIncluded:
+            return .teal
         case .inherited:
             return .accentColor.opacity(0.5)
         case .notSelected:
@@ -51,6 +56,8 @@ struct SparkleButton: View {
         switch selectionState {
         case .directlySelected, .groupInherited:
             return "sparkles"
+        case .containerIncluded:
+            return "circle.fill"  // Small filled dot for included items
         case .inherited:
             return "sparkles"
         case .notSelected:
@@ -68,6 +75,8 @@ struct SparkleButton: View {
             return "Click to remove from AI revision"
         case .groupInherited:
             return "Selected via parent - click parent to modify"
+        case .containerIncluded:
+            return "Included in parent container's review"
         case .inherited:
             return "Included via parent selection (click to exclude)"
         case .notSelected:
@@ -83,9 +92,8 @@ struct SparkleButton: View {
         if node.isCollectionNode {
             // Collection node - show attribute picker
             onShowAttributePicker?()
-        } else if selectionState == .groupInherited {
-            // Group-inherited nodes shouldn't toggle individually
-            // Could show a message or do nothing
+        } else if selectionState == .groupInherited || selectionState == .containerIncluded {
+            // These are controlled by parent - can't toggle individually
             return
         } else {
             // Regular toggle
@@ -107,6 +115,14 @@ struct SparkleButton: View {
                 if selectionState == .groupInherited {
                     Image(systemName: iconName)
                         .foregroundColor(.orange.opacity(0.3))
+                        .font(.system(size: 16))
+                        .blur(radius: 2)
+                }
+
+                // For container-included, show teal glow
+                if selectionState == .containerIncluded {
+                    Image(systemName: iconName)
+                        .foregroundColor(.teal.opacity(0.3))
                         .font(.system(size: 16))
                         .blur(radius: 2)
                 }

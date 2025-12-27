@@ -170,6 +170,22 @@ enum LeafStatus: String, Codable, Hashable {
         return false
     }
 
+    /// Returns true if this node is a child of a container being reviewed in bundle/iterate mode
+    /// e.g., "Swift" is a child of "keywords" which is set to iterate under "skills"
+    var isIncludedInContainerReview: Bool {
+        guard let containerParent = parent,
+              let entry = containerParent.parent,
+              let collection = entry.parent else { return false }
+
+        let containerName = containerParent.name.isEmpty ? containerParent.displayLabel : containerParent.name
+
+        // Check if collection has this container in bundle or enumerate attributes
+        if collection.bundledAttributes?.contains(containerName) == true { return true }
+        if collection.enumeratedAttributes?.contains(containerName) == true { return true }
+
+        return false
+    }
+
     /// Returns true if this node should be included in AI revision
     /// (either directly selected or inherited from parent)
     var isSelectedForAIRevision: Bool {
