@@ -47,15 +47,9 @@ actor LLMMessenger: OnboardingEventEmitter {
     }
     /// Start listening to message request events
     func startEventSubscriptions() async {
-        // Use unstructured tasks so they run independently but ensure streams are ready
         Task {
             for await event in await self.eventBus.stream(topic: .llm) {
                 await self.handleLLMEvent(event)
-            }
-        }
-        Task {
-            for await event in await self.eventBus.stream(topic: .userInput) {
-                await self.handleUserInputEvent(event)
             }
         }
         // Small delay to ensure streams are connected before returning
@@ -65,11 +59,19 @@ actor LLMMessenger: OnboardingEventEmitter {
     private func handleLLMEvent(_ event: OnboardingEvent) async {
         switch event {
         case .llmSendUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText, let toolChoice):
-            await sendUserMessage(payload, isSystemGenerated: isSystemGenerated, chatboxMessageId: chatboxMessageId, originalText: originalText, toolChoice: toolChoice)
-        // llmSendDeveloperMessage is now routed through StateCoordinator's queue
-        // and comes back as llmExecuteDeveloperMessage
+            guard isActive else {
+                Logger.warning("LLMMessenger not active, ignoring message", category: .ai)
+                return
+            }
+            await emit(.llmEnqueueUserMessage(
+                payload: payload,
+                isSystemGenerated: isSystemGenerated,
+                chatboxMessageId: chatboxMessageId,
+                originalText: originalText,
+                toolChoice: toolChoice
+            ))
         case .llmToolResponseMessage(let payload):
-            await sendToolResponse(payload)
+            await emit(.llmEnqueueToolResponse(payload: payload))
         case .llmExecuteUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText, let bundledDeveloperMessages, let toolChoice):
             await executeUserMessage(payload, isSystemGenerated: isSystemGenerated, chatboxMessageId: chatboxMessageId, originalText: originalText, bundledDeveloperMessages: bundledDeveloperMessages, toolChoice: toolChoice)
         case .llmExecuteToolResponse(let payload):
@@ -86,23 +88,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             break
         }
     }
-    private func handleUserInputEvent(_ event: OnboardingEvent) async {
-        Logger.debug("LLMMessenger received user input event", category: .ai)
-    }
-    /// Send user message to LLM (enqueues via event publication)
-    private func sendUserMessage(_ payload: JSON, isSystemGenerated: Bool = false, chatboxMessageId: String? = nil, originalText: String? = nil, toolChoice: String? = nil) async {
-        guard isActive else {
-            Logger.warning("LLMMessenger not active, ignoring message", category: .ai)
-            return
-        }
-        await emit(.llmEnqueueUserMessage(
-            payload: payload,
-            isSystemGenerated: isSystemGenerated,
-            chatboxMessageId: chatboxMessageId,
-            originalText: originalText,
-            toolChoice: toolChoice
-        ))
-    }
+
     private func executeUserMessage(_ payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String? = nil, originalText: String? = nil, bundledDeveloperMessages: [JSON] = [], toolChoice: String? = nil) async {
         await emit(.llmStatus(status: .busy))
         let text = payload["content"].string ?? payload["text"].stringValue
@@ -319,10 +305,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             await stateCoordinator.markStreamCompleted()
         }
     }
-    /// Send tool response back to LLM - enqueues via event publication
-    private func sendToolResponse(_ payload: JSON) async {
-        await emit(.llmEnqueueToolResponse(payload: payload))
-    }
+
     private func executeToolResponse(_ payload: JSON) async {
         await emit(.llmStatus(status: .busy))
         // Track pending tool response for retry on stream error
