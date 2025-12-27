@@ -657,8 +657,12 @@ extension TreeNode {
         // Handle wildcards
         if component == "*" {
             // Enumerate all object children (children with display names that have sub-fields)
-            for child in node.orderedChildren {
-                let childPath = currentPath + [child.name.isEmpty ? child.value : child.name]
+            for (index, child) in node.orderedChildren.enumerated() {
+                // Build identifier: prefer name, then value, then index
+                let identifier = !child.name.isEmpty ? child.name :
+                                 !child.value.isEmpty ? child.value :
+                                 "[\(index)]"
+                let childPath = currentPath + [identifier]
                 exportNodesRecursive(
                     node: child,
                     pathComponents: pathComponents,
@@ -669,8 +673,12 @@ extension TreeNode {
             }
         } else if component == "[]" {
             // Enumerate all array item children (leaf values)
-            for child in node.orderedChildren {
-                let childPath = currentPath + [child.name.isEmpty ? child.value : child.name]
+            for (index, child) in node.orderedChildren.enumerated() {
+                // Build identifier: prefer name, then value, then index
+                let identifier = !child.name.isEmpty ? child.name :
+                                 !child.value.isEmpty ? child.value :
+                                 "[\(index)]"
+                let childPath = currentPath + [identifier]
                 exportNodesRecursive(
                     node: child,
                     pathComponents: pathComponents,
@@ -733,18 +741,23 @@ extension TreeNode {
 
     /// Build a contextual display name that includes parent context.
     /// e.g., path "work.Tesla.description" with nodeName "description" → "Tesla - description"
+    /// Never returns empty - falls back to nodeName, path component, or "Item"
     private static func buildContextualDisplayName(nodeName: String, path: String) -> String {
-        let components = path.split(separator: ".")
-        guard components.count >= 2 else { return nodeName }
+        let components = path.split(separator: ".").map(String.init)
+
+        // Use nodeName if it's not empty
+        let effectiveName = nodeName.isEmpty ? (components.last ?? "Item") : nodeName
+
+        guard components.count >= 2 else { return effectiveName }
 
         // Skip section name (first component like "work", "skills") and the node name (last component)
         // Take the middle components as context (e.g., company name, skill category)
         let middleComponents = components.dropFirst().dropLast()
 
         if let context = middleComponents.first, !context.isEmpty {
-            return "\(context) - \(nodeName)"
+            return "\(context) - \(effectiveName)"
         }
-        return nodeName
+        return effectiveName
     }
 
     /// Apply review changes from a PhaseReviewContainer to the tree.

@@ -105,61 +105,140 @@ Previously defined review behavior for list items:
 
 #### `reviewPhases`
 
-Configures multi-phase AI review for complex sections. Each phase targets a specific field path and can be bundled (batch review) or unbundled (item-by-item review).
+Configures multi-phase AI review for complex sections. Each phase targets a specific field path.
 
 ```json
 "reviewPhases": {
   "skills": [
-    { "phase": 1, "field": "skills.*.name", "bundle": true },
-    { "phase": 2, "field": "skills.*.keywords", "bundle": false }
+    { "phase": 1, "field": "skills.*.name" },
+    { "phase": 2, "field": "skills[].keywords" }
   ]
 }
 ```
 
-**Path Pattern Syntax:**
+### Path Pattern Syntax (defaultAIFields & reviewPhases)
 
-The wildcard notation controls both traversal AND grouping behavior:
+Path patterns determine how resume tree nodes are exported for AI review. The syntax controls both **navigation** (which nodes to select) and **grouping** (how many RevNodes are created).
 
-| Symbol | Meaning | Result |
-|--------|---------|--------|
-| `*` | Enumerate AND **bundle** into ONE revnode | Holistic review of all matches together |
-| `[]` | Enumerate with **one revnode per item** | Individual review of each match |
-| `fieldName` | Match exact field name | Navigates to specific field |
+#### Core Symbols
 
-**Key Insight:** The wildcard determines how many revnodes are created:
-- `skills.*.name` → **1 revnode** containing all 5 category names (bundled for holistic review)
-- `skills[].name` → **5 revnodes**, one per category name (individual review)
-- `skills[].keywords` → **5 revnodes**, each with that category's keywords
-- `work.*.highlights` → **1 revnode** with all highlights across all jobs (bundled)
-- `work[].highlights` → **4 revnodes**, each with one job's highlights
+| Symbol | Meaning | Grouping |
+|--------|---------|----------|
+| `.fieldName` | Navigate to exact field | — |
+| `.*` | Enumerate children AND **bundle** | All matches → **1 RevNode** |
+| `[]` | Enumerate children, **separate** | Each match → **1 RevNode** |
 
-**Phase Properties:**
+#### The Key Distinction: `*` vs `[]`
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `phase` | int | Phase order (1-indexed) |
-| `field` | string | Path pattern (use `*` for bundle, `[]` for per-item) |
-| `bundle` | bool | (Legacy) Prefer using `*` vs `[]` in path pattern instead |
+Both `*` and `[]` enumerate child nodes, but they differ in how results are grouped:
 
-**Typical Configuration:**
+- **`*` bundles**: Collect the specified attribute from ALL children into a single RevNode
+- **`[]` iterates**: Create separate RevNodes for each child
+
+#### Understanding the Tree Structure
+
+Consider this resume tree:
+
+```
+root
+├── work
+│   ├── Company A
+│   │   ├── name: "Company A"
+│   │   ├── position: "Engineer"
+│   │   └── highlights
+│   │       ├── "Built X"
+│   │       ├── "Led Y"
+│   │       └── "Improved Z"
+│   └── Company B
+│       ├── name: "Company B"
+│       ├── position: "Developer"
+│       └── highlights
+│           ├── "Created W"
+│           └── "Designed V"
+├── skills
+│   ├── Software Engineering
+│   │   ├── name: "Software Engineering"
+│   │   └── keywords
+│   │       ├── "Swift"
+│   │       ├── "Python"
+│   │       └── "JavaScript"
+│   └── Data Science
+│       ├── name: "Data Science"
+│       └── keywords
+│           ├── "ML"
+│           └── "Statistics"
+└── custom
+    └── jobTitles
+        ├── "Engineer"
+        ├── "Developer"
+        └── "Architect"
+```
+
+#### Pattern Examples
+
+| Pattern | RevNodes | Content |
+|---------|----------|---------|
+| `work[].highlights` | 2 | RevNode 1: `["Built X", "Led Y", "Improved Z"]`<br>RevNode 2: `["Created W", "Designed V"]` |
+| `work.*.highlights` | 1 | `["Built X", "Led Y", "Improved Z", "Created W", "Designed V"]` |
+| `skills.*.name` | 1 | `["Software Engineering", "Data Science"]` |
+| `skills[].name` | 2 | RevNode 1: `"Software Engineering"`<br>RevNode 2: `"Data Science"` |
+| `skills[].keywords` | 2 | RevNode 1: `["Swift", "Python", "JavaScript"]`<br>RevNode 2: `["ML", "Statistics"]` |
+| `skills.*.keywords` | 1 | `["Swift", "Python", "JavaScript", "ML", "Statistics"]` |
+| `custom.jobTitles[]` | 3 | RevNode 1: `"Engineer"`<br>RevNode 2: `"Developer"`<br>RevNode 3: `"Architect"` |
+| `projects[].description` | N | One RevNode per project, each containing a description string |
+
+#### Double Iteration: `[]` + `[]`
+
+For deep iteration, you can use `[]` multiple times:
+
+| Pattern | RevNodes | Content |
+|---------|----------|---------|
+| `skills[].keywords[]` | 5 | One RevNode per keyword across all skills |
+| `work[].highlights[]` | 5 | One RevNode per highlight bullet across all jobs |
+
+#### When to Use Each
+
+**Use `*` (bundle) when:**
+- LLM needs holistic view of all items together
+- Items should be reviewed/edited as a cohesive set
+- Example: Skill category names should complement each other
+
+**Use `[]` (iterate) when:**
+- Each item should be reviewed independently
+- Changes to one item don't affect others
+- Example: Each job's highlights stand alone
+
+#### Typical Configuration
 
 ```json
 "defaultAIFields": [
-  "skills.*.name",       // 1 revnode: review all category names together
-  "skills[].keywords",   // 5 revnodes: review each category's keywords separately
-  "work[].highlights"    // 4 revnodes: review each job's bullets separately
+  "custom.objective",      // 1 RevNode: scalar field
+  "work[].highlights",     // N RevNodes: each job's bullets separately
+  "projects[].description",// N RevNodes: each project description
+  "skills.*.name",         // 1 RevNode: all category names bundled (Phase 1)
+  "skills[].keywords",     // N RevNodes: each category's keywords (Phase 2)
+  "custom.jobTitles[]"     // N RevNodes: each job title separately
 ]
 ```
 
-**Example Patterns:**
+#### Phase Configuration
 
-| Pattern | Revnodes | Description |
-|---------|----------|-------------|
-| `skills.*.name` | 1 | All category names bundled (e.g., 5 names in 1 revnode) |
-| `skills[].name` | N | One revnode per category name |
-| `skills[].keywords` | N | Each category's keywords as separate revnode |
-| `work[].highlights` | N | Each job's highlights as separate revnode |
-| `work.*.highlights` | 1 | All highlights from all jobs bundled |
+Phases let you review certain fields first (e.g., skill category names) before reviewing dependent fields (e.g., keywords under those categories):
+
+```json
+"reviewPhases": {
+  "skills": [
+    { "phase": 1, "field": "skills.*.name" },
+    { "phase": 2, "field": "skills[].keywords" }
+  ]
+}
+```
+
+In this example:
+- **Phase 1**: Review all 5 skill category names together (1 bundled RevNode)
+- **Phase 2**: After Phase 1 approvals are applied, review keywords for each category (5 RevNodes)
+
+Phase 2 paths will reflect any name changes from Phase 1.
 
 #### `section-visibility`
 

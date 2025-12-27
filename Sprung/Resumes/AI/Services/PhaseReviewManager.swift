@@ -214,113 +214,54 @@ class PhaseReviewManager {
         return result
     }
 
-    /// Build the two-round review structure based on phase assignments:
-    /// - Round 1: Collection-type items assigned to Phase 1
-    /// - Round 2: Everything else (scalars are always Phase 2, collections default to Phase 2)
-    /// Note: Manifest defaults are applied at tree creation time to resume.phaseAssignments
+    /// Build the two-round review structure using manifest patterns:
+    /// - Round 1: Patterns from reviewPhases with phase=1
+    /// - Round 2: All other defaultAIFields patterns
+    ///
+    /// Uses TreeNode.exportNodesMatchingPath which correctly handles:
+    /// - `*` patterns: bundle all matches into 1 RevNode
+    /// - `[]` patterns: create separate RevNodes for each match
     func buildReviewRounds(for resume: Resume) -> (phase1: [ExportedReviewNode], phase2: [ExportedReviewNode]) {
-        guard let rootNode = resume.rootNode else { return ([], []) }
+        guard let rootNode = resume.rootNode,
+              let template = resume.template,
+              let manifest = TemplateManifestLoader.manifest(for: template) else {
+            Logger.warning("⚠️ [buildReviewRounds] Missing rootNode, template, or manifest")
+            return ([], [])
+        }
 
-        let phaseAssignments = resume.phaseAssignments
+        guard let defaultAIFields = manifest.defaultAIFields, !defaultAIFields.isEmpty else {
+            Logger.warning("⚠️ [buildReviewRounds] No defaultAIFields in manifest")
+            return ([], [])
+        }
+
+        // Build set of Phase 1 patterns from reviewPhases config
+        var phase1Patterns = Set<String>()
+        if let reviewPhases = manifest.reviewPhases {
+            for (_, phases) in reviewPhases {
+                for phaseConfig in phases where phaseConfig.phase == 1 {
+                    phase1Patterns.insert(phaseConfig.field)
+                    Logger.debug("📋 [buildReviewRounds] Phase 1 pattern: \(phaseConfig.field)")
+                }
+            }
+        }
+
         var phase1Nodes: [ExportedReviewNode] = []
         var phase2Nodes: [ExportedReviewNode] = []
 
-        // Process all sections and categorize nodes by phase assignment
-        if let children = rootNode.children {
-            for sectionNode in children {
-                let sectionName = sectionNode.name.isEmpty ? sectionNode.value : sectionNode.name
-                guard !sectionName.isEmpty else { continue }
+        // Export nodes for each defaultAIFields pattern
+        for pattern in defaultAIFields {
+            let nodes = TreeNode.exportNodesMatchingPath(pattern, from: rootNode)
+            Logger.debug("📋 [buildReviewRounds] Pattern '\(pattern)' → \(nodes.count) RevNodes")
 
-                // Export all AI-selected nodes from this section
-                let sectionNodes = exportAllAISelectedNodes(from: sectionNode)
-
-                // Categorize each node by its phase assignment
-                for node in sectionNodes {
-                    // Scalar nodes (no children) are always Phase 2
-                    if !node.isContainer {
-                        phase2Nodes.append(node)
-                        continue
-                    }
-
-                    // Collection nodes: check phase assignment (default Phase 2)
-                    let attrName = extractAttributeName(from: node, sectionName: sectionName)
-                    let assignmentKey = "\(sectionName)-\(attrName)"
-                    let assignedPhase = phaseAssignments[assignmentKey] ?? 2
-
-                    if assignedPhase == 1 {
-                        phase1Nodes.append(node)
-                    } else {
-                        phase2Nodes.append(node)
-                    }
-                }
+            if phase1Patterns.contains(pattern) {
+                phase1Nodes.append(contentsOf: nodes)
+            } else {
+                phase2Nodes.append(contentsOf: nodes)
             }
         }
 
         Logger.info("📋 Review rounds: Phase 1 has \(phase1Nodes.count) nodes, Phase 2 has \(phase2Nodes.count) nodes")
         return (phase1Nodes, phase2Nodes)
-    }
-
-    /// Extract attribute name from an exported node for phase assignment lookup
-    private func extractAttributeName(from node: ExportedReviewNode, sectionName: String) -> String {
-        // The path format is like "SectionName.EntryName.attributeName" or just "SectionName.attributeName"
-        // We need to extract the attribute name (last meaningful segment)
-        let pathComponents = node.path.split(separator: ".").map(String.init)
-
-        // Find the attribute name - typically the last component, or second-to-last if it's an item
-        if pathComponents.count >= 2 {
-            // Check if this is a nested item (e.g., "Skills.Programming Languages.keywords")
-            let potentialAttr = pathComponents.last ?? ""
-            // Common attribute names we care about
-            let knownAttributes = ["name", "keywords", "highlights", "summary", "position", "title", "description"]
-            if knownAttributes.contains(potentialAttr.lowercased()) {
-                return potentialAttr
-            }
-        }
-
-        // Fallback: use the node's display name or path
-        return node.displayName
-    }
-
-    /// Export all AI-selected nodes from a section node (recursively).
-    /// Sets isBundled=true when a parent node with children is AI-enabled (bundle mode).
-    /// Sets isBundled=false when individual leaf nodes are AI-enabled (per-item mode).
-    private func exportAllAISelectedNodes(from sectionNode: TreeNode) -> [ExportedReviewNode] {
-        var result: [ExportedReviewNode] = []
-
-        func traverse(_ node: TreeNode, path: String) {
-            let currentPath = path.isEmpty ? node.name : "\(path).\(node.name)"
-
-            // Check if this node is selected for AI
-            if node.status == .aiToReplace {
-                let hasChildren = node.children?.isEmpty == false
-                let childValues = hasChildren ? node.children?.map { $0.value }.filter { !$0.isEmpty } : nil
-
-                // Bundle mode: parent node with children is AI-enabled
-                // Per-item mode: leaf node (no children) is AI-enabled
-                let isBundledNode = hasChildren && childValues?.isEmpty == false
-
-                let exportedNode = ExportedReviewNode(
-                    id: node.id,
-                    path: currentPath,
-                    displayName: node.displayLabel,
-                    value: node.value,
-                    childValues: childValues,
-                    childCount: childValues?.count ?? 0,
-                    isBundled: isBundledNode
-                )
-                result.append(exportedNode)
-            }
-
-            // Recurse into children
-            if let children = node.children {
-                for child in children {
-                    traverse(child, path: currentPath)
-                }
-            }
-        }
-
-        traverse(sectionNode, path: "")
-        return result
     }
 
     /// Tracks whether phase 1 has been completed
