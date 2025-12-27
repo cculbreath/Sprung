@@ -1,6 +1,30 @@
 import Foundation
+
 enum TemplateManifestLoader {
+    /// Cache to avoid repeated JSON parsing of manifests
+    private static var cache: [UUID: (manifest: TemplateManifest, dataHash: Int)] = [:]
+
     static func manifest(for template: Template) -> TemplateManifest? {
-        TemplateManifestDefaults.manifest(for: template)
+        let dataHash = template.manifestData?.hashValue ?? 0
+
+        // Check cache
+        if let cached = cache[template.id], cached.dataHash == dataHash {
+            return cached.manifest
+        }
+
+        // Parse and cache
+        let manifest = TemplateManifestDefaults.manifest(for: template)
+        cache[template.id] = (manifest, dataHash)
+        return manifest
+    }
+
+    /// Clear cache for a specific template (call when manifest data changes)
+    static func invalidateCache(for templateId: UUID) {
+        cache.removeValue(forKey: templateId)
+    }
+
+    /// Clear entire cache
+    static func clearCache() {
+        cache.removeAll()
     }
 }
