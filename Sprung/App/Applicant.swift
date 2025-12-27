@@ -5,28 +5,30 @@
 import Foundation
 import SwiftData
 import SwiftUI
-@Model
-final class ApplicantSocialProfile {
-    @Attribute(.unique) var id: UUID
+
+// MARK: - Social Profile (Codable struct, stored as JSON in ApplicantProfile)
+
+struct SocialProfile: Codable, Identifiable, Equatable {
+    var id: UUID
     var network: String
     var username: String
     var url: String
-    @Relationship(deleteRule: .nullify, inverse: \ApplicantProfile.profiles)
-    var applicant: ApplicantProfile?
+
     init(
         id: UUID = UUID(),
         network: String = "",
         username: String = "",
-        url: String = "",
-        applicant: ApplicantProfile? = nil
+        url: String = ""
     ) {
         self.id = id
         self.network = network
         self.username = username
         self.url = url
-        self.applicant = applicant
     }
 }
+
+// MARK: - Applicant Profile
+
 @Model
 class ApplicantProfile {
     var name: String
@@ -40,10 +42,27 @@ class ApplicantProfile {
     var websites: String
     var email: String
     var phone: String
-    @Relationship(deleteRule: .cascade) var profiles: [ApplicantSocialProfile]
+
+    // Social profiles stored as JSON blob
+    private var socialProfilesData: Data?
+
+    var profiles: [SocialProfile] {
+        get {
+            guard let data = socialProfilesData,
+                  let decoded = try? JSONDecoder().decode([SocialProfile].self, from: data) else {
+                return []
+            }
+            return decoded
+        }
+        set {
+            socialProfilesData = try? JSONEncoder().encode(newValue)
+        }
+    }
+
     @Attribute(.externalStorage) var pictureData: Data?
     var pictureMimeType: String?
     var signatureData: Data?
+
     init(
         name: String = "John Doe",
         label: String = "Software Engineer",
@@ -56,7 +75,7 @@ class ApplicantProfile {
         websites: String = "example.com",
         email: String = "applicant@example.com",
         phone: String = "(555) 123-4567",
-        profiles: [ApplicantSocialProfile] = [],
+        profiles: [SocialProfile] = [],
         pictureData: Data? = nil,
         pictureMimeType: String? = nil,
         signatureData: Data? = nil
@@ -119,7 +138,7 @@ struct Applicant {
         websites: String,
         email: String,
         phone: String,
-        profiles: [ApplicantSocialProfile] = [],
+        profiles: [SocialProfile] = [],
         pictureData: Data? = nil,
         pictureMimeType: String? = nil
     ) {

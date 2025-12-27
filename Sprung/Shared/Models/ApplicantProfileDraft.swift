@@ -1,11 +1,14 @@
 import AppKit
 import Foundation
 import SwiftyJSON
+
+/// Draft model for editing social profiles in the UI
 struct ApplicantSocialProfileDraft: Identifiable, Equatable {
     var id: UUID
     var network: String
     var username: String
     var url: String
+
     init(
         id: UUID = UUID(),
         network: String = "",
@@ -17,26 +20,21 @@ struct ApplicantSocialProfileDraft: Identifiable, Equatable {
         self.username = username
         self.url = url
     }
-    init(model: ApplicantSocialProfile) {
+
+    init(model: SocialProfile) {
         self.id = model.id
         self.network = model.network
         self.username = model.username
         self.url = model.url
     }
-    func toModel(existing: ApplicantSocialProfile? = nil) -> ApplicantSocialProfile {
-        if let existing {
-            existing.network = network
-            existing.username = username
-            existing.url = url
-            return existing
-        }
-        let profile = ApplicantSocialProfile(
+
+    func toModel() -> SocialProfile {
+        SocialProfile(
             id: id,
             network: network,
             username: username,
             url: url
         )
-        return profile
     }
 }
 struct ApplicantProfileDraft: Equatable {
@@ -314,14 +312,7 @@ struct ApplicantProfileDraft: Equatable {
         if replaceMissing || shouldUse(.email, isEmpty: email.isEmpty) { profile.email = email }
         if replaceMissing || shouldUse(.phone, isEmpty: phone.isEmpty) { profile.phone = phone }
         if replaceMissing || shouldUse(.socialProfiles, isEmpty: socialProfiles.isEmpty) {
-            var existing = Dictionary(uniqueKeysWithValues: profile.profiles.map { ($0.id, $0) })
-            var updatedProfiles: [ApplicantSocialProfile] = []
-            for draft in socialProfiles {
-                let existingProfile = existing.removeValue(forKey: draft.id)
-                let updated = draft.toModel(existing: existingProfile)
-                updatedProfiles.append(updated)
-            }
-            profile.profiles = updatedProfiles
+            profile.profiles = socialProfiles.map { $0.toModel() }
         }
         if replaceMissing || shouldUse(.picture, isEmpty: pictureData == nil) {
             profile.pictureData = pictureData

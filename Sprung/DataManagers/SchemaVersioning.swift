@@ -19,7 +19,7 @@ enum SprungSchema {
         CoverLetter.self,
         CoverRef.self,
         ApplicantProfile.self,
-        ApplicantSocialProfile.self,
+        // ApplicantSocialProfile removed - now stored as JSON blob in ApplicantProfile
         ConversationContext.self,
         ConversationMessage.self,
         EnabledLLM.self,
