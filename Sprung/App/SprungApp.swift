@@ -266,7 +266,7 @@ struct SprungApp: App {
                 Button("Open Discovery") {
                     Logger.info("🔍 Menu command requested Discovery window", category: .ui)
                     NotificationCenter.default.post(name: .showDiscovery, object: nil)
-                    appDelegate.showSearchOpsWindow()
+                    appDelegate.showDiscoveryWindow()
                 }
                 .keyboardShortcut("d", modifiers: [.command, .shift])
                 Divider()

@@ -204,7 +204,7 @@ import SwiftUI
     }()
     /// System prompt using the native SwiftOpenAI message format
     let genericSystemMessage: LLMMessage = {
-        let content = loadPromptTemplate(named: "searchops_generic_system")
+        let content = loadPromptTemplate(named: "discovery_generic_system")
         return LLMMessage.text(role: .system, content: content)
     }()
 

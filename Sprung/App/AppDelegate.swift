@@ -21,7 +21,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var onboardingCoordinator: OnboardingInterviewCoordinator?
     var experienceDefaultsStore: ExperienceDefaultsStore?
     var careerKeywordStore: CareerKeywordStore?
-    var searchOpsCoordinator: SearchOpsCoordinator?
+    var searchOpsCoordinator: DiscoveryCoordinator?
     var coverRefStore: CoverRefStore?
     var resRefStore: ResRefStore?
     var jobAppStore: JobAppStore?
@@ -380,24 +380,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
     }
-    @MainActor @objc func showSearchOpsWindow() {
-        showSearchOpsWindow(section: nil, startOnboarding: false, triggerDiscovery: false, triggerEventDiscovery: false, triggerTaskGeneration: false, triggerWeeklyReflection: false)
+    @MainActor @objc func showDiscoveryWindow() {
+        showDiscoveryWindow(section: nil, startOnboarding: false, triggerDiscovery: false, triggerEventDiscovery: false, triggerTaskGeneration: false, triggerWeeklyReflection: false)
     }
 
-    @MainActor func showSearchOpsWindow(
-        section: SearchOpsSection? = nil,
+    @MainActor func showDiscoveryWindow(
+        section: DiscoverySection? = nil,
         startOnboarding: Bool = false,
         triggerDiscovery: Bool = false,
         triggerEventDiscovery: Bool = false,
         triggerTaskGeneration: Bool = false,
         triggerWeeklyReflection: Bool = false
     ) {
-        Logger.info("🔍 showSearchOpsWindow invoked (section: \(section?.rawValue ?? "nil"), onboarding: \(startOnboarding))", category: .ui)
+        Logger.info("🔍 showDiscoveryWindow invoked (section: \(section?.rawValue ?? "nil"), onboarding: \(startOnboarding))", category: .ui)
         if let window = searchOpsWindow, !window.isVisible {
             searchOpsWindow = nil
         }
         if searchOpsWindow == nil {
-            let searchOpsView = SearchOpsMainView()
+            let searchOpsView = DiscoveryMainView()
             let hostingView: NSHostingView<AnyView>
             if let modelContainer,
                let appEnvironment,

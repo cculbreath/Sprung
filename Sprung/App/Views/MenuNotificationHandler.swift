@@ -284,7 +284,7 @@ class MenuNotificationHandler {
         ) { _ in
             Task { @MainActor in
                 if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
-                    appDelegate.showSearchOpsWindow()
+                    appDelegate.showDiscoveryWindow()
                 }
             }
         }
@@ -295,7 +295,7 @@ class MenuNotificationHandler {
         ) { _ in
             Task { @MainActor in
                 if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
-                    appDelegate.showSearchOpsWindow(startOnboarding: true)
+                    appDelegate.showDiscoveryWindow(startOnboarding: true)
                 }
             }
         }
@@ -306,7 +306,7 @@ class MenuNotificationHandler {
         ) { _ in
             Task { @MainActor in
                 if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
-                    appDelegate.showSearchOpsWindow(section: .sources, triggerDiscovery: true)
+                    appDelegate.showDiscoveryWindow(section: .sources, triggerDiscovery: true)
                 }
             }
         }
@@ -317,7 +317,7 @@ class MenuNotificationHandler {
         ) { _ in
             Task { @MainActor in
                 if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
-                    appDelegate.showSearchOpsWindow(section: .events, triggerEventDiscovery: true)
+                    appDelegate.showDiscoveryWindow(section: .events, triggerEventDiscovery: true)
                 }
             }
         }
@@ -328,7 +328,7 @@ class MenuNotificationHandler {
         ) { _ in
             Task { @MainActor in
                 if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
-                    appDelegate.showSearchOpsWindow(section: .daily, triggerTaskGeneration: true)
+                    appDelegate.showDiscoveryWindow(section: .daily, triggerTaskGeneration: true)
                 }
             }
         }
@@ -339,7 +339,7 @@ class MenuNotificationHandler {
         ) { _ in
             Task { @MainActor in
                 if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
-                    appDelegate.showSearchOpsWindow(triggerWeeklyReflection: true)
+                    appDelegate.showDiscoveryWindow(triggerWeeklyReflection: true)
                 }
             }
         }
@@ -350,7 +350,7 @@ class MenuNotificationHandler {
         ) { _ in
             Task { @MainActor in
                 if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
-                    appDelegate.showSearchOpsWindow(section: .sources)
+                    appDelegate.showDiscoveryWindow(section: .sources)
                 }
             }
         }
@@ -361,7 +361,7 @@ class MenuNotificationHandler {
         ) { _ in
             Task { @MainActor in
                 if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
-                    appDelegate.showSearchOpsWindow(section: .contacts)
+                    appDelegate.showDiscoveryWindow(section: .contacts)
                 }
             }
         }
@@ -372,7 +372,7 @@ class MenuNotificationHandler {
         ) { _ in
             Task { @MainActor in
                 if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
-                    appDelegate.showSearchOpsWindow(section: .events)
+                    appDelegate.showDiscoveryWindow(section: .events)
                 }
             }
         }
@@ -383,7 +383,7 @@ class MenuNotificationHandler {
         ) { _ in
             Task { @MainActor in
                 if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
-                    appDelegate.showSearchOpsWindow(section: .daily)
+                    appDelegate.showDiscoveryWindow(section: .daily)
                 }
             }
         }
@@ -394,7 +394,7 @@ class MenuNotificationHandler {
         ) { _ in
             Task { @MainActor in
                 if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
-                    appDelegate.showSearchOpsWindow(section: .weeklyReview)
+                    appDelegate.showDiscoveryWindow(section: .weeklyReview)
                 }
             }
         }

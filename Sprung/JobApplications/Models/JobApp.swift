@@ -13,7 +13,7 @@ enum JobLeadPriority: String, Codable, CaseIterable {
     case low = "Low"
 }
 
-/// Stage in the application pipeline (used by SearchOps Kanban)
+/// Stage in the application pipeline (used by Discovery Kanban)
 enum ApplicationStage: String, Codable, CaseIterable {
     case identified = "Identified"
     case researching = "Researching"
@@ -127,13 +127,13 @@ extension Statuses {
     var status: Statuses = Statuses.new
     var notes: String = ""
 
-    // MARK: - SearchOps Pipeline Properties
+    // MARK: - Discovery Pipeline Properties
 
-    /// Priority level for the application (SearchOps Kanban)
+    /// Priority level for the application (Discovery Kanban)
     /// Stored as optional for migration compatibility with existing records
     private var _priority: JobLeadPriority?
 
-    /// Current stage in the application pipeline (SearchOps Kanban)
+    /// Current stage in the application pipeline (Discovery Kanban)
     /// Stored as optional for migration compatibility with existing records
     private var _stage: ApplicationStage?
 
@@ -340,7 +340,7 @@ extension Statuses {
         return result
     }
 
-    // MARK: - SearchOps Computed Properties
+    // MARK: - Discovery Computed Properties
 
     var daysSinceCreated: Int? {
         Calendar.current.dateComponents([.day], from: createdAt, to: Date()).day

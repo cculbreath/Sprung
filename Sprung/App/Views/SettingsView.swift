@@ -19,7 +19,7 @@ struct SettingsView: View {
     @AppStorage("onboardingInterviewPromptCacheRetention") private var onboardingPromptCacheRetention: Bool = true
     @Environment(OnboardingInterviewCoordinator.self) private var onboardingCoordinator
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
-    @Environment(SearchOpsCoordinator.self) private var searchOpsCoordinator
+    @Environment(DiscoveryCoordinator.self) private var searchOpsCoordinator
     @State private var showFactoryResetConfirmation = false
     @State private var showFinalResetConfirmation = false
     @State private var resetError: String?
@@ -142,7 +142,7 @@ struct SettingsView: View {
             }
 
             // MARK: - Search Operations
-            SearchOpsSettingsSection(coordinator: searchOpsCoordinator)
+            DiscoverySettingsSection(coordinator: searchOpsCoordinator)
 
             // MARK: - Voice & Audio
             Section {

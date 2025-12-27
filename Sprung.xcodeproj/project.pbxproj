@@ -41,7 +41,6 @@
 			explicitFolders = (
 				"Resources/chromium-headless-shell",
 				Resources/Prompts,
-				Resources/SearchOpsSchemas,
 				Resources/TemplateDefaults,
 			);
 			path = Sprung;

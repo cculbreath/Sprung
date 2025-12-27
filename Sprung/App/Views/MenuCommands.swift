@@ -60,7 +60,7 @@ extension Notification.Name {
     static let analyzeApplication = Notification.Name("analyzeApplication")
     // Interview Commands
     static let startOnboardingInterview = Notification.Name("startOnboardingInterview")
-    // Discovery Commands (renamed from SearchOps)
+    // Discovery Commands (renamed from Discovery)
     static let showDiscovery = Notification.Name("showDiscovery")
     static let startDiscoveryInterview = Notification.Name("startDiscoveryInterview")
     static let discoverJobSources = Notification.Name("discoverJobSources")
@@ -72,8 +72,6 @@ extension Notification.Name {
     static let showDiscoveryEvents = Notification.Name("showDiscoveryEvents")
     static let showDiscoveryDailyBriefing = Notification.Name("showDiscoveryDailyBriefing")
     static let showDiscoveryWeeklyReview = Notification.Name("showDiscoveryWeeklyReview")
-    // Legacy alias for compatibility
-    static let showSearchOps = Notification.Name("showDiscovery")
     // Window Commands (for toolbar buttons)
     static let showSettings = Notification.Name("showSettings")
     static let showApplicantProfile = Notification.Name("showApplicantProfile")

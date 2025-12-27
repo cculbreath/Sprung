@@ -32,7 +32,7 @@ final class AppDependencies {
     private let llmService: OpenRouterServiceBackend
     let reasoningStreamManager: ReasoningStreamManager
     let resumeReviseViewModel: ResumeReviseViewModel
-    let searchOpsCoordinator: SearchOpsCoordinator
+    let searchOpsCoordinator: DiscoveryCoordinator
     // MARK: - UI State
     let dragInfo: DragInfo
     let debugSettingsStore: DebugSettingsStore
@@ -148,8 +148,8 @@ final class AppDependencies {
         )
         self.onboardingCoordinator = onboardingCoordinator
 
-        // SearchOps Coordinator
-        let searchOpsCoordinator = SearchOpsCoordinator(
+        // Discovery Coordinator
+        let searchOpsCoordinator = DiscoveryCoordinator(
             modelContext: modelContext,
             jobAppStore: jobAppStore,
             interviewDataStore: interviewDataStore

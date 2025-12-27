@@ -61,9 +61,9 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                     Task { @MainActor in
                         Logger.info("🔍 Toolbar Discovery button tapped", category: .ui)
                         NotificationCenter.default.post(name: .showDiscovery, object: nil)
-                        if !NSApp.sendAction(#selector(AppDelegate.showSearchOpsWindow), to: nil, from: nil),
+                        if !NSApp.sendAction(#selector(AppDelegate.showDiscoveryWindow), to: nil, from: nil),
                            let delegate = NSApplication.shared.delegate as? AppDelegate {
-                            delegate.showSearchOpsWindow()
+                            delegate.showDiscoveryWindow()
                         }
                     }
                 }, label: {
