@@ -24,9 +24,13 @@ struct CoachingSectionView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Header
-            Label("COACH", systemImage: "figure.mind.and.body")
-                .font(.headline)
-                .foregroundStyle(.indigo)
+            HStack(spacing: 8) {
+                Image(systemName: "figure.mind.and.body")
+                    .font(.title2)
+                Text("COACH")
+                    .font(.headline)
+            }
+            .foregroundStyle(.indigo)
 
             // Content based on state
             if let service = coachingService {
