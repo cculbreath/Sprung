@@ -224,9 +224,10 @@ final class CoachingService {
     private func processNextResponse(forceQuestion: Bool) async throws {
         guard let convId = conversationId else { return }
 
-        let toolChoice: ToolChoice? = forceQuestion
+        // Force question tool for first 2 questions, then disable all tools to get recommendations
+        let toolChoice: ToolChoice = forceQuestion
             ? .function(name: CoachingToolSchemas.multipleChoiceToolName)
-            : nil
+            : .none
 
         do {
             let message = try await llmService.sendMessageSingleTurn(
