@@ -47,7 +47,6 @@ final class JobAppStore: SwiftDataStore {
         jobApp.jobPosition = "New Position"
         jobApp.companyName = "Company Name"
         jobApp.status = .new
-        jobApp.stage = .identified
         jobApp.identifiedDate = Date()
         jobApp.source = "Manual Entry"
         modelContext.insert(jobApp)
@@ -143,9 +142,9 @@ final class JobAppStore: SwiftDataStore {
         allJobAppsSorted.filter { $0.isActive }
     }
 
-    /// Job apps filtered by pipeline stage
-    func jobApps(forStage stage: ApplicationStage) -> [JobApp] {
-        allJobAppsSorted.filter { $0.stage == stage }
+    /// Job apps filtered by status
+    func jobApps(forStatus status: Statuses) -> [JobApp] {
+        allJobAppsSorted.filter { $0.status == status }
     }
 
     /// Find a job app by ID
@@ -155,9 +154,9 @@ final class JobAppStore: SwiftDataStore {
 
     // MARK: - Pipeline Stats
 
-    /// Count of job apps per stage
-    var pipelineStats: [ApplicationStage: Int] {
-        Dictionary(grouping: allJobAppsSorted) { $0.stage }
+    /// Count of job apps per status
+    var pipelineStats: [Statuses: Int] {
+        Dictionary(grouping: allJobAppsSorted) { $0.status }
             .mapValues { $0.count }
     }
 
@@ -201,19 +200,19 @@ final class JobAppStore: SwiftDataStore {
         saveContext()
     }
 
-    // MARK: - Stage Management
+    // MARK: - Status Management
 
-    /// Advance a job app to the next stage in the pipeline
-    func advanceStage(_ jobApp: JobApp) {
-        guard let nextStage = jobApp.stage.next else { return }
+    /// Advance a job app to the next status in the pipeline
+    func advanceStatus(_ jobApp: JobApp) {
+        guard let nextStatus = jobApp.status.next else { return }
 
-        jobApp.stage = nextStage
+        jobApp.status = nextStatus
 
         // Track dates
-        switch nextStage {
-        case .applied:
+        switch nextStatus {
+        case .submitted:
             jobApp.appliedDate = Date()
-        case .interviewing:
+        case .interview:
             if jobApp.firstInterviewDate == nil {
                 jobApp.firstInterviewDate = Date()
             }
@@ -230,11 +229,11 @@ final class JobAppStore: SwiftDataStore {
         saveContext()
     }
 
-    /// Set a job app to a specific stage
-    func setStage(_ jobApp: JobApp, to stage: ApplicationStage) {
-        jobApp.stage = stage
+    /// Set a job app to a specific status
+    func setStatus(_ jobApp: JobApp, to status: Statuses) {
+        jobApp.status = status
 
-        if stage == .accepted || stage == .rejected || stage == .withdrawn {
+        if status == .accepted || status == .rejected || status == .withdrawn {
             jobApp.closedDate = Date()
         }
 
@@ -243,7 +242,7 @@ final class JobAppStore: SwiftDataStore {
 
     /// Mark a job app as rejected
     func reject(_ jobApp: JobApp, reason: String?) {
-        jobApp.stage = .rejected
+        jobApp.status = .rejected
         jobApp.rejectionReason = reason
         jobApp.closedDate = Date()
         saveContext()
@@ -251,7 +250,7 @@ final class JobAppStore: SwiftDataStore {
 
     /// Mark a job app as withdrawn
     func withdraw(_ jobApp: JobApp, reason: String?) {
-        jobApp.stage = .withdrawn
+        jobApp.status = .withdrawn
         jobApp.withdrawalReason = reason
         jobApp.closedDate = Date()
         saveContext()
@@ -288,16 +287,16 @@ final class JobAppStore: SwiftDataStore {
     /// Job apps that need attention based on staleness
     var needsAction: [JobApp] {
         activeJobApps.filter { jobApp in
-            switch jobApp.stage {
-            case .identified:
+            switch jobApp.status {
+            case .new:
                 return (jobApp.daysSinceCreated ?? 0) > 3
             case .researching:
                 return (jobApp.daysSinceCreated ?? 0) > 7
             case .applying:
                 return (jobApp.daysSinceCreated ?? 0) > 2
-            case .applied:
+            case .submitted:
                 return (jobApp.daysSinceApplied ?? 0) > 14
-            case .interviewing:
+            case .interview:
                 if let lastInterview = jobApp.lastInterviewDate {
                     let days = Calendar.current.dateComponents([.day], from: lastInterview, to: Date()).day ?? 0
                     return days > 7
@@ -319,7 +318,7 @@ final class JobAppStore: SwiftDataStore {
 
     /// Count of successful (accepted) job apps by source
     func successfulJobAppsBySource() -> [String: Int] {
-        Dictionary(grouping: allJobAppsSorted.filter { $0.stage == .accepted }) { $0.source ?? "Unknown" }
+        Dictionary(grouping: allJobAppsSorted.filter { $0.status == .accepted }) { $0.source ?? "Unknown" }
             .mapValues { $0.count }
     }
 }

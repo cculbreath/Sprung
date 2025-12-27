@@ -11,15 +11,21 @@ extension JobApp {
     /// Maps a status to the colour used in the UI components.
     static func pillColor(_ status: Statuses) -> Color {
         switch status {
-        case .closed: return .gray
+        case .new: return .blue
+        case .researching: return .purple
+        case .applying: return .orange
+        case .submitted: return .green
+        case .interview: return .teal
+        case .offer: return .yellow
+        case .accepted: return .mint
+        case .rejected: return .red
+        case .withdrawn: return .gray
+        // Legacy statuses
+        case .inProgress: return .orange
+        case .unsubmitted: return .gray
+        case .closed: return .secondary
         case .followUp: return .yellow
-        case .interview: return .pink
-        case .submitted: return .indigo
-        case .unsubmitted: return .cyan
-        case .inProgress: return .mint
-        case .new: return .green
-        case .abandonned: return .secondary
-        case .rejected: return .black
+        case .abandonned: return .gray
         }
     }
     /// Backwards-compatible mapping when only a raw string is available.

@@ -14,7 +14,6 @@ struct PipelineView: View {
     @Environment(ResRefStore.self) private var resRefStore
     @Environment(CoverRefStore.self) private var coverRefStore
 
-    @State private var selectedStage: ApplicationStage? = nil
     @State private var showingAddLead = false
     @State private var isChoosing = false
     @State private var selectionResult: JobSelectionsResult?
@@ -22,26 +21,19 @@ struct PipelineView: View {
     @State private var showingSelectionReport = false
 
     private var identifiedCount: Int {
-        coordinator.jobAppStore.jobApps(forStage: .identified).count
-    }
-
-    private var stages: [(ApplicationStage, [JobApp])] {
-        ApplicationStage.allCases.compactMap { stage in
-            let leads = coordinator.jobAppStore.jobApps(forStage: stage)
-            guard !leads.isEmpty || stage == .identified else { return nil }
-            return (stage, leads)
-        }
+        coordinator.jobAppStore.jobApps(forStatus: .new).count
     }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: 16) {
-                ForEach(ApplicationStage.allCases, id: \.self) { stage in
-                    PipelineStageColumn(
-                        stage: stage,
-                        leads: coordinator.jobAppStore.jobApps(forStage: stage),
+                ForEach(Statuses.pipelineStatuses, id: \.self) { status in
+                    PipelineStatusColumn(
+                        status: status,
+                        leads: coordinator.jobAppStore.jobApps(forStatus: status),
                         onAdvance: { lead in advanceLead(lead) },
-                        onReject: { lead in rejectLead(lead) }
+                        onReject: { lead in rejectLead(lead) },
+                        onSelect: { lead in selectLead(lead) }
                     )
                 }
             }
@@ -74,9 +66,9 @@ struct PipelineView: View {
 
             ToolbarItem(placement: .secondaryAction) {
                 Menu {
-                    ForEach(ApplicationStage.allCases, id: \.self) { stage in
-                        let count = coordinator.jobAppStore.jobApps(forStage: stage).count
-                        Text("\(stage.rawValue): \(count)")
+                    ForEach(Statuses.pipelineStatuses, id: \.self) { status in
+                        let count = coordinator.jobAppStore.jobApps(forStatus: status).count
+                        Text("\(status.displayName): \(count)")
                     }
                 } label: {
                     Label("Summary", systemImage: "chart.bar")
@@ -131,36 +123,55 @@ struct PipelineView: View {
     }
 
     private func advanceLead(_ lead: JobApp) {
-        coordinator.jobAppStore.advanceStage(lead)
+        coordinator.jobAppStore.advanceStatus(lead)
     }
 
     private func rejectLead(_ lead: JobApp) {
         coordinator.jobAppStore.reject(lead, reason: nil)
     }
+
+    private func selectLead(_ lead: JobApp) {
+        // Select the job in the store
+        coordinator.jobAppStore.selectedApp = lead
+
+        // Post notification to bring main window to front and select the job
+        NotificationCenter.default.post(
+            name: .selectJobApp,
+            object: nil,
+            userInfo: ["jobAppId": lead.id]
+        )
+
+        // Activate main app window
+        if let mainWindow = NSApp.windows.first(where: { $0.identifier?.rawValue == "myApp" || $0.title.isEmpty }) {
+            mainWindow.makeKeyAndOrderFront(nil)
+        }
+        NSApp.activate(ignoringOtherApps: true)
+    }
 }
 
-// MARK: - Stage Column
+// MARK: - Status Column
 
-struct PipelineStageColumn: View {
-    let stage: ApplicationStage
+struct PipelineStatusColumn: View {
+    let status: Statuses
     let leads: [JobApp]
     let onAdvance: (JobApp) -> Void
     let onReject: (JobApp) -> Void
+    let onSelect: (JobApp) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Header
             HStack {
-                Image(systemName: stage.icon)
-                    .foregroundStyle(stage.color)
-                Text(stage.rawValue)
+                Image(systemName: status.icon)
+                    .foregroundStyle(status.color)
+                Text(status.displayName)
                     .font(.headline)
                 Spacer()
                 Text("\(leads.count)")
                     .font(.caption)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(stage.color.opacity(0.2))
+                    .background(status.color.opacity(0.2))
                     .cornerRadius(8)
             }
             .padding(.horizontal, 12)
@@ -171,9 +182,10 @@ struct PipelineStageColumn: View {
                     ForEach(leads) { lead in
                         PipelineLeadCard(
                             lead: lead,
-                            stage: stage,
+                            status: status,
                             onAdvance: { onAdvance(lead) },
-                            onReject: { onReject(lead) }
+                            onReject: { onReject(lead) },
+                            onSelect: { onSelect(lead) }
                         )
                     }
                 }
@@ -190,9 +202,10 @@ struct PipelineStageColumn: View {
 
 struct PipelineLeadCard: View {
     let lead: JobApp
-    let stage: ApplicationStage
+    let status: Statuses
     let onAdvance: () -> Void
     let onReject: () -> Void
+    let onSelect: () -> Void
 
     @State private var isHovered = false
 
@@ -238,9 +251,9 @@ struct PipelineLeadCard: View {
             }
 
             // Action buttons (show on hover or always on last card)
-            if isHovered && !stage.isTerminal {
+            if isHovered && !status.isTerminal {
                 HStack {
-                    if stage.canAdvance {
+                    if status.canAdvance {
                         Button("Advance") {
                             onAdvance()
                         }
@@ -258,16 +271,17 @@ struct PipelineLeadCard: View {
             }
         }
         .padding(12)
+        .contentShape(Rectangle()) // Make entire card clickable
         .background(
             RoundedRectangle(cornerRadius: 8)
                 .fill(Color(.controlBackgroundColor))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(stage.color.opacity(0.08))
+                        .fill(status.color.opacity(0.08))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(stage.color.opacity(0.3), lineWidth: 1)
+                        .strokeBorder(status.color.opacity(0.3), lineWidth: 1)
                 )
         )
         .shadow(radius: isHovered ? 4 : 1)
@@ -275,6 +289,9 @@ struct PipelineLeadCard: View {
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovered = hovering
             }
+        }
+        .onTapGesture {
+            onSelect()
         }
         .padding(.horizontal, 8)
     }
@@ -355,7 +372,7 @@ struct AddLeadView: View {
         )
         lead.priority = priority
         lead.source = source.isEmpty ? nil : source
-        lead.stage = .identified
+        lead.status = .new
         lead.identifiedDate = Date()
         if !notes.isEmpty {
             lead.notes = notes
@@ -364,48 +381,6 @@ struct AddLeadView: View {
     }
 }
 
-// MARK: - ApplicationStage Extensions
-
-extension ApplicationStage {
-    var icon: String {
-        switch self {
-        case .identified: return "eye"
-        case .researching: return "magnifyingglass"
-        case .applying: return "doc.text"
-        case .applied: return "paperplane"
-        case .interviewing: return "person.2"
-        case .offer: return "gift"
-        case .accepted: return "checkmark.seal"
-        case .rejected: return "xmark.circle"
-        case .withdrawn: return "arrow.uturn.left"
-        }
-    }
-
-    var color: Color {
-        switch self {
-        case .identified: return .teal
-        case .researching: return .blue
-        case .applying: return .indigo
-        case .applied: return .purple
-        case .interviewing: return .orange
-        case .offer: return .green
-        case .accepted: return .mint
-        case .rejected: return .red
-        case .withdrawn: return .secondary
-        }
-    }
-
-    var isTerminal: Bool {
-        switch self {
-        case .accepted, .rejected, .withdrawn: return true
-        default: return false
-        }
-    }
-
-    var canAdvance: Bool {
-        !isTerminal
-    }
-}
 
 // MARK: - Selection Report Sheet
 

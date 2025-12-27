@@ -505,7 +505,6 @@ struct NewAppSheetView: View {
         }
 
         jobApp.status = .new
-        jobApp.stage = .identified
         jobApp.identifiedDate = Date()
         jobApp.source = "LLM Import"
 

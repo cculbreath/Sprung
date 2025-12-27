@@ -92,21 +92,21 @@ final class ActivityReportService {
         jobAppStore.jobApps.filter { $0.createdAt >= since }
     }
 
-    /// Get breakdown of all job apps by pipeline stage
+    /// Get breakdown of all job apps by pipeline status
     private func getJobAppStageBreakdown() -> ActivitySnapshot.JobAppStageBreakdown {
         var breakdown = ActivitySnapshot.JobAppStageBreakdown()
 
         for jobApp in jobAppStore.jobApps {
-            switch jobApp.stage {
-            case .identified:
+            switch jobApp.status {
+            case .new:
                 breakdown.identified += 1
             case .researching:
                 breakdown.researching += 1
             case .applying:
                 breakdown.applying += 1
-            case .applied:
+            case .submitted:
                 breakdown.applied += 1
-            case .interviewing:
+            case .interview:
                 breakdown.interviewing += 1
             case .offer:
                 breakdown.offer += 1
@@ -116,6 +116,8 @@ final class ActivityReportService {
                 breakdown.rejected += 1
             case .withdrawn:
                 breakdown.withdrawn += 1
+            default:
+                break  // Legacy statuses
             }
         }
 
@@ -134,8 +136,8 @@ final class ActivityReportService {
                     jobAppId: jobApp.id,
                     company: jobApp.companyName,
                     position: jobApp.jobPosition,
-                    fromStage: ApplicationStage.applying.rawValue,
-                    toStage: ApplicationStage.applied.rawValue
+                    fromStage: Statuses.applying.displayName,
+                    toStage: Statuses.submitted.displayName
                 ))
             }
 
@@ -145,8 +147,8 @@ final class ActivityReportService {
                     jobAppId: jobApp.id,
                     company: jobApp.companyName,
                     position: jobApp.jobPosition,
-                    fromStage: ApplicationStage.applied.rawValue,
-                    toStage: ApplicationStage.interviewing.rawValue
+                    fromStage: Statuses.submitted.displayName,
+                    toStage: Statuses.interview.displayName
                 ))
             }
 
@@ -156,8 +158,8 @@ final class ActivityReportService {
                     jobAppId: jobApp.id,
                     company: jobApp.companyName,
                     position: jobApp.jobPosition,
-                    fromStage: ApplicationStage.interviewing.rawValue,
-                    toStage: ApplicationStage.offer.rawValue
+                    fromStage: Statuses.interview.displayName,
+                    toStage: Statuses.offer.displayName
                 ))
             }
         }

@@ -5,6 +5,7 @@
 //
 import Foundation
 import SwiftData
+import SwiftUI
 
 /// Priority level for a job application
 enum JobLeadPriority: String, Codable, CaseIterable {
@@ -13,52 +14,111 @@ enum JobLeadPriority: String, Codable, CaseIterable {
     case low = "Low"
 }
 
-/// Stage in the application pipeline (used by Discovery Kanban)
-enum ApplicationStage: String, Codable, CaseIterable {
-    case identified = "Identified"
-    case researching = "Researching"
-    case applying = "Applying"
-    case applied = "Applied"
-    case interviewing = "Interviewing"
-    case offer = "Offer"
-    case accepted = "Accepted"
-    case rejected = "Rejected"
-    case withdrawn = "Withdrawn"
-
-    /// Next stage in the progression
-    var next: ApplicationStage? {
-        switch self {
-        case .identified: return .researching
-        case .researching: return .applying
-        case .applying: return .applied
-        case .applied: return .interviewing
-        case .interviewing: return .offer
-        case .offer: return .accepted
-        case .accepted, .rejected, .withdrawn: return nil
-        }
-    }
-}
-
+/// Application status - unified pipeline for both sidebar and kanban views
 enum Statuses: String, Codable, CaseIterable {
-    case new = "new"
+    case new = "new"                        // Identified/gathered lead
+    case researching = "Researching"        // Learning about the company/role
+    case applying = "Applying"              // Preparing materials
+    case submitted = "Submitted"            // Application sent
+    case interview = "Interview Pending"    // In interview process
+    case offer = "Offer"                    // Received an offer
+    case accepted = "Accepted"              // Accepted the offer
+    case rejected = "Rejected"              // Rejected by company
+    case withdrawn = "Withdrawn"            // User withdrew application
+
+    // Legacy cases for migration compatibility
     case inProgress = "In Progress"
     case unsubmitted = "Unsubmitted"
-    case submitted = "Submitted"
-    case interview = "Interview Pending"
     case closed = "Closed"
     case followUp = "Follow up Required"
-    case abandonned = "Abandonned" // Legacy spelling maintained for persisted records
-    case rejected = "Rejected"
+    case abandonned = "Abandonned"
 }
+
 extension Statuses {
-    /// Human-friendly label for UI surfaces.
+    /// Human-friendly label for UI surfaces
     var displayName: String {
         switch self {
-        case .abandonned:
-            return "Abandoned"
-        default:
-            return rawValue
+        case .new: return "Identified"
+        case .abandonned: return "Abandoned"
+        case .inProgress: return "In Progress"
+        default: return rawValue
         }
+    }
+
+    /// Next status in the pipeline progression
+    var next: Statuses? {
+        switch self {
+        case .new: return .researching
+        case .researching: return .applying
+        case .applying: return .submitted
+        case .submitted: return .interview
+        case .interview: return .offer
+        case .offer: return .accepted
+        case .accepted, .rejected, .withdrawn: return nil
+        // Legacy statuses don't have a next
+        case .inProgress, .unsubmitted, .closed, .followUp, .abandonned: return nil
+        }
+    }
+
+    /// Whether this status can be advanced to the next stage
+    var canAdvance: Bool { next != nil }
+
+    /// Whether this is a terminal status (end of pipeline)
+    var isTerminal: Bool {
+        switch self {
+        case .accepted, .rejected, .withdrawn, .closed, .abandonned:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Whether this is an active (non-terminal) status
+    var isActive: Bool { !isTerminal }
+
+    /// Icon for the status
+    var icon: String {
+        switch self {
+        case .new: return "sparkles"
+        case .researching: return "magnifyingglass"
+        case .applying: return "doc.text"
+        case .submitted: return "paperplane.fill"
+        case .interview: return "person.2"
+        case .offer: return "gift"
+        case .accepted: return "checkmark.seal.fill"
+        case .rejected: return "xmark.circle"
+        case .withdrawn: return "arrow.uturn.backward"
+        case .inProgress: return "arrow.triangle.2.circlepath"
+        case .unsubmitted: return "doc"
+        case .closed: return "archivebox"
+        case .followUp: return "bell"
+        case .abandonned: return "trash"
+        }
+    }
+
+    /// Color for the status
+    var color: SwiftUI.Color {
+        switch self {
+        case .new: return .blue
+        case .researching: return .purple
+        case .applying: return .orange
+        case .submitted: return .green
+        case .interview: return .teal
+        case .offer: return .yellow
+        case .accepted: return .mint
+        case .rejected: return .red
+        case .withdrawn: return .gray
+        case .inProgress: return .orange
+        case .unsubmitted: return .gray
+        case .closed: return .secondary
+        case .followUp: return .yellow
+        case .abandonned: return .gray
+        }
+    }
+
+    /// Pipeline statuses (excludes legacy statuses)
+    static var pipelineStatuses: [Statuses] {
+        [.new, .researching, .applying, .submitted, .interview, .offer, .accepted, .rejected, .withdrawn]
     }
 }
 @Model class JobApp: Equatable, Identifiable, Hashable {
@@ -133,20 +193,10 @@ extension Statuses {
     /// Stored as optional for migration compatibility with existing records
     private var _priority: JobLeadPriority?
 
-    /// Current stage in the application pipeline (Discovery Kanban)
-    /// Stored as optional for migration compatibility with existing records
-    private var _stage: ApplicationStage?
-
     /// Priority level accessor (defaults to .medium for existing records)
     var priority: JobLeadPriority {
         get { _priority ?? .medium }
         set { _priority = newValue }
-    }
-
-    /// Stage accessor (defaults to .identified for existing records)
-    var stage: ApplicationStage {
-        get { _stage ?? .identified }
-        set { _stage = newValue }
     }
 
     /// Source where the lead was discovered (e.g., LinkedIn, Indeed)
@@ -352,10 +402,7 @@ extension Statuses {
     }
 
     var isActive: Bool {
-        switch stage {
-        case .accepted, .rejected, .withdrawn: return false
-        default: return true
-        }
+        status.isActive
     }
 
 }
