@@ -80,7 +80,8 @@ final class SearchOpsLLMService {
     func executeText(
         prompt: String,
         systemPrompt: String? = nil,
-        temperature: Double = 0.7
+        temperature: Double = 0.7,
+        overrideModelId: String? = nil
     ) async throws -> String {
         var fullPrompt = prompt
         if let sys = systemPrompt {
@@ -89,7 +90,7 @@ final class SearchOpsLLMService {
 
         return try await llmFacade.executeText(
             prompt: fullPrompt,
-            modelId: modelId,
+            modelId: overrideModelId ?? modelId,
             temperature: temperature
         )
     }
@@ -97,24 +98,36 @@ final class SearchOpsLLMService {
     // MARK: - Conversation Management (Stateful)
 
     /// Start a new conversation with optional tools
+    /// - Parameters:
+    ///   - systemPrompt: System prompt for the conversation
+    ///   - tools: Optional tools for function calling
+    ///   - overrideModelId: Override model ID (nil = use default from settings)
     func startConversation(
         systemPrompt: String,
-        tools: [ChatCompletionParameters.Tool] = []
+        tools: [ChatCompletionParameters.Tool] = [],
+        overrideModelId: String? = nil
     ) -> UUID {
         let conversationId = UUID()
         let conversation = SearchOpsConversation(
             id: conversationId,
             systemPrompt: systemPrompt,
-            tools: tools
+            tools: tools,
+            modelId: overrideModelId
         )
         conversations[conversationId] = conversation
         return conversationId
     }
 
     /// Send a user message and get response (handles tool calls internally if configured)
+    /// - Parameters:
+    ///   - message: The user message to send
+    ///   - conversationId: The conversation ID
+    ///   - toolChoice: Optional tool choice to force a specific tool (e.g., `.function(name: "tool_name")`)
+    ///   - handleToolCalls: Handler for processing tool calls
     func sendMessage(
         _ message: String,
         conversationId: UUID,
+        toolChoice: ToolChoice? = nil,
         handleToolCalls: ((String, JSON) async throws -> JSON)? = nil
     ) async throws -> String {
         guard var conversation = conversations[conversationId] else {
@@ -131,6 +144,7 @@ final class SearchOpsLLMService {
         if !conversation.tools.isEmpty {
             return try await executeWithToolLoop(
                 conversation: &conversation,
+                toolChoice: toolChoice,
                 handleToolCalls: handleToolCalls
             )
         }
@@ -197,9 +211,11 @@ final class SearchOpsLLMService {
 
     private func executeWithToolLoop(
         conversation: inout SearchOpsConversation,
+        toolChoice: ToolChoice? = nil,
         handleToolCalls: ((String, JSON) async throws -> JSON)?
     ) async throws -> String {
         var maxIterations = 10  // Prevent infinite loops
+        var currentToolChoice = toolChoice ?? .auto  // Use provided or default to auto
 
         while maxIterations > 0 {
             maxIterations -= 1
@@ -210,14 +226,17 @@ final class SearchOpsLLMService {
             ]
             messages.append(contentsOf: conversation.messages)
 
-            // Execute with tools
+            // Execute with tools (use conversation's model ID if specified)
             let completion = try await llmFacade.executeWithTools(
                 messages: messages,
                 tools: conversation.tools,
-                toolChoice: .auto,
-                modelId: modelId,
+                toolChoice: currentToolChoice,
+                modelId: conversation.modelId ?? modelId,
                 temperature: 0.7
             )
+
+            // After first tool call, switch to auto for subsequent iterations
+            currentToolChoice = .auto
 
             guard let choices = completion.choices,
                   let choice = choices.first,
@@ -297,6 +316,7 @@ struct SearchOpsConversation {
     let id: UUID
     let systemPrompt: String
     let tools: [ChatCompletionParameters.Tool]
+    let modelId: String?  // Override model ID (nil = use default)
     var messages: [ChatCompletionParameters.Message] = []
     var underlyingConversationId: UUID?
 }

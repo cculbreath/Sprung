@@ -29,6 +29,9 @@ struct DailyView: View {
                 // Header with date and time
                 headerSection
 
+                // Coaching section (always visible)
+                CoachingSectionView(coordinator: coordinator)
+
                 // Time spent today
                 timeSection
 

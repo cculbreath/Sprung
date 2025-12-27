@@ -59,6 +59,7 @@ class SearchOpsSettings {
     // LLM Configuration
     var llmModelId: String = "gpt-4o"
     var reasoningEffort: String = "low"  // none, low, medium, high
+    // Note: coachingModelId stored in @AppStorage("discoveryCoachingModelId")
 
     // Calendar Configuration
     var useJobSearchCalendar: Bool = false

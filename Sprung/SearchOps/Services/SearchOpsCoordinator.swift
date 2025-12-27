@@ -121,6 +121,11 @@ final class SearchOpsCoordinator {
     let sourcesDiscovery = DiscoveryState()
     let eventsDiscovery = DiscoveryState()
 
+    // MARK: - Coaching
+
+    private(set) var coachingSessionStore: CoachingSessionStore?
+    private(set) var coachingService: CoachingService?
+
     // MARK: - Convenience Store Access (delegated to sub-coordinators)
 
     var preferencesStore: SearchPreferencesStore { pipelineCoordinator.preferencesStore }
@@ -166,7 +171,45 @@ final class SearchOpsCoordinator {
                 settingsStore: settingsStore
             )
             pipelineCoordinator.setAgentService(agentService)
+
+            // Set up coaching service
+            configureCoachingService(llmService: llmService)
         }
+    }
+
+    /// Configure the coaching service
+    private func configureCoachingService(llmService: SearchOpsLLMService) {
+        // Get model context from pipeline coordinator's store
+        guard let modelContext = (pipelineCoordinator.dailyTaskStore as? DailyTaskStore)?.modelContext else {
+            Logger.warning("Could not get model context for coaching service", category: .ai)
+            return
+        }
+
+        // Create coaching session store
+        let sessionStore = CoachingSessionStore(context: modelContext)
+        self.coachingSessionStore = sessionStore
+
+        // Create activity report service
+        let activityService = ActivityReportService(
+            modelContext: modelContext,
+            jobAppStore: jobAppStore,
+            eventStore: eventStore,
+            contactStore: contactStore,
+            interactionStore: interactionStore,
+            timeEntryStore: timeEntryStore
+        )
+
+        // Create coaching service
+        self.coachingService = CoachingService(
+            modelContext: modelContext,
+            llmService: llmService,
+            activityReportService: activityService,
+            sessionStore: sessionStore,
+            settingsStore: settingsStore,
+            preferencesStore: preferencesStore
+        )
+
+        Logger.info("Coaching service configured", category: .ai)
     }
 
     func initialize() {

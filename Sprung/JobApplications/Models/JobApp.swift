@@ -152,6 +152,70 @@ extension Statuses {
     /// Source where the lead was discovered (e.g., LinkedIn, Indeed)
     var source: String?
 
+    /// Reference to JobSource where this job was found
+    var jobSourceId: UUID?
+
+    // MARK: - Job Board Domain Extraction
+
+    /// Extract job board name from a URL
+    static func extractJobBoardName(from urlString: String) -> String? {
+        guard let url = URL(string: urlString),
+              let host = url.host?.lowercased() else { return nil }
+
+        let knownBoards: [String: String] = [
+            "linkedin.com": "LinkedIn",
+            "indeed.com": "Indeed",
+            "glassdoor.com": "Glassdoor",
+            "lever.co": "Lever",
+            "greenhouse.io": "Greenhouse",
+            "workday.com": "Workday",
+            "dice.com": "Dice",
+            "monster.com": "Monster",
+            "ziprecruiter.com": "ZipRecruiter",
+            "builtin.com": "Built In",
+            "angel.co": "AngelList",
+            "wellfound.com": "Wellfound",
+            "stackoverflow.com": "Stack Overflow",
+            "hired.com": "Hired",
+            "simplyhired.com": "SimplyHired",
+            "careerbuilder.com": "CareerBuilder",
+            "roberthalf.com": "Robert Half",
+            "flexjobs.com": "FlexJobs",
+            "remote.co": "Remote.co",
+            "weworkremotely.com": "We Work Remotely",
+            "remoteok.com": "Remote OK",
+            "ycombinator.com": "Y Combinator",
+            "triplebyte.com": "Triplebyte",
+            "otta.com": "Otta",
+            "cord.co": "Cord"
+        ]
+
+        for (domain, name) in knownBoards {
+            if host.contains(domain) { return name }
+        }
+
+        // Extract company name from careers subdomain
+        if host.contains("careers.") || host.contains("jobs.") {
+            let components = host.components(separatedBy: ".")
+            if components.count >= 2 {
+                return components[1].capitalized + " Careers"
+            }
+        }
+
+        return nil
+    }
+
+    /// Get the job board name from either postingURL or jobApplyLink
+    var jobBoardName: String? {
+        if let name = Self.extractJobBoardName(from: postingURL), !name.isEmpty {
+            return name
+        }
+        if let name = Self.extractJobBoardName(from: jobApplyLink), !name.isEmpty {
+            return name
+        }
+        return source
+    }
+
     // MARK: - Pipeline Dates
 
     var createdAt: Date = Date()

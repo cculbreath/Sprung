@@ -19,6 +19,7 @@ struct SetupWizardView: View {
     @AppStorage("onboardingInterviewDefaultModelId") private var onboardingModelId: String = "gpt-5"
     @AppStorage("onboardingPDFExtractionModelId") private var pdfExtractionModelId: String = "google/gemini-2.0-flash-001"
     @AppStorage("onboardingGitIngestModelId") private var gitIngestModelId: String = Self.gitIngestDefaultModelId
+    @AppStorage("discoveryCoachingModelId") private var coachingModelId: String = ""
 
     @State private var openRouterApiKey: String = APIKeyManager.get(.openRouter) ?? ""
     @State private var openAiApiKey: String = APIKeyManager.get(.openAI) ?? ""
@@ -364,6 +365,8 @@ private extension SetupWizardView {
                     pdfExtractionPicker
                     Divider()
                     gitIngestPicker
+                    Divider()
+                    coachingModelPicker
                 }
             }
             Spacer()
@@ -533,6 +536,34 @@ private extension SetupWizardView {
                 .pickerStyle(.menu)
             }
             Text("Used when scanning repositories during onboarding. Default: \(Self.gitIngestDefaultModelId)")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    var coachingModelPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if enabledLLMStore.enabledModels.isEmpty {
+                Text("Enable OpenRouter models to choose a coaching model.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                Picker("Daily Coaching Model", selection: $coachingModelId) {
+                    ForEach(enabledLLMStore.enabledModels.sorted(by: { $0.displayName < $1.displayName }), id: \.modelId) { model in
+                        Text(model.displayName.isEmpty ? model.modelId : model.displayName)
+                            .tag(model.modelId)
+                    }
+                }
+                .pickerStyle(.menu)
+                .onAppear {
+                    // Auto-select first model if none selected
+                    if coachingModelId.isEmpty,
+                       let first = enabledLLMStore.enabledModels.sorted(by: { $0.displayName < $1.displayName }).first {
+                        coachingModelId = first.modelId
+                    }
+                }
+            }
+            Text("Used for daily job search coaching in Discovery. Uses OpenRouter.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }

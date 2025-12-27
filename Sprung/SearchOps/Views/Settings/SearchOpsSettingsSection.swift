@@ -17,9 +17,13 @@ struct SearchOpsSettingsSection: View {
     @State private var sourceRefreshError: String?
     @State private var llmModelId: String = ""
     @State private var reasoningEffort: String = "low"
+
+    @AppStorage("discoveryCoachingModelId") private var coachingModelId: String = ""
     @State private var openAIModels: [ModelObject] = []
     @State private var isLoadingModels = false
     @State private var modelError: String?
+
+    @Environment(EnabledLLMStore.self) private var enabledLLMStore: EnabledLLMStore?
 
     private let reasoningOptions = [
         (value: "low", label: "Low"),
@@ -53,6 +57,9 @@ struct SearchOpsSettingsSection: View {
         Section {
             // LLM Model Picker
             llmModelPicker
+
+            // Coaching Model Picker
+            coachingModelPicker
 
             Divider()
                 .padding(.vertical, 4)
@@ -180,6 +187,45 @@ struct SearchOpsSettingsSection: View {
             }
         } catch {
             modelError = error.localizedDescription
+        }
+    }
+
+    // MARK: - Coaching Model Picker
+
+    private var coachingModelPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let store = enabledLLMStore {
+                let enabledModels = store.enabledModels.sorted { $0.displayName < $1.displayName }
+
+                if enabledModels.isEmpty {
+                    Text("No enabled models. Add models in LLM Settings.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Picker("Coaching Model", selection: $coachingModelId) {
+                        ForEach(enabledModels, id: \.modelId) { model in
+                            Text(model.displayName).tag(model.modelId)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    Text("Model for daily coaching. Uses OpenRouter (different from Discovery which uses OpenAI direct).")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Text("LLM store not available")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .task {
+            // Auto-select first model if none selected
+            if coachingModelId.isEmpty,
+               let store = enabledLLMStore,
+               let firstModel = store.enabledModels.sorted(by: { $0.displayName < $1.displayName }).first {
+                coachingModelId = firstModel.modelId
+            }
         }
     }
 
