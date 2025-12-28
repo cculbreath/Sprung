@@ -1,40 +1,19 @@
-Classify this document to determine the optimal extraction strategy.
+Classify this document to determine the optimal extraction strategy for knowledge card generation.
 
 FILENAME: {FILENAME}
-CONTENT PREVIEW (first 3000 chars):
+
+CONTENT PREVIEW:
 {PREVIEW}
 
 ---
 
-Analyze the document and return JSON:
-
-```json
-{
-  "document_type": "resume | personnel_file | technical_report | cover_letter | reference_letter | dissertation | grant_proposal | project_documentation | git_analysis | presentation | certificate | transcript | other",
-
-  "document_subtype": "More specific type if applicable (e.g., 'WPAF', 'consultation_report')",
-
-  "extraction_strategy": "single_pass | sectioned | timeline_aware | code_analysis",
-
-  "estimated_card_yield": {
-    "employment": 0,
-    "project": 0,
-    "skill": 0,
-    "achievement": 0,
-    "education": 0
-  },
-
-  "structure_hints": {
-    "has_clear_sections": true,
-    "has_timeline_data": true,
-    "has_quantitative_data": true,
-    "has_figures": false,
-    "primary_voice": "first_person | third_person | institutional"
-  },
-
-  "special_handling": []
-}
-```
+Analyze the document and determine:
+1. The primary document type (resume, personnel_file, technical_report, etc.)
+2. A more specific subtype if applicable (e.g., "WPAF" for a personnel file)
+3. The recommended extraction strategy
+4. Estimated number of knowledge cards that can be extracted by type
+5. Structural hints about the document format
+6. Any special handling requirements
 
 ## Document Type Definitions
 
@@ -65,5 +44,3 @@ Analyze the document and return JSON:
 - **contains_multiple_roles**: Document covers multiple distinct roles/positions
 - **spans_multiple_years**: Document covers an extended time period
 - **contains_writing_samples**: Document contains writing samples worth preserving
-
-Return ONLY valid JSON.

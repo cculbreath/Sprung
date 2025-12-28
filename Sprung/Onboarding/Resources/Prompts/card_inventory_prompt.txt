@@ -6,7 +6,7 @@ Analyze this document and identify ALL distinct knowledge cards that can be extr
 - Document ID: {DOC_ID}
 - Filename: {FILENAME}
 - Type: {DOCUMENT_TYPE}
-- Classification: {CLASSIFICATION_JSON}
+- Estimated card yield: {ESTIMATED_YIELD}
 
 ## Document Content
 {EXTRACTED_CONTENT}
@@ -19,53 +19,24 @@ Identify every distinct knowledge card this document provides evidence for. Be E
 
 ## Card Types
 
-**EMPLOYMENT**: A role/position with employer, title, dates
+**employment**: A role/position with employer, title, dates
 - One card per distinct role (promotions = separate cards if responsibilities changed significantly)
 - Include: scope, team, responsibilities, technologies, outcomes
 
-**PROJECT**: A specific initiative, product, system, or deliverable
+**project**: A specific initiative, product, system, or deliverable
 - Must be nameable ("Physics Cloud LMS", not "web development work")
 - Include: what it was, your role, technologies, outcomes, timeline
 
-**SKILL**: A technical or professional capability
+**skill**: A technical or professional capability
 - Must be demonstrable from this document (not just mentioned)
 - Include: proficiency evidence, contexts where applied, related technologies
 
-**ACHIEVEMENT**: A publication, award, certification, presentation, or notable accomplishment
+**achievement**: A publication, award, certification, presentation, or notable accomplishment
 - Must be specific and verifiable
 - Include: what, when, where, impact
 
-**EDUCATION**: A degree, training program, or credential
+**education**: A degree, training program, or credential
 - Include: institution, dates, field, notable details
-
----
-
-## Output Format
-
-Return a JSON object:
-
-```json
-{
-  "document_id": "{DOC_ID}",
-  "cards": [
-    {
-      "card_type": "employment|project|skill|achievement|education",
-      "proposed_title": "Specific, descriptive title",
-      "evidence_strength": "primary|supporting|mention",
-      "evidence_locations": ["page 5-7", "section 'Technical Approach'"],
-      "key_facts": [
-        "Specific fact with numbers/names preserved",
-        "Another specific fact"
-      ],
-      "technologies": ["tech1", "tech2"],
-      "quantified_outcomes": ["metric1", "metric2"],
-      "date_range": "YYYY-YYYY or null",
-      "cross_references": ["Other card titles this relates to"],
-      "extraction_notes": "Any special handling needed"
-    }
-  ]
-}
-```
 
 ## Evidence Strength Definitions
 
@@ -75,12 +46,10 @@ Return a JSON object:
 
 ## Critical Rules
 
-1. **Be specific in titles**: "Allen-Bradley PLC Control System Design" not "automation work"
-2. **Preserve all numbers**: "47 microservices", "$2.3M budget", "12-person team"
-3. **Preserve all names**: project names, tool names, company names
-4. **One card per distinct topic**: Don't bundle unrelated things
-5. **Skills require evidence**: Don't list a skill unless this doc demonstrates proficiency
-6. **Projects need scope**: A project card should describe what was built/delivered
-7. **Include implicit skills**: If doc shows PLC programming, propose a skill card even if not explicitly listed as a skill
-
-Return ONLY valid JSON.
+1. Be specific in titles: "Allen-Bradley PLC Control System Design" not "automation work"
+2. Preserve all numbers: "47 microservices", "$2.3M budget", "12-person team"
+3. Preserve all names: project names, tool names, company names
+4. One card per distinct topic: Don't bundle unrelated things
+5. Skills require evidence: Don't list a skill unless this doc demonstrates proficiency
+6. Projects need scope: A project card should describe what was built/delivered
+7. Include implicit skills: If doc shows PLC programming, propose a skill card even if not explicitly listed

@@ -12,51 +12,19 @@ import Foundation
 enum DocumentClassificationPrompts {
 
     /// Build the classification prompt for a document.
-    /// This is a simplified prompt since the JSON schema enforces the output format.
+    /// Loads template from Resources/Prompts/document_classification_prompt.txt
     /// - Parameters:
     ///   - filename: Original filename
     ///   - preview: First ~3000 characters of content
     /// - Returns: Formatted prompt string
     static func classificationPrompt(filename: String, preview: String) -> String {
-        """
-        Classify this document to determine the optimal extraction strategy for knowledge card generation.
-
-        FILENAME: \(filename)
-
-        CONTENT PREVIEW:
-        \(preview)
-
-        ---
-
-        Analyze the document and determine:
-        1. The primary document type (resume, personnel_file, technical_report, etc.)
-        2. A more specific subtype if applicable (e.g., "WPAF" for a personnel file)
-        3. The recommended extraction strategy
-        4. Estimated number of knowledge cards that can be extracted by type
-        5. Structural hints about the document format
-        6. Any special handling requirements
-
-        Document Type Definitions:
-        - resume: CV or resume showing work history, education, skills
-        - personnel_file: Employee file with reviews, appointment letters, evaluations
-        - technical_report: Design docs, consultation reports, technical documentation
-        - cover_letter: Job application cover letter
-        - reference_letter: Recommendation or reference letter
-        - dissertation: Academic thesis or dissertation
-        - grant_proposal: Funding proposal (STTR, SBIR, etc.)
-        - project_documentation: Project reports, status updates, deliverables
-        - git_analysis: Pre-analyzed git repository data
-        - presentation: Slides or presentation materials
-        - certificate: Professional certification or credential
-        - transcript: Academic transcript
-        - other: Doesn't fit above categories
-
-        Extraction Strategy Definitions:
-        - single_pass: Document can be processed in one pass (short docs, clear structure)
-        - sectioned: Break into logical sections, process each (long docs with clear headers)
-        - timeline_aware: Multiple roles/periods need timeline context (personnel files, resumes)
-        - code_analysis: Already structured code analysis (git_analysis JSON)
-        """
+        PromptLibrary.substitute(
+            template: PromptLibrary.documentClassificationTemplate,
+            replacements: [
+                "FILENAME": filename,
+                "PREVIEW": preview
+            ]
+        )
     }
 
     /// JSON Schema for DocumentClassification - used by Gemini's native structured output.
