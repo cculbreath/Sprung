@@ -68,8 +68,24 @@ actor CardInventoryService {
             Logger.info("✅ Card inventory generated: \(inventory.proposedCards.count) potential cards", category: .ai)
             return inventory
         } catch {
-            Logger.error("❌ Failed to decode inventory JSON: \(error.localizedDescription)", category: .ai)
-            Logger.debug("📦 Raw JSON was: \(jsonString.prefix(500))...", category: .ai)
+            // Enhanced error logging for debugging schema mismatches
+            if let decodingError = error as? DecodingError {
+                switch decodingError {
+                case .keyNotFound(let key, let context):
+                    Logger.error("❌ Missing key '\(key.stringValue)' at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))", category: .ai)
+                case .typeMismatch(let type, let context):
+                    Logger.error("❌ Type mismatch for \(type) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))", category: .ai)
+                case .valueNotFound(let type, let context):
+                    Logger.error("❌ Value not found for \(type) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))", category: .ai)
+                case .dataCorrupted(let context):
+                    Logger.error("❌ Data corrupted at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))", category: .ai)
+                @unknown default:
+                    Logger.error("❌ Unknown decoding error: \(error.localizedDescription)", category: .ai)
+                }
+            } else {
+                Logger.error("❌ Failed to decode inventory JSON: \(error.localizedDescription)", category: .ai)
+            }
+            Logger.debug("📦 Raw JSON was: \(jsonString.prefix(1000))...", category: .ai)
             throw CardInventoryError.invalidResponse
         }
     }

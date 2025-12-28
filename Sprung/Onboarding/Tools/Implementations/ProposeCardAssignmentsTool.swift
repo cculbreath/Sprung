@@ -3,30 +3,24 @@
 //  Sprung
 //
 //  Tool for the main coordinator to propose card-to-document assignments.
-//  Maps timeline entries to artifact sources and identifies documentation gaps.
-//
-//  Supports auto-assignment mode to minimize LLM data construction.
-//  Part of Milestone 6: ID-based updates
+//  Uses inventory-based auto-assignment exclusively.
 //
 
 import Foundation
 import SwiftyJSON
 
 /// Tool that allows the coordinator to map documents to knowledge cards.
-/// Supports auto-assignment mode for efficient ID-based workflows.
+/// Uses inventory-based auto-assignment exclusively.
 struct ProposeCardAssignmentsTool: InterviewTool {
     private static let schema: JSONSchema = {
         JSONSchema(
             type: .object,
-            description: "Map artifacts to knowledge cards. Use auto_assign=true for system auto-assignment, or manual mode for adjustments.",
+            description: "Generate card assignments from document inventories. System auto-assigns based on document analysis.",
             properties: [
-                "auto_assign": JSONSchema(
-                    type: .boolean,
-                    description: "If true, system auto-assigns based on artifact metadata. Recommended for initial assignment."
-                ),
-                "assignments": KnowledgeCardSchemas.assignmentsArray,
-                "gaps": KnowledgeCardSchemas.gapsArray,
-                "summary": KnowledgeCardSchemas.proposalSummary
+                "summary": JSONSchema(
+                    type: .string,
+                    description: "Optional summary of why you're calling this tool"
+                )
             ],
             required: [],
             additionalProperties: false
@@ -48,105 +42,9 @@ struct ProposeCardAssignmentsTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
-        let autoAssign = params["auto_assign"].bool ?? false
-
-        // Auto-assignment mode: system generates assignments from state
-        if autoAssign {
-            return try await executeAutoAssign()
-        }
-
-        // Manual mode: use provided assignments
-        let assignmentsJSON = params["assignments"].arrayValue
-        let gapsJSON = params["gaps"].arrayValue
-        _ = params["summary"].stringValue  // Summary included in response
-
-        Logger.info("📋 ProposeCardAssignmentsTool: \(assignmentsJSON.count) assignments, \(gapsJSON.count) gaps (manual mode)", category: .ai)
-
-        // Validate assignments have at least one artifact
-        var validAssignments: [JSON] = []
-        var assignmentsWithoutArtifacts: [String] = []
-
-        for assignment in assignmentsJSON {
-            let artifactIds = assignment["artifact_ids"].arrayValue
-            let cardTitle = assignment["card_title"].stringValue
-
-            if artifactIds.isEmpty {
-                assignmentsWithoutArtifacts.append(cardTitle)
-            } else {
-                validAssignments.append(assignment)
-            }
-        }
-
-        // Store assignments in session state for later use by dispatch_kc_agents
-        var proposalsToStore = JSON([])
-        for assignment in validAssignments {
-            var proposal = JSON()
-            proposal["card_id"].string = assignment["card_id"].stringValue
-            proposal["card_type"].string = assignment["card_type"].stringValue
-            proposal["title"].string = assignment["card_title"].stringValue
-            proposal["timeline_entry_id"].string = assignment["timeline_entry_id"].string
-            proposal["assigned_artifact_ids"].arrayObject = assignment["artifact_ids"].arrayValue.map { $0.stringValue }
-            proposal["notes"].string = assignment["notes"].string
-            proposalsToStore.arrayObject?.append(proposal.dictionaryObject ?? [:])
-        }
-
-        // Store proposals in state for dispatch_kc_agents to use
-        await coordinator.state.storeCardProposals(proposalsToStore)
-
-        // Update UI plan items with artifact assignments
-        await updatePlanItemsWithAssignments(proposals: proposalsToStore)
-
-        // Gate dispatch_kc_agents until user approves assignments
-        // BUT only if user hasn't already clicked "Generate Cards" (which would have ungated it)
-        let isAlreadyGenerating = await MainActor.run { coordinator.ui.isGeneratingCards }
-        if !isAlreadyGenerating {
-            await coordinator.state.excludeTool(OnboardingToolName.dispatchKCAgents.rawValue)
-        } else {
-            Logger.info("📋 Skipping dispatch_kc_agents gating - user already approved generation", category: .ai)
-        }
-
-        // Emit event for UI/coordinator awareness
-        await coordinator.eventBus.publish(.cardAssignmentsProposed(
-            assignmentCount: validAssignments.count,
-            gapCount: gapsJSON.count
-        ))
-
-        // Build response
-        var response = JSON()
-        response["status"].string = "completed"
-        response["valid_assignment_count"].int = validAssignments.count
-        response["gap_count"].int = gapsJSON.count
-
-        if !assignmentsWithoutArtifacts.isEmpty {
-            response["assignments_without_artifacts"].arrayObject = assignmentsWithoutArtifacts
-            response["warning"].string = "\(assignmentsWithoutArtifacts.count) cards have no artifacts assigned"
-        }
-
-        // Include gaps for user notification
-        if !gapsJSON.isEmpty {
-            response["gaps"] = JSON(gapsJSON)
-            response["has_gaps"].bool = true
-        } else {
-            response["has_gaps"].bool = false
-        }
-
-        // Signal that user validation is required before dispatch
-        response["requires_user_validation"].bool = true
-        response["dispatch_kc_agents_locked"].bool = true
-        response["validation_message"].string = buildValidationMessage(
-            assignmentCount: validAssignments.count,
-            gapCount: gapsJSON.count,
-            assignmentsWithoutArtifacts: assignmentsWithoutArtifacts
-        )
-
-        // Provide explicit instructions that tool is locked
-        response["next_action"].string = """
-            IMPORTANT: dispatch_kc_agents is LOCKED until user clicks the "Generate Cards" button in the UI.
-            DO NOT call dispatch_kc_agents - it will fail. Present the summary to user and WAIT.
-            The system will automatically unlock the tool and prompt you when user approves.
-            """
-
-        return .immediate(response)
+        // Always use inventory-based auto-assignment
+        // Manual mode removed - inventory pipeline is the only path
+        return try await executeAutoAssign()
     }
 
     // MARK: - Auto-Assignment Mode
@@ -163,12 +61,21 @@ struct ProposeCardAssignmentsTool: InterviewTool {
         let mergedInventory: MergedCardInventory
         do {
             mergedInventory = try await cardMergeService.mergeInventories(timeline: timeline)
+        } catch CardMergeService.CardMergeError.noInventories {
+            // No fallback - tell LLM to wait for document processing
+            Logger.warning("⚠️ No document inventories available yet", category: .ai)
+            var response = JSON()
+            response["status"].string = "waiting"
+            response["error"].string = "no_inventories"
+            response["message"].string = "Document inventories are still being generated. Please wait for document processing to complete, then call propose_card_assignments again."
+            response["retry_after_seconds"].int = 5
+            return .immediate(response)
         } catch {
-            Logger.warning("⚠️ Card merge failed: \(error.localizedDescription)", category: .ai)
-            var errorResponse = JSON()
-            errorResponse["status"].string = "error"
-            errorResponse["message"].string = "Failed to merge card inventories: \(error.localizedDescription)"
-            return .immediate(errorResponse)
+            Logger.error("❌ Card merge failed: \(error.localizedDescription)", category: .ai)
+            var response = JSON()
+            response["status"].string = "error"
+            response["message"].string = "Failed to merge card inventories: \(error.localizedDescription)"
+            return .immediate(response)
         }
 
         // Convert merged cards to proposals
@@ -298,116 +205,7 @@ struct ProposeCardAssignmentsTool: InterviewTool {
         }
     }
 
-    // MARK: - UI Messages
-
-    private func buildValidationMessage(
-        assignmentCount: Int,
-        gapCount: Int,
-        assignmentsWithoutArtifacts: [String]
-    ) -> String {
-        var message = "I've mapped your documents to \(assignmentCount) knowledge card(s)."
-
-        if gapCount > 0 {
-            message += " I've identified \(gapCount) area(s) where additional documentation would help."
-        }
-
-        if !assignmentsWithoutArtifacts.isEmpty {
-            message += " Note: \(assignmentsWithoutArtifacts.count) card(s) have no documents assigned yet."
-        }
-
-        message += """
-
-
-        **Please review the assignments above.** You can:
-        - Ask me to reassign documents to different cards
-        - Request I add or remove cards from the plan
-        - Upload additional documents for any gaps
-        - Tell me to proceed when you're satisfied
-
-        When you're ready, say "generate cards" or click the Generate button.
-        """
-
-        return message
-    }
-
     // MARK: - UI Plan Update
-
-    /// Update the UI's knowledgeCardPlan with artifact assignments from proposals
-    /// If no plan items exist, creates them from the proposals
-    private func updatePlanItemsWithAssignments(proposals: JSON) async {
-        // Get current plan items and artifact summaries
-        let currentPlanItems = await MainActor.run { coordinator.ui.knowledgeCardPlan }
-        let artifactSummaries = await coordinator.listArtifactSummaries()
-
-        // Build lookup from artifact ID to summary text
-        let artifactSummaryLookup = buildArtifactSummaryLookup(from: artifactSummaries)
-
-        var updatedPlanItems: [KnowledgeCardPlanItem] = []
-
-        // If no plan items exist, create them from proposals
-        if currentPlanItems.isEmpty {
-            Logger.info("📋 No existing plan items - creating from proposals", category: .ai)
-            for proposal in proposals.arrayValue {
-                let cardId = proposal["card_id"].string ?? UUID().uuidString
-                let title = proposal["title"].string ?? "Knowledge Card"
-                let cardType = proposal["card_type"].string ?? "job"
-                let timelineEntryId = proposal["timeline_entry_id"].string
-
-                let artifactIds = proposal["assigned_artifact_ids"].arrayValue.compactMap { $0.string }
-                let summaries = artifactIds.compactMap { artifactSummaryLookup[$0] }
-
-                let planItem = KnowledgeCardPlanItem(
-                    id: cardId,
-                    title: title,
-                    type: planItemType(from: cardType),
-                    description: nil,
-                    status: .pending,
-                    timelineEntryId: timelineEntryId,
-                    assignedArtifactIds: artifactIds,
-                    assignedArtifactSummaries: summaries
-                )
-                updatedPlanItems.append(planItem)
-            }
-        } else {
-            // Update existing plan items with their assignments
-            for planItem in currentPlanItems {
-                // Find matching proposal by card_id or timeline_entry_id
-                var matchedProposal: JSON?
-                for proposal in proposals.arrayValue {
-                    let proposalCardId = proposal["card_id"].string
-                    let proposalTimelineId = proposal["timeline_entry_id"].string
-
-                    if proposalCardId == planItem.id ||
-                       (proposalTimelineId != nil && proposalTimelineId == planItem.timelineEntryId) {
-                        matchedProposal = proposal
-                        break
-                    }
-                }
-
-                if let proposal = matchedProposal {
-                    // Extract artifact IDs and build summaries
-                    let artifactIds = proposal["assigned_artifact_ids"].arrayValue.compactMap { $0.string }
-                    let summaries = artifactIds.compactMap { artifactSummaryLookup[$0] }
-
-                    let updatedItem = planItem.withAssignments(artifactIds: artifactIds, summaries: summaries)
-                    updatedPlanItems.append(updatedItem)
-                } else {
-                    // No assignment found - keep original (with empty assignments)
-                    let updatedItem = planItem.withAssignments(artifactIds: [], summaries: [])
-                    updatedPlanItems.append(updatedItem)
-                }
-            }
-        }
-
-        // Update the coordinator's plan
-        await coordinator.updateKnowledgeCardPlan(
-            items: updatedPlanItems,
-            currentFocus: coordinator.getCurrentPlanItemFocus(),
-            message: "Review artifact assignments below"
-        )
-
-        Logger.info("📋 Updated \(updatedPlanItems.count) plan items with artifact assignments", category: .ai)
-    }
 
     /// Create plan items directly from merged inventory
     private func updatePlanItemsFromMergedInventory(mergedInventory: MergedCardInventory) async {

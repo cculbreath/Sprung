@@ -114,12 +114,8 @@ enum CardInventoryPrompts {
                     ],
                     "required": ["card_type", "proposed_title", "evidence_strength", "evidence_locations", "key_facts", "technologies", "quantified_outcomes", "cross_references"]
                 ]
-            ],
-            "generated_at": [
-                "type": "string",
-                "description": "ISO8601 timestamp when this inventory was generated"
             ]
         ],
-        "required": ["document_id", "document_type", "cards", "generated_at"]
+        "required": ["document_id", "document_type", "cards"]
     ]
 }
