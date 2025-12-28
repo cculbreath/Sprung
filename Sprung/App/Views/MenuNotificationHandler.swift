@@ -186,6 +186,15 @@ class MenuNotificationHandler {
                 self?.handlePreprocessAllPendingJobs()
             }
         }
+        NotificationCenter.default.addObserver(
+            forName: .rerunAllJobPreprocessing,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.handleRerunAllJobPreprocessing()
+            }
+        }
         // Text-to-Speech Commands
         NotificationCenter.default.addObserver(
             forName: .startSpeaking,
@@ -488,6 +497,17 @@ class MenuNotificationHandler {
             Logger.info("🔄 [Menu] Queued \(count) jobs for preprocessing", category: .ai)
         } else {
             Logger.info("✅ [Menu] All jobs already preprocessed", category: .ai)
+        }
+    }
+
+    @MainActor
+    private func handleRerunAllJobPreprocessing() {
+        guard let jobAppStore = jobAppStore else { return }
+        let count = jobAppStore.rerunPreprocessingForActiveJobs()
+        if count > 0 {
+            Logger.info("🔄 [Menu] Queued \(count) active jobs for reprocessing", category: .ai)
+        } else {
+            Logger.info("✅ [Menu] No active jobs to reprocess", category: .ai)
         }
     }
     deinit {

@@ -61,6 +61,7 @@ extension Notification.Name {
     // Analysis Commands
     static let analyzeApplication = Notification.Name("analyzeApplication")
     static let preprocessAllPendingJobs = Notification.Name("preprocessAllPendingJobs")
+    static let rerunAllJobPreprocessing = Notification.Name("rerunAllJobPreprocessing")
     // Interview Commands
     static let startOnboardingInterview = Notification.Name("startOnboardingInterview")
     // Discovery Commands (renamed from Discovery)

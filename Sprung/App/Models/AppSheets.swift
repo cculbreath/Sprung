@@ -40,6 +40,8 @@ struct AppSheetsModifier: ViewModifier {
     @Environment(ResumeReviseViewModel.self) private var resumeReviseViewModel
     @Environment(ResRefStore.self) private var resRefStore
     @Environment(CoverRefStore.self) private var coverRefStore
+    @State private var showReprocessConfirmation = false
+    @State private var newlyAddedCardName: String = ""
     private var revisionSheetBinding: Binding<Bool> {
         Binding(
             get: { resumeReviseViewModel.showResumeRevisionSheet },
@@ -169,8 +171,30 @@ struct AppSheetsModifier: ViewModifier {
                     },
                     onCardAdded: { card in
                         resRefStore.addResRef(card)
+                        // Check if there are active jobs to reprocess
+                        let activeStatuses: [Statuses] = [.new, .queued, .inProgress]
+                        let activeJobCount = jobAppStore.jobApps.filter { job in
+                            !job.jobDescription.isEmpty && activeStatuses.contains(job.status)
+                        }.count
+                        if activeJobCount > 0 {
+                            newlyAddedCardName = card.name
+                            showReprocessConfirmation = true
+                        }
                     }
                 )
+            }
+            .alert("Re-run Job Pre-processing?", isPresented: $showReprocessConfirmation) {
+                Button("Re-process All") {
+                    let count = jobAppStore.rerunPreprocessingForActiveJobs()
+                    Logger.info("🔄 [AppSheets] Queued \(count) active jobs for reprocessing after KC addition", category: .ai)
+                }
+                Button("Not Now", role: .cancel) {}
+            } message: {
+                let activeStatuses: [Statuses] = [.new, .queued, .inProgress]
+                let activeJobCount = jobAppStore.jobApps.filter { job in
+                    !job.jobDescription.isEmpty && activeStatuses.contains(job.status)
+                }.count
+                Text("You added \"\(newlyAddedCardName)\" to your knowledge cards. Would you like to re-run pre-processing for \(activeJobCount) active job\(activeJobCount == 1 ? "" : "s") to match them with relevant cards?")
             }
             .sheet(isPresented: $sheets.showWritingContextBrowser) {
                 WritingContextBrowserSheet(isPresented: $sheets.showWritingContextBrowser)

@@ -98,6 +98,47 @@ final class JobAppStore: SwiftDataStore {
     var pendingPreprocessingCount: Int {
         jobApps.filter { !$0.jobDescription.isEmpty && !$0.hasPreprocessingComplete }.count
     }
+
+    /// Re-run preprocessing for all active jobs (pending, queued, in-progress).
+    /// This is useful when knowledge cards are updated and need to be re-matched.
+    /// Returns the count of jobs queued for reprocessing.
+    @discardableResult
+    func rerunPreprocessingForActiveJobs() -> Int {
+        guard let preprocessor = preprocessor,
+              let resRefStore = resRefStore else {
+            Logger.warning("⚠️ [JobAppStore] Cannot rerun preprocessing: preprocessor not configured", category: .ai)
+            return 0
+        }
+
+        // Active statuses that should be reprocessed
+        let activeStatuses: [Statuses] = [.new, .queued, .inProgress]
+
+        let activeJobs = jobApps.filter { job in
+            !job.jobDescription.isEmpty && activeStatuses.contains(job.status)
+        }
+
+        guard !activeJobs.isEmpty else {
+            Logger.info("✅ [JobAppStore] No active jobs to reprocess", category: .ai)
+            return 0
+        }
+
+        let cards = resRefStore.resRefs
+        for jobApp in activeJobs {
+            // Clear existing preprocessing to force re-run
+            jobApp.extractedRequirements = nil
+            jobApp.relevantCardIds = nil
+
+            preprocessor.preprocessInBackground(
+                for: jobApp,
+                allCards: cards,
+                modelContext: modelContext
+            )
+        }
+
+        saveContext()
+        Logger.info("🔄 [JobAppStore] Queued \(activeJobs.count) active jobs for reprocessing", category: .ai)
+        return activeJobs.count
+    }
     // MARK: - Methods
     func updateJobAppStatus(_ jobApp: JobApp, to newStatus: Statuses) {
         jobApp.status = newStatus
