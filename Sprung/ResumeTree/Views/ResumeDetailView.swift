@@ -94,8 +94,9 @@ struct ResumeDetailView: View {
 
                 // Revnode count and phase assignment configuration
                 HStack {
-                    // Revnode count indicator
+                    // Revnode count indicator (depends on revnodeRefreshTrigger for live updates)
                     if let root = vm.rootNode {
+                        let _ = vm.revnodeRefreshTrigger  // Force re-evaluation when trigger changes
                         let count = root.revnodeCount
                         if count > 0 {
                             HStack(spacing: 4) {

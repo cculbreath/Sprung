@@ -16,8 +16,15 @@ struct NodeLeafView: View {
     private var isEditing: Bool { vm.editingNodeID == node.id }
 
     /// Background color based on whether this node is part of a container review
+    /// Key: suffix determines color - no suffix = purple (bundled), [] suffix = cyan (each separate)
     private var containerReviewBackgroundColor: Color? {
         guard let parent = node.parent else { return nil }
+
+        // Check for container bundle (parent has bundledAttributes: ["*"])
+        // e.g., Physicist under Job Titles where jobTitles is bundled
+        if parent.bundledAttributes?.contains("*") == true {
+            return .purple.opacity(0.15)  // Purple for container bundle
+        }
 
         // Check for container enumerate (parent has enumeratedAttributes: ["*"])
         // e.g., Physicist under Job Titles where jobTitles[] is configured
@@ -25,12 +32,18 @@ struct NodeLeafView: View {
             return .cyan.opacity(0.15)  // Cyan for container enumerate
         }
 
-        // Check if THIS node is an iterate attribute target
-        // e.g., description when projects[].description is configured
+        // Check if THIS node is a scalar attribute directly under an entry
+        // e.g., "name" leaf when skills[].name or skills.*.name is configured
+        // For scalars: enumeratedAttributes = cyan (each separate), bundledAttributes = purple (all combined)
         if let collection = parent.parent {
             let nodeName = node.name.isEmpty ? node.displayLabel : node.name
+            // enumeratedAttributes["name"] = each entry's name is separate → cyan
             if collection.enumeratedAttributes?.contains(nodeName) == true {
-                return .cyan.opacity(0.15)  // Cyan for iterate attribute target
+                return .cyan.opacity(0.15)  // Cyan - iterate, each entry's value separate
+            }
+            // bundledAttributes["name"] = all names combined → purple
+            if collection.bundledAttributes?.contains(nodeName) == true {
+                return .purple.opacity(0.15)  // Purple - bundled together
             }
         }
 
@@ -40,45 +53,58 @@ struct NodeLeafView: View {
               let collection = entry.parent else { return nil }
 
         let containerName = parent.name.isEmpty ? parent.displayLabel : parent.name
+        let containerNameWithSuffix = containerName + "[]"
 
-        if collection.bundledAttributes?.contains(containerName) == true {
-            return .purple.opacity(0.15)  // Purple for bundle children
-        } else if collection.enumeratedAttributes?.contains(containerName) == true {
-            return .cyan.opacity(0.15)  // Cyan for children of iterate container
+        // Check for each-separate patterns first (cyan) - has [] suffix
+        if collection.bundledAttributes?.contains(containerNameWithSuffix) == true ||
+           collection.enumeratedAttributes?.contains(containerNameWithSuffix) == true {
+            return .cyan.opacity(0.15)  // Cyan - each item separate
         }
+
+        // Check for bundled patterns (purple) - no [] suffix
+        if collection.bundledAttributes?.contains(containerName) == true ||
+           collection.enumeratedAttributes?.contains(containerName) == true {
+            return .purple.opacity(0.15)  // Purple - bundled together
+        }
+
         return nil
     }
 
     /// Whether this is a container enumerate child (should show icon + background)
+    /// Only true when parent has enumeratedAttributes["*"] - each scalar value is separate
     private var isContainerEnumerateChild: Bool {
         guard let parent = node.parent else { return false }
         return parent.enumeratedAttributes?.contains("*") == true
     }
 
-    /// Whether this leaf is a child OF an iterate container (bg only, no icon)
-    /// e.g., bullet points under highlights when work[].highlights is configured
-    private var isChildOfIterateContainer: Bool {
+    /// Whether this leaf is a child of an "each item separate" container (icon + cyan bg)
+    /// e.g., each bullet under highlights when work[].highlights[] is configured
+    private var isEachItemSeparateChild: Bool {
         guard let parent = node.parent,
               let entry = parent.parent,
               let collection = entry.parent else { return false }
         let containerName = parent.name.isEmpty ? parent.displayLabel : parent.name
-        return collection.enumeratedAttributes?.contains(containerName) == true
+        let containerNameWithSuffix = containerName + "[]"
+        // Has [] suffix = each item is separate = show icon
+        return collection.enumeratedAttributes?.contains(containerNameWithSuffix) == true ||
+               collection.bundledAttributes?.contains(containerNameWithSuffix) == true
     }
 
-    /// Whether this leaf IS an iterate attribute target (icon + bg)
-    /// e.g., description leaf when projects[].description is configured
+    /// Whether this leaf IS an iterate attribute target (icon + cyan bg)
+    /// e.g., "name" leaf when skills[].name is configured - each name is a separate revnode
     private var isIterateAttributeTarget: Bool {
         guard let parent = node.parent,
               let collection = parent.parent else { return false }
         let nodeName = node.name.isEmpty ? node.displayLabel : node.name
+        // Scalar attributes in enumeratedAttributes get icons (each is separate revnode)
         return collection.enumeratedAttributes?.contains(nodeName) == true
     }
 
     /// Whether this leaf produces a revnode (should show icon)
-    /// Container enumerate children and iterate attribute targets get icons
-    /// Children OF iterate containers only get background (no icon)
+    /// Icons shown when: container enumerate children, or items marked as "each separate" with [] suffix
+    /// No icon when: bundled together (no [] suffix)
     private var isRevnodeLeaf: Bool {
-        isContainerEnumerateChild || isIterateAttributeTarget
+        isContainerEnumerateChild || isEachItemSeparateChild || isIterateAttributeTarget
     }
     var body: some View {
         let isSectionLabelEntry = node.parent?.name == "section-labels"

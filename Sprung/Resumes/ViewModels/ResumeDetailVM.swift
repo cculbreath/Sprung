@@ -20,6 +20,8 @@ final class ResumeDetailVM {
     var isWide: Bool = false
     // Tracks which group nodes are expanded in the UI.
     private var expandedIDs: Set<String> = []
+    /// Refresh trigger for revnode count - increment to force SwiftUI to re-evaluate
+    var revnodeRefreshTrigger: Int = 0
     /// Computed convenience access to the resume's root node.
     var rootNode: TreeNode? { resume.rootNode }
     /// Whether font size nodes exist for this resume.
@@ -98,6 +100,11 @@ final class ResumeDetailVM {
     /// Re‑exports the resume JSON → PDF via the debounce mechanism.
     func refreshPDF() {
         exportCoordinator.debounceExport(resume: resume)
+    }
+
+    /// Triggers SwiftUI to re-evaluate revnode count display
+    func refreshRevnodeCount() {
+        revnodeRefreshTrigger += 1
     }
     // MARK: - Editing -------------------------------------------------------
     private(set) var editingNodeID: String?

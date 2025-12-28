@@ -45,7 +45,7 @@ struct NodeHeaderView: View {
         } else if node.status == .aiToReplace {
             return .solo  // Solo mode for directly marked nodes
         } else if node.aiStatusChildren > 0 {
-            return .solo  // Show solo indicator when children have AI status
+            return .containsSolo  // Container has solo children (show outline only)
         }
         return .off
     }
@@ -85,14 +85,41 @@ struct NodeHeaderView: View {
     }
 
     /// Current mode for this specific attribute across the collection
+    /// For scalar attributes (no children):
+    /// - bundledAttributes["name"] → purple (all combined)
+    /// - enumeratedAttributes["name"] → cyan (each separate)
+    /// For array attributes (has children):
+    /// - *Attributes["keywords"] → purple (bundled together)
+    /// - *Attributes["keywords[]"] → cyan (each item separate)
     private var attributeMode: AIReviewMode {
         guard let grandparent = grandparentNode else { return .off }
         let attr = attributeName
-        if grandparent.bundledAttributes?.contains(attr) == true {
-            return .bundle  // Purple - 1 revnode total (all entries combined)
-        } else if grandparent.enumeratedAttributes?.contains(attr) == true {
-            return .iterate  // Cyan - N revnodes (1 per entry)
-        } else if node.status == .aiToReplace {
+        let attrWithSuffix = attr + "[]"
+        let isArrayAttribute = !node.orderedChildren.isEmpty
+
+        if isArrayAttribute {
+            // Array attribute: check for [] suffix to determine mode
+            // With [] suffix = each item separate (cyan)
+            if grandparent.bundledAttributes?.contains(attrWithSuffix) == true ||
+               grandparent.enumeratedAttributes?.contains(attrWithSuffix) == true {
+                return .iterate  // Cyan - each item is separate
+            }
+            // Without [] suffix = bundled together (purple)
+            if grandparent.bundledAttributes?.contains(attr) == true ||
+               grandparent.enumeratedAttributes?.contains(attr) == true {
+                return .bundle  // Purple - items bundled together
+            }
+        } else {
+            // Scalar attribute: enumeratedAttributes = cyan, bundledAttributes = purple
+            if grandparent.enumeratedAttributes?.contains(attr) == true {
+                return .iterate  // Cyan - each entry's value separate
+            }
+            if grandparent.bundledAttributes?.contains(attr) == true {
+                return .bundle  // Purple - all values combined
+            }
+        }
+
+        if node.status == .aiToReplace {
             return .solo  // Orange - just this single node
         }
         return .off
@@ -155,16 +182,28 @@ struct NodeHeaderView: View {
         // Entry nodes get outline instead of icon - never show icon
         if isEntryUnderReviewedCollection { return false }
 
-        return node.parent != nil && (
+        // Containers of solo items get outline, not icon
+        if aiMode == .containsSolo { return false }
+
+        // Always show if node has actual AI configuration
+        if node.parent != nil && (
             node.status == .aiToReplace ||
-            node.aiStatusChildren > 0 ||
             node.hasAttributeReviewModes ||
             isContainerEnumerateNode ||
             isAttributeOfCollectionEntry ||
             isChildOfReviewedContainer ||
-            isContainerEnumerateChild ||
-            isHoveringHeader
-        )
+            isContainerEnumerateChild
+        ) {
+            return true
+        }
+
+        // Only show hover indicator for interactive nodes (attribute nodes that can be clicked)
+        // or collection nodes (right-click menu available)
+        if isHoveringHeader && node.parent != nil {
+            return isAIModeInteractive || supportsCollectionModes
+        }
+
+        return false
     }
 
     /// Whether clicking the AI mode indicator should toggle mode
@@ -176,6 +215,49 @@ struct NodeHeaderView: View {
     /// Whether this node is itself a container enumerate node (has enumeratedAttributes["*"])
     private var isContainerEnumerateNode: Bool {
         node.enumeratedAttributes?.contains("*") == true
+    }
+
+    // MARK: - Collection Context Menu Helpers
+
+    /// Whether this collection contains scalar values (no nested attributes)
+    private var isScalarArrayCollection: Bool {
+        guard !node.orderedChildren.isEmpty else { return false }
+        guard let firstChild = node.orderedChildren.first else { return false }
+        return firstChild.orderedChildren.isEmpty
+    }
+
+    /// Whether this node supports collection modes (bundle/iterate)
+    /// True for any non-root node with children (both object arrays and scalar arrays)
+    private var supportsCollectionModes: Bool {
+        node.parent != nil && !node.orderedChildren.isEmpty
+    }
+
+    /// Get attribute names available in this collection's entries
+    private var availableAttributes: [String] {
+        guard let firstChild = node.orderedChildren.first else { return [] }
+        return firstChild.orderedChildren.compactMap {
+            let name = $0.name.isEmpty ? $0.displayLabel : $0.name
+            return name.isEmpty ? nil : name
+        }
+    }
+
+    /// Check if an attribute is itself an array (has children)
+    private func isNestedArray(_ attrName: String) -> Bool {
+        guard let firstChild = node.orderedChildren.first,
+              let attr = firstChild.orderedChildren.first(where: {
+                  ($0.name.isEmpty ? $0.displayLabel : $0.name) == attrName
+              }) else { return false }
+        return !attr.orderedChildren.isEmpty
+    }
+
+    /// Check if an attribute is currently in bundle mode
+    private func isAttributeBundled(_ attr: String) -> Bool {
+        node.bundledAttributes?.contains(attr) == true
+    }
+
+    /// Check if an attribute is currently in iterate mode
+    private func isAttributeIterated(_ attr: String) -> Bool {
+        node.enumeratedAttributes?.contains(attr) == true
     }
 
     /// The mode to display for this node
@@ -231,13 +313,39 @@ struct NodeHeaderView: View {
             return .clear
         }
 
+        // Array attribute nodes with [] suffix get icon only, no background (children are the revnodes)
+        // e.g., highlights when work[].highlights[] is configured
+        if isAttributeOfCollectionEntry && isIterateArrayAttribute {
+            return .clear
+        }
+
         let mode = displayMode
         guard mode != .off else { return .clear }
         return mode.color.opacity(0.15)
     }
 
-    /// Outline color for entry nodes
-    private var entryOutlineColor: Color {
+    /// Whether this is an array attribute marked with [] suffix (each item separate)
+    private var isIterateArrayAttribute: Bool {
+        guard let grandparent = grandparentNode else { return false }
+        let attr = attributeName
+        let attrWithSuffix = attr + "[]"
+        // Only true for array attributes (has children) with [] suffix
+        guard !node.orderedChildren.isEmpty else { return false }
+        return grandparent.bundledAttributes?.contains(attrWithSuffix) == true ||
+               grandparent.enumeratedAttributes?.contains(attrWithSuffix) == true
+    }
+
+    /// Outer outline color (containsSolo - orange)
+    /// Checks aiStatusChildren directly since aiMode may return bundle/iterate first
+    private var outerOutlineColor: Color {
+        if node.aiStatusChildren > 0 {
+            return .orange.opacity(0.5)
+        }
+        return .clear
+    }
+
+    /// Inner outline color (entry under reviewed collection - purple/cyan)
+    private var innerOutlineColor: Color {
         guard isEntryUnderReviewedCollection, let parent = node.parent else { return .clear }
         let hasBundled = parent.bundledAttributes?.isEmpty == false
         let hasEnumerated = parent.enumeratedAttributes?.isEmpty == false
@@ -253,6 +361,11 @@ struct NodeHeaderView: View {
             return .cyan.opacity(0.5)
         }
         return .clear
+    }
+
+    /// Whether this node has any outline (for external padding)
+    private var hasAnyOutline: Bool {
+        outerOutlineColor != .clear || innerOutlineColor != .clear
     }
 
     var body: some View {
@@ -315,10 +428,18 @@ struct NodeHeaderView: View {
         .background(rowBackgroundColor)
         .cornerRadius(6)
         .overlay(
-            // Outline for entry nodes under reviewed collection
+            // Inner outline (entry under reviewed collection - purple/cyan)
             RoundedRectangle(cornerRadius: 6)
-                .stroke(entryOutlineColor, lineWidth: 1.5)
+                .stroke(innerOutlineColor, lineWidth: 1.5)
         )
+        .overlay(
+            // Outer outline (containsSolo - orange), slightly larger
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(outerOutlineColor, lineWidth: 1.5)
+                .padding(-2)
+        )
+        .padding(.horizontal, hasAnyOutline ? 5 : 0)  // External padding for outline visibility
+        .padding(.vertical, hasAnyOutline ? 3 : 0)
         .contentShape(Rectangle())
         .onTapGesture {
             vm.toggleExpansion(for: node)
@@ -331,6 +452,8 @@ struct NodeHeaderView: View {
         .contextMenu {
             if isAttributeOfCollectionEntry {
                 attributeModeContextMenu
+            } else if supportsCollectionModes {
+                collectionModeContextMenu
             } else if node.parent != nil {
                 aiModeContextMenu
             }
@@ -398,6 +521,181 @@ struct NodeHeaderView: View {
         }
     }
 
+    // MARK: - Collection Mode Context Menu
+
+    /// Context menu for collection nodes (skills, work, etc.)
+    @ViewBuilder
+    private var collectionModeContextMenu: some View {
+        if isScalarArrayCollection {
+            scalarArrayContextMenu
+        } else {
+            objectArrayContextMenu
+        }
+    }
+
+    /// Menu for scalar array collections (e.g., jobTitles - list of strings)
+    @ViewBuilder
+    private var scalarArrayContextMenu: some View {
+        let isBundled = node.bundledAttributes?.contains("*") == true
+        let isIterated = node.enumeratedAttributes?.contains("*") == true
+
+        Button {
+            setScalarCollectionMode(.bundle)
+        } label: {
+            HStack {
+                Label("Bundle (1 review)", systemImage: "square.stack.3d.up.fill")
+                if isBundled { Image(systemName: "checkmark") }
+            }
+        }
+
+        Button {
+            setScalarCollectionMode(.iterate)
+        } label: {
+            HStack {
+                Label("Iterate (N reviews)", systemImage: "list.bullet")
+                if isIterated { Image(systemName: "checkmark") }
+            }
+        }
+
+        if isBundled || isIterated {
+            Divider()
+            Button {
+                setScalarCollectionMode(.off)
+            } label: {
+                Label("Disable", systemImage: "xmark.circle")
+            }
+        }
+    }
+
+    /// Menu for object array collections (e.g., skills - entries with attributes)
+    @ViewBuilder
+    private var objectArrayContextMenu: some View {
+        let hasAnyConfig = node.bundledAttributes?.isEmpty == false ||
+                           node.enumeratedAttributes?.isEmpty == false
+
+        Menu {
+            ForEach(availableAttributes, id: \.self) { attr in
+                if isNestedArray(attr) {
+                    // Nested array attribute - show submenu
+                    Menu(attr) {
+                        nestedArraySubmenu(attr: attr, parentMode: .bundle)
+                    }
+                } else {
+                    // Simple attribute - toggle button
+                    attributeToggleButton(attr: attr, mode: .bundle)
+                }
+            }
+        } label: {
+            Label("Bundle", systemImage: "square.stack.3d.up.fill")
+        }
+
+        Menu {
+            ForEach(availableAttributes, id: \.self) { attr in
+                if isNestedArray(attr) {
+                    // Nested array attribute - show submenu
+                    Menu(attr) {
+                        nestedArraySubmenu(attr: attr, parentMode: .iterate)
+                    }
+                } else {
+                    // Simple attribute - toggle button
+                    attributeToggleButton(attr: attr, mode: .iterate)
+                }
+            }
+        } label: {
+            Label("Iterate", systemImage: "list.bullet")
+        }
+
+        if hasAnyConfig {
+            Divider()
+            Button {
+                clearAllCollectionModes()
+            } label: {
+                Label("Clear All", systemImage: "xmark.circle")
+            }
+        }
+    }
+
+    /// Toggle button for a simple attribute
+    @ViewBuilder
+    private func attributeToggleButton(attr: String, mode: AIReviewMode) -> some View {
+        let isActive = mode == .bundle ? isAttributeBundled(attr) : isAttributeIterated(attr)
+
+        Button {
+            toggleCollectionAttribute(attr, mode: mode)
+        } label: {
+            HStack {
+                Text(attr)
+                if isActive { Image(systemName: "checkmark") }
+            }
+        }
+    }
+
+    /// Submenu for nested array attributes (e.g., keywords under skills)
+    /// Uses suffix convention: "keywords" = bundled within entry, "keywords[]" = each item separate
+    /// From Bundle menu: adds to bundledAttributes
+    /// From Iterate menu: adds to enumeratedAttributes
+    @ViewBuilder
+    private func nestedArraySubmenu(attr: String, parentMode: AIReviewMode) -> some View {
+        let attrWithSuffix = attr + "[]"
+        let isBundledBase = isAttributeBundled(attr)
+        let isBundledEach = isAttributeBundled(attrWithSuffix)
+        let isIteratedBase = isAttributeIterated(attr)
+        let isIteratedEach = isAttributeIterated(attrWithSuffix)
+
+        let isBundleActive = parentMode == .bundle ? isBundledBase : isIteratedBase
+        let isIterateActive = parentMode == .bundle ? isBundledEach : isIteratedEach
+
+        // Bundle option: nested array items combined into one review per entry
+        Button {
+            Logger.info("🎯 Nested submenu BUNDLE clicked: attr='\(attr)' parentMode=\(parentMode)")
+            // Remove any existing config for this attr
+            removeCollectionAttribute(attr)
+            removeCollectionAttribute(attrWithSuffix)
+            // Add base attr (bundled within entry)
+            toggleCollectionAttribute(attr, mode: parentMode)
+        } label: {
+            HStack {
+                Image(systemName: "square.stack.3d.up.fill")
+                if parentMode == .bundle {
+                    Text("Bundle (all entries combined)")
+                } else {
+                    Text("Bundle (per entry)")
+                }
+                if isBundleActive { Image(systemName: "checkmark") }
+            }
+        }
+
+        // Iterate option: each nested array item is separate
+        Button {
+            Logger.info("🎯 Nested submenu ITERATE clicked: attr='\(attr)' suffix='\(attrWithSuffix)' parentMode=\(parentMode)")
+            // Remove any existing config for this attr
+            removeCollectionAttribute(attr)
+            removeCollectionAttribute(attrWithSuffix)
+            // Add attr with [] suffix (each item separate)
+            toggleCollectionAttribute(attrWithSuffix, mode: parentMode)
+        } label: {
+            HStack {
+                Image(systemName: "list.bullet")
+                if parentMode == .bundle {
+                    Text("Iterate (each item separate)")
+                } else {
+                    Text("Iterate (per entry, each item)")
+                }
+                if isIterateActive { Image(systemName: "checkmark") }
+            }
+        }
+
+        if isBundleActive || isIterateActive {
+            Divider()
+            Button {
+                removeCollectionAttribute(attr)
+                removeCollectionAttribute(attrWithSuffix)
+            } label: {
+                Label("Off", systemImage: "xmark.circle")
+            }
+        }
+    }
+
     // MARK: - Expanded Controls
 
     @ViewBuilder
@@ -425,6 +723,7 @@ struct NodeHeaderView: View {
         } else {
             node.status = .aiToReplace
         }
+        vm.refreshRevnodeCount()
     }
 
     /// Toggle through attribute modes: off → bundle → iterate → solo → off
@@ -438,7 +737,7 @@ struct NodeHeaderView: View {
             setAttributeMode(.solo)
         case .solo:
             setAttributeMode(.off)
-        case .included:
+        case .included, .containsSolo:
             break  // Children of reviewed containers can't be toggled directly
         }
     }
@@ -484,8 +783,8 @@ struct NodeHeaderView: View {
             // Clear solo status from all matching attribute nodes
             clearSoloStatusForAttribute(attr, in: collection)
 
-        case .included:
-            break  // Not a valid mode to set directly - it's derived from parent state
+        case .included, .containsSolo:
+            break  // Not valid modes to set directly - derived from parent state
         }
 
         // Clean up empty arrays
@@ -506,6 +805,7 @@ struct NodeHeaderView: View {
                 collection.status = .saved
             }
         }
+        vm.refreshRevnodeCount()
     }
 
     /// Clear solo (aiToReplace) status from all nodes matching this attribute name
@@ -519,22 +819,100 @@ struct NodeHeaderView: View {
             }
         }
     }
+
+    // MARK: - Collection Mode Actions
+
+    /// Set mode for scalar array collections (uses "*" as attribute name)
+    private func setScalarCollectionMode(_ mode: AIReviewMode) {
+        node.bundledAttributes = nil
+        node.enumeratedAttributes = nil
+
+        switch mode {
+        case .bundle:
+            node.bundledAttributes = ["*"]
+        case .iterate:
+            node.enumeratedAttributes = ["*"]
+        default:
+            break
+        }
+        vm.refreshRevnodeCount()
+    }
+
+    /// Toggle an attribute in a collection's bundle or iterate list
+    private func toggleCollectionAttribute(_ attr: String, mode: AIReviewMode) {
+        Logger.info("🎯 toggleCollectionAttribute: attr='\(attr)' mode=\(mode) on node '\(node.name)'")
+
+        // Remove from both lists first
+        node.bundledAttributes?.removeAll { $0 == attr }
+        node.enumeratedAttributes?.removeAll { $0 == attr }
+
+        // Add to the appropriate list
+        switch mode {
+        case .bundle:
+            if node.bundledAttributes == nil {
+                node.bundledAttributes = []
+            }
+            node.bundledAttributes?.append(attr)
+            Logger.info("🎯 Added '\(attr)' to bundledAttributes: \(node.bundledAttributes ?? [])")
+        case .iterate:
+            if node.enumeratedAttributes == nil {
+                node.enumeratedAttributes = []
+            }
+            node.enumeratedAttributes?.append(attr)
+            Logger.info("🎯 Added '\(attr)' to enumeratedAttributes: \(node.enumeratedAttributes ?? [])")
+        default:
+            break
+        }
+
+        // Clean up empty arrays
+        if node.bundledAttributes?.isEmpty == true {
+            node.bundledAttributes = nil
+        }
+        if node.enumeratedAttributes?.isEmpty == true {
+            node.enumeratedAttributes = nil
+        }
+        vm.refreshRevnodeCount()
+    }
+
+    /// Remove an attribute from both bundle and iterate lists
+    private func removeCollectionAttribute(_ attr: String) {
+        node.bundledAttributes?.removeAll { $0 == attr }
+        node.enumeratedAttributes?.removeAll { $0 == attr }
+
+        // Clean up empty arrays
+        if node.bundledAttributes?.isEmpty == true {
+            node.bundledAttributes = nil
+        }
+        if node.enumeratedAttributes?.isEmpty == true {
+            node.enumeratedAttributes = nil
+        }
+        vm.refreshRevnodeCount()
+    }
+
+    /// Clear all bundle/iterate configuration from this collection
+    private func clearAllCollectionModes() {
+        node.bundledAttributes = nil
+        node.enumeratedAttributes = nil
+        vm.refreshRevnodeCount()
+    }
 }
 
 // MARK: - AI Review Mode
 
 enum AIReviewMode {
-    case bundle   // Purple - all together across entries
-    case iterate  // Cyan - each entry separately
-    case solo     // Orange - just this single node
-    case included // Cyan - child of a reviewed container (uses same color as iterate)
-    case off      // Gray - disabled
+    case bundle       // Purple - all together across entries
+    case iterate      // Cyan - each entry separately
+    case solo         // Orange - just this single node (bg + icon)
+    case containsSolo // Orange - contains a solo child (outline only, no icon)
+    case included     // Cyan - child of a reviewed container (uses same color as iterate)
+    case off          // Gray - disabled
 
     var color: Color {
         switch self {
         case .bundle: return .purple
         case .iterate: return .cyan
         case .solo: return .orange
+        case .containsSolo: return .orange  // Same color for outline
         case .included: return .cyan  // Same as iterate - children inherit parent's color
         case .off: return .gray
         }
@@ -545,6 +923,7 @@ enum AIReviewMode {
         case .bundle: return "square.stack.3d.up.fill"
         case .iterate: return "list.bullet"
         case .solo: return "sparkles"  // Use sparkles for solo - consistent with SparkleButton
+        case .containsSolo: return "sparkles"  // Not shown, but needed for completeness
         case .included: return "sparkles"
         case .off: return "sparkles"
         }
@@ -583,6 +962,8 @@ struct AIModeIndicator: View {
             text = "Iterate: N reviews (one per entry)"
         case .solo:
             text = "Solo: Just this one item"
+        case .containsSolo:
+            text = "Contains solo item(s)"
         case .included:
             text = "Included in parent's review"
         case .off:
