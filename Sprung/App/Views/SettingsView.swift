@@ -22,8 +22,13 @@ struct SettingsView: View {
     @Environment(OnboardingInterviewCoordinator.self) private var onboardingCoordinator
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(DiscoveryCoordinator.self) private var searchOpsCoordinator
+    @Environment(\.modelContext) private var modelContext
     @State private var showFactoryResetConfirmation = false
     @State private var showFinalResetConfirmation = false
+    @State private var showClearArtifactsConfirmation = false
+    @State private var showClearKnowledgeCardsConfirmation = false
+    @State private var showClearWritingSamplesConfirmation = false
+    @State private var clearResultMessage: String?
     @State private var resetError: String?
     @State private var isResetting = false
     @State private var geminiModels: [GoogleAIService.GeminiModel] = []
@@ -164,8 +169,50 @@ struct SettingsView: View {
 
             // MARK: - Danger Zone
             Section {
+                // Granular data clearing options
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Resetting will permanently delete all your data:")
+                    Text("Clear specific data types without a full reset:")
+                        .font(.callout)
+
+                    HStack(spacing: 12) {
+                        Button(role: .destructive) {
+                            showClearArtifactsConfirmation = true
+                        } label: {
+                            Label("Clear Artifacts", systemImage: "doc.badge.ellipsis")
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(isResetting)
+
+                        Button(role: .destructive) {
+                            showClearKnowledgeCardsConfirmation = true
+                        } label: {
+                            Label("Clear Knowledge Cards", systemImage: "rectangle.stack.badge.minus")
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(isResetting)
+
+                        Button(role: .destructive) {
+                            showClearWritingSamplesConfirmation = true
+                        } label: {
+                            Label("Clear Writing Samples", systemImage: "text.badge.minus")
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(isResetting)
+                    }
+
+                    if let message = clearResultMessage {
+                        Text(message)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Divider()
+                    .padding(.vertical, 8)
+
+                // Full factory reset
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Factory reset will permanently delete all your data:")
                         .font(.callout)
                     VStack(alignment: .leading, spacing: 6) {
                         Label("Resumes, cover letters, and templates", systemImage: "doc.fill")
@@ -214,6 +261,30 @@ struct SettingsView: View {
         } message: {
             Text("This is your final chance to cancel. Once confirmed, all data will be deleted and the app will restart.")
         }
+        .alert("Clear Artifact Records", isPresented: $showClearArtifactsConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Clear", role: .destructive) {
+                clearArtifactRecords()
+            }
+        } message: {
+            Text("This will delete all uploaded documents and their extracted content. This cannot be undone.")
+        }
+        .alert("Clear Knowledge Cards", isPresented: $showClearKnowledgeCardsConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Clear", role: .destructive) {
+                clearKnowledgeCards()
+            }
+        } message: {
+            Text("This will delete all knowledge cards generated during onboarding. This cannot be undone.")
+        }
+        .alert("Clear Writing Samples", isPresented: $showClearWritingSamplesConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Clear", role: .destructive) {
+                clearWritingSamples()
+            }
+        } message: {
+            Text("This will delete all writing samples used for cover letter generation. This cannot be undone.")
+        }
         .task {
             sanitizePDFExtractionModelIfNeeded()
             sanitizeGitIngestModelIfNeeded()
@@ -243,6 +314,33 @@ struct SettingsView: View {
             NSApplication.shared.terminate(nil)
         } catch {
             resetError = error.localizedDescription
+        }
+    }
+
+    private func clearArtifactRecords() {
+        do {
+            let count = try dataResetService.clearArtifactRecords(context: modelContext)
+            clearResultMessage = "Cleared \(count) artifact record\(count == 1 ? "" : "s")"
+        } catch {
+            clearResultMessage = "Error: \(error.localizedDescription)"
+        }
+    }
+
+    private func clearKnowledgeCards() {
+        do {
+            let count = try dataResetService.clearKnowledgeCards()
+            clearResultMessage = "Cleared \(count) knowledge card file\(count == 1 ? "" : "s")"
+        } catch {
+            clearResultMessage = "Error: \(error.localizedDescription)"
+        }
+    }
+
+    private func clearWritingSamples() {
+        do {
+            let count = try dataResetService.clearWritingSamples(context: modelContext)
+            clearResultMessage = "Cleared \(count) writing sample\(count == 1 ? "" : "s")"
+        } catch {
+            clearResultMessage = "Error: \(error.localizedDescription)"
         }
     }
 }

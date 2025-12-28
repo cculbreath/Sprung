@@ -5,12 +5,82 @@
 //  Service responsible for coordinating a complete data reset across all stores and persistent layers.
 //
 import Foundation
+import SwiftData
+
 @Observable
 @MainActor
 final class DataResetService {
     // MARK: - Properties
     var isResetting: Bool = false
     var resetError: String?
+
+    // MARK: - Granular Reset Methods
+
+    /// Clear all artifact records from SwiftData
+    /// - Parameter context: SwiftData ModelContext
+    /// - Returns: Number of records deleted
+    @discardableResult
+    func clearArtifactRecords(context: ModelContext) throws -> Int {
+        let descriptor = FetchDescriptor<OnboardingArtifactRecord>()
+        let artifacts = (try? context.fetch(descriptor)) ?? []
+        let count = artifacts.count
+
+        for artifact in artifacts {
+            context.delete(artifact)
+        }
+
+        try context.save()
+        Logger.info("🗑️ Cleared \(count) artifact records", category: .appLifecycle)
+        return count
+    }
+
+    /// Clear all knowledge cards from file storage
+    /// Knowledge cards are stored as JSON files in the Onboarding/Data directory
+    /// - Returns: Number of files deleted
+    @discardableResult
+    func clearKnowledgeCards() throws -> Int {
+        let fileManager = FileManager.default
+        let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let dataURL = appSupportURL.appendingPathComponent("Onboarding/Data", isDirectory: true)
+
+        guard fileManager.fileExists(atPath: dataURL.path) else {
+            Logger.info("🗑️ No knowledge card directory found", category: .appLifecycle)
+            return 0
+        }
+
+        let contents = try fileManager.contentsOfDirectory(at: dataURL, includingPropertiesForKeys: nil)
+        var deletedCount = 0
+
+        // Delete transcript_record files (knowledge card data)
+        for fileURL in contents where fileURL.lastPathComponent.hasPrefix("transcript_record_") {
+            try fileManager.removeItem(at: fileURL)
+            deletedCount += 1
+        }
+
+        Logger.info("🗑️ Cleared \(deletedCount) knowledge card files", category: .appLifecycle)
+        return deletedCount
+    }
+
+    /// Clear all writing samples from SwiftData
+    /// Writing samples are CoverRef objects with type == .writingSample
+    /// - Parameter context: SwiftData ModelContext
+    /// - Returns: Number of records deleted
+    @discardableResult
+    func clearWritingSamples(context: ModelContext) throws -> Int {
+        let descriptor = FetchDescriptor<CoverRef>()
+        let allRefs = (try? context.fetch(descriptor)) ?? []
+        let writingSamples = allRefs.filter { $0.type == .writingSample }
+        let count = writingSamples.count
+
+        for sample in writingSamples {
+            context.delete(sample)
+        }
+
+        try context.save()
+        Logger.info("🗑️ Cleared \(count) writing samples", category: .appLifecycle)
+        return count
+    }
+
     // MARK: - Reset Orchestration
     /// Performs a complete factory reset of all application data.
     /// Marks SwiftData store for deletion on next launch (avoids SQLite relationship constraint errors),
