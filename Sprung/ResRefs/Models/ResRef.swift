@@ -26,6 +26,8 @@ class ResRef: Identifiable, Codable {
     var sourcesJSON: String?
     /// Indicates this was created via onboarding interview
     var isFromOnboarding: Bool = false
+    /// Token count for this card's content (populated during KC generation)
+    var tokenCount: Int?
 
     init(
         name: String = "", content: String = "",
@@ -35,7 +37,8 @@ class ResRef: Identifiable, Codable {
         organization: String? = nil,
         location: String? = nil,
         sourcesJSON: String? = nil,
-        isFromOnboarding: Bool = false
+        isFromOnboarding: Bool = false,
+        tokenCount: Int? = nil
     ) {
         id = UUID()
         self.content = content
@@ -47,6 +50,7 @@ class ResRef: Identifiable, Codable {
         self.location = location
         self.sourcesJSON = sourcesJSON
         self.isFromOnboarding = isFromOnboarding
+        self.tokenCount = tokenCount
     }
     // MARK: - Codable
     enum CodingKeys: String, CodingKey {
@@ -60,6 +64,7 @@ class ResRef: Identifiable, Codable {
         case location
         case sourcesJSON
         case isFromOnboarding
+        case tokenCount
     }
     required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -73,6 +78,7 @@ class ResRef: Identifiable, Codable {
         location = try container.decodeIfPresent(String.self, forKey: .location)
         sourcesJSON = try container.decodeIfPresent(String.self, forKey: .sourcesJSON)
         isFromOnboarding = try container.decodeIfPresent(Bool.self, forKey: .isFromOnboarding) ?? false
+        tokenCount = try container.decodeIfPresent(Int.self, forKey: .tokenCount)
     }
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -86,5 +92,6 @@ class ResRef: Identifiable, Codable {
         try container.encodeIfPresent(location, forKey: .location)
         try container.encodeIfPresent(sourcesJSON, forKey: .sourcesJSON)
         try container.encode(isFromOnboarding, forKey: .isFromOnboarding)
+        try container.encodeIfPresent(tokenCount, forKey: .tokenCount)
     }
 }

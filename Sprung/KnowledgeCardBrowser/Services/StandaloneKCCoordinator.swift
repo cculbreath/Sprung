@@ -561,7 +561,8 @@ class StandaloneKCCoordinator {
             organization: card.organization ?? metadata.organization,
             location: card.location ?? metadata.location,
             sourcesJSON: sourcesJSON,
-            isFromOnboarding: false  // Standalone, not from onboarding
+            isFromOnboarding: false,  // Standalone, not from onboarding
+            tokenCount: card.tokenCount  // May be nil for standalone cards
         )
     }
 

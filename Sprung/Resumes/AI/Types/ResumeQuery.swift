@@ -379,6 +379,7 @@ import SwiftUI
     ///   - fieldPath: The field path pattern (e.g., "skills.*.name")
     ///   - nodes: The exported nodes to review
     ///   - isBundled: Whether all nodes are bundled into one review
+    ///   - coverRefs: Cover letter references for writing sample extraction (optional)
     /// - Returns: The prompt string for the LLM
     @MainActor
     func phaseReviewPrompt(
@@ -386,26 +387,13 @@ import SwiftUI
         phaseNumber: Int,
         fieldPath: String,
         nodes: [ExportedReviewNode],
-        isBundled: Bool
+        isBundled: Bool,
+        coverRefs: [CoverRef] = []
     ) async -> String {
         try? await exportCoordinator.ensureFreshRenderedText(for: res)
 
         // Build JSON representation of nodes
-        let nodesJson = nodes.map { node in
-            var json = """
-            {
-              "id": "\(node.id)",
-              "path": "\(node.path)",
-              "displayName": "\(node.displayName)",
-              "value": "\(node.value)"
-            """
-            if let childValues = node.childValues, !childValues.isEmpty {
-                let childrenJson = childValues.map { "\"\($0)\"" }.joined(separator: ", ")
-                json += ",\n      \"childValues\": [\(childrenJson)]"
-            }
-            json += "\n    }"
-            return json
-        }.joined(separator: ",\n    ")
+        let nodesJson = buildNodesJson(from: nodes)
 
         // Determine review type description based on whether items are containers
         let hasContainers = nodes.contains { $0.isContainer }
@@ -420,7 +408,45 @@ import SwiftUI
         // Get the text template content
         let textTemplate = res.template?.textContent ?? "(No text template available)"
 
-        // Build prompt from template with substitutions
+        // Check if we have preprocessed data for v2 template
+        let hasPreprocessedData = res.jobApp?.hasPreprocessingComplete ?? false
+
+        if hasPreprocessedData && !coverRefs.isEmpty {
+            // Use v2 template with structured requirements and voice context
+            let voiceContext = coverRefs.voiceContextForPrompt(maxSamples: 2)
+            let extractedRequirements = res.jobApp?.extractedRequirements
+            let formattedRequirements = formatRequirementsForPrompt(
+                extractedRequirements,
+                fallbackJobListing: jobListing
+            )
+            let cardsToInclude = selectCardsForContext(allCards: allResRefs, jobApp: res.jobApp)
+            let filteredCards = formatCardsForPrompt(cardsToInclude)
+
+            let prompt = loadPromptTemplateWithSubstitutions(named: "resume_phase_review_v2", substitutions: [
+                "phaseNumber": String(phaseNumber),
+                "sectionUppercase": section.uppercased(),
+                "fieldPath": fieldPath,
+                "applicantName": applicant.name,
+                "formattedRequirements": formattedRequirements,
+                "voiceContext": voiceContext,
+                "resumeText": resumeText,
+                "textTemplate": textTemplate,
+                "filteredCards": filteredCards,
+                "nodesJson": nodesJson,
+                "bundleDescription": bundleDescription,
+                "itemTypeDescription": itemTypeDescription,
+                "section": section,
+                "isBundled": String(isBundled)
+            ])
+
+            if saveDebugPrompt {
+                savePromptToDownloads(content: prompt, fileName: "phaseReviewPrompt_v2_\(section)_phase\(phaseNumber).txt")
+            }
+
+            return prompt
+        }
+
+        // Fallback to v1 template
         let prompt = loadPromptTemplateWithSubstitutions(named: "resume_phase_review", substitutions: [
             "phaseNumber": String(phaseNumber),
             "sectionUppercase": section.uppercased(),
@@ -442,6 +468,92 @@ import SwiftUI
         }
 
         return prompt
+    }
+
+    // MARK: - Knowledge Card Selection
+
+    /// Select cards based on token limit setting
+    private func selectCardsForContext(allCards: [ResRef], jobApp: JobApp?) -> [ResRef] {
+        let tokenLimit = UserDefaults.standard.integer(forKey: "knowledgeCardTokenLimit")
+        guard tokenLimit > 0 else { return allCards }
+
+        let totalTokens = allCards.compactMap { $0.tokenCount }.reduce(0, +)
+
+        // Under limit: include all cards
+        if totalTokens <= tokenLimit {
+            return allCards
+        }
+
+        // Over limit: filter to relevant cards if preprocessing is complete
+        if let relevantIds = jobApp?.relevantCardIds, !relevantIds.isEmpty {
+            let relevantIdSet = Set(relevantIds)
+            let filtered = allCards.filter { relevantIdSet.contains($0.id.uuidString) }
+            Logger.info("📊 [ResumeQuery] Token limit exceeded (\(totalTokens)/\(tokenLimit)), using \(filtered.count) relevant cards", category: .ai)
+            return filtered
+        }
+
+        // Fallback: include all cards (preprocessing not complete)
+        return allCards
+    }
+
+    /// Format cards for prompt inclusion
+    private func formatCardsForPrompt(_ cards: [ResRef]) -> String {
+        if cards.isEmpty {
+            return "(No knowledge cards available)"
+        }
+
+        return cards.map { card in
+            "### \(card.name)\n\(card.content)"
+        }.joined(separator: "\n\n---\n\n")
+    }
+
+    /// Format requirements for prompt inclusion
+    private func formatRequirementsForPrompt(
+        _ requirements: ExtractedRequirements?,
+        fallbackJobListing: String
+    ) -> String {
+        guard let req = requirements, req.isValid else {
+            return "JOB LISTING:\n\(fallbackJobListing)"
+        }
+
+        var sections: [String] = []
+
+        if !req.mustHave.isEmpty {
+            sections.append("MUST-HAVE (explicitly required):\n" + req.mustHave.map { "- \($0)" }.joined(separator: "\n"))
+        }
+        if !req.strongSignal.isEmpty {
+            sections.append("STRONG SIGNAL (emphasized):\n" + req.strongSignal.map { "- \($0)" }.joined(separator: "\n"))
+        }
+        if !req.preferred.isEmpty {
+            sections.append("PREFERRED (nice-to-have):\n" + req.preferred.map { "- \($0)" }.joined(separator: "\n"))
+        }
+        if !req.cultural.isEmpty {
+            sections.append("CULTURAL/SOFT:\n" + req.cultural.map { "- \($0)" }.joined(separator: "\n"))
+        }
+        if !req.atsKeywords.isEmpty {
+            sections.append("ATS KEYWORDS:\n" + req.atsKeywords.joined(separator: ", "))
+        }
+
+        return sections.joined(separator: "\n\n")
+    }
+
+    /// Build JSON representation of nodes
+    private func buildNodesJson(from nodes: [ExportedReviewNode]) -> String {
+        nodes.map { node in
+            var json = """
+            {
+              "id": "\(node.id)",
+              "path": "\(node.path)",
+              "displayName": "\(node.displayName)",
+              "value": "\(node.value)"
+            """
+            if let childValues = node.childValues, !childValues.isEmpty {
+                let childrenJson = childValues.map { "\"\($0)\"" }.joined(separator: ", ")
+                json += ",\n      \"childValues\": [\(childrenJson)]"
+            }
+            json += "\n    }"
+            return json
+        }.joined(separator: ",\n    ")
     }
 
     // MARK: - Phase Review Resubmission Prompt

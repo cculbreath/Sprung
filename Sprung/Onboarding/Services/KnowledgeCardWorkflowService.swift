@@ -386,6 +386,7 @@ final class KnowledgeCardWorkflowService {
         let timePeriod = card["time_period"].string
         let organization = card["organization"].string
         let location = card["location"].string
+        let tokenCount = card["token_count"].int
 
         // Encode sources array as JSON string
         var sourcesJSON: String?
@@ -405,10 +406,11 @@ final class KnowledgeCardWorkflowService {
             organization: organization,
             location: location,
             sourcesJSON: sourcesJSON,
-            isFromOnboarding: true
+            isFromOnboarding: true,
+            tokenCount: tokenCount
         )
 
         resRefStore.addResRef(resRef)
-        Logger.info("✅ Knowledge card persisted to ResRef (SwiftData): \(title)", category: .ai)
+        Logger.info("✅ Knowledge card persisted to ResRef (SwiftData): \(title) (tokens: \(tokenCount ?? 0))", category: .ai)
     }
 }

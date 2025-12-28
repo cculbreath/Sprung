@@ -269,6 +269,48 @@ extension Statuses {
     var fitScore: Double?
     var llmAssessment: String?
 
+    // MARK: - Job Preprocessing
+
+    /// Pre-extracted job requirements (populated async after job creation)
+    /// Stored as JSON string for SwiftData compatibility
+    private var _extractedRequirementsJSON: String?
+
+    /// IDs of knowledge cards identified as relevant during preprocessing
+    /// Used when total card tokens exceed the configured limit
+    private var _relevantCardIds: [String]?
+
+    /// Decoded extracted requirements
+    var extractedRequirements: ExtractedRequirements? {
+        get {
+            guard let json = _extractedRequirementsJSON,
+                  let data = json.data(using: .utf8),
+                  let requirements = try? JSONDecoder().decode(ExtractedRequirements.self, from: data) else {
+                return nil
+            }
+            return requirements
+        }
+        set {
+            if let requirements = newValue,
+               let data = try? JSONEncoder().encode(requirements),
+               let json = String(data: data, encoding: .utf8) {
+                _extractedRequirementsJSON = json
+            } else {
+                _extractedRequirementsJSON = nil
+            }
+        }
+    }
+
+    /// IDs of relevant knowledge cards for this job
+    var relevantCardIds: [String]? {
+        get { _relevantCardIds }
+        set { _relevantCardIds = newValue }
+    }
+
+    /// Whether preprocessing has been completed
+    var hasPreprocessingComplete: Bool {
+        extractedRequirements?.isValid ?? false
+    }
+
     // MARK: - Computed Properties
 
     var jobListingString: String {

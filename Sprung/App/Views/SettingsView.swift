@@ -17,6 +17,8 @@ struct SettingsView: View {
     @AppStorage("onboardingInterviewHardTaskReasoningEffort") private var onboardingHardTaskReasoningEffort: String = "medium"
     @AppStorage("onboardingInterviewFlexProcessing") private var onboardingFlexProcessing: Bool = true
     @AppStorage("onboardingInterviewPromptCacheRetention") private var onboardingPromptCacheRetention: Bool = true
+    @AppStorage("backgroundProcessingModelId") private var backgroundProcessingModelId: String = "gemini-2.5-flash"
+    @AppStorage("knowledgeCardTokenLimit") private var knowledgeCardTokenLimit: Int = 8000
     @Environment(OnboardingInterviewCoordinator.self) private var onboardingCoordinator
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(DiscoveryCoordinator.self) private var searchOpsCoordinator
@@ -128,6 +130,8 @@ struct SettingsView: View {
                 docSummaryModelPicker
                 gitIngestModelPicker
                 kcAgentModelPicker
+                backgroundProcessingModelPicker
+                knowledgeCardTokenLimitPicker
 
                 Toggle("Allow web search during interviews", isOn: $onboardingWebSearchAllowed)
 
@@ -521,6 +525,71 @@ private extension SettingsView {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    var backgroundProcessingModelPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if !hasGeminiKey {
+                Label("Add Google Gemini API key above to enable background processing.", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .font(.callout)
+            } else if geminiModels.isEmpty {
+                HStack {
+                    Text("No Gemini models available")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    Button("Load Models") {
+                        Task { await loadGeminiModels() }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            } else {
+                Picker("Background Processing Model", selection: $backgroundProcessingModelId) {
+                    ForEach(geminiModels) { model in
+                        Text(model.displayName)
+                            .tag(model.id)
+                    }
+                }
+                .pickerStyle(.menu)
+                Text("Used for job requirement extraction. Fast, inexpensive models recommended.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    var knowledgeCardTokenLimitPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Stepper(value: $knowledgeCardTokenLimit, in: 2000...20000, step: 1000) {
+                HStack {
+                    Text("Knowledge Card Token Limit")
+                    Spacer()
+                    Text("\(knowledgeCardTokenLimit)")
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
+            Text("When total knowledge card tokens exceed this limit, only job-relevant cards are included in prompts.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @discardableResult
+    func sanitizeBackgroundProcessingModelIfNeeded() -> String {
+        let ids = geminiModels.map(\.id)
+        guard !ids.isEmpty else { return backgroundProcessingModelId }
+        let fallback = "gemini-2.5-flash"
+        let (sanitized, adjusted) = ModelPreferenceValidator.sanitize(
+            requested: backgroundProcessingModelId,
+            available: ids,
+            fallback: fallback
+        )
+        if adjusted {
+            backgroundProcessingModelId = sanitized
+        }
+        return sanitized
     }
 
     @discardableResult

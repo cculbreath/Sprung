@@ -22,11 +22,22 @@ final class JobAppStore: SwiftDataStore {
     var form = JobAppForm()
     var resStore: ResStore
     var coverLetterStore: CoverLetterStore
+
+    // MARK: - Preprocessing
+    private var preprocessor: JobAppPreprocessor?
+    private weak var resRefStore: ResRefStore?
+
     // MARK: - Initialiser
     init(context: ModelContext, resStore: ResStore, coverLetterStore: CoverLetterStore) {
         modelContext = context
         self.resStore = resStore
         self.coverLetterStore = coverLetterStore
+    }
+
+    /// Set the preprocessor and ResRefStore for background job processing
+    func setPreprocessor(_ preprocessor: JobAppPreprocessor, resRefStore: ResRefStore) {
+        self.preprocessor = preprocessor
+        self.resRefStore = resRefStore
     }
     // MARK: - Methods
     func updateJobAppStatus(_ jobApp: JobApp, to newStatus: Statuses) {
@@ -38,6 +49,18 @@ final class JobAppStore: SwiftDataStore {
         modelContext.insert(jobApp)
         saveContext()
         selectedApp = jobApp
+
+        // Trigger background preprocessing (requirements + relevant cards)
+        if let preprocessor = preprocessor,
+           let resRefStore = resRefStore,
+           !jobApp.jobDescription.isEmpty {
+            preprocessor.preprocessInBackground(
+                for: jobApp,
+                allCards: resRefStore.resRefs,
+                modelContext: modelContext
+            )
+        }
+
         return jobApp
     }
 

@@ -85,6 +85,8 @@ struct GeneratedCard {
     var resumeBullets: [String]?
     var keywords: [String]?
     var evidenceQuality: String?
+    /// Token count for this card's content (output tokens from generation)
+    var tokenCount: Int?
 
     /// Evidence block from structured output
     struct EvidenceBlockOutput {
@@ -254,6 +256,9 @@ struct GeneratedCard {
         if let location = location {
             card["location"].string = location
         }
+        if let tokenCount = tokenCount {
+            card["token_count"].int = tokenCount
+        }
 
         json["card"] = card
 
@@ -274,7 +279,7 @@ struct GeneratedCard {
 
     /// Create from agent output
     /// Supports both structured evidence format and legacy prose format
-    static func fromAgentOutput(_ output: JSON, cardId: String) -> GeneratedCard {
+    static func fromAgentOutput(_ output: JSON, cardId: String, tokenCount: Int? = nil) -> GeneratedCard {
         // Parse chat sources if provided
         let chatSources = output["chat_sources"].arrayValue.map { json in
             ChatSourceOutput(
@@ -348,7 +353,8 @@ struct GeneratedCard {
             extractedFacts: extractedFacts,
             resumeBullets: output["resume_bullets"].arrayValue.map { $0.stringValue },
             keywords: output["keywords"].arrayValue.map { $0.stringValue },
-            evidenceQuality: output["evidence_quality"].string
+            evidenceQuality: output["evidence_quality"].string,
+            tokenCount: tokenCount
         )
     }
 
@@ -373,7 +379,8 @@ struct GeneratedCard {
             extractedFacts: nil,
             resumeBullets: nil,
             keywords: nil,
-            evidenceQuality: nil
+            evidenceQuality: nil,
+            tokenCount: nil
         )
     }
 }
@@ -624,10 +631,15 @@ actor KnowledgeCardAgentService {
 
             let output = try await runner.run()
 
+            // Get token count from tracker (output tokens from generation)
+            let tokenCount = await MainActor.run {
+                tracker.getAgent(id: agentId)?.outputTokens
+            }
+
             // Parse result
             if let result = output.result?["result"] {
                 // Build and store card BEFORE emitting completion event (fixes race condition)
-                let generatedCard = GeneratedCard.fromAgentOutput(result, cardId: proposal.cardId)
+                let generatedCard = GeneratedCard.fromAgentOutput(result, cardId: proposal.cardId, tokenCount: tokenCount)
 
                 if let validationError = generatedCard.validationError() {
                     let error = "KC agent returned invalid output: \(validationError)"

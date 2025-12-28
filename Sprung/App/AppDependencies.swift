@@ -157,6 +157,10 @@ final class AppDependencies {
         searchOpsCoordinator.configureLLMService(llmFacade: llmFacade)
         self.searchOpsCoordinator = searchOpsCoordinator
 
+        // Job App Preprocessor (background processing for job requirements and card selection)
+        let jobAppPreprocessor = JobAppPreprocessor(llmFacade: llmFacade)
+        jobAppStore.setPreprocessor(jobAppPreprocessor, resRefStore: resRefStore)
+
         self.appEnvironment = AppEnvironment(
             appState: appState,
             navigationState: navigationState,
