@@ -136,17 +136,46 @@ enum LeafStatus: String, Codable, Hashable {
         if enumeratedAttributes?.contains("*") == true {
             count += orderedChildren.count
         }
-        // Bundle attributes: 1 revnode per attribute (regardless of entry count)
+        // Bundle attributes: 1 revnode per attribute, or M for nested arrays with [] suffix
         else if let bundled = bundledAttributes, !bundled.isEmpty {
-            count += bundled.count
+            for attr in bundled {
+                if attr.hasSuffix("[]") {
+                    // Nested array bundle with [] (e.g., "keywords[]"): count all children across entries
+                    let baseAttr = String(attr.dropLast(2))
+                    for entry in orderedChildren {
+                        if let attrNode = entry.orderedChildren.first(where: {
+                            ($0.name.isEmpty ? $0.displayLabel : $0.name) == baseAttr
+                        }) {
+                            count += attrNode.orderedChildren.count
+                        }
+                    }
+                } else {
+                    // Simple bundle: 1 revnode regardless of entry count
+                    count += 1
+                }
+            }
         }
 
-        // Iterate attributes: N revnodes per attribute (1 per entry)
+        // Iterate attributes: N revnodes per attribute (1 per entry) or N×M for nested arrays
         if let enumerated = enumeratedAttributes, !enumerated.isEmpty {
             // Filter out container enumerate marker "*"
             let iterateAttrs = enumerated.filter { $0 != "*" }
-            let entryCount = orderedChildren.count
-            count += iterateAttrs.count * entryCount
+            for attr in iterateAttrs {
+                if attr.hasSuffix("[]") {
+                    // Nested array iterate (e.g., "keywords[]"): count actual children in each entry
+                    let baseAttr = String(attr.dropLast(2))
+                    for entry in orderedChildren {
+                        if let attrNode = entry.orderedChildren.first(where: {
+                            ($0.name.isEmpty ? $0.displayLabel : $0.name) == baseAttr
+                        }) {
+                            count += attrNode.orderedChildren.count  // Each child is a revnode
+                        }
+                    }
+                } else {
+                    // Simple iterate (e.g., "keywords"): 1 revnode per entry
+                    count += orderedChildren.count
+                }
+            }
         }
 
         // Solo nodes: leaf with status == .aiToReplace (not already counted above)
