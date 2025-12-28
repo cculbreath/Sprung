@@ -231,49 +231,53 @@ struct ProposeCardAssignmentsTool: InterviewTool {
             gapCount: gaps.count
         ))
 
-        // Build compact response
+        // Build response in format expected by phase2 prompt
         var response = JSON()
         response["status"].string = "completed"
-        response["mode"].string = "auto"
-        response["card_count"].int = proposals.count
-        response["total_artifacts_assigned"].int = totalArtifactsAssigned
-        response["gap_count"].int = gaps.count
-        response["has_gaps"].bool = !gaps.isEmpty
+        response["mode"].string = "merged_inventory"
 
-        // Include merge stats
-        response["merge_stats"] = JSON([
-            "total_input_cards": mergedInventory.stats.totalInputCards,
-            "merged_output_cards": mergedInventory.stats.mergedOutputCards,
-            "cards_by_type": mergedInventory.stats.cardsByType,
-            "strong_evidence": mergedInventory.stats.strongEvidence,
-            "needs_more_evidence": mergedInventory.stats.needsMoreEvidence
-        ])
+        // Card counts
+        response["card_count"].int = mergedInventory.mergedCards.count
+        response["cards_by_type"] = JSON(mergedInventory.stats.cardsByType)
+        response["strong_evidence_count"].int = mergedInventory.stats.strongEvidence
+        response["needs_more_evidence_count"].int = mergedInventory.stats.needsMoreEvidence
 
-        // Compact card index grouped by type
-        var cardsByType: [String: [[String: Any]]] = [:]
-        for proposal in proposals.arrayValue {
-            let cardType = proposal["card_type"].stringValue
+        // Card summaries for LLM review (grouped by type with details)
+        var cardsByTypeDetail: [String: [[String: Any]]] = [:]
+        for mergedCard in mergedInventory.mergedCards {
             let cardInfo: [String: Any] = [
-                "card_id": proposal["card_id"].stringValue,
-                "title": proposal["title"].stringValue,
-                "artifact_count": proposal["assigned_artifact_ids"].arrayValue.count,
-                "evidence_quality": proposal["evidence_quality"].stringValue
+                "card_id": mergedCard.cardId,
+                "title": mergedCard.title,
+                "evidence_quality": mergedCard.evidenceQuality.rawValue,
+                "source_count": 1 + mergedCard.supportingSources.count,
+                "primary_source": mergedCard.primarySource.documentId
             ]
-            if cardsByType[cardType] == nil {
-                cardsByType[cardType] = []
+            if cardsByTypeDetail[mergedCard.cardType] == nil {
+                cardsByTypeDetail[mergedCard.cardType] = []
             }
-            cardsByType[cardType]?.append(cardInfo)
+            cardsByTypeDetail[mergedCard.cardType]?.append(cardInfo)
         }
-        response["cards_by_type"].dictionaryObject = cardsByType as [String: Any]
+        response["cards_by_type_detail"].dictionaryObject = cardsByTypeDetail as [String: Any]
 
-        // Gap summaries if any
-        if !gaps.isEmpty {
-            response["gaps"] = JSON(gaps)
+        // Gaps for follow-up
+        if !mergedInventory.gaps.isEmpty {
+            response["gaps"].arrayObject = mergedInventory.gaps.map { gap in
+                [
+                    "card_title": gap.cardTitle,
+                    "gap_type": gap.gapType.rawValue,
+                    "current_evidence": gap.currentEvidence,
+                    "recommended_docs": gap.recommendedDocs
+                ] as [String: Any]
+            }
         }
 
+        // Instructions for LLM
         response["requires_user_validation"].bool = true
-        response["dispatch_kc_agents_locked"].bool = true
-        response["next_action"].string = """
+        response["instructions"].string = """
+            Review the proposed cards above with the user. Ask them to confirm before \
+            calling dispatch_kc_agents. If there are gaps listed, ask about specific \
+            missing documents that could strengthen those cards.
+
             IMPORTANT: dispatch_kc_agents is LOCKED until user clicks the "Generate Cards" button in the UI.
             DO NOT call dispatch_kc_agents - it will fail. Present the summary to user and WAIT.
             The system will automatically unlock the tool and prompt you when user approves.

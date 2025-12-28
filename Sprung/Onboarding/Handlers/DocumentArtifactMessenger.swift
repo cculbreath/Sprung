@@ -271,7 +271,7 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
 
     /// Build the extracted content message for artifacts
     /// Phase 1 & 3: Include full extracted text (needed for skeleton timeline, finalization)
-    /// Phase 2: Only summaries to prevent token accumulation (many documents processed)
+    /// Phase 2: Summaries + inventory stats (token-efficient)
     private func buildExtractedContentMessage(artifacts: [JSON], phase: InterviewPhase) -> String {
         let sendFullContent = phase != .phase2DeepDive
         var messageText = "I've uploaded \(artifacts.count == 1 ? "a document" : "\(artifacts.count) documents"):\n\n"
@@ -281,9 +281,12 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
             let artifactId = artifact["id"].stringValue
             let extractedText = artifact["extracted_text"].stringValue
             let summary = artifact["summary"].string ?? "Summary not available"
-            let docType = artifact["metadata"]["document_type"].string
             let sizeBytes = artifact["size_bytes"].int ?? 0
             let sizeKB = sizeBytes / 1024
+
+            // Prefer detected type from classification over user-provided metadata
+            let docTypeDetected = artifact["document_type_detected"].string
+                ?? artifact["metadata"]["document_type"].string
 
             if artifacts.count > 1 {
                 messageText += "### Document \(index + 1): \(filename)\n"
@@ -292,8 +295,8 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
             }
 
             messageText += "- **Artifact ID**: `\(artifactId)`\n"
-            if let docType = docType, !docType.isEmpty {
-                messageText += "- **Type**: \(docType)\n"
+            if let docType = docTypeDetected, !docType.isEmpty {
+                messageText += "- **Detected Type**: \(formatDocType(docType))\n"
             }
             messageText += "- **Size**: \(sizeKB) KB\n\n"
 
@@ -301,20 +304,75 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
                 // Phase 1 & 3: Include full extracted text
                 messageText += "**Extracted Content**:\n\(extractedText)\n\n"
             } else {
-                // Phase 2: Only summary to save tokens
+                // Phase 2: Summary + inventory stats
                 messageText += "**Summary**:\n\(summary)\n\n"
+
+                // Include inventory stats if available
+                messageText += buildInventoryStatsSection(artifact)
             }
         }
 
         if !sendFullContent {
             messageText += """
                 ---
-                Full document text is preserved and available via `get_artifact(artifact_id)` when needed \
-                for detailed analysis or knowledge card generation.
+                Full document text available via `get_artifact(artifact_id)`.
+                Card inventories will be merged when you call `propose_card_assignments`.
                 """
         }
 
         return messageText
+    }
+
+    /// Build inventory stats section from artifact record
+    private func buildInventoryStatsSection(_ artifact: JSON) -> String {
+        let inventoryStats = artifact["inventory_stats"]
+        guard inventoryStats.exists() else { return "" }
+
+        let total = inventoryStats["total"].intValue
+        guard total > 0 else { return "" }
+
+        let byType = inventoryStats["by_type"].dictionaryValue
+        let primaryCount = inventoryStats["primary_count"].intValue
+
+        var section = "**Card Inventory** (\(total) potential cards):\n"
+
+        // Order: employment, skill, project, achievement, education
+        let orderedTypes = ["employment", "skill", "project", "achievement", "education"]
+        for cardType in orderedTypes {
+            if let count = byType[cardType]?.int, count > 0 {
+                section += "- \(count) \(cardType) card\(count == 1 ? "" : "s")\n"
+            }
+        }
+
+        // Show primary source info
+        if primaryCount > 0 {
+            section += "- \(primaryCount) as primary source\n"
+        }
+
+        section += "\n"
+        return section
+    }
+
+    /// Format document type for display
+    private func formatDocType(_ rawType: String) -> String {
+        // Convert snake_case to readable format
+        let mappings: [String: String] = [
+            "personnel_file": "Personnel File",
+            "technical_report": "Technical Report",
+            "cover_letter": "Cover Letter",
+            "reference_letter": "Reference Letter",
+            "grant_proposal": "Grant Proposal",
+            "project_documentation": "Project Documentation",
+            "git_analysis": "Git Repository Analysis",
+            "resume": "Resume",
+            "cv": "CV",
+            "transcript": "Transcript",
+            "dissertation": "Dissertation",
+            "thesis": "Thesis",
+            "publication": "Publication",
+            "presentation": "Presentation"
+        ]
+        return mappings[rawType] ?? rawType.replacingOccurrences(of: "_", with: " ").capitalized
     }
 
     private func sendSingleArtifact(_ record: JSON) async {

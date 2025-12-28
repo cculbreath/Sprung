@@ -217,6 +217,8 @@ actor DocumentProcessingService {
                let classificationString = String(data: classificationData, encoding: .utf8) {
                 artifactRecord["classification"].string = classificationString
             }
+            // Add convenience field for detected document type
+            artifactRecord["document_type_detected"].string = classificationResult.documentType.rawValue
         }
         // Store card inventory
         if let inventoryResult = inventory {
@@ -227,6 +229,31 @@ actor DocumentProcessingService {
                let inventoryString = String(data: inventoryData, encoding: .utf8) {
                 artifactRecord["card_inventory"].string = inventoryString
             }
+
+            // Add inventory stats convenience fields for LLM message display
+            var inventoryStats = JSON()
+            inventoryStats["total"].int = inventoryResult.proposedCards.count
+
+            // Count cards by type
+            var byType: [String: Int] = [:]
+            var primaryCount = 0
+            var supportingCount = 0
+            for card in inventoryResult.proposedCards {
+                let typeKey = card.cardType.rawValue
+                byType[typeKey, default: 0] += 1
+
+                // Count primary vs supporting based on evidence strength
+                if card.evidenceStrength == .primary {
+                    primaryCount += 1
+                } else {
+                    supportingCount += 1
+                }
+            }
+            inventoryStats["by_type"].dictionaryObject = byType as [String: Any]
+            inventoryStats["primary_count"].int = primaryCount
+            inventoryStats["supporting_count"].int = supportingCount
+
+            artifactRecord["inventory_stats"] = inventoryStats
         }
         // Persist both upload metadata and extraction metadata
         var combinedMetadata = metadata
