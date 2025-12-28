@@ -13,13 +13,8 @@ struct JobAppRowView: View {
         HStack {
             Text("\(jobApp.companyName): \(jobApp.jobPosition)")
             Spacer()
-            // Show preprocessing status indicator
-            if jobApp.hasPreprocessingComplete {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-                    .font(.caption)
-                    .help("Requirements analyzed")
-            } else if !jobApp.jobDescription.isEmpty {
+            // Only show indicator for jobs awaiting analysis (not for completed)
+            if !jobApp.jobDescription.isEmpty && !jobApp.hasPreprocessingComplete {
                 Image(systemName: "clock.arrow.circlepath")
                     .foregroundStyle(.orange)
                     .font(.caption)
