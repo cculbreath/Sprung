@@ -631,67 +631,77 @@ struct NodeHeaderView: View {
     }
 
     /// Submenu for nested array attributes (e.g., keywords under skills)
-    /// Uses suffix convention: "keywords" = bundled within entry, "keywords[]" = each item separate
-    /// From Bundle menu: adds to bundledAttributes
-    /// From Iterate menu: adds to enumeratedAttributes
+    /// From Bundle menu: only Bundle option (no [] suffix - all items combined)
+    /// From Iterate menu: Bundle (per entry) or Iterate (each item separate)
     @ViewBuilder
     private func nestedArraySubmenu(attr: String, parentMode: AIReviewMode) -> some View {
         let attrWithSuffix = attr + "[]"
         let isBundledBase = isAttributeBundled(attr)
-        let isBundledEach = isAttributeBundled(attrWithSuffix)
         let isIteratedBase = isAttributeIterated(attr)
         let isIteratedEach = isAttributeIterated(attrWithSuffix)
 
         let isBundleActive = parentMode == .bundle ? isBundledBase : isIteratedBase
-        let isIterateActive = parentMode == .bundle ? isBundledEach : isIteratedEach
+        let isIterateActive = isIteratedEach  // Only valid in iterate mode
 
-        // Bundle option: nested array items combined into one review per entry
-        Button {
-            Logger.info("🎯 Nested submenu BUNDLE clicked: attr='\(attr)' parentMode=\(parentMode)")
-            // Remove any existing config for this attr
-            removeCollectionAttribute(attr)
-            removeCollectionAttribute(attrWithSuffix)
-            // Add base attr (bundled within entry)
-            toggleCollectionAttribute(attr, mode: parentMode)
-        } label: {
-            HStack {
-                Image(systemName: "square.stack.3d.up.fill")
-                if parentMode == .bundle {
-                    Text("Bundle (all entries combined)")
-                } else {
-                    Text("Bundle (per entry)")
-                }
-                if isBundleActive { Image(systemName: "checkmark") }
-            }
-        }
-
-        // Iterate option: each nested array item is separate
-        Button {
-            Logger.info("🎯 Nested submenu ITERATE clicked: attr='\(attr)' suffix='\(attrWithSuffix)' parentMode=\(parentMode)")
-            // Remove any existing config for this attr
-            removeCollectionAttribute(attr)
-            removeCollectionAttribute(attrWithSuffix)
-            // Add attr with [] suffix (each item separate)
-            toggleCollectionAttribute(attrWithSuffix, mode: parentMode)
-        } label: {
-            HStack {
-                Image(systemName: "list.bullet")
-                if parentMode == .bundle {
-                    Text("Iterate (each item separate)")
-                } else {
-                    Text("Iterate (per entry, each item)")
-                }
-                if isIterateActive { Image(systemName: "checkmark") }
-            }
-        }
-
-        if isBundleActive || isIterateActive {
-            Divider()
+        if parentMode == .bundle {
+            // Bundle menu: only offer Bundle (all items combined across all entries)
             Button {
+                Logger.info("🎯 Nested submenu BUNDLE clicked: attr='\(attr)' parentMode=\(parentMode)")
                 removeCollectionAttribute(attr)
                 removeCollectionAttribute(attrWithSuffix)
+                toggleCollectionAttribute(attr, mode: .bundle)
             } label: {
-                Label("Off", systemImage: "xmark.circle")
+                HStack {
+                    Image(systemName: "square.stack.3d.up.fill")
+                    Text("Bundle (all combined)")
+                    if isBundleActive { Image(systemName: "checkmark") }
+                }
+            }
+
+            if isBundleActive {
+                Divider()
+                Button {
+                    removeCollectionAttribute(attr)
+                } label: {
+                    Label("Off", systemImage: "xmark.circle")
+                }
+            }
+        } else {
+            // Iterate menu: offer Bundle (per entry) or Iterate (each item separate)
+            Button {
+                Logger.info("🎯 Nested submenu BUNDLE clicked: attr='\(attr)' parentMode=\(parentMode)")
+                removeCollectionAttribute(attr)
+                removeCollectionAttribute(attrWithSuffix)
+                toggleCollectionAttribute(attr, mode: .iterate)
+            } label: {
+                HStack {
+                    Image(systemName: "square.stack.3d.up.fill")
+                    Text("Bundle (per entry)")
+                    if isBundleActive { Image(systemName: "checkmark") }
+                }
+            }
+
+            Button {
+                Logger.info("🎯 Nested submenu ITERATE clicked: attr='\(attr)' suffix='\(attrWithSuffix)' parentMode=\(parentMode)")
+                removeCollectionAttribute(attr)
+                removeCollectionAttribute(attrWithSuffix)
+                toggleCollectionAttribute(attrWithSuffix, mode: .iterate)
+            } label: {
+                HStack {
+                    Image(systemName: "list.bullet")
+                    Text("Iterate (each item)")
+                    if isIterateActive { Image(systemName: "checkmark") }
+                }
+            }
+
+            if isBundleActive || isIterateActive {
+                Divider()
+                Button {
+                    removeCollectionAttribute(attr)
+                    removeCollectionAttribute(attrWithSuffix)
+                } label: {
+                    Label("Off", systemImage: "xmark.circle")
+                }
             }
         }
     }
