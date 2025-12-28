@@ -3,6 +3,7 @@
 //  Sprung
 //
 //  Service for classifying documents to determine extraction strategy.
+//  Uses Gemini's native structured output mode for guaranteed valid JSON.
 //
 
 import Foundation
@@ -20,7 +21,8 @@ actor DocumentClassificationService {
         self.llmFacade = facade
     }
 
-    /// Classify a document based on its content
+    /// Classify a document based on its content.
+    /// Uses Gemini's native structured output mode with JSON schema for guaranteed valid output.
     /// - Parameters:
     ///   - content: Extracted text content (or preview for large docs)
     ///   - filename: Original filename
@@ -39,8 +41,11 @@ actor DocumentClassificationService {
 
         Logger.info("📋 Classifying document: \(filename)", category: .ai)
 
-        // Call LLM for classification and parse JSON response
-        let jsonString = try await facade.generateStructuredJSON(prompt: prompt)
+        // Call LLM for classification using Gemini's native structured output
+        let jsonString = try await facade.generateStructuredJSON(
+            prompt: prompt,
+            jsonSchema: DocumentClassificationPrompts.jsonSchema
+        )
 
         guard let jsonData = jsonString.data(using: .utf8) else {
             Logger.warning("⚠️ Invalid JSON response for classification, using default", category: .ai)
@@ -56,6 +61,7 @@ actor DocumentClassificationService {
             return classification
         } catch {
             Logger.warning("⚠️ Failed to decode classification JSON: \(error.localizedDescription)", category: .ai)
+            Logger.debug("📋 Raw JSON was: \(jsonString.prefix(500))...", category: .ai)
             return DocumentClassification.default(filename: filename)
         }
     }

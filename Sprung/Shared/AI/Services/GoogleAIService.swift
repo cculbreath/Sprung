@@ -539,19 +539,21 @@ actor GoogleAIService {
 
     // MARK: - Generic Structured JSON Generation
 
-    /// Generate structured JSON output from a prompt.
-    /// Returns raw JSON string for caller to parse into their target type.
-    /// Uses the same pattern as generateSummary but returns raw text.
+    /// Generate structured JSON output from a prompt using Gemini's native structured output mode.
+    /// When a schema is provided, uses `responseMimeType: "application/json"` and `responseJsonSchema`
+    /// to guarantee schema-conforming JSON output.
     ///
     /// - Parameters:
-    ///   - prompt: The prompt text requesting JSON output
-    ///   - modelId: Gemini model ID (defaults to flash)
+    ///   - prompt: The prompt text describing what to extract/generate
+    ///   - modelId: Gemini model ID (defaults to flash-lite)
     ///   - temperature: Generation temperature (default 0.2 for consistent JSON)
-    /// - Returns: Raw JSON string response
+    ///   - jsonSchema: Optional JSON Schema dictionary. When provided, enables native structured output.
+    /// - Returns: Raw JSON string response guaranteed to match the schema
     func generateStructuredJSON(
         prompt: String,
         modelId: String? = nil,
-        temperature: Double = 0.2
+        temperature: Double = 0.2,
+        jsonSchema: [String: Any]? = nil
     ) async throws -> String {
         let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingDocSummaryModelId") ?? "gemini-2.0-flash-lite"
         let apiKey = try getAPIKey()
@@ -561,6 +563,19 @@ actor GoogleAIService {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
+        // Build generation config
+        var generationConfig: [String: Any] = [
+            "temperature": temperature,
+            "maxOutputTokens": 8192
+        ]
+
+        // If schema provided, use native structured output mode
+        if let schema = jsonSchema {
+            generationConfig["responseMimeType"] = "application/json"
+            generationConfig["responseSchema"] = schema
+            Logger.info("📝 Using Gemini native structured output with schema", category: .ai)
+        }
+
         let requestBody: [String: Any] = [
             "contents": [
                 [
@@ -569,10 +584,7 @@ actor GoogleAIService {
                     ]
                 ]
             ],
-            "generationConfig": [
-                "temperature": temperature,
-                "maxOutputTokens": 8192
-            ]
+            "generationConfig": generationConfig
         ]
 
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
@@ -602,21 +614,24 @@ actor GoogleAIService {
             throw GoogleAIError.invalidResponse
         }
 
-        // Extract JSON from markdown code blocks if present
+        // When using structured output mode, response is already pure JSON
+        // For legacy mode, extract from markdown if needed
         var jsonString = text
-        if text.contains("```json") {
-            let pattern = "```json\\s*([\\s\\S]*?)```"
-            if let regex = try? NSRegularExpression(pattern: pattern),
-               let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
-               let jsonRange = Range(match.range(at: 1), in: text) {
-                jsonString = String(text[jsonRange])
-            }
-        } else if text.contains("```") {
-            let pattern = "```\\s*([\\s\\S]*?)```"
-            if let regex = try? NSRegularExpression(pattern: pattern),
-               let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
-               let jsonRange = Range(match.range(at: 1), in: text) {
-                jsonString = String(text[jsonRange])
+        if jsonSchema == nil {
+            if text.contains("```json") {
+                let pattern = "```json\\s*([\\s\\S]*?)```"
+                if let regex = try? NSRegularExpression(pattern: pattern),
+                   let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+                   let jsonRange = Range(match.range(at: 1), in: text) {
+                    jsonString = String(text[jsonRange])
+                }
+            } else if text.contains("```") {
+                let pattern = "```\\s*([\\s\\S]*?)```"
+                if let regex = try? NSRegularExpression(pattern: pattern),
+                   let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+                   let jsonRange = Range(match.range(at: 1), in: text) {
+                    jsonString = String(text[jsonRange])
+                }
             }
         }
 

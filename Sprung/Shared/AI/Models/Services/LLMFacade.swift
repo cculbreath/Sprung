@@ -935,24 +935,27 @@ final class LLMFacade {
         )
     }
 
-    /// Generate structured JSON output from a prompt using Gemini.
-    /// Returns raw JSON string for caller to parse into their target type.
-    /// Used by card pipeline services for classification, inventory, and merge operations.
+    /// Generate structured JSON output from a prompt using Gemini's native structured output mode.
+    /// When a schema is provided, uses `responseMimeType: "application/json"` and `responseSchema`
+    /// to guarantee schema-conforming JSON output.
     ///
     /// - Parameters:
     ///   - prompt: The prompt text requesting JSON output
     ///   - modelId: Gemini model ID (uses default if nil)
-    /// - Returns: Raw JSON string response
+    ///   - jsonSchema: Optional JSON Schema dictionary. When provided, enables native structured output.
+    /// - Returns: Raw JSON string response guaranteed to match the schema
     func generateStructuredJSON(
         prompt: String,
-        modelId: String? = nil
+        modelId: String? = nil,
+        jsonSchema: [String: Any]? = nil
     ) async throws -> String {
         guard let service = googleAIService else {
             throw LLMError.clientError("Google AI service is not configured. Call registerGoogleAIService first.")
         }
         return try await service.generateStructuredJSON(
             prompt: prompt,
-            modelId: modelId
+            modelId: modelId,
+            jsonSchema: jsonSchema
         )
     }
 

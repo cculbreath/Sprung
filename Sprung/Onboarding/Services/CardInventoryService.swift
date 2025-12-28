@@ -3,6 +3,7 @@
 //  Sprung
 //
 //  Service for generating per-document card inventories.
+//  Uses Gemini's native structured output mode for guaranteed valid JSON.
 //
 
 import Foundation
@@ -20,7 +21,8 @@ actor CardInventoryService {
         self.llmFacade = facade
     }
 
-    /// Generate card inventory for a document
+    /// Generate card inventory for a document.
+    /// Uses Gemini's native structured output mode with JSON schema for guaranteed valid output.
     /// - Parameters:
     ///   - documentId: Unique document identifier
     ///   - filename: Original filename
@@ -39,6 +41,7 @@ actor CardInventoryService {
 
         let prompt = CardInventoryPrompts.inventoryPrompt(
             documentId: documentId,
+            filename: filename,
             documentType: classification.documentType.rawValue,
             classification: classification,
             content: content
@@ -46,8 +49,11 @@ actor CardInventoryService {
 
         Logger.info("📦 Generating card inventory for: \(filename)", category: .ai)
 
-        // Call LLM and parse JSON response
-        let jsonString = try await facade.generateStructuredJSON(prompt: prompt)
+        // Call LLM using Gemini's native structured output with schema
+        let jsonString = try await facade.generateStructuredJSON(
+            prompt: prompt,
+            jsonSchema: CardInventoryPrompts.jsonSchema
+        )
 
         guard let jsonData = jsonString.data(using: .utf8) else {
             throw CardInventoryError.invalidResponse
@@ -63,6 +69,7 @@ actor CardInventoryService {
             return inventory
         } catch {
             Logger.error("❌ Failed to decode inventory JSON: \(error.localizedDescription)", category: .ai)
+            Logger.debug("📦 Raw JSON was: \(jsonString.prefix(500))...", category: .ai)
             throw CardInventoryError.invalidResponse
         }
     }
