@@ -1,0 +1,87 @@
+# Cross-Document Card Merge
+
+You have card inventories from multiple documents. Merge cards that refer to the same topic.
+
+## All Document Inventories
+
+{INVENTORIES_JSON}
+
+## Timeline (for employment context)
+
+{TIMELINE_JSON}
+
+---
+
+## Your Task
+
+1. **Group related cards** across documents
+2. **Designate primary source** for each merged card
+3. **Preserve all evidence** from supporting documents
+4. **Identify gaps** where cards have weak evidence
+
+## Merge Rules
+
+### Employment Cards
+- Match to timeline entries by organization + role + dates
+- Multiple docs about same role → merge into one card with multiple evidence blocks
+
+### Skill Cards
+- Same skill appearing in multiple docs → ONE card with evidence from all docs
+- Related skills may stay separate or be cross-referenced
+
+### Project Cards
+- Same project in multiple docs → merge
+- Keep distinct if genuinely different projects
+
+### Achievement Cards
+- Usually unique — only merge if same achievement in multiple docs
+
+## Output Format
+
+```json
+{
+  "merged_cards": [
+    {
+      "card_id": "uuid",
+      "card_type": "skill",
+      "title": "Industrial Automation & Embedded Control",
+      "primary_source": {
+        "document_id": "huntsville_report",
+        "evidence_locations": ["pages 1-17"]
+      },
+      "supporting_sources": [
+        {
+          "document_id": "git_repos_nrd",
+          "evidence_locations": ["full codebase analysis"],
+          "adds": ["Teensy implementation details", "I2C protocol design"]
+        }
+      ],
+      "combined_key_facts": ["...all facts from all sources, deduplicated..."],
+      "combined_technologies": ["..."],
+      "combined_outcomes": ["..."],
+      "date_range": "2017-present",
+      "evidence_quality": "strong|moderate|weak",
+      "extraction_priority": "high|medium|low"
+    }
+  ],
+
+  "gaps": [
+    {
+      "card_title": "Senior Lecturer, Cal Poly",
+      "gap_type": "missing_primary_source",
+      "current_evidence": "Resume bullet only",
+      "recommended_docs": ["performance reviews", "teaching evaluations"]
+    }
+  ],
+
+  "stats": {
+    "total_input_cards": 87,
+    "merged_output_cards": 52,
+    "cards_by_type": {"employment": 5, "skill": 28, "project": 12, "achievement": 7},
+    "strong_evidence": 35,
+    "needs_more_evidence": 17
+  }
+}
+```
+
+Return ONLY valid JSON.

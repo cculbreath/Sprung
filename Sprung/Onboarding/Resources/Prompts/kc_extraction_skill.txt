@@ -1,0 +1,49 @@
+# Skill Card Deep Extraction
+
+Extract comprehensive skill card for:
+**{SKILL_NAME}**
+
+## Source Documents
+{EVIDENCE_BLOCKS_WITH_CONTENT}
+
+---
+
+## Extract These Elements
+
+### Proficiency Evidence
+- How long used
+- In what contexts (professional, academic, personal)
+- Complexity level handled
+- Formal training or certification
+
+### Application Instances
+For each project/role where applied:
+- Context
+- What you built/did
+- Specific techniques demonstrated
+- Outcomes achieved
+
+### Technical Depth
+- Specific technologies within skill area
+- Advanced techniques or patterns
+- Integration with other technologies
+- Complex problems solved
+
+### Proficiency Level Assessment
+Based on evidence:
+- **Expert**: Advanced patterns, teaching others, architectural decisions
+- **Proficient**: Idiomatic usage, moderate complexity, good practices
+- **Competent**: Functional usage, learning evident
+- **Familiar**: Basic usage, configuration, integration
+
+---
+
+## Output Format
+
+Return JSON matching StructuredKnowledgeCard schema with card_type="skill".
+
+Include:
+- evidence_blocks showing progression/depth
+- facts.technologies listing related tools
+- facts.outcomes showing achievements WITH this skill
+- 3-4 resume_bullets demonstrating proficiency through accomplishments

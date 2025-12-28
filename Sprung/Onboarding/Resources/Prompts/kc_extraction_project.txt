@@ -1,0 +1,41 @@
+# Project Card Deep Extraction
+
+Extract comprehensive project card for:
+**{PROJECT_NAME}**
+
+## Source Documents
+{EVIDENCE_BLOCKS_WITH_CONTENT}
+
+---
+
+## Extract These Elements
+
+### Project Overview
+- What was built/delivered
+- Problem it solved
+- Your role and contributions
+- Timeline and milestones
+
+### Technical Details
+- Architecture and design decisions
+- Technologies and tools
+- Scale and complexity metrics
+- Challenges and solutions
+
+### Outcomes
+- Deliverables produced
+- Impact achieved
+- Recognition received
+- Lessons learned
+
+---
+
+## Output Format
+
+Return JSON matching StructuredKnowledgeCard schema with card_type="project".
+
+Include:
+- evidence_blocks with specific details from source documents
+- facts.technologies listing all technologies used
+- facts.outcomes showing project impact
+- 2-3 resume_bullets highlighting your contributions
