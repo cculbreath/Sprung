@@ -536,4 +536,91 @@ actor GoogleAIService {
         let marker = "\n\n[... TRUNCATED: original_chars=\(originalChars), max_chars=\(maxChars) ...]\n\n"
         return (head + marker + tail, originalChars, true)
     }
+
+    // MARK: - Generic Structured JSON Generation
+
+    /// Generate structured JSON output from a prompt.
+    /// Returns raw JSON string for caller to parse into their target type.
+    /// Uses the same pattern as generateSummary but returns raw text.
+    ///
+    /// - Parameters:
+    ///   - prompt: The prompt text requesting JSON output
+    ///   - modelId: Gemini model ID (defaults to flash)
+    ///   - temperature: Generation temperature (default 0.2 for consistent JSON)
+    /// - Returns: Raw JSON string response
+    func generateStructuredJSON(
+        prompt: String,
+        modelId: String? = nil,
+        temperature: Double = 0.2
+    ) async throws -> String {
+        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingDocSummaryModelId") ?? "gemini-2.0-flash-lite"
+        let apiKey = try getAPIKey()
+        let url = URL(string: "\(baseURL)/v1beta/models/\(effectiveModelId):generateContent?key=\(apiKey)")!
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let requestBody: [String: Any] = [
+            "contents": [
+                [
+                    "parts": [
+                        ["text": prompt]
+                    ]
+                ]
+            ],
+            "generationConfig": [
+                "temperature": temperature,
+                "maxOutputTokens": 8192
+            ]
+        ]
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+
+        Logger.info("📝 Generating structured JSON with \(effectiveModelId)", category: .ai)
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw GoogleAIError.invalidResponse
+        }
+
+        if httpResponse.statusCode != 200 {
+            let errorMsg = String(data: data, encoding: .utf8) ?? "Unknown error"
+            Logger.error("❌ Structured JSON generation failed: \(errorMsg)", category: .ai)
+            throw GoogleAIError.generateFailed(errorMsg)
+        }
+
+        // Parse response to extract text
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let candidates = json["candidates"] as? [[String: Any]],
+              let firstCandidate = candidates.first,
+              let content = firstCandidate["content"] as? [String: Any],
+              let parts = content["parts"] as? [[String: Any]],
+              let firstPart = parts.first,
+              let text = firstPart["text"] as? String else {
+            throw GoogleAIError.invalidResponse
+        }
+
+        // Extract JSON from markdown code blocks if present
+        var jsonString = text
+        if text.contains("```json") {
+            let pattern = "```json\\s*([\\s\\S]*?)```"
+            if let regex = try? NSRegularExpression(pattern: pattern),
+               let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+               let jsonRange = Range(match.range(at: 1), in: text) {
+                jsonString = String(text[jsonRange])
+            }
+        } else if text.contains("```") {
+            let pattern = "```\\s*([\\s\\S]*?)```"
+            if let regex = try? NSRegularExpression(pattern: pattern),
+               let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+               let jsonRange = Range(match.range(at: 1), in: text) {
+                jsonString = String(text[jsonRange])
+            }
+        }
+
+        Logger.info("✅ Structured JSON generated (\(jsonString.count) chars)", category: .ai)
+        return jsonString.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 }

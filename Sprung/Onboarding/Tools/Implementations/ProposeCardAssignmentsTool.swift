@@ -151,69 +151,70 @@ struct ProposeCardAssignmentsTool: InterviewTool {
 
     // MARK: - Auto-Assignment Mode
 
-    /// Execute auto-assignment: system matches artifacts to timeline entries
+    /// Execute auto-assignment using merged card inventory from all documents
     /// Returns compact summary instead of requiring LLM to construct arrays
     private func executeAutoAssign() async throws -> ToolResult {
-        Logger.info("📋 ProposeCardAssignmentsTool: Auto-assignment mode", category: .ai)
+        Logger.info("📋 ProposeCardAssignmentsTool: Auto-assignment from merged inventory", category: .ai)
 
-        // Get timeline entries
-        let artifacts = await coordinator.state.artifacts
-        guard let timeline = artifacts.skeletonTimeline,
-              let entries = timeline["experiences"].array, !entries.isEmpty else {
-            var error = JSON()
-            error["status"].string = "error"
-            error["message"].string = "No timeline entries found. Complete Phase 1 first."
-            return .immediate(error)
+        // Get merged card inventory from all documents
+        let cardMergeService = await MainActor.run { coordinator.cardMergeService }
+        let timeline = await coordinator.state.artifacts.skeletonTimeline
+
+        let mergedInventory: MergedCardInventory
+        do {
+            mergedInventory = try await cardMergeService.mergeInventories(timeline: timeline)
+        } catch {
+            Logger.warning("⚠️ Card merge failed: \(error.localizedDescription)", category: .ai)
+            var errorResponse = JSON()
+            errorResponse["status"].string = "error"
+            errorResponse["message"].string = "Failed to merge card inventories: \(error.localizedDescription)"
+            return .immediate(errorResponse)
         }
 
-        // Get artifact summaries
-        let summaries = await coordinator.listArtifactSummaries()
-
-        // Auto-generate card proposals from timeline entries
+        // Convert merged cards to proposals
         var proposals = JSON([])
-        var gaps: [JSON] = []
         var totalArtifactsAssigned = 0
 
-        for entry in entries {
-            guard let entryId = entry["id"].string else { continue }
-
-            let cardId = UUID().uuidString
-            let org = entry["organization"].string ?? "Unknown"
-            let title = entry["title"].string ?? "Position"
-            let cardTitle = "\(title) at \(org)"
-
-            // Find matching artifacts by organization name or entry ID reference
-            let matchingArtifactIds = findMatchingArtifacts(
-                for: entry,
-                from: summaries
-            )
-
+        for mergedCard in mergedInventory.mergedCards {
             var proposal = JSON()
-            proposal["card_id"].string = cardId
-            proposal["card_type"].string = "job"
-            proposal["title"].string = cardTitle
-            proposal["timeline_entry_id"].string = entryId
-            proposal["assigned_artifact_ids"].arrayObject = matchingArtifactIds.map { $0 as Any }
+            proposal["card_id"].string = mergedCard.cardId
+            proposal["card_type"].string = mergedCard.cardType
+            proposal["title"].string = mergedCard.title
+
+            // Collect all artifact IDs (primary + supporting)
+            var artifactIds = [mergedCard.primarySource.documentId]
+            artifactIds.append(contentsOf: mergedCard.supportingSources.map { $0.documentId })
+
+            proposal["assigned_artifact_ids"].arrayObject = artifactIds.map { $0 as Any }
+            proposal["date_range"].string = mergedCard.dateRange
+            proposal["evidence_quality"].string = mergedCard.evidenceQuality.rawValue
+            proposal["extraction_priority"].string = mergedCard.extractionPriority.rawValue
+
+            // Include combined facts for context
+            proposal["key_facts"].arrayObject = mergedCard.combinedKeyFacts.map { $0 as Any }
+            proposal["technologies"].arrayObject = mergedCard.combinedTechnologies.map { $0 as Any }
+            proposal["outcomes"].arrayObject = mergedCard.combinedOutcomes.map { $0 as Any }
 
             proposals.arrayObject?.append(proposal.dictionaryObject ?? [:])
-            totalArtifactsAssigned += matchingArtifactIds.count
+            totalArtifactsAssigned += artifactIds.count
+        }
 
-            // Track gaps (cards with no artifacts)
-            if matchingArtifactIds.isEmpty {
-                var gap = JSON()
-                gap["card_id"].string = cardId
-                gap["card_title"].string = cardTitle
-                gap["recommended_doc_types"].arrayObject = ["resume", "performance review", "project docs"]
-                gap["example_prompt"].string = "Do you have any documents from your time at \(org)?"
-                gaps.append(gap)
-            }
+        // Convert gaps from merge service
+        var gaps: [JSON] = []
+        for gap in mergedInventory.gaps {
+            var gapJSON = JSON()
+            gapJSON["card_title"].string = gap.cardTitle
+            gapJSON["gap_type"].string = gap.gapType.rawValue
+            gapJSON["current_evidence"].string = gap.currentEvidence
+            gapJSON["recommended_docs"].arrayObject = gap.recommendedDocs.map { $0 as Any }
+            gaps.append(gapJSON)
         }
 
         // Store proposals for dispatch_kc_agents
         await coordinator.state.storeCardProposals(proposals)
 
         // Update UI plan items with artifact assignments
-        await updatePlanItemsWithAssignments(proposals: proposals)
+        await updatePlanItemsFromMergedInventory(mergedInventory: mergedInventory)
 
         // Gate dispatch_kc_agents until user approves
         // BUT only if user hasn't already clicked "Generate Cards" (which would have ungated it)
@@ -230,7 +231,7 @@ struct ProposeCardAssignmentsTool: InterviewTool {
             gapCount: gaps.count
         ))
 
-        // Build compact response (no full arrays)
+        // Build compact response
         var response = JSON()
         response["status"].string = "completed"
         response["mode"].string = "auto"
@@ -239,20 +240,35 @@ struct ProposeCardAssignmentsTool: InterviewTool {
         response["gap_count"].int = gaps.count
         response["has_gaps"].bool = !gaps.isEmpty
 
-        // Compact card index (IDs only)
-        var cardIndex: [[String: Any]] = []
+        // Include merge stats
+        response["merge_stats"] = JSON([
+            "total_input_cards": mergedInventory.stats.totalInputCards,
+            "merged_output_cards": mergedInventory.stats.mergedOutputCards,
+            "cards_by_type": mergedInventory.stats.cardsByType,
+            "strong_evidence": mergedInventory.stats.strongEvidence,
+            "needs_more_evidence": mergedInventory.stats.needsMoreEvidence
+        ])
+
+        // Compact card index grouped by type
+        var cardsByType: [String: [[String: Any]]] = [:]
         for proposal in proposals.arrayValue {
-            cardIndex.append([
+            let cardType = proposal["card_type"].stringValue
+            let cardInfo: [String: Any] = [
                 "card_id": proposal["card_id"].stringValue,
                 "title": proposal["title"].stringValue,
-                "artifact_count": proposal["assigned_artifact_ids"].arrayValue.count
-            ])
+                "artifact_count": proposal["assigned_artifact_ids"].arrayValue.count,
+                "evidence_quality": proposal["evidence_quality"].stringValue
+            ]
+            if cardsByType[cardType] == nil {
+                cardsByType[cardType] = []
+            }
+            cardsByType[cardType]?.append(cardInfo)
         }
-        response["card_index"].arrayObject = cardIndex
+        response["cards_by_type"].dictionaryObject = cardsByType as [String: Any]
 
         // Gap summaries if any
         if !gaps.isEmpty {
-            response["gap_titles"].arrayObject = gaps.map { $0["card_title"].stringValue as Any }
+            response["gaps"] = JSON(gaps)
         }
 
         response["requires_user_validation"].bool = true
@@ -266,36 +282,16 @@ struct ProposeCardAssignmentsTool: InterviewTool {
         return .immediate(response)
     }
 
-    /// Find artifacts that match a timeline entry based on metadata
-    private func findMatchingArtifacts(for entry: JSON, from summaries: [JSON]) -> [String] {
-        let org = entry["organization"].string?.lowercased() ?? ""
-        let title = entry["title"].string?.lowercased() ?? ""
-        let entryId = entry["id"].string ?? ""
-
-        var matchingIds: [String] = []
-
-        for summary in summaries {
-            guard let artifactId = summary["id"].string else { continue }
-
-            // Check if artifact references this entry
-            let targetObjectives = summary["metadata"]["target_phase_objectives"].arrayValue
-            if targetObjectives.contains(where: { $0.stringValue == entryId }) {
-                matchingIds.append(artifactId)
-                continue
-            }
-
-            // Check filename or description for org/title match
-            let filename = summary["filename"].string?.lowercased() ?? ""
-            let desc = summary["brief_description"].string?.lowercased() ?? summary["summary"].string?.lowercased() ?? ""
-
-            if !org.isEmpty && (filename.contains(org) || desc.contains(org)) {
-                matchingIds.append(artifactId)
-            } else if !title.isEmpty && (filename.contains(title) || desc.contains(title)) {
-                matchingIds.append(artifactId)
-            }
+    /// Convert card type string to KnowledgeCardPlanItem.ItemType
+    private func planItemType(from cardType: String) -> KnowledgeCardPlanItem.ItemType {
+        switch cardType {
+        case "job": return .job
+        case "skill": return .skill
+        case "project": return .project
+        case "achievement": return .achievement
+        case "education": return .education
+        default: return .job  // Fallback to job for unknown types
         }
-
-        return matchingIds
     }
 
     // MARK: - UI Messages
@@ -340,18 +336,7 @@ struct ProposeCardAssignmentsTool: InterviewTool {
         let artifactSummaries = await coordinator.listArtifactSummaries()
 
         // Build lookup from artifact ID to summary text
-        var artifactSummaryLookup: [String: String] = [:]
-        for summary in artifactSummaries {
-            if let id = summary["id"].string {
-                let filename = summary["filename"].string ?? "Document"
-                let brief = summary["brief_description"].string ?? summary["summary"].string
-                if let brief = brief, !brief.isEmpty {
-                    artifactSummaryLookup[id] = "\(filename): \(brief.prefix(60))..."
-                } else {
-                    artifactSummaryLookup[id] = filename
-                }
-            }
-        }
+        let artifactSummaryLookup = buildArtifactSummaryLookup(from: artifactSummaries)
 
         var updatedPlanItems: [KnowledgeCardPlanItem] = []
 
@@ -370,7 +355,7 @@ struct ProposeCardAssignmentsTool: InterviewTool {
                 let planItem = KnowledgeCardPlanItem(
                     id: cardId,
                     title: title,
-                    type: cardType == "skill" ? .skill : .job,
+                    type: planItemType(from: cardType),
                     description: nil,
                     status: .pending,
                     timelineEntryId: timelineEntryId,
@@ -418,5 +403,59 @@ struct ProposeCardAssignmentsTool: InterviewTool {
         )
 
         Logger.info("📋 Updated \(updatedPlanItems.count) plan items with artifact assignments", category: .ai)
+    }
+
+    /// Create plan items directly from merged inventory
+    private func updatePlanItemsFromMergedInventory(mergedInventory: MergedCardInventory) async {
+        let artifactSummaries = await coordinator.listArtifactSummaries()
+        let artifactSummaryLookup = buildArtifactSummaryLookup(from: artifactSummaries)
+
+        var planItems: [KnowledgeCardPlanItem] = []
+
+        for mergedCard in mergedInventory.mergedCards {
+            // Collect all artifact IDs
+            var artifactIds = [mergedCard.primarySource.documentId]
+            artifactIds.append(contentsOf: mergedCard.supportingSources.map { $0.documentId })
+
+            let summaries = artifactIds.compactMap { artifactSummaryLookup[$0] }
+
+            let planItem = KnowledgeCardPlanItem(
+                id: mergedCard.cardId,
+                title: mergedCard.title,
+                type: planItemType(from: mergedCard.cardType),
+                description: mergedCard.dateRange,
+                status: .pending,
+                timelineEntryId: nil,
+                assignedArtifactIds: artifactIds,
+                assignedArtifactSummaries: summaries
+            )
+            planItems.append(planItem)
+        }
+
+        // Update the coordinator's plan
+        await coordinator.updateKnowledgeCardPlan(
+            items: planItems,
+            currentFocus: coordinator.getCurrentPlanItemFocus(),
+            message: "Review card assignments below"
+        )
+
+        Logger.info("📋 Created \(planItems.count) plan items from merged inventory", category: .ai)
+    }
+
+    /// Build lookup from artifact ID to summary text
+    private func buildArtifactSummaryLookup(from summaries: [JSON]) -> [String: String] {
+        var lookup: [String: String] = [:]
+        for summary in summaries {
+            if let id = summary["id"].string {
+                let filename = summary["filename"].string ?? "Document"
+                let brief = summary["brief_description"].string ?? summary["summary"].string
+                if let brief = brief, !brief.isEmpty {
+                    lookup[id] = "\(filename): \(brief.prefix(60))..."
+                } else {
+                    lookup[id] = filename
+                }
+            }
+        }
+        return lookup
     }
 }

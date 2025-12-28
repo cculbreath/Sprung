@@ -83,6 +83,11 @@ final class OnboardingInterviewCoordinator {
         container.getKCAgentService()
     }
 
+    /// Returns the card merge service for merging document inventories
+    var cardMergeService: CardMergeService {
+        container.cardMergeService
+    }
+
     // MARK: - UI State Properties (from ToolRouter)
     var pendingUploadRequests: [OnboardingUploadRequest] {
         toolRouter.pendingUploadRequests

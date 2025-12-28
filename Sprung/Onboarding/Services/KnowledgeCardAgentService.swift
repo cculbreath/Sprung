@@ -62,11 +62,12 @@ struct ChatSourceOutput {
 }
 
 /// Result from a KC agent - the generated knowledge card data
+/// Supports both structured evidence format (new) and prose format (legacy)
 struct GeneratedCard {
     let cardId: String
     let cardType: String
     let title: String
-    let prose: String
+    let prose: String  // Legacy prose format or summary for structured cards
     let sources: [String]  // Artifact IDs
     let chatSources: [ChatSourceOutput]  // Conversation excerpts used
     let highlights: [String]
@@ -78,8 +79,38 @@ struct GeneratedCard {
     var timePeriod: String?
     var organization: String?
     var location: String?
+    // Structured evidence format (new)
+    var evidenceBlocks: [EvidenceBlockOutput]?
+    var extractedFacts: ExtractedFactsOutput?
+    var resumeBullets: [String]?
+    var keywords: [String]?
+    var evidenceQuality: String?
 
-    func validationError(minProseChars: Int = 1000) -> String? {
+    /// Evidence block from structured output
+    struct EvidenceBlockOutput {
+        let sourceDocument: String
+        let sourceType: String
+        let locations: [String]
+        let facts: [String]
+        let verbatimQuotes: [String]
+    }
+
+    /// Extracted facts from structured output
+    struct ExtractedFactsOutput {
+        let scope: String?
+        let responsibilities: [String]
+        let technologies: [String]
+        let outcomes: [String]
+        let quantified: [String]
+        let context: String?
+    }
+
+    /// Returns true if this card uses structured evidence format
+    var isStructuredFormat: Bool {
+        evidenceBlocks != nil && !evidenceBlocks!.isEmpty
+    }
+
+    func validationError(minProseChars: Int = 200) -> String? {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmedTitle.isEmpty {
             return "Missing title"
@@ -89,10 +120,22 @@ struct GeneratedCard {
         if trimmedType.isEmpty {
             return "Missing card_type"
         }
-        if ["job", "skill", "education", "project"].contains(trimmedType) == false {
+        let validTypes = ["job", "skill", "education", "project", "achievement", "employment"]
+        if !validTypes.contains(trimmedType) {
             return "Invalid card_type '\(trimmedType)'"
         }
 
+        // Structured format validation
+        if isStructuredFormat {
+            // Require at least one evidence block with facts
+            let hasFacts = evidenceBlocks!.contains { !$0.facts.isEmpty }
+            if !hasFacts {
+                return "No facts in evidence blocks"
+            }
+            return nil
+        }
+
+        // Legacy prose format validation
         let trimmedProse = prose.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmedProse.isEmpty {
             return "Missing prose"
@@ -111,13 +154,7 @@ struct GeneratedCard {
     }
 
     /// Convert to JSON format matching submit_knowledge_card schema.
-    /// Output format:
-    /// ```
-    /// {
-    ///   "card": { id, title, type, content, sources: [{type, artifact_id}], ... },
-    ///   "summary": "Brief summary for UI"
-    /// }
-    /// ```
+    /// Supports both structured evidence format and legacy prose format.
     func toJSON() -> JSON {
         var json = JSON()
 
@@ -125,11 +162,69 @@ struct GeneratedCard {
         var card = JSON()
         card["id"].string = cardId
         card["title"].string = title
-        card["type"].string = cardType  // "type" not "card_type"
-        card["content"].string = prose   // "content" not "prose"
+        card["type"].string = cardType
+
+        if isStructuredFormat {
+            // Structured format: use evidence blocks
+            card["content"].string = prose  // Summary/brief description
+
+            // Evidence blocks
+            var blocksArray: [[String: Any]] = []
+            for block in evidenceBlocks ?? [] {
+                blocksArray.append([
+                    "source_document": block.sourceDocument,
+                    "source_type": block.sourceType,
+                    "locations": block.locations,
+                    "facts": block.facts,
+                    "verbatim_quotes": block.verbatimQuotes
+                ])
+            }
+            card["evidence_blocks"].arrayObject = blocksArray
+
+            // Extracted facts
+            if let facts = extractedFacts {
+                var factsDict: [String: Any] = [:]
+                if let scope = facts.scope {
+                    factsDict["scope"] = scope
+                }
+                if !facts.responsibilities.isEmpty {
+                    factsDict["responsibilities"] = facts.responsibilities
+                }
+                if !facts.technologies.isEmpty {
+                    factsDict["technologies"] = facts.technologies
+                }
+                if !facts.outcomes.isEmpty {
+                    factsDict["outcomes"] = facts.outcomes
+                }
+                if !facts.quantified.isEmpty {
+                    factsDict["quantified"] = facts.quantified
+                }
+                if let context = facts.context {
+                    factsDict["context"] = context
+                }
+                card["facts"].dictionaryObject = factsDict
+            }
+
+            // Resume bullets
+            if let bullets = resumeBullets {
+                card["resume_bullets"].arrayObject = bullets
+            }
+
+            // Keywords
+            if let kw = keywords {
+                card["keywords"].arrayObject = kw
+            }
+
+            // Evidence quality
+            if let quality = evidenceQuality {
+                card["evidence_quality"].string = quality
+            }
+        } else {
+            // Legacy prose format
+            card["content"].string = prose
+        }
 
         // Transform sources from [String] to [{type: "artifact", artifact_id: String}]
-        // and include chat sources as [{type: "chat", chat_excerpt: String, chat_context: String?}]
         var sourcesArray: [[String: Any]] = []
         for artifactId in sources {
             sourcesArray.append([
@@ -163,7 +258,9 @@ struct GeneratedCard {
         json["card"] = card
 
         // Generate summary from card data
-        let achievementCount = highlights.count + metrics.count
+        let achievementCount = isStructuredFormat
+            ? (extractedFacts?.quantified.count ?? 0)
+            : (highlights.count + metrics.count)
         let summary = "Knowledge card for \(title) with \(achievementCount) key achievements"
         json["summary"].string = summary
 
@@ -176,6 +273,7 @@ struct GeneratedCard {
     }
 
     /// Create from agent output
+    /// Supports both structured evidence format and legacy prose format
     static func fromAgentOutput(_ output: JSON, cardId: String) -> GeneratedCard {
         // Parse chat sources if provided
         let chatSources = output["chat_sources"].arrayValue.map { json in
@@ -185,21 +283,72 @@ struct GeneratedCard {
             )
         }
 
+        // Check for structured format (evidence_blocks present)
+        let evidenceBlocksJSON = output["evidence_blocks"].arrayValue
+        var evidenceBlocks: [EvidenceBlockOutput]?
+        var extractedFacts: ExtractedFactsOutput?
+
+        if !evidenceBlocksJSON.isEmpty {
+            // Parse evidence blocks
+            evidenceBlocks = evidenceBlocksJSON.map { blockJSON in
+                EvidenceBlockOutput(
+                    sourceDocument: blockJSON["source_document"].stringValue,
+                    sourceType: blockJSON["source_type"].stringValue,
+                    locations: blockJSON["locations"].arrayValue.map { $0.stringValue },
+                    facts: blockJSON["extracted_content"]["facts"].arrayValue.map { $0.stringValue },
+                    verbatimQuotes: blockJSON["extracted_content"]["verbatim_quotes"].arrayValue.map { $0.stringValue }
+                )
+            }
+
+            // Parse extracted facts
+            let factsJSON = output["facts"]
+            if factsJSON.exists() {
+                extractedFacts = ExtractedFactsOutput(
+                    scope: factsJSON["scope"].string,
+                    responsibilities: factsJSON["responsibilities"].arrayValue.map { $0.stringValue },
+                    technologies: factsJSON["technologies"].arrayValue.map { $0.stringValue },
+                    outcomes: factsJSON["outcomes"].arrayValue.map { $0.stringValue },
+                    quantified: factsJSON["quantified"].arrayValue.map { $0.stringValue },
+                    context: factsJSON["context"].string
+                )
+            }
+        }
+
+        // Get prose/content (for structured format, this is a summary)
+        let prose = output["prose"].string ?? output["content"].string ?? output["summary"].stringValue
+
+        // Get sources - handle both string array and object array formats
+        var sources: [String] = []
+        for sourceItem in output["sources"].arrayValue {
+            if let artifactId = sourceItem.string {
+                sources.append(artifactId)
+            } else if let artifactId = sourceItem["artifact_id"].string {
+                sources.append(artifactId)
+            } else if let docId = sourceItem["source_document"].string {
+                sources.append(docId)
+            }
+        }
+
         return GeneratedCard(
             cardId: cardId,
             cardType: output["card_type"].stringValue,
             title: output["title"].stringValue,
-            prose: output["prose"].stringValue,
-            sources: output["sources"].arrayValue.map { $0.stringValue },
+            prose: prose,
+            sources: sources,
             chatSources: chatSources,
             highlights: output["highlights"].arrayValue.map { $0.stringValue },
             skills: output["skills"].arrayValue.map { $0.stringValue },
             metrics: output["metrics"].arrayValue.map { $0.stringValue },
             success: true,
             error: nil,
-            timePeriod: output["time_period"].string,
+            timePeriod: output["time_period"].string ?? output["date_range"].string,
             organization: output["organization"].string,
-            location: output["location"].string
+            location: output["location"].string,
+            evidenceBlocks: evidenceBlocks,
+            extractedFacts: extractedFacts,
+            resumeBullets: output["resume_bullets"].arrayValue.map { $0.stringValue },
+            keywords: output["keywords"].arrayValue.map { $0.stringValue },
+            evidenceQuality: output["evidence_quality"].string
         )
     }
 
@@ -219,7 +368,12 @@ struct GeneratedCard {
             error: error,
             timePeriod: nil,
             organization: nil,
-            location: nil
+            location: nil,
+            evidenceBlocks: nil,
+            extractedFacts: nil,
+            resumeBullets: nil,
+            keywords: nil,
+            evidenceQuality: nil
         )
     }
 }

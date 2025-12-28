@@ -15,9 +15,9 @@ enum KCAgentPrompts {
     // MARK: - System Prompt
 
     /// System prompt for a KC agent.
-    /// Defines the agent's role, available tools, and output format.
+    /// Routes to type-specific extraction prompts for structured output.
     /// - Parameters:
-    ///   - cardType: "job" or "skill"
+    ///   - cardType: "job", "skill", "project", "achievement", or "education"
     ///   - title: Card title (e.g., "Senior Engineer at Company X")
     ///   - candidateName: The candidate's first name for prose references
     static func systemPrompt(
@@ -27,14 +27,38 @@ enum KCAgentPrompts {
     ) -> String {
         let nameRef = candidateName ?? "the candidate"
 
+        // Select type-specific extraction template
+        let template = typeSpecificTemplate(for: cardType)
+
         return PromptLibrary.substitute(
-            template: PromptLibrary.kcAgentSystemPromptTemplate,
+            template: template,
             replacements: [
                 "TITLE": title,
                 "CARD_TYPE": cardType,
                 "NAME_REF": nameRef
             ]
         )
+    }
+
+    /// Returns the type-specific extraction template for a card type
+    /// Falls back to generic system prompt for unknown types
+    private static func typeSpecificTemplate(for cardType: String) -> String {
+        switch cardType.lowercased() {
+        case "job", "employment":
+            return PromptLibrary.kcExtractionEmployment
+        case "skill":
+            return PromptLibrary.kcExtractionSkill
+        case "project":
+            return PromptLibrary.kcExtractionProject
+        case "achievement":
+            return PromptLibrary.kcExtractionAchievement
+        case "education":
+            // Education uses employment template with education-specific guidance
+            return PromptLibrary.kcExtractionEmployment
+        default:
+            // Fall back to generic template for unknown types
+            return PromptLibrary.kcAgentSystemPromptTemplate
+        }
     }
 
     // MARK: - Initial Prompt

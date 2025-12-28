@@ -130,6 +130,9 @@ struct KnowledgeCardPlanItem: Identifiable, Equatable, Codable {
     enum ItemType: String, Codable {
         case job
         case skill
+        case project
+        case achievement
+        case education
     }
 
     enum Status: String, Codable {

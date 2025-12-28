@@ -91,6 +91,52 @@ enum PromptLibrary {
         loadPrompt(named: "agent_ready_workflow")
     }()
 
+    // MARK: - Card Pipeline Prompts
+
+    /// Document classification prompt template
+    /// Contains placeholders: {FILENAME}, {PREVIEW}
+    static let documentClassificationTemplate: String = {
+        loadPrompt(named: "document_classification_prompt")
+    }()
+
+    /// Card inventory prompt template
+    /// Contains placeholders: {DOC_ID}, {FILENAME}, {DOCUMENT_TYPE}, {CLASSIFICATION_JSON}, {EXTRACTED_CONTENT}
+    static let cardInventoryTemplate: String = {
+        loadPrompt(named: "card_inventory_prompt")
+    }()
+
+    /// Cross-document merge prompt template
+    /// Contains placeholders: {INVENTORIES_JSON}, {TIMELINE_JSON}
+    static let crossDocumentMergeTemplate: String = {
+        loadPrompt(named: "cross_document_merge_prompt")
+    }()
+
+    // MARK: - Type-Specific KC Extraction Prompts
+
+    /// Employment card extraction prompt
+    /// Contains placeholders: {TITLE}, {ORGANIZATION}, {DATE_RANGE}, {CARD_ID}, {EVIDENCE_BLOCKS_WITH_CONTENT}
+    static let kcExtractionEmployment: String = {
+        loadPrompt(named: "kc_extraction_employment")
+    }()
+
+    /// Skill card extraction prompt
+    /// Contains placeholders: {SKILL_NAME}, {EVIDENCE_BLOCKS_WITH_CONTENT}
+    static let kcExtractionSkill: String = {
+        loadPrompt(named: "kc_extraction_skill")
+    }()
+
+    /// Project card extraction prompt
+    /// Contains placeholders: {PROJECT_NAME}, {EVIDENCE_BLOCKS_WITH_CONTENT}
+    static let kcExtractionProject: String = {
+        loadPrompt(named: "kc_extraction_project")
+    }()
+
+    /// Achievement card extraction prompt
+    /// Contains placeholders: {ACHIEVEMENT_TITLE}, {EVIDENCE_BLOCKS_WITH_CONTENT}
+    static let kcExtractionAchievement: String = {
+        loadPrompt(named: "kc_extraction_achievement")
+    }()
+
     // MARK: - Prompt Loading
 
     /// Loads a prompt from a resource file in the Prompts directory.

@@ -15,22 +15,36 @@ actor DocumentProcessingService {
     private let dataStore: InterviewDataStore
     private var llmFacade: LLMFacade?
 
+    // Card pipeline services
+    private let classificationService: DocumentClassificationService
+    private let inventoryService: CardInventoryService
+
     // MARK: - Initialization
     init(
         documentExtractionService: DocumentExtractionService,
         uploadStorage: OnboardingUploadStorage,
         dataStore: InterviewDataStore,
-        llmFacade: LLMFacade? = nil
+        llmFacade: LLMFacade? = nil,
+        classificationService: DocumentClassificationService? = nil,
+        inventoryService: CardInventoryService? = nil
     ) {
         self.documentExtractionService = documentExtractionService
         self.uploadStorage = uploadStorage
         self.dataStore = dataStore
         self.llmFacade = llmFacade
+        // Initialize card pipeline services (create if not provided)
+        self.classificationService = classificationService ?? DocumentClassificationService(llmFacade: llmFacade)
+        self.inventoryService = inventoryService ?? CardInventoryService(llmFacade: llmFacade)
         Logger.info("📄 DocumentProcessingService initialized", category: .ai)
     }
 
     func updateLLMFacade(_ facade: LLMFacade?) {
         self.llmFacade = facade
+        // Update card pipeline services
+        Task {
+            await classificationService.updateLLMFacade(facade)
+            await inventoryService.updateLLMFacade(facade)
+        }
     }
     // MARK: - Public API
     /// Process a document file and return an artifact record
@@ -121,7 +135,38 @@ actor DocumentProcessingService {
             documentSummary = DocumentSummary.fallback(from: extractedText, filename: filename)
         }
 
-        // Step 4: Create artifact record
+        // Step 4: Classify document for card pipeline
+        statusCallback?("Classifying document type...")
+        var classification: DocumentClassification?
+        do {
+            classification = try await classificationService.classify(
+                content: extractedText,
+                filename: filename
+            )
+            Logger.info("✅ Document classified as: \(classification?.documentType.rawValue ?? "unknown")", category: .ai)
+        } catch {
+            Logger.warning("⚠️ Document classification failed: \(error.localizedDescription)", category: .ai)
+            classification = DocumentClassification.default(filename: filename)
+        }
+
+        // Step 5: Generate card inventory
+        statusCallback?("Analyzing document for knowledge cards...")
+        var inventory: DocumentInventory?
+        if let classificationResult = classification {
+            do {
+                inventory = try await inventoryService.inventoryDocument(
+                    documentId: artifactId,
+                    filename: filename,
+                    content: extractedText,
+                    classification: classificationResult
+                )
+                Logger.info("✅ Card inventory generated: \(inventory?.proposedCards.count ?? 0) potential cards", category: .ai)
+            } catch {
+                Logger.warning("⚠️ Card inventory generation failed: \(error.localizedDescription)", category: .ai)
+            }
+        }
+
+        // Step 6: Create artifact record
         var artifactRecord = JSON()
         artifactRecord["id"].string = artifactId
         artifactRecord["filename"].string = filename
@@ -163,6 +208,25 @@ actor DocumentProcessingService {
             summaryMeta["achievements"].arrayObject = summary.achievements
             summaryMeta["relevance_hints"].string = summary.relevanceHints
             artifactRecord["summary_metadata"] = summaryMeta
+        }
+        // Store classification result
+        if let classificationResult = classification {
+            let encoder = JSONEncoder()
+            encoder.keyEncodingStrategy = .convertToSnakeCase
+            if let classificationData = try? encoder.encode(classificationResult),
+               let classificationString = String(data: classificationData, encoding: .utf8) {
+                artifactRecord["classification"].string = classificationString
+            }
+        }
+        // Store card inventory
+        if let inventoryResult = inventory {
+            let encoder = JSONEncoder()
+            encoder.keyEncodingStrategy = .convertToSnakeCase
+            encoder.dateEncodingStrategy = .iso8601
+            if let inventoryData = try? encoder.encode(inventoryResult),
+               let inventoryString = String(data: inventoryData, encoding: .utf8) {
+                artifactRecord["card_inventory"].string = inventoryString
+            }
         }
         // Persist both upload metadata and extraction metadata
         var combinedMetadata = metadata

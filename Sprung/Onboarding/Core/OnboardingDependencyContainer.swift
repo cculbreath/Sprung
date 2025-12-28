@@ -111,6 +111,9 @@ final class OnboardingDependencyContainer {
     let agentActivityTracker: AgentActivityTracker
     private var kcAgentService: KnowledgeCardAgentService?
 
+    // MARK: - Card Pipeline Services
+    let cardMergeService: CardMergeService
+
     // MARK: - Usage Tracking
     let tokenUsageTracker: TokenUsageTracker
 
@@ -165,6 +168,12 @@ final class OnboardingDependencyContainer {
             eventBus: core.eventBus, phasePolicy: core.phasePolicy,
             objectives: stores.objectiveStore, artifacts: stores.artifactRepository,
             chat: stores.chatTranscriptStore, uiState: stores.sessionUIState
+        )
+
+        // 4a. Initialize card pipeline services
+        self.cardMergeService = CardMergeService(
+            artifactRepository: stores.artifactRepository,
+            llmFacade: llmFacade
         )
 
         // 5. Initialize document services
@@ -438,6 +447,8 @@ final class OnboardingDependencyContainer {
         lifecycleController.updateLLMFacade(facade)
         Task {
             await gitIngestionKernel.updateLLMFacade(facade)
+            await documentProcessingService.updateLLMFacade(facade)
+            await cardMergeService.updateLLMFacade(facade)
         }
     }
     func reregisterTools(onModelAvailabilityIssue: @escaping (String) -> Void) {
