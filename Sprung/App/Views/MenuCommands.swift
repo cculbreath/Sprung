@@ -60,6 +60,7 @@ extension Notification.Name {
     static let restartSpeaking = Notification.Name("restartSpeaking")
     // Analysis Commands
     static let analyzeApplication = Notification.Name("analyzeApplication")
+    static let preprocessAllPendingJobs = Notification.Name("preprocessAllPendingJobs")
     // Interview Commands
     static let startOnboardingInterview = Notification.Name("startOnboardingInterview")
     // Discovery Commands (renamed from Discovery)

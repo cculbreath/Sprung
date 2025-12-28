@@ -17,7 +17,7 @@ struct SettingsView: View {
     @AppStorage("onboardingInterviewHardTaskReasoningEffort") private var onboardingHardTaskReasoningEffort: String = "medium"
     @AppStorage("onboardingInterviewFlexProcessing") private var onboardingFlexProcessing: Bool = true
     @AppStorage("onboardingInterviewPromptCacheRetention") private var onboardingPromptCacheRetention: Bool = true
-    @AppStorage("backgroundProcessingModelId") private var backgroundProcessingModelId: String = "gemini-2.5-flash"
+    @AppStorage("backgroundProcessingModelId") private var backgroundProcessingModelId: String = "google/gemini-2.0-flash-001"
     @AppStorage("knowledgeCardTokenLimit") private var knowledgeCardTokenLimit: Int = 8000
     @Environment(OnboardingInterviewCoordinator.self) private var onboardingCoordinator
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
@@ -218,11 +218,13 @@ struct SettingsView: View {
             sanitizePDFExtractionModelIfNeeded()
             sanitizeGitIngestModelIfNeeded()
             sanitizeKCAgentModelIfNeeded()
+            sanitizeBackgroundProcessingModelIfNeeded()
         }
         .onChange(of: enabledLLMStore.enabledModels.map(\.modelId)) { _, _ in
             sanitizePDFExtractionModelIfNeeded()
             sanitizeGitIngestModelIfNeeded()
             sanitizeKCAgentModelIfNeeded()
+            sanitizeBackgroundProcessingModelIfNeeded()
         }
         .sheet(isPresented: $showSetupWizard) {
             SetupWizardView {
@@ -529,30 +531,22 @@ private extension SettingsView {
 
     var backgroundProcessingModelPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if !hasGeminiKey {
-                Label("Add Google Gemini API key above to enable background processing.", systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
+            if allOpenRouterModels.isEmpty {
+                Text("No models enabled. Enable models in AI Settings above.")
                     .font(.callout)
-            } else if geminiModels.isEmpty {
-                HStack {
-                    Text("No Gemini models available")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    Button("Load Models") {
-                        Task { await loadGeminiModels() }
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
+                    .foregroundStyle(.secondary)
             } else {
                 Picker("Background Processing Model", selection: $backgroundProcessingModelId) {
-                    ForEach(geminiModels) { model in
-                        Text(model.displayName)
-                            .tag(model.id)
+                    ForEach(allOpenRouterModels) { model in
+                        Text(model.displayName.isEmpty ? model.modelId : model.displayName)
+                            .tag(model.modelId)
                     }
                 }
                 .pickerStyle(.menu)
-                Text("Used for job requirement extraction. Fast, inexpensive models recommended.")
+                .onAppear {
+                    sanitizeBackgroundProcessingModelIfNeeded()
+                }
+                Text("Used for job requirement extraction. Fast, inexpensive models recommended (e.g., Gemini Flash).")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -578,9 +572,9 @@ private extension SettingsView {
 
     @discardableResult
     func sanitizeBackgroundProcessingModelIfNeeded() -> String {
-        let ids = geminiModels.map(\.id)
+        let ids = allOpenRouterModels.map(\.modelId)
         guard !ids.isEmpty else { return backgroundProcessingModelId }
-        let fallback = "gemini-2.5-flash"
+        let fallback = "google/gemini-2.0-flash-001"
         let (sanitized, adjusted) = ModelPreferenceValidator.sanitize(
             requested: backgroundProcessingModelId,
             available: ids,

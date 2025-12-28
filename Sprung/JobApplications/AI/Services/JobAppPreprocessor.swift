@@ -11,20 +11,71 @@
 
 import Foundation
 import SwiftData
+import SwiftOpenAI
 
 /// Service for preprocessing job applications in the background
 /// Extracts requirements and identifies relevant knowledge cards
 @MainActor
 class JobAppPreprocessor {
+    // MARK: - JSON Schema for Structured Output
+
+    /// Schema for preprocessing response - required for Gemini via OpenRouter
+    private static let preprocessingSchema: JSONSchema = {
+        JSONSchema(
+            type: .object,
+            description: "Job requirements extraction and card relevance analysis",
+            properties: [
+                "must_have": JSONSchema(
+                    type: .array,
+                    description: "Explicitly required skills/experience (deal-breakers)",
+                    items: JSONSchema(type: .string)
+                ),
+                "strong_signal": JSONSchema(
+                    type: .array,
+                    description: "Emphasized or frequently mentioned requirements",
+                    items: JSONSchema(type: .string)
+                ),
+                "preferred": JSONSchema(
+                    type: .array,
+                    description: "Nice-to-have qualifications",
+                    items: JSONSchema(type: .string)
+                ),
+                "cultural": JSONSchema(
+                    type: .array,
+                    description: "Soft skills and cultural fit indicators",
+                    items: JSONSchema(type: .string)
+                ),
+                "ats_keywords": JSONSchema(
+                    type: .array,
+                    description: "Technical terms and keywords for ATS matching",
+                    items: JSONSchema(type: .string)
+                ),
+                "relevant_card_ids": JSONSchema(
+                    type: .array,
+                    description: "IDs of knowledge cards relevant to this job",
+                    items: JSONSchema(type: .string)
+                )
+            ],
+            required: ["must_have", "strong_signal", "preferred", "cultural", "ats_keywords", "relevant_card_ids"],
+            additionalProperties: false
+        )
+    }()
     // MARK: - Dependencies
 
     private weak var llmFacade: LLMFacade?
+
+    // MARK: - Concurrency Control
+
+    /// Semaphore to limit concurrent preprocessing jobs
+    private let concurrencyLimit = 5
+    private var activeJobCount = 0
+    private var pendingJobs: [(jobApp: JobApp, cards: [ResRef], context: ModelContext)] = []
 
     // MARK: - Configuration
 
     /// Model for preprocessing (user-configurable via Settings)
     private var preprocessingModel: String {
-        UserDefaults.standard.string(forKey: "backgroundProcessingModelId") ?? "gemini-2.5-flash"
+        UserDefaults.standard.string(forKey: "backgroundProcessingModelId") ?? "google/gemini-2.0-flash-001"
     }
 
     // MARK: - Initialization
@@ -51,19 +102,42 @@ class JobAppPreprocessor {
         allCards: [ResRef],
         modelContext: ModelContext
     ) {
+        // Queue the job
+        pendingJobs.append((jobApp: jobApp, cards: allCards, context: modelContext))
+        processNextJobIfAvailable()
+    }
+
+    // MARK: - Concurrency Management
+
+    private func processNextJobIfAvailable() {
+        guard activeJobCount < concurrencyLimit,
+              !pendingJobs.isEmpty else {
+            return
+        }
+
+        let job = pendingJobs.removeFirst()
+        activeJobCount += 1
+
         Task {
+            defer {
+                Task { @MainActor in
+                    self.activeJobCount -= 1
+                    self.processNextJobIfAvailable()
+                }
+            }
+
             do {
                 let result = try await preprocess(
-                    jobDescription: jobApp.jobDescription,
-                    cards: allCards
+                    jobDescription: job.jobApp.jobDescription,
+                    cards: job.cards
                 )
 
-                jobApp.extractedRequirements = result.requirements
-                jobApp.relevantCardIds = result.relevantCardIds
-                try? modelContext.save()
-                Logger.info("✅ [JobAppPreprocessor] Preprocessed: \(jobApp.jobPosition) at \(jobApp.companyName)", category: .ai)
+                job.jobApp.extractedRequirements = result.requirements
+                job.jobApp.relevantCardIds = result.relevantCardIds
+                try? job.context.save()
+                Logger.info("✅ [JobAppPreprocessor] Preprocessed: \(job.jobApp.jobPosition) at \(job.jobApp.companyName)", category: .ai)
             } catch {
-                Logger.error("❌ [JobAppPreprocessor] Failed to preprocess \(jobApp.jobPosition): \(error.localizedDescription)", category: .ai)
+                Logger.error("❌ [JobAppPreprocessor] Failed to preprocess \(job.jobApp.jobPosition): \(error.localizedDescription)", category: .ai)
             }
         }
     }
@@ -110,12 +184,14 @@ class JobAppPreprocessor {
         Return JSON matching the required structure.
         """
 
-        let response = try await facade.executeStructured(
+        let response = try await facade.executeStructuredWithSchema(
             prompt: prompt,
             modelId: preprocessingModel,
             as: PreprocessingResponse.self,
+            schema: Self.preprocessingSchema,
+            schemaName: "preprocessing_response",
             temperature: 0.2,
-            backend: .gemini
+            backend: .openRouter
         )
 
         return PreprocessingResult(

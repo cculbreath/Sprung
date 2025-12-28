@@ -194,6 +194,9 @@ struct SprungApp: App {
                     NotificationCenter.default.post(name: .analyzeApplication, object: nil)
                 }
                 .keyboardShortcut("a", modifiers: [.command, .shift])
+                Button("Analyze All Pending Jobs") {
+                    NotificationCenter.default.post(name: .preprocessAllPendingJobs, object: nil)
+                }
             }
         }
         // MARK: - Resume Menu

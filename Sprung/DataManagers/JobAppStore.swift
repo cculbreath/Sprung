@@ -61,6 +61,43 @@ final class JobAppStore: SwiftDataStore {
         )
         Logger.info("🔄 [JobAppStore] Re-running preprocessing for: \(jobApp.jobPosition)", category: .ai)
     }
+
+    /// Preprocess all jobs that are missing preprocessing data
+    /// Returns the count of jobs queued for preprocessing
+    @discardableResult
+    func preprocessAllPendingJobs() -> Int {
+        guard let preprocessor = preprocessor,
+              let resRefStore = resRefStore else {
+            Logger.warning("⚠️ [JobAppStore] Cannot preprocess jobs: preprocessor not configured", category: .ai)
+            return 0
+        }
+
+        let jobsNeedingPreprocessing = jobApps.filter {
+            !$0.jobDescription.isEmpty && !$0.hasPreprocessingComplete
+        }
+
+        guard !jobsNeedingPreprocessing.isEmpty else {
+            Logger.info("✅ [JobAppStore] All jobs already preprocessed", category: .ai)
+            return 0
+        }
+
+        let cards = resRefStore.resRefs
+        for jobApp in jobsNeedingPreprocessing {
+            preprocessor.preprocessInBackground(
+                for: jobApp,
+                allCards: cards,
+                modelContext: modelContext
+            )
+        }
+
+        Logger.info("🚀 [JobAppStore] Queued \(jobsNeedingPreprocessing.count) jobs for preprocessing", category: .ai)
+        return jobsNeedingPreprocessing.count
+    }
+
+    /// Count of jobs that need preprocessing
+    var pendingPreprocessingCount: Int {
+        jobApps.filter { !$0.jobDescription.isEmpty && !$0.hasPreprocessingComplete }.count
+    }
     // MARK: - Methods
     func updateJobAppStatus(_ jobApp: JobApp, to newStatus: Statuses) {
         jobApp.status = newStatus

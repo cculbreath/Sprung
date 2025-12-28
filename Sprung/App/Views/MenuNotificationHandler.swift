@@ -177,6 +177,15 @@ class MenuNotificationHandler {
         ) { [weak self] _ in
             self?.sheets?.wrappedValue.showApplicationReview = true
         }
+        NotificationCenter.default.addObserver(
+            forName: .preprocessAllPendingJobs,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.handlePreprocessAllPendingJobs()
+            }
+        }
         // Text-to-Speech Commands
         NotificationCenter.default.addObserver(
             forName: .startSpeaking,
@@ -470,6 +479,16 @@ class MenuNotificationHandler {
         // Switch to cover letter tab and trigger TTS restart
         selectedTab?.wrappedValue = .coverLetter
         NotificationCenter.default.post(name: .triggerTTSRestart, object: nil)
+    }
+    @MainActor
+    private func handlePreprocessAllPendingJobs() {
+        guard let jobAppStore = jobAppStore else { return }
+        let count = jobAppStore.preprocessAllPendingJobs()
+        if count > 0 {
+            Logger.info("🔄 [Menu] Queued \(count) jobs for preprocessing", category: .ai)
+        } else {
+            Logger.info("✅ [Menu] All jobs already preprocessed", category: .ai)
+        }
     }
     deinit {
         NotificationCenter.default.removeObserver(self)
