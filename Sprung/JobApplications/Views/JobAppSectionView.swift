@@ -9,6 +9,8 @@ struct JobAppSectionView: View {
     var status: Statuses
     var jobApps: [JobApp]
     var deleteAction: (JobApp) -> Void
+    var rerunPreprocessingAction: ((JobApp) -> Void)?
+
     var body: some View {
         Section(header: RoundedTagView(
             tagText: status.displayName,
@@ -16,9 +18,11 @@ struct JobAppSectionView: View {
             foregroundColor: .white
         )) {
             ForEach(jobApps) { jobApp in
-                JobAppRowView(jobApp: jobApp) {
-                    deleteAction(jobApp)
-                }
+                JobAppRowView(
+                    jobApp: jobApp,
+                    deleteAction: { deleteAction(jobApp) },
+                    rerunPreprocessingAction: { rerunPreprocessingAction?(jobApp) }
+                )
             }
         }
     }

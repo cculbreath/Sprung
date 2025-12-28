@@ -39,6 +39,28 @@ final class JobAppStore: SwiftDataStore {
         self.preprocessor = preprocessor
         self.resRefStore = resRefStore
     }
+
+    /// Re-run preprocessing for a job (use when preprocessing failed or needs refresh)
+    func rerunPreprocessing(for jobApp: JobApp) {
+        guard let preprocessor = preprocessor,
+              let resRefStore = resRefStore,
+              !jobApp.jobDescription.isEmpty else {
+            Logger.warning("⚠️ [JobAppStore] Cannot re-run preprocessing: missing dependencies or empty job description", category: .ai)
+            return
+        }
+
+        // Clear existing preprocessing data
+        jobApp.extractedRequirements = nil
+        jobApp.relevantCardIds = nil
+        saveContext()
+
+        preprocessor.preprocessInBackground(
+            for: jobApp,
+            allCards: resRefStore.resRefs,
+            modelContext: modelContext
+        )
+        Logger.info("🔄 [JobAppStore] Re-running preprocessing for: \(jobApp.jobPosition)", category: .ai)
+    }
     // MARK: - Methods
     func updateJobAppStatus(_ jobApp: JobApp, to newStatus: Statuses) {
         jobApp.status = newStatus

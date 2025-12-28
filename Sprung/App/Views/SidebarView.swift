@@ -45,6 +45,9 @@ struct SidebarView: View {
                                 if selectedApp == jobApp {
                                     selectedApp = jobApps.first { $0.id != jobApp.id }
                                 }
+                            },
+                            rerunPreprocessingAction: { jobApp in
+                                jobAppStore.rerunPreprocessing(for: jobApp)
                             }
                         )
                     }
