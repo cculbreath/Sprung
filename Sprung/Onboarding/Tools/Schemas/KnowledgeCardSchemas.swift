@@ -24,8 +24,8 @@ enum KnowledgeCardSchemas {
             "title": JSONSchema(type: .string, description: "Title of the knowledge card (e.g., job title or skill area)"),
             "type": JSONSchema(
                 type: .string,
-                description: "Type of card: 'job' for positions, 'skill' for skill areas",
-                enum: ["job", "skill"]
+                description: "Type of card: 'job' for positions, 'skill' for skill areas, 'project', 'achievement', or 'education'",
+                enum: ["job", "skill", "project", "achievement", "education"]
             ),
             "description": JSONSchema(type: .string, description: "Brief description of what this card will cover"),
             "status": JSONSchema(
@@ -72,7 +72,8 @@ enum KnowledgeCardSchemas {
             ),
             "card_type": JSONSchema(
                 type: .string,
-                description: "Type of card: 'job' or 'skill'"
+                description: "Type of card: 'job', 'skill', 'project', 'achievement', or 'education'",
+                enum: ["job", "skill", "project", "achievement", "education"]
             ),
             "title": JSONSchema(
                 type: .string,
@@ -118,7 +119,8 @@ enum KnowledgeCardSchemas {
             ),
             "card_type": JSONSchema(
                 type: .string,
-                description: "Card type: 'job' or 'skill'"
+                description: "Card type: 'job', 'skill', 'project', 'achievement', or 'education'",
+                enum: ["job", "skill", "project", "achievement", "education"]
             ),
             "timeline_entry_id": JSONSchema(
                 type: .string,
@@ -265,5 +267,105 @@ enum KnowledgeCardSchemas {
         type: .array,
         description: "Documentation gaps identified (cards without sufficient artifacts)",
         items: gapSchema
+    )
+
+    // MARK: - Evidence Block Schema
+
+    /// Evidence block schema for structured knowledge cards
+    static let evidenceBlockSchema = JSONSchema(
+        type: .object,
+        description: "Evidence block from a source document",
+        properties: [
+            "source_document": JSONSchema(
+                type: .string,
+                description: "Document ID this evidence comes from"
+            ),
+            "source_type": JSONSchema(
+                type: .string,
+                description: "Whether this is primary or supporting evidence",
+                enum: ["primary", "supporting"]
+            ),
+            "locations": JSONSchema(
+                type: .array,
+                description: "Where in the document this evidence is found",
+                items: JSONSchema(type: .string)
+            ),
+            "extracted_content": JSONSchema(
+                type: .object,
+                description: "Content extracted from the source",
+                properties: [
+                    "facts": JSONSchema(
+                        type: .array,
+                        description: "Facts extracted from this source",
+                        items: JSONSchema(type: .string)
+                    ),
+                    "verbatim_quotes": JSONSchema(
+                        type: .array,
+                        description: "Direct quotes from the source",
+                        items: JSONSchema(type: .string)
+                    )
+                ],
+                required: ["facts"]
+            )
+        ],
+        required: ["source_document", "source_type", "locations", "extracted_content"]
+    )
+
+    // MARK: - Structured Card Schema
+
+    /// Schema for structured knowledge card output from KC agents
+    static let structuredCardSchema = JSONSchema(
+        type: .object,
+        description: "Structured knowledge card with evidence blocks",
+        properties: [
+            "card_id": JSONSchema(type: .string, description: "Unique card identifier"),
+            "card_type": JSONSchema(
+                type: .string,
+                description: "Type of knowledge card",
+                enum: ["employment", "project", "skill", "achievement", "education"]
+            ),
+            "title": JSONSchema(type: .string, description: "Card title"),
+            "date_range": JSONSchema(type: .string, description: "Time period covered"),
+            "organization": JSONSchema(type: .string, description: "Organization/company name"),
+            "location": JSONSchema(type: .string, description: "Geographic location"),
+            "evidence_blocks": JSONSchema(
+                type: .array,
+                description: "Evidence from source documents",
+                items: evidenceBlockSchema
+            ),
+            "facts": JSONSchema(
+                type: .object,
+                description: "Extracted facts",
+                properties: [
+                    "scope": JSONSchema(type: .string),
+                    "responsibilities": JSONSchema(type: .array, items: JSONSchema(type: .string)),
+                    "technologies": JSONSchema(type: .array, items: JSONSchema(type: .string)),
+                    "outcomes": JSONSchema(type: .array, items: JSONSchema(type: .string)),
+                    "quantified": JSONSchema(type: .array, items: JSONSchema(type: .string)),
+                    "context": JSONSchema(type: .string)
+                ]
+            ),
+            "resume_bullets": JSONSchema(
+                type: .array,
+                description: "Pre-generated resume bullets",
+                items: JSONSchema(type: .string)
+            ),
+            "related_cards": JSONSchema(
+                type: .array,
+                description: "IDs of related cards",
+                items: JSONSchema(type: .string)
+            ),
+            "keywords": JSONSchema(
+                type: .array,
+                description: "Keywords for search/matching",
+                items: JSONSchema(type: .string)
+            ),
+            "evidence_quality": JSONSchema(
+                type: .string,
+                description: "Overall evidence quality",
+                enum: ["strong", "moderate", "weak"]
+            )
+        ],
+        required: ["card_id", "card_type", "title", "evidence_blocks", "facts", "resume_bullets"]
     )
 }
