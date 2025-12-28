@@ -7,7 +7,7 @@
 //  directly ingest documents and generate knowledge cards without going
 //  through the full onboarding process.
 //
-//  Pipeline: Upload Sources → Extract → Metadata → KC Agent → Persist
+//  Pipeline: Upload Sources → Extract → Classify → Inventory → Merge → KC Agent → Persist
 //
 
 import Foundation
@@ -24,16 +24,19 @@ class StandaloneKCCoordinator {
     enum Status: Equatable {
         case idle
         case extracting(current: Int, total: Int, filename: String)
+        case classifying
+        case inventorying
+        case merging
         case analyzingMetadata
-        case generatingCard
-        case completed
+        case generatingCard(current: Int, total: Int)
+        case completed(created: Int, enhanced: Int)
         case failed(String)
 
         var isProcessing: Bool {
             switch self {
             case .idle, .completed, .failed:
                 return false
-            case .extracting, .analyzingMetadata, .generatingCard:
+            case .extracting, .classifying, .inventorying, .merging, .analyzingMetadata, .generatingCard:
                 return true
             }
         }
@@ -44,16 +47,39 @@ class StandaloneKCCoordinator {
                 return "Ready"
             case .extracting(let current, let total, let filename):
                 return "Extracting (\(current)/\(total)): \(filename)"
+            case .classifying:
+                return "Classifying documents..."
+            case .inventorying:
+                return "Generating card inventory..."
+            case .merging:
+                return "Merging card proposals..."
             case .analyzingMetadata:
                 return "Analyzing document metadata..."
-            case .generatingCard:
-                return "Generating knowledge card..."
-            case .completed:
-                return "Knowledge card created!"
+            case .generatingCard(let current, let total):
+                return "Generating card (\(current)/\(total))..."
+            case .completed(let created, let enhanced):
+                if created > 0 && enhanced > 0 {
+                    return "Created \(created) cards, enhanced \(enhanced)"
+                } else if created > 0 {
+                    return created == 1 ? "Knowledge card created!" : "\(created) cards created!"
+                } else if enhanced > 0 {
+                    return enhanced == 1 ? "Existing card enhanced!" : "\(enhanced) cards enhanced!"
+                } else {
+                    return "Completed"
+                }
             case .failed(let error):
                 return "Failed: \(error)"
             }
         }
+    }
+
+    // MARK: - Analysis Result
+
+    /// Result of document analysis for user review before generation
+    struct AnalysisResult {
+        let newCards: [MergedCardInventory.MergedCard]
+        let enhancements: [(proposal: MergedCardInventory.MergedCard, existing: ResRef)]
+        let artifacts: [JSON]
     }
 
     // MARK: - Published State
@@ -67,6 +93,8 @@ class StandaloneKCCoordinator {
     private let repository = InMemoryArtifactRepository()
     private var extractionService: DocumentExtractionService?
     private var metadataService: MetadataExtractionService?
+    private var classificationService: DocumentClassificationService?
+    private var inventoryService: CardInventoryService?
     private weak var llmFacade: LLMFacade?
     private weak var resRefStore: ResRefStore?
     /// Session store for persisting artifacts (optional - allows standalone use without persistence)
@@ -87,6 +115,8 @@ class StandaloneKCCoordinator {
         // Initialize services
         self.extractionService = DocumentExtractionService(llmFacade: llmFacade, eventBus: nil)
         self.metadataService = MetadataExtractionService(llmFacade: llmFacade)
+        self.classificationService = DocumentClassificationService(llmFacade: llmFacade)
+        self.inventoryService = CardInventoryService(llmFacade: llmFacade)
     }
 
     // MARK: - Public API
@@ -119,7 +149,7 @@ class StandaloneKCCoordinator {
             let metadata = try await extractMetadata(from: artifacts)
 
             // Phase 3: Generate KC via agent
-            status = .generatingCard
+            status = .generatingCard(current: 1, total: 1)
             let generated = try await runKCAgent(artifacts: artifacts, metadata: metadata)
 
             // Phase 4: Persist to ResRef
@@ -127,7 +157,7 @@ class StandaloneKCCoordinator {
             resRefStore?.addResRef(resRef)
 
             self.generatedCard = resRef
-            status = .completed
+            status = .completed(created: 1, enhanced: 0)
 
             Logger.info("✅ StandaloneKCCoordinator: Knowledge card created - \(resRef.name)", category: .ai)
 
@@ -230,7 +260,7 @@ class StandaloneKCCoordinator {
             let metadata = try await extractMetadata(from: allArtifacts)
 
             // Phase 3: Generate KC via agent
-            status = .generatingCard
+            status = .generatingCard(current: 1, total: 1)
             let generated = try await runKCAgent(artifacts: allArtifacts, metadata: metadata)
 
             // Phase 4: Persist to ResRef
@@ -238,7 +268,7 @@ class StandaloneKCCoordinator {
             resRefStore?.addResRef(resRef)
 
             self.generatedCard = resRef
-            status = .completed
+            status = .completed(created: 1, enhanced: 0)
 
             Logger.info("✅ StandaloneKCCoordinator: Knowledge card created - \(resRef.name)", category: .ai)
 
@@ -249,6 +279,345 @@ class StandaloneKCCoordinator {
             Logger.error("❌ StandaloneKCCoordinator: Failed - \(message)", category: .ai)
             throw error
         }
+    }
+
+    // MARK: - Multi-Card Analysis & Generation
+
+    /// Analyze documents to produce card proposals for user review.
+    /// This uses the full pipeline: classify → inventory → merge → match existing.
+    func analyzeDocuments(from sources: [URL], existingArtifactIds: Set<String> = []) async throws -> AnalysisResult {
+        guard !sources.isEmpty || !existingArtifactIds.isEmpty else {
+            throw StandaloneKCError.noSources
+        }
+
+        guard llmFacade != nil else {
+            throw StandaloneKCError.llmNotConfigured
+        }
+
+        status = .idle
+        errorMessage = nil
+
+        // Phase 1: Extract all sources
+        var allArtifacts: [JSON] = []
+
+        // Load existing artifacts if any
+        if !existingArtifactIds.isEmpty {
+            let existing = await loadArchivedArtifacts(existingArtifactIds)
+            allArtifacts.append(contentsOf: existing)
+        }
+
+        // Extract new sources
+        if !sources.isEmpty {
+            let newArtifacts = try await extractAllSources(sources)
+            allArtifacts.append(contentsOf: newArtifacts)
+        }
+
+        guard !allArtifacts.isEmpty else {
+            throw StandaloneKCError.noArtifactsExtracted
+        }
+
+        // Phase 2: Classify and inventory each document
+        status = .classifying
+        var inventories: [DocumentInventory] = []
+
+        for artifact in allArtifacts {
+            let docId = artifact["id"].stringValue
+            let filename = artifact["filename"].stringValue
+            let content = artifact["extracted_text"].stringValue
+
+            // Classify the document
+            let classification: DocumentClassification
+            if let service = classificationService {
+                classification = try await service.classify(content: content, filename: filename)
+            } else {
+                classification = .default(filename: filename)
+            }
+
+            // Inventory the document for potential cards
+            status = .inventorying
+            if let service = inventoryService {
+                do {
+                    let inventory = try await service.inventoryDocument(
+                        documentId: docId,
+                        filename: filename,
+                        content: content,
+                        classification: classification
+                    )
+                    inventories.append(inventory)
+                } catch {
+                    Logger.warning("⚠️ StandaloneKCCoordinator: Failed to inventory \(filename): \(error.localizedDescription)", category: .ai)
+                }
+            }
+        }
+
+        // Phase 3: Merge inventories into unified card proposals
+        status = .merging
+        let merged = mergeInventoriesLocally(inventories)
+
+        // Phase 4: Match against existing ResRefs
+        let existingCards = resRefStore?.resRefs ?? []
+        var newCards: [MergedCardInventory.MergedCard] = []
+        var enhancements: [(proposal: MergedCardInventory.MergedCard, existing: ResRef)] = []
+
+        for proposal in merged.mergedCards {
+            if let match = findMatchingResRef(proposal, in: existingCards) {
+                enhancements.append((proposal, match))
+            } else {
+                newCards.append(proposal)
+            }
+        }
+
+        status = .idle
+        Logger.info("📊 StandaloneKCCoordinator: Analysis complete - \(newCards.count) new, \(enhancements.count) enhancements", category: .ai)
+
+        return AnalysisResult(newCards: newCards, enhancements: enhancements, artifacts: allArtifacts)
+    }
+
+    /// Generate selected cards and apply enhancements.
+    func generateSelected(
+        newCards: [MergedCardInventory.MergedCard],
+        enhancements: [(proposal: MergedCardInventory.MergedCard, existing: ResRef)],
+        artifacts: [JSON]
+    ) async throws -> (created: Int, enhanced: Int) {
+        guard llmFacade != nil else {
+            throw StandaloneKCError.llmNotConfigured
+        }
+
+        let totalCards = newCards.count
+        var createdCount = 0
+        var enhancedCount = 0
+
+        // Generate new cards
+        for (index, proposal) in newCards.enumerated() {
+            status = .generatingCard(current: index + 1, total: totalCards)
+
+            do {
+                let card = try await runKCAgentForProposal(proposal, artifacts: artifacts)
+                resRefStore?.addResRef(card)
+                createdCount += 1
+                Logger.info("✅ StandaloneKCCoordinator: Created card - \(card.name)", category: .ai)
+            } catch {
+                Logger.error("❌ StandaloneKCCoordinator: Failed to generate card \(proposal.title): \(error.localizedDescription)", category: .ai)
+            }
+        }
+
+        // Enhance existing cards
+        for (proposal, existingCard) in enhancements {
+            enhanceResRef(existingCard, with: proposal)
+            enhancedCount += 1
+            Logger.info("✅ StandaloneKCCoordinator: Enhanced card - \(existingCard.name)", category: .ai)
+        }
+
+        status = .completed(created: createdCount, enhanced: enhancedCount)
+        return (created: createdCount, enhanced: enhancedCount)
+    }
+
+    // MARK: - Private: Multi-Card Helpers
+
+    /// Simple local merge of inventories without LLM (for standalone use)
+    private func mergeInventoriesLocally(_ inventories: [DocumentInventory]) -> MergedCardInventory {
+        var mergedCards: [MergedCardInventory.MergedCard] = []
+        var cardsByKey: [String: MergedCardInventory.MergedCard] = [:]
+
+        for inventory in inventories {
+            for proposed in inventory.proposedCards {
+                // Create a key for grouping similar cards
+                let key = "\(proposed.cardType.rawValue):\(proposed.proposedTitle.lowercased())"
+
+                if var existing = cardsByKey[key] {
+                    // Merge into existing card
+                    var combinedFacts = existing.combinedKeyFacts
+                    combinedFacts.append(contentsOf: proposed.keyFacts.filter { !combinedFacts.contains($0) })
+
+                    var combinedTech = existing.combinedTechnologies
+                    combinedTech.append(contentsOf: proposed.technologies.filter { !combinedTech.contains($0) })
+
+                    var combinedOutcomes = existing.combinedOutcomes
+                    combinedOutcomes.append(contentsOf: proposed.quantifiedOutcomes.filter { !combinedOutcomes.contains($0) })
+
+                    var supportingSources = existing.supportingSources
+                    supportingSources.append(MergedCardInventory.MergedCard.SupportingSource(
+                        documentId: inventory.documentId,
+                        evidenceLocations: proposed.evidenceLocations,
+                        adds: proposed.keyFacts
+                    ))
+
+                    existing = MergedCardInventory.MergedCard(
+                        cardId: existing.cardId,
+                        cardType: existing.cardType,
+                        title: existing.title,
+                        primarySource: existing.primarySource,
+                        supportingSources: supportingSources,
+                        combinedKeyFacts: combinedFacts,
+                        combinedTechnologies: combinedTech,
+                        combinedOutcomes: combinedOutcomes,
+                        dateRange: existing.dateRange ?? proposed.dateRange,
+                        evidenceQuality: .strong,
+                        extractionPriority: .high
+                    )
+                    cardsByKey[key] = existing
+                } else {
+                    // Create new merged card
+                    let merged = MergedCardInventory.MergedCard(
+                        cardId: UUID().uuidString,
+                        cardType: proposed.cardType.rawValue,
+                        title: proposed.proposedTitle,
+                        primarySource: MergedCardInventory.MergedCard.SourceReference(
+                            documentId: inventory.documentId,
+                            evidenceLocations: proposed.evidenceLocations
+                        ),
+                        supportingSources: [],
+                        combinedKeyFacts: proposed.keyFacts,
+                        combinedTechnologies: proposed.technologies,
+                        combinedOutcomes: proposed.quantifiedOutcomes,
+                        dateRange: proposed.dateRange,
+                        evidenceQuality: proposed.evidenceStrength == .primary ? .strong : .moderate,
+                        extractionPriority: .high
+                    )
+                    cardsByKey[key] = merged
+                }
+            }
+        }
+
+        mergedCards = Array(cardsByKey.values)
+
+        return MergedCardInventory(
+            mergedCards: mergedCards,
+            gaps: [],
+            stats: MergedCardInventory.MergeStats(
+                totalInputCards: inventories.flatMap { $0.proposedCards }.count,
+                mergedOutputCards: mergedCards.count,
+                cardsByType: Dictionary(grouping: mergedCards, by: { $0.cardType }).mapValues { $0.count },
+                strongEvidence: mergedCards.filter { $0.evidenceQuality == .strong }.count,
+                needsMoreEvidence: mergedCards.filter { $0.evidenceQuality == .weak }.count
+            ),
+            generatedAt: Date()
+        )
+    }
+
+    /// Match a proposal against existing ResRefs
+    private func findMatchingResRef(
+        _ proposal: MergedCardInventory.MergedCard,
+        in existing: [ResRef]
+    ) -> ResRef? {
+        let titleCore = proposalTitleCore(proposal.title)
+        return existing.first { resRef in
+            resRef.cardType == proposal.cardType &&
+            resRef.name.lowercased().contains(titleCore)
+        }
+    }
+
+    /// Extract core identifier from title (e.g., "Senior Engineer at TechCorp" -> "techcorp")
+    private func proposalTitleCore(_ title: String) -> String {
+        title.lowercased().split(separator: " ").last.map(String.init) ?? title.lowercased()
+    }
+
+    /// Run KC agent for a specific merged card proposal
+    private func runKCAgentForProposal(_ proposal: MergedCardInventory.MergedCard, artifacts: [JSON]) async throws -> ResRef {
+        guard let facade = llmFacade else {
+            throw StandaloneKCError.llmNotConfigured
+        }
+
+        // Build CardProposal
+        var artifactIds = [proposal.primarySource.documentId]
+        artifactIds.append(contentsOf: proposal.supportingSources.map { $0.documentId })
+
+        let cardProposal = CardProposal(
+            cardId: proposal.cardId,
+            cardType: proposal.cardType,
+            title: proposal.title,
+            timelineEntryId: nil,
+            assignedArtifactIds: artifactIds,
+            chatExcerpts: [],
+            notes: nil
+        )
+
+        // Build prompts
+        let systemPrompt = KCAgentPrompts.systemPrompt(
+            cardType: proposal.cardType,
+            title: proposal.title,
+            candidateName: nil
+        )
+
+        let summaries = await repository.getArtifactSummaries()
+        let initialPrompt = KCAgentPrompts.initialPrompt(
+            proposal: cardProposal,
+            allSummaries: summaries
+        )
+
+        // Create tool executor with our in-memory repository
+        let toolExecutor = SubAgentToolExecutor(artifactRepository: repository)
+
+        // Run agent
+        let runner = AgentRunner.forKnowledgeCard(
+            agentId: UUID().uuidString,
+            cardTitle: proposal.title,
+            systemPrompt: systemPrompt,
+            initialPrompt: initialPrompt,
+            modelId: kcAgentModelId,
+            toolExecutor: toolExecutor,
+            llmFacade: facade,
+            eventBus: nil,
+            tracker: nil
+        )
+
+        let output = try await runner.run()
+
+        // Parse result
+        guard let result = output.result?["result"] else {
+            throw StandaloneKCError.agentNoResult
+        }
+
+        let generated = GeneratedCard.fromAgentOutput(result, cardId: proposal.cardId)
+
+        // Build metadata from proposal
+        let metadata = CardMetadata(
+            cardType: proposal.cardType,
+            title: proposal.title,
+            organization: nil,
+            timePeriod: proposal.dateRange,
+            location: nil
+        )
+
+        return createResRef(from: generated, metadata: metadata, artifacts: artifacts)
+    }
+
+    /// Enhance an existing ResRef with new evidence from a proposal
+    private func enhanceResRef(_ resRef: ResRef, with proposal: MergedCardInventory.MergedCard) {
+        // Append new facts to existing content
+        var updatedContent = resRef.content
+
+        let newFacts = proposal.combinedKeyFacts.filter { fact in
+            !resRef.content.contains(fact)
+        }
+
+        if !newFacts.isEmpty {
+            updatedContent += "\n\n## Additional Evidence\n"
+            updatedContent += newFacts.map { "• \($0)" }.joined(separator: "\n")
+        }
+
+        resRef.content = updatedContent
+
+        // Update sources JSON
+        var existingSources: [[String: String]] = []
+        if let sourcesJSON = resRef.sourcesJSON,
+           let data = sourcesJSON.data(using: .utf8),
+           let decoded = try? JSONSerialization.jsonObject(with: data) as? [[String: String]] {
+            existingSources = decoded
+        }
+
+        // Add new sources
+        existingSources.append(["type": "artifact", "artifact_id": proposal.primarySource.documentId])
+        for source in proposal.supportingSources {
+            existingSources.append(["type": "artifact", "artifact_id": source.documentId])
+        }
+
+        if let data = try? JSONSerialization.data(withJSONObject: existingSources),
+           let jsonString = String(data: data, encoding: .utf8) {
+            resRef.sourcesJSON = jsonString
+        }
+
+        resRefStore?.updateResRef(resRef)
     }
 
     // MARK: - Private: Extraction Phase

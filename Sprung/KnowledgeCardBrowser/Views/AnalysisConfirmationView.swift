@@ -1,0 +1,163 @@
+//
+//  AnalysisConfirmationView.swift
+//  Sprung
+//
+//  View for reviewing and confirming card proposals before generation.
+//  Shows new cards to create and existing cards that will be enhanced.
+//
+
+import SwiftUI
+
+struct AnalysisConfirmationView: View {
+    let result: StandaloneKCCoordinator.AnalysisResult
+    let onConfirm: ([MergedCardInventory.MergedCard], [(proposal: MergedCardInventory.MergedCard, existing: ResRef)]) -> Void
+    let onCancel: () -> Void
+
+    @State private var selectedNewCards: Set<String>
+    @State private var selectedEnhancements: Set<String>
+
+    init(
+        result: StandaloneKCCoordinator.AnalysisResult,
+        onConfirm: @escaping ([MergedCardInventory.MergedCard], [(proposal: MergedCardInventory.MergedCard, existing: ResRef)]) -> Void,
+        onCancel: @escaping () -> Void
+    ) {
+        self.result = result
+        self.onConfirm = onConfirm
+        self.onCancel = onCancel
+        // Select all by default
+        _selectedNewCards = State(initialValue: Set(result.newCards.map(\.cardId)))
+        _selectedEnhancements = State(initialValue: Set(result.enhancements.map(\.proposal.cardId)))
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                if result.newCards.isEmpty && result.enhancements.isEmpty {
+                    emptyStateView
+                } else {
+                    List {
+                        if !result.newCards.isEmpty {
+                            Section("Create New Cards (\(result.newCards.count))") {
+                                ForEach(result.newCards, id: \.cardId) { card in
+                                    Toggle(isOn: binding(for: card.cardId, in: $selectedNewCards)) {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(card.title)
+                                                .font(.headline)
+                                            HStack {
+                                                cardTypeBadge(card.cardType)
+                                                if !card.combinedKeyFacts.isEmpty {
+                                                    Text("\(card.combinedKeyFacts.count) facts")
+                                                        .font(.caption)
+                                                        .foregroundStyle(.secondary)
+                                                }
+                                            }
+                                        }
+                                    }
+                                    .toggleStyle(.checkbox)
+                                }
+                            }
+                        }
+
+                        if !result.enhancements.isEmpty {
+                            Section("Enhance Existing Cards (\(result.enhancements.count))") {
+                                ForEach(result.enhancements, id: \.proposal.cardId) { item in
+                                    Toggle(isOn: binding(for: item.proposal.cardId, in: $selectedEnhancements)) {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(item.existing.name)
+                                                .font(.headline)
+                                            Text("Add \(item.proposal.combinedKeyFacts.count) facts from new documents")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                    .toggleStyle(.checkbox)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Divider()
+
+                footerView
+            }
+            .navigationTitle("Analysis Results")
+            .frame(width: 500, height: 450)
+        }
+    }
+
+    private var emptyStateView: some View {
+        ContentUnavailableView(
+            "No Cards Found",
+            systemImage: "doc.questionmark",
+            description: Text("The analysis didn't find any new cards to create or existing cards to enhance.")
+        )
+    }
+
+    private func cardTypeBadge(_ cardType: String) -> some View {
+        Text(cardType.capitalized)
+            .font(.caption2)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(cardTypeColor(cardType).opacity(0.2))
+            .foregroundStyle(cardTypeColor(cardType))
+            .clipShape(Capsule())
+    }
+
+    private func cardTypeColor(_ cardType: String) -> Color {
+        switch cardType.lowercased() {
+        case "employment", "job":
+            return .blue
+        case "project":
+            return .green
+        case "skill":
+            return .purple
+        case "education":
+            return .orange
+        case "achievement":
+            return .yellow
+        default:
+            return .gray
+        }
+    }
+
+    private var footerView: some View {
+        HStack {
+            Text("\(selectedCount) selected")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Button("Cancel", action: onCancel)
+                .keyboardShortcut(.cancelAction)
+
+            Button("Generate") {
+                let newCards = result.newCards.filter { selectedNewCards.contains($0.cardId) }
+                let enhancements = result.enhancements.filter { selectedEnhancements.contains($0.proposal.cardId) }
+                onConfirm(newCards, enhancements)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(selectedNewCards.isEmpty && selectedEnhancements.isEmpty)
+            .keyboardShortcut(.defaultAction)
+        }
+        .padding()
+    }
+
+    private var selectedCount: Int {
+        selectedNewCards.count + selectedEnhancements.count
+    }
+
+    private func binding(for cardId: String, in set: Binding<Set<String>>) -> Binding<Bool> {
+        Binding(
+            get: { set.wrappedValue.contains(cardId) },
+            set: { isSelected in
+                if isSelected {
+                    set.wrappedValue.insert(cardId)
+                } else {
+                    set.wrappedValue.remove(cardId)
+                }
+            }
+        )
+    }
+}

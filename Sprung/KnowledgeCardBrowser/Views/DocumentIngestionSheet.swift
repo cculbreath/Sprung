@@ -28,6 +28,10 @@ struct DocumentIngestionSheet: View {
     @State private var showExistingArtifactsPicker = false
     /// Artifact IDs that have been added from archived artifacts (for display)
     @State private var addedArchivedArtifactIds: Set<String> = []
+    /// Analysis result for multi-card generation
+    @State private var analysisResult: StandaloneKCCoordinator.AnalysisResult?
+    /// Show the analysis confirmation sheet
+    @State private var showAnalysisSheet = false
 
     // MARK: - Callbacks
 
@@ -66,6 +70,31 @@ struct DocumentIngestionSheet: View {
             allowsMultipleSelection: true
         ) { result in
             handleFileSelection(result)
+        }
+        .sheet(isPresented: $showAnalysisSheet) {
+            if let result = analysisResult, let coordinator = coordinator {
+                AnalysisConfirmationView(
+                    result: result,
+                    onConfirm: { selectedNew, selectedEnhancements in
+                        Task {
+                            let (created, _) = try await coordinator.generateSelected(
+                                newCards: selectedNew,
+                                enhancements: selectedEnhancements,
+                                artifacts: result.artifacts
+                            )
+                            if created > 0, let card = coordinator.generatedCard {
+                                onCardGenerated?(card)
+                            }
+                            showAnalysisSheet = false
+                            try? await Task.sleep(for: .seconds(1))
+                            dismiss()
+                        }
+                    },
+                    onCancel: {
+                        showAnalysisSheet = false
+                    }
+                )
+            }
         }
     }
 
@@ -305,12 +334,22 @@ struct DocumentIngestionSheet: View {
             }
             .keyboardShortcut(.cancelAction)
 
-            Button("Generate Card") {
+            // Analyze button for multi-card workflow
+            Button("Analyze") {
+                analyzeDocuments()
+            }
+            .buttonStyle(.bordered)
+            .disabled(!hasAnySources || coordinator?.status.isProcessing == true)
+            .help("Analyze documents and review proposed cards before generating")
+
+            // Quick generate button for single card (legacy behavior)
+            Button("Quick Generate") {
                 generateCard()
             }
             .buttonStyle(.borderedProminent)
             .disabled(!hasAnySources || coordinator?.status.isProcessing == true)
             .keyboardShortcut(.defaultAction)
+            .help("Generate a single card without review")
         }
         .padding()
     }
@@ -394,6 +433,22 @@ struct DocumentIngestionSheet: View {
                 // Dismiss after short delay to show success
                 try? await Task.sleep(for: .seconds(1))
                 dismiss()
+            } catch {
+                // Error is displayed in status section
+            }
+        }
+    }
+
+    private func analyzeDocuments() {
+        guard let coordinator = coordinator else { return }
+
+        Task {
+            do {
+                analysisResult = try await coordinator.analyzeDocuments(
+                    from: sources,
+                    existingArtifactIds: addedArchivedArtifactIds
+                )
+                showAnalysisSheet = true
             } catch {
                 // Error is displayed in status section
             }
