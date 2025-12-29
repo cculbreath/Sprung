@@ -642,4 +642,118 @@ actor GoogleAIService {
         Logger.info("✅ Structured JSON generated (\(jsonString.count) chars)", category: .ai)
         return jsonString.trimmingCharacters(in: .whitespacesAndNewlines)
     }
+
+    /// Generate structured JSON from a PDF using Gemini's native structured output mode.
+    /// Uploads the PDF via Files API, processes with schema enforcement, and returns valid JSON.
+    /// - Parameters:
+    ///   - pdfData: The raw PDF data
+    ///   - filename: Display name for the file
+    ///   - prompt: The prompt describing what to extract
+    ///   - jsonSchema: JSON Schema dictionary for structured output
+    ///   - modelId: Gemini model ID (defaults to flash)
+    ///   - temperature: Generation temperature (default 0.2)
+    /// - Returns: Tuple of (JSON string, token usage)
+    func generateStructuredJSONFromPDF(
+        pdfData: Data,
+        filename: String,
+        prompt: String,
+        jsonSchema: [String: Any],
+        modelId: String? = nil,
+        temperature: Double = 0.2
+    ) async throws -> (jsonString: String, tokenUsage: GeminiTokenUsage?) {
+        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingDocSummaryModelId") ?? "gemini-2.0-flash"
+        let apiKey = try getAPIKey()
+
+        // Step 1: Upload PDF to Files API
+        Logger.info("📤 Uploading PDF for structured analysis: \(filename)", category: .ai)
+        let uploadedFile = try await uploadFile(data: pdfData, mimeType: "application/pdf", displayName: filename)
+
+        // Step 2: Wait for file to be ready if needed
+        var fileURI = uploadedFile.uri
+        if uploadedFile.state != "ACTIVE" {
+            Logger.info("⏳ Waiting for file processing...", category: .ai)
+            let readyFile = try await waitForFileProcessing(fileName: uploadedFile.name)
+            fileURI = readyFile.uri
+        }
+
+        defer {
+            // Clean up uploaded file after processing
+            Task {
+                try? await self.deleteFile(fileName: uploadedFile.name)
+            }
+        }
+
+        // Step 3: Generate content with structured output
+        let url = URL(string: "\(baseURL)/v1beta/models/\(effectiveModelId):generateContent?key=\(apiKey)")!
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let requestBody: [String: Any] = [
+            "contents": [
+                [
+                    "parts": [
+                        ["file_data": ["mime_type": "application/pdf", "file_uri": fileURI]],
+                        ["text": prompt]
+                    ]
+                ]
+            ],
+            "generationConfig": [
+                "temperature": temperature,
+                "maxOutputTokens": 16384,
+                "responseMimeType": "application/json",
+                "responseSchema": jsonSchema
+            ]
+        ]
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+
+        Logger.info("📝 Generating structured JSON from PDF with \(effectiveModelId)", category: .ai)
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw GoogleAIError.invalidResponse
+        }
+
+        if httpResponse.statusCode != 200 {
+            let errorMsg = String(data: data, encoding: .utf8) ?? "Unknown error"
+            Logger.error("❌ Structured PDF analysis failed: \(errorMsg)", category: .ai)
+            throw GoogleAIError.generateFailed(errorMsg)
+        }
+
+        // Parse response
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let candidates = json["candidates"] as? [[String: Any]],
+              let firstCandidate = candidates.first,
+              let content = firstCandidate["content"] as? [String: Any],
+              let parts = content["parts"] as? [[String: Any]],
+              let firstPart = parts.first,
+              let text = firstPart["text"] as? String else {
+            throw GoogleAIError.invalidResponse
+        }
+
+        // Parse token usage
+        var tokenUsage: GeminiTokenUsage?
+        if let usageMetadata = json["usageMetadata"] as? [String: Any] {
+            let promptTokens = usageMetadata["promptTokenCount"] as? Int ?? 0
+            let candidatesTokens = usageMetadata["candidatesTokenCount"] as? Int ?? 0
+            let totalTokens = usageMetadata["totalTokenCount"] as? Int ?? 0
+            tokenUsage = GeminiTokenUsage(
+                promptTokenCount: promptTokens,
+                candidatesTokenCount: candidatesTokens,
+                totalTokenCount: totalTokens
+            )
+            Logger.info("📊 Token usage: prompt=\(promptTokens), output=\(candidatesTokens), total=\(totalTokens)", category: .ai)
+        }
+
+        // Sanitize: Gemini sometimes returns U+23CE (⏎ RETURN SYMBOL) instead of actual newlines
+        var jsonString = text.replacingOccurrences(of: "\u{23CE}", with: "\n")
+        jsonString = jsonString.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        Logger.info("✅ Structured JSON from PDF generated (\(jsonString.count) chars)", category: .ai)
+
+        return (jsonString, tokenUsage)
+    }
 }

@@ -110,6 +110,85 @@ actor CardInventoryService {
         }
     }
 
+    /// Generate card inventory directly from a PDF file.
+    /// Sends the full PDF to Gemini via Files API for maximum content coverage.
+    /// Use this for non-resume documents where full fidelity matters more than text extraction.
+    /// - Parameters:
+    ///   - documentId: Unique document identifier
+    ///   - filename: Original filename
+    ///   - pdfData: Raw PDF file data
+    /// - Returns: DocumentInventory with proposed cards
+    func inventoryDocumentFromPDF(
+        documentId: String,
+        filename: String,
+        pdfData: Data
+    ) async throws -> DocumentInventory {
+        guard let facade = llmFacade else {
+            throw CardInventoryError.llmNotConfigured
+        }
+
+        let prompt = CardInventoryPrompts.inventoryPromptForPDF(
+            documentId: documentId,
+            filename: filename
+        )
+
+        let sizeMB = Double(pdfData.count) / 1_048_576.0
+        Logger.info("📦 Generating card inventory from PDF: \(filename) (\(String(format: "%.1f", sizeMB)) MB)", category: .ai)
+
+        // Call LLM with PDF directly using Files API + structured output
+        let (jsonString, tokenUsage) = try await facade.generateStructuredJSONFromPDF(
+            pdfData: pdfData,
+            filename: filename,
+            prompt: prompt,
+            jsonSchema: CardInventoryPrompts.jsonSchema
+        )
+
+        if let usage = tokenUsage {
+            Logger.info("📊 PDF inventory tokens: input=\(usage.promptTokenCount), output=\(usage.candidatesTokenCount)", category: .ai)
+        }
+
+        Logger.info("📦 Raw PDF inventory JSON (\(jsonString.count) chars): \(jsonString.prefix(500))...", category: .ai)
+
+        guard let jsonData = jsonString.data(using: .utf8) else {
+            throw CardInventoryError.invalidResponse
+        }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        do {
+            let response = try decoder.decode(LLMInventoryResponse.self, from: jsonData)
+
+            let inventory = DocumentInventory(
+                documentId: documentId,
+                documentType: response.documentType,
+                proposedCards: response.proposedCards,
+                generatedAt: Date()
+            )
+            Logger.info("✅ PDF card inventory generated: \(inventory.proposedCards.count) potential cards", category: .ai)
+            return inventory
+        } catch {
+            if let decodingError = error as? DecodingError {
+                switch decodingError {
+                case .keyNotFound(let key, let context):
+                    Logger.error("❌ Missing key '\(key.stringValue)' at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))", category: .ai)
+                case .typeMismatch(let type, let context):
+                    Logger.error("❌ Type mismatch for \(type) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))", category: .ai)
+                case .valueNotFound(let type, let context):
+                    Logger.error("❌ Value not found for \(type) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))", category: .ai)
+                case .dataCorrupted(let context):
+                    Logger.error("❌ Data corrupted at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))", category: .ai)
+                @unknown default:
+                    Logger.error("❌ Unknown decoding error: \(error.localizedDescription)", category: .ai)
+                }
+            } else {
+                Logger.error("❌ Failed to decode PDF inventory JSON: \(error.localizedDescription)", category: .ai)
+            }
+            Logger.debug("📦 Raw JSON was: \(jsonString.prefix(1000))...", category: .ai)
+            throw CardInventoryError.invalidResponse
+        }
+    }
+
     enum CardInventoryError: Error, LocalizedError {
         case llmNotConfigured
         case invalidResponse

@@ -11,7 +11,7 @@ import Foundation
 /// Builds prompts and schemas for document card inventory generation
 enum CardInventoryPrompts {
 
-    /// Build the inventory prompt for a document.
+    /// Build the inventory prompt for a document with extracted text.
     /// Loads template from Resources/Prompts/card_inventory_prompt.txt
     /// - Parameters:
     ///   - documentId: Unique document identifier
@@ -31,6 +31,68 @@ enum CardInventoryPrompts {
                 "EXTRACTED_CONTENT": content
             ]
         )
+    }
+
+    /// Build the inventory prompt for direct PDF analysis.
+    /// The PDF is attached separately via Files API, so this prompt focuses on instructions.
+    /// - Parameters:
+    ///   - documentId: Unique document identifier
+    ///   - filename: Document filename
+    /// - Returns: Formatted prompt string for PDF analysis
+    static func inventoryPromptForPDF(
+        documentId: String,
+        filename: String
+    ) -> String {
+        return """
+        Analyze the attached PDF document and generate a comprehensive inventory of potential knowledge cards.
+
+        Document ID: \(documentId)
+        Filename: \(filename)
+
+        ## Your Task
+
+        Read the ENTIRE document thoroughly. This is a professional document that may contain:
+        - Employment history and job responsibilities
+        - Projects and technical achievements
+        - Skills and technologies used
+        - Educational background
+        - Research, publications, or academic work
+        - Quantified outcomes and metrics
+
+        ## Document Type Classification
+
+        First, determine the document type from the content. Valid types are:
+        - resume, personnel_file, technical_report, cover_letter, reference_letter
+        - dissertation, grant_proposal, project_documentation, git_analysis
+        - presentation, certificate, transcript, or other
+
+        ## Card Types to Identify
+
+        For each potential knowledge card, determine its type:
+        - **employment**: Job positions, roles, responsibilities
+        - **project**: Specific projects, initiatives, deliverables
+        - **skill**: Technical skills, tools, methodologies, competencies
+        - **achievement**: Awards, recognition, quantified accomplishments
+        - **education**: Degrees, certifications, training, courses
+
+        ## Extraction Guidelines
+
+        For EACH potential card:
+        1. **proposed_title**: Create a specific, descriptive title (e.g., "Senior Software Engineer at Google" not just "Software Engineer")
+        2. **evidence_strength**: Rate as "primary" (main source), "supporting" (adds detail), or "mention" (brief reference)
+        3. **evidence_locations**: Note where in the document this appears (page numbers, section names, chapter titles)
+        4. **key_facts**: Extract specific facts - names, dates, numbers, responsibilities. Be thorough.
+        5. **technologies**: List all technologies, tools, frameworks, methodologies mentioned
+        6. **quantified_outcomes**: Capture ALL metrics, percentages, dollar amounts, scale indicators
+        7. **cross_references**: Note relationships to other potential cards
+
+        ## Important
+
+        - Be EXHAUSTIVE - capture every potential card, even if evidence is limited
+        - Preserve specificity - keep exact numbers, dates, company names, project names
+        - For long documents (dissertations, reports), identify MULTIPLE cards from different sections
+        - Include both explicit achievements and implied skills from context
+        """
     }
 
     /// JSON Schema for DocumentInventory - used by Gemini's native structured output.

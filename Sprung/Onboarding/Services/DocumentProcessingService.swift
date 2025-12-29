@@ -130,14 +130,32 @@ actor DocumentProcessingService {
         }
 
         // Step 4: Generate card inventory (inventory determines document type itself)
+        // For non-resume PDFs, send the full PDF directly to Gemini for maximum fidelity
+        // Resume PDFs still use extracted text since we need the text for timeline building
         statusCallback?("Analyzing document for knowledge cards...")
         var inventory: DocumentInventory?
+        let isPDF = fileURL.pathExtension.lowercased() == "pdf"
+        let isResume = documentType == "resume"
+
         do {
-            inventory = try await inventoryService.inventoryDocument(
-                documentId: artifactId,
-                filename: filename,
-                content: extractedText
-            )
+            if isPDF && !isResume {
+                // Use direct PDF inventory for non-resume documents - Gemini sees full content
+                Logger.info("📄 Using direct PDF inventory (full document access)", category: .ai)
+                let pdfData = try Data(contentsOf: fileURL)
+                inventory = try await inventoryService.inventoryDocumentFromPDF(
+                    documentId: artifactId,
+                    filename: filename,
+                    pdfData: pdfData
+                )
+            } else {
+                // Use text-based inventory for resumes and non-PDFs
+                Logger.info("📄 Using text-based inventory", category: .ai)
+                inventory = try await inventoryService.inventoryDocument(
+                    documentId: artifactId,
+                    filename: filename,
+                    content: extractedText
+                )
+            }
             Logger.info("✅ Card inventory generated: \(inventory?.proposedCards.count ?? 0) potential cards", category: .ai)
         } catch {
             Logger.warning("⚠️ Card inventory generation failed: \(error.localizedDescription)", category: .ai)
