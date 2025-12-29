@@ -14,15 +14,14 @@ struct AskUserSkipToNextPhaseTool: InterviewTool {
     private static let schema: JSONSchema = JSONSchema(
         type: .object,
         description: """
-            Ask user for explicit approval to skip to the next phase when requirements aren't met.
-            Use this when next_phase is blocked (e.g., no knowledge cards generated).
-            Presents a confirmation dialog to the user. If they approve, next_phase becomes unblocked.
-            RETURNS: { "status": "approved" } or { "status": "rejected" }
+            EMERGENCY ONLY - Ask user to override a blocked phase transition.
+            DO NOT USE THIS FOR NORMAL PHASE TRANSITIONS - use next_phase instead.
+            Only call this AFTER next_phase has returned a "blocked" status.
             WORKFLOW:
-            1. next_phase returns blocked with reason "no_knowledge_cards"
-            2. Call this tool to ask user if they want to proceed anyway
-            3. If approved, call next_phase again - it will now succeed
-            4. If rejected, continue trying to generate knowledge cards
+            1. Call next_phase first (ALWAYS try this first)
+            2. If next_phase returns blocked, THEN call this tool
+            3. If user approves, call next_phase again
+            RETURNS: { "status": "approved" } or { "status": "rejected" }
             """,
         properties: [
             "reason": JSONSchema(
@@ -42,7 +41,7 @@ struct AskUserSkipToNextPhaseTool: InterviewTool {
 
     var name: String { OnboardingToolName.askUserSkipToNextPhase.rawValue }
     var description: String {
-        "Ask user for explicit approval to skip to next phase when blocked by missing requirements."
+        "EMERGENCY ONLY: Ask user to override a blocked next_phase. Call next_phase FIRST - only use this if next_phase returns blocked."
     }
     var parameters: JSONSchema { Self.schema }
 

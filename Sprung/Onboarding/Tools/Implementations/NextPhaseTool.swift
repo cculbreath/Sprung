@@ -26,10 +26,10 @@ struct NextPhaseTool: InterviewTool {
     var name: String { OnboardingToolName.nextPhase.rawValue }
     var description: String {
         """
-        Skip to the next interview phase. Use this when user wants to skip remaining steps \
-        or when stuck. Normal progression uses phase-specific tools (submit_for_validation, \
-        configure_enabled_sections, dispatch_kc_agents, etc.). Returns {status, new_phase, \
-        skipped_objectives, next_required_tool}.
+        Advance to the next interview phase. THIS IS THE PRIMARY TOOL FOR PHASE TRANSITIONS. \
+        Call this when phase objectives are complete or user is ready to proceed. \
+        Returns {status, new_phase, next_required_tool}. If blocked, the response will \
+        explain why - only then consider ask_user_skip_to_next_phase as a last resort.
         """
     }
     var parameters: JSONSchema { Self.schema }
