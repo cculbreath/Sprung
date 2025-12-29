@@ -1,0 +1,58 @@
+# Knowledge Card Inventory
+
+Analyze this document and identify ALL distinct knowledge cards that can be extracted.
+
+## Document Context
+- Document ID: {DOC_ID}
+- Filename: {FILENAME}
+
+## Document Content
+{EXTRACTED_CONTENT}
+
+---
+
+## Your Task
+
+First, determine the document type from the content. Valid types are:
+- resume, personnel_file, technical_report, cover_letter, reference_letter
+- dissertation, grant_proposal, project_documentation, git_analysis
+- presentation, certificate, transcript, or other
+
+Then identify every distinct knowledge card this document provides evidence for. Be EXHAUSTIVE — it's better to propose too many cards than to miss important content.
+
+## Card Types
+
+**employment**: A role/position with employer, title, dates
+- One card per distinct role (promotions = separate cards if responsibilities changed significantly)
+- Include: scope, team, responsibilities, technologies, outcomes
+
+**project**: A specific initiative, product, system, or deliverable
+- Must be nameable ("Physics Cloud LMS", not "web development work")
+- Include: what it was, your role, technologies, outcomes, timeline
+
+**skill**: A technical or professional capability
+- Must be demonstrable from this document (not just mentioned)
+- Include: proficiency evidence, contexts where applied, related technologies
+
+**achievement**: A publication, award, certification, presentation, or notable accomplishment
+- Must be specific and verifiable
+- Include: what, when, where, impact
+
+**education**: A degree, training program, or credential
+- Include: institution, dates, field, notable details
+
+## Evidence Strength Definitions
+
+- **primary**: This document is THE main source for this card. Contains detailed, first-hand information.
+- **supporting**: This document adds valuable detail but another doc is likely the primary source.
+- **mention**: This document references the topic but with minimal detail.
+
+## Critical Rules
+
+1. Be specific in titles: "Allen-Bradley PLC Control System Design" not "automation work"
+2. Preserve all numbers: "47 microservices", "$2.3M budget", "12-person team"
+3. Preserve all names: project names, tool names, company names
+4. One card per distinct topic: Don't bundle unrelated things
+5. Skills require evidence: Don't list a skill unless this doc demonstrates proficiency
+6. Projects need scope: A project card should describe what was built/delivered
+7. Include implicit skills: If doc shows PLC programming, propose a skill card even if not explicitly listed
