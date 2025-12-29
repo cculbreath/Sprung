@@ -31,6 +31,12 @@ final class UIResponseCoordinator {
             let approved = selectionIds.contains("approve")
             await state.setUserApprovedKCSkip(approved)
             Logger.info("📋 Skip phase approval: \(approved ? "approved" : "rejected")", category: .ai)
+
+            // Force next_phase tool call if approved - prevents LLM from looping
+            if approved {
+                await state.setPendingForcedToolChoice(OnboardingToolName.nextPhase.rawValue)
+                Logger.info("🎯 Forcing toolChoice to next_phase after skip approval", category: .ai)
+            }
         }
 
         // Clear the choice prompt and waiting state

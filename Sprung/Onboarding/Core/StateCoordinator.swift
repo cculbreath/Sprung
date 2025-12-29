@@ -640,6 +640,12 @@ actor StateCoordinator: OnboardingEventEmitter {
         await llmStateManager.popPendingForcedToolChoice()
     }
 
+    /// Set a pending forced tool choice for the next LLM request.
+    /// Used to force a specific tool call after a UI tool completes.
+    func setPendingForcedToolChoice(_ toolName: String) async {
+        await llmStateManager.setPendingForcedToolChoice(toolName)
+    }
+
     /// Check if there are queued developer messages
     func hasQueuedDeveloperMessages() async -> Bool {
         await llmStateManager.hasQueuedDeveloperMessages()
