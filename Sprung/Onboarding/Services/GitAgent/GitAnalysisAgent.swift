@@ -50,30 +50,9 @@ enum GitAgentError: LocalizedError {
 
 // MARK: - Analysis Result
 
-/// Comprehensive git repository analysis result matching the complete_analysis tool schema
-struct GitAnalysisResult: Codable {
-    let repositorySummary: CompleteAnalysisTool.RepositorySummary
-    let technicalSkills: [CompleteAnalysisTool.TechnicalSkill]
-    let aiCollaborationProfile: CompleteAnalysisTool.AICollaborationProfile
-    let architecturalCompetencies: [CompleteAnalysisTool.ArchitecturalCompetency]?
-    let professionalAttributes: [CompleteAnalysisTool.ProfessionalAttribute]?
-    let quantitativeMetrics: CompleteAnalysisTool.QuantitativeMetrics?
-    let notableAchievements: [CompleteAnalysisTool.NotableAchievement]
-    let keywordCloud: CompleteAnalysisTool.KeywordCloud
-    let evidenceFiles: [String]
-
-    enum CodingKeys: String, CodingKey {
-        case repositorySummary = "repository_summary"
-        case technicalSkills = "technical_skills"
-        case aiCollaborationProfile = "ai_collaboration_profile"
-        case architecturalCompetencies = "architectural_competencies"
-        case professionalAttributes = "professional_attributes"
-        case quantitativeMetrics = "quantitative_metrics"
-        case notableAchievements = "notable_achievements"
-        case keywordCloud = "keyword_cloud"
-        case evidenceFiles = "evidence_files"
-    }
-}
+/// Git repository analysis now outputs DocumentInventory format for unified card pipeline.
+/// This typealias maintains backward compatibility while using the standard inventory format.
+typealias GitAnalysisResult = DocumentInventory
 
 // MARK: - Git Analysis Agent
 
@@ -539,16 +518,28 @@ class GitAnalysisAgent {
 
         do {
             let params = try JSONDecoder().decode(CompleteAnalysisTool.Parameters.self, from: data)
-            return GitAnalysisResult(
-                repositorySummary: params.repositorySummary,
-                technicalSkills: params.technicalSkills,
-                aiCollaborationProfile: params.aiCollaborationProfile,
-                architecturalCompetencies: params.architecturalCompetencies,
-                professionalAttributes: params.professionalAttributes,
-                quantitativeMetrics: params.quantitativeMetrics,
-                notableAchievements: params.notableAchievements,
-                keywordCloud: params.keywordCloud,
-                evidenceFiles: params.evidenceFiles
+
+            // Convert to DocumentInventory.ProposedCardEntry format
+            let proposedCards: [DocumentInventory.ProposedCardEntry] = params.cards.map { card in
+                DocumentInventory.ProposedCardEntry(
+                    cardType: DocumentInventory.ProposedCardEntry.CardType(rawValue: card.cardType) ?? .skill,
+                    proposedTitle: card.proposedTitle,
+                    evidenceStrength: DocumentInventory.ProposedCardEntry.EvidenceStrength(rawValue: card.evidenceStrength) ?? .primary,
+                    evidenceLocations: card.evidenceLocations,
+                    keyFacts: card.keyFacts,
+                    technologies: card.technologies,
+                    quantifiedOutcomes: card.quantifiedOutcomes,
+                    dateRange: card.dateRange,
+                    crossReferences: card.crossReferences,
+                    extractionNotes: card.extractionNotes
+                )
+            }
+
+            return DocumentInventory(
+                documentId: repoPath.lastPathComponent,  // Use repo name as document ID
+                documentType: params.documentType,
+                proposedCards: proposedCards,
+                generatedAt: Date()
             )
         } catch {
             throw GitAgentError.invalidToolCall("Failed to decode complete_analysis: \(error.localizedDescription)")

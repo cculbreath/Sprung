@@ -151,6 +151,13 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
             await eventBus.publish(.extractionStateChanged(true, statusMessage: "Creating artifact record..."))
 
             // Step 3: Create artifact record
+            // The analysis is now a DocumentInventory - encode it as card_inventory JSON string
+            let encoder = JSONEncoder()
+            encoder.keyEncodingStrategy = .convertToSnakeCase
+            encoder.dateEncodingStrategy = .iso8601
+            let inventoryData = try encoder.encode(analysis)
+            let inventoryString = String(data: inventoryData, encoding: .utf8) ?? "{}"
+
             var record = JSON()
             record["id"].string = UUID().uuidString
             record["type"].string = "git_analysis"
@@ -161,47 +168,44 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
             if let planItemId = planItemId {
                 record["plan_item_id"].string = planItemId
             }
-            record["analysis"] = analysis
+
+            // Store card_inventory as JSON string (same format as document artifacts)
+            record["card_inventory"].string = inventoryString
             record["raw_data"] = gitData
 
-            // Store analysis in metadata for SwiftData persistence
-            // persistArtifact reads record["metadata"] not record["analysis"]
+            // Store git metadata for SwiftData persistence
             var metadata = JSON()
-            metadata["analysis"] = analysis
             metadata["git_metadata"] = gitData
             record["metadata"] = metadata
 
-            // Set extracted_text from repository_summary.description (correct path after Codable encoding)
-            // The analysis JSON uses snake_case keys from CodingKeys
-            let repoDescription = analysis["repository_summary"]["description"].stringValue
-            if !repoDescription.isEmpty {
-                // Build comprehensive extracted_text for artifact display and persistence
-                var extractedParts: [String] = []
-                extractedParts.append("## Repository: \(repoName)")
-                extractedParts.append(repoDescription)
+            // Build extracted_text from card inventory for display
+            var extractedParts: [String] = []
+            extractedParts.append("## Repository: \(repoName)")
 
-                // Add key skills from technical_skills array
-                if let skills = analysis["technical_skills"].array, !skills.isEmpty {
-                    let skillNames = skills.prefix(15).compactMap { $0["skill_name"].string }
-                    if !skillNames.isEmpty {
-                        extractedParts.append("\n## Key Technologies\n" + skillNames.joined(separator: ", "))
-                    }
+            // Find project cards for description
+            let projectCards = analysis.proposedCards.filter { $0.cardType == .project }
+            if let mainProject = projectCards.first {
+                if !mainProject.keyFacts.isEmpty {
+                    extractedParts.append(mainProject.keyFacts.joined(separator: ". "))
                 }
-
-                // Add notable achievements
-                if let achievements = analysis["notable_achievements"].array, !achievements.isEmpty {
-                    let bullets = achievements.prefix(5).compactMap { $0["resume_bullet"].string }
-                    if !bullets.isEmpty {
-                        extractedParts.append("\n## Notable Achievements\n" + bullets.map { "• \($0)" }.joined(separator: "\n"))
-                    }
-                }
-
-                record["extracted_text"].string = extractedParts.joined(separator: "\n")
-            } else {
-                // Fallback: minimal summary if repository_summary.description is missing
-                record["extracted_text"].string = "Git repository analysis for \(repoName)"
-                Logger.warning("⚠️ Git analysis missing repository_summary.description", category: .ai)
             }
+
+            // Add key technologies from skill cards
+            let skillCards = analysis.proposedCards.filter { $0.cardType == .skill }
+            if !skillCards.isEmpty {
+                let skillNames = skillCards.prefix(15).map { $0.proposedTitle }
+                extractedParts.append("\n## Key Technologies\n" + skillNames.joined(separator: ", "))
+            }
+
+            // Add achievements
+            let achievementCards = analysis.proposedCards.filter { $0.cardType == .achievement }
+            if !achievementCards.isEmpty {
+                let bullets = achievementCards.prefix(5).map { "• \($0.proposedTitle)" }
+                extractedParts.append("\n## Notable Achievements\n" + bullets.joined(separator: "\n"))
+            }
+
+            record["extracted_text"].string = extractedParts.joined(separator: "\n")
+            Logger.info("✅ Git card inventory: \(analysis.proposedCards.count) cards (\(skillCards.count) skills, \(projectCards.count) projects, \(achievementCards.count) achievements)", category: .ai)
 
             let result = IngestionResult(
                 artifactId: record["id"].stringValue,
@@ -350,7 +354,7 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
 
     // MARK: - LLM Analysis Agent
 
-    private func runAnalysisAgent(gitData: JSON, repoName: String, repoURL: URL, agentId: String, tracker: AgentActivityTracker?) async throws -> JSON {
+    private func runAnalysisAgent(gitData: JSON, repoName: String, repoURL: URL, agentId: String, tracker: AgentActivityTracker?) async throws -> GitAnalysisResult {
         Logger.info("🔬 [GitIngest] runAnalysisAgent entered, checking llmFacade...", category: .ai)
         guard let facade = llmFacade else {
             Logger.error("🔬 [GitIngest] llmFacade is nil!", category: .ai)
@@ -369,7 +373,7 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
 
         Logger.info("🤖 Starting multi-turn git analysis agent with model: \(modelId)", category: .ai)
 
-        // Run the multi-turn analysis agent
+        // Run the multi-turn analysis agent - returns DocumentInventory directly
         let analysisResult = try await runGitAnalysisAgent(
             facade: facade,
             repoPath: repoURL,
@@ -380,21 +384,8 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
             tracker: tracker
         )
 
-        // Convert GitAnalysisResult to JSON using Codable (CodingKeys handle snake_case)
-        var result: JSON
-        do {
-            let data = try JSONEncoder().encode(analysisResult)
-            result = try JSON(data: data)
-        } catch {
-            Logger.error("Failed to encode GitAnalysisResult: \(error)", category: .ai)
-            result = JSON()
-        }
-
-        // Merge in the original git metadata
-        result["git_metadata"] = gitData
-
         Logger.info("✅ Multi-turn git analysis agent completed", category: .ai)
-        return result
+        return analysisResult
     }
 
     // MARK: - Multi-Turn Agent Execution
