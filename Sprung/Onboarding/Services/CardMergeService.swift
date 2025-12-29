@@ -42,13 +42,14 @@ actor CardMergeService {
             }
 
             do {
+                // Don't use .convertFromSnakeCase - DocumentInventory has explicit CodingKeys
                 let decoder = JSONDecoder()
-                decoder.keyDecodingStrategy = .convertFromSnakeCase
                 decoder.dateDecodingStrategy = .iso8601
                 let inventory = try decoder.decode(DocumentInventory.self, from: inventoryData)
                 inventories.append(inventory)
+                Logger.debug("📦 Decoded inventory for artifact: \(artifact["id"].stringValue) with \(inventory.proposedCards.count) cards", category: .ai)
             } catch {
-                Logger.warning("⚠️ Failed to decode inventory for artifact: \(artifact["id"].stringValue)", category: .ai)
+                Logger.warning("⚠️ Failed to decode inventory for artifact: \(artifact["id"].stringValue): \(error.localizedDescription)", category: .ai)
             }
         }
 
