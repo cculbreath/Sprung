@@ -24,7 +24,6 @@ class StandaloneKCCoordinator {
     enum Status: Equatable {
         case idle
         case extracting(current: Int, total: Int, filename: String)
-        case classifying
         case inventorying
         case merging
         case analyzingMetadata
@@ -36,7 +35,7 @@ class StandaloneKCCoordinator {
             switch self {
             case .idle, .completed, .failed:
                 return false
-            case .extracting, .classifying, .inventorying, .merging, .analyzingMetadata, .generatingCard:
+            case .extracting, .inventorying, .merging, .analyzingMetadata, .generatingCard:
                 return true
             }
         }
@@ -47,8 +46,6 @@ class StandaloneKCCoordinator {
                 return "Ready"
             case .extracting(let current, let total, let filename):
                 return "Extracting (\(current)/\(total)): \(filename)"
-            case .classifying:
-                return "Classifying documents..."
             case .inventorying:
                 return "Generating card inventory..."
             case .merging:
@@ -93,7 +90,6 @@ class StandaloneKCCoordinator {
     private let repository = InMemoryArtifactRepository()
     private var extractionService: DocumentExtractionService?
     private var metadataService: MetadataExtractionService?
-    private var classificationService: DocumentClassificationService?
     private var inventoryService: CardInventoryService?
     private weak var llmFacade: LLMFacade?
     private weak var resRefStore: ResRefStore?
@@ -115,7 +111,6 @@ class StandaloneKCCoordinator {
         // Initialize services
         self.extractionService = DocumentExtractionService(llmFacade: llmFacade, eventBus: nil)
         self.metadataService = MetadataExtractionService(llmFacade: llmFacade)
-        self.classificationService = DocumentClassificationService(llmFacade: llmFacade)
         self.inventoryService = CardInventoryService(llmFacade: llmFacade)
     }
 
@@ -317,7 +312,7 @@ class StandaloneKCCoordinator {
         }
 
         // Phase 2: Classify and inventory each document
-        status = .classifying
+        status = .inventorying
         var inventories: [DocumentInventory] = []
 
         for artifact in allArtifacts {
@@ -325,23 +320,13 @@ class StandaloneKCCoordinator {
             let filename = artifact["filename"].stringValue
             let content = artifact["extracted_text"].stringValue
 
-            // Classify the document
-            let classification: DocumentClassification
-            if let service = classificationService {
-                classification = try await service.classify(content: content, filename: filename)
-            } else {
-                classification = .default(filename: filename)
-            }
-
-            // Inventory the document for potential cards
-            status = .inventorying
+            // Inventory the document for potential cards (inventory determines document type itself)
             if let service = inventoryService {
                 do {
                     let inventory = try await service.inventoryDocument(
                         documentId: docId,
                         filename: filename,
-                        content: content,
-                        classification: classification
+                        content: content
                     )
                     inventories.append(inventory)
                 } catch {

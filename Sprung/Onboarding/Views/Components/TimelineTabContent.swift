@@ -40,20 +40,31 @@ struct TimelineTabContent: View {
         // Access timelineUIChangeToken in body to establish @Observable tracking
         let _ = coordinator.ui.timelineUIChangeToken
 
-        VStack(alignment: .leading, spacing: 12) {
-            if canEdit {
-                header
+        VStack(spacing: 0) {
+            // Scrollable content area
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    if canEdit {
+                        header
+                    }
+
+                    // Cards list
+                    if canEdit {
+                        editableCardsList
+                    } else {
+                        browseCardsList
+                    }
+                }
+                .padding(.horizontal, 4)
             }
 
-            // Cards list
+            // Sticky footer (outside ScrollView)
             if canEdit {
-                editableCardsList
-            } else {
-                browseCardsList
-            }
-
-            if canEdit {
+                Divider()
                 footerButtons
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 8)
+                    .background(Color(nsColor: .windowBackgroundColor))
             }
         }
         .onAppear {
@@ -411,6 +422,16 @@ struct TimelineCardRow: View {
             }
 
             HStack(spacing: 6) {
+                if let location = experience["location"].string, !location.isEmpty {
+                    Text(location)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+
+                    Text("•")
+                        .font(.caption2)
+                        .foregroundStyle(.quaternary)
+                }
+
                 if let start = experience["start"].string {
                     Text(formatDate(start))
                         .font(.caption2)

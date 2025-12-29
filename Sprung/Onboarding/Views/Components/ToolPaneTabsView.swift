@@ -136,18 +136,16 @@ struct ToolPaneTabsView<InterviewContent: View>: View {
             interviewContent()
                 .padding(.horizontal, 4)
         case .timeline:
-            ScrollView {
-                TimelineTabContent(
-                    coordinator: coordinator,
-                    mode: coordinator.ui.isTimelineEditorActive ? .editor : .browse,
-                    onDoneWithTimeline: {
-                        Task {
-                            await coordinator.completeTimelineEditingAndRequestValidation()
-                        }
+            // TimelineTabContent manages its own scrolling with sticky footer
+            TimelineTabContent(
+                coordinator: coordinator,
+                mode: coordinator.ui.isTimelineEditorActive ? .editor : .browse,
+                onDoneWithTimeline: {
+                    Task {
+                        await coordinator.completeTimelineEditingAndRequestValidation()
                     }
-                )
-                .padding(.horizontal, 4)
-            }
+                }
+            )
         case .artifacts:
             ScrollView {
                 ArtifactsTabContent(coordinator: coordinator)

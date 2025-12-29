@@ -16,30 +16,18 @@ enum CardInventoryPrompts {
     /// - Parameters:
     ///   - documentId: Unique document identifier
     ///   - filename: Document filename
-    ///   - documentType: Document type from classification
-    ///   - classification: Full classification result
     ///   - content: Extracted document content
     /// - Returns: Formatted prompt string
     static func inventoryPrompt(
         documentId: String,
         filename: String,
-        documentType: String,
-        classification: DocumentClassification,
         content: String
     ) -> String {
-        let estimatedYield = "employment=\(classification.estimatedCardYield.employment), " +
-            "project=\(classification.estimatedCardYield.project), " +
-            "skill=\(classification.estimatedCardYield.skill), " +
-            "achievement=\(classification.estimatedCardYield.achievement), " +
-            "education=\(classification.estimatedCardYield.education)"
-
         return PromptLibrary.substitute(
             template: PromptLibrary.cardInventoryTemplate,
             replacements: [
                 "DOC_ID": documentId,
                 "FILENAME": filename,
-                "DOCUMENT_TYPE": documentType,
-                "ESTIMATED_YIELD": estimatedYield,
                 "EXTRACTED_CONTENT": content
             ]
         )

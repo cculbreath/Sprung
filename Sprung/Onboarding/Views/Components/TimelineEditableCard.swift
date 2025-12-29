@@ -78,8 +78,18 @@ struct TimelineEditableCard: View {
                 }
             }
 
-            // Date range
+            // Location & Date range
             HStack(spacing: 6) {
+                if !entry.location.isEmpty {
+                    Text(entry.location)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+
+                    Text("•")
+                        .font(.caption2)
+                        .foregroundStyle(.quaternary)
+                }
+
                 if !entry.start.isEmpty {
                     Text(formatDate(entry.start))
                         .font(.caption2)

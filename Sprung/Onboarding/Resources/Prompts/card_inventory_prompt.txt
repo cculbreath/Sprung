@@ -5,8 +5,6 @@ Analyze this document and identify ALL distinct knowledge cards that can be extr
 ## Document Context
 - Document ID: {DOC_ID}
 - Filename: {FILENAME}
-- Type: {DOCUMENT_TYPE}
-- Estimated card yield: {ESTIMATED_YIELD}
 
 ## Document Content
 {EXTRACTED_CONTENT}
@@ -15,7 +13,12 @@ Analyze this document and identify ALL distinct knowledge cards that can be extr
 
 ## Your Task
 
-Identify every distinct knowledge card this document provides evidence for. Be EXHAUSTIVE — it's better to propose too many cards than to miss important content.
+First, determine the document type from the content. Valid types are:
+- resume, personnel_file, technical_report, cover_letter, reference_letter
+- dissertation, grant_proposal, project_documentation, git_analysis
+- presentation, certificate, transcript, or other
+
+Then identify every distinct knowledge card this document provides evidence for. Be EXHAUSTIVE — it's better to propose too many cards than to miss important content.
 
 ## Card Types
 

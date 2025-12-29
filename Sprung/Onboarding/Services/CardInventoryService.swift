@@ -34,17 +34,16 @@ actor CardInventoryService {
 
     /// Generate card inventory for a document.
     /// Uses Gemini's native structured output mode with JSON schema for guaranteed valid output.
+    /// The inventory service now determines document type itself from full content.
     /// - Parameters:
     ///   - documentId: Unique document identifier
     ///   - filename: Original filename
     ///   - content: Full extracted text
-    ///   - classification: Document classification result
     /// - Returns: DocumentInventory with proposed cards
     func inventoryDocument(
         documentId: String,
         filename: String,
-        content: String,
-        classification: DocumentClassification
+        content: String
     ) async throws -> DocumentInventory {
         guard let facade = llmFacade else {
             throw CardInventoryError.llmNotConfigured
@@ -53,8 +52,6 @@ actor CardInventoryService {
         let prompt = CardInventoryPrompts.inventoryPrompt(
             documentId: documentId,
             filename: filename,
-            documentType: classification.documentType.rawValue,
-            classification: classification,
             content: content
         )
 

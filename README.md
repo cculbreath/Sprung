@@ -56,6 +56,14 @@ Sprung is a native macOS copilot for job hunting. It keeps your data local, buil
 - **CoverRefs**: Writing samples and background facts for cover letters, including dossier entries from onboarding.
 - **Artifact pipeline**: Document and repo ingestion feed artifacts → knowledge cards → resumes and covers.
 
+### Discovery (Job Search Operations)
+- **Daily task management**: AI-generated daily job search tasks based on user goals and current progress. Focus area customization (balanced, applications-heavy, networking-heavy) with time tracking and idle detection.
+- **Job source discovery**: AI-powered discovery of job boards and career websites via web search. URL validation, visit tracking, and categorization (job boards, recruiter sites, company career pages).
+- **Networking event pipeline**: AI discovery and evaluation of professional events with recommendation levels. Pre-event prep (elevator pitch, talking points, company research) and post-event debrief capture (contacts, ratings, follow-ups).
+- **Professional networking CRM**: Contact database with relationship warmth levels (cold/warm/hot), interaction history, relationship health assessment, and AI-powered outreach message drafting.
+- **Job search coaching**: Automated three-phase coaching sessions—check-in questions, personalized activity review, and actionable recommendations. Integrates with all job search activity data and supports research tools (knowledge cards, job descriptions, resumes).
+- **Weekly goals & reflection**: Goal setting for applications, networking events, contacts, and time investment with progress tracking and AI-generated weekly reflections.
+
 ### Audio & Reasoning
 - **Reasoning stream overlay**: Displays model reasoning tokens for supported OpenRouter models during long-running flows.
 - **Streaming TTS**: Pause/resume/stop controls with buffering safeguards using `swift-chunked-audio-player`.
@@ -125,6 +133,7 @@ The onboarding interview uses a stricter event-driven stack (documented in `.arc
 Sprung/
 ├── App/                # Entry point, app environment, settings, windows, toolbar
 ├── Onboarding/         # Interview engine (state/event coordinators, phases, tools, ingestion services)
+├── Discovery/          # Job search ops (coaching, daily tasks, sources, events, contacts, CRM)
 ├── Resumes/            # Resume models, AI revision flows, split editor, inspectors
 ├── ResumeTree/         # Tree-based resume data + draggable node UI
 ├── CoverLetters/       # Generation, committee voting, inspector, PDF/TTS, references
@@ -141,10 +150,11 @@ Sprung/
 ## LLM & Provider Support
 
 - **Onboarding**: Uses the in-repo OpenAI adapter (Responses API with tool calling). `instructions` is intentionally `nil`; developer messages carry persistent context.
+- **Discovery**: Dual backend—OpenAI for web search operations (job sources, networking events) with structured output; OpenRouter for coaching and general LLM tasks with tool calling and conversation history.
 - **Resume/Cover/Job tools**: Unified LLM facade primarily backed by OpenRouter (GPT-4o, Claude 3.5, Gemini 1.5, o1/o3, etc.). Model pickers surface available options and capabilities (reasoning support, images).
 - **Document extraction**: Defaults to Gemini (`google/gemini-2.0-flash-001`) with configurable model ID in Settings.
 - **Text-to-speech**: OpenAI TTS with streaming playback.
-- API keys are required for OpenAI (onboarding + TTS), OpenRouter (general LLM tasks), and Gemini (PDF/doc extraction).
+- API keys are required for OpenAI (onboarding + TTS + Discovery web search), OpenRouter (general LLM tasks + Discovery coaching), and Gemini (PDF/doc extraction).
 
 ## Getting Started
 
