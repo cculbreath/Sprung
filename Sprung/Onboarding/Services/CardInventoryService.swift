@@ -12,6 +12,17 @@ import Foundation
 actor CardInventoryService {
     private var llmFacade: LLMFacade?
 
+    /// Private struct for decoding LLM response (excludes client-set fields)
+    private struct LLMInventoryResponse: Codable {
+        let documentType: String
+        let proposedCards: [DocumentInventory.ProposedCardEntry]
+
+        enum CodingKeys: String, CodingKey {
+            case documentType = "document_type"
+            case proposedCards = "cards"
+        }
+    }
+
     init(llmFacade: LLMFacade?) {
         self.llmFacade = llmFacade
         Logger.info("📦 CardInventoryService initialized", category: .ai)
@@ -64,7 +75,16 @@ actor CardInventoryService {
         decoder.dateDecodingStrategy = .iso8601
 
         do {
-            let inventory = try decoder.decode(DocumentInventory.self, from: jsonData)
+            // Decode LLM response (excludes document_id and generated_at)
+            let response = try decoder.decode(LLMInventoryResponse.self, from: jsonData)
+
+            // Construct full DocumentInventory with client-side fields
+            let inventory = DocumentInventory(
+                documentId: documentId,
+                documentType: response.documentType,
+                proposedCards: response.proposedCards,
+                generatedAt: Date()
+            )
             Logger.info("✅ Card inventory generated: \(inventory.proposedCards.count) potential cards", category: .ai)
             return inventory
         } catch {

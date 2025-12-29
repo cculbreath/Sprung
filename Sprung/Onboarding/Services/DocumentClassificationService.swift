@@ -60,8 +60,24 @@ actor DocumentClassificationService {
             Logger.info("✅ Document classified as: \(classification.documentType.rawValue)", category: .ai)
             return classification
         } catch {
-            Logger.warning("⚠️ Failed to decode classification JSON: \(error.localizedDescription)", category: .ai)
-            Logger.debug("📋 Raw JSON was: \(jsonString.prefix(500))...", category: .ai)
+            // Enhanced error logging for debugging schema mismatches
+            if let decodingError = error as? DecodingError {
+                switch decodingError {
+                case .keyNotFound(let key, let context):
+                    Logger.warning("⚠️ Classification missing key '\(key.stringValue)' at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))", category: .ai)
+                case .typeMismatch(let type, let context):
+                    Logger.warning("⚠️ Classification type mismatch for \(type) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))", category: .ai)
+                case .valueNotFound(let type, let context):
+                    Logger.warning("⚠️ Classification value not found for \(type) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))", category: .ai)
+                case .dataCorrupted(let context):
+                    Logger.warning("⚠️ Classification data corrupted at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))", category: .ai)
+                @unknown default:
+                    Logger.warning("⚠️ Unknown classification decoding error: \(error.localizedDescription)", category: .ai)
+                }
+            } else {
+                Logger.warning("⚠️ Failed to decode classification JSON: \(error.localizedDescription)", category: .ai)
+            }
+            Logger.debug("📋 Raw JSON was: \(jsonString.prefix(1000))...", category: .ai)
             return DocumentClassification.default(filename: filename)
         }
     }

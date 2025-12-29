@@ -50,10 +50,6 @@ enum CardInventoryPrompts {
     static let jsonSchema: [String: Any] = [
         "type": "object",
         "properties": [
-            "document_id": [
-                "type": "string",
-                "description": "Unique identifier for this document"
-            ],
             "document_type": [
                 "type": "string",
                 "description": "Type of document"
@@ -116,6 +112,6 @@ enum CardInventoryPrompts {
                 ]
             ]
         ],
-        "required": ["document_id", "document_type", "cards"]
+        "required": ["document_type", "cards"]
     ]
 }

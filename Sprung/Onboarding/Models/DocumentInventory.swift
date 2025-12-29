@@ -18,15 +18,15 @@ struct DocumentInventory: Codable {
         case documentId = "document_id"
         case documentType = "document_type"
         case proposedCards = "cards"
+        case generatedAt = "generated_at"
     }
 
-    /// Custom decoder that sets generatedAt client-side (not from LLM response)
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        documentId = try container.decode(String.self, forKey: .documentId)
-        documentType = try container.decode(String.self, forKey: .documentType)
-        proposedCards = try container.decode([ProposedCardEntry].self, forKey: .proposedCards)
-        generatedAt = Date()  // Always set client-side
+    /// Memberwise initializer for constructing from decoded LLM response
+    init(documentId: String, documentType: String, proposedCards: [ProposedCardEntry], generatedAt: Date) {
+        self.documentId = documentId
+        self.documentType = documentType
+        self.proposedCards = proposedCards
+        self.generatedAt = generatedAt
     }
 
     /// A single proposed card from this document
