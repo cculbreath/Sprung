@@ -256,25 +256,24 @@ final class UIResponseCoordinator {
         // Get current timeline info
         let timelineInfo = await buildTimelineCardSummary()
 
-        // Send developer message forcing submit_for_validation tool
+        // Send user message (not developer) to avoid queue issues - flows through immediately
         var payload = JSON()
-        payload["title"].string = """
-            User has completed timeline editing and clicked "Done with Timeline". \
-            IMMEDIATELY call submit_for_validation with validation_type="skeleton_timeline" \
-            to present the final approval prompt. The user is ready to confirm their timeline.
+        var messageText = """
+            I've completed editing my timeline and clicked "Done with Timeline". \
+            Please call submit_for_validation with validation_type="skeleton_timeline" \
+            to show me the final approval prompt so I can confirm my timeline.
             """
-        var details = JSON()
-        details["action"].string = "call_submit_for_validation"
-        details["validation_type"].string = "skeleton_timeline"
-        details["user_action"].string = "done_with_timeline"
         if !timelineInfo.isEmpty {
-            details["current_cards"].string = timelineInfo
+            messageText += "\n\nCurrent timeline cards:\n\(timelineInfo)"
         }
-        payload["details"] = details
-        payload["toolChoice"].string = OnboardingToolName.submitForValidation.rawValue
+        payload["text"].string = messageText
 
-        await eventBus.publish(.llmSendDeveloperMessage(payload: payload))
-        Logger.info("✅ Timeline editing complete - forcing submit_for_validation", category: .ai)
+        await eventBus.publish(.llmSendUserMessage(
+            payload: payload,
+            isSystemGenerated: true,
+            toolChoice: OnboardingToolName.submitForValidation.rawValue
+        ))
+        Logger.info("✅ Timeline editing complete - requesting submit_for_validation via user message", category: .ai)
     }
     // MARK: - Applicant Profile Handling
     func confirmApplicantProfile(draft: ApplicantProfileDraft) async {

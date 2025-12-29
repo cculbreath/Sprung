@@ -635,6 +635,10 @@ actor GoogleAIService {
             }
         }
 
+        // Sanitize: Gemini sometimes returns U+23CE (⏎ RETURN SYMBOL) instead of actual newlines
+        // This decorative character isn't valid JSON whitespace and causes decode failures
+        jsonString = jsonString.replacingOccurrences(of: "\u{23CE}", with: "\n")
+
         Logger.info("✅ Structured JSON generated (\(jsonString.count) chars)", category: .ai)
         return jsonString.trimmingCharacters(in: .whitespacesAndNewlines)
     }

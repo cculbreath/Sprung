@@ -63,8 +63,8 @@ actor CardInventoryService {
             jsonSchema: CardInventoryPrompts.jsonSchema
         )
 
-        // Debug: Log raw JSON to see what Gemini is returning
-        Logger.debug("📦 Raw inventory JSON: \(jsonString.prefix(2000))", category: .ai)
+        // Log raw JSON to see what Gemini is returning (INFO level for visibility)
+        Logger.info("📦 Raw inventory JSON (\(jsonString.count) chars): \(jsonString.prefix(500))...", category: .ai)
 
         guard let jsonData = jsonString.data(using: .utf8) else {
             throw CardInventoryError.invalidResponse
