@@ -66,12 +66,15 @@ actor CardInventoryService {
             jsonSchema: CardInventoryPrompts.jsonSchema
         )
 
+        // Debug: Log raw JSON to see what Gemini is returning
+        Logger.debug("📦 Raw inventory JSON: \(jsonString.prefix(2000))", category: .ai)
+
         guard let jsonData = jsonString.data(using: .utf8) else {
             throw CardInventoryError.invalidResponse
         }
 
+        // Don't use convertFromSnakeCase - we have explicit CodingKeys that handle the mapping
         let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
         decoder.dateDecodingStrategy = .iso8601
 
         do {

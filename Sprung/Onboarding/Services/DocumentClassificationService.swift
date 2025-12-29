@@ -47,13 +47,16 @@ actor DocumentClassificationService {
             jsonSchema: DocumentClassificationPrompts.jsonSchema
         )
 
+        // Debug: Log raw JSON to see what Gemini is returning
+        Logger.debug("📋 Raw classification JSON: \(jsonString.prefix(2000))", category: .ai)
+
         guard let jsonData = jsonString.data(using: .utf8) else {
             Logger.warning("⚠️ Invalid JSON response for classification, using default", category: .ai)
             return DocumentClassification.default(filename: filename)
         }
 
+        // Don't use convertFromSnakeCase - we have explicit CodingKeys that handle the mapping
         let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
 
         do {
             let classification = try decoder.decode(DocumentClassification.self, from: jsonData)
