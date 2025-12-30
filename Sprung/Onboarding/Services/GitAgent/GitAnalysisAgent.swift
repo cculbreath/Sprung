@@ -268,6 +268,18 @@ class GitAnalysisAgent {
                     let progressMessage = toolDetail.isEmpty ? "Completed: \(toolName)" : "Completed: \(toolName) - \(toolDetail)"
                     await updateProgress(progressMessage)
                     messages.append(buildToolResultMessage(toolCallId: toolId, result: result))
+
+                    // Add tool call to transcript
+                    if let agentId = agentId {
+                        let displayName = toolDisplayName(toolName)
+                        let content = toolDetail.isEmpty ? displayName : "\(displayName): \(toolDetail)"
+                        tracker?.appendTranscript(
+                            agentId: agentId,
+                            entryType: .tool,
+                            content: content,
+                            details: nil
+                        )
+                    }
                 }
             }
 
@@ -609,6 +621,18 @@ class GitAnalysisAgent {
         }
 
         return ""
+    }
+
+    /// Convert tool name to human-readable display name
+    private func toolDisplayName(_ name: String) -> String {
+        switch name {
+        case ReadFileTool.name: return "Read file"
+        case ListDirectoryTool.name: return "List directory"
+        case GlobSearchTool.name: return "Glob search"
+        case GrepSearchTool.name: return "Grep search"
+        case CompleteAnalysisTool.name: return "Complete analysis"
+        default: return name
+        }
     }
 
     // MARK: - Event Emission
