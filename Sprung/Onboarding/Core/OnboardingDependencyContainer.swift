@@ -311,9 +311,8 @@ final class OnboardingDependencyContainer {
             requiredObjectives: Dictionary(uniqueKeysWithValues: InterviewPhase.allCases.map {
                 ($0, phaseRegistry.script(for: $0)?.requiredObjectives ?? [])
             }),
-            allowedTools: Dictionary(uniqueKeysWithValues: InterviewPhase.allCases.map {
-                ($0, Set(phaseRegistry.script(for: $0)?.allowedTools ?? []))
-            })
+            // Tool permissions derived from ToolBundlePolicy (single source of truth)
+            allowedTools: ToolBundlePolicy.allowedToolsByPhase
         )
         return CoreInfrastructure(eventBus: eventBus, toolRegistry: toolRegistry,
                                   phaseRegistry: phaseRegistry, phasePolicy: phasePolicy)

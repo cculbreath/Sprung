@@ -445,12 +445,10 @@ struct OnboardingRequestBuilder {
 
     // MARK: - Tool Schemas
 
-    /// Get tool schemas from ToolRegistry, filtered by allowed tools using subphase-aware bundling
+    /// Get tool schemas from ToolRegistry using subphase-aware bundling.
+    /// Tool availability is determined by ToolBundlePolicy (single source of truth).
     /// - Parameter toolChoice: Optional tool choice mode to override bundling
     private func getToolSchemas(for toolChoice: ToolChoiceMode? = nil) async -> [Tool] {
-        // Get base allowed tools from state coordinator
-        let allowedNames = await stateCoordinator.getAllowedToolNames()
-
         // Get current state for subphase inference
         let phase = await stateCoordinator.phase
         let toolPaneCard = await stateCoordinator.getCurrentToolPaneCard()
@@ -463,10 +461,9 @@ struct OnboardingRequestBuilder {
             objectives: objectives
         )
 
-        // Select tools based on subphase (handles toolChoice internally)
+        // Select tools based on subphase (ToolBundlePolicy is the single source of truth)
         let bundledNames = ToolBundlePolicy.selectBundleForSubphase(
             subphase,
-            allowedTools: allowedNames,
             toolChoice: toolChoice
         )
 

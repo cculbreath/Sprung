@@ -194,24 +194,34 @@ final class KnowledgeCardWorkflowService {
         Logger.info("🛟 Manual KC fallback activated: submit_knowledge_card ungated after agent failures", category: .ai)
     }
 
-    /// Handle KC agent completion - auto-present validation UI without LLM tool call
-    /// Cards are queued and presented immediately as they complete
+    /// Handle KC agent completion - auto-persist without validation UI
+    /// User oversight happens at the pre-generation review stage (trashcan to exclude)
     func handleKCAgentCompleted(agentId: String, cardId: String, cardTitle: String) async {
         Logger.info("🎉 KC agent completed: '\(cardTitle)' (cardId: \(cardId.prefix(8)), agentId: \(agentId.prefix(8)))", category: .ai)
 
-        // Enqueue this card for validation
-        await sessionUIState.enqueueKCValidation(cardId)
-
-        // Check if validation UI is already showing
-        let currentValidation = await sessionUIState.pendingValidationPrompt
-        if currentValidation != nil {
-            // Another validation is in progress - card is already queued
-            Logger.info("📋 KC validation queued (another validation in progress): \(cardTitle)", category: .ai)
+        // Retrieve the pending card from state
+        guard let card = await state.getPendingCard(id: cardId) else {
+            Logger.warning("⚠️ KC auto-persist: pending card not found for ID \(cardId.prefix(8))", category: .ai)
             return
         }
 
-        // No active validation - present this card immediately
-        await presentNextKCValidation()
+        let cardData = card["card"]
+
+        // Persist to ResRef (SwiftData) - single source of truth for knowledge cards
+        persistToResRef(card: cardData)
+
+        // Remove from pending storage
+        await state.removePendingCard(id: cardId)
+
+        // Update plan item status if linked
+        if let planItemId = cardData["plan_item_id"].string {
+            await handlePlanItemStatusChange(itemId: planItemId, status: "completed")
+        }
+
+        // Emit persisted event (for UI updates)
+        await eventBus.publish(.knowledgeCardPersisted(card: cardData))
+
+        Logger.info("✅ KC auto-persisted: \(cardTitle)", category: .ai)
     }
 
     /// Present the next card from the KC validation queue

@@ -4,14 +4,12 @@
 //
 //  Phase 1: Core Facts — Collect applicant profile and skeleton timeline.
 //
-//  TOOL GATING (enforced by SessionUIState):
-//  - submit_for_validation: BLOCKED until user clicks "Done with Timeline", then MANDATED via toolChoice
-//  - next_phase: BLOCKED until user approves timeline validation, then available
+//  TOOL AVAILABILITY: Defined in ToolBundlePolicy.swift (single source of truth)
 //
 //  FLOW:
 //  1. Collect contact info → validate applicant profile
 //  2. Collect timeline (resume upload or manual) → user edits in UI → user clicks "Done with Timeline"
-//  3. [GATED] submit_for_validation is MANDATED → user approves timeline → [UNGATE] next_phase
+//  3. submit_for_validation → user approves timeline
 //  4. configure_enabled_sections → user toggles sections → user clicks "Approve"
 //  5. Optional: dossier seed questions
 //  6. next_phase to Phase 2
@@ -24,34 +22,6 @@ struct PhaseOneScript: PhaseScript {
         .skeletonTimeline,   // formerly P1.2
         .enabledSections     // formerly P1.3
         // dossierSeed (formerly P1.4) is optional, not required for phase advancement
-    ])
-
-    // NOTE: submit_for_validation and next_phase are included here but GATED by SessionUIState.
-    // They are initially excluded and only ungated when specific user actions occur:
-    // - submit_for_validation: ungated + mandated when user clicks "Done with Timeline"
-    // - next_phase: ungated when user approves timeline validation
-    let allowedTools: [String] = OnboardingToolName.rawValues([
-        .agentReady,
-        .getUserOption,
-        .getApplicantProfile,
-        .getUserUpload,
-        .cancelUserUpload,
-        .createTimelineCard,
-        .updateTimelineCard,
-        .reorderTimelineCards,
-        .deleteTimelineCard,
-        .displayTimelineEntriesForReview,
-        .getTimelineEntries,
-        .submitForValidation,      // GATED until "Done with Timeline", then MANDATED
-        .validateApplicantProfile,
-        .validatedApplicantProfileData,
-        .configureEnabledSections,
-        .listArtifacts,
-        .getArtifact,
-        .getContextPack,
-        .requestRawFile,
-        .nextPhase,                // GATED until timeline approved
-        .askUserSkipToNextPhase    // Escape hatch for blocked transitions
     ])
     var objectiveWorkflows: [String: ObjectiveWorkflow] {
         [

@@ -4,41 +4,14 @@
 //
 //  Phase 2: Deep Dive — Conduct detailed interviews and generate knowledge cards.
 //
+//  TOOL AVAILABILITY: Defined in ToolBundlePolicy.swift (single source of truth)
+//
 import Foundation
 struct PhaseTwoScript: PhaseScript {
     let phase: InterviewPhase = .phase2DeepDive
     let requiredObjectives: [String] = OnboardingObjectiveId.rawValues([
         .evidenceAuditCompleted,
         .cardsGenerated
-    ])
-    let allowedTools: [String] = OnboardingToolName.rawValues([
-        // Multi-agent workflow tools (in order of use)
-        .startPhaseTwo,           // Bootstrap: returns timeline + artifact summaries
-        .openDocumentCollection,  // Show dropzone for document uploads (mandatory step)
-        // Card merge triggered by "Done with Uploads" button, not LLM tool
-        .dispatchKCAgents,        // Spawn parallel KC agents
-        .submitKnowledgeCard,     // Persist each generated card
-
-        // Document collection tools
-        .getUserUpload,
-        .cancelUserUpload,
-        // Note: scanGitRepo removed - it's triggered by UI button, not LLM
-        .listArtifacts,
-        .getArtifact,
-        .getContextPack,
-        .requestRawFile,
-        // Note: requestEvidence tool removed - users upload via dropzone instead
-
-        // User interaction
-        .getUserOption,
-
-        // Data persistence
-        .persistData,             // For dossier entries
-
-        // Phase management
-        .setObjectiveStatus,
-        .nextPhase,
-        .askUserSkipToNextPhase  // For when KC generation fails
     ])
     var objectiveWorkflows: [String: ObjectiveWorkflow] {
         [

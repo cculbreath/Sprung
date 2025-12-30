@@ -5,6 +5,7 @@
 //  Tool for LLM to ingest writing samples from text pasted in chat.
 //  Creates an artifact record for the writing sample.
 //
+import CryptoKit
 import Foundation
 import SwiftyJSON
 
@@ -19,14 +20,20 @@ struct IngestWritingSampleTool: InterviewTool {
                 Use this when the user pastes or types a writing sample (cover letter, email, essay, etc.)
                 directly into the conversation instead of uploading a file.
 
+                ⚠️ NEVER use this tool for content from uploaded files - those are ALREADY artifacts!
+                File uploads are automatically processed. Using this tool on uploaded file content
+                will be detected as a duplicate and rejected.
+
                 WORKFLOW:
                 1. User pastes text in chat describing it as a writing sample
                 2. Call this tool with the full text content and descriptive name
-                3. The tool creates an artifact record
+                3. The tool creates an artifact record (or returns duplicate_detected if content exists)
 
-                RETURNS: { "status": "ingested", "artifact_id": "<uuid>", "name": "<name>", "character_count": <n> }
+                RETURNS:
+                - Success: { "status": "ingested", "artifact_id": "<uuid>", "name": "<name>", "character_count": <n> }
+                - Duplicate: { "status": "duplicate_detected", "existing_artifact_id": "<uuid>", "message": "..." }
 
-                NOTE: This is for text pasted in chat. For file uploads, use get_user_upload with type "writing_sample".
+                NOTE: This is ONLY for text pasted in chat. Uploaded files are already artifacts.
                 """,
             properties: [
                 "name": MiscSchemas.writingSampleName,
@@ -58,6 +65,31 @@ struct IngestWritingSampleTool: InterviewTool {
 
         let context = params["context"].string
 
+        // Compute content hash for duplicate detection
+        let contentHash = sha256Hex(content)
+
+        // Check for duplicate content in existing artifacts
+        let existingArtifacts = await coordinator.listArtifactSummaries()
+        for artifact in existingArtifacts {
+            // Check by hash if available
+            if artifact["source_hash"].string == contentHash {
+                let existingName = artifact["filename"].stringValue
+                Logger.warning("📝 Duplicate writing sample detected (hash match): \(existingName)", category: .ai)
+                return duplicateResponse(existingName: existingName, existingId: artifact["id"].stringValue)
+            }
+            // Check by content substring (handles case where original upload didn't have hash)
+            // Need to fetch full artifact to get extracted_text
+            if let artifactId = artifact["id"].string,
+               let fullArtifact = await coordinator.getArtifactRecord(id: artifactId) {
+                let existingContent = fullArtifact["extracted_text"].stringValue
+                if !existingContent.isEmpty && contentMatchesExisting(content, existingContent) {
+                    let existingName = fullArtifact["filename"].stringValue
+                    Logger.warning("📝 Duplicate writing sample detected (content match): \(existingName)", category: .ai)
+                    return duplicateResponse(existingName: existingName, existingId: artifactId)
+                }
+            }
+        }
+
         // Create artifact record for the writing sample
         let artifactId = UUID()
         var artifactRecord = JSON()
@@ -65,6 +97,7 @@ struct IngestWritingSampleTool: InterviewTool {
         artifactRecord["source_type"].string = "writing_sample"
         artifactRecord["filename"].string = "\(sampleName).txt"
         artifactRecord["extracted_text"].string = content
+        artifactRecord["source_hash"].string = contentHash
         artifactRecord["ingested_at"].string = ISO8601DateFormatter().string(from: Date())
 
         // Build metadata
@@ -104,6 +137,56 @@ struct IngestWritingSampleTool: InterviewTool {
             Mark one_writing_sample.ingest_sample as completed when you have at least one quality sample.
             """
 
+        return .immediate(response)
+    }
+
+    // MARK: - Duplicate Detection Helpers
+
+    /// Compute SHA256 hash of content
+    private func sha256Hex(_ string: String) -> String {
+        let data = Data(string.utf8)
+        let hash = SHA256.hash(data: data)
+        return hash.compactMap { String(format: "%02x", $0) }.joined()
+    }
+
+    /// Check if content matches existing artifact content (normalized comparison)
+    private func contentMatchesExisting(_ newContent: String, _ existingContent: String) -> Bool {
+        // Normalize whitespace for comparison
+        let normalizedNew = newContent.components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }.joined(separator: " ")
+        let normalizedExisting = existingContent.components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }.joined(separator: " ")
+
+        // Check for exact match or substantial overlap (90% similar)
+        if normalizedNew == normalizedExisting {
+            return true
+        }
+
+        // Check if one contains the other (covers excerpts)
+        let shorter = normalizedNew.count < normalizedExisting.count ? normalizedNew : normalizedExisting
+        let longer = normalizedNew.count < normalizedExisting.count ? normalizedExisting : normalizedNew
+
+        // If shorter is at least 80% of longer and is contained, it's a match
+        if shorter.count > 500 && Double(shorter.count) / Double(longer.count) > 0.8 {
+            return longer.contains(shorter)
+        }
+
+        return false
+    }
+
+    /// Build response for duplicate detection
+    private func duplicateResponse(existingName: String, existingId: String) -> ToolResult {
+        var response = JSON()
+        response["status"].string = "duplicate_detected"
+        response["existing_artifact_id"].string = existingId
+        response["existing_artifact_name"].string = existingName
+        response["message"].string = "This content already exists as artifact '\(existingName)'. Do NOT call ingest_writing_sample again with this content."
+        response["next_action"].string = """
+            STOP: This writing sample already exists as '\(existingName)'.
+            Do NOT attempt to re-ingest it with a different name.
+            The uploaded files have already been processed as artifacts.
+            Move on to evaluate the existing writing samples for quality.
+            """
         return .immediate(response)
     }
 }

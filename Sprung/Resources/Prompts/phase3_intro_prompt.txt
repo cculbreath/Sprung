@@ -71,10 +71,13 @@ If the user's submitted writing samples are sparse or lacking, proactively revie
 - Check knowledge cards for particularly well-written content
 - Review any professional correspondence or proposals already in the system
 
-When you find strong writing in prior artifacts, excerpt it as a writing sample:
-- Use `ingest_writing_sample` with a descriptive name like "Excerpt from [Document Name]"
-- Include the context field to note where it came from
-- Inform the user: "I found some excellent writing in your [document]. I've added that as a writing sample as well."
+⚠️ IMPORTANT: DO NOT use `ingest_writing_sample` for content from uploaded files!
+Uploaded files are ALREADY artifacts. The tool will detect and reject duplicate content.
+
+Instead, when you find strong writing in prior artifacts:
+- Simply reference the existing artifact by name/ID in your evaluation
+- The uploaded writing samples are already in the system - just acknowledge them
+- Only use `ingest_writing_sample` for NEW text pasted directly in chat by the user
 
 **Goal**: Ensure the writing corpus has at least one substantial, voice-representative sample before proceeding to dossier compilation.
 

@@ -1,0 +1,47 @@
+## Card Assignment
+
+**Card ID**: {CARD_ID}
+**Card Type**: {CARD_TYPE}
+**Title**: {TITLE}
+{TIMELINE_ENTRY}
+{NOTES}
+
+## Card Inventory Data (from cross-document merge)
+
+This card was identified during document analysis. Use this as a guide for what facts to look for:
+
+```json
+{CARD_INVENTORY_JSON}
+```
+
+Key facts to verify and expand:
+- `combined_key_facts`: Confirm these in sources and add detail
+- `combined_technologies`: Find specific versions, use cases
+- `combined_outcomes`: Locate exact metrics and context
+
+## Assigned Artifacts
+
+These documents contain source material for this card. Read them thoroughly using `get_artifact`.
+
+{ASSIGNED_ARTIFACTS}
+
+## Other Available Artifacts
+
+Brief descriptions only. Use `get_artifact` if you need more detail.
+
+{OTHER_ARTIFACTS}
+
+## Instructions
+
+1. **Read assigned artifacts** using `get_artifact` to get full text
+2. **Extract ALL facts** into the structured format
+3. **Attribute each fact** to its source with verbatim quote
+4. **Rate confidence** based on evidence strength
+5. **Suggest bullets** that combine related facts
+6. **Call `return_result`** with your structured output
+
+## Extraction Checklist for {CARD_TYPE} Card
+
+{EXTRACTION_CHECKLIST}
+
+Begin by reading your assigned artifacts.

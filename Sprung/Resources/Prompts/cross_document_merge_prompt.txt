@@ -1,6 +1,6 @@
 # Cross-Document Card Merge
 
-You have card inventories from multiple documents. Merge cards that refer to the same topic.
+You have card inventories from multiple documents. Merge related cards to create a balanced, manageable set while preserving important distinctions.
 
 ## All Document Inventories
 
@@ -14,32 +14,53 @@ You have card inventories from multiple documents. Merge cards that refer to the
 
 ## Your Task
 
-1. **Group related cards** across documents
-2. **Designate primary source** for each merged card
-3. **Preserve all evidence** from supporting documents
-4. **Identify gaps** where cards have weak evidence
+1. **Merge related cards** when they cover the same topic or domain
+2. **Keep cards separate** when they represent genuinely distinct experiences
+3. **Designate primary source** for each merged card
+4. **Preserve key evidence** from supporting documents
+5. **Identify gaps** where cards have weak evidence
 
-## Merge Rules
+## Merge Rules - BALANCED APPROACH
 
 ### Employment Cards
-- Match to timeline entries by organization + role + dates
-- Multiple docs about same role → merge into one card with multiple evidence blocks
+- ONE card per employer/organization
+- Multiple roles at same org → consolidate into one card with role progression
+- Include key projects as bullet points within the employment card
 
 ### Skill Cards
-- Same skill appearing in multiple docs → ONE card with evidence from all docs
-- Related skills may stay separate or be cross-referenced
+- Group closely related skills into domain cards
+- Example: "Python", "FastAPI", "SQLAlchemy" → ONE "Python Backend Development" card
+- Keep separate when skills serve different domains (e.g., "Python for Data Science" vs "Python for Web")
 
 ### Project Cards
-- Same project in multiple docs → merge
-- Keep distinct if genuinely different projects
+- Create separate cards only for MAJOR standalone projects
+- Smaller projects → include in employment or skill cards
+- Related projects at same employer → consolidate
 
 ### Achievement Cards
-- Usually unique — only merge if same achievement in multiple docs
+- Group related achievements (e.g., all teaching awards → one card)
+- Keep separate for truly distinct recognition types
+
+### Education Cards
+- ONE card per degree/institution
+- Group related certifications by domain
+
+## Target Card Counts
+
+Target 35-50 cards for a typical professional with 10+ years experience:
+- 4-7 employment cards (one per major employer/role)
+- 5-10 project cards (major standalone projects only)
+- 15-25 skill cards (grouped by domain)
+- 3-6 achievement cards (grouped by category)
+- 2-4 education cards
+
+Balance is key: preserve meaningful distinctions while avoiding redundancy.
 
 ## Output Format
 
 ```json
 {
+  "generated_at": "2024-01-15T10:30:00Z",
   "merged_cards": [
     {
       "card_id": "uuid",
@@ -56,9 +77,9 @@ You have card inventories from multiple documents. Merge cards that refer to the
           "adds": ["Teensy implementation details", "I2C protocol design"]
         }
       ],
-      "combined_key_facts": ["...all facts from all sources, deduplicated..."],
-      "combined_technologies": ["..."],
-      "combined_outcomes": ["..."],
+      "combined_key_facts": ["...all unique facts, max 5..."],
+      "combined_technologies": ["...max 5..."],
+      "combined_outcomes": ["...max 3..."],
       "date_range": "2017-present",
       "evidence_quality": "strong|moderate|weak",
       "extraction_priority": "high|medium|low"
@@ -76,10 +97,10 @@ You have card inventories from multiple documents. Merge cards that refer to the
 
   "stats": {
     "total_input_cards": 87,
-    "merged_output_cards": 52,
-    "cards_by_type": {"employment": 5, "skill": 28, "project": 12, "achievement": 7},
-    "strong_evidence": 35,
-    "needs_more_evidence": 17
+    "merged_output_cards": 42,
+    "cards_by_type": {"employment": 5, "skill": 20, "project": 8, "achievement": 5, "education": 4},
+    "strong_evidence": 30,
+    "needs_more_evidence": 12
   }
 }
 ```

@@ -137,6 +137,21 @@ enum PromptLibrary {
         loadPrompt(named: "kc_extraction_achievement")
     }()
 
+    // MARK: - Fact-Based KC Extraction Prompts
+
+    /// System prompt for fact-based KC extraction
+    /// Contains placeholders: {CARD_ID}, {CARD_TYPE}, {TITLE}
+    static let kcFactExtractionSystem: String = {
+        loadPrompt(named: "kc_fact_extraction_system")
+    }()
+
+    /// Initial prompt template for fact-based KC extraction
+    /// Contains placeholders: {CARD_ID}, {CARD_TYPE}, {TITLE}, {TIMELINE_ENTRY}, {NOTES},
+    /// {CARD_INVENTORY_JSON}, {ASSIGNED_ARTIFACTS}, {OTHER_ARTIFACTS}, {EXTRACTION_CHECKLIST}
+    static let kcFactExtractionInitial: String = {
+        loadPrompt(named: "kc_fact_extraction_initial")
+    }()
+
     // MARK: - Prompt Loading
 
     /// Loads a prompt from a resource file in the Prompts directory.

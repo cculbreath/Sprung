@@ -4,28 +4,14 @@
 //
 //  Phase 3: Writing Corpus — Collect writing samples and complete dossier.
 //
+//  TOOL AVAILABILITY: Defined in ToolBundlePolicy.swift (single source of truth)
+//
 import Foundation
 struct PhaseThreeScript: PhaseScript {
     let phase: InterviewPhase = .phase3WritingCorpus
     let requiredObjectives: [String] = OnboardingObjectiveId.rawValues([
         .oneWritingSample,
         .dossierComplete
-    ])
-    let allowedTools: [String] = OnboardingToolName.rawValues([
-        .startPhaseThree,        // Bootstrap tool - returns knowledge cards + instructions
-        .getUserOption,
-        .ingestWritingSample,    // Capture writing samples from chat text (NOT for file uploads)
-        .submitForValidation,
-        .persistData,            // NOT for writing samples - they're auto-created as artifacts
-        .submitExperienceDefaults, // Submit resume defaults (validates against enabled sections)
-        .submitCandidateDossier,   // Submit finalized candidate dossier
-        .setObjectiveStatus,
-        .listArtifacts,
-        .getArtifact,
-        .getContextPack,
-        .requestRawFile,
-        .nextPhase,
-        .askUserSkipToNextPhase  // Escape hatch for blocked transitions
     ])
     var objectiveWorkflows: [String: ObjectiveWorkflow] {
         [

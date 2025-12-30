@@ -2,14 +2,42 @@
 //  ToolBundlePolicy.swift
 //  Sprung
 //
-//  Dynamic tool bundling policy using subphase-aware selection.
-//  Part of Milestone 3: Dynamic tool bundling
+//  SINGLE SOURCE OF TRUTH for tool availability in the onboarding interview.
+//
+//  ## Architecture
+//
+//  This file defines which tools are available at each point in the interview.
+//  There is ONE place to update when adding or changing tool availability:
+//  the `subphaseBundles` dictionary below.
+//
+//  ## How It Works
+//
+//  1. **Subphase Bundles** (`subphaseBundles`): Define which tools are available
+//     for each fine-grained interview subphase (e.g., p1_profileIntake, p3_dossierCompilation)
+//
+//  2. **Phase-Level Permissions**: Automatically derived by `allowedToolsForPhase()`,
+//     which unions all subphase bundles for that phase. Used for tool execution validation.
+//
+//  3. **Request-Time Selection**: `selectBundleForSubphase()` determines which tools
+//     to send in each API request based on current UI state and objectives.
+//
+//  ## Adding a New Tool
+//
+//  1. Register the tool in `OnboardingToolRegistrar.registerTools()`
+//  2. Add the tool to relevant subphase bundles in `subphaseBundles` below
+//  3. That's it! Phase-level permissions are derived automatically.
+//
+//  ## Special Tool Sets
+//
+//  - `safeEscapeTools`: Always included (escape hatches for blocked states)
+//  - `artifactAccessTools`: Included in Phase 2-3 subphases (document access)
 //
 
 import Foundation
 import SwiftOpenAI
 
-/// Policy for selecting minimal tool sets per request based on interview subphase
+/// Policy for selecting minimal tool sets per request based on interview subphase.
+/// This is the SINGLE SOURCE OF TRUTH for tool availability.
 struct ToolBundlePolicy {
 
     // MARK: - Safe Escape Tools
@@ -174,6 +202,7 @@ struct ToolBundlePolicy {
             OnboardingToolName.ingestWritingSample.rawValue
         ],
         .p3_writingCollection: [
+            OnboardingToolName.getUserOption.rawValue,  // For structured questions about sample types
             OnboardingToolName.ingestWritingSample.rawValue,
             OnboardingToolName.getUserUpload.rawValue,
             OnboardingToolName.cancelUserUpload.rawValue,
@@ -182,6 +211,7 @@ struct ToolBundlePolicy {
             OnboardingToolName.submitExperienceDefaults.rawValue
         ],
         .p3_sampleReview: [
+            OnboardingToolName.getUserOption.rawValue,  // For structured feedback on samples
             OnboardingToolName.ingestWritingSample.rawValue,
             OnboardingToolName.setObjectiveStatus.rawValue,
             // Progression: after review, model compiles dossier
@@ -189,6 +219,7 @@ struct ToolBundlePolicy {
             OnboardingToolName.submitCandidateDossier.rawValue
         ],
         .p3_dossierCompilation: [
+            OnboardingToolName.getUserOption.rawValue,  // For structured questions during dossier gathering
             OnboardingToolName.persistData.rawValue,
             OnboardingToolName.submitExperienceDefaults.rawValue,
             OnboardingToolName.submitCandidateDossier.rawValue,
@@ -413,22 +444,19 @@ struct ToolBundlePolicy {
 
     // MARK: - Bundle Selection
 
-    /// Select tool bundle based on subphase
+    /// Select tool bundle based on subphase.
+    /// Returns the set of tools to send to the LLM for this specific subphase.
     /// - Parameters:
     ///   - subphase: The current interview subphase
-    ///   - allowedTools: The full set of allowed tools for this phase
-    ///   - toolChoice: Optional tool choice override
-    /// - Returns: Filtered set of tool names to include
+    ///   - toolChoice: Optional tool choice override (for forcing a specific tool)
+    /// - Returns: Set of tool names to include in the API request
     static func selectBundleForSubphase(
         _ subphase: InterviewSubphase,
-        allowedTools: Set<String>,
         toolChoice: ToolChoiceMode? = nil
     ) -> Set<String> {
         // Handle toolChoice overrides
-        // CRITICAL: When forcing a specific tool, that tool MUST be included regardless of
-        // whether allowedTools is populated. On the first request, allowedTools may be empty
-        // because the event system hasn't processed yet. The OpenAI API requires the forced
-        // tool to be present in the tools array.
+        // CRITICAL: When forcing a specific tool, that tool MUST be included.
+        // The OpenAI API requires the forced tool to be present in the tools array.
         if let choice = toolChoice {
             switch choice {
             case .none:
@@ -436,19 +464,17 @@ struct ToolBundlePolicy {
             case .functionTool(let ft):
                 // Always include the forced tool - this is required by OpenAI API
                 var bundle: Set<String> = [ft.name]
-                // Add safe escape tools that are in allowedTools
-                bundle.formUnion(safeEscapeTools.intersection(allowedTools))
-                // Include artifact access in Phase 2-3 even when forcing a tool
+                bundle.formUnion(safeEscapeTools)
                 if subphase.phase != .phase1CoreFacts {
-                    bundle.formUnion(artifactAccessTools.intersection(allowedTools))
+                    bundle.formUnion(artifactAccessTools)
                 }
                 return bundle
             case .customTool(let ct):
                 // Always include the forced tool - this is required by OpenAI API
                 var bundle: Set<String> = [ct.name]
-                bundle.formUnion(safeEscapeTools.intersection(allowedTools))
+                bundle.formUnion(safeEscapeTools)
                 if subphase.phase != .phase1CoreFacts {
-                    bundle.formUnion(artifactAccessTools.intersection(allowedTools))
+                    bundle.formUnion(artifactAccessTools)
                 }
                 return bundle
             default:
@@ -467,7 +493,40 @@ struct ToolBundlePolicy {
             bundle.formUnion(artifactAccessTools)
         }
 
-        // Intersect with allowed tools
-        return bundle.intersection(allowedTools)
+        return bundle
     }
+
+    // MARK: - Phase-Level Tool Permissions
+
+    /// Compute allowed tools for a phase by unioning all subphase bundles.
+    /// This is used for tool execution validation (can this tool run in this phase?).
+    /// - Parameter phase: The interview phase
+    /// - Returns: Set of all tool names permitted in this phase
+    static func allowedToolsForPhase(_ phase: InterviewPhase) -> Set<String> {
+        var allowed = Set<String>()
+
+        // Union all subphase bundles for this phase
+        for (subphase, bundle) in subphaseBundles where subphase.phase == phase {
+            allowed.formUnion(bundle)
+        }
+
+        // Always include safe escape tools
+        allowed.formUnion(safeEscapeTools)
+
+        // Include artifact access tools for Phase 2-3
+        if phase != .phase1CoreFacts {
+            allowed.formUnion(artifactAccessTools)
+        }
+
+        return allowed
+    }
+
+    /// Precomputed allowed tools for all phases (for efficient lookup)
+    static let allowedToolsByPhase: [InterviewPhase: Set<String>] = {
+        var result: [InterviewPhase: Set<String>] = [:]
+        for phase in InterviewPhase.allCases {
+            result[phase] = allowedToolsForPhase(phase)
+        }
+        return result
+    }()
 }

@@ -1,5 +1,0 @@
-After profile intake completes, you'll be guided to:
-1. Offer profile photo upload (optional - user can skip)
-2. Offer resume/LinkedIn upload for timeline building (optional - user can dictate instead)
-Be proactive: Always call the upload tool BEFORE describing it to the user.
-Never ask if they want to upload - just show the upload UI and explain their options.

@@ -51,6 +51,7 @@ struct ObjectiveWorkflow {
     }
 }
 /// Defines the behavior and configuration for a specific interview phase.
+/// NOTE: Tool availability is defined in ToolBundlePolicy.swift (single source of truth).
 protocol PhaseScript {
     /// The phase this script represents.
     var phase: InterviewPhase { get }
@@ -58,8 +59,6 @@ protocol PhaseScript {
     var introductoryPrompt: String { get }
     /// Required objectives that must be completed before advancing.
     var requiredObjectives: [String] { get }
-    /// Tools that are allowed in this phase.
-    var allowedTools: [String] { get }
     /// Declarative workflows for objectives in this phase.
     var objectiveWorkflows: [String: ObjectiveWorkflow] { get }
     /// Convenience lookup for a single workflow.
