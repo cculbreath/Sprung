@@ -14,7 +14,6 @@ struct TemplateEditorEditorColumn: View {
     @Binding var manifestValidationMessage: String?
     @Binding var customFieldWarningMessage: String?
     @Binding var textEditorInsertion: TextEditorInsertionRequest?
-    let selectedResume: Resume?
     let onTemplateChange: (TemplateEditorTab, String) -> Void
     let hasUnsavedChanges: Bool
     let onSaveAndRefresh: () -> Void

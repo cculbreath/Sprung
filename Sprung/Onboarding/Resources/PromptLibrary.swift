@@ -92,12 +92,6 @@ enum PromptLibrary {
 
     // MARK: - Card Pipeline Prompts
 
-    /// Document classification prompt template
-    /// Contains placeholders: {FILENAME}, {PREVIEW}
-    static let documentClassificationTemplate: String = {
-        loadPrompt(named: "document_classification_prompt")
-    }()
-
     /// Card inventory prompt template
     /// Contains placeholders: {DOC_ID}, {FILENAME}, {DOCUMENT_TYPE}, {CLASSIFICATION_JSON}, {EXTRACTED_CONTENT}
     static let cardInventoryTemplate: String = {

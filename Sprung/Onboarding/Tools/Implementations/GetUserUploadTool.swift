@@ -43,7 +43,6 @@ struct GetUserUploadTool: InterviewTool {
         )
     }()
     private unowned let coordinator: OnboardingInterviewCoordinator
-    private let storage = OnboardingUploadStorage()
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
@@ -71,7 +70,6 @@ struct GetUserUploadTool: InterviewTool {
 private struct UploadRequestPayload {
     let kind: OnboardingUploadKind
     let metadata: OnboardingUploadMetadata
-    let waitingMessage: String
     let targetKey: String?
     let cancelMessage: String?
     init(json: JSON) throws {
@@ -127,7 +125,6 @@ private struct UploadRequestPayload {
             targetKey: targetKey,
             cancelMessage: cancelMessage
         )
-        self.waitingMessage = "Waiting for user to upload: \(prompt)"
     }
     private static let allowedTargetKeys: Set<String> = ["basics.image"]
     private static func title(for kind: OnboardingUploadKind) -> String {
@@ -150,28 +147,6 @@ private struct UploadRequestPayload {
             return "Upload File"
         case .linkedIn:
             return "Upload LinkedIn Export"
-        }
-    }
-    private static func defaultPrompt(for kind: OnboardingUploadKind) -> String {
-        switch kind {
-        case .resume:
-            return "Please upload your most recent resume."
-        case .artifact:
-            return "Upload relevant supporting artifacts."
-        case .coverletter:
-            return "Upload a relevant cover letter (optional)."
-        case .portfolio:
-            return "Provide supporting portfolio material."
-        case .transcript:
-            return "Upload an unofficial transcript."
-        case .certificate:
-            return "Upload a professional certificate."
-        case .writingSample:
-            return "Upload a writing sample."
-        case .generic:
-            return "Provide the requested file."
-        case .linkedIn:
-            return "Upload your latest LinkedIn export or resume."
         }
     }
 }

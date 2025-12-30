@@ -24,8 +24,6 @@ struct EntryTokenUsage {
     let input: Int
     let output: Int
     let cached: Int
-
-    var total: Int { input + output }
 }
 
 /// A single entry in the conversation log
@@ -235,11 +233,6 @@ final class ConversationLogStore {
     func clear() {
         entries.removeAll()
         runningTokenTotal = 0
-    }
-
-    /// Get the current running token total
-    func getRunningTokenTotal() -> Int {
-        runningTokenTotal
     }
 
     // MARK: - Export

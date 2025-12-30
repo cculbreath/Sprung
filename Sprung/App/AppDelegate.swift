@@ -24,7 +24,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var searchOpsCoordinator: DiscoveryCoordinator?
     var coverRefStore: CoverRefStore?
     var resRefStore: ResRefStore?
-    var jobAppStore: JobAppStore?
     func applicationDidFinishLaunching(_: Notification) {
         // Wait until the app is fully loaded before modifying the menu
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {

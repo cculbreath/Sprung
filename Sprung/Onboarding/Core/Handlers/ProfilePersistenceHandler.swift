@@ -31,10 +31,6 @@ final class ProfilePersistenceHandler {
         }
         Logger.info("📋 ProfilePersistenceHandler started", category: .ai)
     }
-    func stop() {
-        subscriptionTask?.cancel()
-        subscriptionTask = nil
-    }
     private func handleEvent(_ event: OnboardingEvent) async {
         switch event {
         case .applicantProfileStored(let json):

@@ -18,17 +18,7 @@ enum OnboardingToolStatus: String {
 /// Consolidated snapshot of tool statuses for a single moment in time.
 struct OnboardingToolStatusSnapshot: Equatable {
     let statuses: [OnboardingToolIdentifier: OnboardingToolStatus]
-    init(statuses: [OnboardingToolIdentifier: OnboardingToolStatus]) {
-        self.statuses = statuses
-    }
-    func status(for identifier: OnboardingToolIdentifier) -> OnboardingToolStatus {
-        statuses[identifier] ?? .ready
-    }
-    var rawValueMap: [String: String] {
-        statuses.reduce(into: [:]) { result, entry in
-            result[entry.key.rawValue] = entry.value.rawValue
-        }
-    }
+
     static func == (lhs: OnboardingToolStatusSnapshot, rhs: OnboardingToolStatusSnapshot) -> Bool {
         lhs.statuses == rhs.statuses
     }
@@ -98,13 +88,6 @@ final class ToolHandler {
             break
         }
     }
-    // MARK: - Status Snapshot
-    /// Returns the current status of each tool managed by the router. Used for
-    /// capability manifests and analytics.
-    var statusSnapshot: OnboardingToolStatusSnapshot {
-        let statuses = statusResolvers.mapValues { $0() }
-        return OnboardingToolStatusSnapshot(statuses: statuses)
-    }
     // MARK: - Observable State Facades
     var pendingChoicePrompt: OnboardingChoicePrompt? {
         promptHandler.pendingChoicePrompt
@@ -124,9 +107,6 @@ final class ToolHandler {
     var pendingUploadRequests: [OnboardingUploadRequest] {
         uploadHandler.pendingUploadRequests
     }
-    var uploadedItems: [OnboardingUploadedItem] {
-        uploadHandler.uploadedItems
-    }
     var pendingSectionToggleRequest: OnboardingSectionToggleRequest? {
         sectionHandler.pendingSectionToggleRequest
     }
@@ -139,9 +119,6 @@ final class ToolHandler {
     }
     func resolveChoice(selectionIds: [String]) -> (payload: JSON, source: String?)? {
         promptHandler.resolveChoice(selectionIds: selectionIds)
-    }
-    func cancelChoicePrompt(reason: String) -> JSON? {
-        promptHandler.cancelChoicePrompt(reason: reason)
     }
     // MARK: - Validation Prompts
     func presentValidationPrompt(_ prompt: OnboardingValidationPrompt) {
@@ -163,16 +140,7 @@ final class ToolHandler {
             notes: notes
         )
     }
-    func cancelValidation(reason: String) -> JSON? {
-        promptHandler.cancelValidation(reason: reason)
-    }
     // MARK: - Applicant Profile Validation
-    func presentApplicantProfileRequest(_ request: OnboardingApplicantProfileRequest) {
-        profileHandler.presentProfileRequest(request)
-    }
-    func clearApplicantProfileRequest() {
-        profileHandler.clearProfileRequest()
-    }
     func resolveApplicantProfile(with draft: ApplicantProfileDraft) -> JSON? {
         profileHandler.resolveProfile(with: draft)
     }
@@ -204,9 +172,6 @@ final class ToolHandler {
     func completeApplicantProfileDraft(_ draft: ApplicantProfileDraft, source: OnboardingApplicantProfileIntakeState.Source) {
         profileHandler.completeDraft(draft, source: source)
     }
-    func cancelApplicantProfileIntake(reason: String) -> JSON? {
-        profileHandler.cancelIntake(reason: reason)
-    }
     func clearApplicantProfileIntake() {
         profileHandler.clearIntake()
     }
@@ -222,12 +187,6 @@ final class ToolHandler {
     }
     func skipUpload(id: UUID) async -> JSON? {
         await uploadHandler.skipUpload(id: id)
-    }
-    func cancelUpload(id: UUID, reason: String?) async -> JSON? {
-        await uploadHandler.cancelUpload(id: id, reason: reason)
-    }
-    func cancelPendingUpload(reason: String?) async -> JSON? {
-        await uploadHandler.cancelPendingUpload(reason: reason)
     }
     // MARK: - Section Toggle Handling
     func presentSectionToggle(_ request: OnboardingSectionToggleRequest) {

@@ -145,7 +145,4 @@ class EnabledLLMStore: SwiftDataStore {
         }
         return model.isEnabled
     }
-    func clearCache() {
-        enabledModels.removeAll()
-    }
 }

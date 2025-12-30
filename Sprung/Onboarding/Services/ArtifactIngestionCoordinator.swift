@@ -62,31 +62,6 @@ actor ArtifactIngestionCoordinator {
         await eventBus.publish(.processingStateChanged(false))
     }
 
-    /// Ingest a document file (PDF, DOCX, etc.)
-    func ingestDocument(
-        fileURL: URL,
-        planItemId: String?,
-        metadata: JSON = JSON()
-    ) async {
-        do {
-            let pending = try await documentKernel.startIngestion(
-                source: fileURL,
-                planItemId: planItemId,
-                metadata: metadata
-            )
-            trackPending(pending)
-            await notifyIngestionStarted(pending)
-        } catch {
-            Logger.error("❌ Document ingestion failed to start: \(error.localizedDescription)", category: .ai)
-            await notifyIngestionFailed(
-                filename: fileURL.lastPathComponent,
-                source: .document,
-                planItemId: planItemId,
-                error: error.localizedDescription
-            )
-        }
-    }
-
     /// Ingest a git repository
     func ingestGitRepository(
         repoURL: URL,

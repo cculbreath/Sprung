@@ -26,34 +26,6 @@ struct ProposedRevisionNode: Codable, Equatable {
     var oldValueArray: [String]?
     var newValueArray: [String]?
 
-    /// Per-item feedback for list nodes (populated when user rejects/comments on individual items)
-    var itemFeedback: [ItemFeedback]?
-
-    // MARK: - Convenience Accessors
-
-    /// Get all old values (works for both scalar and list nodes)
-    var oldValues: [String] {
-        if nodeType == .list {
-            return oldValueArray ?? []
-        } else {
-            return oldValue.isEmpty ? [] : [oldValue]
-        }
-    }
-
-    /// Get all new values (works for both scalar and list nodes)
-    var newValues: [String] {
-        if nodeType == .list {
-            return newValueArray ?? []
-        } else {
-            return newValue.isEmpty ? [] : [newValue]
-        }
-    }
-
-    /// Check if this is a list node
-    var isList: Bool {
-        nodeType == .list
-    }
-
     // `value` has been removed. `treePath` is retained so the model can
     // provide a hierarchical hint when an ID match is ambiguous.
     // Default initializer
@@ -116,7 +88,6 @@ struct ProposedRevisionNode: Codable, Equatable {
         case nodeType
         case oldValueArray
         case newValueArray
-        case itemFeedback
     }
 
     // Custom decoder so that the struct stays compatible with older
@@ -135,7 +106,6 @@ struct ProposedRevisionNode: Codable, Equatable {
         nodeType = try container.decodeIfPresent(NodeType.self, forKey: .nodeType) ?? .scalar
         oldValueArray = try container.decodeIfPresent([String].self, forKey: .oldValueArray)
         newValueArray = try container.decodeIfPresent([String].self, forKey: .newValueArray)
-        itemFeedback = try container.decodeIfPresent([ItemFeedback].self, forKey: .itemFeedback)
     }
 
     // Encodable synthesis is fine.
@@ -257,22 +227,6 @@ struct PhaseReviewItem: Codable, Equatable, Identifiable {
     var originalChildren: [String]?         // Original child values
     var proposedChildren: [String]?         // Proposed child values
 
-    /// The effective value to apply - considers user edits and decision
-    var effectiveValue: String {
-        if userDecision == .acceptedOriginal {
-            return originalValue
-        }
-        return editedValue ?? proposedValue
-    }
-
-    /// The effective children to apply - considers user edits and decision
-    var effectiveChildren: [String]? {
-        if userDecision == .acceptedOriginal {
-            return originalChildren
-        }
-        return editedChildren ?? proposedChildren
-    }
-
     enum CodingKeys: String, CodingKey {
         case id, displayName, originalValue, proposedValue, action, reason
         case userDecision, userComment, editedValue, editedChildren
@@ -360,10 +314,6 @@ struct PhaseReviewState {
         return phases[currentPhaseIndex]
     }
 
-    var isLastPhase: Bool {
-        currentPhaseIndex >= phases.count - 1
-    }
-
     mutating func reset() {
         isActive = false
         currentSection = ""
@@ -382,20 +332,6 @@ enum NodeType: String, Codable {
     case list    // Array of string values (keywords, highlights)
 }
 
-/// Per-item feedback for list nodes (e.g., work highlights, skill keywords)
-struct ItemFeedback: Codable, Equatable, Identifiable {
-    var id: Int { index }  // Use index as ID for Identifiable
-    var index: Int
-    var status: ItemStatus = .pending
-    var comment: String = ""
-
-    enum ItemStatus: String, Codable {
-        case pending
-        case accepted
-        case rejected
-        case rejectedWithComment
-    }
-}
 @Observable class FeedbackNode {
     var id: String
     var originalValue: String

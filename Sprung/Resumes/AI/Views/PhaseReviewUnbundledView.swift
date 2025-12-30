@@ -72,8 +72,7 @@ struct PhaseReviewUnbundledView: View {
                             // Show children diff (like keywords)
                             childrenDiffView(
                                 original: originalChildren,
-                                proposed: proposedChildren,
-                                itemName: item.displayName
+                                proposed: proposedChildren
                             )
                         } else {
                             // Show scalar diff (includes items with empty children arrays)
@@ -281,7 +280,7 @@ struct PhaseReviewUnbundledView: View {
 
     // MARK: - Children Diff View
 
-    private func childrenDiffView(original: [String], proposed: [String], itemName: String) -> some View {
+    private func childrenDiffView(original: [String], proposed: [String]) -> some View {
         VStack(spacing: 16) {
             // Stats
             DiffStatsView(original: original, proposed: proposed)

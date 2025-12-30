@@ -88,35 +88,4 @@ extension ReviewCard {
             }
         )
     }
-
-    /// Review card with accept and reject actions
-    init(
-        title: String,
-        subtitle: String? = nil,
-        contentMaxHeight: CGFloat = 320,
-        acceptButtonTitle: String = "Accept",
-        rejectButtonTitle: String = "Reject",
-        onAccept: @escaping () -> Void,
-        onReject: @escaping () -> Void,
-        onCancel: @escaping () -> Void,
-        @ViewBuilder content: @escaping () -> Content
-    ) where Content: View {
-        self.init(
-            title: title,
-            subtitle: subtitle,
-            contentMaxHeight: contentMaxHeight,
-            onCancel: onCancel,
-            content: content,
-            actions: {
-                AnyView(
-                    HStack(spacing: 8) {
-                        Button(rejectButtonTitle, action: onReject)
-                            .buttonStyle(.bordered)
-                        Button(acceptButtonTitle, action: onAccept)
-                            .buttonStyle(.borderedProminent)
-                    }
-                )
-            }
-        )
-    }
 }

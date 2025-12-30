@@ -20,7 +20,6 @@ struct SettingsView: View {
     @AppStorage("onboardingInterviewPromptCacheRetention") private var onboardingPromptCacheRetention: Bool = true
     @AppStorage("backgroundProcessingModelId") private var backgroundProcessingModelId: String = "google/gemini-2.0-flash-001"
     @AppStorage("knowledgeCardTokenLimit") private var knowledgeCardTokenLimit: Int = 8000
-    @Environment(OnboardingInterviewCoordinator.self) private var onboardingCoordinator
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(DiscoveryCoordinator.self) private var searchOpsCoordinator
     @Environment(\.modelContext) private var modelContext
@@ -41,7 +40,6 @@ struct SettingsView: View {
     @State private var interviewModelError: String?
     private let dataResetService = DataResetService()
     private let pdfExtractionFallbackModelId = "gemini-2.5-flash"
-    private let interviewModelFallbackId = "gpt-5"
     private let googleAIService = GoogleAIService()
 
     /// Filtered interview models: gpt-5*, gpt-6*, gpt-7* (dynamically fetched from OpenAI)

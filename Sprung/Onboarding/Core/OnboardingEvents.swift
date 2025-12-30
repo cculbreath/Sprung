@@ -801,10 +801,6 @@ extension OnboardingEventEmitter {
         await eventBus.publish(event)
     }
 }
-/// Protocol for components that handle events
-protocol OnboardingEventHandler {
-    func handleEvent(_ event: OnboardingEvent) async
-}
 // Tool call structure now uses the one from ToolProtocol.swift
 // MARK: - TimelineDiff Summary Extension
 /// Extension to provide a summary string for the detailed TimelineDiff type

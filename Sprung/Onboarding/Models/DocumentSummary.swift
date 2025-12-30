@@ -39,40 +39,6 @@ struct DocumentSummary: Codable {
     /// Hints about what types of knowledge cards this doc could support
     let relevanceHints: String
 
-    /// Generate a compact string representation for LLM context
-    func toContextString() -> String {
-        var parts: [String] = []
-
-        parts.append("Type: \(documentType)")
-        parts.append("Summary: \(summary)")
-
-        if let timePeriod = timePeriod, !timePeriod.isEmpty {
-            parts.append("Time Period: \(timePeriod)")
-        }
-
-        if !companies.isEmpty {
-            parts.append("Companies: \(companies.joined(separator: ", "))")
-        }
-
-        if !roles.isEmpty {
-            parts.append("Roles: \(roles.joined(separator: ", "))")
-        }
-
-        if !skills.isEmpty {
-            parts.append("Skills: \(skills.joined(separator: ", "))")
-        }
-
-        if !achievements.isEmpty {
-            parts.append("Achievements: \(achievements.joined(separator: "; "))")
-        }
-
-        if !relevanceHints.isEmpty {
-            parts.append("Relevance: \(relevanceHints)")
-        }
-
-        return parts.joined(separator: "\n")
-    }
-
     /// Create a fallback summary when parsing fails
     static func fallback(from text: String, filename: String) -> DocumentSummary {
         // Extract a simple summary from the first portion of text
@@ -88,25 +54,5 @@ struct DocumentSummary: Codable {
             achievements: [],
             relevanceHints: "Unable to fully analyze document structure."
         )
-    }
-}
-
-// MARK: - JSON Conversion
-
-extension DocumentSummary {
-    /// Convert to JSON string for storage in artifact record
-    func toJSONString() -> String? {
-        let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .convertToSnakeCase
-        guard let data = try? encoder.encode(self) else { return nil }
-        return String(data: data, encoding: .utf8)
-    }
-
-    /// Initialize from JSON string
-    static func fromJSONString(_ json: String) -> DocumentSummary? {
-        guard let data = json.data(using: .utf8) else { return nil }
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        return try? decoder.decode(DocumentSummary.self, from: data)
     }
 }

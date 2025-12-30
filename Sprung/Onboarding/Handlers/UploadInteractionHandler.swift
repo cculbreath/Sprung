@@ -18,7 +18,6 @@ final class UploadInteractionHandler {
     private let uploadFileService: UploadFileService
     private let uploadStorage: OnboardingUploadStorage
     private let applicantProfileStore: ApplicantProfileStore
-    private let dataStore: InterviewDataStore
     private let eventBus: EventCoordinator
     private var extractionProgressHandler: ExtractionProgressHandler?
     // MARK: - Init
@@ -26,14 +25,12 @@ final class UploadInteractionHandler {
         uploadFileService: UploadFileService,
         uploadStorage: OnboardingUploadStorage,
         applicantProfileStore: ApplicantProfileStore,
-        dataStore: InterviewDataStore,
         eventBus: EventCoordinator,
         extractionProgressHandler: ExtractionProgressHandler?
     ) {
         self.uploadFileService = uploadFileService
         self.uploadStorage = uploadStorage
         self.applicantProfileStore = applicantProfileStore
-        self.dataStore = dataStore
         self.eventBus = eventBus
         self.extractionProgressHandler = extractionProgressHandler
     }
@@ -83,10 +80,6 @@ final class UploadInteractionHandler {
     /// Cancels an upload request (assistant dismissed the card).
     func cancelUpload(id: UUID, reason: String?) async -> JSON? {
         await handleUploadCompletion(id: id, fileURLs: [], originalURL: nil, cancelReason: reason)
-    }
-    func cancelPendingUpload(reason: String?) async -> JSON? {
-        guard let request = pendingUploadRequests.first else { return nil }
-        return await cancelUpload(id: request.id, reason: reason)
     }
     // MARK: - Private Helpers
     private func handleUploadCompletion(

@@ -70,7 +70,7 @@ extension TemplateEditorView {
             manifestValidationMessage = "Validation failed: \(error.localizedDescription)"
         }
     }
-    static func emptyManifest(slug: String = "") -> String {
+    static func emptyManifest(slug _: String = "") -> String {
         let overrides = TemplateManifestOverrides(
             sectionOrder: Array(StandardSection.allCases),
             styling: TemplateManifestOverrides.Styling(
@@ -89,7 +89,7 @@ extension TemplateEditorView {
         }
         return string
     }
-    func decodeManifestOverrides(from data: Data, slug: String) -> TemplateManifestOverrides? {
+    func decodeManifestOverrides(from data: Data, slug _: String) -> TemplateManifestOverrides? {
         let decoder = JSONDecoder()
         if let overrides = try? decoder.decode(TemplateManifestOverrides.self, from: data) {
             return overrides
@@ -115,19 +115,5 @@ extension TemplateEditorView {
                 return "Manifest must contain styling, UI, or custom field overrides."
             }
         }
-    }
-    // MARK: - JSON Utilities
-    func prettyJSONString(from data: Data) -> String? {
-        guard let jsonObject = try? JSONSerialization.jsonObject(with: data) else {
-            return nil
-        }
-        return prettyJSONString(from: jsonObject)
-    }
-    func prettyJSONString(from object: Any) -> String? {
-        guard JSONSerialization.isValidJSONObject(object),
-              let data = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys]) else {
-            return nil
-        }
-        return String(data: data, encoding: .utf8)
     }
 }

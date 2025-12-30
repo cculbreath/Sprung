@@ -11,7 +11,6 @@ import Foundation
 
 struct DailyTasksResult {
     let tasks: [GeneratedDailyTask]
-    let summary: String?
 }
 
 struct JobSourcesResult {

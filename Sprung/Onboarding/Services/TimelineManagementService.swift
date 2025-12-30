@@ -20,31 +20,7 @@ actor TimelineManagementService: OnboardingEventEmitter {
         self.eventBus = eventBus
         self.phaseTransitionController = phaseTransitionController
     }
-    // MARK: - User Timeline Updates
-    /// Apply user timeline update from editor (Phase 3)
-    /// Replaces timeline in one shot and sends developer message
-    func applyUserTimelineUpdate(cards: [TimelineCard], meta: JSON?, diff: TimelineDiff) async {
-        // Build timeline JSON
-        let timeline = TimelineCardAdapter.makeTimelineJSON(cards: cards, meta: meta)
-        // Emit replacement event
-        await eventBus.publish(.skeletonTimelineReplaced(timeline: timeline, diff: diff, meta: meta))
-        // Build developer message
-        var payload = JSON()
-        payload["text"].string = """
-            Developer status: Timeline cards updated by the user (\(diff.summary)). \
-            The skeleton_timeline artifact now reflects their edits. \
-            Do not re-validate unless new information is introduced.
-            """
-        var details = JSON()
-        details["validation_state"].string = "user_validated"
-        details["diff_summary"].string = diff.summary
-        details["updated_count"].int = cards.count
-        payload["details"] = details
-        payload["payload"] = timeline
-        // Send developer message
-        await eventBus.publish(.llmSendDeveloperMessage(payload: payload))
-        Logger.info("📋 User timeline update applied (\(diff.summary))", category: .ai)
-    }
+
     // MARK: - Timeline Card Operations
     func createTimelineCard(fields: JSON) async -> JSON {
         var card = fields

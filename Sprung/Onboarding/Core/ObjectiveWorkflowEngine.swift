@@ -107,7 +107,7 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
         // Execute the workflow callbacks
         let outputs = workflow.outputs(for: newStatus, context: context)
         for output in outputs {
-            await processWorkflowOutput(output, objectiveId: id)
+            await processWorkflowOutput(output)
         }
         // If objective completed, check for dependent objectives to auto-start
         if newStatus == .completed {
@@ -162,7 +162,7 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
         }
     }
     // MARK: - Workflow Output Processing
-    private func processWorkflowOutput(_ output: ObjectiveWorkflowOutput, objectiveId: String) async {
+    private func processWorkflowOutput(_ output: ObjectiveWorkflowOutput) async {
         switch output {
         case .developerMessage(let title, let details, let payload, let toolChoice):
             await sendDeveloperMessage(title: title, details: details, payload: payload, toolChoice: toolChoice)

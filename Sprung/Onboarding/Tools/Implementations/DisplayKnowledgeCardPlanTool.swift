@@ -151,8 +151,6 @@ struct KnowledgeCardPlanItem: Identifiable, Equatable, Codable {
     let timelineEntryId: String?
     /// Artifact IDs assigned to this card (set by card merge)
     var assignedArtifactIds: [String]
-    /// Brief summaries of assigned artifacts for UI display
-    var assignedArtifactSummaries: [String]
 
     init(
         id: String,
@@ -161,8 +159,7 @@ struct KnowledgeCardPlanItem: Identifiable, Equatable, Codable {
         description: String? = nil,
         status: Status = .pending,
         timelineEntryId: String? = nil,
-        assignedArtifactIds: [String] = [],
-        assignedArtifactSummaries: [String] = []
+        assignedArtifactIds: [String] = []
     ) {
         self.id = id
         self.title = title
@@ -171,38 +168,5 @@ struct KnowledgeCardPlanItem: Identifiable, Equatable, Codable {
         self.status = status
         self.timelineEntryId = timelineEntryId
         self.assignedArtifactIds = assignedArtifactIds
-        self.assignedArtifactSummaries = assignedArtifactSummaries
-    }
-
-    func toJSON() -> JSON {
-        var json = JSON()
-        json["id"].string = id
-        json["title"].string = title
-        json["type"].string = type.rawValue
-        json["status"].string = status.rawValue
-        if let description = description {
-            json["description"].string = description
-        }
-        if let timelineEntryId = timelineEntryId {
-            json["timeline_entry_id"].string = timelineEntryId
-        }
-        if !assignedArtifactIds.isEmpty {
-            json["assigned_artifact_ids"].arrayObject = assignedArtifactIds
-        }
-        return json
-    }
-
-    /// Create a copy with updated artifact assignments
-    func withAssignments(artifactIds: [String], summaries: [String]) -> KnowledgeCardPlanItem {
-        KnowledgeCardPlanItem(
-            id: id,
-            title: title,
-            type: type,
-            description: description,
-            status: status,
-            timelineEntryId: timelineEntryId,
-            assignedArtifactIds: artifactIds,
-            assignedArtifactSummaries: summaries
-        )
     }
 }

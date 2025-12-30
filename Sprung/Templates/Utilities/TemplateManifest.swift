@@ -564,15 +564,6 @@ struct TemplateManifest: Codable {
             }
         }
     }
-    func makeDefaultContext() -> [String: Any] {
-        var context: [String: Any] = [:]
-        for key in sectionOrder {
-            if let value = sections[key]?.defaultContextValue() {
-                context[key] = value
-            }
-        }
-        return context
-    }
     static func normalize(_ value: Any) -> Any {
         switch value {
         case is NSNull:
@@ -614,65 +605,6 @@ extension TemplateManifest {
     func sectionVisibilityKeys() -> [String] {
         guard let defaultKeys = sectionVisibilityDefaults?.keys else { return [] }
         return Array(defaultKeys).sorted()
-    }
-}
-
-// MARK: - AI Revision Configuration Helpers
-extension TemplateManifest {
-    /// Check if a tree path matches any of the defaultAIFields patterns
-    /// - Parameter path: Tree path like "skills.0.keywords.2" or "work.1.highlights"
-    /// - Returns: true if this path should be pre-selected for AI revision
-    func isDefaultAIField(path: String) -> Bool {
-        guard let patterns = defaultAIFields else { return false }
-        return patterns.contains { pattern in
-            pathMatchesPattern(path: path, pattern: pattern)
-        }
-    }
-
-    /// Check if a tree path is a list container (should be reviewed as batch)
-    /// - Parameter path: Tree path like "skills.0.keywords" or "work.1.highlights"
-    /// - Returns: true if this path should use batch review
-    func isListContainer(path: String) -> Bool {
-        guard let patterns = listContainers else { return false }
-        return patterns.contains { pattern in
-            pathMatchesPattern(path: path, pattern: pattern)
-        }
-    }
-
-    /// Get review phases for a section
-    /// - Parameter section: Section name like "skills"
-    /// - Returns: Array of ReviewPhaseConfig sorted by phase number, or nil if no phases defined
-    func reviewPhasesConfig(for section: String) -> [ReviewPhaseConfig]? {
-        guard let phases = reviewPhases?[section], !phases.isEmpty else {
-            return nil
-        }
-        return phases.sorted { $0.phase < $1.phase }
-    }
-
-    /// Match a concrete path against a glob pattern
-    /// Pattern "work.*.highlights" matches "work.0.highlights", "work.1.highlights", etc.
-    /// - Parameters:
-    ///   - path: Concrete path with numeric indices
-    ///   - pattern: Glob pattern with * wildcards
-    /// - Returns: true if path matches pattern
-    private func pathMatchesPattern(path: String, pattern: String) -> Bool {
-        let pathComponents = path.split(separator: ".").map(String.init)
-        let patternComponents = pattern.split(separator: ".").map(String.init)
-
-        guard pathComponents.count == patternComponents.count else {
-            return false
-        }
-
-        for (pathPart, patternPart) in zip(pathComponents, patternComponents) {
-            if patternPart == "*" {
-                // Wildcard matches any single component (typically a numeric index)
-                continue
-            }
-            if pathPart != patternPart {
-                return false
-            }
-        }
-        return true
     }
 }
 // MARK: - Field Descriptor Synthesis

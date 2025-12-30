@@ -245,7 +245,7 @@ struct ListDirectoryTool: AgentTool {
     static func execute(
         parameters: Parameters,
         repoRoot: URL,
-        gitignorePatterns: [String] = []
+        gitignorePatterns _: [String] = []
     ) throws -> Result {
         let dirPath = parameters.path
         let maxDepth = min(5, parameters.depth ?? 2)
@@ -813,7 +813,7 @@ struct GrepSearchTool: AgentTool {
         repoRoot: URL,
         filePattern: String?,
         limit: Int,
-        contextLines: Int
+        contextLines _: Int
     ) throws -> Result {
         let regex = try NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
         let searchURL = URL(fileURLWithPath: searchPath)
@@ -957,33 +957,5 @@ enum GitToolError: LocalizedError {
         case .executionFailed(let message):
             return "Tool execution failed: \(message)"
         }
-    }
-}
-
-// MARK: - Git Tool Registry
-
-/// Registry of all available tools for the git analysis agent
-struct GitToolRegistry {
-    /// Get all tool definitions for LLM function calling
-    static func allToolDefinitions() -> [[String: Any]] {
-        [
-            toolDefinition(for: ReadFileTool.self),
-            toolDefinition(for: ListDirectoryTool.self),
-            toolDefinition(for: GlobSearchTool.self),
-            toolDefinition(for: GrepSearchTool.self),
-            toolDefinition(for: CompleteAnalysisTool.self)
-        ]
-    }
-
-    /// Create tool definition for LLM
-    private static func toolDefinition<T: AgentTool>(for tool: T.Type) -> [String: Any] {
-        [
-            "type": "function",
-            "function": [
-                "name": tool.name,
-                "description": tool.description,
-                "parameters": tool.parametersSchema
-            ]
-        ]
     }
 }

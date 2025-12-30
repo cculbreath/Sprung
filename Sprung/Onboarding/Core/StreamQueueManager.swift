@@ -19,7 +19,6 @@ actor StreamQueueManager {
     private(set) var hasStreamedFirstResponse = false
     // MARK: - Parallel Tool Call Batching
     private var expectedToolResponseCount: Int = 0
-    private var expectedToolCallIds: Set<String> = []
     private var collectedToolResponses: [JSON] = []
     // MARK: - Instance Identity (for debugging)
     private let instanceId = UUID()
@@ -55,7 +54,6 @@ actor StreamQueueManager {
                     Logger.info("📦 Single tool response (collected early) - sent", category: .ai)
                 }
                 expectedToolResponseCount = 0
-                expectedToolCallIds = []
                 // Process any extras (shouldn't happen but be safe)
                 for extra in collectedToolResponses {
                     enqueue(.toolResponse(payload: extra))
@@ -66,18 +64,15 @@ actor StreamQueueManager {
                 let batch = collectedToolResponses
                 collectedToolResponses = []
                 expectedToolResponseCount = 0
-                expectedToolCallIds = []
                 enqueueBatchedToolResponses(batch)
                 Logger.info("📦 All \(batch.count) tool responses (collected early) - sent as batch", category: .ai)
             } else {
                 // Still waiting for more responses
                 expectedToolResponseCount = expectedCount
-                expectedToolCallIds = Set(callIds)
                 Logger.info("📦 Waiting for \(expectedCount - collectedToolResponses.count) more tool responses", category: .ai)
             }
         } else {
             expectedToolResponseCount = expectedCount
-            expectedToolCallIds = Set(callIds)
         }
     }
     /// Enqueue a tool response, batching if needed for parallel tool calls
@@ -113,7 +108,6 @@ actor StreamQueueManager {
                 let batch = collectedToolResponses
                 // Reset batching state
                 expectedToolResponseCount = 0
-                expectedToolCallIds = []
                 collectedToolResponses = []
                 // Enqueue batch as a single request
                 enqueueBatchedToolResponses(batch)
@@ -123,7 +117,6 @@ actor StreamQueueManager {
             // Single tool call - send immediately
             enqueue(.toolResponse(payload: payload))
             expectedToolResponseCount = 0
-            expectedToolCallIds = []
             Logger.debug("📦 Single tool response - sent immediately", category: .ai)
         }
     }
@@ -164,7 +157,6 @@ actor StreamQueueManager {
         streamQueue.removeAll()
         hasStreamedFirstResponse = false
         expectedToolResponseCount = 0
-        expectedToolCallIds = []
         collectedToolResponses = []
     }
     /// Restore streaming state from snapshot
@@ -208,7 +200,6 @@ actor StreamQueueManager {
                     Logger.info("🔔 Chatbox message detected - clearing tool response block (was expecting \(expectedToolResponseCount), held \(collectedToolResponses.count))", category: .ai)
                     expectedToolResponseCount = 0
                     collectedToolResponses = []
-                    expectedToolCallIds = []
                 }
                 isStreaming = true
                 let request = streamQueue.remove(at: chatboxIndex)

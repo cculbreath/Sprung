@@ -49,16 +49,6 @@ enum AttendanceSize: String, Codable, CaseIterable {
     case medium = "Medium (30-100)"
     case large = "Large (100-300)"
     case massive = "Massive (300+)"
-
-    var networkingQuality: String {
-        switch self {
-        case .intimate: return "Deep conversations, everyone meets everyone"
-        case .small: return "Good for meaningful connections"
-        case .medium: return "Balanced — can still have quality conversations"
-        case .large: return "Harder to connect; be strategic"
-        case .massive: return "Focus on specific people; avoid random wandering"
-        }
-    }
 }
 
 enum EventPipelineStatus: String, Codable, CaseIterable {
@@ -96,15 +86,6 @@ enum AttendanceRecommendation: String, Codable, CaseIterable {
         case .skip: return "xmark.circle"
         }
     }
-
-    var color: String {
-        switch self {
-        case .strongYes: return "gold"
-        case .yes: return "green"
-        case .maybe: return "orange"
-        case .skip: return "gray"
-        }
-    }
 }
 
 enum EventRating: Int, Codable, CaseIterable {
@@ -113,16 +94,6 @@ enum EventRating: Int, Codable, CaseIterable {
     case okay = 3
     case good = 4
     case excellent = 5
-
-    var label: String {
-        switch self {
-        case .waste: return "Waste of time"
-        case .poor: return "Not valuable"
-        case .okay: return "Some value"
-        case .good: return "Worth it"
-        case .excellent: return "Excellent"
-        }
-    }
 }
 
 enum DiscoverySource: String, Codable {
@@ -201,20 +172,9 @@ class NetworkingEventOpportunity: Identifiable {
 
     init() {}
 
-    init(name: String, date: Date, location: String, url: String) {
-        self.name = name
-        self.date = date
-        self.location = location
-        self.url = url
-    }
-
     var isPast: Bool { date < Date() }
 
     var needsDebrief: Bool { attended && status != .debriefed }
-
-    var isUpcoming: Bool {
-        date > Date() && (status == .planned || status == .recommended)
-    }
 
     var daysUntilEvent: Int? {
         guard date > Date() else { return nil }
@@ -249,16 +209,6 @@ class NetworkingEventOpportunity: Identifiable {
         }
         set {
             thingsToAvoidJSON = newValue.flatMap { try? String(data: JSONEncoder().encode($0), encoding: .utf8) }
-        }
-    }
-
-    var targetCompaniesLikely: [String]? {
-        get {
-            guard let json = targetCompaniesLikelyJSON else { return nil }
-            return try? JSONDecoder().decode([String].self, from: Data(json.utf8))
-        }
-        set {
-            targetCompaniesLikelyJSON = newValue.flatMap { try? String(data: JSONEncoder().encode($0), encoding: .utf8) }
         }
     }
 
@@ -316,24 +266,6 @@ enum ContactWarmth: String, Codable, CaseIterable {
     case warm = "Warm"
     case cold = "Cold"
     case dormant = "Dormant"
-
-    var description: String {
-        switch self {
-        case .hot: return "Active dialogue, recent meaningful interaction"
-        case .warm: return "Good relationship, periodic contact"
-        case .cold: return "Haven't connected in a while"
-        case .dormant: return "Very old connection, needs reactivation"
-        }
-    }
-
-    var decayThresholdDays: Int {
-        switch self {
-        case .hot: return 14
-        case .warm: return 45
-        case .cold: return 90
-        case .dormant: return 999
-        }
-    }
 }
 
 enum RelationshipHealth: String, CaseIterable {
@@ -350,16 +282,6 @@ enum RelationshipHealth: String, CaseIterable {
         case .decaying: return "arrow.down.heart"
         case .dormant: return "moon.zzz"
         case .new: return "sparkles"
-        }
-    }
-
-    var color: String {
-        switch self {
-        case .healthy: return "green"
-        case .needsAttention: return "yellow"
-        case .decaying: return "orange"
-        case .dormant: return "gray"
-        case .new: return "blue"
         }
     }
 }
@@ -480,26 +402,6 @@ class NetworkingContact: Identifiable {
             tagsJSON = try? String(data: JSONEncoder().encode(newValue), encoding: .utf8)
         }
     }
-
-    var canReferTo: [String]? {
-        get {
-            guard let json = canReferToJSON else { return nil }
-            return try? JSONDecoder().decode([String].self, from: Data(json.utf8))
-        }
-        set {
-            canReferToJSON = newValue.flatMap { try? String(data: JSONEncoder().encode($0), encoding: .utf8) }
-        }
-    }
-
-    var linkedJobAppIds: [UUID]? {
-        get {
-            guard let json = linkedJobAppIdsJSON else { return nil }
-            return try? JSONDecoder().decode([UUID].self, from: Data(json.utf8))
-        }
-        set {
-            linkedJobAppIdsJSON = newValue.flatMap { try? String(data: JSONEncoder().encode($0), encoding: .utf8) }
-        }
-    }
 }
 
 // MARK: - Networking Interaction
@@ -519,23 +421,6 @@ enum InteractionType: String, Codable, CaseIterable {
     case slackDM = "Slack/Discord DM"
     case textMessage = "Text Message"
     case other = "Other"
-
-    var icon: String {
-        switch self {
-        case .email: return "envelope"
-        case .linkedInMessage, .linkedInComment: return "link"
-        case .phoneCall: return "phone"
-        case .videoCall: return "video"
-        case .coffee: return "cup.and.saucer"
-        case .eventMeeting: return "person.3"
-        case .introduction: return "arrow.triangle.branch"
-        case .referralGiven, .referralReceived: return "star"
-        case .informational: return "questionmark.bubble"
-        case .slackDM: return "bubble.left"
-        case .textMessage: return "message"
-        case .other: return "ellipsis"
-        }
-    }
 
     var isOutbound: Bool {
         switch self {

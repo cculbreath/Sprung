@@ -8,7 +8,6 @@ final class PhaseTransitionController {
     private let state: StateCoordinator
     private let eventBus: EventCoordinator
     private let phaseRegistry: PhaseScriptRegistry
-    private weak var lifecycleController: InterviewLifecycleController?
     // MARK: - Initialization
     init(
         state: StateCoordinator,
@@ -18,10 +17,6 @@ final class PhaseTransitionController {
         self.state = state
         self.eventBus = eventBus
         self.phaseRegistry = phaseRegistry
-    }
-    // MARK: - Lifecycle Controller Reference
-    func setLifecycleController(_ controller: InterviewLifecycleController) {
-        self.lifecycleController = controller
     }
     // MARK: - Phase Transition Handling
     func handlePhaseTransition(_ phaseName: String) async {
@@ -93,27 +88,6 @@ final class PhaseTransitionController {
         }
         Logger.info("🔄 Phase introductory prompt sent as developer message for phase: \(phaseName)", category: .ai)
     }
-    // MARK: - Phase Advancement
-    func advancePhase() async -> InterviewPhase? {
-        guard let newPhase = await state.advanceToNextPhase() else { return nil }
-        // Update wizard progress is handled by the coordinator
-        // via state synchronization
-        await registerObjectivesForCurrentPhase()
-        return newPhase
-    }
-    func nextPhase() async -> InterviewPhase? {
-        let canAdvance = await state.canAdvancePhase()
-        guard canAdvance else { return nil }
-        let currentPhase = await state.phase
-        switch currentPhase {
-        case .phase1CoreFacts:
-            return .phase2DeepDive
-        case .phase2DeepDive:
-            return .phase3WritingCorpus
-        case .phase3WritingCorpus, .complete:
-            return nil
-        }
-    }
     // MARK: - Phase Transition Requests
     func requestPhaseTransition(from: String, to: String, reason: String?) async {
         await eventBus.publish(.phaseTransitionRequested(
@@ -130,15 +104,5 @@ final class PhaseTransitionController {
     }
     func missingObjectives() async -> [String] {
         await state.getMissingObjectives()
-    }
-    func getCompletedObjectiveIds() async -> Set<String> {
-        let objectives = await state.getAllObjectives()
-        return Set(objectives
-            .filter { $0.status == .completed || $0.status == .skipped }
-            .map { $0.id })
-    }
-    // MARK: - System Prompt Building
-    func buildSystemPrompt(for phase: InterviewPhase) -> String {
-        phaseRegistry.buildSystemPrompt(for: phase)
     }
 }

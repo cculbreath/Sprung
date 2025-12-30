@@ -110,9 +110,6 @@ final class OnboardingInterviewCoordinator {
     var pendingSectionToggleRequest: OnboardingSectionToggleRequest? {
         toolRouter.pendingSectionToggleRequest
     }
-    func eventStream(for topic: EventTopic) async -> AsyncStream<OnboardingEvent> {
-        await eventBus.stream(topic: topic)
-    }
     // MARK: - Initialization
     init(
         llmFacade: LLMFacade?,
@@ -304,17 +301,6 @@ final class OnboardingInterviewCoordinator {
     func handleEvidenceUpload(url: URL, requirementId: String) async {
         await container.artifactIngestionCoordinator.handleEvidenceUpload(url: url, requirementId: requirementId)
     }
-    // MARK: - Phase Management
-    func advancePhase() async -> InterviewPhase? {
-        let newPhase = await phases.advancePhase()
-        let completedSteps = await state.completedWizardSteps
-        let currentStep = await state.currentWizardStep
-        synchronizeWizardTracker(currentStep: currentStep, completedSteps: completedSteps)
-        return newPhase
-    }
-    func getCompletedObjectiveIds() async -> Set<String> {
-        await phases.getCompletedObjectiveIds()
-    }
     // MARK: - Objective Management
     func updateObjectiveStatus(
         objectiveId: String,
@@ -379,20 +365,6 @@ final class OnboardingInterviewCoordinator {
         await eventBus.publish(.uploadRequestCancelled(id: id))
     }
 
-    func nextPhase() async -> InterviewPhase? {
-        await phases.nextPhase()
-    }
-    // MARK: - Extraction Management
-    // Internal helper for wizard tracker synchronization
-    private func synchronizeWizardTracker(
-        currentStep: StateCoordinator.WizardStep,
-        completedSteps: Set<StateCoordinator.WizardStep>
-    ) {
-        extraction.synchronizeWizardTracker(
-            currentStep: currentStep,
-            completedSteps: completedSteps
-        )
-    }
     // MARK: - Knowledge Card Plan
     func updateKnowledgeCardPlan(
         items: [KnowledgeCardPlanItem],
@@ -442,29 +414,6 @@ final class OnboardingInterviewCoordinator {
         await container.eventBus.publish(.llmExecuteDeveloperMessage(payload: payload))
     }
 
-    /// Ingest document files using the async ingestion pipeline
-    func ingestDocuments(_ fileURLs: [URL]) async {
-        let currentPlanItemId = ui.knowledgeCardPlanFocus
-        for url in fileURLs {
-            await container.artifactIngestionCoordinator.ingestDocument(
-                fileURL: url,
-                planItemId: currentPlanItemId
-            )
-        }
-    }
-
-    /// Check if there are pending artifacts for the current knowledge card item
-    func hasPendingArtifactsForCurrentItem() async -> Bool {
-        guard let planItemId = ui.knowledgeCardPlanFocus else { return false }
-        return await container.artifactIngestionCoordinator.hasPendingArtifacts(forPlanItem: planItemId)
-    }
-
-    /// Get status message for pending artifacts
-    func getPendingArtifactStatus() async -> String? {
-        guard let planItemId = ui.knowledgeCardPlanFocus else { return nil }
-        return await container.artifactIngestionCoordinator.getPendingStatusMessage(forPlanItem: planItemId)
-    }
-
     // MARK: - Tool Management
 
     func presentUploadRequest(_ request: OnboardingUploadRequest) {
@@ -487,28 +436,6 @@ final class OnboardingInterviewCoordinator {
             await eventBus.publish(.uploadRequestCancelled(id: id))
         }
         return result
-    }
-
-    func presentChoicePrompt(_ prompt: OnboardingChoicePrompt) {
-        Task {
-            await eventBus.publish(.choicePromptRequested(prompt: prompt))
-        }
-    }
-
-    func submitChoice(optionId: String) -> JSON? {
-        guard let result = toolRouter.promptHandler.resolveChoice(selectionIds: [optionId]) else {
-            return nil
-        }
-        Task {
-            await eventBus.publish(.choicePromptCleared)
-        }
-        return result.payload
-    }
-
-    func presentValidationPrompt(_ prompt: OnboardingValidationPrompt) {
-        Task {
-            await eventBus.publish(.validationPromptRequested(prompt: prompt))
-        }
     }
 
     func submitValidationResponse(
@@ -600,9 +527,6 @@ final class OnboardingInterviewCoordinator {
     }
     func completeUploadAndResume(id: UUID, fileURLs: [URL]) async {
         await uiResponseCoordinator.completeUploadAndResume(id: id, fileURLs: fileURLs, coordinator: self)
-    }
-    func completeUploadAndResume(id: UUID, link: URL) async {
-        await uiResponseCoordinator.completeUploadAndResume(id: id, link: link, coordinator: self)
     }
     func skipUploadAndResume(id: UUID) async {
         await uiResponseCoordinator.skipUploadAndResume(id: id, coordinator: self)
@@ -987,8 +911,7 @@ final class OnboardingInterviewCoordinator {
                 description: mergedCard.dateRange,
                 status: .pending,
                 timelineEntryId: nil,
-                assignedArtifactIds: artifactIds,
-                assignedArtifactSummaries: []
+                assignedArtifactIds: artifactIds
             )
         }
 
@@ -1087,19 +1010,11 @@ final class OnboardingInterviewCoordinator {
         await lifecycleController.resetStore()
     }
     // MARK: - Utility
-    func notifyInvalidModel(id: String) {
-        Logger.warning("⚠️ Invalid model id reported: \(id)", category: .ai)
-        ui.modelAvailabilityMessage = "Your selected model (\(id)) is not available. Choose another model in Settings."
-        uiResponseCoordinator.notifyInvalidModel(id: id)
-    }
     func clearModelAvailabilityMessage() {
         ui.modelAvailabilityMessage = nil
     }
     func transcriptExportString() -> String {
         ChatTranscriptFormatter.format(messages: ui.messages)
-    }
-    func buildSystemPrompt(for phase: InterviewPhase) -> String {
-        phases.buildSystemPrompt(for: phase)
     }
     #if DEBUG
     // MARK: - Debug Event Diagnostics

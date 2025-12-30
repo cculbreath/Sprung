@@ -104,22 +104,12 @@ class ApplicantProfile {
         }
         return nil
     }
-    func getPictureImage() -> Image? {
-        guard let data = pictureData,
-              let nsImage = NSImage(data: data) else {
-            return nil
-        }
-        return Image(nsImage: nsImage)
-    }
+
     func pictureDataURL() -> String? {
         guard let pictureData else { return nil }
         let mimeType = pictureMimeType ?? "image/png"
         let base64 = pictureData.base64EncodedString()
         return "data:\(mimeType);base64,\(base64)"
-    }
-    func updatePicture(data: Data?, mimeType: String?) {
-        pictureData = data
-        pictureMimeType = data == nil ? nil : (mimeType ?? pictureMimeType ?? "image/png")
     }
 }
 struct Applicant {
@@ -161,8 +151,6 @@ struct Applicant {
     }
     // Forward properties to maintain backward compatibility
     var name: String { profile.name }
-    var label: String { profile.label }
-    var summary: String { profile.summary }
     var address: String { profile.address }
     var city: String { profile.city }
     var state: String { profile.state }
@@ -170,9 +158,6 @@ struct Applicant {
     var websites: String { profile.websites }
     var email: String { profile.email }
     var phone: String { profile.phone }
-    var pictureDataURL: String? { profile.pictureDataURL() }
-    var picture: String { profileDataURL ?? "" }
-    private var profileDataURL: String? { profile.pictureDataURL() }
     /// Provides a non-empty placeholder applicant for previews and fallbacks.
     static var placeholder: Applicant {
         Applicant(

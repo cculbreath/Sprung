@@ -277,7 +277,4 @@ struct OnboardingPendingExtraction: Identifiable {
             progressItems[index].detail = nil
         }
     }
-    mutating func applyProgressUpdates(_ updates: [ExtractionProgressUpdate]) {
-        updates.forEach { applyProgressUpdate($0) }
-    }
 }

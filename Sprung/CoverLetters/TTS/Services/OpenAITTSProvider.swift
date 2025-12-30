@@ -142,7 +142,7 @@ class OpenAITTSProvider {
     ///   - voice: The voice to use
     ///   - instructions: Custom voice instructions (optional)
     ///   - onComplete: Called when audio playback is complete or fails
-    func speakText(_ text: String, voice: Voice = .nova, instructions: String? = nil, onComplete: @escaping (Error?) -> Void) {
+    func speakText(_ text: String, voice: Voice = .nova, instructions _: String? = nil, onComplete: @escaping (Error?) -> Void) {
         // OpenAI TTS has a 4096 character limit
         let maxLength = 4096
         var textToSpeak = text
@@ -345,7 +345,7 @@ class OpenAITTSProvider {
     private func streamSingleChunk(
         _ text: String,
         voice: Voice,
-        instructions: String?,
+        instructions _: String?,
         onStart: (() -> Void)?,
         onComplete: @escaping (Error?) -> Void
     ) {

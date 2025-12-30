@@ -81,21 +81,12 @@ final class CoachingSessionStore: SwiftDataStore {
     }
 
     func update(_ session: CoachingSession) {
+        _ = session // Silence unused warning - parameter needed for API consistency
         saveContext()
     }
 
     func delete(_ session: CoachingSession) {
         modelContext.delete(session)
-        saveContext()
-    }
-
-    /// Clear old sessions (older than specified days)
-    func clearOldSessions(olderThan days: Int = 30) {
-        let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: Date()) ?? Date()
-        let oldSessions = allSessions.filter { $0.sessionDate < cutoff }
-        for session in oldSessions {
-            modelContext.delete(session)
-        }
         saveContext()
     }
 

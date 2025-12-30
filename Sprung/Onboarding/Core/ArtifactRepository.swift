@@ -12,10 +12,7 @@ actor ArtifactRepository: OnboardingEventEmitter {
     private var pendingKnowledgeCards: [String: JSON] = [:]
     // MARK: - Synchronous Caches (for SwiftUI)
     nonisolated(unsafe) private(set) var artifactRecordsSync: [JSON] = []
-    nonisolated(unsafe) private(set) var applicantProfileSync: JSON?
     nonisolated(unsafe) private(set) var skeletonTimelineSync: JSON?
-    nonisolated(unsafe) private(set) var enabledSectionsSync: Set<String> = []
-    nonisolated(unsafe) private(set) var knowledgeCardsSync: [JSON] = []
     /// Archived artifacts (from previous sessions, available for reuse)
     nonisolated(unsafe) private(set) var archivedArtifactsSync: [JSON] = []
     // MARK: - Initialization
@@ -31,7 +28,6 @@ actor ArtifactRepository: OnboardingEventEmitter {
     /// Set applicant profile artifact
     func setApplicantProfile(_ profile: JSON?) async {
         artifacts.applicantProfile = profile
-        applicantProfileSync = profile
         Logger.info("👤 Applicant profile \(profile != nil ? "saved" : "cleared")", category: .ai)
         // Emit event for state coordinator to update objectives
         if profile != nil {
@@ -59,7 +55,6 @@ actor ArtifactRepository: OnboardingEventEmitter {
     /// Set enabled sections
     func setEnabledSections(_ sections: Set<String>) async {
         artifacts.enabledSections = sections
-        enabledSectionsSync = sections
         Logger.info("📑 Enabled sections updated: \(sections.count) sections", category: .ai)
         // Emit event for state coordinator to update objectives
         await emit(.enabledSectionsUpdated(sections))
@@ -183,39 +178,6 @@ actor ArtifactRepository: OnboardingEventEmitter {
         return deleted
     }
 
-    /// Update the summary field for an artifact (called after summarization)
-    func updateArtifactSummary(artifactId: String, summary: String) async {
-        guard let index = artifacts.artifactRecords.firstIndex(where: { record in
-            record["id"].string == artifactId
-        }) else {
-            Logger.warning("⚠️ Artifact not found for summary update: \(artifactId)", category: .ai)
-            return
-        }
-
-        var artifact = artifacts.artifactRecords[index]
-        artifact["summary"].string = summary
-        artifact["summary_generated_at"].string = ISO8601DateFormatter().string(from: Date())
-        artifacts.artifactRecords[index] = artifact
-        artifactRecordsSync = artifacts.artifactRecords
-
-        Logger.info("✅ Artifact summary updated: \(artifactId) (\(summary.count) chars)", category: .ai)
-    }
-
-    /// Check if an artifact has a summary
-    func hasArtifactSummary(artifactId: String) -> Bool {
-        guard let artifact = getArtifactRecord(id: artifactId) else { return false }
-        return artifact["summary"].string?.isEmpty == false
-    }
-
-    /// Get artifacts that need summarization (have extracted text but no summary)
-    func getArtifactsNeedingSummary() -> [JSON] {
-        artifacts.artifactRecords.filter { artifact in
-            let hasExtractedText = !artifact["extracted_text"].stringValue.isEmpty
-            let hasSummary = !artifact["summary"].stringValue.isEmpty
-            return hasExtractedText && !hasSummary
-        }
-    }
-
     // MARK: - Archived Artifacts Management
 
     /// Set archived artifacts (loaded from SwiftData)
@@ -237,11 +199,6 @@ actor ArtifactRepository: OnboardingEventEmitter {
     func removeFromArchivedCache(id: String) {
         archivedArtifactsSync.removeAll { $0["id"].stringValue == id }
         Logger.debug("📦 Removed from archived cache: \(id)", category: .ai)
-    }
-
-    /// Get archived artifacts count (for UI visibility)
-    func getArchivedArtifactsCount() -> Int {
-        archivedArtifactsSync.count
     }
 
     // MARK: - Timeline Card Management
@@ -307,11 +264,6 @@ actor ArtifactRepository: OnboardingEventEmitter {
         // The TimelineManagementService already published the event that triggered this
     }
     // MARK: - Experience & Knowledge Cards
-    /// Add experience card
-    func addExperienceCard(_ card: JSON) async {
-        artifacts.experienceCards.append(card)
-        Logger.info("💼 Experience card added (total: \(artifacts.experienceCards.count))", category: .ai)
-    }
     /// Get all experience cards
     func getExperienceCards() -> [JSON] {
         artifacts.experienceCards
@@ -321,13 +273,11 @@ actor ArtifactRepository: OnboardingEventEmitter {
     /// Do NOT emit .knowledgeCardPersisted here - that would create an infinite loop!
     func addKnowledgeCard(_ card: JSON) async {
         artifacts.knowledgeCards.append(card)
-        knowledgeCardsSync = artifacts.knowledgeCards
         Logger.info("🃏 Knowledge card added (total: \(artifacts.knowledgeCards.count))", category: .ai)
     }
     /// Set knowledge cards (bulk restore)
     func setKnowledgeCards(_ cards: [JSON]) async {
         artifacts.knowledgeCards = cards
-        knowledgeCardsSync = cards
         Logger.info("🃏 Knowledge cards loaded (total: \(artifacts.knowledgeCards.count))", category: .ai)
     }
     /// Get all knowledge cards
@@ -368,17 +318,7 @@ actor ArtifactRepository: OnboardingEventEmitter {
         Logger.debug("🗑️ Pending KC removed: \(id) (remaining: \(pendingKnowledgeCards.count))", category: .ai)
     }
 
-    /// Get all pending card IDs
-    func getPendingCardIds() -> [String] {
-        Array(pendingKnowledgeCards.keys)
-    }
-
     // MARK: - Writing Samples
-    /// Add writing sample
-    func addWritingSample(_ sample: JSON) async {
-        artifacts.writingSamples.append(sample)
-        Logger.info("✍️ Writing sample added (total: \(artifacts.writingSamples.count))", category: .ai)
-    }
     /// Get all writing samples
     func getWritingSamples() -> [JSON] {
         artifacts.writingSamples
@@ -389,10 +329,7 @@ actor ArtifactRepository: OnboardingEventEmitter {
     func reset() {
         artifacts = OnboardingArtifacts()
         artifactRecordsSync = []
-        applicantProfileSync = nil
         skeletonTimelineSync = nil
-        enabledSectionsSync = []
-        knowledgeCardsSync = []
         Logger.info("🔄 ArtifactRepository reset", category: .ai)
     }
 }

@@ -203,10 +203,6 @@ actor SessionUIState: OnboardingEventEmitter {
             Logger.info("▶️  EXITING WAITING STATE (was: \(previousState.rawValue))", category: .ai)
         }
     }
-    /// Clear waiting state and restore normal tools
-    func clearWaitingState() async {
-        await setWaitingState(nil)
-    }
     /// Get current waiting state
     func getWaitingState() -> WaitingState? {
         waitingState
@@ -235,19 +231,6 @@ actor SessionUIState: OnboardingEventEmitter {
 
     // MARK: - KC Auto-Validation Queue Management
 
-    /// Enqueue a card ID for auto-validation
-    /// If no validation is currently active, immediately emit validation request
-    /// Returns: whether the card was queued (true) or immediately presented (false)
-    func enqueueKCValidation(_ cardId: String) {
-        pendingKCValidationQueue.append(cardId)
-        Logger.info("📋 KC validation queued: \(cardId) (queue size: \(pendingKCValidationQueue.count))", category: .ai)
-    }
-
-    /// Get the next card ID from the validation queue without removing it
-    func peekNextKCValidation() -> String? {
-        pendingKCValidationQueue.first
-    }
-
     /// Remove and return the next card ID from the validation queue
     func dequeueNextKCValidation() -> String? {
         guard !pendingKCValidationQueue.isEmpty else { return nil }
@@ -262,13 +245,6 @@ actor SessionUIState: OnboardingEventEmitter {
     /// Set whether current validation is auto-initiated (from KC agent completion)
     func setAutoValidation(_ isAuto: Bool) {
         isAutoValidation = isAuto
-    }
-
-    /// Clear the KC validation queue
-    func clearKCValidationQueue() {
-        pendingKCValidationQueue.removeAll()
-        isAutoValidation = false
-        Logger.info("🗑️ KC validation queue cleared", category: .ai)
     }
     /// Set pending extraction
     /// - Parameters:
@@ -358,11 +334,6 @@ actor SessionUIState: OnboardingEventEmitter {
         }
     }
 
-    /// Get allowed tools for the current phase, minus any excluded tools
-    private func getAllowedToolsForCurrentPhase() -> Set<String> {
-        let phaseTools = phasePolicy.allowedTools[currentPhase] ?? []
-        return phaseTools.subtracting(excludedTools)
-    }
     /// Public API to trigger tool permission republication
     func publishToolPermissionsNow() async {
         await publishToolPermissions()
@@ -378,11 +349,6 @@ actor SessionUIState: OnboardingEventEmitter {
             phaseAllowedTools: phaseTools,
             excludedTools: excludedTools
         )
-    }
-    /// Update excluded tools and republish permissions
-    func setExcludedTools(_ tools: Set<String>) async {
-        excludedTools = tools
-        await publishToolPermissions()
     }
     /// Add a tool to the excluded set
     func excludeTool(_ toolName: String) async {

@@ -12,18 +12,15 @@ final class ResStore: SwiftDataStore {
     // MARK: - Properties
     unowned let modelContext: ModelContext
     private let exportCoordinator: ResumeExportCoordinator
-    private let applicantProfileStore: ApplicantProfileStore
     private let experienceDefaultsStore: ExperienceDefaultsStore
     // MARK: - Initialiser
     init(
         context: ModelContext,
         exportCoordinator: ResumeExportCoordinator,
-        applicantProfileStore: ApplicantProfileStore,
         experienceDefaultsStore: ExperienceDefaultsStore
     ) {
         modelContext = context
         self.exportCoordinator = exportCoordinator
-        self.applicantProfileStore = applicantProfileStore
         self.experienceDefaultsStore = experienceDefaultsStore
     }
     @discardableResult

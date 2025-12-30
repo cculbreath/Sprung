@@ -39,11 +39,7 @@ struct ConfigureEnabledSectionsTool: InterviewTool {
         )
     }()
     private unowned let coordinator: OnboardingInterviewCoordinator
-    private let dateFormatter: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
+
     var name: String { OnboardingToolName.configureEnabledSections.rawValue }
     var description: String {
         """

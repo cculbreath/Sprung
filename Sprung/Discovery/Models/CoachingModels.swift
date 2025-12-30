@@ -219,22 +219,6 @@ struct ActivitySnapshot: Codable {
         let toStage: String
     }
 
-    /// Check if there was any activity
-    var hasActivity: Bool {
-        newJobApps > 0 ||
-        !stageChanges.isEmpty ||
-        resumesCreated > 0 ||
-        resumesModified > 0 ||
-        coverLettersCreated > 0 ||
-        coverLettersModified > 0 ||
-        !coverLetterDetails.isEmpty ||
-        eventsAdded > 0 ||
-        eventsAttended > 0 ||
-        eventsDebriefed > 0 ||
-        contactsAdded > 0 ||
-        interactionsLogged > 0
-    }
-
     /// Generate a human-readable summary for the LLM prompt
     func textSummary() -> String {
         var parts: [String] = []
@@ -541,17 +525,6 @@ enum CoachingFollowUpAction: String, Codable, CaseIterable {
         case .done: return "I'm good for now"
         }
     }
-
-    var description: String {
-        switch self {
-        case .chooseFocusJobs: return "Select the top 5 jobs to focus on today based on fit"
-        case .generateTasks: return "Tasks were auto-generated from this coaching session"
-        case .staleAppCheck: return "Find applications that need follow-up"
-        case .networkingSuggestions: return "Identify contacts to reach out to"
-        case .quickWins: return "3-5 minute tasks for quick momentum"
-        case .done: return "End the coaching session"
-        }
-    }
 }
 
 // MARK: - Coaching State
@@ -568,15 +541,6 @@ enum CoachingState: Equatable {
     case complete(sessionId: UUID)
     case error(String)
 
-    var isLoading: Bool {
-        switch self {
-        case .generatingReport, .generatingRecommendations, .executingFollowUp:
-            return true
-        default:
-            return false
-        }
-    }
-
     var isActive: Bool {
         switch self {
         case .idle, .complete, .error:
@@ -592,7 +556,6 @@ enum CoachingState: Equatable {
 /// Response from task regeneration LLM call
 struct TaskRegenerationResponse: Codable {
     let tasks: [TaskJSON]
-    let explanation: String
 }
 
 /// JSON representation of a task from LLM response

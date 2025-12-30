@@ -31,7 +31,7 @@ struct DiscoveryResponseParser {
             tasks.append(task)
         }
 
-        return DailyTasksResult(tasks: tasks, summary: json["summary"].string)
+        return DailyTasksResult(tasks: tasks)
     }
 
     func parseSources(_ response: String) throws -> JobSourcesResult {

@@ -214,8 +214,7 @@ final class OnboardingDependencyContainer {
         // 9. Initialize session persistence handler
         self.sessionPersistenceHandler = SwiftDataSessionPersistenceHandler(
             eventBus: core.eventBus,
-            sessionStore: sessionStore,
-            chatTranscriptStore: stores.chatTranscriptStore
+            sessionStore: sessionStore
         )
 
         // 10. Initialize lifecycle controller (merged with session coordinator)
@@ -291,7 +290,6 @@ final class OnboardingDependencyContainer {
         )
 
         // 12. Post-init configuration
-        phaseTransitionController.setLifecycleController(lifecycleController)
         tools.toolRouter.uploadHandler.updateExtractionProgressHandler { [services] update in
             Task { @MainActor in services.extractionManagementService.updateExtractionProgress(with: update) }
         }
@@ -338,7 +336,7 @@ final class OnboardingDependencyContainer {
 
         let uploadStorage = OnboardingUploadStorage()
         let documentProcessingService = DocumentProcessingService(
-            documentExtractionService: documentExtractionService, uploadStorage: uploadStorage, dataStore: dataStore,
+            documentExtractionService: documentExtractionService,
             llmFacade: llmFacade
         )
         return DocumentComponents(
@@ -362,7 +360,7 @@ final class OnboardingDependencyContainer {
         )
         let uploadHandler = UploadInteractionHandler(
             uploadFileService: UploadFileService(), uploadStorage: uploadStorage,
-            applicantProfileStore: applicantProfileStore, dataStore: dataStore,
+            applicantProfileStore: applicantProfileStore,
             eventBus: eventBus, extractionProgressHandler: nil
         )
         let toolRouter = ToolHandler(
@@ -381,7 +379,7 @@ final class OnboardingDependencyContainer {
     ) -> Services {
         Services(
             extractionManagementService: ExtractionManagementService(
-                eventBus: eventBus, state: state, toolRouter: toolRouter, wizardTracker: wizardTracker
+                eventBus: eventBus, state: state
             ),
             timelineManagementService: TimelineManagementService(
                 eventBus: eventBus, phaseTransitionController: phaseTransitionController
@@ -459,9 +457,6 @@ final class OnboardingDependencyContainer {
     // MARK: - Accessors for External Dependencies
     func getApplicantProfileStore() -> ApplicantProfileStore {
         applicantProfileStore
-    }
-    func getDataStore() -> InterviewDataStore {
-        dataStore
     }
     func getResRefStore() -> ResRefStore {
         resRefStore

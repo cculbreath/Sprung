@@ -10,14 +10,12 @@ import Foundation
 
 actor URLValidationService {
     private let session: URLSession
-    private let timeoutInterval: TimeInterval
 
     init(timeoutInterval: TimeInterval = 10.0) {
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = timeoutInterval
         config.timeoutIntervalForResource = timeoutInterval
         self.session = URLSession(configuration: config)
-        self.timeoutInterval = timeoutInterval
     }
 
     /// Validate a single URL
@@ -122,18 +120,4 @@ struct URLValidationResult {
     let isValid: Bool
     let statusCode: Int?
     let error: String?
-
-    var isNetworkError: Bool {
-        statusCode == nil && error != nil
-    }
-
-    var isServerError: Bool {
-        guard let code = statusCode else { return false }
-        return code >= 500
-    }
-
-    var isClientError: Bool {
-        guard let code = statusCode else { return false }
-        return code >= 400 && code < 500
-    }
 }

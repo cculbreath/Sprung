@@ -94,11 +94,6 @@ final class JobAppStore: SwiftDataStore {
         return jobsNeedingPreprocessing.count
     }
 
-    /// Count of jobs that need preprocessing
-    var pendingPreprocessingCount: Int {
-        jobApps.filter { !$0.jobDescription.isEmpty && !$0.hasPreprocessingComplete }.count
-    }
-
     /// Re-run preprocessing for all active jobs (pending, queued, in-progress).
     /// This is useful when knowledge cards are updated and need to be re-matched.
     /// Returns the count of jobs queued for reprocessing.
@@ -260,11 +255,6 @@ final class JobAppStore: SwiftDataStore {
         return (try? modelContext.fetch(descriptor)) ?? []
     }
 
-    /// Active job apps (not in terminal stages)
-    var activeJobApps: [JobApp] {
-        allJobAppsSorted.filter { $0.isActive }
-    }
-
     /// Job apps filtered by status
     func jobApps(forStatus status: Statuses) -> [JobApp] {
         allJobAppsSorted.filter { $0.status == status }
@@ -275,51 +265,11 @@ final class JobAppStore: SwiftDataStore {
         allJobAppsSorted.first { $0.id == id }
     }
 
-    // MARK: - Pipeline Stats
-
-    /// Count of job apps per status
-    var pipelineStats: [Statuses: Int] {
-        Dictionary(grouping: allJobAppsSorted) { $0.status }
-            .mapValues { $0.count }
-    }
-
-    /// Count of active job apps
-    var activeCount: Int {
-        activeJobApps.count
-    }
-
-    /// Count of applications submitted this week
-    var thisWeeksApplications: Int {
-        let calendar = Calendar.current
-        let weekStart = calendar.date(
-            from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())
-        ) ?? Date()
-
-        return allJobAppsSorted.filter {
-            guard let appliedDate = $0.appliedDate else { return false }
-            return appliedDate >= weekStart
-        }.count
-    }
-
     // MARK: - Pipeline CRUD
 
     /// Add a new job app to the pipeline
     func addToPipeline(_ jobApp: JobApp) {
         modelContext.insert(jobApp)
-        saveContext()
-    }
-
-    /// Add multiple job apps to the pipeline
-    func addMultipleToPipeline(_ jobApps: [JobApp]) {
-        for jobApp in jobApps {
-            modelContext.insert(jobApp)
-        }
-        saveContext()
-    }
-
-    /// Delete a job app from the pipeline
-    func deleteFromPipeline(_ jobApp: JobApp) {
-        modelContext.delete(jobApp)
         saveContext()
     }
 
@@ -369,79 +319,5 @@ final class JobAppStore: SwiftDataStore {
         jobApp.rejectionReason = reason
         jobApp.closedDate = Date()
         saveContext()
-    }
-
-    /// Mark a job app as withdrawn
-    func withdraw(_ jobApp: JobApp, reason: String?) {
-        jobApp.status = .withdrawn
-        jobApp.withdrawalReason = reason
-        jobApp.closedDate = Date()
-        saveContext()
-    }
-
-    /// Record an interview for a job app
-    func recordInterview(_ jobApp: JobApp, notes: String?) {
-        jobApp.interviewCount += 1
-        jobApp.lastInterviewDate = Date()
-        if jobApp.firstInterviewDate == nil {
-            jobApp.firstInterviewDate = Date()
-        }
-        if let notes = notes {
-            jobApp.lastInterviewNotes = notes
-        }
-        saveContext()
-    }
-
-    // MARK: - Priority Management
-
-    /// Set the priority of a job app
-    func setPriority(_ jobApp: JobApp, to priority: JobLeadPriority) {
-        jobApp.priority = priority
-        saveContext()
-    }
-
-    // MARK: - Pipeline Filtering
-
-    /// High priority active job apps
-    var highPriorityJobApps: [JobApp] {
-        activeJobApps.filter { $0.priority == .high }
-    }
-
-    /// Job apps that need attention based on staleness
-    var needsAction: [JobApp] {
-        activeJobApps.filter { jobApp in
-            switch jobApp.status {
-            case .new:
-                return (jobApp.daysSinceCreated ?? 0) > 3
-            case .queued:
-                return (jobApp.daysSinceCreated ?? 0) > 5
-            case .inProgress:
-                return (jobApp.daysSinceCreated ?? 0) > 7
-            case .submitted:
-                return (jobApp.daysSinceApplied ?? 0) > 14
-            case .interview:
-                if let lastInterview = jobApp.lastInterviewDate {
-                    let days = Calendar.current.dateComponents([.day], from: lastInterview, to: Date()).day ?? 0
-                    return days > 7
-                }
-                return false
-            default:
-                return false
-            }
-        }
-    }
-
-    // MARK: - Source Tracking
-
-    /// Count of job apps by source
-    func jobAppsBySource() -> [String: Int] {
-        Dictionary(grouping: allJobAppsSorted) { $0.source ?? "Unknown" }
-            .mapValues { $0.count }
-    }
-
-    /// Count of successful (accepted) job apps by source
-    func successfulJobAppsBySource() -> [String: Int] {
-        Dictionary(grouping: allJobAppsSorted.filter { $0.status == .accepted }) { $0.source ?? "Unknown" }
-            .mapValues { $0.count }
     }
 }

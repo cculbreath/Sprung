@@ -15,7 +15,6 @@ struct NewAppSheetView: View {
     @State private var verydelayed: Bool = false
     @State private var showCloudflareChallenge: Bool = false
     @State private var challengeURL: URL?
-    @State private var baddomain: Bool = false
     @State private var errorMessage: String?
     @State private var showError: Bool = false
     @State private var showLinkedInLogin: Bool = false

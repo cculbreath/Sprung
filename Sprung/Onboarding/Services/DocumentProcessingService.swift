@@ -11,8 +11,6 @@ import SwiftyJSON
 actor DocumentProcessingService {
     // MARK: - Properties
     private let documentExtractionService: DocumentExtractionService
-    private let uploadStorage: OnboardingUploadStorage
-    private let dataStore: InterviewDataStore
     private var llmFacade: LLMFacade?
 
     // Card pipeline service (inventory determines document type itself)
@@ -21,14 +19,10 @@ actor DocumentProcessingService {
     // MARK: - Initialization
     init(
         documentExtractionService: DocumentExtractionService,
-        uploadStorage: OnboardingUploadStorage,
-        dataStore: InterviewDataStore,
         llmFacade: LLMFacade? = nil,
         inventoryService: CardInventoryService? = nil
     ) {
         self.documentExtractionService = documentExtractionService
-        self.uploadStorage = uploadStorage
-        self.dataStore = dataStore
         self.llmFacade = llmFacade
         self.inventoryService = inventoryService ?? CardInventoryService(llmFacade: llmFacade)
         Logger.info("📄 DocumentProcessingService initialized", category: .ai)

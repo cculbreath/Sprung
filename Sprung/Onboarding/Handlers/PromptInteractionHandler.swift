@@ -29,17 +29,6 @@ final class PromptInteractionHandler {
         Logger.info("✅ Choice prompt resolved (ids: \(selectionIds.joined(separator: ", ")), source: \(source ?? "none"))", category: .ai)
         return (payload, source)
     }
-    func cancelChoicePrompt(reason: String) -> JSON? {
-        guard pendingChoicePrompt != nil else { return nil }
-        var payload = JSON()
-        payload["cancelled"].boolValue = true
-        if !reason.isEmpty {
-            payload["userNotes"].string = reason
-        }
-        pendingChoicePrompt = nil
-        Logger.info("❌ Choice prompt cancelled: \(reason)", category: .ai)
-        return payload
-    }
     // MARK: - Validation Prompts
     func presentValidationPrompt(_ prompt: OnboardingValidationPrompt) {
         pendingValidationPrompt = prompt
@@ -68,17 +57,6 @@ final class PromptInteractionHandler {
         }
         pendingValidationPrompt = nil
         Logger.info("✅ Validation response submitted (status: \(status))", category: .ai)
-        return payload
-    }
-    func cancelValidation(reason: String) -> JSON? {
-        guard pendingValidationPrompt != nil else { return nil }
-        Logger.info("❌ Validation prompt cancelled: \(reason)", category: .ai)
-        var payload = JSON()
-        payload["cancelled"].boolValue = true
-        if !reason.isEmpty {
-            payload["userNotes"].string = reason
-        }
-        pendingValidationPrompt = nil
         return payload
     }
     // MARK: - Lifecycle

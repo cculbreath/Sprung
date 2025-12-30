@@ -352,22 +352,3 @@ actor DiscoveryToolExecutor {
         return result.rawString() ?? "{\"status\": \"error\"}"
     }
 }
-
-// MARK: - Tool Execution Error
-
-enum DiscoveryToolError: LocalizedError {
-    case invalidParameters(String)
-    case notFound(String)
-    case contextUnavailable(String)
-
-    var errorDescription: String? {
-        switch self {
-        case .invalidParameters(let msg):
-            return "Invalid parameters: \(msg)"
-        case .notFound(let msg):
-            return "Not found: \(msg)"
-        case .contextUnavailable(let msg):
-            return "Context unavailable: \(msg)"
-        }
-    }
-}

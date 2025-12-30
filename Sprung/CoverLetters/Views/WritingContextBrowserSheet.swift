@@ -20,7 +20,6 @@ struct WritingContextBrowserSheet: View {
                 get: { allCoverRefs },
                 set: { _ in }
             ),
-            coverRefStore: coverRefStore,
             onCardUpdated: { _ in
                 // SwiftData query auto-refreshes
             },

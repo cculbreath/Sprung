@@ -35,7 +35,6 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
         var expectedCount: Int
         var collectedArtifacts: [JSON] = []
         var skippedCount: Int = 0
-        var startTime: Date = Date()
         var timeoutTask: Task<Void, Never>?
 
         init(expectedCount: Int) {

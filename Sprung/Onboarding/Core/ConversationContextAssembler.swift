@@ -19,49 +19,6 @@ actor ConversationContextAssembler {
         Logger.info("📝 ConversationContextAssembler initialized (full conversation history mode)", category: .ai)
     }
     // MARK: - Context Assembly
-    /// Build input items for a user message
-    func buildForUserMessage(
-        text: String
-    ) async -> [InputItem] {
-        var items: [InputItem] = []
-        // Note: We're back to using previous_response_id, so OpenAI manages conversation history
-        // We only need to send the current message and optional state cues
-        // 1. State cues developer message (only if we have conversation history)
-        // Skip for the very first message to encourage natural conversation
-        // Note: Tool management is now handled via API's tools parameter
-        let messages = await state.messages
-        if !messages.isEmpty {
-            let stateCues = await buildStateCues()
-            if !stateCues.isEmpty {
-                items.append(.message(InputMessage(
-                    role: "developer",
-                    content: .text(stateCues)
-                )))
-            }
-        }
-        // 2. Current user message
-        items.append(.message(InputMessage(
-            role: "user",
-            content: .text(text)
-        )))
-        Logger.debug("📦 Assembled context: \(items.count) items", category: .ai)
-        return items
-    }
-    /// Build input items for a developer message
-    func buildForDeveloperMessage(
-        text: String
-    ) async -> [InputItem] {
-        var items: [InputItem] = []
-        // Note: We're back to using previous_response_id, so OpenAI manages conversation history
-        // We only need to send the current developer message
-        // Current developer message
-        items.append(.message(InputMessage(
-            role: "developer",
-            content: .text(text)
-        )))
-        Logger.debug("📦 Assembled developer context: \(items.count) items", category: .ai)
-        return items
-    }
     /// Build input items for a tool response
     func buildForToolResponse(
         output: JSON,
@@ -107,26 +64,6 @@ actor ConversationContextAssembler {
             return "incomplete"
         }
         return status
-    }
-    /// Build state cues developer message
-    /// Note: Tool management is now handled via API's tools parameter, not injected here
-    private func buildStateCues() async -> String {
-        let phase = await state.phase
-        let objectives = await state.getAllObjectives()
-        let phaseObjectives = objectives.filter { $0.phase == phase }
-        var cues: [String] = []
-        // Phase info
-        cues.append("Phase: \(phase.rawValue)")
-        // Objectives summary
-        var objectiveSummary: [String] = []
-        for objective in phaseObjectives.sorted(by: { $0.id < $1.id }) {
-            objectiveSummary.append("\(objective.id)=\(objective.status.rawValue)")
-        }
-        if !objectiveSummary.isEmpty {
-            cues.append("Objectives: \(objectiveSummary.joined(separator: ", "))")
-        }
-        guard !cues.isEmpty else { return "" }
-        return "State update:\n" + cues.joined(separator: "\n")
     }
     /// Build full conversation history (all messages from the interview)
     /// Used when restoring from checkpoint or starting fresh without previous_response_id

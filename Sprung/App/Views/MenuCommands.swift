@@ -21,17 +21,6 @@ extension FocusedValues {
     }
 }
 
-// MARK: - Knowledge Cards Menu Item
-/// Menu item to open the Knowledge Cards browser
-struct KnowledgeCardsMenuItem: View {
-    var body: some View {
-        Button("Knowledge Cards...") {
-            NotificationCenter.default.post(name: .toggleKnowledgeCards, object: nil)
-        }
-        .keyboardShortcut("k", modifiers: [.command, .option])
-    }
-}
-
 // MARK: - Menu Command Notifications
 /// Central list of notifications bridging AppKit menu/toolbar commands into the SwiftUI layer.
 extension Notification.Name {

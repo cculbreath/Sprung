@@ -11,10 +11,6 @@ enum InterviewPhase: String, Codable, CaseIterable {
     case phase2DeepDive = "Phase 2: Deep Dive"
     case phase3WritingCorpus = "Phase 3: Writing Corpus"
     case complete = "Complete"
-    /// Human-readable description
-    var description: String {
-        rawValue
-    }
     /// Short identifier for logging
     var shortName: String {
         switch self {

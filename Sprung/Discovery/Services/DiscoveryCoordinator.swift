@@ -112,10 +112,6 @@ final class DiscoveryCoordinator {
 
     private(set) var discoveryStatus: DiscoveryStatus = .idle
 
-    func updateDiscoveryStatus(_ status: DiscoveryStatus) {
-        self.discoveryStatus = status
-    }
-
     // MARK: - Discovery State (persists across navigation)
 
     let sourcesDiscovery = DiscoveryState()
@@ -143,14 +139,8 @@ final class DiscoveryCoordinator {
 
     // MARK: - Convenience Service Access (delegated to sub-coordinators)
 
-    var urlValidationService: URLValidationService { networkingCoordinator.urlValidationService }
     var llmService: DiscoveryLLMService? { pipelineCoordinator.llmService }
     var calendarService: CalendarIntegrationService? { pipelineCoordinator.calendarService }
-
-    // MARK: - State
-
-    private(set) var isInitialized: Bool = false
-    var currentTimeEntry: TimeEntry? { pipelineCoordinator.currentTimeEntry }
 
     // MARK: - Private Dependencies
 
@@ -210,7 +200,6 @@ final class DiscoveryCoordinator {
             activityReportService: activityService,
             sessionStore: sessionStore,
             dailyTaskStore: dailyTaskStore,
-            settingsStore: settingsStore,
             preferencesStore: preferencesStore,
             jobAppStore: jobAppStore,
             interviewDataStore: interviewDataStore
@@ -246,50 +235,10 @@ final class DiscoveryCoordinator {
         }
     }
 
-    func initialize() {
-        guard !isInitialized else { return }
-
-        pipelineCoordinator.initialize()
-        networkingCoordinator.initialize()
-
-        isInitialized = true
-        Logger.info("✅ Discovery initialized", category: .appLifecycle)
-    }
-
     // MARK: - Module State Checks
 
     var needsOnboarding: Bool {
         pipelineCoordinator.needsOnboarding
-    }
-
-    var hasActiveSources: Bool {
-        networkingCoordinator.hasActiveSources
-    }
-
-    // MARK: - Time Tracking (delegated to pipeline coordinator)
-
-    func startTimeTracking(activity: ActivityType) {
-        pipelineCoordinator.startTimeTracking(activity: activity)
-    }
-
-    func endTimeTracking() {
-        pipelineCoordinator.endTimeTracking()
-    }
-
-    func switchTimeTracking(to activity: ActivityType) {
-        pipelineCoordinator.switchTimeTracking(to: activity)
-    }
-
-    // MARK: - Source Operations (delegated to networking coordinator)
-
-    func visitSource(_ source: JobSource) {
-        networkingCoordinator.visitSource(source)
-    }
-
-    // MARK: - Source Validation (delegated to networking coordinator)
-
-    func validateSources() async {
-        await networkingCoordinator.validateSources()
     }
 
     // MARK: - Daily Summary (coordinated across sub-coordinators)

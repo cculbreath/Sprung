@@ -459,27 +459,6 @@ enum TemplateManifestDefaults {
             allowsManualMutations: allowsManualMutations
         )
     }
-    private static func locationField() -> TemplateManifest.Section.FieldDescriptor {
-        TemplateManifest.Section.FieldDescriptor(
-            key: "location",
-            input: nil,
-            required: false,
-            repeatable: false,
-            validation: nil,
-            titleTemplate: nil,
-            children: [
-                field("address", input: .text, binding: ["location", "address"]),
-                field("postalCode", input: .text, binding: ["location", "postalCode"]),
-                field("city", input: .text, binding: ["location", "city"]),
-                field("countryCode", input: .text, binding: ["location", "countryCode"]),
-                field("region", input: .text, binding: ["location", "region"])
-            ],
-            placeholder: nil,
-            behavior: nil,
-            binding: nil,
-            allowsManualMutations: false
-        )
-    }
     private static func profilesField() -> TemplateManifest.Section.FieldDescriptor {
         TemplateManifest.Section.FieldDescriptor(
             key: "profiles",

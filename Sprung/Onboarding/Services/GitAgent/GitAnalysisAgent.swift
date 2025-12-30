@@ -478,7 +478,7 @@ class GitAnalysisAgent {
 
     // MARK: - Result Parsing
 
-    private func buildParsingErrorMessage(arguments: String, error: Error) -> String {
+    private func buildParsingErrorMessage(arguments _: String, error: Error) -> String {
         // Extract specific decoding error details if available
         var specificError = error.localizedDescription
         if let decodingError = error as? DecodingError {

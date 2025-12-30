@@ -208,32 +208,6 @@ enum DailyTaskType: String, Codable, CaseIterable {
     case networking = "Networking"
     case eventPrep = "Event Prep"
     case eventDebrief = "Debrief"
-
-    var icon: String {
-        switch self {
-        case .gatherLeads: return "magnifyingglass"
-        case .customizeMaterials: return "pencil"
-        case .submitApplication: return "paperplane"
-        case .followUp: return "arrow.uturn.right"
-        case .networking: return "person.2"
-        case .eventPrep: return "person.bubble"
-        case .eventDebrief: return "doc.text"
-        }
-    }
-}
-
-enum TaskPriority: String, Codable, CaseIterable {
-    case high = "High"
-    case medium = "Medium"
-    case low = "Low"
-
-    var sortOrder: Int {
-        switch self {
-        case .high: return 0
-        case .medium: return 1
-        case .low: return 2
-        }
-    }
 }
 
 @Model
@@ -281,17 +255,6 @@ enum ActivityType: String, Codable, CaseIterable {
     case llmChat = "AI Assistance"
     case appActive = "Sprung Active"
     case other = "Other"
-
-    var color: String {
-        switch self {
-        case .customizing: return "blue"
-        case .gathering: return "green"
-        case .applying: return "purple"
-        case .networking: return "orange"
-        case .interviewPrep: return "red"
-        default: return "gray"
-        }
-    }
 }
 
 enum TrackingSource: String, Codable {
@@ -323,13 +286,6 @@ class TimeEntry: Identifiable {
     init(activityType: ActivityType, startTime: Date) {
         self.activityType = activityType
         self.startTime = startTime
-    }
-
-    var duration: TimeInterval {
-        if let end = endTime {
-            return end.timeIntervalSince(startTime)
-        }
-        return TimeInterval(durationSeconds)
     }
 
     var durationMinutes: Int {
@@ -381,10 +337,6 @@ class WeeklyGoal: Identifiable {
 
     init(weekStartDate: Date) {
         self.weekStartDate = weekStartDate
-    }
-
-    var weekEndDate: Date {
-        Calendar.current.date(byAdding: .day, value: 6, to: weekStartDate) ?? weekStartDate
     }
 
     var applicationProgress: Double {

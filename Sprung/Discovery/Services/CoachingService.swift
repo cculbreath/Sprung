@@ -19,7 +19,6 @@ final class CoachingService {
     private let activityReportService: ActivityReportService
     private let sessionStore: CoachingSessionStore
     private let dailyTaskStore: DailyTaskStore
-    private let settingsStore: DiscoverySettingsStore
     private let preferencesStore: SearchPreferencesStore
     private let jobAppStore: JobAppStore
     private let interviewDataStore: InterviewDataStore
@@ -56,7 +55,6 @@ final class CoachingService {
         activityReportService: ActivityReportService,
         sessionStore: CoachingSessionStore,
         dailyTaskStore: DailyTaskStore,
-        settingsStore: DiscoverySettingsStore,
         preferencesStore: SearchPreferencesStore,
         jobAppStore: JobAppStore,
         interviewDataStore: InterviewDataStore
@@ -66,7 +64,6 @@ final class CoachingService {
         self.activityReportService = activityReportService
         self.sessionStore = sessionStore
         self.dailyTaskStore = dailyTaskStore
-        self.settingsStore = settingsStore
         self.preferencesStore = preferencesStore
         self.jobAppStore = jobAppStore
         self.interviewDataStore = interviewDataStore
@@ -113,11 +110,6 @@ final class CoachingService {
                 Logger.error("Failed to auto-start coaching: \(error)", category: .ai)
             }
         }
-    }
-
-    /// Check if there's a completed session for today
-    var hasSessionToday: Bool {
-        sessionStore.hasCompletedSessionToday
     }
 
     /// Get the currently selected model ID for coaching (OpenRouter model)
@@ -664,81 +656,6 @@ final class CoachingService {
 
         // Request a contextual follow-up offer from the model
         await requestFollowUpOffer()
-    }
-
-    /// Parse recommendations to extract prose and JSON tasks
-    private func parseRecommendationsAndTasks(_ response: String) -> (prose: String, tasks: [DailyTask]) {
-        // Look for JSON block at the end of response
-        // Format: ```json\n{...}\n``` or just {...} at the end
-        var prose = response
-        var tasks: [DailyTask] = []
-
-        // Try to find JSON block with markdown code fence
-        if let jsonStart = response.range(of: "```json", options: .backwards),
-           let jsonEnd = response.range(of: "```", options: .backwards, range: jsonStart.upperBound..<response.endIndex) {
-            let jsonString = String(response[jsonStart.upperBound..<jsonEnd.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
-            prose = String(response[..<jsonStart.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
-            tasks = parseTasksFromJSON(jsonString)
-        }
-        // Try to find bare JSON object at end
-        else if let lastBrace = response.lastIndex(of: "}"),
-                let firstBrace = response[..<lastBrace].lastIndex(of: "{"),
-                response[firstBrace...].contains("daily_tasks") {
-            let jsonString = String(response[firstBrace...lastBrace])
-            prose = String(response[..<firstBrace]).trimmingCharacters(in: .whitespacesAndNewlines)
-            tasks = parseTasksFromJSON(jsonString)
-        }
-
-        if tasks.isEmpty {
-            Logger.warning("Coaching: No daily tasks found in response", category: .ai)
-        } else {
-            Logger.info("Coaching: Parsed \(tasks.count) daily tasks from response", category: .ai)
-        }
-
-        return (prose, tasks)
-    }
-
-    /// Parse JSON string into DailyTask array
-    private func parseTasksFromJSON(_ jsonString: String) -> [DailyTask] {
-        let json = JSON(parseJSON: jsonString)
-        let tasksArray = json["daily_tasks"].arrayValue
-
-        return tasksArray.compactMap { taskJSON -> DailyTask? in
-            let taskTypeStr = taskJSON["task_type"].stringValue
-            guard let taskType = mapTaskType(taskTypeStr) else {
-                Logger.warning("Coaching: Unknown task type '\(taskTypeStr)'", category: .ai)
-                return nil
-            }
-
-            let title = taskJSON["title"].stringValue
-            guard !title.isEmpty else { return nil }
-
-            let task = DailyTask()
-            task.taskType = taskType
-            task.title = title
-            task.taskDescription = taskJSON["description"].string
-            task.priority = taskJSON["priority"].intValue
-            task.estimatedMinutes = taskJSON["estimated_minutes"].int
-            task.isLLMGenerated = true
-
-            // Handle related_id if present
-            if let relatedIdStr = taskJSON["related_id"].string,
-               let relatedId = UUID(uuidString: relatedIdStr) {
-                // Assign to appropriate relationship based on task type
-                switch taskType {
-                case .gatherLeads:
-                    task.relatedJobSourceId = relatedId
-                case .customizeMaterials, .submitApplication, .followUp:
-                    task.relatedJobAppId = relatedId
-                case .networking:
-                    task.relatedContactId = relatedId
-                case .eventPrep, .eventDebrief:
-                    task.relatedEventId = relatedId
-                }
-            }
-
-            return task
-        }
     }
 
     /// Map task type string from prompt to DailyTaskType enum

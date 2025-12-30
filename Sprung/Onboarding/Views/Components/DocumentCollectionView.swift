@@ -45,10 +45,6 @@ struct DocumentCollectionView: View {
         coordinator.ui.artifactRecords.count
     }
 
-    private var isCollectionActive: Bool {
-        coordinator.ui.isDocumentCollectionActive
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             // Header

@@ -105,10 +105,6 @@ actor DocumentExtractionService {
         self.eventBus = eventBus
     }
 
-    func updateLLMFacade(_ facade: LLMFacade?) {
-        self.llmFacade = facade
-    }
-
     func updateEventBus(_ bus: EventCoordinator?) {
         self.eventBus = bus
     }
@@ -346,7 +342,7 @@ actor DocumentExtractionService {
         sha256: String,
         purpose: String,
         timeout: TimeInterval?,
-        autoPersist: Bool,
+        autoPersist _: Bool,
         progress: ExtractionProgressHandler?
     ) async throws -> ExtractionResult {
         func notifyProgress(_ stage: ExtractionProgressStage, _ state: ExtractionProgressStageState, detail: String? = nil) async {

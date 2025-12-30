@@ -35,11 +35,6 @@ final class PhaseScriptRegistry {
         scripts[phase]
     }
 
-    /// Returns the script for the current phase.
-    func currentScript(for phase: InterviewPhase) -> PhaseScript? {
-        script(for: phase)
-    }
-
     /// Returns the base developer message text (sent once on first request, persists via previous_response_id).
     /// Phase introductory prompts are sent as additional developer messages at phase start.
     func buildSystemPrompt(for phase: InterviewPhase) -> String {

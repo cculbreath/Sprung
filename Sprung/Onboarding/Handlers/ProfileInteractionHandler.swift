@@ -34,11 +34,6 @@ final class ProfileInteractionHandler {
         self.eventBus = eventBus
     }
     // MARK: - Validation Flow (Approve/Reject)
-    /// Presents a validation request for an applicant profile.
-    func presentProfileRequest(_ request: OnboardingApplicantProfileRequest) {
-        pendingApplicantProfileRequest = request
-        Logger.info("📋 Profile validation request presented", category: .ai)
-    }
     /// Clears the current profile request.
     func clearProfileRequest() {
         pendingApplicantProfileRequest = nil
@@ -239,15 +234,6 @@ final class ProfileInteractionHandler {
         // Show the profile summary card
         showProfileSummary(profile: dataJSON)
         Logger.info("✅ Draft completed (source: \(source == .contacts ? "contacts" : "manual"))", category: .ai)
-    }
-    /// Cancels profile intake.
-    func cancelIntake(reason: String) -> JSON? {
-        guard pendingApplicantProfileIntake != nil else { return nil }
-        Logger.info("❌ Profile intake cancelled: \(reason)", category: .ai)
-        var payload = JSON()
-        payload["cancelled"].boolValue = true
-        pendingApplicantProfileIntake = nil
-        return payload
     }
     /// Clears the applicant profile intake state without completing it.
     /// Used when extraction begins to allow spinner to show.

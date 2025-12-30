@@ -8,16 +8,6 @@
 import Foundation
 import SwiftOpenAI
 
-/// Protocol for types that provide schema metadata
-protocol SchemaDescribable {
-    /// Schema description for the type
-    static var schemaDescription: String? { get }
-}
-
-extension SchemaDescribable {
-    static var schemaDescription: String? { nil }
-}
-
 /// Builder for constructing JSON schemas with type-safe API
 struct SchemaBuilder {
     private var schemaType: JSONSchemaType = .object
@@ -63,20 +53,6 @@ struct SchemaBuilder {
         return builder
     }
 
-    func number(description: String? = nil) -> SchemaBuilder {
-        var builder = self
-        builder.schemaType = .number
-        builder.description = description
-        return builder
-    }
-
-    func boolean(description: String? = nil) -> SchemaBuilder {
-        var builder = self
-        builder.schemaType = .boolean
-        builder.description = description
-        return builder
-    }
-
     // MARK: - Property Configuration
 
     func property(_ name: String, _ schema: JSONSchema, required: Bool = false) -> SchemaBuilder {
@@ -85,12 +61,6 @@ struct SchemaBuilder {
         if required {
             builder.requiredFields.append(name)
         }
-        return builder
-    }
-
-    func required(_ fields: String...) -> SchemaBuilder {
-        var builder = self
-        builder.requiredFields.append(contentsOf: fields)
         return builder
     }
 
@@ -126,18 +96,6 @@ enum SchemaGenerator {
             .build()
     }
 
-    static func number(description: String? = nil) -> JSONSchema {
-        SchemaBuilder()
-            .number(description: description)
-            .build()
-    }
-
-    static func boolean(description: String? = nil) -> JSONSchema {
-        SchemaBuilder()
-            .boolean(description: description)
-            .build()
-    }
-
     // MARK: - Complex Types
 
     static func array(of itemType: JSONSchema, description: String? = nil) -> JSONSchema {
@@ -159,30 +117,6 @@ enum SchemaGenerator {
         }
 
         return builder.build()
-    }
-
-    // MARK: - Optional Types
-
-    static func optional(_ schema: JSONSchema) -> JSONSchema {
-        JSONSchema(
-            type: .union([schema.type ?? .string, .null]),
-            description: schema.description,
-            properties: schema.properties,
-            items: schema.items,
-            required: schema.required,
-            additionalProperties: schema.additionalProperties ?? false,
-            enum: schema.enum
-        )
-    }
-
-    // MARK: - Enum Helper
-
-    static func enumSchema<E: RawRepresentable>(
-        _ enumType: E.Type,
-        description: String? = nil
-    ) -> JSONSchema where E.RawValue == String, E: CaseIterable {
-        let values = enumType.allCases.map { $0.rawValue }
-        return string(description: description, enumValues: values)
     }
 }
 

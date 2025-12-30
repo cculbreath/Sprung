@@ -55,10 +55,6 @@ actor StateCoordinator: OnboardingEventEmitter {
     // StreamQueueManager handles serial LLM streaming and parallel tool call batching
     // MARK: - LLM State (Delegated to LLMStateManager)
     // LLMStateManager handles tool names, response IDs, model config, and tool pane cards
-    // MARK: - State Accessors
-    var pendingValidationPrompt: OnboardingValidationPrompt? {
-        get async { await uiState.pendingValidationPrompt }
-    }
     // MARK: - Initialization
     init(
         eventBus: EventCoordinator,
@@ -79,12 +75,6 @@ actor StateCoordinator: OnboardingEventEmitter {
         Logger.info("🎯 StateCoordinator initialized (orchestrator mode with injected services)", category: .ai)
     }
     // MARK: - Phase Management
-    private static let nextPhaseMap: [InterviewPhase: InterviewPhase?] = [
-        .phase1CoreFacts: .phase2DeepDive,
-        .phase2DeepDive: .phase3WritingCorpus,
-        .phase3WritingCorpus: .complete,
-        .complete: nil
-    ]
     func setPhase(_ phase: InterviewPhase) async {
         self.phase = phase
         // Reset user approval flags when entering new phase
@@ -102,17 +92,6 @@ actor StateCoordinator: OnboardingEventEmitter {
         if approved {
             Logger.info("✅ User approved skipping KC generation", category: .ai)
         }
-    }
-    func advanceToNextPhase() async -> InterviewPhase? {
-        guard await canAdvancePhase() else { return nil }
-        guard let nextPhase = Self.nextPhaseMap[phase] ?? nil else {
-            return nil
-        }
-        await setPhase(nextPhase)
-        return nextPhase
-    }
-    func canAdvancePhase() async -> Bool {
-        return await objectiveStore.canAdvancePhase(from: phase)
     }
     // MARK: - Wizard Progress (Queries ObjectiveStore)
     private func updateWizardProgress() async {
@@ -535,20 +514,12 @@ actor StateCoordinator: OnboardingEventEmitter {
         }
     }
     // MARK: - LLM State Accessors (Delegated to LLMStateManager)
-    /// Get allowed tool names
-    func getAllowedToolNames() async -> Set<String> {
-        await llmStateManager.getAllowedToolNames()
-    }
     /// Update conversation state (called by LLMMessenger when response completes)
     /// - Parameters:
     ///   - responseId: The response ID from the completed response
     ///   - hadToolCalls: Whether this response included tool calls (affects checkpoint safety)
     func updateConversationState(responseId: String, hadToolCalls: Bool = false) async {
         await llmStateManager.updateConversationState(responseId: responseId, hadToolCalls: hadToolCalls)
-    }
-    /// Get last response ID
-    func getLastResponseId() async -> String? {
-        await llmStateManager.getLastResponseId()
     }
     /// Set model ID
     func setModelId(_ modelId: String) async {
@@ -579,26 +550,9 @@ actor StateCoordinator: OnboardingEventEmitter {
     func setPendingToolResponses(_ payloads: [JSON]) async {
         await llmStateManager.setPendingToolResponses(payloads)
     }
-    /// Get pending tool response payloads for retry
-    func getPendingToolResponses() async -> [JSON] {
-        await llmStateManager.getPendingToolResponses()
-    }
-    /// Check if there are pending tool responses
-    func hasPendingToolResponses() async -> Bool {
-        await llmStateManager.hasPendingToolResponses()
-    }
     /// Clear pending tool responses (call after successful acknowledgment)
     func clearPendingToolResponses() async {
         await llmStateManager.clearPendingToolResponses()
-    }
-    /// Get pending tool responses for retry, with retry counting
-    /// Returns nil if max retries exceeded (caller should revert to clean state)
-    func getPendingToolResponsesForRetry() async -> [JSON]? {
-        await llmStateManager.getPendingToolResponsesForRetry()
-    }
-    /// Get the current retry count for pending tool responses (for exponential backoff)
-    func getPendingToolResponseRetryCount() async -> Int {
-        await llmStateManager.getPendingToolResponseRetryCount()
     }
 
     // MARK: - Pending UI Tool Call (Codex Paradigm)
@@ -610,11 +564,6 @@ actor StateCoordinator: OnboardingEventEmitter {
         await llmStateManager.setPendingUIToolCall(callId: callId, toolName: toolName)
     }
 
-    /// Check if there's a pending UI tool awaiting user action
-    func hasPendingUIToolCall() async -> Bool {
-        await llmStateManager.hasPendingUIToolCall()
-    }
-
     /// Get the pending UI tool call info
     func getPendingUIToolCall() async -> (callId: String, toolName: String)? {
         await llmStateManager.getPendingUIToolCall()
@@ -623,16 +572,6 @@ actor StateCoordinator: OnboardingEventEmitter {
     /// Clear the pending UI tool call (after user action sends tool output)
     func clearPendingUIToolCall() async {
         await llmStateManager.clearPendingUIToolCall()
-    }
-
-    /// Queue a developer message while a UI tool is pending
-    func queueDeveloperMessage(_ payload: JSON) async {
-        await llmStateManager.queueDeveloperMessage(payload)
-    }
-
-    /// Drain queued developer messages (call after UI tool output is sent)
-    func drainQueuedDeveloperMessages() async -> [JSON] {
-        await llmStateManager.drainQueuedDeveloperMessages()
     }
 
     /// Pop any pending forced tool choice override (one-shot).
@@ -646,121 +585,6 @@ actor StateCoordinator: OnboardingEventEmitter {
         await llmStateManager.setPendingForcedToolChoice(toolName)
     }
 
-    /// Check if there are queued developer messages
-    func hasQueuedDeveloperMessages() async -> Bool {
-        await llmStateManager.hasQueuedDeveloperMessages()
-    }
-
-    // MARK: - Snapshot Management
-    struct StateSnapshot: Codable {
-        let phase: InterviewPhase
-        let objectives: [String: ObjectiveStore.ObjectiveEntry]
-        let wizardStep: String
-        let completedWizardSteps: Set<String>
-        // Conversation state for resume (clean response ID = no pending tool calls)
-        let lastCleanResponseId: String?
-        let currentModelId: String
-        let messages: [OnboardingMessage]
-        let hasStreamedFirstResponse: Bool
-        // ToolPane UI state for resume
-        let currentToolPaneCard: OnboardingToolPaneCard
-        let evidenceRequirements: [EvidenceRequirement]
-        // Dossier WIP notes (scratchpad)
-        let dossierNotes: String?
-    }
-    func createSnapshot() async -> StateSnapshot {
-        let allObjectives = await objectiveStore.getAllObjectives()
-        let objectivesDict = Dictionary(uniqueKeysWithValues: allObjectives.map { ($0.id, $0) })
-        // Get conversation state
-        let currentMessages = await chatStore.getAllMessages()
-        let hasStreamedFirst = await streamQueueManager.getHasStreamedFirstResponse()
-        let llmSnapshot = await llmStateManager.createSnapshot()
-        return StateSnapshot(
-            phase: phase,
-            objectives: objectivesDict,
-            wizardStep: currentWizardStep.rawValue,
-            completedWizardSteps: Set(completedWizardSteps.map { $0.rawValue }),
-            lastCleanResponseId: llmSnapshot.lastCleanResponseId,  // Use clean ID for safe restore
-            currentModelId: llmSnapshot.currentModelId,
-            messages: currentMessages,
-            hasStreamedFirstResponse: hasStreamedFirst,
-            currentToolPaneCard: llmSnapshot.currentToolPaneCard,
-            evidenceRequirements: evidenceRequirements,
-            dossierNotes: dossierNotes.isEmpty ? nil : dossierNotes
-        )
-    }
-    func restoreFromSnapshot(_ snapshot: StateSnapshot) async {
-        phase = snapshot.phase
-        await objectiveStore.restore(objectives: snapshot.objectives)
-        if let step = WizardStep(rawValue: snapshot.wizardStep) {
-            currentWizardStep = step
-        }
-        completedWizardSteps = Set(snapshot.completedWizardSteps.compactMap { WizardStep(rawValue: $0) })
-        // Restore conversation state using clean response ID
-        if let cleanResponseId = snapshot.lastCleanResponseId {
-            await chatStore.setPreviousResponseId(cleanResponseId)
-            Logger.info("📝 Restoring from clean response ID: \(cleanResponseId.prefix(8))...", category: .ai)
-        }
-        // Restore LLM state via LLMStateManager
-        let llmSnapshot = LLMStateManager.Snapshot(
-            lastCleanResponseId: snapshot.lastCleanResponseId,
-            currentModelId: snapshot.currentModelId,
-            currentToolPaneCard: snapshot.currentToolPaneCard
-        )
-        await llmStateManager.restoreFromSnapshot(llmSnapshot)
-        await chatStore.restoreMessages(snapshot.messages)
-        Logger.info("💬 Restored \(snapshot.messages.count) chat messages", category: .ai)
-        // Restore streaming state via StreamQueueManager
-        await streamQueueManager.restoreState(hasStreamedFirstResponse: snapshot.hasStreamedFirstResponse)
-        // Restore evidence requirements
-        evidenceRequirements = snapshot.evidenceRequirements
-        // Restore dossier notes
-        dossierNotes = snapshot.dossierNotes ?? ""
-        Logger.info("📥 State restored from snapshot with conversation history", category: .ai)
-    }
-    /// Backfill objective statuses when migrating from legacy snapshots
-    private func backfillObjectiveStatuses(snapshot: StateSnapshot) async {
-        let restoredObjectives = snapshot.objectives
-        // contact_source_selected: completed if applicant_profile was completed
-        if let applicantProfile = restoredObjectives[OnboardingObjectiveId.applicantProfile.rawValue],
-           applicantProfile.status == .completed {
-            await objectiveStore.setObjectiveStatus(
-                OnboardingObjectiveId.contactSourceSelected.rawValue,
-                status: .completed,
-                source: "migration",
-                notes: "Backfilled based on applicant_profile completion"
-            )
-        }
-        // contact_data_collected: completed if applicant_profile.contact_intake.persisted was completed
-        if let contactPersisted = restoredObjectives[OnboardingObjectiveId.applicantProfileContactIntakePersisted.rawValue],
-           contactPersisted.status == .completed {
-            await objectiveStore.setObjectiveStatus(
-                OnboardingObjectiveId.contactDataCollected.rawValue,
-                status: .completed,
-                source: "migration",
-                notes: "Backfilled based on contact_intake.persisted completion"
-            )
-        }
-        // contact_data_validated: completed if applicant_profile.contact_intake.persisted was completed
-        if let contactPersisted = restoredObjectives[OnboardingObjectiveId.applicantProfileContactIntakePersisted.rawValue],
-           contactPersisted.status == .completed {
-            await objectiveStore.setObjectiveStatus(
-                OnboardingObjectiveId.contactDataValidated.rawValue,
-                status: .completed,
-                source: "migration",
-                notes: "Backfilled based on contact_intake.persisted completion"
-            )
-        }
-        Logger.info("✅ Objective status backfill completed", category: .ai)
-    }
-    private func emitSnapshot(reason: String) async {
-        let snapshot = await createSnapshot()
-        var snapshotJSON = JSON()
-        snapshotJSON["phase"].string = snapshot.phase.rawValue
-        snapshotJSON["wizardStep"].string = snapshot.wizardStep
-        let updatedKeys = ["phase", "wizardStep", "objectives"]
-        await emit(.stateSnapshot(updatedKeys: updatedKeys, snapshot: snapshotJSON))
-    }
     // MARK: - Reset
     func reset() async {
         phase = .phase1CoreFacts
@@ -776,9 +600,6 @@ actor StateCoordinator: OnboardingEventEmitter {
         Logger.info("🔄 StateCoordinator reset (all services reset)", category: .ai)
     }
     // MARK: - ToolPane Card Tracking (Delegated to LLMStateManager)
-    func setToolPaneCard(_ card: OnboardingToolPaneCard) async {
-        await llmStateManager.setToolPaneCard(card)
-    }
     func getCurrentToolPaneCard() async -> OnboardingToolPaneCard {
         await llmStateManager.getCurrentToolPaneCard()
     }
@@ -808,11 +629,6 @@ actor StateCoordinator: OnboardingEventEmitter {
             return
         }
         await objectiveStore.setObjectiveStatus(objectiveId, status: objectiveStatus, source: "session_restore")
-    }
-
-    /// Restore an artifact from persisted session
-    func restoreArtifact(_ artifact: JSON) async {
-        await artifactRepository.addArtifactRecord(artifact)
     }
 
     /// Restore multiple artifacts from persisted session
@@ -851,14 +667,6 @@ actor StateCoordinator: OnboardingEventEmitter {
     func storeApplicantProfile(_ profile: JSON) async {
         await artifactRepository.setApplicantProfile(profile)
     }
-    /// Store skeleton timeline in artifact repository
-    func storeSkeletonTimeline(_ timeline: JSON) async {
-        await artifactRepository.setSkeletonTimeline(timeline)
-    }
-    /// Store enabled sections in artifact repository
-    func storeEnabledSections(_ sections: Set<String>) async {
-        await artifactRepository.setEnabledSections(sections)
-    }
     var artifacts: OnboardingArtifacts {
         get async {
             // Reconstruct artifacts struct from repository
@@ -886,11 +694,6 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
 
     // MARK: - Pending Knowledge Cards (Milestone 7)
-
-    /// Store a generated card for later submission (keeps content out of main thread)
-    func storePendingCard(_ card: JSON, id: String) async {
-        await artifactRepository.storePendingCard(card, id: id)
-    }
 
     /// Retrieve a pending card by ID
     func getPendingCard(id: String) async -> JSON? {
@@ -924,31 +727,13 @@ actor StateCoordinator: OnboardingEventEmitter {
             await chatStore.getAllMessages()
         }
     }
-    var latestReasoningSummary: String? {
-        get async {
-            await chatStore.getLatestReasoningSummary()
-        }
-    }
     func appendUserMessage(_ text: String, isSystemGenerated: Bool = false) async -> UUID {
         let id = await chatStore.appendUserMessage(text, isSystemGenerated: isSystemGenerated)
         return id
     }
 
-    /// Remove a message by ID (used when message send fails)
-    func removeMessage(id: UUID) async -> OnboardingMessage? {
-        await chatStore.removeMessage(id: id)
-    }
     func appendAssistantMessage(_ text: String) async -> UUID {
         await chatStore.appendAssistantMessage(text)
-    }
-    func beginStreamingMessage(initialText: String, reasoningExpected: Bool) async -> UUID {
-        await chatStore.beginStreamingMessage(initialText: initialText, reasoningExpected: reasoningExpected)
-    }
-    func updateStreamingMessage(id: UUID, delta: String) async {
-        await chatStore.updateStreamingMessage(id: id, delta: delta)
-    }
-    func finalizeStreamingMessage(id: UUID, finalText: String, toolCalls: [OnboardingMessage.ToolCallInfo]? = nil) async {
-        await chatStore.finalizeStreamingMessage(id: id, finalText: finalText, toolCalls: toolCalls)
     }
     func getPreviousResponseId() async -> String? {
         await chatStore.getPreviousResponseId()
@@ -964,16 +749,6 @@ actor StateCoordinator: OnboardingEventEmitter {
     func publishAllowedToolsNow() async {
         await uiState.publishToolPermissionsNow()
     }
-    var waitingState: SessionUIState.WaitingState? {
-        get async {
-            await uiState.getWaitingState()
-        }
-    }
-    func getAllowedToolsForCurrentPhase() -> Set<String> {
-        let phaseTools = phasePolicy.allowedTools[phase] ?? []
-        return phaseTools.subtracting(excludedTools)
-    }
-
     /// Check tool availability using centralized gating logic
     /// - Parameter toolName: Name of the tool to check
     /// - Returns: Availability status with reason if blocked
@@ -998,19 +773,9 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     // MARK: - Dossier Tracking API
 
-    /// Get the next dossier field to collect for the current phase
-    func getNextDossierField() -> CandidateDossierField? {
-        dossierTracker.getNextField(for: phase)
-    }
-
     /// Build a prompt for the LLM to ask a dossier question
     func buildDossierPrompt() -> String? {
         dossierTracker.buildDossierPrompt(for: phase)
-    }
-
-    /// Check if a dossier field has been collected
-    func hasDossierFieldCollected(_ field: CandidateDossierField) -> Bool {
-        dossierTracker.hasCollected(field)
     }
 
     // MARK: - Dossier WIP Notes API
@@ -1046,11 +811,6 @@ actor StateCoordinator: OnboardingEventEmitter {
     var pendingExtraction: OnboardingPendingExtraction? {
         get async {
             await uiState.pendingExtraction
-        }
-    }
-    var pendingStreamingStatus: String? {
-        get async {
-            nil
         }
     }
 }

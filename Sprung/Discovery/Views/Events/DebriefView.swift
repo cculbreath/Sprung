@@ -516,17 +516,6 @@ struct NewContactEntry: Identifiable {
     var linkedIn = ""
     var notes = ""
     var wantsFollowUp = true
-
-    var firstName: String {
-        let parts = name.split(separator: " ")
-        return parts.first.map(String.init) ?? name
-    }
-
-    var lastName: String? {
-        let parts = name.split(separator: " ")
-        guard parts.count > 1 else { return nil }
-        return parts.dropFirst().joined(separator: " ")
-    }
 }
 
 struct NewContactCard: View {

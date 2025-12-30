@@ -53,7 +53,7 @@ actor ObjectiveStore: OnboardingEventEmitter {
         self.eventBus = eventBus
         self.phasePolicy = phasePolicy
         // Register initial objectives for the starting phase
-        let descriptors = Self.objectivesForPhase(initialPhase, policy: phasePolicy)
+        let descriptors = Self.objectivesForPhase(initialPhase)
         for descriptor in descriptors {
             objectives[descriptor.id] = ObjectiveEntry(
                 id: descriptor.id,
@@ -121,8 +121,7 @@ actor ObjectiveStore: OnboardingEventEmitter {
         .complete: []
     ]
     private static func objectivesForPhase(
-        _ phase: InterviewPhase,
-        policy: PhasePolicy
+        _ phase: InterviewPhase
     ) -> [(id: String, label: String, phase: InterviewPhase, source: String, parentId: String?, level: Int)] {
         let metadata = objectiveMetadata[phase] ?? []
         return metadata.map { meta in
@@ -142,7 +141,7 @@ actor ObjectiveStore: OnboardingEventEmitter {
     // MARK: - Registration
     /// Register default objectives for a given phase
     func registerDefaultObjectives(for phase: InterviewPhase) {
-        let descriptors = Self.objectivesForPhase(phase, policy: phasePolicy)
+        let descriptors = Self.objectivesForPhase(phase)
         for descriptor in descriptors {
             registerObjective(
                 descriptor.id,
@@ -298,7 +297,6 @@ actor ObjectiveStore: OnboardingEventEmitter {
             objectives[objectiveId]?.status == .skipped
         }
     }
-
     // MARK: - State Management
     /// Restore objectives from snapshot
     func restore(objectives: [String: ObjectiveEntry]) {

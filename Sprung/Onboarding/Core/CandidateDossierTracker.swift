@@ -89,13 +89,6 @@ struct CandidateDossierTracker {
         collectedFields.contains(field.rawValue)
     }
 
-    /// Get all uncollected fields for the given phase
-    func getUncollectedFields(for phase: InterviewPhase) -> [CandidateDossierField] {
-        CandidateDossierField.allCases.filter { field in
-            field.applicablePhases.contains(phase) && !collectedFields.contains(field.rawValue)
-        }
-    }
-
     /// Build a prompt instructing the LLM to ask a dossier question
     func buildDossierPrompt(for phase: InterviewPhase) -> String? {
         guard let nextField = getNextField(for: phase) else {

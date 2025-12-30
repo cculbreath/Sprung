@@ -155,7 +155,6 @@ struct CoverRefSelectionManagerView: View {
                     get: { allCoverRefs },
                     set: { _ in }
                 ),
-                coverRefStore: coverRefStore,
                 onCardUpdated: { _ in
                     // SwiftData will auto-refresh via @Query
                 },

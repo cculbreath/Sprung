@@ -354,7 +354,7 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
 
     // MARK: - LLM Analysis Agent
 
-    private func runAnalysisAgent(gitData: JSON, repoName: String, repoURL: URL, agentId: String, tracker: AgentActivityTracker?) async throws -> GitAnalysisResult {
+    private func runAnalysisAgent(gitData _: JSON, repoName _: String, repoURL: URL, agentId: String, tracker: AgentActivityTracker?) async throws -> GitAnalysisResult {
         Logger.info("🔬 [GitIngest] runAnalysisAgent entered, checking llmFacade...", category: .ai)
         guard let facade = llmFacade else {
             Logger.error("🔬 [GitIngest] llmFacade is nil!", category: .ai)

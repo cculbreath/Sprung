@@ -2,7 +2,6 @@ import Foundation
 import SwiftyJSON
 struct AnyExperienceSectionCodec: Identifiable {
     let key: ExperienceSectionKey
-    private let isEnabledClosure: (ExperienceDefaultsDraft) -> Bool
     private let encodeItemsClosure: (ExperienceDefaultsDraft) -> [[String: Any]]
     private let decodeClosure: (JSON?, inout ExperienceDefaultsDraft) -> Void
     var id: ExperienceSectionKey { key }
@@ -14,9 +13,6 @@ struct AnyExperienceSectionCodec: Identifiable {
         decodeItem: @escaping (JSON) -> Item
     ) where Item: Identifiable & Equatable, Item.ID == UUID {
         self.key = key
-        isEnabledClosure = { draft in
-            draft[keyPath: metadata.isEnabledKeyPath]
-        }
         encodeItemsClosure = { draft in
             guard draft[keyPath: metadata.isEnabledKeyPath] else { return [] }
             return draft[keyPath: itemsKeyPath]
@@ -39,9 +35,6 @@ struct AnyExperienceSectionCodec: Identifiable {
             draft[keyPath: metadata.isEnabledKeyPath] = array.isEmpty == false
             draft[keyPath: itemsKeyPath] = array.map(decodeItem)
         }
-    }
-    func isEnabled(in draft: ExperienceDefaultsDraft) -> Bool {
-        isEnabledClosure(draft)
     }
     func encodeSection(from draft: ExperienceDefaultsDraft) -> [[String: Any]]? {
         let encoded = encodeItemsClosure(draft)

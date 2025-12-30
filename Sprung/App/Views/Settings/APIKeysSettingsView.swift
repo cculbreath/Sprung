@@ -164,24 +164,6 @@ enum APIKeyTestResult: Equatable {
     case testing
     case valid
     case invalid(String)
-
-    var icon: String {
-        switch self {
-        case .idle: return ""
-        case .testing: return ""
-        case .valid: return "checkmark.circle.fill"
-        case .invalid: return "xmark.circle.fill"
-        }
-    }
-
-    var color: Color {
-        switch self {
-        case .idle: return .secondary
-        case .testing: return .secondary
-        case .valid: return .green
-        case .invalid: return .red
-        }
-    }
 }
 
 // MARK: - API Key Editor

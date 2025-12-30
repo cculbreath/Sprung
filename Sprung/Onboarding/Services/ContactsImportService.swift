@@ -36,38 +36,6 @@ final class ContactsImportService {
         Logger.debug("📇 Fetched Me card from Contacts", category: .ai)
         return buildDraft(from: contact)
     }
-    /// Fetches the user's "Me" contact card as vCard data.
-    /// - Throws: `ContactFetchError` if permission is denied, contact not found, or system error.
-    func fetchMeCardAsVCard() async throws -> Data {
-        try await requestContactsAccess()
-        let store = CNContactStore()
-        let keys: [CNKeyDescriptor] = [
-            CNContactGivenNameKey as CNKeyDescriptor,
-            CNContactFamilyNameKey as CNKeyDescriptor,
-            CNContactEmailAddressesKey as CNKeyDescriptor,
-            CNContactPhoneNumbersKey as CNKeyDescriptor,
-            CNContactOrganizationNameKey as CNKeyDescriptor,
-            CNContactJobTitleKey as CNKeyDescriptor,
-            CNContactPostalAddressesKey as CNKeyDescriptor
-        ]
-        let contact: CNContact
-        do {
-            contact = try store.unifiedMeContactWithKeys(toFetch: keys)
-        } catch {
-            if let cnError = error as? CNError, cnError.code == .recordDoesNotExist {
-                throw ContactFetchError.notFound
-            }
-            throw ContactFetchError.system(error.localizedDescription)
-        }
-        // Convert contact to vCard format
-        do {
-            let vCardData = try CNContactVCardSerialization.data(with: [contact])
-            Logger.debug("📇 Generated vCard data from Me card", category: .ai)
-            return vCardData
-        } catch {
-            throw ContactFetchError.system("Failed to generate vCard: \(error.localizedDescription)")
-        }
-    }
     // MARK: - Private Helpers
     private func requestContactsAccess() async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in

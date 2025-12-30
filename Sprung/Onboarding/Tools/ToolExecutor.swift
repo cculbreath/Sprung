@@ -12,9 +12,6 @@ actor ToolExecutor {
     init(registry: ToolRegistry) {
         self.registry = registry
     }
-    func availableToolSchemas(allowedNames: Set<String>? = nil) async -> [Tool] {
-        await registry.toolSchemas(filteredBy: allowedNames)
-    }
     func handleToolCall(_ call: ToolCall) async throws -> ToolResult {
         guard let tool = registry.tool(named: call.name) else {
             throw ToolError.invalidParameters("Unknown tool: \(call.name)")

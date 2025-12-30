@@ -9,24 +9,6 @@ import Foundation
 import SwiftOpenAI
 
 enum DiscoveryToolSchemas {
-    // MARK: - Output Schemas (kept for reference if needed elsewhere)
-
-    static let discoverJobSourcesSchema = SchemaLoader.loadSchema(resourceName: "discover_job_sources")
-    static let jobSourceOutputSchema = SchemaLoader.loadSchema(resourceName: "job_source_output")
-    static let generateDailyTasksSchema = SchemaLoader.loadSchema(resourceName: "generate_daily_tasks")
-    static let dailyTaskOutputSchema = SchemaLoader.loadSchema(resourceName: "daily_task_output")
-    static let generateWeeklyReflectionSchema = SchemaLoader.loadSchema(resourceName: "generate_weekly_reflection")
-    static let discoverNetworkingEventsSchema = SchemaLoader.loadSchema(resourceName: "discover_networking_events")
-    static let networkingEventOutputSchema = SchemaLoader.loadSchema(resourceName: "networking_event_output")
-    static let evaluateNetworkingEventSchema = SchemaLoader.loadSchema(resourceName: "evaluate_networking_event")
-    static let eventEvaluationOutputSchema = SchemaLoader.loadSchema(resourceName: "event_evaluation_output")
-    static let prepareForEventSchema = SchemaLoader.loadSchema(resourceName: "prepare_for_event")
-    static let eventPrepOutputSchema = SchemaLoader.loadSchema(resourceName: "event_prep_output")
-    static let suggestNetworkingActionsSchema = SchemaLoader.loadSchema(resourceName: "suggest_networking_actions")
-    static let networkingActionOutputSchema = SchemaLoader.loadSchema(resourceName: "networking_action_output")
-    static let draftOutreachMessageSchema = SchemaLoader.loadSchema(resourceName: "draft_outreach_message")
-    static let outreachMessageOutputSchema = SchemaLoader.loadSchema(resourceName: "outreach_message_output")
-
     // MARK: - Complete Tool Definitions
 
     /// Returns all Discovery tools as ChatCompletionParameters.Tool objects

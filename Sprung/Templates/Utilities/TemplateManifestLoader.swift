@@ -17,14 +17,4 @@ enum TemplateManifestLoader {
         cache[template.id] = (manifest, dataHash)
         return manifest
     }
-
-    /// Clear cache for a specific template (call when manifest data changes)
-    static func invalidateCache(for templateId: UUID) {
-        cache.removeValue(forKey: templateId)
-    }
-
-    /// Clear entire cache
-    static func clearCache() {
-        cache.removeAll()
-    }
 }

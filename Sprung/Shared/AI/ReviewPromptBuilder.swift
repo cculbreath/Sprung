@@ -85,13 +85,14 @@ struct ReviewPromptBuilder {
             "Output format (markdown):",
             outputHeader,
             "**\(strengthsLabel)**",
-            "• …",
-            "• …",
-            "• …",
+            "• ...",
+            "• ...",
+            "• ...",
             "**\(improvementsLabel)**",
-            "• …",
-            "• …",
-            "• …"
+            "• ...",
+            "• ...",
+            "• ...",
+            "**\(ratingLabel)**: [1-10]"
         ]
 
         if !additionalOutput.isEmpty {

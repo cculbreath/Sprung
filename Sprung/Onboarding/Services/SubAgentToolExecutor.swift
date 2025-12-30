@@ -263,22 +263,3 @@ actor SubAgentToolExecutor {
         )
     }
 }
-
-// MARK: - Errors
-
-enum SubAgentToolError: LocalizedError {
-    case invalidParameters(String)
-    case notFound(String)
-    case toolNotAvailable(String)
-
-    var errorDescription: String? {
-        switch self {
-        case .invalidParameters(let msg):
-            return "Invalid parameters: \(msg)"
-        case .notFound(let msg):
-            return "Not found: \(msg)"
-        case .toolNotAvailable(let name):
-            return "Tool not available for sub-agents: \(name)"
-        }
-    }
-}

@@ -15,12 +15,6 @@ enum ExperienceSectionKey: String, CaseIterable, Identifiable {
     case references
     case custom
     var id: String { rawValue }
-    var displayName: String {
-        metadata.title
-    }
-    var addButtonTitle: String {
-        metadata.addButtonTitle
-    }
     var metadata: ExperienceSectionMetadata {
         ExperienceSectionMetadata.forKey(self)
     }
@@ -160,16 +154,6 @@ enum ExperienceSchema {
             ]
         )
     ]
-    static let sectionsByKey: [ExperienceSectionKey: ExperienceSchemaSection] = {
-        Dictionary(uniqueKeysWithValues: sections.map { ($0.key, $0) })
-    }()
-    static func section(for key: ExperienceSectionKey) -> ExperienceSchemaSection {
-        if let section = sectionsByKey[key] {
-            return section
-        }
-        Logger.warning("📚 Missing experience schema section for key \(key.rawValue)")
-        return ExperienceSchemaSection(key: key, nodes: [])
-    }
     private static func field(_ name: String) -> ExperienceSchemaNode {
         ExperienceSchemaNode(kind: .field(name))
     }
@@ -178,7 +162,6 @@ enum ExperienceSchema {
     }
 }
 struct ExperienceSectionMetadata {
-    let key: ExperienceSectionKey
     let title: String
     let subtitle: String?
     let addButtonTitle: String
@@ -197,7 +180,6 @@ extension ExperienceSectionMetadata {
         switch key {
         case .summary:
             return ExperienceSectionMetadata(
-                key: key,
                 title: "Summary",
                 subtitle: nil,
                 addButtonTitle: "⊕ Add Summary",
@@ -205,7 +187,6 @@ extension ExperienceSectionMetadata {
             )
         case .work:
             return ExperienceSectionMetadata(
-                key: key,
                 title: "Work Experience",
                 subtitle: "Default roles and accomplishments for new resumes",
                 addButtonTitle: "⊕ Add Work History",
@@ -213,7 +194,6 @@ extension ExperienceSectionMetadata {
             )
         case .volunteer:
             return ExperienceSectionMetadata(
-                key: key,
                 title: "Volunteer Experience",
                 subtitle: nil,
                 addButtonTitle: "⊕ Add Volunteer Work",
@@ -221,7 +201,6 @@ extension ExperienceSectionMetadata {
             )
         case .education:
             return ExperienceSectionMetadata(
-                key: key,
                 title: "Education",
                 subtitle: "Preconfigured studies, courses, and achievements",
                 addButtonTitle: "⊕ Add Education",
@@ -229,7 +208,6 @@ extension ExperienceSectionMetadata {
             )
         case .projects:
             return ExperienceSectionMetadata(
-                key: key,
                 title: "Projects",
                 subtitle: nil,
                 addButtonTitle: "⊕ Add Project",
@@ -237,7 +215,6 @@ extension ExperienceSectionMetadata {
             )
         case .skills:
             return ExperienceSectionMetadata(
-                key: key,
                 title: "Skills",
                 subtitle: nil,
                 addButtonTitle: "⊕ Add Skill",
@@ -245,7 +222,6 @@ extension ExperienceSectionMetadata {
             )
         case .awards:
             return ExperienceSectionMetadata(
-                key: key,
                 title: "Awards",
                 subtitle: nil,
                 addButtonTitle: "⊕ Add Award",
@@ -253,7 +229,6 @@ extension ExperienceSectionMetadata {
             )
         case .certificates:
             return ExperienceSectionMetadata(
-                key: key,
                 title: "Certificates",
                 subtitle: nil,
                 addButtonTitle: "⊕ Add Certificate",
@@ -261,7 +236,6 @@ extension ExperienceSectionMetadata {
             )
         case .publications:
             return ExperienceSectionMetadata(
-                key: key,
                 title: "Publications",
                 subtitle: nil,
                 addButtonTitle: "⊕ Add Publication",
@@ -269,7 +243,6 @@ extension ExperienceSectionMetadata {
             )
         case .languages:
             return ExperienceSectionMetadata(
-                key: key,
                 title: "Languages",
                 subtitle: nil,
                 addButtonTitle: "⊕ Add Language",
@@ -277,7 +250,6 @@ extension ExperienceSectionMetadata {
             )
         case .interests:
             return ExperienceSectionMetadata(
-                key: key,
                 title: "Interests",
                 subtitle: nil,
                 addButtonTitle: "⊕ Add Interest",
@@ -285,7 +257,6 @@ extension ExperienceSectionMetadata {
             )
         case .references:
             return ExperienceSectionMetadata(
-                key: key,
                 title: "References",
                 subtitle: nil,
                 addButtonTitle: "⊕ Add Reference",
@@ -293,7 +264,6 @@ extension ExperienceSectionMetadata {
             )
         case .custom:
             return ExperienceSectionMetadata(
-                key: key,
                 title: "Custom Fields",
                 subtitle: "Defaults for custom template fields (e.g., job titles)",
                 addButtonTitle: "⊕ Add Custom Field",

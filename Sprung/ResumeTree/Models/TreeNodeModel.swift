@@ -122,11 +122,6 @@ enum LeafStatus: String, Codable, Hashable {
         return hasBundled || hasEnumerated
     }
 
-    /// Returns true if any attribute is in "Separately" mode (entries can be toggled)
-    var hasEnumeratedAttributes: Bool {
-        !(enumeratedAttributes?.isEmpty ?? true)
-    }
-
     /// Total revnode count for this subtree
     /// Counts: solo nodes, bundle attributes (1 each), iterate attributes (N each), container enumerate children
     var revnodeCount: Int {
@@ -221,11 +216,6 @@ enum LeafStatus: String, Codable, Hashable {
         return false
     }
 
-    /// Returns true if this node is a child of a container being reviewed in bundle/iterate mode
-    var isIncludedInContainerReview: Bool {
-        isIncludedInBundleReview || isIncludedInIterateReview
-    }
-
     /// Returns true if this node is included via BUNDLE mode (purple)
     /// e.g., "Swift" under "keywords" when skills.*.keywords is configured
     var isIncludedInBundleReview: Bool {
@@ -262,104 +252,6 @@ enum LeafStatus: String, Codable, Hashable {
 
         let containerName = containerParent.name.isEmpty ? containerParent.displayLabel : containerParent.name
         return collection.enumeratedAttributes?.contains(containerName) == true
-    }
-
-    /// Returns true if this node should be included in AI revision
-    /// (either directly selected or inherited from parent)
-    var isSelectedForAIRevision: Bool {
-        status == .aiToReplace || isInheritedAISelection
-    }
-
-    /// Toggle AI selection on this node and optionally propagate to children
-    /// - Parameter propagateToChildren: If true, also sets all descendants to the new status
-    func toggleAISelection(propagateToChildren: Bool = false) {
-        if status == .aiToReplace {
-            status = .saved
-            if propagateToChildren {
-                setChildrenAIStatus(to: .saved)
-            }
-        } else {
-            status = .aiToReplace
-            if propagateToChildren {
-                setChildrenAIStatus(to: .aiToReplace)
-            }
-        }
-    }
-
-    /// Recursively set AI status on all descendants
-    private func setChildrenAIStatus(to newStatus: LeafStatus) {
-        guard let children = children else { return }
-        for child in children {
-            child.status = newStatus
-            child.setChildrenAIStatus(to: newStatus)
-        }
-    }
-
-    // MARK: - Smart Badge Counts
-
-    /// Returns a meaningful count for badge display
-    /// For section nodes (skills, work): counts direct children (categories, positions)
-    /// For other nodes: counts selected items
-    var reviewOperationsCount: Int {
-        // For section-level nodes that are selected, count their direct children
-        // This gives us "5 categories" for skills, "3 positions" for work
-        if status == .aiToReplace && isSectionNode {
-            return children?.count ?? 0
-        }
-
-        // If this node is selected but not a section, count as 1
-        if status == .aiToReplace {
-            return 1
-        }
-
-        // Otherwise, count selected direct children only (don't recurse into grandchildren)
-        // This prevents counting 67 keywords when we want 5 categories
-        guard let children = children else { return 0 }
-
-        var count = 0
-        for child in children {
-            if child.status == .aiToReplace {
-                // Child is directly selected - count as 1 operation
-                count += 1
-            } else if child.aiStatusChildren > 0 {
-                // Child has selected descendants
-                // For section nodes, just count this child as having selections
-                // Don't recurse to avoid counting leaf nodes
-                if isSectionNode {
-                    count += 1
-                } else {
-                    count += child.reviewOperationsCount
-                }
-            }
-        }
-        return count
-    }
-
-    /// Returns true if this is a top-level section node (skills, work, education, etc.)
-    private var isSectionNode: Bool {
-        let sectionNames = ["skills", "work", "education", "projects", "volunteer", "awards", "certificates", "publications", "languages", "interests"]
-        return sectionNames.contains(name.lowercased())
-    }
-
-    /// Returns a descriptive label for the badge count
-    /// e.g., "3 categories" for skills, "2 positions" for work
-    var reviewOperationsLabel: String? {
-        let count = reviewOperationsCount
-        guard count > 0 else { return nil }
-
-        // Determine appropriate label based on node type
-        switch name.lowercased() {
-        case "skills":
-            return count == 1 ? "1 category" : "\(count) categories"
-        case "work":
-            return count == 1 ? "1 position" : "\(count) positions"
-        case "education":
-            return count == 1 ? "1 school" : "\(count) schools"
-        case "projects":
-            return count == 1 ? "1 project" : "\(count) projects"
-        default:
-            return "\(count)"
-        }
     }
 
     init(

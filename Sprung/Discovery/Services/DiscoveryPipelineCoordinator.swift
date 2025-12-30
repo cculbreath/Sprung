@@ -99,15 +99,6 @@ final class DiscoveryPipelineCoordinator {
 
     // MARK: - Daily Summary
 
-    struct DailySummary {
-        let tasksTotal: Int
-        let tasksCompleted: Int
-        let timeSpentMinutes: Int
-        let sourcesVisited: Int
-        let applicationsSubmitted: Int
-        let followUpsSent: Int
-    }
-
     func todaysSummary(eventsToday: [NetworkingEventOpportunity], contactsNeedingAttention: [NetworkingContact]) -> DiscoveryCoordinator.DailySummary {
         let tasks = dailyTaskStore.todaysTasks
         let completedTasks = tasks.filter { $0.isCompleted }
@@ -129,14 +120,6 @@ final class DiscoveryPipelineCoordinator {
     }
 
     // MARK: - Weekly Summary
-
-    struct WeeklySummary {
-        let goal: WeeklyGoal
-        let applicationProgress: Double
-        let networkingProgress: Double
-        let timeProgress: Double
-        let reflectionNeeded: Bool
-    }
 
     func thisWeeksSummary(topSources: [JobSource], eventsAttended: [NetworkingEventOpportunity], newContacts: [NetworkingContact]) -> DiscoveryCoordinator.WeeklySummary {
         let goal = weeklyGoalStore.currentWeek()

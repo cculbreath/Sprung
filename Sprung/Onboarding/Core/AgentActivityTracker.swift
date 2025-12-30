@@ -172,20 +172,9 @@ class AgentActivityTracker {
 
     // MARK: - Computed Properties
 
-    /// The currently selected agent
-    var selectedAgent: TrackedAgent? {
-        guard let id = selectedAgentId else { return nil }
-        return agents.first { $0.id == id }
-    }
-
     /// Count of currently running agents
     var runningAgentCount: Int {
         agents.filter { $0.status == .running }.count
-    }
-
-    /// Set of currently active agent types
-    var activeAgentTypes: Set<AgentType> {
-        Set(agents.filter { $0.status == .running }.map { $0.agentType })
     }
 
     /// Whether any agent is currently running
@@ -193,24 +182,9 @@ class AgentActivityTracker {
         runningAgentCount > 0
     }
 
-    /// Status summary for UI display
-    var statusSummary: String {
-        guard runningAgentCount > 0 else { return "" }
-        let types = activeAgentTypes.map(\.displayName).joined(separator: ", ")
-        if runningAgentCount == 1 {
-            return "1 background task (\(types))"
-        }
-        return "\(runningAgentCount) background tasks (\(types))"
-    }
-
     /// Running agents only
     var runningAgents: [TrackedAgent] {
         agents.filter { $0.status == .running }
-    }
-
-    /// Completed agents only (including failed/killed)
-    var completedAgents: [TrackedAgent] {
-        agents.filter { $0.status != .running }
     }
 
     // MARK: - Agent Lifecycle
@@ -371,61 +345,11 @@ class AgentActivityTracker {
         Logger.info("⏹️ Agent killed: \(agents[index].name)", category: .ai)
     }
 
-    /// Cancel all running agents
-    func cancelAllAgents() async {
-        Logger.info("🛑 Cancelling all \(runningAgentCount) running agent(s)", category: .ai)
-
-        for agent in runningAgents {
-            await killAgent(agentId: agent.id)
-        }
-    }
-
     // MARK: - Query Methods
 
     /// Get a specific agent by ID
     func getAgent(id: String) -> TrackedAgent? {
         agents.first { $0.id == id }
-    }
-
-    /// Get all agents of a specific type
-    func getAgents(ofType type: AgentType) -> [TrackedAgent] {
-        agents.filter { $0.agentType == type }
-    }
-
-    /// Get running agents of a specific type
-    func getRunningAgents(ofType type: AgentType) -> [TrackedAgent] {
-        agents.filter { $0.agentType == type && $0.status == .running }
-    }
-
-    // MARK: - Cleanup
-
-    /// Remove completed agents older than a certain age
-    func pruneCompletedAgents(olderThan maxAge: TimeInterval = 3600) {
-        let cutoff = Date().addingTimeInterval(-maxAge)
-
-        let beforeCount = agents.count
-        agents.removeAll { agent in
-            agent.status != .running &&
-            agent.endTime != nil &&
-            agent.endTime! < cutoff
-        }
-
-        let removed = beforeCount - agents.count
-        if removed > 0 {
-            Logger.info("🧹 Pruned \(removed) old agent(s)", category: .ai)
-        }
-    }
-
-    /// Clear all agents (for reset)
-    func reset() {
-        // Cancel all running tasks first
-        for (_, task) in activeTasks {
-            task.cancel()
-        }
-        activeTasks.removeAll()
-        agents.removeAll()
-        selectedAgentId = nil
-        Logger.info("🔄 AgentActivityTracker reset", category: .ai)
     }
 }
 

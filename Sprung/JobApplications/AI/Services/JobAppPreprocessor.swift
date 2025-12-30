@@ -85,11 +85,6 @@ class JobAppPreprocessor {
         Logger.info("🔧 JobAppPreprocessor initialized", category: .ai)
     }
 
-    /// Update the LLM facade reference
-    func updateLLMFacade(_ facade: LLMFacade?) {
-        self.llmFacade = facade
-    }
-
     // MARK: - Public API
 
     /// Preprocess a job application: extract requirements and identify relevant cards

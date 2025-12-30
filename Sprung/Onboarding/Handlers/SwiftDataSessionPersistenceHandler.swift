@@ -15,7 +15,6 @@ final class SwiftDataSessionPersistenceHandler {
     // MARK: - Dependencies
     private let eventBus: EventCoordinator
     private let sessionStore: OnboardingSessionStore
-    private let chatTranscriptStore: ChatTranscriptStore
 
     // MARK: - State
     private(set) var currentSession: OnboardingSession?
@@ -25,12 +24,10 @@ final class SwiftDataSessionPersistenceHandler {
     // MARK: - Initialization
     init(
         eventBus: EventCoordinator,
-        sessionStore: OnboardingSessionStore,
-        chatTranscriptStore: ChatTranscriptStore
+        sessionStore: OnboardingSessionStore
     ) {
         self.eventBus = eventBus
         self.sessionStore = sessionStore
-        self.chatTranscriptStore = chatTranscriptStore
         Logger.info("💾 SwiftDataSessionPersistenceHandler initialized", category: .ai)
     }
 

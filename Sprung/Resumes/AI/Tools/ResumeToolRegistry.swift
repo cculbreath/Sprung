@@ -102,22 +102,6 @@ enum ResumeToolResult {
     case error(String)
 }
 
-// MARK: - Tool Errors
-
-enum ResumeToolError: Error, LocalizedError {
-    case invalidParameters(String)
-    case executionFailed(String)
-    case userCancelled
-
-    var errorDescription: String? {
-        switch self {
-        case .invalidParameters(let msg): return "Invalid parameters: \(msg)"
-        case .executionFailed(let msg): return "Execution failed: \(msg)"
-        case .userCancelled: return "User cancelled the operation"
-        }
-    }
-}
-
 // MARK: - Tool Registry
 
 /// Registry for managing resume customization tools.

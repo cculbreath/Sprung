@@ -37,10 +37,6 @@ final class TimeEntryStore: SwiftDataStore {
         saveContext()
     }
 
-    func entry(byId id: UUID) -> TimeEntry? {
-        allEntries.first { $0.id == id }
-    }
-
     // MARK: - Date-based Queries
 
     func entriesForDate(_ date: Date) -> [TimeEntry] {
@@ -94,91 +90,15 @@ final class TimeEntryStore: SwiftDataStore {
         breakdownByActivity(for: entriesForDate(Date()))
     }
 
-    var thisWeeksBreakdown: [ActivityType: Int] {
-        breakdownByActivity(for: entriesForCurrentWeek())
-    }
-
     // MARK: - Formatted Outputs
 
     func formattedTotalForDate(_ date: Date) -> String {
         formatMinutes(totalMinutesForDate(date))
     }
 
-    func formattedTotalForCurrentWeek() -> String {
-        formatMinutes(totalMinutesForCurrentWeek())
-    }
-
     private func formatMinutes(_ minutes: Int) -> String {
         let hours = minutes / 60
         let mins = minutes % 60
-        if hours > 0 {
-            return "\(hours)h \(mins)m"
-        }
-        return "\(mins)m"
-    }
-
-    // MARK: - Weekly Summary
-
-    func weeklySummary() -> WeeklyTimeSummary {
-        let calendar = Calendar.current
-        let weekStart = calendar.date(
-            from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())
-        ) ?? Date()
-        let entries = entriesInRange(from: weekStart, to: Date())
-
-        var dailyTotals: [Date: Int] = [:]
-        for entry in entries {
-            let day = calendar.startOfDay(for: entry.startTime)
-            dailyTotals[day, default: 0] += entry.durationMinutes
-        }
-
-        let totalMinutes = entries.reduce(0) { $0 + $1.durationMinutes }
-        let daysWithActivity = max(1, dailyTotals.count)
-
-        return WeeklyTimeSummary(
-            weekStart: weekStart,
-            totalMinutes: totalMinutes,
-            dailyTotals: dailyTotals,
-            averageMinutesPerDay: totalMinutes / daysWithActivity
-        )
-    }
-}
-
-// MARK: - Summary Types
-
-struct DailyTimeSummary {
-    let date: Date
-    let totalMinutes: Int
-    let breakdown: [ActivityType: Int]
-
-    var formattedTotal: String {
-        let hours = totalMinutes / 60
-        let mins = totalMinutes % 60
-        if hours > 0 {
-            return "\(hours)h \(mins)m"
-        }
-        return "\(mins)m"
-    }
-}
-
-struct WeeklyTimeSummary {
-    let weekStart: Date
-    let totalMinutes: Int
-    let dailyTotals: [Date: Int]
-    let averageMinutesPerDay: Int
-
-    var formattedTotal: String {
-        let hours = totalMinutes / 60
-        let mins = totalMinutes % 60
-        if hours > 0 {
-            return "\(hours)h \(mins)m"
-        }
-        return "\(mins)m"
-    }
-
-    var formattedAverage: String {
-        let hours = averageMinutesPerDay / 60
-        let mins = averageMinutesPerDay % 60
         if hours > 0 {
             return "\(hours)h \(mins)m"
         }

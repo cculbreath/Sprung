@@ -11,7 +11,6 @@ import SwiftUI
 struct CoverRefBrowserOverlay: View {
     @Binding var isPresented: Bool
     @Binding var cards: [CoverRef]
-    let coverRefStore: CoverRefStore
     let onCardUpdated: (CoverRef) -> Void
     let onCardDeleted: (CoverRef) -> Void
     let onCardAdded: (CoverRef) -> Void
@@ -31,14 +30,6 @@ struct CoverRefBrowserOverlay: View {
         case backgroundFacts = "Background Facts"
         case writingSamples = "Writing Samples"
         case dossier = "Dossier"
-
-        var refType: CoverRefType? {
-            switch self {
-            case .all, .dossier: return nil
-            case .backgroundFacts: return .backgroundFact
-            case .writingSamples: return .writingSample
-            }
-        }
     }
 
     private var filteredCards: [CoverRef] {

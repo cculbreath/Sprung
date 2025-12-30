@@ -247,15 +247,6 @@ class ResumeReviseViewModel {
         navigationManager.saveAndNext(response: response, resume: resume)
     }
 
-    @discardableResult
-    func nextNode(resume: Resume) -> Bool {
-        navigationManager.nextNode(resume: resume)
-    }
-
-    func completeReviewWorkflow(with resume: Resume) {
-        navigationManager.completeReviewWorkflow(with: resume)
-    }
-
     func initializeUpdateNodes(for resume: Resume) {
         navigationManager.initializeUpdateNodes(for: resume)
     }
@@ -300,14 +291,6 @@ class ResumeReviseViewModel {
 
     // MARK: - Forwarded Phase Review Methods
 
-    func sectionsWithActiveReviewPhases(for resume: Resume) -> [(section: String, phases: [TemplateManifest.ReviewPhaseConfig])] {
-        phaseReviewManager.sectionsWithActiveReviewPhases(for: resume)
-    }
-
-    func startTwoRoundReview(resume: Resume, modelId: String) async throws {
-        try await phaseReviewManager.startTwoRoundReview(resume: resume, modelId: modelId)
-    }
-
     func completeCurrentPhase(resume: Resume, context: ModelContext) {
         phaseReviewManager.completeCurrentPhase(resume: resume, context: context)
     }
@@ -342,28 +325,12 @@ class ResumeReviseViewModel {
         phaseReviewManager.goToNextItem()
     }
 
-    func goToItem(at index: Int) {
-        phaseReviewManager.goToItem(at: index)
-    }
-
     var canGoToPrevious: Bool {
         phaseReviewManager.canGoToPrevious
     }
 
     var canGoToNext: Bool {
         phaseReviewManager.canGoToNext
-    }
-
-    var hasItemsNeedingResubmission: Bool {
-        phaseReviewManager.hasItemsNeedingResubmission
-    }
-
-    var itemsNeedingResubmission: [PhaseReviewItem] {
-        phaseReviewManager.itemsNeedingResubmission
-    }
-
-    func finishPhaseReview(resume: Resume) {
-        phaseReviewManager.finishPhaseReview(resume: resume)
     }
 
     func hasUnappliedApprovedChanges() -> Bool {

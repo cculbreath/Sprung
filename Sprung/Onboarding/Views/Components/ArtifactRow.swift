@@ -14,14 +14,6 @@ struct ArtifactRow: View {
         !artifact.extractedContent.isEmpty
     }
 
-    private var contentPreview: String {
-        let content = artifact.extractedContent.trimmingCharacters(in: .whitespacesAndNewlines)
-        if content.count <= 100 {
-            return content
-        }
-        return String(content.prefix(100)) + "..."
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header row (always visible)

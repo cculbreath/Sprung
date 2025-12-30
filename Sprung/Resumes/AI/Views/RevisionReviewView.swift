@@ -33,7 +33,7 @@ struct RevisionReviewView: View {
             if let resume = resume {
                 // Check for hierarchical review first
                 if viewModel.isHierarchicalReviewActive {
-                    hierarchicalReviewContent(resume: resume)
+                    hierarchicalReviewContent()
                 } else if viewModel.aiResubmit && !isUsingReasoningModal {
                     // Loading state during AI resubmission (only for non-reasoning models)
                     VStack {
@@ -208,7 +208,7 @@ struct RevisionReviewView: View {
     /// Routes to the phase review view.
     /// Always uses unbundled view for consistent UX across all phases.
     @ViewBuilder
-    private func hierarchicalReviewContent(resume: Resume) -> some View {
+    private func hierarchicalReviewContent() -> some View {
         PhaseReviewUnbundledView(
             viewModel: viewModel,
             resume: Binding(

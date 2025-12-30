@@ -24,11 +24,6 @@ enum CoachingToolSchemas {
 
     // MARK: - Complete Tool Definitions
 
-    /// Returns the question tool only (for forced tool choice)
-    static let questionTool: [ChatCompletionParameters.Tool] = [
-        buildCoachingMultipleChoiceTool()
-    ]
-
     /// Returns all coaching tools including background research tools
     static let allTools: [ChatCompletionParameters.Tool] = [
         buildCoachingMultipleChoiceTool(),
@@ -37,11 +32,6 @@ enum CoachingToolSchemas {
         buildGetResumeTool(),
         buildUpdateDailyTasksTool(),
         buildChooseBestJobsTool()
-    ]
-
-    /// Returns just the update_daily_tasks tool (for forced tool choice at end of session)
-    static let taskUpdateTool: [ChatCompletionParameters.Tool] = [
-        buildUpdateDailyTasksTool()
     ]
 
     // MARK: - Multiple Choice Question Tool
@@ -116,33 +106,6 @@ enum CoachingToolSchemas {
     }
 
     // MARK: - Tool Response Parsing
-
-    /// Parse a tool call response into a CoachingQuestion
-    static func parseQuestion(from arguments: [String: Any]) -> CoachingQuestion? {
-        guard let questionText = arguments["question"] as? String,
-              let optionsArray = arguments["options"] as? [[String: Any]],
-              let questionTypeRaw = arguments["question_type"] as? String,
-              let questionType = CoachingQuestionType(rawValue: questionTypeRaw) else {
-            return nil
-        }
-
-        let options = optionsArray.compactMap { optionDict -> QuestionOption? in
-            guard let value = optionDict["value"] as? Int,
-                  let label = optionDict["label"] as? String else {
-                return nil
-            }
-            let emoji = optionDict["emoji"] as? String
-            return QuestionOption(value: value, label: label, emoji: emoji)
-        }
-
-        guard !options.isEmpty else { return nil }
-
-        return CoachingQuestion(
-            questionText: questionText,
-            options: options,
-            questionType: questionType
-        )
-    }
 
     /// Parse a tool call response from SwiftyJSON
     static func parseQuestionFromJSON(_ json: SwiftyJSON.JSON) -> CoachingQuestion? {

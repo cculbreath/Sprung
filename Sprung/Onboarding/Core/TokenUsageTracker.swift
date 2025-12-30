@@ -208,22 +208,6 @@ class TokenUsageTracker {
 
     // MARK: - Recording Usage
 
-    /// Record usage from an OpenAI API response
-    func recordUsage(from usage: Usage?, modelId: String, source: UsageSource) {
-        guard let usage = usage else { return }
-
-        let entry = TokenUsageEntry(
-            modelId: modelId,
-            inputTokens: usage.inputTokens ?? 0,
-            outputTokens: usage.outputTokens ?? 0,
-            cachedTokens: usage.inputTokensDetails?.cachedTokens ?? 0,
-            reasoningTokens: usage.outputTokensDetails?.reasoningTokens ?? 0,
-            source: source
-        )
-
-        recordEntry(entry)
-    }
-
     /// Record a usage entry directly
     func recordEntry(_ entry: TokenUsageEntry) {
         entries.append(entry)
@@ -295,72 +279,6 @@ class TokenUsageTracker {
         recordEntry(entry)
     }
 
-    // MARK: - Queries
-
-    /// Get stats for a specific model
-    func stats(forModel modelId: String) -> TokenUsageStats {
-        statsByModel[modelId] ?? TokenUsageStats()
-    }
-
-    /// Get stats for a specific source
-    func stats(forSource source: UsageSource) -> TokenUsageStats {
-        statsBySource[source] ?? TokenUsageStats()
-    }
-
-    /// Get entries for a specific source
-    func entries(forSource source: UsageSource) -> [TokenUsageEntry] {
-        entries.filter { $0.source == source }
-    }
-
-    /// Get entries for a specific model
-    func entries(forModel modelId: String) -> [TokenUsageEntry] {
-        entries.filter { $0.modelId == modelId }
-    }
-
-    // MARK: - Reset
-
-    /// Reset all tracked usage (for new session)
-    func reset() {
-        entries.removeAll()
-        statsByModel.removeAll()
-        statsBySource.removeAll()
-        Logger.info("📊 TokenUsageTracker reset", category: .ai)
-    }
-
-    // MARK: - Export
-
-    /// Export usage summary as JSON for logging/debugging
-    func exportSummary() -> String {
-        let summary: [String: Any] = [
-            "session_duration_seconds": sessionDuration,
-            "total_requests": totalStats.requestCount,
-            "total_input_tokens": totalStats.inputTokens,
-            "total_output_tokens": totalStats.outputTokens,
-            "total_cached_tokens": totalStats.cachedTokens,
-            "total_reasoning_tokens": totalStats.reasoningTokens,
-            "cache_hit_rate": String(format: "%.1f%%", totalStats.cacheHitRate * 100),
-            "by_model": statsByModel.mapValues { [
-                "input": $0.inputTokens,
-                "output": $0.outputTokens,
-                "cached": $0.cachedTokens,
-                "requests": $0.requestCount
-            ] },
-            "by_source": Dictionary(uniqueKeysWithValues: statsBySource.map { (
-                $0.key.rawValue,
-                [
-                    "input": $0.value.inputTokens,
-                    "output": $0.value.outputTokens,
-                    "requests": $0.value.requestCount
-                ]
-            ) })
-        ]
-
-        if let data = try? JSONSerialization.data(withJSONObject: summary, options: .prettyPrinted),
-           let string = String(data: data, encoding: .utf8) {
-            return string
-        }
-        return "{}"
-    }
 }
 
 // MARK: - Formatting Helpers

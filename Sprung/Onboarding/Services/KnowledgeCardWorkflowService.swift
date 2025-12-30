@@ -145,7 +145,7 @@ final class KnowledgeCardWorkflowService {
     // MARK: - KC Agent Completion Handlers
 
     /// Handle KC agent failure - surface error to user
-    func handleKCAgentFailed(agentId: String, cardId: String, error: String) async {
+    func handleKCAgentFailed(agentId _: String, cardId: String, error: String) async {
         Logger.error("❌ KC agent failed: cardId=\(cardId.prefix(8)), error=\(error)", category: .ai)
 
         // Ensure manual fallback tool is available (subphase bundling must also include it).

@@ -71,33 +71,6 @@ extension TemplateEditorView {
             return String(template[matchRange])
         })
     }
-    static func collectCustomFieldKeys(from dictionary: [String: Any]) -> Set<String> {
-        guard let customValue = dictionary["custom"] else { return [] }
-        var results: Set<String> = []
-        collectCustomFieldKeys(from: customValue, currentPath: ["custom"], accumulator: &results)
-        return results
-    }
-    private static func collectCustomFieldKeys(
-        from value: Any,
-        currentPath: [String],
-        accumulator: inout Set<String>
-    ) {
-        if let dict = value as? [String: Any] {
-            for (key, entry) in dict {
-                collectCustomFieldKeys(
-                    from: entry,
-                    currentPath: currentPath + [key],
-                    accumulator: &accumulator
-                )
-            }
-            return
-        }
-        if value is [Any] {
-            accumulator.insert(currentPath.joined(separator: "."))
-            return
-        }
-        accumulator.insert(currentPath.joined(separator: "."))
-    }
     // MARK: - Save/Refresh Orchestration
     @discardableResult
     func saveAllChanges() -> Bool {

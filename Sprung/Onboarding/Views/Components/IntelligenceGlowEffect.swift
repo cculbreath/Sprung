@@ -1,13 +1,4 @@
 import SwiftUI
-// MARK: - View Extensions
-extension View {
-    @MainActor
-    func intelligenceOverlay<S: InsettableShape>(
-        in shape: S
-    ) -> some View {
-        overlay(shape.intelligenceStroke())
-    }
-}
 // MARK: - Shape Extension
 extension InsettableShape {
     @MainActor

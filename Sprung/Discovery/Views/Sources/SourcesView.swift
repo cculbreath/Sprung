@@ -199,7 +199,6 @@ struct SourcesView: View {
 struct SourceRowView: View {
     let source: JobSource
     let store: JobSourceStore
-    @State private var showingCadencePopover = false
 
     var body: some View {
         HStack {

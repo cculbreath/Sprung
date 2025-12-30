@@ -188,21 +188,6 @@ final class ResumeDetailVM {
         resume.sectionVisibilityOverrides = overrides
         refreshPDF()
     }
-    // MARK: - Bulk Operations ---------------------------------------------
-    /// Set all child nodes to AI status (.aiToReplace)
-    func setAllChildrenToAI(for parent: TreeNode) {
-        for child in parent.orderedChildren {
-            child.status = .aiToReplace
-        }
-        refreshPDF()
-    }
-    /// Set all child nodes to saved status (.saved)
-    func setAllChildrenToNone(for parent: TreeNode) {
-        for child in parent.orderedChildren {
-            child.status = .saved
-        }
-        refreshPDF()
-    }
     // MARK: - Validation -------------------------------------------------
     private func validate(node: TreeNode, proposedValue: String) -> String? {
         let trimmed = proposedValue.trimmingCharacters(in: .whitespacesAndNewlines)

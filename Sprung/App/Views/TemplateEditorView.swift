@@ -309,7 +309,6 @@ struct TemplateEditorView: View {
             manifestValidationMessage: $manifestValidationMessage,
             customFieldWarningMessage: $customFieldWarningMessage,
             textEditorInsertion: $textEditorInsertion,
-            selectedResume: selectedResume,
             onTemplateChange: { tab, updatedContent in
                 handleTemplateDraftUpdate(for: tab, content: updatedContent)
             },

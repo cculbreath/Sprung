@@ -69,7 +69,6 @@ final class AppDependencies {
         self.resStore = ResStore(
             context: modelContext,
             exportCoordinator: resumeExportCoordinator,
-            applicantProfileStore: applicantProfileStore,
             experienceDefaultsStore: experienceDefaultsStore
         )
         self.resRefStore = ResRefStore(context: modelContext)

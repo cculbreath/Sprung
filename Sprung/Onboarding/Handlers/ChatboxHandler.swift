@@ -49,45 +49,4 @@ actor ChatboxHandler: OnboardingEventEmitter {
             break
         }
     }
-    // MARK: - User Input
-    /// Send user message to LLM
-    func sendUserMessage(_ text: String) async {
-        // Check if there's a pending UI tool call (validation, upload, etc.)
-        // If so, cancel it with an error response before sending the user's message
-        // This prevents the conversation from getting stuck waiting for tool output
-        if let pendingTool = await state.getPendingUIToolCall() {
-            Logger.info("💬 User message while UI tool pending - cancelling \(pendingTool.toolName)", category: .ai)
-
-            // Build cancelled tool response
-            // NOTE: OpenAI Responses API only accepts: "in_progress", "completed", "incomplete"
-            // Use "incomplete" for cancelled/skipped tool interactions
-            var cancelPayload = JSON()
-            cancelPayload["callId"].string = pendingTool.callId
-            var output = JSON()
-            output["status"].string = "incomplete"
-            output["reason"].string = "User sent a chat message, overriding the pending UI interaction"
-            output["user_message"].string = text
-            cancelPayload["output"] = output
-
-            // Clear the pending UI tool state
-            await state.clearPendingUIToolCall()
-
-            // Send the cancelled tool response
-            await emit(.llmToolResponseMessage(payload: cancelPayload))
-
-            Logger.info("💬 Sent cancelled tool response for \(pendingTool.toolName), proceeding with user message", category: .ai)
-        }
-
-        // Add the ORIGINAL message (without tags) to chat transcript IMMEDIATELY so user sees it right away
-        let messageId = await state.appendUserMessage(text, isSystemGenerated: false)
-        // Emit a custom event so coordinator can sync its messages array
-        await emit(.chatboxUserMessageAdded(messageId: messageId.uuidString))
-        // Wrap user chatbox messages in <chatbox> tags for LLM context
-        var payload = JSON()
-        payload["text"].string = "<chatbox>\(text)</chatbox>"
-        // Emit processing state change for UI feedback
-        await emit(.processingStateChanged(true, statusMessage: "Processing your message..."))
-        // Emit event for LLMMessenger to handle (isSystemGenerated defaults to false)
-        await emit(.llmSendUserMessage(payload: payload))
-    }
 }

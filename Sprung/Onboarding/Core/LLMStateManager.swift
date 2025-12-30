@@ -76,10 +76,6 @@ actor LLMStateManager {
     func setLastResponseId(_ responseId: String?) {
         lastResponseId = responseId
     }
-    /// Set the last clean response ID (for restore)
-    func setLastCleanResponseId(_ responseId: String?) {
-        lastCleanResponseId = responseId
-    }
     // MARK: - Model Configuration
     /// Get the current model ID
     func getCurrentModelId() -> String {

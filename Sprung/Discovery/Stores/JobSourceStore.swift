@@ -36,10 +36,6 @@ final class JobSourceStore: SwiftDataStore {
         activeSources.filter { $0.isDue }
     }
 
-    var sourcesByCategory: [SourceCategory: [JobSource]] {
-        Dictionary(grouping: activeSources) { $0.category }
-    }
-
     func add(_ source: JobSource) {
         modelContext.insert(source)
         saveContext()
@@ -57,12 +53,6 @@ final class JobSourceStore: SwiftDataStore {
     func markVisited(_ source: JobSource) {
         source.lastVisitedAt = Date()
         source.totalVisits += 1
-        saveContext()
-        version += 1
-    }
-
-    func incrementOpeningsCaptured(_ source: JobSource) {
-        source.openingsCaptured += 1
         saveContext()
         version += 1
     }
@@ -95,11 +85,6 @@ final class JobSourceStore: SwiftDataStore {
     /// Get sources that need URL revalidation
     var sourcesNeedingRevalidation: [JobSource] {
         activeSources.filter { $0.needsRevalidation }
-    }
-
-    /// Get sources that should be suggested for removal
-    var sourcesToSuggestRemoval: [JobSource] {
-        sources.filter { $0.shouldSuggestRemoval }
     }
 
     /// Update URL validation result

@@ -58,10 +58,6 @@ actor ChatTranscriptStore: OnboardingEventEmitter {
     func getAllMessages() -> [OnboardingMessage] {
         messages
     }
-    /// Get message count
-    func getMessageCount() -> Int {
-        messages.count
-    }
 
     /// Remove a message by ID (used when message send fails)
     func removeMessage(id: UUID) -> OnboardingMessage? {
@@ -131,10 +127,6 @@ actor ChatTranscriptStore: OnboardingEventEmitter {
             messagesSync = messages
         }
     }
-    /// Get current streaming message
-    func getStreamingMessage() -> StreamingMessage? {
-        streamingMessage
-    }
     // MARK: - Reasoning Summary (Sidebar Display)
     /// Update the current reasoning summary for sidebar display (ChatGPT-style)
     func updateReasoningSummary(delta: String) {
@@ -168,14 +160,6 @@ actor ChatTranscriptStore: OnboardingEventEmitter {
     /// Get latest reasoning summary
     func getLatestReasoningSummary() -> String? {
         latestReasoningSummary
-    }
-    /// Get current reasoning summary (for sidebar)
-    func getCurrentReasoningSummary() -> String? {
-        currentReasoningSummary
-    }
-    /// Check if reasoning is active
-    func getIsReasoningActive() -> Bool {
-        isReasoningActive
     }
     // MARK: - State Management
     /// Restore messages from checkpoint

@@ -17,20 +17,6 @@ struct KnowledgeCardSource: Identifiable, Equatable, Codable {
         case chatContext = "chat_context"
     }
 
-    init(
-        id: UUID = UUID(),
-        type: String,
-        artifactId: String? = nil,
-        chatExcerpt: String? = nil,
-        chatContext: String? = nil
-    ) {
-        self.id = id
-        self.type = type
-        self.artifactId = artifactId
-        self.chatExcerpt = chatExcerpt
-        self.chatContext = chatContext
-    }
-
     init(json: JSON) {
         id = UUID(uuidString: json["id"].stringValue) ?? UUID()
         type = json["type"].stringValue
@@ -76,26 +62,6 @@ struct KnowledgeCardDraft: Identifiable, Equatable, Codable {
         case timePeriod = "time_period"
         case organization
         case location
-    }
-
-    init(
-        id: UUID = UUID(),
-        title: String = "",
-        cardType: String? = nil,
-        content: String = "",
-        sources: [KnowledgeCardSource] = [],
-        timePeriod: String? = nil,
-        organization: String? = nil,
-        location: String? = nil
-    ) {
-        self.id = id
-        self.title = title
-        self.cardType = cardType
-        self.content = content
-        self.sources = sources
-        self.timePeriod = timePeriod
-        self.organization = organization
-        self.location = location
     }
 
     init(json: JSON) {
@@ -298,15 +264,5 @@ struct ArtifactRecord: Identifiable, Equatable, Codable {
         json["extracted_text"].string = extractedContent
         json["metadata"] = metadata
         return json
-    }
-}
-struct ExperienceContext {
-    var timelineEntry: JSON
-    var artifacts: [ArtifactRecord]
-    var transcript: String
-    init(timelineEntry: JSON, artifacts: [ArtifactRecord] = [], transcript: String = "") {
-        self.timelineEntry = timelineEntry
-        self.artifacts = artifacts
-        self.transcript = transcript
     }
 }

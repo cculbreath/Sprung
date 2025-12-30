@@ -23,10 +23,6 @@ final class NetworkingContactStore: SwiftDataStore {
         )) ?? []
     }
 
-    var activeContacts: [NetworkingContact] {
-        allContacts.filter { $0.warmth != .dormant }
-    }
-
     var needsAttention: [NetworkingContact] {
         allContacts.filter {
             $0.relationshipHealth == .needsAttention || $0.relationshipHealth == .decaying
@@ -37,63 +33,13 @@ final class NetworkingContactStore: SwiftDataStore {
         allContacts.filter { $0.warmth == .hot }
     }
 
-    var warmContacts: [NetworkingContact] {
-        allContacts.filter { $0.warmth == .warm }
-    }
-
-    var coldContacts: [NetworkingContact] {
-        allContacts.filter { $0.warmth == .cold }
-    }
-
-    var dormantContacts: [NetworkingContact] {
-        allContacts.filter { $0.warmth == .dormant }
-    }
-
-    var atTargetCompanies: [NetworkingContact] {
-        allContacts.filter { $0.isAtTargetCompany }
-    }
-
-    var recruiters: [NetworkingContact] {
-        allContacts.filter { $0.isRecruiter }
-    }
-
-    var hiringManagers: [NetworkingContact] {
-        allContacts.filter { $0.isHiringManager }
-    }
-
-    var contactsWhoOfferedHelp: [NetworkingContact] {
-        allContacts.filter { $0.hasOfferedToHelp }
-    }
-
     func add(_ contact: NetworkingContact) {
         modelContext.insert(contact)
         saveContext()
     }
 
-    func update(_ contact: NetworkingContact) {
-        contact.updatedAt = Date()
-        saveContext()
-    }
-
-    func delete(_ contact: NetworkingContact) {
-        modelContext.delete(contact)
-        saveContext()
-    }
-
     func contact(byId id: UUID) -> NetworkingContact? {
         allContacts.first { $0.id == id }
-    }
-
-    func contacts(byCompany company: String) -> [NetworkingContact] {
-        allContacts.filter { $0.company?.lowercased() == company.lowercased() }
-    }
-
-    func contacts(withTag tag: String) -> [NetworkingContact] {
-        allContacts.filter { $0.tags.contains(tag) }
-    }
-
-    func contacts(fromEvent eventId: UUID) -> [NetworkingContact] {
-        allContacts.filter { $0.metAtEventId == eventId }
     }
 
     // MARK: - Interaction Recording
@@ -102,20 +48,6 @@ final class NetworkingContactStore: SwiftDataStore {
         contact.lastContactAt = Date()
         contact.lastContactType = type
         contact.totalInteractions += 1
-        contact.updatedAt = Date()
-        saveContext()
-    }
-
-    func setNextAction(_ contact: NetworkingContact, action: String, date: Date?) {
-        contact.nextAction = action
-        contact.nextActionAt = date
-        contact.updatedAt = Date()
-        saveContext()
-    }
-
-    func clearNextAction(_ contact: NetworkingContact) {
-        contact.nextAction = nil
-        contact.nextActionAt = nil
         contact.updatedAt = Date()
         saveContext()
     }
@@ -157,26 +89,6 @@ final class NetworkingContactStore: SwiftDataStore {
         for contact in allContacts {
             decayWarmthIfNeeded(contact)
         }
-    }
-
-    // MARK: - Statistics
-
-    var totalContactCount: Int {
-        allContacts.count
-    }
-
-    var activeContactCount: Int {
-        activeContacts.count
-    }
-
-    var contactsByWarmth: [ContactWarmth: Int] {
-        Dictionary(grouping: allContacts) { $0.warmth }
-            .mapValues { $0.count }
-    }
-
-    var contactsByRelationship: [RelationshipType: Int] {
-        Dictionary(grouping: allContacts) { $0.relationship }
-            .mapValues { $0.count }
     }
 
     /// Contacts added this week
