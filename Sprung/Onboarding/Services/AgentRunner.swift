@@ -307,10 +307,12 @@ actor AgentRunner {
                         \(errorMessage)
 
                         Fix the JSON and call `return_result` again. Requirements:
-                        - result.card_type: one of job/skill/education/project
+                        - result.card_type: one of job/skill/education/project/employment/achievement
                         - result.title: non-empty
-                        - result.prose: non-empty, substantial narrative (500+ words recommended)
-                        - result.sources: include the artifact IDs you used as evidence and prefer non-empty
+                        - result.facts: array of extracted facts with category, statement, confidence, source
+                        - result.suggested_bullets: array of resume bullet templates
+                        - result.technologies: array of technologies/tools mentioned
+                        - result.sources_used: artifact IDs used as evidence
                         """
                         messages.append(buildUserMessage(content: correctionMessage))
                         await logTranscript(type: .system, content: "Sent return_result correction request")
@@ -473,9 +475,10 @@ actor AgentRunner {
 
         let cardType = result["card_type"].stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         if cardType.isEmpty {
-            return "Missing `result.card_type` (job/skill/education/project)."
+            return "Missing `result.card_type` (job/skill/education/project/employment)."
         }
-        if ["job", "skill", "education", "project"].contains(cardType) == false {
+        let validTypes = ["job", "skill", "education", "project", "employment", "achievement"]
+        if !validTypes.contains(cardType) {
             return "Invalid `result.card_type` value '\(cardType)'."
         }
 
@@ -484,24 +487,21 @@ actor AgentRunner {
             return "Missing `result.title` (non-empty string)."
         }
 
-        let prose = result["prose"].stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        if prose.isEmpty {
-            return "Missing `result.prose` (non-empty narrative)."
+        // Fact-based format validation
+        let facts = result["facts"].arrayValue
+        if facts.isEmpty {
+            return "Missing `result.facts` (array of extracted facts with source attribution)."
         }
-        if prose.count < 1000 {
-            return "`result.prose` is too short (\(prose.count) chars). Provide a substantial narrative; do not leave it blank or terse."
+        if facts.count < 3 {
+            return "`result.facts` has too few items (\(facts.count)). Extract all relevant facts from the artifacts."
         }
 
-        let sources = result["sources"].arrayValue
+        let sourcesUsed = result["sources_used"].arrayValue
             .map { $0.stringValue.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
 
-        let chatSources = result["chat_sources"].arrayValue
-            .map { $0["excerpt"].stringValue.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-
-        if sources.isEmpty && chatSources.isEmpty {
-            return "No evidence sources provided. Include `result.sources` (artifact IDs) and/or `result.chat_sources` excerpts."
+        if sourcesUsed.isEmpty {
+            return "No evidence sources provided. Include `result.sources_used` (artifact IDs used)."
         }
 
         return nil

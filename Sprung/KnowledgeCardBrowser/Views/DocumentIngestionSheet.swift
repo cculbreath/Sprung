@@ -8,7 +8,6 @@
 //
 
 import SwiftUI
-import SwiftyJSON
 import UniformTypeIdentifiers
 
 struct DocumentIngestionSheet: View {
@@ -417,14 +416,11 @@ struct DocumentIngestionSheet: View {
 
         Task {
             do {
-                // Load archived artifacts if any were selected
-                var existingArtifacts: [JSON] = []
-                if !addedArchivedArtifactIds.isEmpty {
-                    existingArtifacts = await coordinator.loadArchivedArtifacts(addedArchivedArtifactIds)
-                }
-
-                // Generate card with both new sources and existing artifacts
-                try await coordinator.generateCardWithExisting(from: sources, existingArtifacts: existingArtifacts)
+                // Generate card with both new sources and existing artifact IDs
+                try await coordinator.generateCardWithExisting(
+                    from: sources,
+                    existingArtifactIds: addedArchivedArtifactIds
+                )
 
                 if let card = coordinator.generatedCard {
                     onCardGenerated?(card)

@@ -88,13 +88,10 @@ class StandaloneKCCoordinator {
     // MARK: - Dependencies
 
     private let repository = InMemoryArtifactRepository()
-    private var extractionService: DocumentExtractionService?
-    private var metadataService: MetadataExtractionService?
-    private var inventoryService: CardInventoryService?
+    private let extractor: StandaloneKCExtractor
+    private let analyzer: StandaloneKCAnalyzer
     private weak var llmFacade: LLMFacade?
     private weak var resRefStore: ResRefStore?
-    /// Session store for persisting artifacts (optional - allows standalone use without persistence)
-    private weak var sessionStore: OnboardingSessionStore?
 
     // MARK: - Configuration
 
@@ -105,16 +102,14 @@ class StandaloneKCCoordinator {
     init(llmFacade: LLMFacade?, resRefStore: ResRefStore?, sessionStore: OnboardingSessionStore? = nil) {
         self.llmFacade = llmFacade
         self.resRefStore = resRefStore
-        self.sessionStore = sessionStore
         self.kcAgentModelId = UserDefaults.standard.string(forKey: "onboardingKCAgentModelId") ?? "anthropic/claude-haiku-4.5"
 
-        // Initialize services
-        self.extractionService = DocumentExtractionService(llmFacade: llmFacade, eventBus: nil)
-        self.metadataService = MetadataExtractionService(llmFacade: llmFacade)
-        self.inventoryService = CardInventoryService(llmFacade: llmFacade)
+        // Initialize sub-modules
+        self.extractor = StandaloneKCExtractor(llmFacade: llmFacade, sessionStore: sessionStore)
+        self.analyzer = StandaloneKCAnalyzer(llmFacade: llmFacade, resRefStore: resRefStore)
     }
 
-    // MARK: - Public API
+    // MARK: - Public API: Single Card Generation
 
     /// Generate a knowledge card from the given source URLs.
     /// Sources can be document files (PDF, DOCX, TXT) or git repository folders.
@@ -133,7 +128,9 @@ class StandaloneKCCoordinator {
 
         do {
             // Phase 1: Extract all sources
-            let artifacts = try await extractAllSources(sources)
+            let artifacts = try await extractor.extractAllSources(sources, into: repository) { [weak self] current, total, filename in
+                self?.status = .extracting(current: current, total: total, filename: filename)
+            }
 
             guard !artifacts.isEmpty else {
                 throw StandaloneKCError.noArtifactsExtracted
@@ -141,7 +138,7 @@ class StandaloneKCCoordinator {
 
             // Phase 2: Extract metadata
             status = .analyzingMetadata
-            let metadata = try await extractMetadata(from: artifacts)
+            let metadata = try await analyzer.extractMetadata(from: artifacts)
 
             // Phase 3: Generate KC via agent
             status = .generatingCard(current: 1, total: 1)
@@ -175,57 +172,9 @@ class StandaloneKCCoordinator {
         }
     }
 
-    /// Load archived artifacts into the repository for KC generation.
-    /// These artifacts have already been extracted and stored in SwiftData.
-    /// Returns the JSON representations of the loaded artifacts.
-    func loadArchivedArtifacts(_ artifactIds: Set<String>) async -> [JSON] {
-        guard let store = sessionStore else { return [] }
-
-        var loadedArtifacts: [JSON] = []
-
-        for id in artifactIds {
-            guard let record = store.findArtifactById(id) else {
-                Logger.warning("⚠️ StandaloneKCCoordinator: Archived artifact not found: \(id)", category: .ai)
-                continue
-            }
-
-            // Convert SwiftData record to JSON
-            var artifactJSON = JSON()
-            artifactJSON["id"].string = record.id.uuidString
-            artifactJSON["filename"].string = record.sourceFilename
-            artifactJSON["source_type"].string = record.sourceType
-            artifactJSON["extracted_text"].string = record.extractedContent
-            artifactJSON["sha256"].string = record.sourceHash
-
-            // Parse metadata JSON
-            if let metadataJSONString = record.metadataJSON,
-               let data = metadataJSONString.data(using: .utf8),
-               let metadata = try? JSON(data: data) {
-                if let summary = metadata["summary"].string {
-                    artifactJSON["summary"].string = summary
-                }
-                if let brief = metadata["brief_description"].string {
-                    artifactJSON["brief_description"].string = brief
-                }
-                if let title = metadata["title"].string {
-                    artifactJSON["metadata"]["title"].string = title
-                }
-            }
-
-            // Add to in-memory repository for KC agent access
-            await repository.addArtifactRecord(artifactJSON)
-            loadedArtifacts.append(artifactJSON)
-
-            Logger.debug("📦 StandaloneKCCoordinator: Loaded archived artifact: \(record.sourceFilename)", category: .ai)
-        }
-
-        return loadedArtifacts
-    }
-
     /// Generate a knowledge card from URLs and/or pre-loaded archived artifacts.
-    /// Call loadArchivedArtifacts first if you have archived artifact IDs to include.
-    func generateCardWithExisting(from sources: [URL], existingArtifacts: [JSON]) async throws {
-        guard !sources.isEmpty || !existingArtifacts.isEmpty else {
+    func generateCardWithExisting(from sources: [URL], existingArtifactIds: Set<String>) async throws {
+        guard !sources.isEmpty || !existingArtifactIds.isEmpty else {
             throw StandaloneKCError.noSources
         }
 
@@ -238,11 +187,18 @@ class StandaloneKCCoordinator {
         generatedCard = nil
 
         do {
-            // Phase 1: Extract new sources (if any)
-            var allArtifacts = existingArtifacts
+            // Phase 1: Load existing artifacts
+            var allArtifacts: [JSON] = []
+            if !existingArtifactIds.isEmpty {
+                let existing = await extractor.loadArchivedArtifacts(existingArtifactIds, into: repository)
+                allArtifacts.append(contentsOf: existing)
+            }
 
+            // Phase 2: Extract new sources
             if !sources.isEmpty {
-                let newArtifacts = try await extractAllSources(sources)
+                let newArtifacts = try await extractor.extractAllSources(sources, into: repository) { [weak self] current, total, filename in
+                    self?.status = .extracting(current: current, total: total, filename: filename)
+                }
                 allArtifacts.append(contentsOf: newArtifacts)
             }
 
@@ -250,15 +206,15 @@ class StandaloneKCCoordinator {
                 throw StandaloneKCError.noArtifactsExtracted
             }
 
-            // Phase 2: Extract metadata
+            // Phase 3: Extract metadata
             status = .analyzingMetadata
-            let metadata = try await extractMetadata(from: allArtifacts)
+            let metadata = try await analyzer.extractMetadata(from: allArtifacts)
 
-            // Phase 3: Generate KC via agent
+            // Phase 4: Generate KC via agent
             status = .generatingCard(current: 1, total: 1)
             let generated = try await runKCAgent(artifacts: allArtifacts, metadata: metadata)
 
-            // Phase 4: Persist to ResRef
+            // Phase 5: Persist to ResRef
             let resRef = createResRef(from: generated, metadata: metadata, artifacts: allArtifacts)
             resRefStore?.addResRef(resRef)
 
@@ -276,7 +232,7 @@ class StandaloneKCCoordinator {
         }
     }
 
-    // MARK: - Multi-Card Analysis & Generation
+    // MARK: - Public API: Multi-Card Analysis & Generation
 
     /// Analyze documents to produce card proposals for user review.
     /// This uses the full pipeline: classify → inventory → merge → match existing.
@@ -292,18 +248,18 @@ class StandaloneKCCoordinator {
         status = .idle
         errorMessage = nil
 
-        // Phase 1: Extract all sources
+        // Phase 1: Load existing artifacts
         var allArtifacts: [JSON] = []
-
-        // Load existing artifacts if any
         if !existingArtifactIds.isEmpty {
-            let existing = await loadArchivedArtifacts(existingArtifactIds)
+            let existing = await extractor.loadArchivedArtifacts(existingArtifactIds, into: repository)
             allArtifacts.append(contentsOf: existing)
         }
 
-        // Extract new sources
+        // Phase 2: Extract new sources
         if !sources.isEmpty {
-            let newArtifacts = try await extractAllSources(sources)
+            let newArtifacts = try await extractor.extractAllSources(sources, into: repository) { [weak self] current, total, filename in
+                self?.status = .extracting(current: current, total: total, filename: filename)
+            }
             allArtifacts.append(contentsOf: newArtifacts)
         }
 
@@ -311,46 +267,13 @@ class StandaloneKCCoordinator {
             throw StandaloneKCError.noArtifactsExtracted
         }
 
-        // Phase 2: Classify and inventory each document
+        // Phase 3: Analyze and inventory
         status = .inventorying
-        var inventories: [DocumentInventory] = []
+        let merged = try await analyzer.analyzeArtifacts(allArtifacts)
 
-        for artifact in allArtifacts {
-            let docId = artifact["id"].stringValue
-            let filename = artifact["filename"].stringValue
-            let content = artifact["extracted_text"].stringValue
-
-            // Inventory the document for potential cards (inventory determines document type itself)
-            if let service = inventoryService {
-                do {
-                    let inventory = try await service.inventoryDocument(
-                        documentId: docId,
-                        filename: filename,
-                        content: content
-                    )
-                    inventories.append(inventory)
-                } catch {
-                    Logger.warning("⚠️ StandaloneKCCoordinator: Failed to inventory \(filename): \(error.localizedDescription)", category: .ai)
-                }
-            }
-        }
-
-        // Phase 3: Merge inventories into unified card proposals
+        // Phase 4: Match against existing
         status = .merging
-        let merged = mergeInventoriesLocally(inventories)
-
-        // Phase 4: Match against existing ResRefs
-        let existingCards = resRefStore?.resRefs ?? []
-        var newCards: [MergedCardInventory.MergedCard] = []
-        var enhancements: [(proposal: MergedCardInventory.MergedCard, existing: ResRef)] = []
-
-        for proposal in merged.mergedCards {
-            if let match = findMatchingResRef(proposal, in: existingCards) {
-                enhancements.append((proposal, match))
-            } else {
-                newCards.append(proposal)
-            }
-        }
+        let (newCards, enhancements) = analyzer.matchAgainstExisting(merged)
 
         status = .idle
         Logger.info("📊 StandaloneKCCoordinator: Analysis complete - \(newCards.count) new, \(enhancements.count) enhancements", category: .ai)
@@ -386,125 +309,83 @@ class StandaloneKCCoordinator {
             }
         }
 
-        // Enhance existing cards
+        // Enhance existing cards (using fact-based merging)
         for (proposal, existingCard) in enhancements {
-            enhanceResRef(existingCard, with: proposal)
+            analyzer.enhanceResRef(existingCard, with: proposal)
             enhancedCount += 1
-            Logger.info("✅ StandaloneKCCoordinator: Enhanced card - \(existingCard.name)", category: .ai)
         }
 
         status = .completed(created: createdCount, enhanced: enhancedCount)
         return (created: createdCount, enhanced: enhancedCount)
     }
 
-    // MARK: - Private: Multi-Card Helpers
+    // MARK: - Private: KC Agent Generation
 
-    /// Simple local merge of inventories without LLM (for standalone use)
-    private func mergeInventoriesLocally(_ inventories: [DocumentInventory]) -> MergedCardInventory {
-        var mergedCards: [MergedCardInventory.MergedCard] = []
-        var cardsByKey: [String: MergedCardInventory.MergedCard] = [:]
-
-        for inventory in inventories {
-            for proposed in inventory.proposedCards {
-                // Create a key for grouping similar cards
-                let key = "\(proposed.cardType.rawValue):\(proposed.proposedTitle.lowercased())"
-
-                if var existing = cardsByKey[key] {
-                    // Merge into existing card
-                    var combinedFacts = existing.combinedKeyFacts
-                    combinedFacts.append(contentsOf: proposed.keyFacts.filter { !combinedFacts.contains($0) })
-
-                    var combinedTech = existing.combinedTechnologies
-                    combinedTech.append(contentsOf: proposed.technologies.filter { !combinedTech.contains($0) })
-
-                    var combinedOutcomes = existing.combinedOutcomes
-                    combinedOutcomes.append(contentsOf: proposed.quantifiedOutcomes.filter { !combinedOutcomes.contains($0) })
-
-                    var supportingSources = existing.supportingSources
-                    supportingSources.append(MergedCardInventory.MergedCard.SupportingSource(
-                        documentId: inventory.documentId,
-                        evidenceLocations: proposed.evidenceLocations,
-                        adds: proposed.keyFacts
-                    ))
-
-                    existing = MergedCardInventory.MergedCard(
-                        cardId: existing.cardId,
-                        cardType: existing.cardType,
-                        title: existing.title,
-                        primarySource: existing.primarySource,
-                        supportingSources: supportingSources,
-                        combinedKeyFacts: combinedFacts,
-                        combinedTechnologies: combinedTech,
-                        combinedOutcomes: combinedOutcomes,
-                        dateRange: existing.dateRange ?? proposed.dateRange,
-                        evidenceQuality: .strong,
-                        extractionPriority: .high
-                    )
-                    cardsByKey[key] = existing
-                } else {
-                    // Create new merged card
-                    let merged = MergedCardInventory.MergedCard(
-                        cardId: UUID().uuidString,
-                        cardType: proposed.cardType.rawValue,
-                        title: proposed.proposedTitle,
-                        primarySource: MergedCardInventory.MergedCard.SourceReference(
-                            documentId: inventory.documentId,
-                            evidenceLocations: proposed.evidenceLocations
-                        ),
-                        supportingSources: [],
-                        combinedKeyFacts: proposed.keyFacts,
-                        combinedTechnologies: proposed.technologies,
-                        combinedOutcomes: proposed.quantifiedOutcomes,
-                        dateRange: proposed.dateRange,
-                        evidenceQuality: proposed.evidenceStrength == .primary ? .strong : .moderate,
-                        extractionPriority: .high
-                    )
-                    cardsByKey[key] = merged
-                }
-            }
+    private func runKCAgent(artifacts: [JSON], metadata: CardMetadata) async throws -> GeneratedCard {
+        guard let facade = llmFacade else {
+            throw StandaloneKCError.llmNotConfigured
         }
 
-        mergedCards = Array(cardsByKey.values)
-
-        let grouped = Dictionary(grouping: mergedCards, by: { $0.cardType })
-        return MergedCardInventory(
-            mergedCards: mergedCards,
-            gaps: [],
-            stats: MergedCardInventory.MergeStats(
-                totalInputCards: inventories.flatMap { $0.proposedCards }.count,
-                mergedOutputCards: mergedCards.count,
-                cardsByType: MergedCardInventory.MergeStats.CardsByType(
-                    employment: grouped["employment"]?.count ?? 0,
-                    project: grouped["project"]?.count ?? 0,
-                    skill: grouped["skill"]?.count ?? 0,
-                    achievement: grouped["achievement"]?.count ?? 0,
-                    education: grouped["education"]?.count ?? 0
-                ),
-                strongEvidence: mergedCards.filter { $0.evidenceQuality == .strong }.count,
-                needsMoreEvidence: mergedCards.filter { $0.evidenceQuality == .weak }.count
-            ),
-            generatedAt: ISO8601DateFormatter().string(from: Date())
+        // Build CardProposal
+        let artifactIds = artifacts.compactMap { $0["id"].string }
+        let proposal = CardProposal(
+            cardId: UUID().uuidString,
+            cardType: metadata.cardType,
+            title: metadata.title,
+            timelineEntryId: nil,
+            assignedArtifactIds: artifactIds,
+            chatExcerpts: [],
+            notes: nil
         )
-    }
 
-    /// Match a proposal against existing ResRefs
-    private func findMatchingResRef(
-        _ proposal: MergedCardInventory.MergedCard,
-        in existing: [ResRef]
-    ) -> ResRef? {
-        let titleCore = proposalTitleCore(proposal.title)
-        return existing.first { resRef in
-            resRef.cardType == proposal.cardType &&
-            resRef.name.lowercased().contains(titleCore)
+        // Build prompts for fact-based extraction
+        let systemPrompt = KCAgentPrompts.systemPrompt(
+            cardId: UUID().uuidString,
+            cardType: metadata.cardType,
+            title: metadata.title
+        )
+
+        // Build artifact summaries for the initial prompt
+        let summaries = await repository.getArtifactSummaries()
+
+        let initialPrompt = KCAgentPrompts.initialPrompt(
+            proposal: proposal,
+            allArtifacts: summaries
+        )
+
+        // Create tool executor with our in-memory repository
+        let toolExecutor = SubAgentToolExecutor(artifactRepository: repository)
+
+        // Run agent
+        let runner = AgentRunner.forKnowledgeCard(
+            agentId: UUID().uuidString,
+            cardTitle: metadata.title,
+            systemPrompt: systemPrompt,
+            initialPrompt: initialPrompt,
+            modelId: kcAgentModelId,
+            toolExecutor: toolExecutor,
+            llmFacade: facade,
+            eventBus: nil,
+            tracker: nil
+        )
+
+        let output = try await runner.run()
+
+        // Parse result
+        guard let result = output.result?["result"] else {
+            throw StandaloneKCError.agentNoResult
         }
+
+        let generated = GeneratedCard.fromAgentOutput(result, cardId: proposal.cardId)
+
+        // Validate
+        if let error = generated.validationError() {
+            throw StandaloneKCError.agentInvalidOutput(error)
+        }
+
+        return generated
     }
 
-    /// Extract core identifier from title (e.g., "Senior Engineer at TechCorp" -> "techcorp")
-    private func proposalTitleCore(_ title: String) -> String {
-        title.lowercased().split(separator: " ").last.map(String.init) ?? title.lowercased()
-    }
-
-    /// Run KC agent for a specific merged card proposal
     private func runKCAgentForProposal(_ proposal: MergedCardInventory.MergedCard, artifacts: [JSON]) async throws -> ResRef {
         guard let facade = llmFacade else {
             throw StandaloneKCError.llmNotConfigured
@@ -524,17 +405,17 @@ class StandaloneKCCoordinator {
             notes: nil
         )
 
-        // Build prompts
+        // Build prompts for fact-based extraction
         let systemPrompt = KCAgentPrompts.systemPrompt(
+            cardId: proposal.cardId,
             cardType: proposal.cardType,
-            title: proposal.title,
-            candidateName: nil
+            title: proposal.title
         )
 
         let summaries = await repository.getArtifactSummaries()
         let initialPrompt = KCAgentPrompts.initialPrompt(
             proposal: cardProposal,
-            allSummaries: summaries
+            allArtifacts: summaries
         )
 
         // Create tool executor with our in-memory repository
@@ -574,332 +455,9 @@ class StandaloneKCCoordinator {
         return createResRef(from: generated, metadata: metadata, artifacts: artifacts)
     }
 
-    /// Enhance an existing ResRef with new evidence from a proposal
-    private func enhanceResRef(_ resRef: ResRef, with proposal: MergedCardInventory.MergedCard) {
-        // Append new facts to existing content
-        var updatedContent = resRef.content
+    // MARK: - Private: ResRef Creation
 
-        let newFacts = proposal.combinedKeyFacts.filter { fact in
-            !resRef.content.contains(fact)
-        }
-
-        if !newFacts.isEmpty {
-            updatedContent += "\n\n## Additional Evidence\n"
-            updatedContent += newFacts.map { "• \($0)" }.joined(separator: "\n")
-        }
-
-        resRef.content = updatedContent
-
-        // Update sources JSON
-        var existingSources: [[String: String]] = []
-        if let sourcesJSON = resRef.sourcesJSON,
-           let data = sourcesJSON.data(using: .utf8),
-           let decoded = try? JSONSerialization.jsonObject(with: data) as? [[String: String]] {
-            existingSources = decoded
-        }
-
-        // Add new sources
-        existingSources.append(["type": "artifact", "artifact_id": proposal.primarySource.documentId])
-        for source in proposal.supportingSources {
-            existingSources.append(["type": "artifact", "artifact_id": source.documentId])
-        }
-
-        if let data = try? JSONSerialization.data(withJSONObject: existingSources),
-           let jsonString = String(data: data, encoding: .utf8) {
-            resRef.sourcesJSON = jsonString
-        }
-
-        resRefStore?.updateResRef(resRef)
-    }
-
-    // MARK: - Private: Extraction Phase
-
-    private func extractAllSources(_ sources: [URL]) async throws -> [JSON] {
-        var artifacts: [JSON] = []
-        let total = sources.count
-
-        for (index, url) in sources.enumerated() {
-            let filename = url.lastPathComponent
-            status = .extracting(current: index + 1, total: total, filename: filename)
-
-            do {
-                if isGitRepository(url) {
-                    let artifact = try await extractGitRepository(url)
-                    artifacts.append(artifact)
-                } else {
-                    let artifact = try await extractDocument(url)
-                    artifacts.append(artifact)
-                }
-            } catch {
-                Logger.warning("⚠️ StandaloneKCCoordinator: Failed to extract \(filename): \(error.localizedDescription)", category: .ai)
-                // Continue with other sources even if one fails
-            }
-        }
-
-        return artifacts
-    }
-
-    private func isGitRepository(_ url: URL) -> Bool {
-        let gitDir = url.appendingPathComponent(".git")
-        var isDirectory: ObjCBool = false
-        return FileManager.default.fileExists(atPath: gitDir.path, isDirectory: &isDirectory) && isDirectory.boolValue
-    }
-
-    private func extractDocument(_ url: URL) async throws -> JSON {
-        guard let service = extractionService else {
-            throw StandaloneKCError.extractionServiceNotAvailable
-        }
-
-        let request = DocumentExtractionService.ExtractionRequest(
-            fileURL: url,
-            purpose: "knowledge_card",
-            returnTypes: ["text"],
-            autoPersist: false,
-            displayFilename: url.lastPathComponent
-        )
-
-        let result = try await service.extract(using: request)
-
-        guard result.status == .ok || result.status == .partial,
-              let artifact = result.artifact else {
-            throw StandaloneKCError.extractionFailed("No content extracted from \(url.lastPathComponent)")
-        }
-
-        // Build artifact JSON for repository
-        var artifactJSON = JSON()
-        artifactJSON["id"].string = artifact.id
-        artifactJSON["filename"].string = artifact.filename
-        artifactJSON["content_type"].string = artifact.contentType
-        artifactJSON["size_bytes"].int = artifact.sizeInBytes
-        artifactJSON["sha256"].string = artifact.sha256
-        artifactJSON["extracted_text"].string = artifact.extractedContent
-
-        if let title = artifact.title {
-            artifactJSON["metadata"]["title"].string = title
-        }
-
-        // Generate a summary for metadata extraction
-        let summary = generateLocalSummary(from: artifact.extractedContent, filename: artifact.filename)
-        artifactJSON["summary"].string = summary
-        artifactJSON["brief_description"].string = String(artifact.extractedContent.prefix(200))
-
-        // Store in repository for KC agent access
-        await repository.addArtifactRecord(artifactJSON)
-
-        // Also persist to SwiftData as standalone artifact (session = nil, immediately archived)
-        persistArtifactToSwiftData(artifactJSON)
-
-        return artifactJSON
-    }
-
-    private func extractGitRepository(_ url: URL) async throws -> JSON {
-        // For git repos, we do a simpler analysis without the full GitIngestionKernel
-        // to avoid heavy dependencies. We extract basic repo info and file structure.
-        let repoName = url.lastPathComponent
-
-        // Get basic git info
-        let gitInfo = try await gatherGitInfo(url)
-
-        var artifactJSON = JSON()
-        artifactJSON["id"].string = UUID().uuidString
-        artifactJSON["filename"].string = repoName
-        artifactJSON["content_type"].string = "application/x-git"
-        artifactJSON["source_type"].string = "git_repository"
-        artifactJSON["extracted_text"].string = gitInfo.fullText
-        artifactJSON["summary"].string = gitInfo.summary
-        artifactJSON["brief_description"].string = "Git repository: \(repoName)"
-
-        // Add summary metadata
-        artifactJSON["summary_metadata"]["document_type"].string = "git_repository"
-        artifactJSON["summary_metadata"]["technologies"].arrayObject = gitInfo.technologies
-
-        // Store in repository for KC agent access
-        await repository.addArtifactRecord(artifactJSON)
-
-        // Also persist to SwiftData as standalone artifact (session = nil, immediately archived)
-        persistArtifactToSwiftData(artifactJSON)
-
-        return artifactJSON
-    }
-
-    private struct GitInfo {
-        let summary: String
-        let fullText: String
-        let technologies: [String]
-    }
-
-    private func gatherGitInfo(_ repoURL: URL) async throws -> GitInfo {
-        let repoPath = repoURL.path
-        let repoName = repoURL.lastPathComponent
-
-        // Run git commands to gather info
-        let commitCount = try? await runGitCommand("git -C \"\(repoPath)\" rev-list --count HEAD")
-        let firstCommitDate = try? await runGitCommand("git -C \"\(repoPath)\" log --reverse --format=%cd --date=short | head -1")
-        let lastCommitDate = try? await runGitCommand("git -C \"\(repoPath)\" log -1 --format=%cd --date=short")
-
-        // Get file types (extensions)
-        let fileTypes = try? await runGitCommand("git -C \"\(repoPath)\" ls-files | sed 's/.*\\.//' | sort | uniq -c | sort -rn | head -10")
-
-        // Get recent commits
-        let recentCommits = try? await runGitCommand("git -C \"\(repoPath)\" log --oneline -20")
-
-        // Detect technologies from file extensions
-        var technologies: [String] = []
-        if let types = fileTypes {
-            if types.contains("swift") { technologies.append("Swift") }
-            if types.contains("py") { technologies.append("Python") }
-            if types.contains("js") || types.contains("ts") { technologies.append("JavaScript/TypeScript") }
-            if types.contains("go") { technologies.append("Go") }
-            if types.contains("rs") { technologies.append("Rust") }
-            if types.contains("java") { technologies.append("Java") }
-            if types.contains("kt") { technologies.append("Kotlin") }
-        }
-
-        let summary = """
-        Repository: \(repoName)
-        Commits: \(commitCount?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "unknown")
-        Period: \(firstCommitDate?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "?") to \(lastCommitDate?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "?")
-        Technologies: \(technologies.joined(separator: ", "))
-        """
-
-        let fullText = """
-        # Git Repository: \(repoName)
-
-        ## Overview
-        - Total commits: \(commitCount?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "unknown")
-        - First commit: \(firstCommitDate?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "unknown")
-        - Last commit: \(lastCommitDate?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "unknown")
-        - Primary technologies: \(technologies.joined(separator: ", "))
-
-        ## File Type Distribution
-        \(fileTypes ?? "Unable to determine")
-
-        ## Recent Commits
-        \(recentCommits ?? "Unable to retrieve")
-        """
-
-        return GitInfo(
-            summary: summary,
-            fullText: fullText,
-            technologies: technologies
-        )
-    }
-
-    private func runGitCommand(_ command: String) async throws -> String {
-        let process = Process()
-        let pipe = Pipe()
-
-        process.executableURL = URL(fileURLWithPath: "/bin/sh")
-        process.arguments = ["-c", command]
-        process.standardOutput = pipe
-        process.standardError = pipe
-
-        try process.run()
-        process.waitUntilExit()
-
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        return String(data: data, encoding: .utf8) ?? ""
-    }
-
-    private func generateLocalSummary(from text: String, filename: String) -> String {
-        // Generate a simple local summary without LLM
-        // This is used for quick context; full extraction prompts are used for KC generation
-        let wordCount = text.split(separator: " ").count
-        let lineCount = text.split(separator: "\n").count
-
-        let preview = String(text.prefix(500))
-            .replacingOccurrences(of: "\n", with: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        return """
-        Document: \(filename)
-        Length: approximately \(wordCount) words, \(lineCount) lines
-
-        Preview:
-        \(preview)...
-        """
-    }
-
-    // MARK: - Private: Metadata Extraction
-
-    private func extractMetadata(from artifacts: [JSON]) async throws -> CardMetadata {
-        guard let service = metadataService else {
-            let filename = artifacts.first?["filename"].stringValue ?? "Document"
-            return CardMetadata.defaults(fromFilename: filename)
-        }
-
-        return try await service.extract(from: artifacts)
-    }
-
-    // MARK: - Private: KC Agent Generation
-
-    private func runKCAgent(artifacts: [JSON], metadata: CardMetadata) async throws -> GeneratedCard {
-        guard let facade = llmFacade else {
-            throw StandaloneKCError.llmNotConfigured
-        }
-
-        // Build CardProposal
-        let artifactIds = artifacts.compactMap { $0["id"].string }
-        let proposal = CardProposal(
-            cardId: UUID().uuidString,
-            cardType: metadata.cardType,
-            title: metadata.title,
-            timelineEntryId: nil,
-            assignedArtifactIds: artifactIds,
-            chatExcerpts: [],
-            notes: nil
-        )
-
-        // Build prompts using reused KCAgentPrompts
-        let systemPrompt = KCAgentPrompts.systemPrompt(
-            cardType: metadata.cardType,
-            title: metadata.title,
-            candidateName: nil
-        )
-
-        // Build artifact summaries for the initial prompt
-        let summaries = await repository.getArtifactSummaries()
-
-        let initialPrompt = KCAgentPrompts.initialPrompt(
-            proposal: proposal,
-            allSummaries: summaries
-        )
-
-        // Create tool executor with our in-memory repository
-        let toolExecutor = SubAgentToolExecutor(artifactRepository: repository)
-
-        // Run agent
-        let runner = AgentRunner.forKnowledgeCard(
-            agentId: UUID().uuidString,
-            cardTitle: metadata.title,
-            systemPrompt: systemPrompt,
-            initialPrompt: initialPrompt,
-            modelId: kcAgentModelId,
-            toolExecutor: toolExecutor,
-            llmFacade: facade,
-            eventBus: nil,
-            tracker: nil
-        )
-
-        let output = try await runner.run()
-
-        // Parse result
-        guard let result = output.result?["result"] else {
-            throw StandaloneKCError.agentNoResult
-        }
-
-        let generated = GeneratedCard.fromAgentOutput(result, cardId: proposal.cardId)
-
-        // Validate
-        if let error = generated.validationError(minProseChars: 500) {
-            throw StandaloneKCError.agentInvalidOutput(error)
-        }
-
-        return generated
-    }
-
-    // MARK: - Private: Persistence
-
+    /// Create ResRef from fact-based GeneratedCard
     private func createResRef(from card: GeneratedCard, metadata: CardMetadata, artifacts: [JSON]) -> ResRef {
         // Encode sources as JSON
         var sourcesJSON: String?
@@ -913,9 +471,35 @@ class StandaloneKCCoordinator {
             }
         }
 
+        // Build content from suggested bullets for display
+        let content: String
+        if let bullets = card.suggestedBullets, !bullets.isEmpty {
+            content = bullets.map { "• \($0)" }.joined(separator: "\n")
+        } else {
+            content = "Knowledge card: \(card.title)"
+        }
+
+        // Encode technologies as JSON
+        var technologiesJSON: String?
+        if let techs = card.technologies, !techs.isEmpty {
+            if let data = try? JSONSerialization.data(withJSONObject: techs),
+               let jsonString = String(data: data, encoding: .utf8) {
+                technologiesJSON = jsonString
+            }
+        }
+
+        // Encode suggested bullets as JSON
+        var suggestedBulletsJSON: String?
+        if let bullets = card.suggestedBullets, !bullets.isEmpty {
+            if let data = try? JSONSerialization.data(withJSONObject: bullets),
+               let jsonString = String(data: data, encoding: .utf8) {
+                suggestedBulletsJSON = jsonString
+            }
+        }
+
         return ResRef(
             name: card.title.isEmpty ? metadata.title : card.title,
-            content: card.prose,
+            content: content,
             enabledByDefault: true,
             cardType: metadata.cardType,
             timePeriod: card.timePeriod ?? metadata.timePeriod,
@@ -923,66 +507,11 @@ class StandaloneKCCoordinator {
             location: card.location ?? metadata.location,
             sourcesJSON: sourcesJSON,
             isFromOnboarding: false,  // Standalone, not from onboarding
-            tokenCount: card.tokenCount  // May be nil for standalone cards
+            tokenCount: card.tokenCount,
+            factsJSON: card.factsJSON,
+            suggestedBulletsJSON: suggestedBulletsJSON,
+            technologiesJSON: technologiesJSON
         )
-    }
-
-    // MARK: - Private: SwiftData Persistence
-
-    /// Persist artifact to SwiftData as a standalone artifact (no session, immediately archived).
-    /// This allows KC Browser extractions to be reused in future onboarding interviews.
-    private func persistArtifactToSwiftData(_ artifactJSON: JSON) {
-        guard let store = sessionStore else {
-            Logger.debug("📦 StandaloneKCCoordinator: No session store, skipping persistence", category: .ai)
-            return
-        }
-
-        // Check for existing artifact by hash to avoid duplicates
-        if let hash = artifactJSON["sha256"].string,
-           store.findExistingArtifactByHash(hash) != nil {
-            Logger.debug("📦 StandaloneKCCoordinator: Artifact already exists, skipping", category: .ai)
-            return
-        }
-
-        let sourceType = artifactJSON["source_type"].string ?? "document"
-        let filename = artifactJSON["filename"].stringValue
-        let extractedContent = artifactJSON["extracted_text"].stringValue
-        let sourceHash = artifactJSON["sha256"].string
-
-        // Build metadata JSON including summary
-        var metadataDict: [String: Any] = [:]
-        if let summary = artifactJSON["summary"].string {
-            metadataDict["summary"] = summary
-        }
-        if let brief = artifactJSON["brief_description"].string {
-            metadataDict["brief_description"] = brief
-        }
-        if let title = artifactJSON["metadata"]["title"].string {
-            metadataDict["title"] = title
-        }
-        if !artifactJSON["summary_metadata"].dictionaryValue.isEmpty {
-            metadataDict["summary_metadata"] = artifactJSON["summary_metadata"].dictionaryObject ?? [:]
-        }
-
-        let metadataJSONString: String?
-        if !metadataDict.isEmpty,
-           let data = try? JSONSerialization.data(withJSONObject: metadataDict),
-           let string = String(data: data, encoding: .utf8) {
-            metadataJSONString = string
-        } else {
-            metadataJSONString = nil
-        }
-
-        // Persist as standalone artifact (session = nil)
-        _ = store.addStandaloneArtifact(
-            sourceType: sourceType,
-            sourceFilename: filename,
-            extractedContent: extractedContent,
-            sourceHash: sourceHash,
-            metadataJSON: metadataJSONString
-        )
-
-        Logger.info("📦 StandaloneKCCoordinator: Persisted artifact to SwiftData: \(filename)", category: .ai)
     }
 }
 

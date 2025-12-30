@@ -108,13 +108,13 @@ struct DispatchKCAgentsTool: InterviewTool {
         // Return compact card handles (not full content)
         var cardHandles: [[String: Any]] = []
         for card in result.successfulCards {
-            let wordCount = card.prose.components(separatedBy: .whitespacesAndNewlines).count
-            let shortSummary = String(card.prose.prefix(150)).components(separatedBy: ".").first ?? ""
+            let factCount = card.suggestedBullets?.count ?? 0
+            let techCount = card.technologies?.count ?? 0
             cardHandles.append([
                 "card_id": card.cardId,
                 "title": card.title,
-                "word_count": wordCount,
-                "short_summary": shortSummary.trimmingCharacters(in: .whitespaces)
+                "fact_count": factCount,
+                "tech_count": techCount
             ])
         }
         response["cards"].arrayObject = cardHandles

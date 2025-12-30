@@ -1,8 +1,0 @@
-An error occurred: {ERROR}
-
-Please try a different approach:
-1. If you couldn't read an artifact, try the summary instead
-2. If no artifacts are available, create the card based on the title and any context provided
-3. Call `return_result` with whatever information you can provide
-
-Continue with your card generation.

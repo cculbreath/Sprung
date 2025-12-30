@@ -29,33 +29,19 @@ enum PromptLibrary {
         loadPrompt(named: "phase3_intro_prompt")
     }()
 
-    // MARK: - Knowledge Card Agent Prompts
+    // MARK: - Fact-Based Knowledge Card Prompts
 
-    /// System prompt template for Knowledge Card generation agents.
-    /// Contains placeholders: {TITLE}, {CARD_TYPE}, {NAME_REF}
-    static let kcAgentSystemPromptTemplate: String = {
-        loadPrompt(named: "kc_agent_system_prompt")
+    /// System prompt for fact-based KC extraction
+    /// Contains placeholders: {CARD_ID}, {CARD_TYPE}, {TITLE}
+    static let kcFactExtractionSystem: String = {
+        loadPrompt(named: "kc_fact_extraction_system")
     }()
 
-    /// Additional guidance for skill-type Knowledge Cards
-    static let kcSkillCardGuidance: String = {
-        loadPrompt(named: "kc_skill_card_guidance")
-    }()
-
-    /// Additional guidance for job-type Knowledge Cards
-    static let kcJobCardGuidance: String = {
-        loadPrompt(named: "kc_job_card_guidance")
-    }()
-
-    /// Error recovery prompt for KC agents
-    static let kcErrorRecovery: String = {
-        loadPrompt(named: "kc_error_recovery")
-    }()
-
-    /// Initial prompt template for KC agents
-    /// Contains placeholders for card details and artifact summaries
-    static let kcInitialPromptTemplate: String = {
-        loadPrompt(named: "kc_initial_prompt")
+    /// Initial prompt template for fact-based KC extraction
+    /// Contains placeholders: {CARD_ID}, {CARD_TYPE}, {TITLE}, {TIMELINE_ENTRY}, {NOTES},
+    /// {CARD_INVENTORY_JSON}, {ASSIGNED_ARTIFACTS}, {OTHER_ARTIFACTS}, {EXTRACTION_CHECKLIST}
+    static let kcFactExtractionInitial: String = {
+        loadPrompt(named: "kc_fact_extraction_initial")
     }()
 
     // MARK: - Document Extraction Prompts
@@ -109,47 +95,6 @@ enum PromptLibrary {
     /// Contains placeholders: {INVENTORIES_JSON}, {TIMELINE_JSON}
     static let crossDocumentMergeTemplate: String = {
         loadPrompt(named: "cross_document_merge_prompt")
-    }()
-
-    // MARK: - Type-Specific KC Extraction Prompts
-
-    /// Employment card extraction prompt
-    /// Contains placeholders: {TITLE}, {ORGANIZATION}, {DATE_RANGE}, {CARD_ID}, {EVIDENCE_BLOCKS_WITH_CONTENT}
-    static let kcExtractionEmployment: String = {
-        loadPrompt(named: "kc_extraction_employment")
-    }()
-
-    /// Skill card extraction prompt
-    /// Contains placeholders: {SKILL_NAME}, {EVIDENCE_BLOCKS_WITH_CONTENT}
-    static let kcExtractionSkill: String = {
-        loadPrompt(named: "kc_extraction_skill")
-    }()
-
-    /// Project card extraction prompt
-    /// Contains placeholders: {PROJECT_NAME}, {EVIDENCE_BLOCKS_WITH_CONTENT}
-    static let kcExtractionProject: String = {
-        loadPrompt(named: "kc_extraction_project")
-    }()
-
-    /// Achievement card extraction prompt
-    /// Contains placeholders: {ACHIEVEMENT_TITLE}, {EVIDENCE_BLOCKS_WITH_CONTENT}
-    static let kcExtractionAchievement: String = {
-        loadPrompt(named: "kc_extraction_achievement")
-    }()
-
-    // MARK: - Fact-Based KC Extraction Prompts
-
-    /// System prompt for fact-based KC extraction
-    /// Contains placeholders: {CARD_ID}, {CARD_TYPE}, {TITLE}
-    static let kcFactExtractionSystem: String = {
-        loadPrompt(named: "kc_fact_extraction_system")
-    }()
-
-    /// Initial prompt template for fact-based KC extraction
-    /// Contains placeholders: {CARD_ID}, {CARD_TYPE}, {TITLE}, {TIMELINE_ENTRY}, {NOTES},
-    /// {CARD_INVENTORY_JSON}, {ASSIGNED_ARTIFACTS}, {OTHER_ARTIFACTS}, {EXTRACTION_CHECKLIST}
-    static let kcFactExtractionInitial: String = {
-        loadPrompt(named: "kc_fact_extraction_initial")
     }()
 
     // MARK: - Prompt Loading

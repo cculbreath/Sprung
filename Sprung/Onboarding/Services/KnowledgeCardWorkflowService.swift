@@ -389,9 +389,9 @@ final class KnowledgeCardWorkflowService {
     // MARK: - Persistence
 
     /// Persist knowledge card to SwiftData as a ResRef for use in resume generation
+    /// Handles fact-based format with structured facts, suggested bullets, and technologies
     private func persistToResRef(card: JSON) {
         let title = card["title"].stringValue
-        let content = card["content"].stringValue
         let cardType = card["type"].string
         let timePeriod = card["time_period"].string
         let organization = card["organization"].string
@@ -407,6 +407,31 @@ final class KnowledgeCardWorkflowService {
             }
         }
 
+        // Fact-based format: extract structured data
+        let factsJSON = card["facts_json"].string
+        var suggestedBulletsJSON: String?
+        if let bullets = card["suggested_bullets"].array, !bullets.isEmpty {
+            if let data = try? JSON(bullets).rawData(),
+               let jsonString = String(data: data, encoding: .utf8) {
+                suggestedBulletsJSON = jsonString
+            }
+        }
+        var technologiesJSON: String?
+        if let techs = card["technologies"].array, !techs.isEmpty {
+            if let data = try? JSON(techs).rawData(),
+               let jsonString = String(data: data, encoding: .utf8) {
+                technologiesJSON = jsonString
+            }
+        }
+
+        // Build content from suggested bullets for display/search purposes
+        let content: String
+        if let bullets = card["suggested_bullets"].array, !bullets.isEmpty {
+            content = bullets.map { "• \($0.stringValue)" }.joined(separator: "\n")
+        } else {
+            content = "Knowledge card: \(title)"
+        }
+
         let resRef = ResRef(
             name: title,
             content: content,
@@ -417,10 +442,14 @@ final class KnowledgeCardWorkflowService {
             location: location,
             sourcesJSON: sourcesJSON,
             isFromOnboarding: true,
-            tokenCount: tokenCount
+            tokenCount: tokenCount,
+            factsJSON: factsJSON,
+            suggestedBulletsJSON: suggestedBulletsJSON,
+            technologiesJSON: technologiesJSON
         )
 
         resRefStore.addResRef(resRef)
-        Logger.info("✅ Knowledge card persisted to ResRef (SwiftData): \(title) (tokens: \(tokenCount ?? 0))", category: .ai)
+        let factCount = card["suggested_bullets"].arrayValue.count
+        Logger.info("✅ Knowledge card persisted to ResRef: \(title) (\(factCount) bullets, \(tokenCount ?? 0) tokens)", category: .ai)
     }
 }
