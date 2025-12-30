@@ -75,6 +75,16 @@ struct BackgroundAgentStatusBar: View {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(Color(nsColor: .controlBackgroundColor).opacity(0.8))
             )
+            .overlay {
+                // Animated glow border when busy
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .intelligenceStroke(
+                        lineWidths: [1.5, 2.5, 3.5],
+                        blurs: [4, 8, 14],
+                        updateInterval: 0.5,
+                        animationDurations: [0.6, 0.8, 1.0]
+                    )
+            }
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }
