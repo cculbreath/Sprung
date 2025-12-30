@@ -834,8 +834,18 @@ final class OnboardingInterviewCoordinator {
     }
 
     /// Convert OnboardingArtifactRecord to JSON format.
+    /// Uses metadataJSON as base to preserve all fields (card_inventory, summary, etc.)
     private func artifactRecordToJSON(_ record: OnboardingArtifactRecord) -> JSON {
-        var json = JSON()
+        // Start with the full persisted record (includes card_inventory, metadata, etc.)
+        var json: JSON
+        if let metadataJSON = record.metadataJSON,
+           let data = metadataJSON.data(using: .utf8),
+           let fullRecord = try? JSON(data: data) {
+            json = fullRecord
+        } else {
+            json = JSON()
+        }
+        // Override with canonical SwiftData fields (in case of any discrepancy)
         json["id"].string = record.id.uuidString
         json["source_type"].string = record.sourceType
         json["filename"].string = record.sourceFilename
@@ -844,18 +854,6 @@ final class OnboardingInterviewCoordinator {
         json["raw_file_path"].string = record.rawFileRelativePath
         json["plan_item_id"].string = record.planItemId
         json["ingested_at"].string = ISO8601DateFormatter().string(from: record.ingestedAt)
-        if let metadataJSON = record.metadataJSON,
-           let data = metadataJSON.data(using: .utf8),
-           let metadata = try? JSON(data: data) {
-            json["metadata"] = metadata
-            // Also extract summary/brief_description to top level for easier access
-            if let summary = metadata["summary"].string {
-                json["summary"].string = summary
-            }
-            if let brief = metadata["brief_description"].string {
-                json["brief_description"].string = brief
-            }
-        }
         return json
     }
 

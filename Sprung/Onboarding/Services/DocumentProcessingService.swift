@@ -132,6 +132,7 @@ actor DocumentProcessingService {
         // Step 4: Generate card inventory (inventory determines document type itself)
         // For non-resume PDFs, send the full PDF directly to Gemini for maximum fidelity
         // Resume PDFs still use extracted text since we need the text for timeline building
+        // FALLBACK: If Gemini PDF extraction fails (RECITATION, MAX_TOKENS, decode error), use text-based
         statusCallback?("Analyzing document for knowledge cards...")
         var inventory: DocumentInventory?
         let isPDF = fileURL.pathExtension.lowercased() == "pdf"
@@ -142,11 +143,21 @@ actor DocumentProcessingService {
                 // Use direct PDF inventory for non-resume documents - Gemini sees full content
                 Logger.info("📄 Using direct PDF inventory (full document access)", category: .ai)
                 let pdfData = try Data(contentsOf: fileURL)
-                inventory = try await inventoryService.inventoryDocumentFromPDF(
-                    documentId: artifactId,
-                    filename: filename,
-                    pdfData: pdfData
-                )
+                do {
+                    inventory = try await inventoryService.inventoryDocumentFromPDF(
+                        documentId: artifactId,
+                        filename: filename,
+                        pdfData: pdfData
+                    )
+                } catch {
+                    // Fallback to text-based inventory on Gemini failure
+                    Logger.warning("⚠️ PDF inventory failed (\(error.localizedDescription)), falling back to text-based", category: .ai)
+                    inventory = try await inventoryService.inventoryDocument(
+                        documentId: artifactId,
+                        filename: filename,
+                        content: extractedText
+                    )
+                }
             } else {
                 // Use text-based inventory for resumes and non-PDFs
                 Logger.info("📄 Using text-based inventory", category: .ai)

@@ -45,6 +45,8 @@ actor GoogleAIService {
         case generateFailed(String)
         case fileProcessing(String)
         case invalidResponse
+        /// Extraction blocked due to non-STOP finish reason (e.g., RECITATION, MAX_TOKENS)
+        case extractionBlocked(finishReason: String)
 
         var errorDescription: String? {
             switch self {
@@ -58,6 +60,8 @@ actor GoogleAIService {
                 return "File still processing: \(state)"
             case .invalidResponse:
                 return "Invalid response from Google API"
+            case .extractionBlocked(let finishReason):
+                return "Extraction blocked by Gemini: \(finishReason)"
             }
         }
     }
@@ -630,13 +634,10 @@ actor GoogleAIService {
             throw GoogleAIError.invalidResponse
         }
 
-        // Check finish reason for truncation (important for structured output)
-        if let finishReason = firstCandidate["finishReason"] as? String {
-            if finishReason == "MAX_TOKENS" {
-                Logger.warning("⚠️ Structured output truncated due to MAX_TOKENS limit", category: .ai)
-            } else if finishReason != "STOP" {
-                Logger.warning("⚠️ Structured output unexpected finish reason: \(finishReason)", category: .ai)
-            }
+        // Check finish reason - throw error for non-STOP to trigger fallback
+        if let finishReason = firstCandidate["finishReason"] as? String, finishReason != "STOP" {
+            Logger.warning("⚠️ Structured output failed: finishReason=\(finishReason)", category: .ai)
+            throw GoogleAIError.extractionBlocked(finishReason: finishReason)
         }
 
         // Log token usage for debugging
@@ -783,13 +784,10 @@ actor GoogleAIService {
             throw GoogleAIError.invalidResponse
         }
 
-        // Check finish reason for truncation (important for structured output)
-        if let finishReason = firstCandidate["finishReason"] as? String {
-            if finishReason == "MAX_TOKENS" {
-                Logger.warning("⚠️ PDF structured output truncated due to MAX_TOKENS limit", category: .ai)
-            } else if finishReason != "STOP" {
-                Logger.warning("⚠️ PDF structured output unexpected finish reason: \(finishReason)", category: .ai)
-            }
+        // Check finish reason - throw error for non-STOP to trigger fallback
+        if let finishReason = firstCandidate["finishReason"] as? String, finishReason != "STOP" {
+            Logger.warning("⚠️ PDF structured output failed: finishReason=\(finishReason)", category: .ai)
+            throw GoogleAIError.extractionBlocked(finishReason: finishReason)
         }
 
         // Parse token usage
