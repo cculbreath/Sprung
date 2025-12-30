@@ -12,7 +12,8 @@ struct MergedCardInventory: Codable {
     let mergedCards: [MergedCard]
     let gaps: [DocumentationGap]
     let stats: MergeStats
-    let generatedAt: Date
+    /// ISO8601 timestamp string (using String instead of Date for robustness with LLM output)
+    let generatedAt: String
 
     enum CodingKeys: String, CodingKey {
         case mergedCards = "merged_cards"
@@ -113,7 +114,7 @@ struct MergedCardInventory: Codable {
     struct MergeStats: Codable {
         let totalInputCards: Int
         let mergedOutputCards: Int
-        let cardsByType: [String: Int]
+        let cardsByType: CardsByType
         let strongEvidence: Int
         let needsMoreEvidence: Int
 
@@ -123,6 +124,16 @@ struct MergedCardInventory: Codable {
             case cardsByType = "cards_by_type"
             case strongEvidence = "strong_evidence"
             case needsMoreEvidence = "needs_more_evidence"
+        }
+
+        /// Explicit card type counts for Gemini structured output compatibility
+        /// (Gemini requires object types to have defined properties)
+        struct CardsByType: Codable {
+            let employment: Int
+            let project: Int
+            let skill: Int
+            let achievement: Int
+            let education: Int
         }
     }
 }

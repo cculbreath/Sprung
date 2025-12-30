@@ -241,6 +241,12 @@ final class SwiftDataSessionPersistenceHandler {
         case .planItemStatusChangeRequested(let itemId, let status):
             sessionStore.updatePlanItemStatus(session, itemId: itemId, status: status)
 
+        case .mergedInventoryStored(let inventoryJSON):
+            sessionStore.updateMergedInventory(session, inventoryJSON: inventoryJSON)
+
+        case .excludedCardIdsChanged(let excludedIds):
+            sessionStore.updateExcludedCardIds(session, excludedIds: excludedIds)
+
         default:
             break
         }
@@ -337,7 +343,8 @@ final class SwiftDataSessionPersistenceHandler {
         let filename = record["filename"].stringValue
         let extractedContent = record["extracted_text"].stringValue
         let sourceHash = record["source_hash"].string
-        let metadataJSON = record["metadata"].rawString()
+        // Persist the full record JSON (includes card_inventory, metadata, etc.)
+        let metadataJSON = record.rawString()
         let planItemId = record["plan_item_id"].string
 
         // Check if this is a promoted artifact (already exists with this ID globally)
@@ -396,7 +403,16 @@ final class SwiftDataSessionPersistenceHandler {
     /// Get restored artifacts as JSON for restoring to ArtifactRepository
     func getRestoredArtifacts(_ session: OnboardingSession) -> [JSON] {
         sessionStore.getArtifacts(session).map { record in
-            var json = JSON()
+            // Start with the full persisted record (includes card_inventory, metadata, etc.)
+            var json: JSON
+            if let metadataJSON = record.metadataJSON,
+               let data = metadataJSON.data(using: .utf8),
+               let fullRecord = try? JSON(data: data) {
+                json = fullRecord
+            } else {
+                json = JSON()
+            }
+            // Override with canonical SwiftData fields (in case of any discrepancy)
             json["id"].string = record.id.uuidString
             json["source_type"].string = record.sourceType
             json["filename"].string = record.sourceFilename
@@ -405,11 +421,6 @@ final class SwiftDataSessionPersistenceHandler {
             json["raw_file_path"].string = record.rawFileRelativePath
             json["plan_item_id"].string = record.planItemId
             json["ingested_at"].string = ISO8601DateFormatter().string(from: record.ingestedAt)
-            if let metadataJSON = record.metadataJSON,
-               let data = metadataJSON.data(using: .utf8),
-               let metadata = try? JSON(data: data) {
-                json["metadata"] = metadata
-            }
             return json
         }
     }
@@ -435,6 +446,20 @@ final class SwiftDataSessionPersistenceHandler {
     /// Get restored enabled sections
     func getRestoredEnabledSections(_ session: OnboardingSession) -> Set<String> {
         sessionStore.getEnabledSections(session)
+    }
+
+    /// Get restored merged inventory
+    func getRestoredMergedInventory(_ session: OnboardingSession) -> MergedCardInventory? {
+        guard let jsonString = sessionStore.getMergedInventory(session),
+              let data = jsonString.data(using: .utf8) else {
+            return nil
+        }
+        return try? JSONDecoder().decode(MergedCardInventory.self, from: data)
+    }
+
+    /// Get restored excluded card IDs
+    func getRestoredExcludedCardIds(_ session: OnboardingSession) -> Set<String> {
+        sessionStore.getExcludedCardIds(session)
     }
 
     // MARK: - Archived Artifacts

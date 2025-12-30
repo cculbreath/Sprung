@@ -97,6 +97,10 @@ enum OnboardingEvent {
     case generateCardsButtonClicked
     /// Emitted after propose_card_assignments to gate dispatch until user approval
     case cardAssignmentsProposed(assignmentCount: Int, gapCount: Int)
+    /// Emitted when merged inventory is produced (for persistence)
+    case mergedInventoryStored(inventoryJSON: String)
+    /// Emitted when user changes excluded card IDs
+    case excludedCardIdsChanged(excludedIds: Set<String>)
     // MARK: - Evidence Requirements
     case evidenceRequirementAdded(EvidenceRequirement)
     case evidenceRequirementUpdated(EvidenceRequirement)
@@ -180,6 +184,89 @@ enum OnboardingEvent {
     // MARK: - Phase 3: Workflow Automation & Robustness
     case llmCancelRequested
     case skeletonTimelineReplaced(timeline: JSON, diff: TimelineDiff?, meta: JSON?)
+
+    /// Concise log description that avoids logging full JSON payloads
+    var logDescription: String {
+        switch self {
+        // Events with large payloads - show just the event name or key info
+        case .llmSendUserMessage(_, let isSystemGenerated, _, _, _):
+            return "llmSendUserMessage(isSystemGenerated: \(isSystemGenerated))"
+        case .llmEnqueueUserMessage(_, let isSystemGenerated, _, _, _):
+            return "llmEnqueueUserMessage(isSystemGenerated: \(isSystemGenerated))"
+        case .llmExecuteUserMessage(_, let isSystemGenerated, _, _, _, _):
+            return "llmExecuteUserMessage(isSystemGenerated: \(isSystemGenerated))"
+        case .llmToolResponseMessage:
+            return "llmToolResponseMessage"
+        case .llmEnqueueToolResponse:
+            return "llmEnqueueToolResponse"
+        case .llmExecuteToolResponse:
+            return "llmExecuteToolResponse"
+        case .llmSendDeveloperMessage:
+            return "llmSendDeveloperMessage"
+        case .llmExecuteDeveloperMessage:
+            return "llmExecuteDeveloperMessage"
+        case .llmSentToolResponseMessage(let messageId, _):
+            return "llmSentToolResponseMessage(messageId: \(messageId.prefix(8))...)"
+        case .llmUserMessageSent(let messageId, _, let isSystemGenerated):
+            return "llmUserMessageSent(messageId: \(messageId.prefix(8))..., isSystemGenerated: \(isSystemGenerated))"
+        case .llmDeveloperMessageSent(let messageId, _):
+            return "llmDeveloperMessageSent(messageId: \(messageId.prefix(8))...)"
+        case .llmExecuteBatchedToolResponses(let payloads):
+            return "llmExecuteBatchedToolResponses(count: \(payloads.count))"
+        case .streamingMessageFinalized(let id, let finalText, let toolCalls, _):
+            let textPreview = finalText.prefix(50).replacingOccurrences(of: "\n", with: " ")
+            return "streamingMessageFinalized(id: \(id), text: \"\(textPreview)...\", toolCalls: \(toolCalls?.count ?? 0))"
+        case .streamingMessageUpdated(let id, _, _):
+            return "streamingMessageUpdated(id: \(id))"
+        case .toolCallRequested(let toolCall, _):
+            return "toolCallRequested(name: \(toolCall.name))"
+        case .toolCallCompleted(let id, _, _):
+            return "toolCallCompleted(id: \(id))"
+        case .artifactRecordProduced:
+            return "artifactRecordProduced"
+        case .artifactRecordsReplaced(let records):
+            return "artifactRecordsReplaced(count: \(records.count))"
+        case .artifactMetadataUpdateRequested(let artifactId, _):
+            return "artifactMetadataUpdateRequested(artifactId: \(artifactId.prefix(8))...)"
+        case .artifactMetadataUpdated:
+            return "artifactMetadataUpdated"
+        case .knowledgeCardPersisted:
+            return "knowledgeCardPersisted"
+        case .knowledgeCardsReplaced(let cards):
+            return "knowledgeCardsReplaced(count: \(cards.count))"
+        case .knowledgeCardPlanUpdated(let items, let currentFocus, _):
+            return "knowledgeCardPlanUpdated(items: \(items.count), focus: \(currentFocus ?? "none"))"
+        case .skeletonTimelineReplaced:
+            return "skeletonTimelineReplaced"
+        case .applicantProfileStored:
+            return "applicantProfileStored"
+        case .skeletonTimelineStored:
+            return "skeletonTimelineStored"
+        case .experienceDefaultsGenerated:
+            return "experienceDefaultsGenerated"
+        case .uploadCompleted(let files, let requestKind, _, _):
+            return "uploadCompleted(files: \(files.count), kind: \(requestKind))"
+        case .timelineCardCreated:
+            return "timelineCardCreated"
+        case .timelineCardUpdated(let id, _):
+            return "timelineCardUpdated(id: \(id.prefix(8))...)"
+        case .timelineUIUpdateNeeded:
+            return "timelineUIUpdateNeeded"
+        case .stateSnapshot(let updatedKeys, _):
+            return "stateSnapshot(keys: \(updatedKeys.joined(separator: ", ")))"
+        case .profileSummaryUpdateRequested:
+            return "profileSummaryUpdateRequested"
+        case .knowledgeCardSubmissionPending:
+            return "knowledgeCardSubmissionPending"
+        case .writingSamplePersisted:
+            return "writingSamplePersisted"
+        case .candidateDossierPersisted:
+            return "candidateDossierPersisted"
+        // Events with minimal payloads - use default description
+        default:
+            return String(describing: self)
+        }
+    }
 }
 enum LLMStatus: String {
     case busy
@@ -384,7 +471,8 @@ actor EventCoordinator {
         case .objectiveStatusRequested, .objectiveStatusUpdateRequested, .objectiveStatusChanged:
             return .objective
         // Tool events
-        case .toolCallRequested, .toolCallCompleted, .knowledgeCardPlanUpdated:
+        case .toolCallRequested, .toolCallCompleted, .knowledgeCardPlanUpdated,
+             .mergedInventoryStored, .excludedCardIdsChanged:
             return .tool
         // Artifact events
         case .uploadCompleted,
@@ -694,6 +782,10 @@ actor EventCoordinator {
             description = "🛑 Token budget exceeded: \(inputTokens) > \(threshold) - triggering PRI reset"
         case .knowledgeCardPlanUpdated(let items, let focus, _):
             description = "Knowledge card plan updated: \(items.count) items, focus: \(focus ?? "none")"
+        case .mergedInventoryStored(let inventoryJSON):
+            description = "Merged inventory stored: \(inventoryJSON.count) chars"
+        case .excludedCardIdsChanged(let excludedIds):
+            description = "Excluded card IDs changed: \(excludedIds.count) excluded"
         }
         Logger.debug("[Event] \(description)", category: .ai)
     }

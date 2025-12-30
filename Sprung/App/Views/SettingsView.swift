@@ -7,9 +7,10 @@ struct SettingsView: View {
     @AppStorage("reasoningEffort") private var reasoningEffort: String = "medium"
     @AppStorage("enableResumeCustomizationTools") private var enableResumeCustomizationTools: Bool = true
     @AppStorage("onboardingInterviewDefaultModelId") private var onboardingModelId: String = "gpt-5"
-    @AppStorage("onboardingPDFExtractionModelId") private var pdfExtractionModelId: String = "google/gemini-2.0-flash-001"
+    @AppStorage("onboardingPDFExtractionModelId") private var pdfExtractionModelId: String = "gemini-2.5-flash"
     @AppStorage("onboardingGitIngestModelId") private var gitIngestModelId: String = "anthropic/claude-haiku-4.5"
-    @AppStorage("onboardingDocSummaryModelId") private var docSummaryModelId: String = "gemini-2.0-flash-lite"
+    @AppStorage("onboardingDocSummaryModelId") private var docSummaryModelId: String = "gemini-2.5-flash-lite"
+    @AppStorage("onboardingCardMergeModelId") private var cardMergeModelId: String = "gemini-2.5-flash"
     @AppStorage("onboardingKCAgentModelId") private var kcAgentModelId: String = "anthropic/claude-haiku-4.5"
     @AppStorage("onboardingKCAgentMaxConcurrent") private var kcAgentMaxConcurrent: Int = 5
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var onboardingWebSearchAllowed: Bool = true
@@ -39,7 +40,7 @@ struct SettingsView: View {
     @State private var isLoadingInterviewModels = false
     @State private var interviewModelError: String?
     private let dataResetService = DataResetService()
-    private let pdfExtractionFallbackModelId = "gemini-2.0-flash"
+    private let pdfExtractionFallbackModelId = "gemini-2.5-flash"
     private let interviewModelFallbackId = "gpt-5"
     private let googleAIService = GoogleAIService()
 
@@ -464,7 +465,7 @@ private extension SettingsView {
                 }
             } else {
                 Picker("PDF Extraction Model", selection: $pdfExtractionModelId) {
-                    ForEach(geminiModels) { model in
+                    ForEach(geminiModels.filter { $0.outputTokenLimit >= 64000 }) { model in
                         Text(model.displayName)
                             .tag(model.id)
                     }
@@ -582,13 +583,24 @@ private extension SettingsView {
                 }
             } else {
                 Picker("Doc Summary Model", selection: $docSummaryModelId) {
-                    ForEach(geminiModels) { model in
+                    ForEach(geminiModels.filter { $0.outputTokenLimit >= 64000 }) { model in
                         Text(model.displayName)
                             .tag(model.id)
                     }
                 }
                 .pickerStyle(.menu)
                 Text("Generates summaries of uploaded documents. Flash-Lite recommended for cost.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                Picker("Card Merge Model", selection: $cardMergeModelId) {
+                    ForEach(geminiModels.filter { $0.outputTokenLimit >= 64000 }) { model in
+                        Text(model.displayName)
+                            .tag(model.id)
+                    }
+                }
+                .pickerStyle(.menu)
+                Text("Merges card inventories across documents. Only models with 64K+ output tokens shown.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

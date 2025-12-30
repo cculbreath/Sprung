@@ -97,7 +97,7 @@ actor DocumentExtractionService {
 
     // MARK: - Private Properties
     private var llmFacade: LLMFacade?
-    private let defaultModelId = "gemini-2.0-flash"
+    private let defaultModelId = "gemini-2.5-flash"
     private var eventBus: EventCoordinator?
 
     init(llmFacade: LLMFacade?, eventBus: EventCoordinator? = nil) {

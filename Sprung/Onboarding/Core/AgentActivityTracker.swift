@@ -17,12 +17,14 @@ enum AgentType: String, Codable, CaseIterable {
     case documentIngestion = "doc_ingest"
     case gitIngestion = "git_ingest"
     case knowledgeCard = "knowledge_card"
+    case cardMerge = "card_merge"
 
     var displayName: String {
         switch self {
         case .documentIngestion: return "Doc Ingest"
         case .gitIngestion: return "Git Ingest"
         case .knowledgeCard: return "KC Agent"
+        case .cardMerge: return "Card Merge"
         }
     }
 
@@ -31,6 +33,7 @@ enum AgentType: String, Codable, CaseIterable {
         case .documentIngestion: return "doc.text"
         case .gitIngestion: return "chevron.left.forwardslash.chevron.right"
         case .knowledgeCard: return "brain.head.profile"
+        case .cardMerge: return "arrow.triangle.merge"
         }
     }
 }

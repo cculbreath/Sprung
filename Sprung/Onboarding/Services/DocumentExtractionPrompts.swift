@@ -10,6 +10,56 @@ import Foundation
 
 enum DocumentExtractionPrompts {
 
+    // MARK: - JSON Schema for Gemini Structured Output
+
+    /// JSON Schema for DocumentSummary to enable Gemini structured output mode
+    static let summaryJsonSchema: [String: Any] = [
+        "type": "object",
+        "properties": [
+            "document_type": [
+                "type": "string",
+                "description": "Type of document (resume, performance_review, project_doc, cover_letter, recommendation, technical_report, grant_proposal, other)"
+            ],
+            "brief_description": [
+                "type": "string",
+                "description": "Brief one-line description (~10 words) for quick reference"
+            ],
+            "summary": [
+                "type": "string",
+                "description": "~500 word narrative summary of the document content"
+            ],
+            "time_period": [
+                "type": "string",
+                "description": "Time period covered by the document (e.g., '2019-2023'), empty string if not applicable"
+            ],
+            "companies": [
+                "type": "array",
+                "items": ["type": "string"],
+                "description": "Companies mentioned in the document"
+            ],
+            "roles": [
+                "type": "array",
+                "items": ["type": "string"],
+                "description": "Roles/positions mentioned in the document"
+            ],
+            "skills": [
+                "type": "array",
+                "items": ["type": "string"],
+                "description": "Skills identified in the document"
+            ],
+            "achievements": [
+                "type": "array",
+                "items": ["type": "string"],
+                "description": "Key achievements mentioned"
+            ],
+            "relevance_hints": [
+                "type": "string",
+                "description": "Hints about what types of knowledge cards this doc could support"
+            ]
+        ],
+        "required": ["document_type", "brief_description", "summary", "time_period", "companies", "roles", "skills", "achievements", "relevance_hints"]
+    ]
+
     // MARK: - Extraction Prompts
 
     /// Default prompt for PDF text extraction.

@@ -31,6 +31,10 @@ class OnboardingSession {
     var applicantProfileJSON: String?
     /// Enabled sections as comma-separated string
     var enabledSectionsCSV: String?
+    /// Merged card inventory JSON (expensive Gemini call result)
+    var mergedInventoryJSON: String?
+    /// Excluded card IDs as comma-separated string
+    var excludedCardIdsCSV: String?
 
     // MARK: - Relationships
     @Relationship(deleteRule: .cascade, inverse: \OnboardingObjectiveRecord.session)
@@ -55,7 +59,9 @@ class OnboardingSession {
         isComplete: Bool = false,
         skeletonTimelineJSON: String? = nil,
         applicantProfileJSON: String? = nil,
-        enabledSectionsCSV: String? = nil
+        enabledSectionsCSV: String? = nil,
+        mergedInventoryJSON: String? = nil,
+        excludedCardIdsCSV: String? = nil
     ) {
         self.id = id
         self.previousResponseId = previousResponseId
@@ -66,6 +72,8 @@ class OnboardingSession {
         self.skeletonTimelineJSON = skeletonTimelineJSON
         self.applicantProfileJSON = applicantProfileJSON
         self.enabledSectionsCSV = enabledSectionsCSV
+        self.mergedInventoryJSON = mergedInventoryJSON
+        self.excludedCardIdsCSV = excludedCardIdsCSV
     }
 }
 

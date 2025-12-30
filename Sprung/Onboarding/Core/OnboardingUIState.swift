@@ -74,6 +74,10 @@ final class OnboardingUIState {
     var identifiedGapCount: Int = 0
     /// True when KC agents are actively generating cards
     var isGeneratingCards: Bool = false
+    /// Full merged inventory for detail views and gap display
+    var mergedInventory: MergedCardInventory?
+    /// Card IDs that user has excluded from generation
+    var excludedCardIds: Set<String> = []
 
     // MARK: - Objective Status (for Phase 3 subphase tracking)
     var objectiveStatuses: [String: String] = [:]

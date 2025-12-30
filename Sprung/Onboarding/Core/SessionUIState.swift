@@ -140,8 +140,31 @@ actor SessionUIState: OnboardingEventEmitter {
     /// Update current phase (for tool permission calculation)
     func setPhase(_ phase: InterviewPhase) async {
         currentPhase = phase
+        // Apply phase-specific initial exclusions
+        applyPhaseExclusions(phase)
         // Re-publish tool permissions when phase changes
         await publishToolPermissions()
+    }
+
+    /// Apply phase-specific initial tool exclusions
+    /// These tools are gated until specific user actions occur:
+    /// - submit_for_validation: ungated + mandated when user clicks "Done with Timeline"
+    /// - next_phase: ungated when user approves timeline validation
+    private func applyPhaseExclusions(_ phase: InterviewPhase) {
+        switch phase {
+        case .phase1CoreFacts:
+            // Gate submit_for_validation until user clicks "Done with Timeline"
+            // Gate next_phase until user approves timeline validation
+            excludedTools = [
+                OnboardingToolName.submitForValidation.rawValue,
+                OnboardingToolName.nextPhase.rawValue
+            ]
+            Logger.info("🔒 Phase 1 tool gating: submit_for_validation and next_phase excluded until user actions", category: .ai)
+
+        case .phase2DeepDive, .phase3WritingCorpus, .complete:
+            // Clear Phase 1 exclusions when entering new phases
+            excludedTools = []
+        }
     }
     // MARK: - Session State
     /// Set processing state

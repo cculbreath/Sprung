@@ -17,7 +17,7 @@ struct SetupWizardView: View {
 
     @AppStorage("hasCompletedSetupWizard") private var hasCompletedSetupWizard = false
     @AppStorage("onboardingInterviewDefaultModelId") private var onboardingModelId: String = "gpt-5"
-    @AppStorage("onboardingPDFExtractionModelId") private var pdfExtractionModelId: String = "google/gemini-2.0-flash-001"
+    @AppStorage("onboardingPDFExtractionModelId") private var pdfExtractionModelId: String = "gemini-2.5-flash"
     @AppStorage("onboardingGitIngestModelId") private var gitIngestModelId: String = Self.gitIngestDefaultModelId
     @AppStorage("discoveryCoachingModelId") private var coachingModelId: String = ""
 
@@ -674,7 +674,7 @@ private extension SetupWizardView {
             let (sanitizedPDF, adjustedPDF) = ModelPreferenceValidator.sanitize(
                 requested: pdfExtractionModelId,
                 available: ids,
-                fallback: "google/gemini-2.0-flash-001"
+                fallback: "gemini-2.5-flash"
             )
             if adjustedPDF {
                 pdfExtractionModelId = sanitizedPDF

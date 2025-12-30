@@ -62,7 +62,7 @@ actor DocumentProcessingService {
         Logger.info("💾 Document location: \(storagePath)", category: .ai)
 
         // Step 2: Extract text using configured model
-        let modelId = UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId") ?? "google/gemini-2.0-flash-001"
+        let modelId = UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId") ?? "gemini-2.5-flash"
         Logger.info("🔍 Extracting text with model: \(modelId)", category: .ai)
         statusCallback?("Extracting text from \(filename)...")
 

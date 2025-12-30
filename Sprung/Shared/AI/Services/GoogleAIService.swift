@@ -344,13 +344,14 @@ actor GoogleAIService {
     /// Uses Gemini Flash-Lite for cost efficiency (~$0.005/doc).
     /// Returns structured JSON with summary, document type, time periods, skills, etc.
     /// Model can be configured in Settings > Onboarding Interview > Doc Summary Model.
+    /// Now uses Gemini's native structured output mode for guaranteed valid JSON.
     func generateSummary(
         content: String,
         filename: String,
         modelId: String? = nil
     ) async throws -> DocumentSummary {
         // Use setting-based model or fallback
-        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingDocSummaryModelId") ?? "gemini-2.0-flash-lite"
+        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingDocSummaryModelId") ?? "gemini-2.5-flash-lite"
         let apiKey = try getAPIKey()
         let url = URL(string: "\(baseURL)/v1beta/models/\(effectiveModelId):generateContent?key=\(apiKey)")!
 
@@ -360,6 +361,7 @@ actor GoogleAIService {
 
         let summaryPrompt = DocumentExtractionPrompts.summaryPrompt(filename: filename, content: content)
 
+        // Use Gemini's native structured output mode with schema
         let requestBody: [String: Any] = [
             "contents": [
                 [
@@ -370,13 +372,15 @@ actor GoogleAIService {
             ],
             "generationConfig": [
                 "temperature": 0.2,
-                "maxOutputTokens": 4096
+                "maxOutputTokens": 4096,
+                "responseMimeType": "application/json",
+                "responseSchema": DocumentExtractionPrompts.summaryJsonSchema
             ]
         ]
 
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
 
-        Logger.info("📝 Generating summary with \(effectiveModelId) for: \(filename)", category: .ai)
+        Logger.info("📝 Generating summary with \(effectiveModelId) (structured output) for: \(filename)", category: .ai)
 
         let (data, response) = try await session.data(for: request)
 
@@ -390,7 +394,7 @@ actor GoogleAIService {
             throw GoogleAIError.generateFailed(errorMsg)
         }
 
-        // Parse response
+        // Parse response - with structured output, text is already valid JSON
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let candidates = json["candidates"] as? [[String: Any]],
               let firstCandidate = candidates.first,
@@ -401,42 +405,23 @@ actor GoogleAIService {
             throw GoogleAIError.invalidResponse
         }
 
-        // Parse the JSON response
-        let summary = try parseSummaryResponse(text)
-        Logger.info("✅ Summary generated for \(filename) (\(summary.summary.count) chars)", category: .ai)
-
-        return summary
-    }
-
-    /// Parse the summary JSON response
-    private func parseSummaryResponse(_ text: String) throws -> DocumentSummary {
-        // Try to extract JSON from the response (might be wrapped in markdown)
-        var jsonString = text
-
-        // Handle markdown code blocks
-        if text.contains("```json") {
-            let pattern = "```json\\s*([\\s\\S]*?)```"
-            if let regex = try? NSRegularExpression(pattern: pattern),
-               let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
-               let jsonRange = Range(match.range(at: 1), in: text) {
-                jsonString = String(text[jsonRange])
-            }
-        } else if text.contains("```") {
-            let pattern = "```\\s*([\\s\\S]*?)```"
-            if let regex = try? NSRegularExpression(pattern: pattern),
-               let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
-               let jsonRange = Range(match.range(at: 1), in: text) {
-                jsonString = String(text[jsonRange])
-            }
-        }
-
-        guard let jsonData = jsonString.data(using: .utf8) else {
+        // Decode directly - structured output guarantees valid JSON matching schema
+        guard let jsonData = text.data(using: .utf8) else {
             throw GoogleAIError.invalidResponse
         }
 
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
-        return try decoder.decode(DocumentSummary.self, from: jsonData)
+
+        do {
+            let summary = try decoder.decode(DocumentSummary.self, from: jsonData)
+            Logger.info("✅ Summary generated for \(filename) (\(summary.summary.count) chars)", category: .ai)
+            return summary
+        } catch {
+            Logger.error("❌ Failed to decode summary JSON: \(error.localizedDescription)", category: .ai)
+            Logger.error("📝 Raw JSON: \(text.prefix(500))...", category: .ai)
+            throw GoogleAIError.generateFailed("Failed to decode summary: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - High-Level API
@@ -547,15 +532,17 @@ actor GoogleAIService {
     ///   - prompt: The prompt text describing what to extract/generate
     ///   - modelId: Gemini model ID (defaults to flash-lite)
     ///   - temperature: Generation temperature (default 0.2 for consistent JSON)
+    ///   - maxOutputTokens: Maximum output tokens (default 65536 for large structured outputs)
     ///   - jsonSchema: Optional JSON Schema dictionary. When provided, enables native structured output.
     /// - Returns: Raw JSON string response guaranteed to match the schema
     func generateStructuredJSON(
         prompt: String,
         modelId: String? = nil,
         temperature: Double = 0.2,
+        maxOutputTokens: Int = 65536,
         jsonSchema: [String: Any]? = nil
     ) async throws -> String {
-        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingDocSummaryModelId") ?? "gemini-2.0-flash-lite"
+        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingDocSummaryModelId") ?? "gemini-2.5-flash-lite"
         let apiKey = try getAPIKey()
         let url = URL(string: "\(baseURL)/v1beta/models/\(effectiveModelId):generateContent?key=\(apiKey)")!
 
@@ -566,14 +553,24 @@ actor GoogleAIService {
         // Build generation config
         var generationConfig: [String: Any] = [
             "temperature": temperature,
-            "maxOutputTokens": 8192
+            "maxOutputTokens": maxOutputTokens
         ]
 
         // If schema provided, use native structured output mode
         if let schema = jsonSchema {
             generationConfig["responseMimeType"] = "application/json"
             generationConfig["responseSchema"] = schema
-            Logger.info("📝 Using Gemini native structured output with schema", category: .ai)
+            Logger.info("📝 Using Gemini native structured output with schema (maxTokens: \(maxOutputTokens))", category: .ai)
+        }
+
+        // For Gemini 2.5+ models, disable thinking to prevent output truncation
+        // Thinking tokens count against the output budget, causing JSON to be cut off mid-string
+        let needsThinkingDisabled = effectiveModelId.contains("2.5") ||
+                                    effectiveModelId.contains("exp") ||
+                                    effectiveModelId.hasPrefix("gemini-3")
+        if needsThinkingDisabled {
+            generationConfig["thinkingConfig"] = ["thinkingBudget": 0]
+            Logger.info("🧠 Disabled thinking for \(effectiveModelId) to prevent truncation", category: .ai)
         }
 
         let requestBody: [String: Any] = [
@@ -589,9 +586,17 @@ actor GoogleAIService {
 
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
 
-        Logger.info("📝 Generating structured JSON with \(effectiveModelId)", category: .ai)
+        Logger.info("📝 Generating structured JSON with \(effectiveModelId) (starting network request...)", category: .ai)
 
-        let (data, response) = try await session.data(for: request)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+            Logger.info("📝 Gemini response received (\(data.count) bytes)", category: .ai)
+        } catch {
+            Logger.error("❌ Gemini network request failed: \(error.localizedDescription)", category: .ai)
+            throw error
+        }
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw GoogleAIError.invalidResponse
@@ -604,14 +609,42 @@ actor GoogleAIService {
         }
 
         // Parse response to extract text
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let candidates = json["candidates"] as? [[String: Any]],
-              let firstCandidate = candidates.first,
-              let content = firstCandidate["content"] as? [String: Any],
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            Logger.error("❌ Structured JSON: Failed to parse response as JSON", category: .ai)
+            throw GoogleAIError.invalidResponse
+        }
+
+        guard let candidates = json["candidates"] as? [[String: Any]], !candidates.isEmpty else {
+            // Log the full response to understand why there are no candidates
+            let responseStr = String(data: data, encoding: .utf8) ?? "unable to decode"
+            Logger.error("❌ Structured JSON: No candidates in response. Full response: \(responseStr.prefix(500))", category: .ai)
+            throw GoogleAIError.invalidResponse
+        }
+
+        let firstCandidate = candidates[0]
+        guard let content = firstCandidate["content"] as? [String: Any],
               let parts = content["parts"] as? [[String: Any]],
               let firstPart = parts.first,
               let text = firstPart["text"] as? String else {
+            Logger.error("❌ Structured JSON: Missing content/parts/text in candidate. Candidate keys: \(firstCandidate.keys)", category: .ai)
             throw GoogleAIError.invalidResponse
+        }
+
+        // Check finish reason for truncation (important for structured output)
+        if let finishReason = firstCandidate["finishReason"] as? String {
+            if finishReason == "MAX_TOKENS" {
+                Logger.warning("⚠️ Structured output truncated due to MAX_TOKENS limit", category: .ai)
+            } else if finishReason != "STOP" {
+                Logger.warning("⚠️ Structured output unexpected finish reason: \(finishReason)", category: .ai)
+            }
+        }
+
+        // Log token usage for debugging
+        if let usageMetadata = json["usageMetadata"] as? [String: Any] {
+            let promptTokens = usageMetadata["promptTokenCount"] as? Int ?? 0
+            let candidatesTokens = usageMetadata["candidatesTokenCount"] as? Int ?? 0
+            let totalTokens = usageMetadata["totalTokenCount"] as? Int ?? 0
+            Logger.info("📊 Token usage: prompt=\(promptTokens), output=\(candidatesTokens), total=\(totalTokens)", category: .ai)
         }
 
         // When using structured output mode, response is already pure JSON
@@ -661,7 +694,8 @@ actor GoogleAIService {
         modelId: String? = nil,
         temperature: Double = 0.2
     ) async throws -> (jsonString: String, tokenUsage: GeminiTokenUsage?) {
-        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingDocSummaryModelId") ?? "gemini-2.0-flash"
+        // Use gemini-2.5-flash for structured PDF output - has 65K output tokens
+        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingDocSummaryModelId") ?? "gemini-2.5-flash"
         let apiKey = try getAPIKey()
 
         // Step 1: Upload PDF to Files API
@@ -690,6 +724,26 @@ actor GoogleAIService {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
+        // Build generation config
+        // Use high maxOutputTokens for large structured outputs
+        var generationConfig: [String: Any] = [
+            "temperature": temperature,
+            "maxOutputTokens": 65536,
+            "responseMimeType": "application/json",
+            "responseSchema": jsonSchema
+        ]
+
+        // For Gemini 2.5+ models, disable thinking to prevent output truncation
+        // Thinking tokens count against the output budget, causing JSON to be cut off mid-string
+        // See: https://discuss.ai.google.dev/t/truncated-response-issue-with-gemini-2-5-flash-preview/81258
+        let needsThinkingDisabled = effectiveModelId.contains("2.5") ||
+                                    effectiveModelId.contains("exp") ||
+                                    effectiveModelId.hasPrefix("gemini-3")
+        if needsThinkingDisabled {
+            generationConfig["thinkingConfig"] = ["thinkingBudget": 0]
+            Logger.info("🧠 Disabled thinking for \(effectiveModelId) to prevent truncation", category: .ai)
+        }
+
         let requestBody: [String: Any] = [
             "contents": [
                 [
@@ -699,12 +753,7 @@ actor GoogleAIService {
                     ]
                 ]
             ],
-            "generationConfig": [
-                "temperature": temperature,
-                "maxOutputTokens": 16384,
-                "responseMimeType": "application/json",
-                "responseSchema": jsonSchema
-            ]
+            "generationConfig": generationConfig
         ]
 
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
@@ -732,6 +781,15 @@ actor GoogleAIService {
               let firstPart = parts.first,
               let text = firstPart["text"] as? String else {
             throw GoogleAIError.invalidResponse
+        }
+
+        // Check finish reason for truncation (important for structured output)
+        if let finishReason = firstCandidate["finishReason"] as? String {
+            if finishReason == "MAX_TOKENS" {
+                Logger.warning("⚠️ PDF structured output truncated due to MAX_TOKENS limit", category: .ai)
+            } else if finishReason != "STOP" {
+                Logger.warning("⚠️ PDF structured output unexpected finish reason: \(finishReason)", category: .ai)
+            }
         }
 
         // Parse token usage

@@ -235,7 +235,7 @@ final class UIResponseCoordinator {
     }
 
     /// Called when user clicks "Done with Timeline" in the editor.
-    /// Clears the editor and forces the LLM to call submit_for_validation.
+    /// Clears the editor, ungates submit_for_validation, and forces the LLM to call it.
     func completeTimelineEditingAndRequestValidation() async {
         // Deactivate the timeline editor mode
         ui.isTimelineEditorActive = false
@@ -244,7 +244,7 @@ final class UIResponseCoordinator {
         toolRouter.clearValidationPrompt()
         await eventBus.publish(.validationPromptCleared)
 
-        // Mark timeline_editor objective as completed - this gates submit_for_validation
+        // Mark timeline_editor objective as completed
         await eventBus.publish(.objectiveStatusUpdateRequested(
             id: OnboardingObjectiveId.skeletonTimelineTimelineEditor.rawValue,
             status: "completed",
@@ -253,10 +253,14 @@ final class UIResponseCoordinator {
             details: nil
         ))
 
+        // UNGATE: Allow submit_for_validation now that user clicked Done
+        await sessionUIState.includeTool(OnboardingToolName.submitForValidation.rawValue)
+        Logger.info("🔓 Ungated submit_for_validation after user clicked Done with Timeline", category: .ai)
+
         // Get current timeline info
         let timelineInfo = await buildTimelineCardSummary()
 
-        // Send user message (not developer) to avoid queue issues - flows through immediately
+        // Send user message with mandatory toolChoice - LLM must call submit_for_validation
         var payload = JSON()
         var messageText = """
             I've completed editing my timeline and clicked "Done with Timeline". \
@@ -273,7 +277,7 @@ final class UIResponseCoordinator {
             isSystemGenerated: true,
             toolChoice: OnboardingToolName.submitForValidation.rawValue
         ))
-        Logger.info("✅ Timeline editing complete - requesting submit_for_validation via user message", category: .ai)
+        Logger.info("✅ Timeline editing complete - mandating submit_for_validation via toolChoice", category: .ai)
     }
     // MARK: - Applicant Profile Handling
     func confirmApplicantProfile(draft: ApplicantProfileDraft) async {
@@ -452,6 +456,7 @@ final class UIResponseCoordinator {
             notes: "Section toggle confirmed by user",
             details: ["sections": enabled.joined(separator: ", ")]
         ))
+
         Logger.info("✅ Section toggle confirmed - info included in tool response", category: .ai)
     }
     func rejectSectionToggle(reason: String) async {

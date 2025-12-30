@@ -466,17 +466,24 @@ class StandaloneKCCoordinator {
 
         mergedCards = Array(cardsByKey.values)
 
+        let grouped = Dictionary(grouping: mergedCards, by: { $0.cardType })
         return MergedCardInventory(
             mergedCards: mergedCards,
             gaps: [],
             stats: MergedCardInventory.MergeStats(
                 totalInputCards: inventories.flatMap { $0.proposedCards }.count,
                 mergedOutputCards: mergedCards.count,
-                cardsByType: Dictionary(grouping: mergedCards, by: { $0.cardType }).mapValues { $0.count },
+                cardsByType: MergedCardInventory.MergeStats.CardsByType(
+                    employment: grouped["employment"]?.count ?? 0,
+                    project: grouped["project"]?.count ?? 0,
+                    skill: grouped["skill"]?.count ?? 0,
+                    achievement: grouped["achievement"]?.count ?? 0,
+                    education: grouped["education"]?.count ?? 0
+                ),
                 strongEvidence: mergedCards.filter { $0.evidenceQuality == .strong }.count,
                 needsMoreEvidence: mergedCards.filter { $0.evidenceQuality == .weak }.count
             ),
-            generatedAt: Date()
+            generatedAt: ISO8601DateFormatter().string(from: Date())
         )
     }
 

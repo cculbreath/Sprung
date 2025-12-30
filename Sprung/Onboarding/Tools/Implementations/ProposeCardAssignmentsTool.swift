@@ -58,10 +58,15 @@ struct ProposeCardAssignmentsTool: InterviewTool {
         let cardMergeService = await MainActor.run { coordinator.cardMergeService }
         let timeline = await coordinator.state.artifacts.skeletonTimeline
 
+        // Show status while merging (Gemini 2.5 call can take 30-60s)
+        await coordinator.eventBus.publish(.extractionStateChanged(true, statusMessage: "Merging card inventories..."))
+
         let mergedInventory: MergedCardInventory
         do {
             mergedInventory = try await cardMergeService.mergeInventories(timeline: timeline)
+            await coordinator.eventBus.publish(.extractionStateChanged(false, statusMessage: nil))
         } catch CardMergeService.CardMergeError.noInventories {
+            await coordinator.eventBus.publish(.extractionStateChanged(false, statusMessage: nil))
             // No fallback - tell LLM to wait for document processing
             Logger.warning("⚠️ No document inventories available yet", category: .ai)
             var response = JSON()
@@ -71,6 +76,7 @@ struct ProposeCardAssignmentsTool: InterviewTool {
             response["retry_after_seconds"].int = 5
             return .immediate(response)
         } catch {
+            await coordinator.eventBus.publish(.extractionStateChanged(false, statusMessage: nil))
             Logger.error("❌ Card merge failed: \(error.localizedDescription)", category: .ai)
             var response = JSON()
             response["status"].string = "error"

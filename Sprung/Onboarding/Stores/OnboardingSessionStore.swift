@@ -411,4 +411,35 @@ final class OnboardingSessionStore: SwiftDataStore {
         }
         return Set(csv.split(separator: ",").map { String($0) })
     }
+
+    // MARK: - Merged Inventory Management
+
+    /// Update merged card inventory JSON (expensive Gemini call result)
+    func updateMergedInventory(_ session: OnboardingSession, inventoryJSON: String?) {
+        session.mergedInventoryJSON = inventoryJSON
+        session.lastActiveAt = Date()
+        saveContext()
+        Logger.info("💾 Persisted merged card inventory (\(inventoryJSON?.count ?? 0) chars)", category: .ai)
+    }
+
+    /// Get merged inventory JSON
+    func getMergedInventory(_ session: OnboardingSession) -> String? {
+        session.mergedInventoryJSON
+    }
+
+    /// Update excluded card IDs
+    func updateExcludedCardIds(_ session: OnboardingSession, excludedIds: Set<String>) {
+        session.excludedCardIdsCSV = excludedIds.sorted().joined(separator: ",")
+        session.lastActiveAt = Date()
+        saveContext()
+        Logger.debug("📦 Session excluded card IDs updated: \(excludedIds.count) excluded", category: .ai)
+    }
+
+    /// Get excluded card IDs
+    func getExcludedCardIds(_ session: OnboardingSession) -> Set<String> {
+        guard let csv = session.excludedCardIdsCSV, !csv.isEmpty else {
+            return []
+        }
+        return Set(csv.split(separator: ",").map { String($0) })
+    }
 }

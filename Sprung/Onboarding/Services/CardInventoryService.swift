@@ -149,7 +149,43 @@ actor CardInventoryService {
 
         Logger.info("📦 Raw PDF inventory JSON (\(jsonString.count) chars): \(jsonString.prefix(500))...", category: .ai)
 
-        guard let jsonData = jsonString.data(using: .utf8) else {
+        // Strip markdown code blocks if present (Gemini sometimes wraps JSON)
+        var cleanedJSON = jsonString
+        if cleanedJSON.hasPrefix("```json") {
+            cleanedJSON = String(cleanedJSON.dropFirst(7))
+            if let endIndex = cleanedJSON.lastIndex(of: "`") {
+                cleanedJSON = String(cleanedJSON[..<endIndex])
+            }
+            cleanedJSON = cleanedJSON.trimmingCharacters(in: .whitespacesAndNewlines)
+            Logger.info("📦 Stripped markdown code block from JSON", category: .ai)
+        } else if cleanedJSON.hasPrefix("```") {
+            cleanedJSON = String(cleanedJSON.dropFirst(3))
+            if let endIndex = cleanedJSON.lastIndex(of: "`") {
+                cleanedJSON = String(cleanedJSON[..<endIndex])
+            }
+            cleanedJSON = cleanedJSON.trimmingCharacters(in: .whitespacesAndNewlines)
+            Logger.info("📦 Stripped generic code block from JSON", category: .ai)
+        }
+
+        guard let jsonData = cleanedJSON.data(using: .utf8) else {
+            throw CardInventoryError.invalidResponse
+        }
+
+        // First validate JSON structure with JSONSerialization
+        do {
+            _ = try JSONSerialization.jsonObject(with: jsonData, options: [])
+            Logger.debug("📦 JSON structure is valid", category: .ai)
+        } catch {
+            Logger.error("❌ JSON syntax error: \(error.localizedDescription)", category: .ai)
+            Logger.error("📦 Raw string (first 1000): \(cleanedJSON.prefix(1000))...", category: .ai)
+            // Save full JSON to file for inspection
+            let logsDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+                .appendingPathComponent("Sprung")
+            if let logsDir = logsDir {
+                let debugFile = logsDir.appendingPathComponent("failed_json_\(documentId).json")
+                try? cleanedJSON.write(to: debugFile, atomically: true, encoding: .utf8)
+                Logger.error("📦 Full JSON saved to: \(debugFile.path)", category: .ai)
+            }
             throw CardInventoryError.invalidResponse
         }
 
@@ -172,19 +208,33 @@ actor CardInventoryService {
                 switch decodingError {
                 case .keyNotFound(let key, let context):
                     Logger.error("❌ Missing key '\(key.stringValue)' at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))", category: .ai)
+                    Logger.error("   Context: \(context.debugDescription)", category: .ai)
                 case .typeMismatch(let type, let context):
                     Logger.error("❌ Type mismatch for \(type) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))", category: .ai)
+                    Logger.error("   Context: \(context.debugDescription)", category: .ai)
                 case .valueNotFound(let type, let context):
                     Logger.error("❌ Value not found for \(type) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))", category: .ai)
+                    Logger.error("   Context: \(context.debugDescription)", category: .ai)
                 case .dataCorrupted(let context):
                     Logger.error("❌ Data corrupted at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))", category: .ai)
+                    Logger.error("   Context: \(context.debugDescription)", category: .ai)
+                    Logger.error("   Underlying error: \(context.underlyingError?.localizedDescription ?? "none")", category: .ai)
                 @unknown default:
                     Logger.error("❌ Unknown decoding error: \(error.localizedDescription)", category: .ai)
                 }
             } else {
                 Logger.error("❌ Failed to decode PDF inventory JSON: \(error.localizedDescription)", category: .ai)
             }
-            Logger.debug("📦 Raw JSON was: \(jsonString.prefix(1000))...", category: .ai)
+            // Log more of the raw JSON for debugging
+            Logger.error("📦 Raw JSON (first 2000 chars): \(jsonString.prefix(2000))", category: .ai)
+            // Save full JSON to file for inspection
+            let logsDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+                .appendingPathComponent("Sprung")
+            if let logsDir = logsDir {
+                let debugFile = logsDir.appendingPathComponent("failed_inventory_\(documentId).json")
+                try? jsonString.write(to: debugFile, atomically: true, encoding: .utf8)
+                Logger.error("📦 Full JSON saved to: \(debugFile.path)", category: .ai)
+            }
             throw CardInventoryError.invalidResponse
         }
     }

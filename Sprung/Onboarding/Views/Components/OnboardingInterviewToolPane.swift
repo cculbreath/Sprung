@@ -233,11 +233,8 @@ struct OnboardingInterviewToolPane: View {
                     coordinator: coordinator,
                     onAssessCompleteness: {
                         Task {
-                            // Deactivate collection UI and send message to LLM
-                            await MainActor.run {
-                                coordinator.ui.isDocumentCollectionActive = false
-                            }
-                            await coordinator.sendChatMessage("I'm done uploading documents. Please assess the completeness of my evidence.")
+                            // Trigger card merge directly and notify LLM of results
+                            await coordinator.finishUploadsAndMergeCards()
                         }
                     },
                     onCancelExtractionsAndFinish: {
@@ -261,11 +258,23 @@ struct OnboardingInterviewToolPane: View {
                 VStack(spacing: 12) {
                     PersistentUploadDropZone(
                         onDropFiles: { urls, extractionMethod in
-                            Task { await coordinator.uploadFilesDirectly(urls, extractionMethod: extractionMethod) }
+                            Task {
+                                await coordinator.uploadFilesDirectly(urls, extractionMethod: extractionMethod)
+                                // Re-activate document collection UI to allow re-merge
+                                await MainActor.run {
+                                    coordinator.ui.isDocumentCollectionActive = true
+                                }
+                            }
                         },
                         onSelectFiles: { openDirectUploadPanel() },
                         onSelectGitRepo: { repoURL in
-                            Task { await coordinator.startGitRepoAnalysis(repoURL) }
+                            Task {
+                                await coordinator.startGitRepoAnalysis(repoURL)
+                                // Re-activate document collection UI to allow re-merge
+                                await MainActor.run {
+                                    coordinator.ui.isDocumentCollectionActive = true
+                                }
+                            }
                         }
                     )
                     KnowledgeCardCollectionView(
