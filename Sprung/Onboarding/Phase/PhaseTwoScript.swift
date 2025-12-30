@@ -15,7 +15,7 @@ struct PhaseTwoScript: PhaseScript {
         // Multi-agent workflow tools (in order of use)
         .startPhaseTwo,           // Bootstrap: returns timeline + artifact summaries
         .openDocumentCollection,  // Show dropzone for document uploads (mandatory step)
-        .proposeCardAssignments,  // Map artifacts to cards, identify gaps
+        // Card merge triggered by "Done with Uploads" button, not LLM tool
         .dispatchKCAgents,        // Spawn parallel KC agents
         .submitKnowledgeCard,     // Persist each generated card
 

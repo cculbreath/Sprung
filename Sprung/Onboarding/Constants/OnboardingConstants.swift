@@ -58,7 +58,7 @@ enum OnboardingToolName: String, CaseIterable {
     case setObjectiveStatus = "set_objective_status"
 
     // Multi-Agent Tools (Phase 2)
-    case proposeCardAssignments = "propose_card_assignments"
+    // NOTE: propose_card_assignments removed - merge now triggered by "Done with Uploads" button
     case dispatchKCAgents = "dispatch_kc_agents"
 
     // Web Browsing Tools

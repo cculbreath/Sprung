@@ -31,10 +31,11 @@ struct OpenDocumentCollectionTool: InterviewTool {
                 - Select git repositories for analysis
                 - Click "Done with Uploads" when finished
 
-                When user clicks "Done with Uploads", you receive a chat message with artifact summaries.
-                Before calling propose_card_assignments, you may optionally ask if they have additional
-                documents for specific gaps (e.g., "Do you have any performance reviews or project docs
-                from your time at Company X?"). Then call propose_card_assignments.
+                When user clicks "Done with Uploads":
+                1. System automatically merges card inventories across all documents
+                2. You receive a chat message with merged card summary and any documentation gaps
+                3. User can review/exclude cards in the sidebar, then click "Generate Cards"
+                4. DO NOT call dispatch_kc_agents - it's triggered by the "Generate Cards" button
                 """,
             properties: [
                 "message": UserInteractionSchemas.documentCollectionMessage,

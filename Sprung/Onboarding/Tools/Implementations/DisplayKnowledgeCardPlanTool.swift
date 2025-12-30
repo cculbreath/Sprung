@@ -13,8 +13,8 @@ struct DisplayKnowledgeCardPlanTool: InterviewTool {
                 MULTI-AGENT WORKFLOW:
                 1. Call this tool after start_phase_two with your full plan
                 2. Next, call open_document_collection to let user upload supporting documents
-                3. After user clicks "Assess Completeness", call propose_card_assignments
-                4. Cards are generated in parallel by KC agents via dispatch_kc_agents
+                3. User clicks "Done with Uploads" → system merges card inventories
+                4. User reviews cards, clicks "Generate Cards" → system dispatches KC agents
 
                 The plan is displayed to the user as a checklist. User can review and
                 request modifications before generation begins.
@@ -112,9 +112,10 @@ struct DisplayKnowledgeCardPlanTool: InterviewTool {
                 You MUST now call `open_document_collection` to:
                 1. Show the document collection UI with the KC plan
                 2. Let the user upload supporting documents (resumes, portfolios, etc.)
-                3. Wait for user to click "Assess Completeness"
+                3. Wait for user to click "Done with Uploads"
 
-                After the user submits documents, proceed with propose_card_assignments.
+                When user clicks "Done with Uploads", system merges card inventories automatically.
+                User will then review cards and click "Generate Cards" to dispatch KC agents.
                 """
         }
 
@@ -148,7 +149,7 @@ struct KnowledgeCardPlanItem: Identifiable, Equatable, Codable {
     let description: String?
     var status: Status
     let timelineEntryId: String?
-    /// Artifact IDs assigned to this card (set by propose_card_assignments)
+    /// Artifact IDs assigned to this card (set by card merge)
     var assignedArtifactIds: [String]
     /// Brief summaries of assigned artifacts for UI display
     var assignedArtifactSummaries: [String]

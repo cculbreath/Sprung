@@ -45,19 +45,19 @@ struct DispatchKCAgentsTool: InterviewTool {
         var proposalsJSON = params["proposals"].arrayValue
 
         if proposalsJSON.isEmpty {
-            // Fall back to stored proposals from propose_card_assignments
+            // Fall back to stored proposals from card merge (triggered by "Done with Uploads" button)
             let storedProposals = await coordinator.state.getCardProposals()
             proposalsJSON = storedProposals.arrayValue
 
             if !proposalsJSON.isEmpty {
-                Logger.info("🔄 DispatchKCAgentsTool: Using \(proposalsJSON.count) stored proposal(s) from previous propose_card_assignments", category: .ai)
+                Logger.info("🔄 DispatchKCAgentsTool: Using \(proposalsJSON.count) stored proposal(s) from card merge", category: .ai)
             }
         }
 
         guard !proposalsJSON.isEmpty else {
             var error = JSON()
             error["status"].string = "error"
-            error["message"].string = "No proposals provided in input and no stored proposals found. Call propose_card_assignments first."
+            error["message"].string = "No proposals provided. User must click 'Done with Uploads' button to trigger card merge first."
             return .immediate(error)
         }
 

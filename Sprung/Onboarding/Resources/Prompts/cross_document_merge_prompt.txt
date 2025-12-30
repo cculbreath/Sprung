@@ -1,6 +1,6 @@
 # Cross-Document Card Merge
 
-You have card inventories from multiple documents. Merge cards that refer to the same topic.
+You have card inventories from multiple documents. AGGRESSIVELY merge cards that refer to related topics.
 
 ## All Document Inventories
 
@@ -12,34 +12,74 @@ You have card inventories from multiple documents. Merge cards that refer to the
 
 ---
 
+## Critical: Output Order
+
+Output fields in this EXACT order (small fields first, large array last):
+1. `generated_at` - ISO8601 timestamp
+2. `stats` - counts and statistics
+3. `gaps` - documentation gaps
+4. `merged_cards` - the large array (LAST!)
+
+This order ensures metadata is preserved if response is truncated.
+
+---
+
 ## Your Task
 
-1. **Group related cards** across documents
+1. **AGGRESSIVELY merge** related cards - err on the side of combining
 2. **Designate primary source** for each merged card
-3. **Preserve all evidence** from supporting documents
+3. **Preserve key evidence** but BE CONCISE - max 5 items per array
 4. **Identify gaps** where cards have weak evidence
+5. **Target 30-50 output cards** maximum
 
-## Merge Rules
+## Aggressive Merge Rules
 
 ### Employment Cards
 - Match to timeline entries by organization + role + dates
-- Multiple docs about same role → merge into one card with multiple evidence blocks
+- Multiple docs about same role → merge into ONE card
 
-### Skill Cards
-- Same skill appearing in multiple docs → ONE card with evidence from all docs
-- Related skills may stay separate or be cross-referenced
+### Skill Cards - BE AGGRESSIVE!
+- Related skills → COMBINE into broader categories
+- Example: "PLC Programming" + "Embedded Systems" + "Industrial Automation" → ONE card "Industrial Automation & Control Systems"
+- Don't keep 40 separate skill cards - consolidate to ~10-15 skill categories
 
 ### Project Cards
 - Same project in multiple docs → merge
-- Keep distinct if genuinely different projects
+- Related sub-projects → consider merging into parent project
 
 ### Achievement Cards
-- Usually unique — only merge if same achievement in multiple docs
+- Publications with same co-authors/topic → merge
+- Certifications in same domain → merge
+
+## Output Constraints
+
+- **Max 5 key_facts per card** - most important only
+- **Max 5 technologies per card** - deduplicated
+- **Max 3 outcomes per card** - quantified ones preferred
+- **Max 3 evidence_locations per source** - representative samples
+
+---
 
 ## Output Format
 
 ```json
 {
+  "generated_at": "2025-01-15T10:30:00Z",
+  "stats": {
+    "total_input_cards": 87,
+    "merged_output_cards": 42,
+    "cards_by_type": {"employment": 5, "skill": 12, "project": 15, "achievement": 5, "education": 5},
+    "strong_evidence": 30,
+    "needs_more_evidence": 12
+  },
+  "gaps": [
+    {
+      "card_title": "Senior Lecturer, Cal Poly",
+      "gap_type": "missing_primary_source",
+      "current_evidence": "Resume bullet only",
+      "recommended_docs": ["performance reviews", "teaching evaluations"]
+    }
+  ],
   "merged_cards": [
     {
       "card_id": "uuid",
@@ -53,35 +93,18 @@ You have card inventories from multiple documents. Merge cards that refer to the
         {
           "document_id": "git_repos_nrd",
           "evidence_locations": ["full codebase analysis"],
-          "adds": ["Teensy implementation details", "I2C protocol design"]
+          "adds": ["Implementation details", "Protocol design"]
         }
       ],
-      "combined_key_facts": ["...all facts from all sources, deduplicated..."],
-      "combined_technologies": ["..."],
-      "combined_outcomes": ["..."],
+      "combined_key_facts": ["max 5 facts"],
+      "combined_technologies": ["max 5 techs"],
+      "combined_outcomes": ["max 3 outcomes"],
       "date_range": "2017-present",
-      "evidence_quality": "strong|moderate|weak",
-      "extraction_priority": "high|medium|low"
+      "evidence_quality": "strong",
+      "extraction_priority": "high"
     }
-  ],
-
-  "gaps": [
-    {
-      "card_title": "Senior Lecturer, Cal Poly",
-      "gap_type": "missing_primary_source",
-      "current_evidence": "Resume bullet only",
-      "recommended_docs": ["performance reviews", "teaching evaluations"]
-    }
-  ],
-
-  "stats": {
-    "total_input_cards": 87,
-    "merged_output_cards": 52,
-    "cards_by_type": {"employment": 5, "skill": 28, "project": 12, "achievement": 7},
-    "strong_evidence": 35,
-    "needs_more_evidence": 17
-  }
+  ]
 }
 ```
 
-Return ONLY valid JSON.
+Return ONLY valid JSON. Remember: generated_at, stats, gaps FIRST, then merged_cards.

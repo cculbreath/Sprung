@@ -114,8 +114,6 @@ struct ToolBundlePolicy {
             // Progression: after bootstrap, model collects documents
             OnboardingToolName.openDocumentCollection.rawValue,
             OnboardingToolName.getUserUpload.rawValue,
-            // Allow proposing assignments even if subphase inference lags (prevents stalls)
-            OnboardingToolName.proposeCardAssignments.rawValue,
             // Allow model to progress itself and dispatch agents once docs are ready
             OnboardingToolName.setObjectiveStatus.rawValue,
             OnboardingToolName.dispatchKCAgents.rawValue,
@@ -126,14 +124,12 @@ struct ToolBundlePolicy {
             OnboardingToolName.cancelUserUpload.rawValue,
             // NOTE: scanGitRepo removed - it's triggered by UI button, not LLM
             OnboardingToolName.openDocumentCollection.rawValue,
-            // Progression: after document collection, model proposes assignments OR dispatches agents
-            OnboardingToolName.proposeCardAssignments.rawValue,
+            // Card merge is now triggered by "Done with Uploads" button, not LLM tool
             OnboardingToolName.dispatchKCAgents.rawValue,
             OnboardingToolName.setObjectiveStatus.rawValue,
             OnboardingToolName.nextPhase.rawValue
         ],
         .p2_cardAssignment: [
-            OnboardingToolName.proposeCardAssignments.rawValue,
             OnboardingToolName.getUserOption.rawValue,
             // Fallback: allow manual KC creation if an agent fails
             OnboardingToolName.submitKnowledgeCard.rawValue,
@@ -150,8 +146,6 @@ struct ToolBundlePolicy {
             OnboardingToolName.setObjectiveStatus.rawValue
         ],
         .p2_kcGeneration: [
-            // Critical bridge tool: required before dispatch if proposals are missing
-            OnboardingToolName.proposeCardAssignments.rawValue,
             OnboardingToolName.dispatchKCAgents.rawValue,
             OnboardingToolName.setObjectiveStatus.rawValue,
             // Cards are auto-presented for validation - no submit_knowledge_card needed

@@ -316,7 +316,7 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
             messageText += """
                 ---
                 Full document text available via `get_artifact(artifact_id)`.
-                Card inventories will be merged when you call `propose_card_assignments`.
+                Card inventories will be merged when user clicks "Done with Uploads".
                 """
         }
 
