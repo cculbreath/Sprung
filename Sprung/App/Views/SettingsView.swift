@@ -10,7 +10,7 @@ struct SettingsView: View {
     @AppStorage("onboardingPDFExtractionModelId") private var pdfExtractionModelId: String = "gemini-2.5-flash"
     @AppStorage("onboardingGitIngestModelId") private var gitIngestModelId: String = "anthropic/claude-haiku-4.5"
     @AppStorage("onboardingDocSummaryModelId") private var docSummaryModelId: String = "gemini-2.5-flash-lite"
-    @AppStorage("onboardingCardMergeModelId") private var cardMergeModelId: String = "gemini-2.5-flash"
+    @AppStorage("onboardingCardMergeModelId") private var cardMergeModelId: String = "openai/gpt-5"
     @AppStorage("onboardingKCAgentModelId") private var kcAgentModelId: String = "anthropic/claude-haiku-4.5"
     @AppStorage("onboardingKCAgentMaxConcurrent") private var kcAgentMaxConcurrent: Int = 5
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var onboardingWebSearchAllowed: Bool = true
@@ -594,13 +594,13 @@ private extension SettingsView {
                     .foregroundStyle(.secondary)
 
                 Picker("Card Merge Model", selection: $cardMergeModelId) {
-                    ForEach(geminiModels.filter { $0.outputTokenLimit >= 64000 }) { model in
+                    ForEach(allOpenRouterModels.filter { $0.supportsStructuredOutput }, id: \.modelId) { model in
                         Text(model.displayName)
-                            .tag(model.id)
+                            .tag(model.modelId)
                     }
                 }
                 .pickerStyle(.menu)
-                Text("Merges card inventories across documents. Only models with 64K+ output tokens shown.")
+                Text("Merges card inventories across documents. Models with structured output support shown. GPT-5+ recommended for 128K output tokens.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

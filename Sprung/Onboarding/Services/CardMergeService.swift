@@ -73,10 +73,10 @@ actor CardMergeService {
             timeline: timeline
         )
 
-        Logger.info("🔄 Merging \(inventories.count) document inventories using OpenAI", category: .ai)
+        Logger.info("🔄 Merging \(inventories.count) document inventories using OpenRouter", category: .ai)
 
-        // Use GPT-5 with strict schema enforcement (128K output tokens, guaranteed schema compliance)
-        let mergeModelId = UserDefaults.standard.string(forKey: "onboardingCardMergeModelId") ?? "gpt-5"
+        // Use OpenRouter with strict schema enforcement (GPT-5+ recommended for 128K output tokens)
+        let mergeModelId = UserDefaults.standard.string(forKey: "onboardingCardMergeModelId") ?? "openai/gpt-5"
 
         do {
             let mergedInventory: MergedCardInventory = try await facade.executeStructuredWithSchema(
@@ -86,7 +86,7 @@ actor CardMergeService {
                 schema: CardMergePrompts.openAISchema,
                 schemaName: "merged_card_inventory",
                 temperature: 0.2,
-                backend: .openAI
+                backend: .openRouter
             )
 
             Logger.info("✅ Merged inventory: \(mergedInventory.mergedCards.count) cards from \(inventories.count) documents", category: .ai)
