@@ -482,7 +482,8 @@ final class OnboardingDependencyContainer {
             artifactRepository: artifactRepository,
             llmFacade: llmFacade,
             tracker: agentActivityTracker,
-            eventBus: eventBus
+            eventBus: eventBus,
+            sessionStore: sessionStore
         )
         kcAgentService = service
         return service

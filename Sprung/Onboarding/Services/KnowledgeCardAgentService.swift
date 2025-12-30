@@ -248,6 +248,7 @@ actor KnowledgeCardAgentService {
     private weak var llmFacade: LLMFacade?
     private let tracker: AgentActivityTracker
     private let eventBus: EventCoordinator
+    private weak var sessionStore: OnboardingSessionStore?
 
     // MARK: - Configuration
 
@@ -261,12 +262,14 @@ actor KnowledgeCardAgentService {
         llmFacade: LLMFacade?,
         tracker: AgentActivityTracker,
         eventBus: EventCoordinator,
+        sessionStore: OnboardingSessionStore?,
         maxConcurrentAgents: Int? = nil
     ) {
         self.artifactRepository = artifactRepository
         self.llmFacade = llmFacade
         self.tracker = tracker
         self.eventBus = eventBus
+        self.sessionStore = sessionStore
         // Read from UserDefaults, fallback to provided value or default of 5
         let settingsValue = UserDefaults.standard.integer(forKey: "onboardingKCAgentMaxConcurrent")
         self.maxConcurrentAgents = maxConcurrentAgents ?? (settingsValue > 0 ? settingsValue : 5)
@@ -437,8 +440,24 @@ actor KnowledgeCardAgentService {
         }
 
         do {
+            // Export artifacts to filesystem for agent access
+            guard let store = sessionStore else {
+                throw KCAgentError.sessionStoreNotAvailable
+            }
+            let artifactIds = Set(proposal.assignedArtifactIds)
+            let exportDir = try await MainActor.run {
+                try store.exportArtifactsByIds(artifactIds)
+            }
+
+            // Ensure cleanup happens even if agent fails
+            defer {
+                Task { @MainActor in
+                    store.cleanupExportedArtifacts(at: exportDir)
+                }
+            }
+
             // Create isolated tool executor for this agent
-            let toolExecutor = SubAgentToolExecutor(artifactRepository: artifactRepository)
+            let toolExecutor = SubAgentToolExecutor(filesystemRoot: exportDir)
 
             // Build prompts for fact-based extraction
             let systemPrompt = KCAgentPrompts.systemPrompt(
@@ -551,6 +570,19 @@ actor KnowledgeCardAgentService {
                 title: proposal.title,
                 error: errorMessage
             )
+        }
+    }
+}
+
+// MARK: - Errors
+
+enum KCAgentError: LocalizedError {
+    case sessionStoreNotAvailable
+
+    var errorDescription: String? {
+        switch self {
+        case .sessionStoreNotAvailable:
+            return "Session store not available for artifact export"
         }
     }
 }

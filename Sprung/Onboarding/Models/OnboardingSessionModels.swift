@@ -137,6 +137,23 @@ class OnboardingArtifactRecord {
         session == nil
     }
 
+    /// Folder name for filesystem export (sanitized filename without extension)
+    var artifactFolderName: String {
+        let baseName: String
+        if !sourceFilename.isEmpty {
+            let nameWithoutExt = URL(fileURLWithPath: sourceFilename).deletingPathExtension().lastPathComponent
+            baseName = nameWithoutExt.isEmpty ? sourceFilename : nameWithoutExt
+        } else {
+            baseName = id.uuidString
+        }
+        // Sanitize for filesystem
+        return baseName
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: ":", with: "_")
+            .replacingOccurrences(of: "\\", with: "_")
+            .replacingOccurrences(of: " ", with: "_")
+    }
+
     init(
         id: UUID = UUID(),
         sourceType: String,

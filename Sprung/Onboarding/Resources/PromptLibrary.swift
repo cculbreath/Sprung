@@ -44,6 +44,19 @@ enum PromptLibrary {
         loadPrompt(named: "kc_fact_extraction_initial")
     }()
 
+    /// System prompt for expanding existing KC with new evidence
+    static let kcExpandSystem: String = {
+        loadPrompt(named: "kc_expand_system")
+    }()
+
+    /// Initial prompt template for KC expansion
+    /// Contains placeholders: {CARD_ID}, {CARD_TYPE}, {TITLE}, {ORGANIZATION}, {TIME_PERIOD},
+    /// {FACT_COUNT}, {EXISTING_FACTS_JSON}, {EXISTING_BULLETS_JSON}, {EXISTING_TECHNOLOGIES},
+    /// {EXISTING_SOURCES}, {NEW_ARTIFACTS}
+    static let kcExpandInitial: String = {
+        loadPrompt(named: "kc_expand_initial")
+    }()
+
     // MARK: - Document Extraction Prompts
 
     /// Default PDF/document extraction prompt

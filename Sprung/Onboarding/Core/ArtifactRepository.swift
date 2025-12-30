@@ -2,7 +2,7 @@ import Foundation
 import SwiftyJSON
 /// Domain service for artifact storage and management.
 /// Owns all artifact state including timeline cards, knowledge cards, and uploaded documents.
-actor ArtifactRepository: OnboardingEventEmitter, ArtifactStorageProtocol {
+actor ArtifactRepository: OnboardingEventEmitter {
     // MARK: - Event System
     let eventBus: EventCoordinator
     // MARK: - Artifact Storage

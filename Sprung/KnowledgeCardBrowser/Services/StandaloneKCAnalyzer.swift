@@ -30,6 +30,8 @@ class StandaloneKCAnalyzer {
     // MARK: - Public API
 
     /// Analyze artifacts to generate card proposals.
+    /// Uses pre-existing card_inventory from artifacts when available,
+    /// otherwise generates via LLM.
     /// - Parameter artifacts: Extracted artifact JSON objects
     /// - Returns: Merged card inventory with proposals
     func analyzeArtifacts(_ artifacts: [JSON]) async throws -> MergedCardInventory {
@@ -40,7 +42,14 @@ class StandaloneKCAnalyzer {
             let filename = artifact["filename"].stringValue
             let content = artifact["extracted_text"].stringValue
 
-            // Inventory the document for potential cards
+            // Check if artifact already has a card_inventory
+            if let existingInventory = parseExistingInventory(from: artifact, docId: docId) {
+                Logger.info("📦 StandaloneKCAnalyzer: Using pre-existing card_inventory for \(filename)", category: .ai)
+                inventories.append(existingInventory)
+                continue
+            }
+
+            // Fall back to generating inventory via LLM
             if let service = inventoryService {
                 do {
                     let inventory = try await service.inventoryDocument(
@@ -56,6 +65,71 @@ class StandaloneKCAnalyzer {
         }
 
         return mergeInventoriesLocally(inventories)
+    }
+
+    /// Parse pre-existing card_inventory from artifact JSON
+    private func parseExistingInventory(from artifact: JSON, docId: String) -> DocumentInventory? {
+        // Check for card_inventory at top level
+        let cardInventory = artifact["card_inventory"]
+        guard !cardInventory.isEmpty else { return nil }
+
+        // Parse proposed_cards from inventory
+        let proposedCardsJSON = cardInventory["proposed_cards"].arrayValue
+        guard !proposedCardsJSON.isEmpty else { return nil }
+
+        var proposedCards: [DocumentInventory.ProposedCardEntry] = []
+
+        for cardJSON in proposedCardsJSON {
+            let cardType: DocumentInventory.ProposedCardEntry.CardType
+            switch cardJSON["card_type"].stringValue.lowercased() {
+            case "employment", "job":
+                cardType = .employment
+            case "project":
+                cardType = .project
+            case "skill":
+                cardType = .skill
+            case "achievement":
+                cardType = .achievement
+            case "education":
+                cardType = .education
+            default:
+                cardType = .employment
+            }
+
+            let evidenceStrength: DocumentInventory.ProposedCardEntry.EvidenceStrength
+            switch cardJSON["evidence_strength"].stringValue.lowercased() {
+            case "primary":
+                evidenceStrength = .primary
+            case "supporting":
+                evidenceStrength = .supporting
+            default:
+                evidenceStrength = .primary
+            }
+
+            let proposed = DocumentInventory.ProposedCardEntry(
+                cardType: cardType,
+                proposedTitle: cardJSON["title"].stringValue,
+                evidenceStrength: evidenceStrength,
+                evidenceLocations: cardJSON["evidence_locations"].arrayValue.map { $0.stringValue },
+                keyFacts: cardJSON["key_facts"].arrayValue.map { $0.stringValue },
+                technologies: cardJSON["technologies"].arrayValue.map { $0.stringValue },
+                quantifiedOutcomes: cardJSON["quantified_outcomes"].arrayValue.map { $0.stringValue },
+                dateRange: cardJSON["date_range"].string,
+                crossReferences: cardJSON["cross_references"].arrayValue.map { $0.stringValue },
+                extractionNotes: cardJSON["extraction_notes"].string
+            )
+            proposedCards.append(proposed)
+        }
+
+        guard !proposedCards.isEmpty else { return nil }
+
+        let docType = artifact["summary_metadata"]["document_type"].stringValue
+        return DocumentInventory(
+            documentId: docId,
+            documentType: docType.isEmpty ? "unknown" : docType,
+            proposedCards: proposedCards,
+            generatedAt: Date()
+        )
     }
 
     /// Match proposals against existing ResRefs to determine new vs enhancement.

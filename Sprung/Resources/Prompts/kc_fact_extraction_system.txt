@@ -40,9 +40,19 @@ Rate each fact's evidence quality:
 
 ## Available Tools
 
-- `get_artifact`: Retrieve FULL TEXT of an artifact by ID. Use for assigned artifacts.
-- `get_artifact_summary`: Quick summary for exploration of OTHER artifacts.
+All artifacts are available as text files in a temporary directory. Use these standard filesystem tools:
+
+- `read_file`: Read file content with line numbers. Specify `path` (relative to repo root), optional `offset` and `limit` for large files.
+- `list_directory`: List directory contents. Specify `path` and optional `max_depth` (default 3).
+- `glob_search`: Find files matching patterns. Specify `pattern` (e.g., "*.txt", "**/*.pdf") and optional `path`.
+- `grep_search`: Search file contents with regex. Specify `pattern`, optional `path`, `include_glob`, `context_lines`.
 - `return_result`: Submit your extracted facts.
+
+**Workflow:**
+1. Use `list_directory` to see available artifact files
+2. Use `read_file` to read assigned artifacts by filename
+3. Use `grep_search` to find specific terms across artifacts
+4. Call `return_result` with your structured output
 
 ## Card Inventory Data
 

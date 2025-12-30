@@ -3,20 +3,19 @@
 //  Sprung
 //
 //  Minimal tool executor for isolated sub-agents (KC agents, etc.).
-//  Provides a RESTRICTED tool set that avoids infrastructure conflicts:
+//  Uses the SAME FileSystemTools as GitAnalysisAgent for unified access:
 //
-//  ALLOWED (READ-ONLY):
-//  - get_artifact: Read full artifact content from shared ArtifactRepository
-//  - get_artifact_summary: Read artifact summary only
-//  - return_result: Return completion result to AgentRunner (does NOT persist)
+//  FILESYSTEM TOOLS (same as Git agent):
+//  - read_file: Read file content with line numbers
+//  - list_directory: List directory contents with depth traversal
+//  - glob_search: Find files matching glob patterns
+//  - grep_search: Search file contents with regex
 //
-//  BLOCKED (would conflict with main coordinator):
-//  - get_user_option: Requires UI, sets global waitingState
-//  - get_user_upload: Requires UI, sets global waitingState
-//  - submit_knowledge_card: Writes to shared state
-//  - persist_data: Writes to shared state
-//  - set_objective_status: Modifies global phase state
-//  - next_phase: Modifies global phase state
+//  COMPLETION TOOL:
+//  - return_result: Return completion result to AgentRunner
+//
+//  Artifacts must be exported to a temp directory before use.
+//  Use OnboardingSessionStore.exportArtifactsToFilesystem() or exportArtifactsByIds().
 //
 
 import Foundation
@@ -26,46 +25,60 @@ import SwiftyJSON
 // MARK: - Sub-Agent Tool Executor
 
 /// Minimal tool executor for isolated sub-agents.
-/// Only provides read-only access to artifacts and a completion tool.
+/// Takes a pre-exported filesystem directory and uses same tools as Git agent.
 actor SubAgentToolExecutor {
-    // MARK: - Dependencies
+    // MARK: - State
 
-    private let artifactRepository: any ArtifactStorageProtocol
-
-    // MARK: - Tool Definitions
-
-    private lazy var tools: [ChatCompletionParameters.Tool] = buildTools()
+    private let repoRoot: URL
 
     // MARK: - Initialization
 
-    init(artifactRepository: any ArtifactStorageProtocol) {
-        self.artifactRepository = artifactRepository
+    /// Initialize with a pre-exported filesystem directory.
+    /// The directory should contain artifact folders created by OnboardingSessionStore.exportArtifacts*.
+    init(filesystemRoot: URL) {
+        self.repoRoot = filesystemRoot
     }
 
     // MARK: - Public API
 
-    /// Get tool schemas for LLM
+    /// Get tool schemas for LLM (same tools as Git agent + return_result)
     func getToolSchemas() -> [ChatCompletionParameters.Tool] {
-        return tools
+        [
+            buildTool(ReadFileTool.self),
+            buildTool(ListDirectoryTool.self),
+            buildTool(GlobSearchTool.self),
+            buildTool(GrepSearchTool.self),
+            buildReturnResultTool()
+        ]
     }
 
     /// Execute a tool call
     /// - Returns: JSON string result
     func execute(toolName: String, arguments: String) async -> String {
-        let argsJSON: JSON
-        if let data = arguments.data(using: .utf8) {
-            argsJSON = (try? JSON(data: data)) ?? JSON()
-        } else {
-            argsJSON = JSON()
-        }
-
         do {
-            switch toolName {
-            case "get_artifact":
-                return try await executeGetArtifact(args: argsJSON)
+            let argsData = arguments.data(using: .utf8) ?? Data()
 
-            case "get_artifact_summary":
-                return try await executeGetArtifactSummary(args: argsJSON)
+            switch toolName {
+            // Same tools as Git agent
+            case ReadFileTool.name:
+                let params = try JSONDecoder().decode(ReadFileTool.Parameters.self, from: argsData)
+                let result = try ReadFileTool.execute(parameters: params, repoRoot: repoRoot)
+                return formatReadResult(result)
+
+            case ListDirectoryTool.name:
+                let params = try JSONDecoder().decode(ListDirectoryTool.Parameters.self, from: argsData)
+                let result = try ListDirectoryTool.execute(parameters: params, repoRoot: repoRoot)
+                return result.formattedTree
+
+            case GlobSearchTool.name:
+                let params = try JSONDecoder().decode(GlobSearchTool.Parameters.self, from: argsData)
+                let result = try GlobSearchTool.execute(parameters: params, repoRoot: repoRoot)
+                return formatGlobResult(result)
+
+            case GrepSearchTool.name:
+                let params = try JSONDecoder().decode(GrepSearchTool.Parameters.self, from: argsData)
+                let result = try GrepSearchTool.execute(parameters: params, repoRoot: repoRoot)
+                return result.formatted
 
             case "return_result":
                 // This is handled by AgentRunner, just return success
@@ -75,87 +88,32 @@ actor SubAgentToolExecutor {
                 return errorResult("Tool not available for sub-agents: \(toolName)")
             }
         } catch {
+            Logger.error("❌ SubAgent tool execution error (\(toolName)): \(error.localizedDescription)", category: .ai)
             return errorResult(error.localizedDescription)
         }
     }
 
-    // MARK: - Tool Implementations
+    // MARK: - Result Formatting
 
-    private func executeGetArtifact(args: JSON) async throws -> String {
-        guard let artifactId = args["artifact_id"].string?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !artifactId.isEmpty else {
-            throw SubAgentToolError.invalidParameters("artifact_id is required")
+    private func formatReadResult(_ result: ReadFileTool.Result) -> String {
+        var output = "File content (lines \(result.startLine)-\(result.endLine) of \(result.totalLines)):\n"
+        output += result.content
+        if result.hasMore {
+            output += "\n\n[Note: File has more content. Use offset=\(result.endLine + 1) to read more.]"
         }
-
-        // Safe: Actor-isolated read from shared repository
-        guard let artifact = await artifactRepository.getArtifactRecord(id: artifactId) else {
-            throw SubAgentToolError.notFound("Artifact not found: \(artifactId)")
-        }
-
-        // Sub-agents can easily blow past model context limits if we return multi-megabyte
-        // extracted_text fields. Return a compact artifact view, truncating extracted_text.
-        let maxExtractedChars = 180_000
-        let extracted = artifact["extracted_text"].stringValue
-        let extractedOriginalChars = extracted.count
-        let extractedTruncated: String
-        let didTruncate: Bool
-        if extractedOriginalChars > maxExtractedChars {
-            didTruncate = true
-            extractedTruncated = String(extracted.prefix(maxExtractedChars)) + "\n\n[TRUNCATED: extracted_text exceeded \(maxExtractedChars) chars]"
-        } else {
-            didTruncate = false
-            extractedTruncated = extracted
-        }
-
-        var compact = JSON()
-        compact["id"].string = artifact["id"].string
-        compact["filename"].string = artifact["filename"].string
-        compact["content_type"].string = artifact["content_type"].string
-        compact["size_bytes"].int = artifact["size_bytes"].int
-        if let brief = artifact["brief_description"].string, !brief.isEmpty {
-            compact["brief_description"].string = brief
-        }
-        if let summary = artifact["summary"].string, !summary.isEmpty {
-            compact["summary"].string = summary
-        }
-        if !artifact["summary_metadata"].dictionaryValue.isEmpty {
-            compact["summary_metadata"] = artifact["summary_metadata"]
-        }
-        // Keep selected metadata fields that help interpretation but avoid dumping huge blobs.
-        if let title = artifact["metadata"]["title"].string, !title.isEmpty {
-            compact["metadata"]["title"].string = title
-        }
-        if let purpose = artifact["metadata"]["purpose"].string, !purpose.isEmpty {
-            compact["metadata"]["purpose"].string = purpose
-        }
-        compact["extracted_text"].string = extractedTruncated
-        compact["extracted_text_original_chars"].int = extractedOriginalChars
-        compact["extracted_text_truncated"].bool = didTruncate
-
-        var result = JSON()
-        result["status"].string = "completed"
-        result["artifact"] = compact
-        return result.rawString() ?? "{}"
+        return output
     }
 
-    private func executeGetArtifactSummary(args: JSON) async throws -> String {
-        guard let artifactId = args["artifact_id"].string?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !artifactId.isEmpty else {
-            throw SubAgentToolError.invalidParameters("artifact_id is required")
+    private func formatGlobResult(_ result: GlobSearchTool.Result) -> String {
+        var lines: [String] = ["Found \(result.totalMatches) files matching pattern:"]
+        for file in result.files {
+            let sizeStr = ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file)
+            lines.append("  \(file.relativePath) (\(sizeStr))")
         }
-
-        // Safe: Actor-isolated read from shared repository
-        guard let artifact = await artifactRepository.getArtifactRecord(id: artifactId) else {
-            throw SubAgentToolError.notFound("Artifact not found: \(artifactId)")
+        if result.truncated {
+            lines.append("  ... and \(result.totalMatches - result.files.count) more")
         }
-
-        var result = JSON()
-        result["status"].string = "completed"
-        result["artifact_id"].string = artifactId
-        result["filename"].string = artifact["filename"].string
-        result["summary"].string = artifact["summary"].string ?? "No summary available"
-        result["content_type"].string = artifact["content_type"].string
-        return result.rawString() ?? "{}"
+        return lines.joined(separator: "\n")
     }
 
     private func errorResult(_ message: String) -> String {
@@ -167,67 +125,61 @@ actor SubAgentToolExecutor {
 
     // MARK: - Tool Schema Building
 
-    private func buildTools() -> [ChatCompletionParameters.Tool] {
-        [
-            buildGetArtifactTool(),
-            buildGetArtifactSummaryTool(),
-            buildReturnResultTool()
-        ]
+    private func buildTool<T: AgentTool>(_ tool: T.Type) -> ChatCompletionParameters.Tool {
+        let schemaDict = tool.parametersSchema
+        let schema = buildJSONSchema(from: schemaDict)
+
+        let function = ChatCompletionParameters.ChatFunction(
+            name: tool.name,
+            strict: true,
+            description: tool.description,
+            parameters: schema
+        )
+
+        return ChatCompletionParameters.Tool(function: function)
     }
 
-    private func buildGetArtifactTool() -> ChatCompletionParameters.Tool {
-        let schema = JSONSchema(
-            type: .object,
-            description: """
-                Retrieve complete artifact record including full extracted text content.
-                Use this when you need the actual document content for detailed analysis.
-                Returns the full artifact with extracted_text field containing the document content.
-                """,
-            properties: [
-                "artifact_id": JSONSchema(
-                    type: .string,
-                    description: "Unique identifier of the artifact to retrieve"
-                )
-            ],
-            required: ["artifact_id"],
-            additionalProperties: false
-        )
+    private func buildJSONSchema(from dict: [String: Any]) -> JSONSchema {
+        let typeStr = dict["type"] as? String ?? "object"
+        let desc = dict["description"] as? String
+        let enumValues = dict["enum"] as? [String]
 
-        return ChatCompletionParameters.Tool(
-            function: ChatCompletionParameters.ChatFunction(
-                name: "get_artifact",
-                strict: false,
-                description: "Retrieve complete artifact with full extracted text content",
-                parameters: schema
-            )
-        )
-    }
+        let schemaType: JSONSchemaType
+        switch typeStr {
+        case "string": schemaType = .string
+        case "integer": schemaType = .integer
+        case "number": schemaType = .number
+        case "boolean": schemaType = .boolean
+        case "array": schemaType = .array
+        case "object": schemaType = .object
+        default: schemaType = .string
+        }
 
-    private func buildGetArtifactSummaryTool() -> ChatCompletionParameters.Tool {
-        let schema = JSONSchema(
-            type: .object,
-            description: """
-                Retrieve just the summary of an artifact (not the full text).
-                Use this for quick reference or to decide if full content is needed.
-                Faster and lighter than get_artifact.
-                """,
-            properties: [
-                "artifact_id": JSONSchema(
-                    type: .string,
-                    description: "Unique identifier of the artifact"
-                )
-            ],
-            required: ["artifact_id"],
-            additionalProperties: false
-        )
+        var properties: [String: JSONSchema]? = nil
+        if let propsDict = dict["properties"] as? [String: [String: Any]] {
+            var propSchemas: [String: JSONSchema] = [:]
+            for (key, propSpec) in propsDict {
+                propSchemas[key] = buildJSONSchema(from: propSpec)
+            }
+            properties = propSchemas
+        }
 
-        return ChatCompletionParameters.Tool(
-            function: ChatCompletionParameters.ChatFunction(
-                name: "get_artifact_summary",
-                strict: false,
-                description: "Retrieve artifact summary only (not full content)",
-                parameters: schema
-            )
+        var items: JSONSchema? = nil
+        if schemaType == .array, let itemsDict = dict["items"] as? [String: Any] {
+            items = buildJSONSchema(from: itemsDict)
+        }
+
+        let required = dict["required"] as? [String]
+        let additionalProps = dict["additionalProperties"] as? Bool ?? false
+
+        return JSONSchema(
+            type: schemaType,
+            description: desc,
+            properties: properties,
+            items: items,
+            required: required,
+            additionalProperties: additionalProps,
+            enum: enumValues
         )
     }
 
@@ -239,11 +191,10 @@ actor SubAgentToolExecutor {
                 "excerpt": JSONSchema(type: .string, description: "Direct quote from the user"),
                 "context": JSONSchema(type: .string, description: "Why this excerpt matters / what it supports")
             ],
-            required: ["excerpt", "context"],  // OpenAI strict mode requires all properties in required
+            required: ["excerpt", "context"],
             additionalProperties: false
         )
 
-        // OpenAI strict mode requires ALL properties to be in required array
         let resultSchema = JSONSchema(
             type: .object,
             description: "Knowledge card generation output",
@@ -263,7 +214,7 @@ actor SubAgentToolExecutor {
                 "metrics": JSONSchema(type: .array, description: "Quantitative results", items: JSONSchema(type: .string)),
                 "sources": JSONSchema(
                     type: .array,
-                    description: "Artifact IDs used as evidence (prefer non-empty); include assigned artifacts whenever possible.",
+                    description: "File names used as evidence (prefer non-empty); include assigned files whenever possible.",
                     items: JSONSchema(type: .string)
                 ),
                 "chat_sources": JSONSchema(
@@ -290,7 +241,7 @@ actor SubAgentToolExecutor {
                 - card_type: "job" or "skill"
                 - title: Title of the knowledge card
                 - prose: Comprehensive narrative (500-2000+ words)
-                - sources: Array of artifact IDs used
+                - sources: Array of file names used
                 - highlights: Key achievements or competencies
                 - skills: Relevant skills demonstrated
                 - metrics: Quantitative achievements if available

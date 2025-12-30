@@ -9,6 +9,33 @@
 import Foundation
 import SwiftyJSON
 
+// MARK: - JSON Artifact Extension
+
+extension JSON {
+    /// Computed folder name for an artifact (matches OnboardingArtifactRecord.artifactFolderName)
+    var artifactFolderName: String {
+        let filename = self["filename"].stringValue
+        let id = self["id"].stringValue
+
+        let baseName: String
+        if !filename.isEmpty {
+            let nameWithoutExt = URL(fileURLWithPath: filename).deletingPathExtension().lastPathComponent
+            baseName = nameWithoutExt.isEmpty ? filename : nameWithoutExt
+        } else {
+            baseName = id
+        }
+
+        // Sanitize for filesystem
+        return baseName
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: ":", with: "_")
+            .replacingOccurrences(of: "\\", with: "_")
+            .replacingOccurrences(of: " ", with: "_")
+    }
+}
+
+// MARK: - KC Agent Prompts
+
 enum KCAgentPrompts {
 
     // MARK: - System Prompt
@@ -45,23 +72,30 @@ enum KCAgentPrompts {
         var assignedArtifacts = ""
         let allAssignedIds = proposal.assignedArtifactIds
         let primaryId = allAssignedIds.first
+        var assignedFolders: [String] = []
 
         for artifact in allArtifacts where allAssignedIds.contains(artifact["id"].stringValue) {
             let filename = artifact["filename"].stringValue
             let artifactId = artifact["id"].stringValue
+            let folder = artifact.artifactFolderName
             let summary = artifact["summary"].stringValue
             let docType = artifact["summary_metadata"]["document_type"].stringValue
 
             let isPrimary = artifactId == primaryId
             let marker = isPrimary ? " (PRIMARY SOURCE)" : ""
+            assignedFolders.append(folder)
 
             assignedArtifacts += """
 
             ### \(filename)\(marker)
-            **ID**: \(artifactId)
+            **Folder**: `\(folder)/`
             **Type**: \(docType)
+            **Files**:
+            - `\(folder)/extracted_text.txt` - Full document text
+            - `\(folder)/summary.txt` - Document summary
+            - `\(folder)/card_inventory.json` - Card proposals (if exists)
 
-            \(summary)
+            **Summary**: \(summary)
             """
         }
 
@@ -69,13 +103,13 @@ enum KCAgentPrompts {
         var otherArtifacts = ""
         for artifact in allArtifacts where !allAssignedIds.contains(artifact["id"].stringValue) {
             let filename = artifact["filename"].stringValue
-            let artifactId = artifact["id"].stringValue
+            let folder = artifact.artifactFolderName
             let briefDesc = artifact["brief_description"].string
                 ?? artifact["summary_metadata"]["brief_description"].string
                 ?? artifact["summary_metadata"]["document_type"].string
                 ?? "document"
 
-            otherArtifacts += "\n- **\(filename)** (ID: \(artifactId)): \(briefDesc)"
+            otherArtifacts += "\n- **\(filename)** (`\(folder)/`): \(briefDesc)"
         }
 
         // Build card inventory JSON from proposal
@@ -83,7 +117,7 @@ enum KCAgentPrompts {
             "card_id": proposal.cardId,
             "card_type": proposal.cardType,
             "title": proposal.title,
-            "assigned_artifact_ids": proposal.assignedArtifactIds
+            "assigned_folders": assignedFolders
         ]
         if let timelineId = proposal.timelineEntryId {
             cardInventory["timeline_entry_id"] = timelineId
@@ -196,5 +230,115 @@ enum KCAgentPrompts {
             - [ ] Skills demonstrated
             """
         }
+    }
+
+    // MARK: - Expand KC Prompts
+
+    /// System prompt for KC expansion agent.
+    static func expandSystemPrompt(
+        cardId: String,
+        cardType: String,
+        title: String
+    ) -> String {
+        PromptLibrary.substitute(
+            template: PromptLibrary.kcExpandSystem,
+            replacements: [
+                "CARD_ID": cardId,
+                "CARD_TYPE": cardType,
+                "TITLE": title
+            ]
+        )
+    }
+
+    /// Initial prompt for expanding an existing KC with new evidence.
+    /// - Parameters:
+    ///   - existingCard: The ResRef to expand
+    ///   - newArtifacts: New artifact JSON objects containing additional evidence
+    /// - Returns: Formatted expand prompt
+    static func expandInitialPrompt(
+        existingCard: ResRef,
+        newArtifacts: [JSON]
+    ) -> String {
+        // Get existing facts count
+        var factCount = 0
+        var existingFactsJSON = "[]"
+        if let factsJSON = existingCard.factsJSON,
+           let data = factsJSON.data(using: .utf8),
+           let facts = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            factCount = facts.count
+            if let prettyData = try? JSONSerialization.data(withJSONObject: facts, options: .prettyPrinted),
+               let prettyString = String(data: prettyData, encoding: .utf8) {
+                existingFactsJSON = prettyString
+            }
+        }
+
+        // Get existing bullets
+        var existingBulletsJSON = "[]"
+        if let bulletsJSON = existingCard.suggestedBulletsJSON,
+           let data = bulletsJSON.data(using: .utf8),
+           let bullets = try? JSONSerialization.jsonObject(with: data) as? [String] {
+            if let prettyData = try? JSONSerialization.data(withJSONObject: bullets, options: .prettyPrinted),
+               let prettyString = String(data: prettyData, encoding: .utf8) {
+                existingBulletsJSON = prettyString
+            }
+        }
+
+        // Get existing technologies
+        var existingTechnologies = "(none)"
+        if let techJSON = existingCard.technologiesJSON,
+           let data = techJSON.data(using: .utf8),
+           let techs = try? JSONSerialization.jsonObject(with: data) as? [String],
+           !techs.isEmpty {
+            existingTechnologies = techs.joined(separator: ", ")
+        }
+
+        // Get existing sources
+        var existingSources = "(none)"
+        if let sourcesJSON = existingCard.sourcesJSON,
+           let data = sourcesJSON.data(using: .utf8),
+           let sources = try? JSONSerialization.jsonObject(with: data) as? [[String: String]] {
+            let ids = sources.compactMap { $0["artifact_id"] }
+            if !ids.isEmpty {
+                existingSources = ids.joined(separator: ", ")
+            }
+        }
+
+        // Build new artifacts section
+        var newArtifactsSection = ""
+        for artifact in newArtifacts {
+            let filename = artifact["filename"].stringValue
+            let folder = artifact.artifactFolderName
+            let summary = artifact["summary"].stringValue
+            let docType = artifact["summary_metadata"]["document_type"].stringValue
+
+            newArtifactsSection += """
+
+            ### \(filename)
+            **Folder**: `\(folder)/`
+            **Type**: \(docType)
+            **Files**:
+            - `\(folder)/extracted_text.txt` - Full document text
+            - `\(folder)/summary.txt` - Document summary
+
+            **Summary**: \(summary)
+            """
+        }
+
+        return PromptLibrary.substitute(
+            template: PromptLibrary.kcExpandInitial,
+            replacements: [
+                "CARD_ID": existingCard.id.uuidString,
+                "CARD_TYPE": existingCard.cardType ?? "employment",
+                "TITLE": existingCard.name,
+                "ORGANIZATION": existingCard.organization ?? "(not specified)",
+                "TIME_PERIOD": existingCard.timePeriod ?? "(not specified)",
+                "FACT_COUNT": String(factCount),
+                "EXISTING_FACTS_JSON": existingFactsJSON,
+                "EXISTING_BULLETS_JSON": existingBulletsJSON,
+                "EXISTING_TECHNOLOGIES": existingTechnologies,
+                "EXISTING_SOURCES": existingSources,
+                "NEW_ARTIFACTS": newArtifactsSection.isEmpty ? "(No new artifacts)" : newArtifactsSection
+            ]
+        )
     }
 }

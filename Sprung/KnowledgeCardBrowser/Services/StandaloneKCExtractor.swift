@@ -26,15 +26,13 @@ class StandaloneKCExtractor {
 
     // MARK: - Public API
 
-    /// Extract all sources into artifacts.
+    /// Extract all sources into artifacts. Artifacts are persisted to SwiftData as standalone (archived).
     /// - Parameters:
     ///   - sources: URLs to documents or git repositories
-    ///   - repository: In-memory repository to store artifacts for KC agent access
     ///   - onProgress: Progress callback (current, total, filename)
-    /// - Returns: Array of artifact JSON objects
+    /// - Returns: Array of artifact JSON objects with their IDs
     func extractAllSources(
         _ sources: [URL],
-        into repository: InMemoryArtifactRepository,
         onProgress: @escaping (Int, Int, String) -> Void
     ) async throws -> [JSON] {
         var artifacts: [JSON] = []
@@ -46,10 +44,10 @@ class StandaloneKCExtractor {
 
             do {
                 if isGitRepository(url) {
-                    let artifact = try await extractGitRepository(url, into: repository)
+                    let artifact = try await extractGitRepository(url)
                     artifacts.append(artifact)
                 } else {
-                    let artifact = try await extractDocument(url, into: repository)
+                    let artifact = try await extractDocument(url)
                     artifacts.append(artifact)
                 }
             } catch {
@@ -61,15 +59,10 @@ class StandaloneKCExtractor {
         return artifacts
     }
 
-    /// Load archived artifacts from SwiftData into the repository.
-    /// - Parameters:
-    ///   - artifactIds: Set of artifact IDs to load
-    ///   - repository: In-memory repository to store loaded artifacts
-    /// - Returns: Array of loaded artifact JSON objects
-    func loadArchivedArtifacts(
-        _ artifactIds: Set<String>,
-        into repository: InMemoryArtifactRepository
-    ) async -> [JSON] {
+    /// Load archived artifacts from SwiftData.
+    /// - Parameter artifactIds: Set of artifact IDs to load
+    /// - Returns: Array of artifact JSON objects
+    func loadArchivedArtifacts(_ artifactIds: Set<String>) -> [JSON] {
         guard let store = sessionStore else { return [] }
 
         var loadedArtifacts: [JSON] = []
@@ -80,31 +73,7 @@ class StandaloneKCExtractor {
                 continue
             }
 
-            // Convert SwiftData record to JSON
-            var artifactJSON = JSON()
-            artifactJSON["id"].string = record.id.uuidString
-            artifactJSON["filename"].string = record.sourceFilename
-            artifactJSON["source_type"].string = record.sourceType
-            artifactJSON["extracted_text"].string = record.extractedContent
-            artifactJSON["sha256"].string = record.sourceHash
-
-            // Parse metadata JSON
-            if let metadataJSONString = record.metadataJSON,
-               let data = metadataJSONString.data(using: .utf8),
-               let metadata = try? JSON(data: data) {
-                if let summary = metadata["summary"].string {
-                    artifactJSON["summary"].string = summary
-                }
-                if let brief = metadata["brief_description"].string {
-                    artifactJSON["brief_description"].string = brief
-                }
-                if let title = metadata["title"].string {
-                    artifactJSON["metadata"]["title"].string = title
-                }
-            }
-
-            // Add to in-memory repository for KC agent access
-            await repository.addArtifactRecord(artifactJSON)
+            let artifactJSON = artifactRecordToJSON(record)
             loadedArtifacts.append(artifactJSON)
 
             Logger.debug("📦 StandaloneKCExtractor: Loaded archived artifact: \(record.sourceFilename)", category: .ai)
@@ -113,9 +82,40 @@ class StandaloneKCExtractor {
         return loadedArtifacts
     }
 
+    /// Convert OnboardingArtifactRecord to JSON format
+    func artifactRecordToJSON(_ record: OnboardingArtifactRecord) -> JSON {
+        var artifactJSON = JSON()
+        artifactJSON["id"].string = record.id.uuidString
+        artifactJSON["filename"].string = record.sourceFilename
+        artifactJSON["source_type"].string = record.sourceType
+        artifactJSON["extracted_text"].string = record.extractedContent
+        artifactJSON["sha256"].string = record.sourceHash
+
+        // Parse metadata JSON
+        if let metadataJSONString = record.metadataJSON,
+           let data = metadataJSONString.data(using: .utf8),
+           let metadata = try? JSON(data: data) {
+            if let summary = metadata["summary"].string {
+                artifactJSON["summary"].string = summary
+            }
+            if let brief = metadata["brief_description"].string {
+                artifactJSON["brief_description"].string = brief
+            }
+            if let title = metadata["title"].string {
+                artifactJSON["metadata"]["title"].string = title
+            }
+            // Include summary_metadata if present
+            if !metadata["summary_metadata"].dictionaryValue.isEmpty {
+                artifactJSON["summary_metadata"] = metadata["summary_metadata"]
+            }
+        }
+
+        return artifactJSON
+    }
+
     // MARK: - Private: Document Extraction
 
-    private func extractDocument(_ url: URL, into repository: InMemoryArtifactRepository) async throws -> JSON {
+    private func extractDocument(_ url: URL) async throws -> JSON {
         guard let service = extractionService else {
             throw StandaloneKCError.extractionServiceNotAvailable
         }
@@ -135,7 +135,7 @@ class StandaloneKCExtractor {
             throw StandaloneKCError.extractionFailed("No content extracted from \(url.lastPathComponent)")
         }
 
-        // Build artifact JSON for repository
+        // Build artifact JSON
         var artifactJSON = JSON()
         artifactJSON["id"].string = artifact.id
         artifactJSON["filename"].string = artifact.filename
@@ -153,11 +153,9 @@ class StandaloneKCExtractor {
         artifactJSON["summary"].string = summary
         artifactJSON["brief_description"].string = String(artifact.extractedContent.prefix(200))
 
-        // Store in repository for KC agent access
-        await repository.addArtifactRecord(artifactJSON)
-
-        // Also persist to SwiftData as standalone artifact (session = nil, immediately archived)
-        persistArtifactToSwiftData(artifactJSON)
+        // Persist to SwiftData as standalone artifact (session = nil, immediately archived)
+        let artifactId = persistArtifactToSwiftData(artifactJSON)
+        artifactJSON["id"].string = artifactId  // Use the SwiftData ID
 
         return artifactJSON
     }
@@ -170,7 +168,7 @@ class StandaloneKCExtractor {
         return FileManager.default.fileExists(atPath: gitDir.path, isDirectory: &isDirectory) && isDirectory.boolValue
     }
 
-    private func extractGitRepository(_ url: URL, into repository: InMemoryArtifactRepository) async throws -> JSON {
+    private func extractGitRepository(_ url: URL) async throws -> JSON {
         // For git repos, we do a simpler analysis without the full GitIngestionKernel
         // to avoid heavy dependencies. We extract basic repo info and file structure.
         let repoName = url.lastPathComponent
@@ -191,11 +189,9 @@ class StandaloneKCExtractor {
         artifactJSON["summary_metadata"]["document_type"].string = "git_repository"
         artifactJSON["summary_metadata"]["technologies"].arrayObject = gitInfo.technologies
 
-        // Store in repository for KC agent access
-        await repository.addArtifactRecord(artifactJSON)
-
-        // Also persist to SwiftData as standalone artifact (session = nil, immediately archived)
-        persistArtifactToSwiftData(artifactJSON)
+        // Persist to SwiftData as standalone artifact (session = nil, immediately archived)
+        let artifactId = persistArtifactToSwiftData(artifactJSON)
+        artifactJSON["id"].string = artifactId  // Use the SwiftData ID
 
         return artifactJSON
     }
@@ -302,17 +298,19 @@ class StandaloneKCExtractor {
 
     /// Persist artifact to SwiftData as a standalone artifact (no session, immediately archived).
     /// This allows KC Browser extractions to be reused in future onboarding interviews.
-    private func persistArtifactToSwiftData(_ artifactJSON: JSON) {
+    /// - Returns: The artifact ID (UUID string) of the persisted record
+    @discardableResult
+    private func persistArtifactToSwiftData(_ artifactJSON: JSON) -> String {
         guard let store = sessionStore else {
             Logger.debug("📦 StandaloneKCExtractor: No session store, skipping persistence", category: .ai)
-            return
+            return artifactJSON["id"].stringValue
         }
 
         // Check for existing artifact by hash to avoid duplicates
         if let hash = artifactJSON["sha256"].string,
-           store.findExistingArtifactByHash(hash) != nil {
-            Logger.debug("📦 StandaloneKCExtractor: Artifact already exists, skipping", category: .ai)
-            return
+           let existing = store.findExistingArtifactByHash(hash) {
+            Logger.debug("📦 StandaloneKCExtractor: Artifact already exists, returning existing ID", category: .ai)
+            return existing.id.uuidString
         }
 
         let sourceType = artifactJSON["source_type"].string ?? "document"
@@ -345,7 +343,7 @@ class StandaloneKCExtractor {
         }
 
         // Persist as standalone artifact (session = nil)
-        _ = store.addStandaloneArtifact(
+        let record = store.addStandaloneArtifact(
             sourceType: sourceType,
             sourceFilename: filename,
             extractedContent: extractedContent,
@@ -354,5 +352,6 @@ class StandaloneKCExtractor {
         )
 
         Logger.info("📦 StandaloneKCExtractor: Persisted artifact to SwiftData: \(filename)", category: .ai)
+        return record.id.uuidString
     }
 }

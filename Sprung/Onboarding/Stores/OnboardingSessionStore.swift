@@ -442,4 +442,136 @@ final class OnboardingSessionStore: SwiftDataStore {
         }
         return Set(csv.split(separator: ",").map { String($0) })
     }
+
+    // MARK: - Artifact Export for KC Agents
+
+    /// Export session artifacts to a temporary filesystem directory for KC agent access.
+    /// Creates a folder per artifact with extracted_text.txt, summary.txt, and card_inventory.json.
+    /// - Returns: URL of the temporary directory containing exported artifacts
+    func exportArtifactsToFilesystem(_ session: OnboardingSession) throws -> URL {
+        // Create temp directory
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sprung-artifacts-\(UUID().uuidString)")
+
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+        // Export each artifact to its own folder
+        for artifact in session.artifacts {
+            let artifactDir = tempDir.appendingPathComponent(artifact.artifactFolderName)
+            try FileManager.default.createDirectory(at: artifactDir, withIntermediateDirectories: true)
+
+            // Write extracted text
+            if !artifact.extractedContent.isEmpty {
+                let textPath = artifactDir.appendingPathComponent("extracted_text.txt")
+                try artifact.extractedContent.write(to: textPath, atomically: true, encoding: .utf8)
+            }
+
+            // Parse metadataJSON for summary and card_inventory
+            if let metadataString = artifact.metadataJSON,
+               let metadataData = metadataString.data(using: .utf8) {
+                let metadata = try JSON(data: metadataData)
+
+                // Write summary
+                let summary = metadata["summary"].stringValue
+                if !summary.isEmpty {
+                    let summaryPath = artifactDir.appendingPathComponent("summary.txt")
+                    try summary.write(to: summaryPath, atomically: true, encoding: .utf8)
+                }
+
+                // Write card inventory if present
+                let cardInventoryString = metadata["card_inventory"].stringValue
+                if !cardInventoryString.isEmpty {
+                    let inventoryPath = artifactDir.appendingPathComponent("card_inventory.json")
+                    // Pretty-print if possible
+                    if let data = cardInventoryString.data(using: .utf8),
+                       let parsed = try? JSON(data: data),
+                       let prettyData = try? parsed.rawData(options: .prettyPrinted),
+                       let prettyString = String(data: prettyData, encoding: .utf8) {
+                        try prettyString.write(to: inventoryPath, atomically: true, encoding: .utf8)
+                    } else {
+                        try cardInventoryString.write(to: inventoryPath, atomically: true, encoding: .utf8)
+                    }
+                }
+            }
+        }
+
+        Logger.info("📁 Exported \(session.artifacts.count) artifacts to \(tempDir.path)", category: .ai)
+        return tempDir
+    }
+
+    /// Export specific artifacts by ID to a temporary filesystem directory.
+    /// Used by standalone KC generation (artifacts not in a session).
+    /// - Parameter artifactIds: Set of artifact IDs to export
+    /// - Returns: URL of the temporary directory containing exported artifacts
+    func exportArtifactsByIds(_ artifactIds: Set<String>) throws -> URL {
+        // Create temp directory
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sprung-artifacts-\(UUID().uuidString)")
+
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+        // Find and export each artifact
+        var exportedCount = 0
+        for idString in artifactIds {
+            guard let artifact = findArtifactById(idString) else {
+                Logger.warning("⚠️ Artifact not found for export: \(idString)", category: .ai)
+                continue
+            }
+
+            try exportArtifact(artifact, to: tempDir)
+            exportedCount += 1
+        }
+
+        Logger.info("📁 Exported \(exportedCount) artifacts to \(tempDir.path)", category: .ai)
+        return tempDir
+    }
+
+    /// Export a single artifact to a directory
+    private func exportArtifact(_ artifact: OnboardingArtifactRecord, to directory: URL) throws {
+        let artifactDir = directory.appendingPathComponent(artifact.artifactFolderName)
+        try FileManager.default.createDirectory(at: artifactDir, withIntermediateDirectories: true)
+
+        // Write extracted text
+        if !artifact.extractedContent.isEmpty {
+            let textPath = artifactDir.appendingPathComponent("extracted_text.txt")
+            try artifact.extractedContent.write(to: textPath, atomically: true, encoding: .utf8)
+        }
+
+        // Parse metadataJSON for summary and card_inventory
+        if let metadataString = artifact.metadataJSON,
+           let metadataData = metadataString.data(using: .utf8),
+           let metadata = try? JSON(data: metadataData) {
+
+            // Write summary
+            let summary = metadata["summary"].stringValue
+            if !summary.isEmpty {
+                let summaryPath = artifactDir.appendingPathComponent("summary.txt")
+                try summary.write(to: summaryPath, atomically: true, encoding: .utf8)
+            }
+
+            // Write card inventory if present
+            let cardInventoryString = metadata["card_inventory"].stringValue
+            if !cardInventoryString.isEmpty {
+                let inventoryPath = artifactDir.appendingPathComponent("card_inventory.json")
+                if let data = cardInventoryString.data(using: .utf8),
+                   let parsed = try? JSON(data: data),
+                   let prettyData = try? parsed.rawData(options: .prettyPrinted),
+                   let prettyString = String(data: prettyData, encoding: .utf8) {
+                    try prettyString.write(to: inventoryPath, atomically: true, encoding: .utf8)
+                } else {
+                    try cardInventoryString.write(to: inventoryPath, atomically: true, encoding: .utf8)
+                }
+            }
+        }
+    }
+
+    /// Clean up an exported artifact directory
+    func cleanupExportedArtifacts(at url: URL) {
+        do {
+            try FileManager.default.removeItem(at: url)
+            Logger.info("🧹 Cleaned up exported artifacts", category: .ai)
+        } catch {
+            Logger.warning("⚠️ Failed to cleanup exported artifacts: \(error)", category: .ai)
+        }
+    }
 }

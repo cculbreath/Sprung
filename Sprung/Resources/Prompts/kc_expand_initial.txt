@@ -1,0 +1,84 @@
+## Existing Knowledge Card to Expand
+
+**Card ID**: {CARD_ID}
+**Card Type**: {CARD_TYPE}
+**Title**: {TITLE}
+**Organization**: {ORGANIZATION}
+**Time Period**: {TIME_PERIOD}
+
+### Current Facts ({FACT_COUNT} total)
+
+The existing card contains these facts. You MUST preserve ALL of them:
+
+```json
+{EXISTING_FACTS_JSON}
+```
+
+### Current Suggested Bullets
+
+```json
+{EXISTING_BULLETS_JSON}
+```
+
+### Current Technologies
+
+{EXISTING_TECHNOLOGIES}
+
+### Current Sources
+
+{EXISTING_SOURCES}
+
+---
+
+## New Evidence Documents
+
+These NEW documents have been identified as containing additional evidence for this card:
+
+{NEW_ARTIFACTS}
+
+## Your Task
+
+1. **List available files** using `list_directory` with `path: "."` to see new artifact filenames
+2. **Read the new artifacts** using `read_file`
+3. **Extract NEW facts** not already in the existing card
+4. **Merge facts** - combine existing facts with new facts
+5. **Update suggested bullets** to incorporate new evidence
+6. **Add new technologies** discovered in the new sources
+7. **Call `return_result`** with the EXPANDED output
+
+## Expansion Requirements
+
+- **Minimum fact count**: {FACT_COUNT} + at least 1 new fact
+- **All original facts**: MUST be preserved
+- **New sources**: Add to sources_used list
+- **Suggested bullets**: Update to reflect new information
+
+## Output Format
+
+Same structure as extraction, but EXPANDED:
+
+```json
+{
+  "result": {
+    "card_id": "{CARD_ID}",
+    "card_type": "{CARD_TYPE}",
+    "title": "{TITLE}",
+    "facts": [
+      // ALL existing facts PLUS new facts
+    ],
+    "suggested_bullets": [
+      // Updated bullets incorporating new evidence
+    ],
+    "technologies": [
+      // Existing PLUS new technologies
+    ],
+    "date_range": "{TIME_PERIOD}",
+    "organization": "{ORGANIZATION}",
+    "sources_used": [
+      // Original sources PLUS new artifact IDs
+    ]
+  }
+}
+```
+
+Begin by reading the new artifact files to find additional evidence.
