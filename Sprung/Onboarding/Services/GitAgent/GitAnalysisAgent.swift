@@ -133,7 +133,7 @@ class GitAnalysisAgent {
 
                 turnCount += 1
                 await emitEvent(.gitAgentTurnStarted(turn: turnCount, maxTurns: maxTurns))
-                await updateProgress("Turn \(turnCount): Thinking...")
+                await updateProgress("(Turn \(turnCount)) Calling LLM...")
 
                 // Add turn marker to transcript
                 if let agentId = agentId {
@@ -236,8 +236,8 @@ class GitAnalysisAgent {
 
                 // Log parallel execution
                 let toolNames = executableCalls.map { $0.function.name ?? "unknown" }
+                await updateProgress("(Turn \(turnCount)) Running: \(toolNames.joined(separator: ", "))")
                 if executableCalls.count > 1 {
-                    await updateProgress("Executing \(executableCalls.count) tools in parallel: \(toolNames.joined(separator: ", "))")
                     Logger.info("🚀 GitAgent: Executing \(executableCalls.count) tools in parallel", category: .ai)
                 }
 
@@ -263,10 +263,9 @@ class GitAnalysisAgent {
                 }
 
                 // Add all tool results to messages (order doesn't matter for tool responses)
+                await updateProgress("(Turn \(turnCount)) Processing results...")
                 for (toolId, toolName, result) in results {
                     let toolDetail = extractToolDetail(name: toolName, arguments: executableCalls.first { $0.id == toolId }?.function.arguments ?? "")
-                    let progressMessage = toolDetail.isEmpty ? "Completed: \(toolName)" : "Completed: \(toolName) - \(toolDetail)"
-                    await updateProgress(progressMessage)
                     messages.append(buildToolResultMessage(toolCallId: toolId, result: result))
 
                     // Add tool call to transcript

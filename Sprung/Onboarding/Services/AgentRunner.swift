@@ -128,6 +128,8 @@ actor AgentRunner {
     private let maxTextOnlyRetries: Int = 2
     private var invalidCompletionRetries: Int = 0
     private let maxInvalidCompletionRetries: Int = 2
+    private var emptyResponseRetries: Int = 0
+    private let maxEmptyResponseRetries: Int = 3
 
     // MARK: - Initialization
 
@@ -179,6 +181,7 @@ actor AgentRunner {
 
                 turnCount += 1
                 await logTranscript(type: .system, content: "Turn \(turnCount) started")
+                await updateStatus("(Turn \(turnCount)) Calling LLM...")
 
                 // Call LLM with tools
                 let tools = await toolExecutor.getToolSchemas()
@@ -192,15 +195,45 @@ actor AgentRunner {
                 )
 
                 // Emit token usage event if available
+                let outputTokens = response.usage?.completionTokens ?? 0
                 if let usage = response.usage {
                     await emitTokenUsage(
                         modelId: config.modelId,
                         inputTokens: usage.promptTokens ?? 0,
-                        outputTokens: usage.completionTokens ?? 0,
+                        outputTokens: outputTokens,
                         cachedTokens: usage.promptTokensDetails?.cachedTokens ?? 0,
                         reasoningTokens: usage.completionTokensDetails?.reasoningTokens ?? 0
                     )
                 }
+
+                // Detect empty API response (0 output tokens indicates API issue, not model choice)
+                let hasContent = response.choices?.first?.message?.content?.isEmpty == false
+                let hasToolCalls = response.choices?.first?.message?.toolCalls?.isEmpty == false
+                let isEmptyResponse = outputTokens == 0 && !hasContent && !hasToolCalls
+
+                if isEmptyResponse {
+                    emptyResponseRetries += 1
+                    await logTranscript(
+                        type: .error,
+                        content: "Empty API response (attempt \(emptyResponseRetries)/\(maxEmptyResponseRetries))",
+                        details: "0 output tokens - likely rate limit or API overload"
+                    )
+
+                    if emptyResponseRetries >= maxEmptyResponseRetries {
+                        throw AgentRunnerError.invalidOutput("API returned empty responses \(maxEmptyResponseRetries) times")
+                    }
+
+                    // Wait before retrying (exponential backoff: 1s, 2s, 4s)
+                    let delay = pow(2.0, Double(emptyResponseRetries - 1))
+                    try await Task.sleep(for: .seconds(delay))
+
+                    // Don't increment turnCount for empty responses - retry the same turn
+                    turnCount -= 1
+                    continue
+                }
+
+                // Got a real response - reset empty response counter
+                emptyResponseRetries = 0
 
                 // Process response
                 guard let choice = response.choices?.first,
@@ -296,6 +329,8 @@ actor AgentRunner {
 
                 // Execute non-completion tools in parallel
                 let executableCalls = toolCalls.filter { $0.function.name != "return_result" }
+                let toolNames = executableCalls.compactMap { $0.function.name }.joined(separator: ", ")
+                await updateStatus("(Turn \(turnCount)) Running: \(toolNames)")
 
                 let results = await withTaskGroup(of: (String, String, String).self) { group in
                     for toolCall in executableCalls {
@@ -327,6 +362,7 @@ actor AgentRunner {
                 }
 
                 // Add tool results to messages
+                await updateStatus("(Turn \(turnCount)) Processing results...")
                 for (toolId, toolName, result) in results {
                     await logTranscript(
                         type: .toolResult,
@@ -487,6 +523,16 @@ actor AgentRunner {
                 content: content,
                 details: details
             )
+        }
+    }
+
+    // MARK: - Status Updates
+
+    private func updateStatus(_ message: String) async {
+        guard let tracker = tracker else { return }
+
+        await MainActor.run {
+            tracker.updateStatusMessage(agentId: config.agentId, message: message)
         }
     }
 

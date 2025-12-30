@@ -14,51 +14,47 @@ struct BackgroundAgentStatusBar: View {
     let extractionMessage: String?
     let isExtractionInProgress: Bool
 
+    /// Maximum number of agents to display before showing "+N more"
+    private let maxVisibleAgents = 3
+
     private var hasActivity: Bool {
         tracker.isAnyRunning || isExtractionInProgress
     }
 
-    private var statusMessage: String {
-        // Priority: show extraction message if active, otherwise agent status
-        if isExtractionInProgress, let message = extractionMessage {
-            return message
-        }
-
-        // Show first running agent's status
-        if let runningAgent = tracker.runningAgents.first {
-            let agentName = runningAgent.name
-            if let status = runningAgent.statusMessage {
-                return "\(agentName): \(status)"
-            }
-            return "\(agentName): Processing..."
-        }
-
-        return "Processing..."
+    /// Running agents to display (limited to maxVisibleAgents)
+    private var visibleAgents: [TrackedAgent] {
+        Array(tracker.runningAgents.prefix(maxVisibleAgents))
     }
 
-    private var agentSummary: String? {
-        let count = tracker.runningAgentCount
-        guard count > 1 else { return nil }
-        return "+\(count - 1) more"
+    /// Number of agents not shown
+    private var hiddenAgentCount: Int {
+        max(0, tracker.runningAgentCount - maxVisibleAgents)
+    }
+
+    /// Format status message for an agent
+    private func statusMessage(for agent: TrackedAgent) -> String {
+        if let status = agent.statusMessage {
+            return "\(agent.name): \(status)"
+        }
+        return "\(agent.name): Processing..."
     }
 
     var body: some View {
         if hasActivity {
-            HStack(spacing: 10) {
-                // Animated spinner
-                ProgressView()
-                    .controlSize(.small)
+            HStack(spacing: 4) {
+                // Show extraction progress if active
+                if isExtractionInProgress, let message = extractionMessage {
+                    AgentStatusItem(message: message)
+                }
 
-                // Status message
-                Text(statusMessage)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                // Show each running agent with its own spinner
+                ForEach(visibleAgents) { agent in
+                    AgentStatusItem(message: statusMessage(for: agent))
+                }
 
-                // Additional agents indicator
-                if let summary = agentSummary {
-                    Text(summary)
+                // Show overflow indicator if more agents are hidden
+                if hiddenAgentCount > 0 {
+                    Text("+\(hiddenAgentCount) more")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                         .padding(.horizontal, 6)
@@ -67,10 +63,10 @@ struct BackgroundAgentStatusBar: View {
                         .clipShape(Capsule())
                 }
 
-                Spacer()
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(Color(nsColor: .controlBackgroundColor).opacity(0.8))
@@ -87,5 +83,27 @@ struct BackgroundAgentStatusBar: View {
             }
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }
+    }
+}
+
+/// Individual agent status item with spinner and message
+private struct AgentStatusItem: View {
+    let message: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ProgressView()
+                .controlSize(.small)
+
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color.secondary.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 }
