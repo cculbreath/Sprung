@@ -75,6 +75,7 @@ struct AgentTranscriptEntry: Identifiable, Codable {
         case assistant = "assistant"
         case error = "error"
         case toolResult = "tool_result"
+        case turn = "turn"  // LLM turn marker
     }
 
     init(

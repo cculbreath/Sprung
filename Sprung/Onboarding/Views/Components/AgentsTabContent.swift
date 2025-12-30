@@ -421,6 +421,7 @@ struct TranscriptEntryView: View {
         case .assistant: return "brain"
         case .error: return "exclamationmark.triangle.fill"
         case .toolResult: return "checkmark.circle"
+        case .turn: return "arrow.trianglehead.2.clockwise.rotate.90"
         }
     }
 
@@ -431,6 +432,7 @@ struct TranscriptEntryView: View {
         case .assistant: return "Assistant"
         case .error: return "Error"
         case .toolResult: return "Tool Result"
+        case .turn: return "Turn"
         }
     }
 
@@ -441,6 +443,7 @@ struct TranscriptEntryView: View {
         case .assistant: return .green
         case .error: return .red
         case .toolResult: return .blue
+        case .turn: return .cyan
         }
     }
 
@@ -451,6 +454,7 @@ struct TranscriptEntryView: View {
         case .assistant: return Color.green.opacity(0.05)
         case .error: return Color.red.opacity(0.05)
         case .toolResult: return Color.blue.opacity(0.05)
+        case .turn: return Color.cyan.opacity(0.05)
         }
     }
 

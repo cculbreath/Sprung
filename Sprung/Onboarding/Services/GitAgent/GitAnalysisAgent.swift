@@ -135,6 +135,16 @@ class GitAnalysisAgent {
                 await emitEvent(.gitAgentTurnStarted(turn: turnCount, maxTurns: maxTurns))
                 await updateProgress("Turn \(turnCount): Thinking...")
 
+                // Add turn marker to transcript
+                if let agentId = agentId {
+                    tracker?.appendTranscript(
+                        agentId: agentId,
+                        entryType: .turn,
+                        content: "Turn \(turnCount) of \(maxTurns)",
+                        details: nil
+                    )
+                }
+
                 // Call LLM with tools
                 let response = try await facade.executeWithTools(
                     messages: messages,
