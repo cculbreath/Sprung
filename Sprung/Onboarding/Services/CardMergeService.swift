@@ -24,6 +24,7 @@ actor CardMergeService {
     }
 
     /// Merge all document inventories into unified card inventory
+    /// Uses GPT-5 with strict schema enforcement for guaranteed valid output
     /// - Parameter timeline: Skeleton timeline for employment context
     /// - Returns: MergedCardInventory
     func mergeInventories(timeline: JSON?) async throws -> MergedCardInventory {
@@ -38,7 +39,6 @@ actor CardMergeService {
         Logger.info("🔄 CardMergeService: Checking \(artifacts.artifactRecords.count) artifacts for card_inventory", category: .ai)
 
         for artifact in artifacts.artifactRecords {
-            let artifactId = artifact["id"].stringValue
             let filename = artifact["filename"].stringValue
 
             // Check what keys exist on this artifact
@@ -73,55 +73,26 @@ actor CardMergeService {
             timeline: timeline
         )
 
-        Logger.info("🔄 Merging \(inventories.count) document inventories", category: .ai)
+        Logger.info("🔄 Merging \(inventories.count) document inventories using OpenAI", category: .ai)
 
-        // Call LLM with schema for guaranteed JSON structure
-        // Model configured in Settings - requires 65K output tokens (use Gemini 2.5+)
-        let mergeModelId = UserDefaults.standard.string(forKey: "onboardingCardMergeModelId") ?? "gemini-2.5-flash"
-        let jsonString = try await facade.generateStructuredJSON(
-            prompt: prompt,
-            modelId: mergeModelId,
-            jsonSchema: CardMergePrompts.jsonSchema
-        )
-
-        guard let jsonData = jsonString.data(using: .utf8) else {
-            throw CardMergeError.invalidResponse
-        }
-
-        // Don't use .convertFromSnakeCase - MergedCardInventory has explicit CodingKeys
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        // Use GPT-5 with strict schema enforcement (128K output tokens, guaranteed schema compliance)
+        let mergeModelId = UserDefaults.standard.string(forKey: "onboardingCardMergeModelId") ?? "gpt-5"
 
         do {
-            let mergedInventory = try decoder.decode(MergedCardInventory.self, from: jsonData)
+            let mergedInventory: MergedCardInventory = try await facade.executeStructuredWithSchema(
+                prompt: prompt,
+                modelId: mergeModelId,
+                as: MergedCardInventory.self,
+                schema: CardMergePrompts.openAISchema,
+                schemaName: "merged_card_inventory",
+                temperature: 0.2,
+                backend: .openAI
+            )
+
             Logger.info("✅ Merged inventory: \(mergedInventory.mergedCards.count) cards from \(inventories.count) documents", category: .ai)
             return mergedInventory
         } catch {
-            if let decodingError = error as? DecodingError {
-                switch decodingError {
-                case .keyNotFound(let key, let context):
-                    Logger.error("❌ Missing key '\(key.stringValue)' at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))", category: .ai)
-                case .typeMismatch(let type, let context):
-                    Logger.error("❌ Type mismatch for \(type) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))", category: .ai)
-                case .valueNotFound(let type, let context):
-                    Logger.error("❌ Value not found for \(type) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))", category: .ai)
-                case .dataCorrupted(let context):
-                    Logger.error("❌ Data corrupted at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))", category: .ai)
-                    Logger.error("   Underlying: \(context.underlyingError?.localizedDescription ?? "none")", category: .ai)
-                @unknown default:
-                    Logger.error("❌ Unknown decoding error: \(error.localizedDescription)", category: .ai)
-                }
-            }
-            Logger.error("❌ Failed to decode merged inventory JSON: \(error.localizedDescription)", category: .ai)
-            Logger.error("📦 Raw merge JSON (first 1000 chars): \(jsonString.prefix(1000))", category: .ai)
-            // Save full JSON to file for inspection
-            let logsDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
-                .appendingPathComponent("Sprung")
-            if let logsDir = logsDir {
-                let debugFile = logsDir.appendingPathComponent("failed_merge_\(UUID().uuidString.prefix(8)).json")
-                try? jsonString.write(to: debugFile, atomically: true, encoding: .utf8)
-                Logger.error("📦 Full JSON saved to: \(debugFile.path)", category: .ai)
-            }
+            Logger.error("❌ Card merge failed: \(error.localizedDescription)", category: .ai)
             throw CardMergeError.invalidResponse
         }
     }
