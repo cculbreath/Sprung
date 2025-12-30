@@ -891,10 +891,11 @@ final class OnboardingInterviewCoordinator {
         await eventBus.publish(.pendingExtractionUpdated(nil, statusMessage: nil))
         await eventBus.publish(.processingStateChanged(false))
 
-        // Deactivate document collection UI
+        // Deactivate document collection UI and clear waiting state
         await MainActor.run {
             ui.isDocumentCollectionActive = false
         }
+        await container.sessionUIState.setDocumentCollectionActive(false)
 
         // Send message to LLM
         await sendChatMessage("I'm done uploading documents. (Note: Some document extractions were cancelled.) Please assess the completeness of my evidence.")
@@ -902,15 +903,25 @@ final class OnboardingInterviewCoordinator {
         Logger.info("✅ Extraction agents cancelled and document upload phase finished", category: .ai)
     }
 
+    /// Activate document collection UI and gate all tools until user clicks "Done with Uploads"
+    func activateDocumentCollection() async {
+        await MainActor.run {
+            ui.isDocumentCollectionActive = true
+        }
+        await container.sessionUIState.setDocumentCollectionActive(true)
+        Logger.info("📂 Document collection activated - tools gated until 'Done with Uploads'", category: .ai)
+    }
+
     /// Finish uploads and trigger card merge directly (bypassing LLM tool call).
     /// Called when user clicks "Done with Uploads" button.
     func finishUploadsAndMergeCards() async {
         Logger.info("📋 User finished uploads - triggering card merge directly", category: .ai)
 
-        // Deactivate document collection UI
+        // Deactivate document collection UI and clear waiting state (re-enable tools)
         await MainActor.run {
             ui.isDocumentCollectionActive = false
         }
+        await container.sessionUIState.setDocumentCollectionActive(false)
 
         // Track merge in Agents pane
         let agentId = await MainActor.run {

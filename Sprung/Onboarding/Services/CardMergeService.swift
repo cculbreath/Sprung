@@ -75,7 +75,7 @@ actor CardMergeService {
 
         Logger.info("🔄 Merging \(inventories.count) document inventories using OpenRouter", category: .ai)
 
-        // Use OpenRouter with strict schema enforcement (GPT-5+ recommended for 128K output tokens)
+        // Use OpenRouter with strict schema enforcement
         let mergeModelId = UserDefaults.standard.string(forKey: "onboardingCardMergeModelId") ?? "openai/gpt-5"
 
         do {

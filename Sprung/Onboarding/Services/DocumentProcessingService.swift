@@ -108,69 +108,34 @@ actor DocumentProcessingService {
         let artifactId = artifact.id
         Logger.info("✅ Text extraction completed: \(artifactId)", category: .ai)
 
-        // Step 3: Generate summary (non-blocking - runs after extraction)
-        statusCallback?("Generating summary for \(filename)...")
-        var documentSummary: DocumentSummary?
-        if let facade = llmFacade {
-            do {
-                documentSummary = try await facade.generateDocumentSummary(
-                    content: extractedText,
-                    filename: filename
-                )
-                Logger.info("✅ Summary generated for \(artifactId) (\(documentSummary?.summary.count ?? 0) chars)", category: .ai)
-            } catch {
-                // Summary generation failure is not fatal - log and continue
-                Logger.warning("⚠️ Summary generation failed for \(filename): \(error.localizedDescription)", category: .ai)
-                // Create a fallback summary from the extracted text
-                documentSummary = DocumentSummary.fallback(from: extractedText, filename: filename)
-            }
-        } else {
-            Logger.warning("⚠️ LLMFacade not configured, using fallback summary for \(filename)", category: .ai)
-            documentSummary = DocumentSummary.fallback(from: extractedText, filename: filename)
-        }
-
-        // Step 4: Generate card inventory (inventory determines document type itself)
-        // For non-resume PDFs, send the full PDF directly to Gemini for maximum fidelity
-        // Resume PDFs still use extracted text since we need the text for timeline building
-        // FALLBACK: If Gemini PDF extraction fails (RECITATION, MAX_TOKENS, decode error), use text-based
-        statusCallback?("Analyzing document for knowledge cards...")
-        var inventory: DocumentInventory?
+        // Steps 3 & 4: Generate summary and card inventory IN PARALLEL
+        // Both are independent LLM calls that only need extractedText
+        statusCallback?("Running summary + card inventory in parallel...")
         let isPDF = fileURL.pathExtension.lowercased() == "pdf"
         let isResume = documentType == "resume"
+        let pdfData: Data? = isPDF && !isResume ? try? Data(contentsOf: fileURL) : nil
 
-        do {
-            if isPDF && !isResume {
-                // Use direct PDF inventory for non-resume documents - Gemini sees full content
-                Logger.info("📄 Using direct PDF inventory (full document access)", category: .ai)
-                let pdfData = try Data(contentsOf: fileURL)
-                do {
-                    inventory = try await inventoryService.inventoryDocumentFromPDF(
-                        documentId: artifactId,
-                        filename: filename,
-                        pdfData: pdfData
-                    )
-                } catch {
-                    // Fallback to text-based inventory on Gemini failure
-                    Logger.warning("⚠️ PDF inventory failed (\(error.localizedDescription)), falling back to text-based", category: .ai)
-                    inventory = try await inventoryService.inventoryDocument(
-                        documentId: artifactId,
-                        filename: filename,
-                        content: extractedText
-                    )
-                }
-            } else {
-                // Use text-based inventory for resumes and non-PDFs
-                Logger.info("📄 Using text-based inventory", category: .ai)
-                inventory = try await inventoryService.inventoryDocument(
-                    documentId: artifactId,
-                    filename: filename,
-                    content: extractedText
-                )
-            }
-            Logger.info("✅ Card inventory generated: \(inventory?.proposedCards.count ?? 0) potential cards", category: .ai)
-        } catch {
-            Logger.warning("⚠️ Card inventory generation failed: \(error.localizedDescription)", category: .ai)
-        }
+        // Launch both tasks in parallel
+        async let summaryTask: DocumentSummary? = generateSummary(
+            extractedText: extractedText,
+            filename: filename,
+            facade: llmFacade
+        )
+        async let inventoryTask: DocumentInventory? = generateInventory(
+            artifactId: artifactId,
+            filename: filename,
+            extractedText: extractedText,
+            pdfData: pdfData,
+            isPDF: isPDF,
+            isResume: isResume
+        )
+
+        // Await both results
+        let (documentSummary, inventory) = await (summaryTask, inventoryTask)
+        let summaryChars = documentSummary?.summary.count ?? 0
+        let cardCount = inventory?.proposedCards.count ?? 0
+        statusCallback?("Summary (\(summaryChars) chars) + \(cardCount) cards complete")
+        Logger.info("✅ Parallel processing complete: summary=\(summaryChars) chars, cards=\(cardCount)", category: .ai)
 
         // Step 5: Create artifact record
         var artifactRecord = JSON()
@@ -263,5 +228,74 @@ actor DocumentProcessingService {
         }
         Logger.info("📦 Artifact record created: \(artifactId)", category: .ai)
         return artifactRecord
+    }
+
+    // MARK: - Parallel Processing Helpers
+
+    /// Generate document summary (runs in parallel with inventory)
+    private func generateSummary(
+        extractedText: String,
+        filename: String,
+        facade: LLMFacade?
+    ) async -> DocumentSummary? {
+        guard let facade = facade else {
+            Logger.warning("⚠️ LLMFacade not configured, using fallback summary for \(filename)", category: .ai)
+            return DocumentSummary.fallback(from: extractedText, filename: filename)
+        }
+        do {
+            let summary = try await facade.generateDocumentSummary(
+                content: extractedText,
+                filename: filename
+            )
+            Logger.info("✅ Summary generated for \(filename) (\(summary.summary.count) chars)", category: .ai)
+            return summary
+        } catch {
+            Logger.warning("⚠️ Summary generation failed for \(filename): \(error.localizedDescription)", category: .ai)
+            return DocumentSummary.fallback(from: extractedText, filename: filename)
+        }
+    }
+
+    /// Generate card inventory (runs in parallel with summary)
+    /// Falls back to text-based extraction if PDF extraction fails
+    private func generateInventory(
+        artifactId: String,
+        filename: String,
+        extractedText: String,
+        pdfData: Data?,
+        isPDF: Bool,
+        isResume: Bool
+    ) async -> DocumentInventory? {
+        do {
+            if isPDF && !isResume, let pdfData = pdfData {
+                // Use direct PDF inventory for non-resume documents
+                Logger.info("📄 Using direct PDF inventory (full document access)", category: .ai)
+                do {
+                    return try await inventoryService.inventoryDocumentFromPDF(
+                        documentId: artifactId,
+                        filename: filename,
+                        pdfData: pdfData
+                    )
+                } catch {
+                    // Fallback to text-based inventory on Gemini failure
+                    Logger.warning("⚠️ PDF inventory failed (\(error.localizedDescription)), falling back to text-based", category: .ai)
+                    return try await inventoryService.inventoryDocument(
+                        documentId: artifactId,
+                        filename: filename,
+                        content: extractedText
+                    )
+                }
+            } else {
+                // Use text-based inventory for resumes and non-PDFs
+                Logger.info("📄 Using text-based inventory", category: .ai)
+                return try await inventoryService.inventoryDocument(
+                    documentId: artifactId,
+                    filename: filename,
+                    content: extractedText
+                )
+            }
+        } catch {
+            Logger.warning("⚠️ Card inventory generation failed: \(error.localizedDescription)", category: .ai)
+            return nil
+        }
     }
 }

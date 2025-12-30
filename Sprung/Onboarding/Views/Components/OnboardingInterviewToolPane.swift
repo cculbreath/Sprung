@@ -112,8 +112,18 @@ struct OnboardingInterviewToolPane: View {
                 switch coordinator.ui.phase {
                 case .phase3WritingCorpus:
                     Task { await coordinator.uploadWritingSamples(urls) }
+                case .phase2DeepDive:
+                    // Phase 2: upload files and re-activate document collection UI if it was closed
+                    let wasDocCollectionActive = coordinator.ui.isDocumentCollectionActive
+                    Task {
+                        await coordinator.uploadFilesDirectly(urls)
+                        // Only re-activate if document collection was previously closed (after Done with Uploads)
+                        if !wasDocCollectionActive {
+                            await coordinator.activateDocumentCollection()
+                        }
+                    }
                 default:
-                    // Phase 1, Phase 2, or complete - use direct upload
+                    // Phase 1 or complete - use direct upload without document collection
                     Task { await coordinator.uploadFilesDirectly(urls) }
                 }
             }
@@ -261,9 +271,7 @@ struct OnboardingInterviewToolPane: View {
                             Task {
                                 await coordinator.uploadFilesDirectly(urls, extractionMethod: extractionMethod)
                                 // Re-activate document collection UI to allow re-merge
-                                await MainActor.run {
-                                    coordinator.ui.isDocumentCollectionActive = true
-                                }
+                                await coordinator.activateDocumentCollection()
                             }
                         },
                         onSelectFiles: { openDirectUploadPanel() },
@@ -271,9 +279,7 @@ struct OnboardingInterviewToolPane: View {
                             Task {
                                 await coordinator.startGitRepoAnalysis(repoURL)
                                 // Re-activate document collection UI to allow re-merge
-                                await MainActor.run {
-                                    coordinator.ui.isDocumentCollectionActive = true
-                                }
+                                await coordinator.activateDocumentCollection()
                             }
                         }
                     )

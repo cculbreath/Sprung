@@ -50,7 +50,7 @@ struct ToolGating {
                     return .blocked(reason: "Cannot execute non-timeline tools while waiting for validation (state: \(waitingState.rawValue))")
                 }
 
-            case .selection, .upload, .processing:
+            case .selection, .upload, .processing, .documentCollection:
                 // All tools blocked during these waiting states
                 return .blocked(reason: "Cannot execute tools while waiting for user input (state: \(waitingState.rawValue))")
             }
@@ -85,7 +85,7 @@ struct ToolGating {
             // During validation, only timeline tools are available
             return OnboardingToolName.timelineTools.intersection(phaseAllowedTools).subtracting(excludedTools)
 
-        case .selection, .upload, .processing:
+        case .selection, .upload, .processing, .documentCollection:
             // All tools blocked during these waiting states
             return []
         }
@@ -114,6 +114,7 @@ actor SessionUIState: OnboardingEventEmitter {
         case validation
         case extraction
         case processing
+        case documentCollection  // Waiting for user to click "Done with Uploads"
     }
     private(set) var waitingState: WaitingState?
     // MARK: - Pending UI Prompts
@@ -286,6 +287,19 @@ actor SessionUIState: OnboardingEventEmitter {
     func setStreamingStatus(_ status: String?) {
         pendingStreamingStatus = status
     }
+
+    // MARK: - Document Collection State
+
+    /// Set document collection active state
+    /// When active, all tools are gated until user clicks "Done with Uploads"
+    func setDocumentCollectionActive(_ active: Bool) async {
+        let newWaitingState: WaitingState? = active ? .documentCollection : nil
+        await setWaitingState(newWaitingState)
+        if active {
+            Logger.info("📂 Document collection mode activated - tools gated until 'Done with Uploads'", category: .ai)
+        }
+    }
+
     // MARK: - Tool Gating Logic
     // Tool Gating Strategy:
     // When the system enters a waiting state (upload, selection, validation, processing),

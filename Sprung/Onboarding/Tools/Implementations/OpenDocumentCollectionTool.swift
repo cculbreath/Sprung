@@ -58,10 +58,8 @@ struct OpenDocumentCollectionTool: InterviewTool {
 
     func execute(_ params: JSON) async throws -> ToolResult {
         let message = params["message"].string
-        // Activate the document collection UI
-        await MainActor.run {
-            coordinator.ui.isDocumentCollectionActive = true
-        }
+        // Activate document collection UI and gate all tools
+        await coordinator.activateDocumentCollection()
 
         Logger.info("📂 Document collection UI activated", category: .ai)
 

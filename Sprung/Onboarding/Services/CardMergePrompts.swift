@@ -86,7 +86,7 @@ enum CardMergePrompts {
             ],
             required: ["card_id", "card_type", "title", "primary_source", "supporting_sources",
                       "combined_key_facts", "combined_technologies", "combined_outcomes",
-                      "evidence_quality", "extraction_priority"]
+                      "date_range", "evidence_quality", "extraction_priority"]
         )
 
         // Documentation gap schema
