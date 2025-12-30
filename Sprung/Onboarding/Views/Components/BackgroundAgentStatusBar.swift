@@ -70,13 +70,11 @@ struct BackgroundAgentStatusBar: View {
                 Spacer()
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(Color(nsColor: .windowBackgroundColor).opacity(0.9))
-            .overlay(alignment: .top) {
-                Rectangle()
-                    .fill(Color.secondary.opacity(0.2))
-                    .frame(height: 0.5)
-            }
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(nsColor: .controlBackgroundColor).opacity(0.8))
+            )
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }

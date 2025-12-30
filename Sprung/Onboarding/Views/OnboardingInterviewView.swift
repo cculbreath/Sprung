@@ -66,16 +66,19 @@ struct OnboardingInterviewView: View {
                 .scaleEffect(cardAppeared ? 1 : 0.88)
                 .offset(y: cardAppeared ? 0 : 22)
                 .blur(radius: cardAppeared ? 0 : 12)
-                Spacer(minLength: 16) // centers body relative to bottom bar
 
-                // Full-width background agent status bar
+                // Background agent status bar - positioned directly below card
                 BackgroundAgentStatusBar(
                     tracker: coordinator.agentActivityTracker,
                     extractionMessage: coordinator.ui.extractionStatusMessage,
                     isExtractionInProgress: coordinator.ui.isExtractionInProgress
                 )
+                .frame(width: 1040) // Match card width
+                .padding(.top, 4)
                 .animation(.easeInOut(duration: 0.2), value: coordinator.agentActivityTracker.isAnyRunning)
                 .animation(.easeInOut(duration: 0.2), value: coordinator.ui.isExtractionInProgress)
+
+                Spacer(minLength: 16) // centers body relative to bottom bar
 
                 OnboardingInterviewBottomBar(
                     showBack: shouldShowBackButton(for: coordinator.wizardTracker.currentStep),
