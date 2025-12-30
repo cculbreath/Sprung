@@ -67,6 +67,16 @@ struct OnboardingInterviewView: View {
                 .offset(y: cardAppeared ? 0 : 22)
                 .blur(radius: cardAppeared ? 0 : 12)
                 Spacer(minLength: 16) // centers body relative to bottom bar
+
+                // Full-width background agent status bar
+                BackgroundAgentStatusBar(
+                    tracker: coordinator.agentActivityTracker,
+                    extractionMessage: coordinator.ui.extractionStatusMessage,
+                    isExtractionInProgress: coordinator.ui.isExtractionInProgress
+                )
+                .animation(.easeInOut(duration: 0.2), value: coordinator.agentActivityTracker.isAnyRunning)
+                .animation(.easeInOut(duration: 0.2), value: coordinator.ui.isExtractionInProgress)
+
                 OnboardingInterviewBottomBar(
                     showBack: shouldShowBackButton(for: coordinator.wizardTracker.currentStep),
                     continueTitle: continueButtonTitle(for: coordinator.wizardTracker.currentStep),
@@ -447,30 +457,30 @@ private struct ValidationPromptSheet: View {
     @ViewBuilder
     private var validationContent: some View {
         if validation.dataType == OnboardingDataType.skeletonTimeline.rawValue {
-            ScrollView {
-                TimelineTabContent(
-                    coordinator: coordinator,
-                    mode: .validation,
-                    onValidationSubmit: { status in
-                        Task {
-                            await coordinator.submitValidationAndResume(
-                                status: status,
-                                updatedData: nil,
-                                changes: nil,
-                                notes: nil
-                            )
-                        }
-                    },
-                    onSubmitChangesOnly: {
-                        Task {
-                            await coordinator.clearValidationPromptAndNotifyLLM(
-                                message: "User made changes to the timeline cards and submitted them for review. Please reassess the updated timeline, ask any clarifying questions if needed, or submit for validation again when ready."
-                            )
-                        }
+            // TimelineTabContent has its own internal ScrollView with sticky footer
+            // Do NOT wrap in an outer ScrollView or the footer buttons will scroll away
+            TimelineTabContent(
+                coordinator: coordinator,
+                mode: .validation,
+                onValidationSubmit: { status in
+                    Task {
+                        await coordinator.submitValidationAndResume(
+                            status: status,
+                            updatedData: nil,
+                            changes: nil,
+                            notes: nil
+                        )
                     }
-                )
-                .padding(16)
-            }
+                },
+                onSubmitChangesOnly: {
+                    Task {
+                        await coordinator.clearValidationPromptAndNotifyLLM(
+                            message: "User made changes to the timeline cards and submitted them for review. Please reassess the updated timeline, ask any clarifying questions if needed, or submit for validation again when ready."
+                        )
+                    }
+                }
+            )
+            .padding(16)
         } else if validation.dataType == "knowledge_card" {
             KnowledgeCardValidationSheetContent(
                 prompt: validation,

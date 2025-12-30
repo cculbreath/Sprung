@@ -110,6 +110,9 @@ struct TrackedAgent: Identifiable, Codable {
     var outputTokens: Int = 0
     var cachedTokens: Int = 0
 
+    /// Current status message for running agents (e.g., "Analyzing repository structure...")
+    var statusMessage: String?
+
     /// Total tokens processed (input + output only).
     /// Note: cachedTokens are already included in inputTokens by the API,
     /// so we don't add them separately to avoid double-counting.
@@ -330,6 +333,15 @@ class AgentActivityTracker {
             "📊 Agent token usage: +\(input) in, +\(output) out (total: \(agents[index].totalTokens))",
             category: .ai
         )
+    }
+
+    /// Update the current status message for a running agent
+    func updateStatusMessage(agentId: String, message: String?) {
+        guard let index = agents.firstIndex(where: { $0.id == agentId }) else {
+            return // Silent fail - status updates are non-critical
+        }
+
+        agents[index].statusMessage = message
     }
 
     /// Kill (cancel) a running agent

@@ -72,11 +72,9 @@ struct OnboardingInterviewChatPanel: View {
             .padding(.top, sectionSpacing)
             .padding(.horizontal, horizontalPadding)
 
-            // Status Bar
+            // Status Bar (model info only - extraction status is shown in full-width BackgroundAgentStatusBar)
             OnboardingChatStatusBar(
                 modelStatusDescription: modelStatusDescription,
-                isExtractionInProgress: coordinator.ui.isExtractionInProgress,
-                extractionStatusMessage: coordinator.ui.extractionStatusMessage,
                 onOpenSettings: onOpenSettings
             )
             .padding(.top, 8)

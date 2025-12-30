@@ -1,10 +1,9 @@
 import SwiftUI
 
-/// Status bar shown at the bottom of the chat panel
+/// Status bar shown at the bottom of the chat panel (model info only)
+/// Note: Extraction/agent status is now shown in the full-width BackgroundAgentStatusBar
 struct OnboardingChatStatusBar: View {
     let modelStatusDescription: String
-    let isExtractionInProgress: Bool
-    let extractionStatusMessage: String?
     let onOpenSettings: () -> Void
 
     var body: some View {
@@ -18,18 +17,6 @@ struct OnboardingChatStatusBar: View {
             .buttonStyle(.link)
             .font(.caption)
             Spacer()
-            // Extraction indicator (non-blocking - chat remains enabled)
-            if isExtractionInProgress {
-                HStack(spacing: 6) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text(extractionStatusMessage ?? "Extracting...")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .transition(.opacity.combined(with: .scale(scale: 0.9)))
-            }
         }
-        .animation(.easeInOut(duration: 0.2), value: isExtractionInProgress)
     }
 }

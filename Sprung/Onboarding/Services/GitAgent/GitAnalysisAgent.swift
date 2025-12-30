@@ -554,6 +554,10 @@ class GitAnalysisAgent {
         Logger.info("🤖 GitAgent: \(message)", category: .ai)
         // Update extraction status without blocking chat input
         await emitEvent(.extractionStateChanged(true, statusMessage: "Git analysis: \(message)"))
+        // Update agent-specific status message for detail view
+        if let agentId = agentId {
+            tracker?.updateStatusMessage(agentId: agentId, message: message)
+        }
     }
 
     /// Extract a human-readable detail from tool arguments for logging

@@ -333,13 +333,15 @@ struct AgentTranscriptView: View {
 
     private var agentFooter: some View {
         HStack {
-            // Running indicator
+            // Running indicator with status message
             HStack(spacing: 6) {
                 ProgressView()
                     .scaleEffect(0.7)
-                Text("Processing...")
+                Text(agent.statusMessage ?? "Processing...")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
 
             Spacer()
