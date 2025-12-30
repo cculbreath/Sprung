@@ -114,7 +114,8 @@ struct KnowledgeCardCollectionView: View {
             systemImage: "list.bullet.clipboard",
             description: Text("The interviewer is analyzing your timeline to plan knowledge card collection...")
         )
-        .frame(height: 150)
+        .frame(maxWidth: .infinity, minHeight: 150)
+        .frame(maxHeight: .infinity)
     }
 
     private var planListSection: some View {

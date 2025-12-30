@@ -176,7 +176,8 @@ struct TimelineTabContent: View {
             systemImage: "calendar.badge.clock",
             description: Text("Timeline cards will appear here as they're created during the interview.")
         )
-        .frame(height: 180)
+        .frame(maxWidth: .infinity, minHeight: 180)
+        .frame(maxHeight: .infinity)
     }
 
     // MARK: - Edit Mode (Editable Cards)
@@ -235,7 +236,8 @@ struct TimelineTabContent: View {
             systemImage: "calendar.badge.plus",
             description: Text("Add entries to build your experience timeline.")
         )
-        .frame(height: 180)
+        .frame(maxWidth: .infinity, minHeight: 180)
+        .frame(maxHeight: .infinity)
     }
 
     // MARK: - Footer Buttons
