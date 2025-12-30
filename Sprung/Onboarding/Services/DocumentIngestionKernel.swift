@@ -9,8 +9,7 @@ import Foundation
 import SwiftyJSON
 
 /// Document ingestion kernel using Gemini (or configured model) for text extraction
-actor DocumentIngestionKernel: ArtifactIngestionKernel {
-    let kernelType: IngestionSource = .document
+actor DocumentIngestionKernel {
 
     private let documentProcessingService: DocumentProcessingService
     private let eventBus: EventCoordinator
@@ -44,9 +43,7 @@ actor DocumentIngestionKernel: ArtifactIngestionKernel {
             source: .document,
             filename: filename,
             planItemId: planItemId,
-            startTime: Date(),
-            status: .pending,
-            statusMessage: "Starting extraction..."
+            status: .pending
         )
 
         // Start async processing
@@ -62,14 +59,6 @@ actor DocumentIngestionKernel: ArtifactIngestionKernel {
         activeTasks[pendingId] = task
 
         return pending
-    }
-
-    func completeIngestion(pendingId: String) async throws -> IngestionResult {
-        // This is called by the coordinator, but for documents we handle completion
-        // in the async task. This method exists for protocol conformance.
-        throw NSError(domain: "DocumentIngestionKernel", code: 1, userInfo: [
-            NSLocalizedDescriptionKey: "Document ingestion completes asynchronously via callback"
-        ])
     }
 
     // MARK: - Private
@@ -102,11 +91,7 @@ actor DocumentIngestionKernel: ArtifactIngestionKernel {
                 record["plan_item_id"].string = planItemId
             }
 
-            let result = IngestionResult(
-                artifactId: record["id"].stringValue,
-                artifactRecord: record,
-                source: .document
-            )
+            let result = IngestionResult(artifactRecord: record)
 
             // Notify coordinator (coordinator manages processing state for batches)
             await ingestionCoordinator?.handleIngestionCompleted(pendingId: pendingId, result: result)

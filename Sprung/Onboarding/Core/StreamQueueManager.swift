@@ -41,7 +41,7 @@ actor StreamQueueManager {
     }
     /// Start collecting tool responses for a batch (parallel tool calls)
     /// Called when responseCompleted fires and we know the final count
-    func startToolCallBatch(expectedCount: Int, callIds: [String]) {
+    func startToolCallBatch(expectedCount: Int, callIds _: [String]) {
         Logger.info("📦 [\(instanceId.uuidString.prefix(8))] Tool call batch started: expecting \(expectedCount) responses, already collected \(collectedToolResponses.count)", category: .ai)
 
         // Process any responses that arrived before we knew the batch count

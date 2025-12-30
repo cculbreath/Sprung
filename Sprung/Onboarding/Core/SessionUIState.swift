@@ -118,9 +118,6 @@ actor SessionUIState: OnboardingEventEmitter {
     }
     private(set) var waitingState: WaitingState?
     // MARK: - Pending UI Prompts
-    private(set) var pendingUploadRequest: OnboardingUploadRequest?
-    private(set) var pendingChoicePrompt: OnboardingChoicePrompt?
-    private(set) var pendingValidationPrompt: OnboardingValidationPrompt?
     private(set) var pendingExtraction: OnboardingPendingExtraction?
     private(set) var pendingStreamingStatus: String?
 
@@ -210,19 +207,16 @@ actor SessionUIState: OnboardingEventEmitter {
     // MARK: - Pending Prompts
     /// Set pending upload request
     func setPendingUpload(_ request: OnboardingUploadRequest?) async {
-        pendingUploadRequest = request
         let newWaitingState: WaitingState? = request != nil ? .upload : nil
         await setWaitingState(newWaitingState)
     }
     /// Set pending choice prompt
     func setPendingChoice(_ prompt: OnboardingChoicePrompt?) async {
-        pendingChoicePrompt = prompt
         let newWaitingState: WaitingState? = prompt != nil ? .selection : nil
         await setWaitingState(newWaitingState)
     }
     /// Set pending validation prompt
     func setPendingValidation(_ prompt: OnboardingValidationPrompt?) async {
-        pendingValidationPrompt = prompt
         // Only set waiting state for validation mode, not editor mode
         // Editor mode allows tools to continue (e.g., timeline card creation)
         let newWaitingState: WaitingState? = (prompt != nil && prompt?.mode == .validation) ? .validation : nil
@@ -366,9 +360,6 @@ actor SessionUIState: OnboardingEventEmitter {
         isActive = false
         isProcessing = false
         waitingState = nil
-        pendingUploadRequest = nil
-        pendingChoicePrompt = nil
-        pendingValidationPrompt = nil
         pendingExtraction = nil
         pendingStreamingStatus = nil
         excludedTools = []

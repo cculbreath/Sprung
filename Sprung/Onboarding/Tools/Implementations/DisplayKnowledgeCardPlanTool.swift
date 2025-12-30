@@ -149,8 +149,6 @@ struct KnowledgeCardPlanItem: Identifiable, Equatable, Codable {
     let description: String?
     var status: Status
     let timelineEntryId: String?
-    /// Artifact IDs assigned to this card (set by card merge)
-    var assignedArtifactIds: [String]
 
     init(
         id: String,
@@ -158,8 +156,7 @@ struct KnowledgeCardPlanItem: Identifiable, Equatable, Codable {
         type: ItemType,
         description: String? = nil,
         status: Status = .pending,
-        timelineEntryId: String? = nil,
-        assignedArtifactIds: [String] = []
+        timelineEntryId: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -167,6 +164,5 @@ struct KnowledgeCardPlanItem: Identifiable, Equatable, Codable {
         self.description = description
         self.status = status
         self.timelineEntryId = timelineEntryId
-        self.assignedArtifactIds = assignedArtifactIds
     }
 }

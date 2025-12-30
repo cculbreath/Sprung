@@ -107,49 +107,6 @@ struct KnowledgeCardDraft: Identifiable, Equatable, Codable {
         content.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
     }
 }
-struct EvidenceItem: Equatable, Codable {
-    var quote: String
-    var source: String
-    var locator: String?
-    var artifactSHA: String?
-
-    enum CodingKeys: String, CodingKey {
-        case quote
-        case source
-        case locator
-        case artifactSHA = "artifact_sha"
-    }
-
-    init(
-        quote: String,
-        source: String,
-        locator: String? = nil,
-        artifactSHA: String? = nil
-    ) {
-        self.quote = quote
-        self.source = source
-        self.locator = locator
-        self.artifactSHA = artifactSHA
-    }
-    init(json: JSON) {
-        quote = json["quote"].stringValue
-        source = json["source"].stringValue
-        locator = json["locator"].string
-        artifactSHA = json["artifact_sha"].string
-    }
-    func toJSON() -> JSON {
-        var json = JSON()
-        json["quote"].string = quote
-        json["source"].string = source
-        if let locator {
-            json["locator"].string = locator
-        }
-        if let artifactSHA {
-            json["artifact_sha"].string = artifactSHA
-        }
-        return json
-    }
-}
 struct ArtifactRecord: Identifiable, Equatable, Codable {
     var id: String
     var filename: String
@@ -199,29 +156,6 @@ struct ArtifactRecord: Identifiable, Equatable, Codable {
         return Self.estimateTokens(summary)
     }
 
-    init(
-        id: String = UUID().uuidString,
-        filename: String,
-        title: String? = nil,
-        contentType: String? = nil,
-        sizeInBytes: Int = 0,
-        sha256: String? = nil,
-        extractedContent: String = "",
-        summary: String? = nil,
-        briefDescription: String? = nil,
-        metadata: JSON = JSON()
-    ) {
-        self.id = id
-        self.filename = filename
-        self.title = title
-        self.contentType = contentType
-        self.sizeInBytes = sizeInBytes
-        self.sha256 = sha256
-        self.extractedContent = extractedContent
-        self.summary = summary
-        self.briefDescription = briefDescription
-        self.metadata = metadata
-    }
     init(json: JSON) {
         let identifier = json["id"].string
         let sha = json["sha256"].string
@@ -246,23 +180,5 @@ struct ArtifactRecord: Identifiable, Equatable, Codable {
         // Try direct field first, then summary_metadata
         briefDescription = json["brief_description"].string ?? json["summary_metadata"]["brief_description"].string
         metadata = json["metadata"]
-    }
-    func toJSON() -> JSON {
-        var json = JSON()
-        json["id"].string = id
-        json["filename"].string = filename
-        if let title {
-            json["title"].string = title
-        }
-        if let contentType {
-            json["content_type"].string = contentType
-        }
-        json["size_bytes"].int = sizeInBytes
-        if let sha256 {
-            json["sha256"].string = sha256
-        }
-        json["extracted_text"].string = extractedContent
-        json["metadata"] = metadata
-        return json
     }
 }

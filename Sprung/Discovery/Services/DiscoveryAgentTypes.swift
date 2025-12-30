@@ -35,24 +35,6 @@ struct JobSelection {
     let reasoning: String
 }
 
-struct EventEvaluationResult {
-    let recommendation: String
-    let rationale: String
-    let expectedValue: String?
-    let concerns: [String]
-    let preparationTips: [String]
-
-    var attendanceRecommendation: AttendanceRecommendation {
-        switch recommendation.lowercased() {
-        case "strong_yes": return .strongYes
-        case "yes": return .yes
-        case "maybe": return .maybe
-        case "skip": return .skip
-        default: return .maybe
-        }
-    }
-}
-
 struct EventPrepResult {
     let goal: String
     let pitchScript: String
@@ -103,25 +85,6 @@ struct TargetCompanyResult {
             possibleOpeners: possibleOpeners
         )
     }
-}
-
-struct NetworkingActionsResult {
-    let actions: [NetworkingActionItem]
-}
-
-struct NetworkingActionItem {
-    let contactName: String
-    let contactId: String?
-    let actionType: String
-    let actionDescription: String
-    let urgency: String
-    let suggestedOpener: String?
-}
-
-struct OutreachMessageResult {
-    let subject: String?
-    let message: String
-    let notes: String?
 }
 
 // MARK: - Generated Types (from LLM responses)

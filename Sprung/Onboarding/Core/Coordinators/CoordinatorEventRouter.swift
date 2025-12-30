@@ -213,9 +213,4 @@ final class CoordinatorEventRouter {
         await eventBus.publish(.llmExecuteDeveloperMessage(payload: payload))
         Logger.info("📋 Triggered dossier collection during extraction", category: .ai)
     }
-
-    /// Present next KC validation after user completes one
-    func presentNextKCValidationIfQueued() async {
-        await knowledgeCardWorkflow.presentNextKCValidationIfQueued()
-    }
 }

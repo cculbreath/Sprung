@@ -27,9 +27,7 @@ final class AppDependencies {
     let careerKeywordStore: CareerKeywordStore
     let applicantProfileStore: ApplicantProfileStore
     let onboardingSessionStore: OnboardingSessionStore
-    let documentExtractionService: DocumentExtractionService
     let onboardingCoordinator: OnboardingInterviewCoordinator
-    private let llmService: OpenRouterServiceBackend
     let reasoningStreamManager: ReasoningStreamManager
     let resumeReviseViewModel: ResumeReviseViewModel
     let searchOpsCoordinator: DiscoveryCoordinator
@@ -100,11 +98,9 @@ final class AppDependencies {
             enabledLLMStore: enabledLLMStore,
             modelValidationService: appState.modelValidationService
         )
-        self.llmService = llmService
         appState.llmService = llmService
         // Create DocumentExtractionService with LLMFacade (unified LLM interface)
         let documentExtractionService = DocumentExtractionService(llmFacade: llmFacade)
-        self.documentExtractionService = documentExtractionService
         // Register OpenAI backend if API key is configured
         if let openAIKey = APIKeyManager.get(.openAI)?.trimmingCharacters(in: .whitespacesAndNewlines),
            !openAIKey.isEmpty {

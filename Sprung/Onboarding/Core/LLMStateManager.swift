@@ -42,20 +42,12 @@ actor LLMStateManager {
     private var pendingForcedToolChoice: String?
 
     // MARK: - Tool Names
-    /// Get the current set of allowed tool names
-    func getAllowedToolNames() -> Set<String> {
-        allowedToolNames
-    }
     /// Update the allowed tool names
     func setAllowedToolNames(_ tools: Set<String>) {
         allowedToolNames = tools
         Logger.info("🔧 Allowed tools updated in LLMStateManager: \(tools.count) tools", category: .ai)
     }
     // MARK: - Response Tracking
-    /// Get the last response ID
-    func getLastResponseId() -> String? {
-        lastResponseId
-    }
     /// Get the last clean response ID (safe to restore from - no pending tool calls)
     func getLastCleanResponseId() -> String? {
         lastCleanResponseId
@@ -123,11 +115,6 @@ actor LLMStateManager {
         Logger.info("🎯 UI tool pending: \(toolName) (callId: \(callId.prefix(8)))", category: .ai)
     }
 
-    /// Check if there's a pending UI tool awaiting user action
-    func hasPendingUIToolCall() -> Bool {
-        pendingUIToolCall != nil
-    }
-
     /// Get the pending UI tool call info
     func getPendingUIToolCall() -> (callId: String, toolName: String)? {
         pendingUIToolCall
@@ -156,11 +143,6 @@ actor LLMStateManager {
             Logger.info("📤 Flushing \(messages.count) queued developer message(s)", category: .ai)
         }
         return messages
-    }
-
-    /// Check if there are queued developer messages
-    func hasQueuedDeveloperMessages() -> Bool {
-        !queuedDeveloperMessages.isEmpty
     }
 
     // MARK: - Forced Tool Choice Override
@@ -211,14 +193,6 @@ actor LLMStateManager {
         Logger.info("🔄 Retry attempt \(pendingToolResponseRetryCount)/\(maxPendingToolResponseRetries) for pending tool responses", category: .ai)
         return pendingToolResponsePayloads
     }
-    /// Get pending tool response payloads (without incrementing retry count)
-    func getPendingToolResponses() -> [JSON] {
-        pendingToolResponsePayloads
-    }
-    /// Check if there are pending tool responses
-    func hasPendingToolResponses() -> Bool {
-        !pendingToolResponsePayloads.isEmpty
-    }
     /// Get the current retry count for pending tool responses (for exponential backoff calculation)
     func getPendingToolResponseRetryCount() -> Int {
         pendingToolResponseRetryCount
@@ -229,38 +203,6 @@ actor LLMStateManager {
             Logger.debug("✅ Pending tool responses cleared (acknowledged)", category: .ai)
             pendingToolResponsePayloads = []
             pendingToolResponseRetryCount = 0
-        }
-    }
-    // MARK: - Snapshot Support
-    struct Snapshot: Codable {
-        let lastCleanResponseId: String?  // Only store clean response ID (safe to restore from)
-        let currentModelId: String
-        let currentToolPaneCard: OnboardingToolPaneCard
-    }
-    /// Create a snapshot of LLM state for persistence
-    func createSnapshot() -> Snapshot {
-        Snapshot(
-            lastCleanResponseId: lastCleanResponseId,  // Store clean ID, not potentially mid-tool-loop ID
-            currentModelId: currentModelId,
-            currentToolPaneCard: currentToolPaneCard
-        )
-    }
-    /// Restore LLM state from a snapshot
-    /// Uses lastCleanResponseId which points to a response with no pending tool calls,
-    /// allowing the conversation to continue from server-side context.
-    func restoreFromSnapshot(_ snapshot: Snapshot) {
-        // Restore from clean response ID (safe to continue from)
-        lastResponseId = snapshot.lastCleanResponseId
-        lastCleanResponseId = snapshot.lastCleanResponseId
-        currentModelId = snapshot.currentModelId
-        currentToolPaneCard = snapshot.currentToolPaneCard
-        if let responseId = lastResponseId {
-            Logger.info("📝 Checkpoint restore: using clean response ID \(responseId.prefix(8))...", category: .ai)
-        } else {
-            Logger.info("📝 Checkpoint restore: no clean response ID, will start fresh", category: .ai)
-        }
-        if currentToolPaneCard != .none {
-            Logger.info("🎴 Restored ToolPane card: \(currentToolPaneCard.rawValue)", category: .ai)
         }
     }
     // MARK: - Reset

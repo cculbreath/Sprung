@@ -172,8 +172,6 @@ class NetworkingEventOpportunity: Identifiable {
 
     init() {}
 
-    var isPast: Bool { date < Date() }
-
     var needsDebrief: Bool { attended && status != .debriefed }
 
     var daysUntilEvent: Int? {
@@ -324,7 +322,6 @@ class NetworkingContact: Identifiable {
     // Notes
     var notes: String = ""
     var conversationNotes: String?
-    var tagsJSON: String?  // JSON encoded [String]
 
     // Value Indicators
     var canReferToJSON: String?  // JSON encoded [String]
@@ -391,17 +388,6 @@ class NetworkingContact: Identifiable {
         case (nil, nil): return nil
         }
     }
-
-    // JSON decode helpers
-    var tags: [String] {
-        get {
-            guard let json = tagsJSON else { return [] }
-            return (try? JSONDecoder().decode([String].self, from: Data(json.utf8))) ?? []
-        }
-        set {
-            tagsJSON = try? String(data: JSONEncoder().encode(newValue), encoding: .utf8)
-        }
-    }
 }
 
 // MARK: - Networking Interaction
@@ -421,15 +407,6 @@ enum InteractionType: String, Codable, CaseIterable {
     case slackDM = "Slack/Discord DM"
     case textMessage = "Text Message"
     case other = "Other"
-
-    var isOutbound: Bool {
-        switch self {
-        case .email, .linkedInMessage, .linkedInComment, .phoneCall, .textMessage, .slackDM:
-            return true
-        default:
-            return false
-        }
-    }
 }
 
 enum InteractionOutcome: String, Codable, CaseIterable {

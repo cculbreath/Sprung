@@ -190,7 +190,6 @@ private struct RootLeafDisclosureView: View {
                 if showAIIndicator {
                     AIModeIndicator(
                         mode: .solo,
-                        isCollection: false,
                         pathPattern: nil,
                         isPerEntry: false
                     )

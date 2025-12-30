@@ -10,8 +10,7 @@ import Foundation
 import SwiftyJSON
 
 /// Git repository ingestion kernel using async LLM agent via OpenRouter
-actor GitIngestionKernel: ArtifactIngestionKernel {
-    let kernelType: IngestionSource = .gitRepository
+actor GitIngestionKernel {
 
     private let eventBus: EventCoordinator
     private var llmFacade: LLMFacade?
@@ -63,9 +62,7 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
             source: .gitRepository,
             filename: repoName,
             planItemId: planItemId,
-            startTime: Date(),
-            status: .pending,
-            statusMessage: "Analyzing repository..."
+            status: .pending
         )
 
         // Register with agent activity tracker for UI visibility
@@ -98,12 +95,6 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
         }
 
         return pending
-    }
-
-    func completeIngestion(pendingId: String) async throws -> IngestionResult {
-        throw NSError(domain: "GitIngestionKernel", code: 1, userInfo: [
-            NSLocalizedDescriptionKey: "Git ingestion completes asynchronously via callback"
-        ])
     }
 
     // MARK: - Private Analysis
@@ -207,11 +198,7 @@ actor GitIngestionKernel: ArtifactIngestionKernel {
             record["extracted_text"].string = extractedParts.joined(separator: "\n")
             Logger.info("✅ Git card inventory: \(analysis.proposedCards.count) cards (\(skillCards.count) skills, \(projectCards.count) projects, \(achievementCards.count) achievements)", category: .ai)
 
-            let result = IngestionResult(
-                artifactId: record["id"].stringValue,
-                artifactRecord: record,
-                source: .gitRepository
-            )
+            let result = IngestionResult(artifactRecord: record)
 
             await ingestionCoordinator?.handleIngestionCompleted(pendingId: pendingId, result: result)
             // Note: DocumentArtifactMessenger.sendGitArtifact turns off the spinner after sending the developer message

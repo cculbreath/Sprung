@@ -17,7 +17,6 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
     private let state: StateCoordinator
     private let llmMessenger: LLMMessenger
     private let networkRouter: NetworkRouter
-    private let baseDeveloperMessage: String  // Sent once on first request, persists via previous_response_id
     private var isActive = false
     // MARK: - Initialization
     init(
@@ -27,7 +26,6 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
         toolRegistry: ToolRegistry,
         state: StateCoordinator
     ) {
-        self.baseDeveloperMessage = baseDeveloperMessage
         self.eventBus = eventBus
         self.state = state
         self.networkRouter = NetworkRouter(eventBus: eventBus)
@@ -88,24 +86,5 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
         } else {
             Logger.info("📝 Resuming interview with existing conversation context", category: .ai)
         }
-    }
-    func endInterview() {
-        isActive = false
-        Task {
-            await llmMessenger.deactivate()
-        }
-    }
-    func sendUserMessage(_ text: String) async throws {
-        guard isActive else { return }
-        await emit(.processingStateChanged(true, statusMessage: "Sending message..."))
-        // Emit message request event (§4.3)
-        var payload = JSON()
-        payload["text"].string = text
-        await emit(.llmSendUserMessage(payload: payload))
-    }
-    // MARK: - Model Configuration
-    /// Set the model ID for the LLM messenger
-    func setModelId(_ id: String) async {
-        await llmMessenger.setModelId(id)
     }
 }

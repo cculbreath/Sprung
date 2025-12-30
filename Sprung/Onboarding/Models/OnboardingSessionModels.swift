@@ -127,11 +127,6 @@ class OnboardingArtifactRecord {
 
     var session: OnboardingSession?
 
-    /// True if this artifact belongs to an active session (not archived)
-    var isInCurrentSession: Bool {
-        session != nil
-    }
-
     /// True if this artifact is archived (no session, available for reuse)
     var isArchived: Bool {
         session == nil

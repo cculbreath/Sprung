@@ -16,17 +16,6 @@ final class Template {
     @Relationship(deleteRule: .nullify)
     var resumes: [Resume]
 
-    /// Decoded manifest from manifestData
-    var manifest: TemplateManifest? {
-        guard let data = manifestData else { return nil }
-        do {
-            return try JSONDecoder().decode(TemplateManifest.self, from: data)
-        } catch {
-            Logger.error("Failed to decode template manifest: \(error)")
-            return nil
-        }
-    }
-
     init(
         id: UUID = UUID(),
         name: String,

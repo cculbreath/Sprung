@@ -47,22 +47,6 @@ struct TokenBudgetPolicy {
         case aboveTypical(Int)   // tokens over typical budget
         case warning(Int)        // tokens approaching hard stop
         case exceededHardStop(Int) // tokens over hard stop
-
-        var shouldLog: Bool {
-            switch self {
-            case .withinBudget:
-                return false
-            case .aboveTypical, .warning, .exceededHardStop:
-                return true
-            }
-        }
-
-        var isBlocking: Bool {
-            if case .exceededHardStop = self {
-                return true
-            }
-            return false
-        }
     }
 
     // MARK: - Budget Checking

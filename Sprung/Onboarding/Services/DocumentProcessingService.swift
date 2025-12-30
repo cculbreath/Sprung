@@ -28,12 +28,6 @@ actor DocumentProcessingService {
         Logger.info("📄 DocumentProcessingService initialized", category: .ai)
     }
 
-    func updateLLMFacade(_ facade: LLMFacade?) {
-        self.llmFacade = facade
-        Task {
-            await inventoryService.updateLLMFacade(facade)
-        }
-    }
     // MARK: - Public API
     /// Process a document file and return an artifact record
     /// Note: The fileURL is expected to already be in storage (copied by UploadInteractionHandler)

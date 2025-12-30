@@ -75,18 +75,6 @@ struct DiscoveryResponseParser {
         return NetworkingEventsResult(events: events)
     }
 
-    func parseEvaluation(_ response: String) throws -> EventEvaluationResult {
-        let json = try extractAndParseJSON(from: response)
-
-        return EventEvaluationResult(
-            recommendation: json["recommendation"].stringValue,
-            rationale: json["rationale"].stringValue,
-            expectedValue: json["expected_value"].string,
-            concerns: json["concerns"].arrayValue.map { $0.stringValue },
-            preparationTips: json["preparation_tips"].arrayValue.map { $0.stringValue }
-        )
-    }
-
     func parsePrep(_ response: String) throws -> EventPrepResult {
         let json = try extractAndParseJSON(from: response)
 
@@ -130,33 +118,6 @@ struct DiscoveryResponseParser {
             },
             opportunitiesIdentified: json["opportunities_identified"].arrayValue.map { $0.stringValue },
             nextSteps: json["next_steps"].arrayValue.map { $0.stringValue }
-        )
-    }
-
-    func parseActions(_ response: String) throws -> NetworkingActionsResult {
-        let json = try extractAndParseJSON(from: response)
-
-        return NetworkingActionsResult(
-            actions: json["actions"].arrayValue.map {
-                NetworkingActionItem(
-                    contactName: $0["contact_name"].stringValue,
-                    contactId: $0["contact_id"].string,
-                    actionType: $0["action_type"].stringValue,
-                    actionDescription: $0["action_description"].stringValue,
-                    urgency: $0["urgency"].stringValue,
-                    suggestedOpener: $0["suggested_opener"].string
-                )
-            }
-        )
-    }
-
-    func parseOutreach(_ response: String) throws -> OutreachMessageResult {
-        let json = try extractAndParseJSON(from: response)
-
-        return OutreachMessageResult(
-            subject: json["subject"].string,
-            message: json["message"].stringValue,
-            notes: json["notes"].string
         )
     }
 

@@ -10,9 +10,7 @@ import SwiftyJSON
 
 /// Result of an ingestion operation
 struct IngestionResult {
-    let artifactId: String
     let artifactRecord: JSON
-    let source: IngestionSource
 }
 
 /// Source type for ingestion
@@ -35,33 +33,7 @@ struct PendingArtifact: Identifiable, Equatable {
     let source: IngestionSource
     let filename: String
     let planItemId: String?
-    let startTime: Date
     var status: IngestionStatus
-    var statusMessage: String?
-}
-
-/// Protocol for artifact ingestion services
-/// Both document extraction and git analysis implement this
-protocol ArtifactIngestionKernel {
-    /// Unique identifier for this kernel type
-    var kernelType: IngestionSource { get }
-
-    /// Start ingestion and return immediately with a pending artifact ID
-    /// The actual processing happens asynchronously
-    func startIngestion(
-        source: URL,
-        planItemId: String?,
-        metadata: JSON
-    ) async throws -> PendingArtifact
-
-    /// Called internally when ingestion completes
-    /// Returns the completed artifact record
-    func completeIngestion(
-        pendingId: String
-    ) async throws -> IngestionResult
-
-    /// Cancel all active ingestion tasks
-    func cancelAllTasks() async
 }
 
 /// Events emitted by the ingestion system

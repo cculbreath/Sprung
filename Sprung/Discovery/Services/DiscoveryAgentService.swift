@@ -159,7 +159,6 @@ actor DiscoveryAgentService {
                 modelId: modelId,
                 reasoningEffort: reasoningEffort,
                 webSearchLocation: webSearchLocation,
-                temperature: nil,
                 onWebSearching: statusCallback.map { callback in
                     { await callback(.webSearching(context: searchContext)) }
                 },
@@ -223,15 +222,6 @@ actor DiscoveryAgentService {
         return try parser.parseEvents(response)
     }
 
-    func evaluateEvent(eventId: UUID) async throws -> EventEvaluationResult {
-        let systemPrompt = loadPromptTemplate(named: "discovery_evaluate_event")
-        let response = try await runAgent(
-            systemPrompt: systemPrompt,
-            userMessage: "Evaluate event \(eventId.uuidString) for attendance"
-        )
-        return try parser.parseEvaluation(response)
-    }
-
     func prepareForEvent(eventId: UUID, focusCompanies: [String] = [], goals: String? = nil) async throws -> EventPrepResult {
         let systemPrompt = loadPromptTemplate(named: "discovery_prepare_for_event")
         var userMessage = "Prepare me for event \(eventId.uuidString)"
@@ -279,24 +269,6 @@ actor DiscoveryAgentService {
             systemPrompt: systemPrompt,
             userMessage: "Generate my weekly job search reflection"
         )
-    }
-
-    func suggestNetworkingActions(focus: String = "balanced") async throws -> NetworkingActionsResult {
-        let systemPrompt = loadPromptTemplate(named: "discovery_suggest_networking_actions")
-        let response = try await runAgent(
-            systemPrompt: systemPrompt,
-            userMessage: "Suggest networking actions. Focus: \(focus)"
-        )
-        return try parser.parseActions(response)
-    }
-
-    func draftOutreachMessage(contactId: UUID, purpose: String, channel: String, tone: String = "professional") async throws -> OutreachMessageResult {
-        let systemPrompt = loadPromptTemplate(named: "discovery_draft_outreach_message")
-        let response = try await runAgent(
-            systemPrompt: systemPrompt,
-            userMessage: "Draft a \(channel) message to contact \(contactId.uuidString). Purpose: \(purpose). Tone: \(tone)"
-        )
-        return try parser.parseOutreach(response)
     }
 
     // TODO: Context source choice - may revisit (currently using knowledge cards + dossier)

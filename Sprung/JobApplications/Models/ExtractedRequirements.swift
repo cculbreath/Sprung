@@ -34,22 +34,4 @@ struct ExtractedRequirements: Codable {
     var isValid: Bool {
         !mustHave.isEmpty || !strongSignal.isEmpty
     }
-
-    /// All requirements flattened for search
-    var allRequirements: [String] {
-        mustHave + strongSignal + preferred + cultural
-    }
-
-    /// Empty/failed extraction
-    static var empty: ExtractedRequirements {
-        ExtractedRequirements(
-            mustHave: [],
-            strongSignal: [],
-            preferred: [],
-            cultural: [],
-            atsKeywords: [],
-            extractedAt: Date(),
-            extractionModel: nil
-        )
-    }
 }

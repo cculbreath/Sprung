@@ -303,7 +303,6 @@ actor EventCoordinator {
     #endif
     struct EventMetrics {
         var publishedCount: [EventTopic: Int] = [:]
-        var queueDepth: [EventTopic: Int] = [:]
         var lastPublishTime: [EventTopic: Date] = [:]
     }
     init() {

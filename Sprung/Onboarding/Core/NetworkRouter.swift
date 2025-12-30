@@ -22,13 +22,10 @@ actor NetworkRouter: OnboardingEventEmitter {
         let messageId: UUID
         var text: String
         var pendingFragment: String
-        let startedAt: Date
-        var firstDeltaLogged: Bool
         var toolCalls: [OnboardingMessage.ToolCallInfo]
     }
     private var streamingBuffers: [String: StreamBuffer] = [:]
     private var messageIds: [String: UUID] = [:]
-    private var lastMessageUUID: UUID?
     private var receivedOutputItemDone = false
     // Track tool call IDs for parallel tool call batching
     private var pendingToolCallIds: [String] = []
@@ -153,12 +150,9 @@ actor NetworkRouter: OnboardingEventEmitter {
                 messageId: messageId,
                 text: "",
                 pendingFragment: "",
-                startedAt: Date(),
-                firstDeltaLogged: false,
                 toolCalls: []
             )
             messageIds[itemId] = messageId
-            lastMessageUUID = messageId
         }
         guard var buffer = streamingBuffers[itemId] else { return }
         buffer.text += text
@@ -175,7 +169,6 @@ actor NetworkRouter: OnboardingEventEmitter {
         }
         streamingBuffers.removeAll()
         messageIds.removeAll()
-        lastMessageUUID = nil
     }
     /// Process a completed response that arrived without streaming deltas
     private func processCompletedResponse(_ response: ResponseModel) async {
@@ -254,7 +247,6 @@ actor NetworkRouter: OnboardingEventEmitter {
         // Clean up all tracking state
         streamingBuffers.removeAll()
         messageIds.removeAll()
-        lastMessageUUID = nil
         receivedOutputItemDone = false
         Logger.info("🧹 NetworkRouter cleaned up \(bufferCount) cancelled stream(s)", category: .ai)
     }

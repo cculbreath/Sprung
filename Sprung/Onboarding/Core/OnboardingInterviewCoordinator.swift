@@ -51,11 +51,6 @@ final class OnboardingInterviewCoordinator {
         get async { await state.artifacts }
     }
 
-    /// Knowledge cards created during onboarding (persisted as ResRefs)
-    var onboardingKnowledgeCards: [ResRef] {
-        container.onboardingKnowledgeCards
-    }
-
     /// All knowledge cards (ResRefs) including both onboarding and manually created
     var allKnowledgeCards: [ResRef] {
         resRefStore.resRefs
@@ -148,15 +143,6 @@ final class OnboardingInterviewCoordinator {
         Logger.info("🎯 OnboardingInterviewCoordinator initialized with event-driven architecture", category: .ai)
         Task { await subscribeToEvents() }
         Task { await profilePersistenceHandler.start() }
-    }
-    // MARK: - Service Updates
-    func updateLLMFacade(_ facade: LLMFacade?) {
-        container.updateLLMFacade(facade)
-        // Re-register tools with new agent if available
-        container.reregisterTools { [weak self] message in
-            self?.ui.modelAvailabilityMessage = message
-        }
-        Logger.info("🔄 LLMFacade updated in Coordinator", category: .ai)
     }
     // MARK: - Event Subscription
     private func subscribeToEvents() async {
@@ -901,17 +887,13 @@ final class OnboardingInterviewCoordinator {
 
         // Build plan items from merged inventory
         let planItems = mergedInventory.mergedCards.map { mergedCard in
-            var artifactIds = [mergedCard.primarySource.documentId]
-            artifactIds.append(contentsOf: mergedCard.supportingSources.map { $0.documentId })
-
             return KnowledgeCardPlanItem(
                 id: mergedCard.cardId,
                 title: mergedCard.title,
                 type: planItemType(from: mergedCard.cardType),
                 description: mergedCard.dateRange,
                 status: .pending,
-                timelineEntryId: nil,
-                assignedArtifactIds: artifactIds
+                timelineEntryId: nil
             )
         }
 

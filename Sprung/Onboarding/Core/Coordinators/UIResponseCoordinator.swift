@@ -87,17 +87,6 @@ final class UIResponseCoordinator {
         await completePendingUIToolCall(output: output)
         Logger.info("✅ Upload completed (non-extractable files) - info included in tool response", category: .ai)
     }
-    func completeUploadAndResume(id: UUID, link: URL, coordinator: OnboardingInterviewCoordinator) async {
-        guard await coordinator.toolRouter.completeUpload(id: id, link: link) != nil else { return }
-
-        // Complete pending UI tool call with all info in tool response
-        // No separate user message needed - tool response contains the completion info
-        var output = JSON()
-        output["message"].string = "User provided URL: \(link.absoluteString)"
-        output["status"].string = "completed"
-        await completePendingUIToolCall(output: output)
-        Logger.info("✅ Upload from URL completed - info included in tool response", category: .ai)
-    }
     func skipUploadAndResume(id: UUID, coordinator: OnboardingInterviewCoordinator) async {
         guard await coordinator.skipUpload(id: id) != nil else { return }
 
@@ -469,14 +458,6 @@ final class UIResponseCoordinator {
         output["status"].string = "rejected"
         await completePendingUIToolCall(output: output)
         Logger.info("✅ Section toggle rejected - info included in tool response", category: .ai)
-    }
-    // MARK: - Model Availability
-    func notifyInvalidModel(id: String) {
-        // This method is called by OnboardingInterviewCoordinator when an invalid model is reported
-        // We don't need to do anything here as the coordinator updates the UI state directly
-        // via ui.modelAvailabilityMessage = ...
-        // But if we wanted to send a message to the LLM or log it specifically here, we could.
-        Logger.warning("⚠️ UIResponseCoordinator notified of invalid model: \(id)", category: .ai)
     }
     // MARK: - Chat & Control
     func sendChatMessage(_ text: String) async {

@@ -319,9 +319,6 @@ final class WebViewNavigationHelper: NSObject, WKNavigationDelegate {
         /// Maximum time to wait for success condition (in seconds)
         var maxWaitTime: TimeInterval = 15
 
-        /// Poll interval for success detection (in seconds)
-        var pollInterval: TimeInterval = 0.5
-
         /// Delay before calling success callback (in seconds)
         var successDelay: TimeInterval = 0
     }

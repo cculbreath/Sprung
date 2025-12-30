@@ -233,22 +233,6 @@ final class LLMFacade {
         let altClient = try resolveClient(for: backend)
         return try await altClient.executeTextWithImages(prompt: prompt, modelId: modelId, images: images, temperature: temperature)
     }
-    func executeTextWithPDF(
-        prompt: String,
-        modelId: String,
-        pdfData: Data,
-        temperature: Double? = nil,
-        maxTokens: Int? = nil,
-        backend: Backend = .openRouter
-    ) async throws -> String {
-        // PDFs are supported natively by OpenRouter for models that support file input
-        if backend == .openRouter {
-            try await validate(modelId: modelId, requires: [])
-            return try await client.executeTextWithPDF(prompt: prompt, modelId: modelId, pdfData: pdfData, temperature: temperature, maxTokens: maxTokens)
-        }
-        let altClient = try resolveClient(for: backend)
-        return try await altClient.executeTextWithPDF(prompt: prompt, modelId: modelId, pdfData: pdfData, temperature: temperature, maxTokens: maxTokens)
-    }
     // Structured
     func executeStructured<T: Codable & Sendable>(
         prompt: String,
@@ -764,7 +748,6 @@ final class LLMFacade {
     ///   - modelId: OpenAI model ID (e.g., "gpt-4o" or "openai/gpt-4o" - prefix stripped automatically)
     ///   - reasoningEffort: Reasoning effort level ("low", "medium", "high")
     ///   - webSearchLocation: Optional location for web search (city name). If provided, enables web search tool.
-    ///   - temperature: Sampling temperature
     ///   - onWebSearching: Callback when web search starts
     ///   - onWebSearchComplete: Callback when web search completes
     ///   - onReasoningDelta: Callback for reasoning/output text deltas
@@ -775,7 +758,6 @@ final class LLMFacade {
         modelId: String,
         reasoningEffort: String? = nil,
         webSearchLocation: String? = nil,
-        temperature: Double? = nil,
         onWebSearching: (@MainActor @Sendable () async -> Void)? = nil,
         onWebSearchComplete: (@MainActor @Sendable () async -> Void)? = nil,
         onTextDelta: (@MainActor @Sendable (String) async -> Void)? = nil

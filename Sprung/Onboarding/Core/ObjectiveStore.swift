@@ -45,9 +45,6 @@ actor ObjectiveStore: OnboardingEventEmitter {
             self.level = level
         }
     }
-    // MARK: - Synchronous Caches (for SwiftUI)
-    /// Sync cache of all objectives for SwiftUI access
-    nonisolated(unsafe) private(set) var objectivesSync: [String: ObjectiveEntry] = [:]
     // MARK: - Initialization
     init(eventBus: EventCoordinator, phasePolicy: PhasePolicy, initialPhase: InterviewPhase) {
         self.eventBus = eventBus
@@ -67,7 +64,6 @@ actor ObjectiveStore: OnboardingEventEmitter {
                 level: descriptor.level
             )
         }
-        objectivesSync = objectives
         Logger.info("🎯 ObjectiveStore initialized with \(objectives.count) objectives", category: .ai)
     }
     // MARK: - Objective Catalog
@@ -186,7 +182,6 @@ actor ObjectiveStore: OnboardingEventEmitter {
             parentId: parentId,
             level: detectedLevel
         )
-        objectivesSync = objectives // Update sync cache
         Logger.info("📋 Objective registered: \(id) for \(phase)", category: .ai)
     }
     // MARK: - Status Updates
@@ -217,7 +212,6 @@ actor ObjectiveStore: OnboardingEventEmitter {
             objective.completedAt = Date()
         }
         objectives[id] = objective
-        objectivesSync = objectives // Update sync cache
         // Emit event to notify listeners (e.g., ObjectiveWorkflowEngine, StateCoordinator)
         await emit(.objectiveStatusChanged(
             id: id,
@@ -287,27 +281,10 @@ actor ObjectiveStore: OnboardingEventEmitter {
             return status != .completed && status != .skipped
         }
     }
-    /// Check if phase can advance (all required objectives complete)
-    func canAdvancePhase(from phase: InterviewPhase) -> Bool {
-        guard let requiredObjectives = phasePolicy.requiredObjectives[phase] else {
-            return false
-        }
-        return requiredObjectives.allSatisfy { objectiveId in
-            objectives[objectiveId]?.status == .completed ||
-            objectives[objectiveId]?.status == .skipped
-        }
-    }
     // MARK: - State Management
-    /// Restore objectives from snapshot
-    func restore(objectives: [String: ObjectiveEntry]) {
-        self.objectives = objectives
-        self.objectivesSync = objectives
-        Logger.info("📥 Objectives restored from snapshot (\(objectives.count) objectives)", category: .ai)
-    }
     /// Reset all objectives
     func reset() {
         objectives.removeAll()
-        objectivesSync = [:]
         Logger.info("🔄 ObjectiveStore reset", category: .ai)
     }
 }

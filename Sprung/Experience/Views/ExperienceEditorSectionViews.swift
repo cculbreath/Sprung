@@ -349,7 +349,6 @@ struct AnyExperienceSectionRenderer: Identifiable {
     }
     init(
         key: ExperienceSectionKey,
-        metadata: ExperienceSectionMetadata,
         isEnabled: @escaping (ExperienceDefaultsDraft) -> Bool,
         render: @escaping (Binding<ExperienceDefaultsDraft>, ExperienceSectionViewCallbacks) -> AnyView
     ) {
@@ -739,7 +738,6 @@ extension CustomExperienceSectionView {
     static func renderer() -> AnyExperienceSectionRenderer {
         AnyExperienceSectionRenderer(
             key: .custom,
-            metadata: ExperienceSectionKey.custom.metadata,
             isEnabled: { $0.isCustomEnabled },
             render: { draft, callbacks in
                 AnyView(

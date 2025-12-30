@@ -31,24 +31,6 @@ final class CalendarIntegrationService {
 
     // MARK: - Authorization
 
-    /// Request calendar access
-    func requestAccess() async -> Bool {
-        do {
-            let granted = try await eventStore.requestFullAccessToEvents()
-            await MainActor.run {
-                isAuthorized = granted
-                if granted {
-                    loadCalendars()
-                }
-            }
-            Logger.info("📅 Calendar access \(granted ? "granted" : "denied")", category: .appLifecycle)
-            return granted
-        } catch {
-            Logger.error("📅 Calendar access request failed: \(error)", category: .appLifecycle)
-            return false
-        }
-    }
-
     /// Update authorization status
     func updateAuthorizationStatus() {
         authorizationStatus = EKEventStore.authorizationStatus(for: .event)
@@ -66,11 +48,6 @@ final class CalendarIntegrationService {
         availableCalendars = eventStore.calendars(for: .event)
             .filter { $0.allowsContentModifications }
             .sorted { $0.title < $1.title }
-    }
-
-    /// Set the calendar to use for job search events
-    func selectCalendar(identifier: String) {
-        selectedCalendarIdentifier = identifier
     }
 
     /// Get the selected calendar or default
@@ -135,100 +112,6 @@ final class CalendarIntegrationService {
         return event.eventIdentifier
     }
 
-    /// Create a calendar event for a follow-up task
-    func createFollowUpReminder(
-        contactName: String,
-        action: String,
-        dueDate: Date
-    ) async throws -> String {
-        guard isAuthorized else {
-            throw CalendarError.notAuthorized
-        }
-
-        guard let calendar = targetCalendar else {
-            throw CalendarError.noCalendarAvailable
-        }
-
-        let event = EKEvent(eventStore: eventStore)
-        event.calendar = calendar
-        event.title = "Follow up: \(contactName)"
-        event.notes = action
-        event.isAllDay = true
-        event.startDate = Calendar.current.startOfDay(for: dueDate)
-        event.endDate = event.startDate
-
-        // Add morning reminder
-        let alarm = EKAlarm(relativeOffset: 0) // At start of day
-        event.addAlarm(alarm)
-
-        try eventStore.save(event, span: .thisEvent)
-
-        Logger.info("📅 Created follow-up reminder for: \(contactName)", category: .ai)
-
-        return event.eventIdentifier
-    }
-
-    /// Update an existing calendar event
-    func updateCalendarEvent(identifier: String, with networkingEvent: NetworkingEventOpportunity) async throws {
-        guard isAuthorized else {
-            throw CalendarError.notAuthorized
-        }
-
-        guard let event = eventStore.event(withIdentifier: identifier) else {
-            throw CalendarError.eventNotFound
-        }
-
-        event.title = networkingEvent.name
-        event.startDate = networkingEvent.date
-        event.notes = buildEventNotes(for: networkingEvent)
-
-        if networkingEvent.isVirtual {
-            event.location = networkingEvent.virtualLink ?? "Virtual Event"
-        } else {
-            event.location = networkingEvent.locationAddress ?? networkingEvent.location
-        }
-
-        try eventStore.save(event, span: .thisEvent)
-
-        Logger.info("📅 Updated calendar event: \(event.title ?? "Untitled")", category: .ai)
-    }
-
-    /// Delete a calendar event
-    func deleteCalendarEvent(identifier: String) async throws {
-        guard isAuthorized else {
-            throw CalendarError.notAuthorized
-        }
-
-        guard let event = eventStore.event(withIdentifier: identifier) else {
-            throw CalendarError.eventNotFound
-        }
-
-        try eventStore.remove(event, span: .thisEvent)
-
-        Logger.info("📅 Deleted calendar event", category: .ai)
-    }
-
-    // MARK: - Event Lookup
-
-    /// Find calendar events in a date range
-    func findEvents(from startDate: Date, to endDate: Date) -> [EKEvent] {
-        guard isAuthorized else { return [] }
-
-        let predicate = eventStore.predicateForEvents(
-            withStart: startDate,
-            end: endDate,
-            calendars: targetCalendar.map { [$0] }
-        )
-
-        return eventStore.events(matching: predicate)
-    }
-
-    /// Check if a networking event has a calendar entry
-    func hasCalendarEvent(for networkingEvent: NetworkingEventOpportunity) -> Bool {
-        guard let identifier = networkingEvent.calendarEventId else { return false }
-        return eventStore.event(withIdentifier: identifier) != nil
-    }
-
     // MARK: - Helpers
 
     private func buildEventNotes(for event: NetworkingEventOpportunity) -> String {
@@ -287,7 +170,6 @@ final class CalendarIntegrationService {
 enum CalendarError: LocalizedError {
     case notAuthorized
     case noCalendarAvailable
-    case eventNotFound
     case saveFailed(Error)
 
     var errorDescription: String? {
@@ -296,8 +178,6 @@ enum CalendarError: LocalizedError {
             return "Calendar access not authorized. Please grant access in System Settings."
         case .noCalendarAvailable:
             return "No writable calendar available."
-        case .eventNotFound:
-            return "Calendar event not found."
         case .saveFailed(let error):
             return "Failed to save calendar event: \(error.localizedDescription)"
         }

@@ -39,13 +39,6 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
         }
         Logger.info("▶️ ObjectiveWorkflowEngine started", category: .ai)
     }
-    func stop() {
-        guard isActive else { return }
-        isActive = false
-        subscriptionTask?.cancel()
-        subscriptionTask = nil
-        Logger.info("⏹️ ObjectiveWorkflowEngine stopped", category: .ai)
-    }
     // MARK: - Event Handling
     private func handleObjectiveEvent(_ event: OnboardingEvent) async {
         guard case .objectiveStatusChanged(

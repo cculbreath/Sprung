@@ -19,10 +19,6 @@ actor CardMergeService {
         Logger.info("🔄 CardMergeService initialized", category: .ai)
     }
 
-    func updateLLMFacade(_ facade: LLMFacade?) {
-        self.llmFacade = facade
-    }
-
     /// Merge all document inventories into unified card inventory
     /// Uses GPT-5 with strict schema enforcement for guaranteed valid output
     /// - Parameter timeline: Skeleton timeline for employment context

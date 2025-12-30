@@ -41,9 +41,8 @@ struct SubmitKnowledgeCardTool: InterviewTool {
     private unowned let coordinator: OnboardingInterviewCoordinator
     private let eventBus: EventCoordinator
 
-    init(coordinator: OnboardingInterviewCoordinator, dataStore: InterviewDataStore, eventBus: EventCoordinator) {
+    init(coordinator: OnboardingInterviewCoordinator, eventBus: EventCoordinator) {
         self.coordinator = coordinator
-        // dataStore parameter retained for API compatibility but not stored
         self.eventBus = eventBus
     }
 

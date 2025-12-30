@@ -151,26 +151,6 @@ class PhaseReviewManager {
         self.toolRunner = toolRunner
     }
 
-    // MARK: - Tool UI State Forwarding
-
-    var showSkillExperiencePicker: Bool {
-        get { toolRunner.showSkillExperiencePicker }
-        set { toolRunner.showSkillExperiencePicker = newValue }
-    }
-
-    var pendingSkillQueries: [SkillQuery] {
-        get { toolRunner.pendingSkillQueries }
-        set { toolRunner.pendingSkillQueries = newValue }
-    }
-
-    func submitSkillExperienceResults(_ results: [SkillExperienceResult]) {
-        toolRunner.submitSkillExperienceResults(results)
-    }
-
-    func cancelSkillExperienceQuery() {
-        toolRunner.cancelSkillExperienceQuery()
-    }
-
     // MARK: - Tool Response Parsing
 
     /// Parse PhaseReviewContainer from a raw LLM response string (used with tool-enabled conversations)
@@ -249,52 +229,6 @@ class PhaseReviewManager {
     }
 
     // MARK: - Phase Detection
-
-    /// Find sections with review phases defined that have nodes selected for AI revision.
-    func sectionsWithActiveReviewPhases(for resume: Resume) -> [(section: String, phases: [TemplateManifest.ReviewPhaseConfig])] {
-        Logger.debug("🔍 [sectionsWithActiveReviewPhases] Starting check...")
-        Logger.debug("🔍 [sectionsWithActiveReviewPhases] template: \(resume.template != nil ? "exists" : "nil")")
-        Logger.debug("🔍 [sectionsWithActiveReviewPhases] manifestData: \(resume.template?.manifestData != nil ? "\(resume.template!.manifestData!.count) bytes" : "nil")")
-        Logger.debug("🔍 [sectionsWithActiveReviewPhases] rootNode: \(resume.rootNode != nil ? "exists" : "nil")")
-
-        guard let template = resume.template,
-              let rootNode = resume.rootNode else {
-            Logger.warning("⚠️ [sectionsWithActiveReviewPhases] Bailing - template or rootNode nil")
-            return []
-        }
-
-        guard let manifest = TemplateManifestLoader.manifest(for: template) else {
-            Logger.warning("⚠️ [sectionsWithActiveReviewPhases] Failed to load manifest via TemplateManifestLoader")
-            return []
-        }
-        Logger.debug("🔍 [sectionsWithActiveReviewPhases] manifest loaded via TemplateManifestLoader")
-
-        Logger.debug("🔍 [sectionsWithActiveReviewPhases] reviewPhases: \(manifest.reviewPhases != nil ? "\(manifest.reviewPhases!.keys.joined(separator: ", "))" : "nil")")
-
-        var result: [(section: String, phases: [TemplateManifest.ReviewPhaseConfig])] = []
-
-        if let reviewPhases = manifest.reviewPhases {
-            for (section, phases) in reviewPhases {
-                Logger.debug("🔍 [sectionsWithActiveReviewPhases] Checking section '\(section)' with \(phases.count) phases")
-                if let sectionNode = rootNode.children?.first(where: { $0.name.lowercased() == section.lowercased() }) {
-                    let hasSelected = sectionNode.status == .aiToReplace || sectionNode.aiStatusChildren > 0
-                    Logger.debug("🔍 [sectionsWithActiveReviewPhases] Section '\(section)' found - status=\(sectionNode.status), aiStatusChildren=\(sectionNode.aiStatusChildren), hasSelected=\(hasSelected)")
-                    if hasSelected && !phases.isEmpty {
-                        let sortedPhases = phases.sorted { $0.phase < $1.phase }
-                        result.append((section: section, phases: sortedPhases))
-                        Logger.info("📋 Section '\(section)' has \(sortedPhases.count) review phases configured - USING PHASED REVIEW")
-                    }
-                } else {
-                    Logger.debug("🔍 [sectionsWithActiveReviewPhases] Section '\(section)' NOT found in rootNode.children")
-                }
-            }
-        } else {
-            Logger.debug("🔍 [sectionsWithActiveReviewPhases] manifest.reviewPhases is nil")
-        }
-
-        Logger.debug("🔍 [sectionsWithActiveReviewPhases] Returning \(result.count) sections with active phases")
-        return result
-    }
 
     /// Build the two-round review structure from TreeNode state.
     ///
@@ -884,13 +818,6 @@ class PhaseReviewManager {
         guard let currentReview = phaseReviewState.currentReview,
               phaseReviewState.currentItemIndex < currentReview.items.count - 1 else { return }
         phaseReviewState.currentItemIndex += 1
-    }
-
-    /// Navigate to specific item index.
-    func goToItem(at index: Int) {
-        guard let currentReview = phaseReviewState.currentReview,
-              index >= 0 && index < currentReview.items.count else { return }
-        phaseReviewState.currentItemIndex = index
     }
 
     /// Check if can navigate to previous item.

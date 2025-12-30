@@ -86,7 +86,7 @@ struct OnboardingInterviewView: View {
                     isContinueDisabled: isContinueDisabled(coordinator: coordinator),
                     continueTooltip: continueButtonTooltip(coordinator: coordinator),
                     onShowSettings: openSettings,
-                    onBack: { handleBack(coordinator: coordinator) },
+                    onBack: { handleBack() },
                     onCancel: { handleCancel() },
                     onContinue: { handleContinue(coordinator: coordinator) }
                 )
@@ -342,9 +342,7 @@ private extension OnboardingInterviewView {
             handleCancel()
         }
     }
-    func handleBack(
-        coordinator: OnboardingInterviewCoordinator
-    ) {
+    func handleBack() {
         // Wizard steps are now derived from objectives - no manual reset needed
     }
     func handleCancel() {
@@ -417,7 +415,6 @@ private extension OnboardingInterviewView {
 private struct ValidationPromptSheet: View {
     let validation: OnboardingValidationPrompt
     let coordinator: OnboardingInterviewCoordinator
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(spacing: 0) {

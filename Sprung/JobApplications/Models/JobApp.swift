@@ -60,9 +60,6 @@ extension Statuses {
         }
     }
 
-    /// Whether this is an active (non-terminal) status
-    var isActive: Bool { !isTerminal }
-
     /// Icon for the status
     var icon: String {
         switch self {
@@ -358,14 +355,4 @@ extension Statuses {
     var daysSinceCreated: Int? {
         Calendar.current.dateComponents([.day], from: createdAt, to: Date()).day
     }
-
-    var daysSinceApplied: Int? {
-        guard let appliedDate = appliedDate else { return nil }
-        return Calendar.current.dateComponents([.day], from: appliedDate, to: Date()).day
-    }
-
-    var isActive: Bool {
-        status.isActive
-    }
-
 }

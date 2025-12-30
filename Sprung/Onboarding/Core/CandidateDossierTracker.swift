@@ -84,11 +84,6 @@ struct CandidateDossierTracker {
         return nil
     }
 
-    /// Check if a specific field has been collected
-    func hasCollected(_ field: CandidateDossierField) -> Bool {
-        collectedFields.contains(field.rawValue)
-    }
-
     /// Build a prompt instructing the LLM to ask a dossier question
     func buildDossierPrompt(for phase: InterviewPhase) -> String? {
         guard let nextField = getNextField(for: phase) else {

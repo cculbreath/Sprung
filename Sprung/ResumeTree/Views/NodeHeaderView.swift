@@ -391,20 +391,17 @@ struct NodeHeaderView: View {
                     if hasMixedModes && isCollectionNode {
                         AIModeIndicator(
                             mode: .bundle,
-                            isCollection: true,
                             pathPattern: nil,
                             isPerEntry: false
                         )
                         AIModeIndicator(
                             mode: .iterate,
-                            isCollection: true,
                             pathPattern: nil,
                             isPerEntry: true
                         )
                     } else {
                         AIModeIndicator(
                             mode: displayMode,
-                            isCollection: isCollectionNode || isAttributeOfCollectionEntry,
                             pathPattern: pathPattern,
                             isPerEntry: isPerEntryExtraction
                         )
@@ -944,7 +941,6 @@ enum AIReviewMode {
 
 struct AIModeIndicator: View {
     let mode: AIReviewMode
-    let isCollection: Bool
     var pathPattern: String?
     var isPerEntry: Bool = false
 

@@ -58,7 +58,6 @@ final class DiscoveryState {
     private(set) var reasoningText = ""
     private var task: Task<Void, Never>?
 
-    var canCancel: Bool { task != nil }
 
     func start(operation: @escaping (@escaping @MainActor (DiscoveryStatus, String?) -> Void) async throws -> Void) {
         guard !isActive else { return }
@@ -244,23 +243,14 @@ final class DiscoveryCoordinator {
     // MARK: - Daily Summary (coordinated across sub-coordinators)
 
     struct DailySummary {
-        let tasksTotal: Int
-        let tasksCompleted: Int
-        let timeSpentMinutes: Int
-        let sourcesVisited: Int
-        let applicationsSubmitted: Int
-        let followUpsSent: Int
         let eventsToday: [NetworkingEventOpportunity]
         let contactsNeedingAttention: [NetworkingContact]
     }
 
     func todaysSummary() -> DailySummary {
-        let eventsToday = networkingCoordinator.eventsToday()
-        let contactsNeedingAttention = networkingCoordinator.contactsNeedingAttention(limit: 5)
-
-        return pipelineCoordinator.todaysSummary(
-            eventsToday: eventsToday,
-            contactsNeedingAttention: contactsNeedingAttention
+        DailySummary(
+            eventsToday: networkingCoordinator.eventsToday(),
+            contactsNeedingAttention: networkingCoordinator.contactsNeedingAttention(limit: 5)
         )
     }
 
@@ -268,49 +258,17 @@ final class DiscoveryCoordinator {
 
     struct WeeklySummary {
         let goal: WeeklyGoal
-        let applicationProgress: Double
-        let networkingProgress: Double
-        let timeProgress: Double
         let topSources: [JobSource]
         let eventsAttended: [NetworkingEventOpportunity]
         let newContacts: [NetworkingContact]
-        let reflectionNeeded: Bool
     }
 
     func thisWeeksSummary() -> WeeklySummary {
-        let topSources = jobSourceStore.topSourcesByEffectiveness(limit: 3)
-        let eventsAttended = networkingCoordinator.eventsAttendedThisWeek()
-        let newContacts = networkingCoordinator.newContactsThisWeek()
-
-        return pipelineCoordinator.thisWeeksSummary(
-            topSources: topSources,
-            eventsAttended: eventsAttended,
-            newContacts: newContacts
-        )
-    }
-
-    // MARK: - Event Workflow Helpers (delegated to networking coordinator)
-
-    func recordEventAttendance(_ event: NetworkingEventOpportunity) {
-        networkingCoordinator.recordEventAttendance(event, weeklyGoalStore: weeklyGoalStore)
-    }
-
-    func recordEventDebrief(
-        _ event: NetworkingEventOpportunity,
-        contacts: [NetworkingContact],
-        rating: EventRating,
-        wouldRecommend: Bool,
-        whatWorked: String?,
-        whatDidntWork: String?
-    ) {
-        networkingCoordinator.recordEventDebrief(
-            event,
-            contacts: contacts,
-            rating: rating,
-            wouldRecommend: wouldRecommend,
-            whatWorked: whatWorked,
-            whatDidntWork: whatDidntWork,
-            weeklyGoalStore: weeklyGoalStore
+        WeeklySummary(
+            goal: weeklyGoalStore.currentWeek(),
+            topSources: jobSourceStore.topSourcesByEffectiveness(limit: 3),
+            eventsAttended: networkingCoordinator.eventsAttendedThisWeek(),
+            newContacts: networkingCoordinator.newContactsThisWeek()
         )
     }
 
@@ -466,33 +424,12 @@ final class DiscoveryCoordinator {
         return result
     }
 
-    /// Evaluate an event for attendance using LLM agent
-    func evaluateEvent(_ event: NetworkingEventOpportunity) async throws -> EventEvaluationResult {
-        guard let agent = agentService else {
-            throw DiscoveryLLMError.toolExecutionFailed("Agent service not configured")
-        }
-        return try await networkingCoordinator.evaluateEvent(event, using: agent)
-    }
-
     /// Generate an elevator pitch for an event using LLM agent
     func generateEventPitch(for event: NetworkingEventOpportunity) async throws -> String? {
         guard let agent = agentService else {
             throw DiscoveryLLMError.toolExecutionFailed("Agent service not configured")
         }
         return try await networkingCoordinator.generateEventPitch(for: event, using: agent)
-    }
-
-    /// Prepare for an event using LLM agent
-    func prepareForEvent(_ event: NetworkingEventOpportunity, focusCompanies: [String] = [], goals: String? = nil) async throws -> EventPrepResult {
-        guard let agent = agentService else {
-            throw DiscoveryLLMError.toolExecutionFailed("Agent service not configured")
-        }
-        return try await networkingCoordinator.prepareForEvent(
-            event,
-            focusCompanies: focusCompanies,
-            goals: goals,
-            using: agent
-        )
     }
 
     /// Generate debrief outcomes and suggested next steps using LLM agent
@@ -520,45 +457,6 @@ final class DiscoveryCoordinator {
             throw DiscoveryLLMError.toolExecutionFailed("Agent service not configured")
         }
         try await pipelineCoordinator.generateWeeklyReflection(using: agent)
-    }
-
-    /// Suggest networking actions using LLM agent
-    func suggestNetworkingActions(focus: String = "balanced") async throws -> NetworkingActionsResult {
-        guard let agent = agentService else {
-            throw DiscoveryLLMError.toolExecutionFailed("Agent service not configured")
-        }
-        return try await networkingCoordinator.suggestNetworkingActions(focus: focus, using: agent)
-    }
-
-    /// Draft an outreach message using LLM agent
-    func draftOutreachMessage(
-        contact: NetworkingContact,
-        purpose: String,
-        channel: String,
-        tone: String = "professional"
-    ) async throws -> OutreachMessageResult {
-        guard let agent = agentService else {
-            throw DiscoveryLLMError.toolExecutionFailed("Agent service not configured")
-        }
-        return try await networkingCoordinator.draftOutreachMessage(
-            contact: contact,
-            purpose: purpose,
-            channel: channel,
-            tone: tone,
-            using: agent
-        )
-    }
-
-    /// Run a conversational agent with custom prompt
-    func runAgent(systemPrompt: String, userMessage: String) async throws -> String {
-        guard let agent = agentService else {
-            throw DiscoveryLLMError.toolExecutionFailed("Agent service not configured")
-        }
-        return try await pipelineCoordinator.runAgent(
-            using: agent,
-            systemPrompt: systemPrompt,
-            userMessage: userMessage
-        )
     }
 
     // MARK: - Role Suggestion (Onboarding)
@@ -757,29 +655,6 @@ final class DiscoveryCoordinator {
             workArrangement: arrangement,
             remoteAcceptable: result.remoteAcceptable,
             companySize: companySize
-        )
-    }
-
-    // MARK: - Contact Workflow Helpers (delegated to networking coordinator)
-
-    func recordContactInteraction(
-        _ contact: NetworkingContact,
-        type: InteractionType,
-        notes: String = "",
-        outcome: InteractionOutcome? = nil,
-        followUpNeeded: Bool = false,
-        followUpAction: String? = nil,
-        followUpDate: Date? = nil
-    ) {
-        networkingCoordinator.recordContactInteraction(
-            contact,
-            type: type,
-            notes: notes,
-            outcome: outcome,
-            followUpNeeded: followUpNeeded,
-            followUpAction: followUpAction,
-            followUpDate: followUpDate,
-            weeklyGoalStore: weeklyGoalStore
         )
     }
 }

@@ -467,13 +467,6 @@ actor LLMMessenger: OnboardingEventEmitter {
         isActive = true
         Logger.info("✅ LLMMessenger activated", category: .ai)
     }
-    func deactivate() {
-        isActive = false
-        Logger.info("⏹️ LLMMessenger deactivated", category: .ai)
-    }
-    func setModelId(_ modelId: String) async {
-        await stateCoordinator.setModelId(modelId)
-    }
     // MARK: - Budget Enforcement (Milestone 8)
 
     /// Handle budget exceeded event by resetting the PRI thread

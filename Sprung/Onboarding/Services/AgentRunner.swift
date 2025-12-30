@@ -25,7 +25,6 @@ import SwiftyJSON
 struct AgentConfiguration {
     let agentId: String
     let agentType: AgentType
-    let name: String
     let modelId: String
     let systemPrompt: String
     let initialUserMessage: String
@@ -37,7 +36,6 @@ struct AgentConfiguration {
     init(
         agentId: String = UUID().uuidString,
         agentType: AgentType,
-        name: String,
         modelId: String,
         systemPrompt: String,
         initialUserMessage: String,
@@ -48,7 +46,6 @@ struct AgentConfiguration {
     ) {
         self.agentId = agentId
         self.agentType = agentType
-        self.name = name
         self.modelId = modelId
         self.systemPrompt = systemPrompt
         self.initialUserMessage = initialUserMessage
@@ -63,12 +60,7 @@ struct AgentConfiguration {
 
 /// Result returned by an agent when it completes
 struct AgentOutput {
-    let agentId: String
-    let success: Bool
     let result: JSON?
-    let error: String?
-    let turnCount: Int
-    let duration: TimeInterval
 }
 
 // MARK: - Agent Runner Errors
@@ -387,14 +379,7 @@ actor AgentRunner {
                 details: "Duration: \(String(format: "%.1f", duration))s, Turns: \(turnCount)"
             )
 
-            return AgentOutput(
-                agentId: config.agentId,
-                success: true,
-                result: completionResult,
-                error: nil,
-                turnCount: turnCount,
-                duration: duration
-            )
+            return AgentOutput(result: completionResult)
 
         } catch is CancellationError {
             let duration = Date().timeIntervalSince(startTime)
@@ -591,7 +576,6 @@ extension AgentRunner {
         let config = AgentConfiguration(
             agentId: agentId,
             agentType: .knowledgeCard,
-            name: cardTitle,
             modelId: modelId,
             systemPrompt: systemPrompt,
             initialUserMessage: initialPrompt,

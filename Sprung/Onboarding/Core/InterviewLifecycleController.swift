@@ -304,49 +304,6 @@ final class InterviewLifecycleController {
         clearArtifacts()
         await resetStore()
     }
-    func updateLLMFacade(_ facade: LLMFacade?) {
-        self.llmFacade = facade
-        if orchestrator != nil, facade != nil {
-            // If we have an active orchestrator, we might need to update its facade reference
-            // However, InterviewOrchestrator holds a let reference.
-            // For now, we'll just log. In a full implementation, we might need to restart the orchestrator
-            // or make its facade updatable too.
-            // Given the current architecture, a restart of the interview might be cleaner if it was already running.
-            Logger.info("🔄 LLMFacade updated in LifecycleController", category: .ai)
-        }
-    }
-    /// End the current interview session.
-    func endInterview() async {
-        Logger.info("🛑 Ending interview", category: .ai)
-
-        // End session persistence
-        sessionPersistenceHandler.endSession(markComplete: false)
-        sessionPersistenceHandler.stop()
-
-        // Stop orchestrator
-        await orchestrator?.endInterview()
-        orchestrator = nil
-
-        // Stop workflow engine
-        await workflowEngine?.stop()
-        workflowEngine = nil
-
-        // Stop transcript persistence handler
-        await transcriptPersistenceHandler?.stop()
-        transcriptPersistenceHandler = nil
-
-        // Update state via events
-        await eventBus.publish(.processingStateChanged(false))
-        await eventBus.publish(.waitingStateChanged(nil))
-
-        // Cancel state update tasks
-        stateUpdateTasks.forEach { $0.cancel() }
-        stateUpdateTasks.removeAll()
-
-        // Sync UI state
-        ui.isActive = await state.isActive
-        Logger.info("🎛️ Session isActive synced: \(ui.isActive)", category: .ai)
-    }
 
     // MARK: - Data Persistence
 

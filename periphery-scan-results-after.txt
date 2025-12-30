@@ -1,0 +1,468 @@
+* Inspecting project...
+* Building Sprung...
+* Indexing...
+* Analyzing...
+
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/App/AppDependencies.swift:30:9: warning: Property 'documentExtractionService' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/App/AppDependencies.swift:32:17: warning: Property 'llmService' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/App/Views/CloudflareChallengeView.swift:48:13: warning: Property 'parent' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/DataManagers/ApplicantProfileStore.swift:11:10: warning: Function 'save(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/CoachingModels.swift:80:9: warning: Property 'isToday' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/CoachingModels.swift:96:9: warning: Property 'jobAppPositions' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/CoachingModels.swift:117:13: warning: Property 'activeTotal' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/CoachingModels.swift:121:13: warning: Property 'submittedTotal' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/CoachingModels.swift:137:13: warning: Property 'jobAppId' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/CoachingModels.swift:161:13: warning: Property 'eventId' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/CoachingModels.swift:170:13: warning: Property 'estimatedAttendance' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/CoachingModels.swift:174:13: warning: Property 'attended' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/CoachingModels.swift:200:13: warning: Property 'confirmedTotal' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/CoachingModels.swift:205:13: warning: Property 'pendingTotal' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/CoachingModels.swift:215:13: warning: Property 'jobAppId' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/CoachingModels.swift:497:9: warning: Property 'timestamp' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/DiscoveryModels.swift:37:9: warning: Property 'willingToRelocate' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/DiscoveryModels.swift:38:9: warning: Property 'relocationTargets' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/DiscoveryModels.swift:39:9: warning: Property 'preferredArrangement' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/DiscoveryModels.swift:43:9: warning: Property 'createdAt' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/DiscoveryModels.swift:44:9: warning: Property 'updatedAt' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/DiscoveryModels.swift:74:9: warning: Property 'jobSearchCalendarIdentifier' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/DiscoveryModels.swift:88:9: warning: Property 'lastNotificationClickedAt' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/DiscoveryModels.swift:89:9: warning: Property 'notificationFatiguePauseOffered' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/DiscoveryModels.swift:90:9: warning: Property 'notificationsPausedAt' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/DiscoveryModels.swift:92:9: warning: Property 'createdAt' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/DiscoveryModels.swift:93:9: warning: Property 'updatedAt' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/DiscoveryModels.swift:187:9: warning: Property 'needsRevalidation' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/DiscoveryModels.swift:193:9: warning: Property 'shouldSuggestRemoval' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/DiscoveryModels.swift:286:5: warning: Initializer 'init(activityType:startTime:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/DiscoveryModels.swift:295:9: warning: Property 'formattedDuration' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/NetworkingModels.swift:175:9: warning: Property 'isPast' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/NetworkingModels.swift:185:9: warning: Property 'concerns' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/NetworkingModels.swift:195:9: warning: Property 'conversationStarters' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/NetworkingModels.swift:205:9: warning: Property 'thingsToAvoid' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/NetworkingModels.swift:215:9: warning: Property 'talkingPoints' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/NetworkingModels.swift:225:9: warning: Property 'targetCompanies' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/NetworkingModels.swift:235:9: warning: Property 'followUpActions' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/NetworkingModels.swift:396:9: warning: Property 'tags' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/NetworkingModels.swift:425:9: warning: Property 'isOutbound' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/NetworkingModels.swift:510:8: warning: Struct 'TalkingPoint' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/NetworkingModels.swift:517:8: warning: Struct 'TargetCompanyContext' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Models/NetworkingModels.swift:526:8: warning: Struct 'FollowUpAction' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/CalendarIntegrationService.swift:35:10: warning: Function 'requestAccess()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/CalendarIntegrationService.swift:72:10: warning: Function 'selectCalendar(identifier:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/CalendarIntegrationService.swift:139:10: warning: Function 'createFollowUpReminder(contactName:action:dueDate:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/CalendarIntegrationService.swift:172:10: warning: Function 'updateCalendarEvent(identifier:with:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/CalendarIntegrationService.swift:197:10: warning: Function 'deleteCalendarEvent(identifier:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/CalendarIntegrationService.swift:214:10: warning: Function 'findEvents(from:to:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/CalendarIntegrationService.swift:227:10: warning: Function 'hasCalendarEvent(for:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryAgentService.swift:226:10: warning: Function 'evaluateEvent(eventId:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryAgentService.swift:284:10: warning: Function 'suggestNetworkingActions(focus:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryAgentService.swift:293:10: warning: Function 'draftOutreachMessage(contactId:purpose:channel:tone:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryAgentTypes.swift:38:8: warning: Struct 'EventEvaluationResult' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryAgentTypes.swift:85:10: warning: Function 'toTalkingPoint()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryAgentTypes.swift:97:10: warning: Function 'toTargetCompanyContext()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryAgentTypes.swift:108:8: warning: Struct 'NetworkingActionsResult' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryAgentTypes.swift:113:9: warning: Property 'contactName' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryAgentTypes.swift:114:9: warning: Property 'contactId' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryAgentTypes.swift:115:9: warning: Property 'actionType' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryAgentTypes.swift:116:9: warning: Property 'actionDescription' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryAgentTypes.swift:117:9: warning: Property 'urgency' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryAgentTypes.swift:118:9: warning: Property 'suggestedOpener' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryAgentTypes.swift:121:8: warning: Struct 'OutreachMessageResult' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryCoordinator.swift:42:9: warning: Property 'isActive' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryCoordinator.swift:61:9: warning: Property 'canCancel' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryCoordinator.swift:247:13: warning: Property 'tasksTotal' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryCoordinator.swift:248:13: warning: Property 'tasksCompleted' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryCoordinator.swift:249:13: warning: Property 'timeSpentMinutes' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryCoordinator.swift:250:13: warning: Property 'sourcesVisited' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryCoordinator.swift:251:13: warning: Property 'applicationsSubmitted' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryCoordinator.swift:252:13: warning: Property 'followUpsSent' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryCoordinator.swift:271:13: warning: Property 'applicationProgress' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryCoordinator.swift:272:13: warning: Property 'networkingProgress' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryCoordinator.swift:273:13: warning: Property 'timeProgress' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryCoordinator.swift:277:13: warning: Property 'reflectionNeeded' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryCoordinator.swift:294:10: warning: Function 'recordEventAttendance(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryCoordinator.swift:298:10: warning: Function 'recordEventDebrief(_:contacts:rating:wouldRecommend:whatWorked:whatDidntWork:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryCoordinator.swift:470:10: warning: Function 'evaluateEvent(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryCoordinator.swift:486:10: warning: Function 'prepareForEvent(_:focusCompanies:goals:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryCoordinator.swift:526:10: warning: Function 'suggestNetworkingActions(focus:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryCoordinator.swift:534:10: warning: Function 'draftOutreachMessage(contact:purpose:channel:tone:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryCoordinator.swift:553:10: warning: Function 'runAgent(systemPrompt:userMessage:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryCoordinator.swift:569:13: warning: Property 'reasoning' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryCoordinator.swift:765:10: warning: Function 'recordContactInteraction(_:type:notes:outcome:followUpNeeded:followUpAction:followUpDate:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryLLMService.swift:129:10: warning: Function 'executeText(prompt:systemPrompt:temperature:overrideModelId:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryLLMService.swift:176:10: warning: Function 'sendMessage(_:conversationId:toolChoice:handleToolCalls:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryLLMService.swift:219:10: warning: Function 'continueConversation(_:conversationId:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryLLMService.swift:330:18: warning: Function 'executeWithToolLoop(conversation:toolChoice:handleToolCalls:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryLLMService.swift:422:10: warning: Function 'getConversation(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryLLMService.swift:426:10: warning: Function 'conversationMessageCount(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryLLMService.swift:434:9: warning: Property 'id' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryNetworkingCoordinator.swift:38:10: warning: Function 'initialize()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryNetworkingCoordinator.swift:45:9: warning: Property 'hasActiveSources' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryNetworkingCoordinator.swift:51:10: warning: Function 'visitSource(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryNetworkingCoordinator.swift:57:10: warning: Function 'validateSources()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryNetworkingCoordinator.swift:85:10: warning: Function 'recordEventAttendance(_:weeklyGoalStore:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryNetworkingCoordinator.swift:90:10: warning: Function 'recordEventDebrief(_:contacts:rating:wouldRecommend:whatWorked:whatDidntWork:weeklyGoalStore:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryNetworkingCoordinator.swift:131:10: warning: Function 'recordContactInteraction(_:type:notes:outcome:followUpNeeded:followUpAction:followUpDate:weeklyGoalStore:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryNetworkingCoordinator.swift:249:10: warning: Function 'evaluateEvent(_:using:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryNetworkingCoordinator.swift:277:10: warning: Function 'prepareForEvent(_:focusCompanies:goals:using:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryNetworkingCoordinator.swift:307:10: warning: Function 'suggestNetworkingActions(focus:using:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryNetworkingCoordinator.swift:316:10: warning: Function 'draftOutreachMessage(contact:purpose:channel:tone:using:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryPipelineCoordinator.swift:53:10: warning: Function 'initialize()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryPipelineCoordinator.swift:73:10: warning: Function 'startTimeTracking(activity:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryPipelineCoordinator.swift:84:10: warning: Function 'endTimeTracking()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryPipelineCoordinator.swift:95:10: warning: Function 'switchTimeTracking(to:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryPipelineCoordinator.swift:179:10: warning: Function 'runAgent(using:systemPrompt:userMessage:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryResponseParser.swift:78:10: warning: Function 'parseEvaluation(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryResponseParser.swift:136:10: warning: Function 'parseActions(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/DiscoveryResponseParser.swift:153:10: warning: Function 'parseOutreach(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/RelationshipHealthService.swift:18:17: warning: Property 'contactStore' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/RelationshipHealthService.swift:19:17: warning: Property 'interactionStore' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/RelationshipHealthService.swift:24:17: warning: Property 'hotDecayThreshold' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/RelationshipHealthService.swift:27:17: warning: Property 'warmDecayThreshold' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/RelationshipHealthService.swift:30:17: warning: Property 'coldDecayThreshold' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/RelationshipHealthService.swift:35:9: warning: Property 'urgentContacts' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/RelationshipHealthService.swift:43:9: warning: Property 'suggestedOutreach' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/RelationshipHealthService.swift:50:9: warning: Property 'hotContactsAtRisk' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/RelationshipHealthService.swift:59:5: warning: Initializer 'init(contactStore:interactionStore:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/RelationshipHealthService.swift:67:10: warning: Function 'updateAllWarmthLevels()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/RelationshipHealthService.swift:75:10: warning: Function 'updateWarmthIfNeeded(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/RelationshipHealthService.swift:110:10: warning: Function 'upgradeWarmth(_:reason:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/RelationshipHealthService.swift:138:10: warning: Function 'hasOverdueFollowUp(for:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/RelationshipHealthService.swift:143:10: warning: Function 'pendingFollowUps(for:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/RelationshipHealthService.swift:148:10: warning: Function 'suggestedFollowUpAction(for:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/RelationshipHealthService.swift:217:10: warning: Function 'healthSummary()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/RelationshipHealthService.swift:247:10: warning: Function 'contactsForEventOutreach(eventId:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/RelationshipHealthService.swift:260:6: warning: Enum 'WarmthUpgradeReason' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/RelationshipHealthService.swift:269:8: warning: Struct 'SuggestedFollowUp' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/RelationshipHealthService.swift:281:9: warning: Property 'color' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/RelationshipHealthService.swift:290:8: warning: Struct 'RelationshipHealthSummary' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/TimeTrackingService.swift:20:17: warning: Property 'timeEntryStore' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/TimeTrackingService.swift:21:17: warning: Property 'weeklyGoalStore' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/TimeTrackingService.swift:30:9: warning: Property 'todayMinutes' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/TimeTrackingService.swift:35:9: warning: Property 'currentSessionSeconds' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/TimeTrackingService.swift:45:17: warning: Property 'idleThresholdSeconds' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/TimeTrackingService.swift:49:5: warning: Initializer 'init(timeEntryStore:weeklyGoalStore:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/TimeTrackingService.swift:54:22: warning: Function 'cleanup()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/TimeTrackingService.swift:63:10: warning: Function 'startObserving()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/TimeTrackingService.swift:108:10: warning: Function 'stopObserving()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/TimeTrackingService.swift:122:10: warning: Function 'startTracking(activity:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/TimeTrackingService.swift:140:10: warning: Function 'stopTracking()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/TimeTrackingService.swift:164:10: warning: Function 'switchActivity(to:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/TimeTrackingService.swift:170:10: warning: Function 'recordActivity()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/TimeTrackingService.swift:176:18: warning: Function 'handleAppBecameActive()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/TimeTrackingService.swift:196:18: warning: Function 'handleAppResignedActive()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/TimeTrackingService.swift:204:18: warning: Function 'startIdleTimer()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/TimeTrackingService.swift:214:18: warning: Function 'stopIdleTimer()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/TimeTrackingService.swift:219:18: warning: Function 'checkIdleState()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Services/URLValidationService.swift:121:9: warning: Property 'statusCode' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Stores/CoachingSessionStore.swift:38:9: warning: Property 'hasCompletedSessionToday' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Stores/DailyTaskStore.swift:61:10: warning: Function 'clearOldTasks(olderThan:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Stores/EventFeedbackStore.swift:26:10: warning: Function 'add(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Stores/JobSourceStore.swift:76:10: warning: Function 'source(byUrl:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Stores/JobSourceStore.swift:86:9: warning: Property 'sourcesNeedingRevalidation' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Stores/JobSourceStore.swift:91:10: warning: Function 'updateValidation(_:valid:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Stores/NetworkingContactStore.swift:47:10: warning: Function 'recordInteraction(_:type:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Stores/NetworkingContactStore.swift:57:10: warning: Function 'updateWarmth(_:to:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Stores/NetworkingContactStore.swift:64:10: warning: Function 'decayWarmthIfNeeded(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Stores/NetworkingContactStore.swift:88:10: warning: Function 'updateAllWarmthLevels()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Stores/NetworkingEventStore.swift:70:10: warning: Function 'markAsPlanned(_:calendarEventId:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Stores/NetworkingEventStore.swift:76:10: warning: Function 'markAsAttended(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Stores/NetworkingEventStore.swift:83:10: warning: Function 'markAsDebriefed(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Stores/NetworkingInteractionStore.swift:43:9: warning: Property 'overdueFollowUps' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Stores/TimeEntryStore.swift:26:10: warning: Function 'add(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Stores/TimeEntryStore.swift:31:10: warning: Function 'delete(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Stores/TimeEntryStore.swift:36:10: warning: Function 'update(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Stores/WeeklyGoalStore.swift:59:10: warning: Function 'add(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Stores/WeeklyGoalStore.swift:64:19: warning: Parameter 'goal' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Stores/WeeklyGoalStore.swift:68:10: warning: Function 'delete(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Stores/WeeklyGoalStore.swift:73:10: warning: Function 'goal(byId:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Stores/WeeklyGoalStore.swift:77:10: warning: Function 'goal(forWeekStarting:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Stores/WeeklyGoalStore.swift:104:10: warning: Function 'incrementFollowUpsSent()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Stores/WeeklyGoalStore.swift:110:10: warning: Function 'addTimeMinutes(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Stores/WeeklyGoalStore.swift:133:10: warning: Function 'averageApplicationRate(weeks:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Stores/WeeklyGoalStore.swift:141:10: warning: Function 'averageTimePerWeek(weeks:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Tools/Schemas/DiscoveryToolNames.swift:10:6: warning: Enum 'DiscoveryToolName' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Discovery/Tools/Schemas/SchemaLoader.swift:11:6: warning: Enum 'SchemaLoader' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Experience/Views/ExperienceEditorSectionViews.swift:352:9: warning: Parameter 'metadata' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/JobApplications/Models/ExtractedRequirements.swift:28:9: warning: Property 'extractedAt' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/JobApplications/Models/ExtractedRequirements.swift:31:9: warning: Property 'extractionModel' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/JobApplications/Models/ExtractedRequirements.swift:39:9: warning: Property 'allRequirements' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/JobApplications/Models/ExtractedRequirements.swift:44:16: warning: Property 'empty' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/JobApplications/Models/JobApp+Helpers.swift:12:9: warning: Property 'displayTitle' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/JobApplications/Models/JobApp.swift:64:9: warning: Property 'isActive' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/JobApplications/Models/JobApp.swift:362:9: warning: Property 'daysSinceApplied' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/JobApplications/Models/JobApp.swift:367:9: warning: Property 'isActive' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/JobApplications/Models/LinkedInJobScrape.swift:272:17: warning: Property 'timeoutWorkItem' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/JobApplications/Utilities/CloudflareCookieManager.swift:46:17: warning: Property 'selfRetain' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/JobApplications/Utilities/WebResourceService.swift:150:17: warning: Property 'selfRetain' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/JobApplications/Utilities/WebResourceService.swift:323:13: warning: Property 'pollInterval' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/KnowledgeCardBrowser/Services/StandaloneKCCoordinator.swift:120:10: warning: Function 'generateCard(from:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/KnowledgeCardBrowser/Services/StandaloneKCCoordinator.swift:173:10: warning: Function 'reset()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/KnowledgeCardBrowser/Services/StandaloneKCCoordinator.swift:624:81: warning: Parameter 'artifacts' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/KnowledgeCardBrowser/Views/DocumentIngestionSheet.swift:26:24: warning: Property 'showFolderPicker' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Constants/OnboardingConstants.swift:217:17: warning: Function 'isAccepted(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Constants/OnboardingConstants.swift:248:17: warning: Function 'rawValues(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Constants/OnboardingConstants.swift:252:17: warning: Function 'rawValues(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Constants/OnboardingConstants.swift:263:9: warning: Property 'parentId' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Constants/OnboardingConstants.swift:270:9: warning: Property 'isSubObjective' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/CandidateDossierTracker.swift:88:10: warning: Function 'hasCollected(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ChatTranscriptStore.swift:16:13: warning: Property 'reasoningExpected' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ChatTranscriptStore.swift:22:42: warning: Property 'messagesSync' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ChatTranscriptStore.swift:23:42: warning: Property 'streamingMessageSync' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ChatTranscriptStore.swift:63:10: warning: Function 'removeMessage(id:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ChatTranscriptStore.swift:87:10: warning: Function 'beginStreamingMessage(initialText:reasoningExpected:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ChatTranscriptStore.swift:161:10: warning: Function 'getLatestReasoningSummary()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/Coordinators/CoordinatorEventRouter.swift:218:10: warning: Function 'presentNextKCValidationIfQueued()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/Coordinators/UIResponseCoordinator.swift:90:10: warning: Function 'completeUploadAndResume(id:link:coordinator:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/Coordinators/UIResponseCoordinator.swift:474:10: warning: Function 'notifyInvalidModel(id:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/InterviewLifecycleController.swift:307:10: warning: Function 'updateLLMFacade(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/InterviewLifecycleController.swift:319:10: warning: Function 'endInterview()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/InterviewOrchestrator.swift:20:17: warning: Property 'baseDeveloperMessage' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/InterviewOrchestrator.swift:92:10: warning: Function 'endInterview()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/InterviewOrchestrator.swift:98:10: warning: Function 'sendUserMessage(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/InterviewOrchestrator.swift:108:10: warning: Function 'setModelId(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/LLMMessenger.swift:470:10: warning: Function 'deactivate()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/LLMMessenger.swift:474:10: warning: Function 'setModelId(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/LLMStateManager.swift:46:10: warning: Function 'getAllowedToolNames()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/LLMStateManager.swift:56:10: warning: Function 'getLastResponseId()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/LLMStateManager.swift:127:10: warning: Function 'hasPendingUIToolCall()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/LLMStateManager.swift:162:10: warning: Function 'hasQueuedDeveloperMessages()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/LLMStateManager.swift:215:10: warning: Function 'getPendingToolResponses()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/LLMStateManager.swift:219:10: warning: Function 'hasPendingToolResponses()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/LLMStateManager.swift:235:12: warning: Struct 'Snapshot' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/LLMStateManager.swift:241:10: warning: Function 'createSnapshot()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/LLMStateManager.swift:251:10: warning: Function 'restoreFromSnapshot(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ModelProvider.swift:8:6: warning: Enum 'TaskType' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ModelProvider.swift:15:8: warning: Struct 'ModelProvider' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/NetworkRouter.swift:25:13: warning: Property 'startedAt' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/NetworkRouter.swift:26:13: warning: Property 'firstDeltaLogged' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/NetworkRouter.swift:31:17: warning: Property 'lastMessageUUID' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ObjectiveStore.swift:15:13: warning: Property 'label' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ObjectiveStore.swift:23:13: warning: Property 'level' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ObjectiveStore.swift:50:42: warning: Property 'objectivesSync' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ObjectiveStore.swift:291:10: warning: Function 'canAdvancePhase(from:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ObjectiveStore.swift:302:10: warning: Function 'restore(objectives:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ObjectiveWorkflowEngine.swift:42:10: warning: Function 'stop()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingDependencyContainer.swift:64:9: warning: Property 'chatboxHandler' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingDependencyContainer.swift:65:9: warning: Property 'toolExecutionCoordinator' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingDependencyContainer.swift:73:9: warning: Property 'dataPersistenceService' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingDependencyContainer.swift:76:9: warning: Property 'documentIngestionKernel' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingDependencyContainer.swift:80:9: warning: Property 'uploadStorage' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingDependencyContainer.swift:82:9: warning: Property 'documentArtifactHandler' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingDependencyContainer.swift:83:9: warning: Property 'documentArtifactMessenger' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingDependencyContainer.swift:87:9: warning: Property 'objectiveStore' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingDependencyContainer.swift:94:9: warning: Property 'toolExecutor' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingDependencyContainer.swift:329:91: warning: Parameter 'dataStore' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingDependencyContainer.swift:354:9: warning: Parameter 'dataStore' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingDependencyContainer.swift:378:40: warning: Parameter 'applicantProfileStore' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingDependencyContainer.swift:442:10: warning: Function 'updateLLMFacade(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingDependencyContainer.swift:451:10: warning: Function 'reregisterTools(onModelAvailabilityIssue:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingDependencyContainer.swift:488:9: warning: Property 'onboardingKnowledgeCards' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingEvents.swift:306:13: warning: Property 'queueDepth' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:16:9: warning: Property 'phaseRegistry' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:17:9: warning: Property 'toolRegistry' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:25:9: warning: Property 'extraction' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:27:9: warning: Property 'phases' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:50:9: warning: Property 'artifacts' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:55:9: warning: Property 'onboardingKnowledgeCards' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingInterviewCoordinator.swift:153:10: warning: Function 'updateLLMFacade(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/OnboardingRequestBuilder.swift:434:42: warning: Parameter 'text' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/SessionUIState.swift:121:22: warning: Property 'pendingUploadRequest' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/SessionUIState.swift:122:22: warning: Property 'pendingChoicePrompt' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/SessionUIState.swift:123:22: warning: Property 'pendingValidationPrompt' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/SessionUIState.swift:125:22: warning: Property 'pendingStreamingStatus' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/StateCoordinator.swift:801:9: warning: Property 'isProcessing' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/StreamQueueManager.swift:44:49: warning: Parameter 'callIds' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/TokenBudgetPolicy.swift:51:13: warning: Property 'shouldLog' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/TokenBudgetPolicy.swift:60:13: warning: Property 'isBlocking' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/TokenUsageTracker.swift:18:9: warning: Property 'timestamp' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/TokenUsageTracker.swift:26:9: warning: Property 'totalTokens' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Core/ToolHandler.swift:185:10: warning: Function 'completeUpload(id:link:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Handlers/ChatboxHandler.swift:20:17: warning: Property 'state' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Handlers/DocumentArtifactHandler.swift:52:10: warning: Function 'stop()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Handlers/DocumentArtifactHandler.swift:217:13: warning: Property 'error' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Handlers/DocumentArtifactMessenger.swift:70:10: warning: Function 'stop()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Handlers/SwiftDataSessionPersistenceHandler.swift:53:10: warning: Function 'endSession(markComplete:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Handlers/SwiftDataSessionPersistenceHandler.swift:158:10: warning: Function 'stop()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Handlers/SwiftDataSessionPersistenceHandler.swift:470:10: warning: Function 'getArchivedArtifactsCount()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Handlers/TranscriptPersistenceHandler.swift:37:10: warning: Function 'stop()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Handlers/UploadInteractionHandler.swift:55:10: warning: Function 'completeUpload(id:link:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Handlers/UploadInteractionHandler.swift:81:10: warning: Function 'cancelUpload(id:reason:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Handlers/UploadInteractionHandler.swift:290:18: warning: Function 'resumeUpload(id:withError:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/DocumentInventory.swift:15:9: warning: Property 'generatedAt' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/DocumentInventory.swift:42:13: warning: Property 'crossReferences' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/DocumentInventory.swift:43:13: warning: Property 'extractionNotes' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/EvidenceRequirement.swift:5:9: warning: Property 'timelineEntryId' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/EvidenceRequirement.swift:9:9: warning: Property 'linkedArtifactId' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/Extensions/JSONViewHelpers.swift:8:9: warning: Property 'nonEmptyString' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/Extensions/JSONViewHelpers.swift:14:9: warning: Property 'displayName' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/Extensions/JSONViewHelpers.swift:18:9: warning: Property 'formattedCityRegion' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/Extensions/JSONViewHelpers.swift:25:9: warning: Property 'formattedLocation' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/Extensions/JSONViewHelpers.swift:50:9: warning: Property 'formattedDateRange' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/Extensions/JSONViewHelpers.swift:56:9: warning: Property 'urlString' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/Extensions/JSONViewHelpers.swift:63:9: warning: Property 'nonEmptyTrimmed' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/KnowledgeCardDraft.swift:114:9: warning: Property 'artifactSHA' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/KnowledgeCardDraft.swift:123:5: warning: Initializer 'init(quote:source:locator:artifactSHA:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/KnowledgeCardDraft.swift:134:5: warning: Initializer 'init(json:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/KnowledgeCardDraft.swift:140:10: warning: Function 'toJSON()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/KnowledgeCardDraft.swift:202:5: warning: Initializer 'init(id:filename:title:contentType:sizeInBytes:sha256:extractedContent:summary:briefDescription:metadata:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/KnowledgeCardDraft.swift:250:10: warning: Function 'toJSON()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/MergedCardInventory.swift:16:9: warning: Property 'generatedAt' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/MergedCardInventory.swift:43:13: warning: Property 'extractionPriority' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/MergedCardInventory.swift:61:17: warning: Property 'evidenceLocations' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/MergedCardInventory.swift:71:17: warning: Property 'evidenceLocations' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/MergedCardInventory.swift:72:17: warning: Property 'adds' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/MergedCardInventory.swift:116:13: warning: Property 'mergedOutputCards' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/MergedCardInventory.swift:118:13: warning: Property 'strongEvidence' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/MergedCardInventory.swift:119:13: warning: Property 'needsMoreEvidence' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPlaceholders.swift:21:9: warning: Property 'toolCalls' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPlaceholders.swift:23:13: warning: Property 'id' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPlaceholders.swift:24:13: warning: Property 'name' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPlaceholders.swift:25:13: warning: Property 'arguments' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPlaceholders.swift:51:9: warning: Property 'icon' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPlaceholders.swift:58:9: warning: Property 'required' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPlaceholders.swift:141:9: warning: Property 'filename' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPlaceholders.swift:142:9: warning: Property 'url' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPlaceholders.swift:143:9: warning: Property 'uploadedAt' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPlaceholders.swift:202:5: warning: Initializer 'init(proposedProfile:sources:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPlaceholders.swift:208:9: warning: Property 'id' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPlaceholders.swift:234:9: warning: Property 'rawExtraction' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPlaceholders.swift:237:5: warning: Initializer 'init(id:title:summary:rawExtraction:uncertainties:progressItems:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPreferences.swift:4:9: warning: Property 'preferredModelId' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingPreferences.swift:5:9: warning: Property 'preferredBackend' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/OnboardingSessionModels.swift:131:9: warning: Property 'isInCurrentSession' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Models/StructuredKnowledgeCard.swift:11:8: warning: Struct 'StructuredKnowledgeCard' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Phase/PhaseOneScript.swift:19:9: warning: Property 'phase' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Phase/PhaseScript.swift:12:9: warning: Property 'completedObjectives' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Phase/PhaseScript.swift:14:9: warning: Property 'details' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Phase/PhaseScript.swift:24:9: warning: Property 'id' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Phase/PhaseScript.swift:57:9: warning: Property 'phase' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Phase/PhaseScript.swift:67:10: warning: Function 'canAdvance(completedObjectives:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Phase/PhaseScript.swift:69:10: warning: Function 'missingObjectives(completedObjectives:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Phase/PhaseScript.swift:77:10: warning: Function 'canAdvance(completedObjectives:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Phase/PhaseScript.swift:80:10: warning: Function 'missingObjectives(completedObjectives:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Phase/PhaseScriptRegistry.swift:40:32: warning: Parameter 'phase' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Phase/PhaseThreeScript.swift:11:9: warning: Property 'phase' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Phase/PhaseTwoScript.swift:11:9: warning: Property 'phase' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/AgentRunner.swift:28:9: warning: Property 'name' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/AgentRunner.swift:66:9: warning: Property 'agentId' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/AgentRunner.swift:67:9: warning: Property 'success' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/AgentRunner.swift:69:9: warning: Property 'error' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/AgentRunner.swift:70:9: warning: Property 'turnCount' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/AgentRunner.swift:71:9: warning: Property 'duration' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/ArtifactIngestionCoordinator.swift:90:10: warning: Function 'hasPendingArtifacts(forPlanItem:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/ArtifactIngestionCoordinator.swift:96:10: warning: Function 'getPendingArtifacts(forPlanItem:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/ArtifactIngestionCoordinator.swift:103:10: warning: Function 'getPendingStatusMessage(forPlanItem:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/ArtifactIngestionProtocol.swift:13:9: warning: Property 'artifactId' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/ArtifactIngestionProtocol.swift:15:9: warning: Property 'source' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/ArtifactIngestionProtocol.swift:38:9: warning: Property 'startTime' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/ArtifactIngestionProtocol.swift:40:9: warning: Property 'statusMessage' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/ArtifactIngestionProtocol.swift:45:10: warning: Protocol 'ArtifactIngestionKernel' is redundant as it's never used as an existential type
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentIngestionKernel.swift:12:32: warning: Protocol 'ArtifactIngestionKernel' conformance is redundant
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/GitIngestionKernel.swift:13:27: warning: Protocol 'ArtifactIngestionKernel' conformance is redundant
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/CardInventoryService.swift:31:10: warning: Function 'updateLLMFacade(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/CardMergeService.swift:22:10: warning: Function 'updateLLMFacade(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentExtractionService.swift:11:9: warning: Property 'onInvalidModelId' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentExtractionService.swift:16:13: warning: Property 'returnTypes' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentExtractionService.swift:54:13: warning: Property 'confidence' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentExtractionService.swift:55:13: warning: Property 'issues' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentExtractionService.swift:66:13: warning: Property 'quality' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentExtractionService.swift:67:13: warning: Property 'derivedApplicantProfile' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentExtractionService.swift:68:13: warning: Property 'derivedSkeletonTimeline' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentExtractionService.swift:69:13: warning: Property 'persisted' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentExtractionService.swift:344:9: warning: Parameter 'timeout' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentIngestionKernel.swift:13:9: warning: Property 'kernelType' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentIngestionKernel.swift:34:10: warning: Function 'startIngestion(source:planItemId:metadata:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentIngestionKernel.swift:67:10: warning: Function 'completeIngestion(pendingId:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentIngestionKernel.swift:77:18: warning: Function 'processDocument(pendingId:fileURL:planItemId:metadata:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/DocumentProcessingService.swift:31:10: warning: Function 'updateLLMFacade(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/FactBasedKCSchema.swift:13:6: warning: Enum 'FactBasedKCSchema' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/GitAgent/FileSystemTools.swift:66:13: warning: Property 'truncatedLines' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/GitAgent/FileSystemTools.swift:222:13: warning: Property 'path' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/GitAgent/FileSystemTools.swift:229:13: warning: Property 'entries' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/GitAgent/FileSystemTools.swift:230:13: warning: Property 'totalCount' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/GitAgent/FileSystemTools.swift:231:13: warning: Property 'truncated' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/GitAgent/FileSystemTools.swift:413:13: warning: Property 'path' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/GitAgent/FileSystemTools.swift:613:13: warning: Property 'filePath' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/GitAgent/FileSystemTools.swift:614:13: warning: Property 'relativePath' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/GitAgent/FileSystemTools.swift:617:13: warning: Property 'contextBefore' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/GitAgent/FileSystemTools.swift:618:13: warning: Property 'contextAfter' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/GitAgent/FileSystemTools.swift:622:13: warning: Property 'filePath' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/GitAgent/FileSystemTools.swift:628:13: warning: Property 'files' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/GitAgent/FileSystemTools.swift:629:13: warning: Property 'totalFiles' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/GitAgent/FileSystemTools.swift:630:13: warning: Property 'totalMatches' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/GitAgent/FileSystemTools.swift:631:13: warning: Property 'truncated' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/GitIngestionKernel.swift:14:9: warning: Property 'kernelType' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/GitIngestionKernel.swift:103:10: warning: Function 'completeIngestion(pendingId:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/UploadFileService.swift:14:10: warning: Function 'downloadRemoteFile(from:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Services/UploadFileService.swift:50:10: warning: Function 'cleanupTemporaryFile(at:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Stores/OnboardingSessionStore.swift:36:10: warning: Function 'getAllSessions()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Stores/OnboardingSessionStore.swift:77:10: warning: Function 'completeSession(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Stores/OnboardingSessionStore.swift:262:10: warning: Function 'updateMessage(_:text:toolCallsJSON:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Stores/OnboardingSessionStore.swift:451:10: warning: Function 'exportArtifactsToFilesystem(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Tools/Implementations/DisplayKnowledgeCardPlanTool.swift:153:9: warning: Property 'assignedArtifactIds' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Tools/Implementations/SubmitKnowledgeCardTool.swift:44:55: warning: Parameter 'dataStore' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Tools/Shared/TimelineToolHelpers.swift:12:6: warning: Enum 'TimelineValidation' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Tools/Shared/TimelineToolHelpers.swift:63:6: warning: Enum 'TimelineResponseBuilder' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Tools/Shared/TimelineToolHelpers.swift:129:6: warning: Enum 'TimelineDataProcessor' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Utilities/TimelineDiff.swift:4:13: warning: Property 'field' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Utilities/TimelineDiff.swift:14:13: warning: Property 'title' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Views/Components/CitationRow.swift:2:8: warning: Struct 'CitationRow' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Views/Components/EvidenceRequestView.swift:3:8: warning: Struct 'EvidenceRequestView' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Views/Components/ExtractionStatusCard.swift:2:8: warning: Struct 'ExtractionStatusCard' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Views/Components/KnowledgeCardDeckView.swift:5:8: warning: Struct 'KnowledgeCardDeckView' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Views/Components/KnowledgeCardDeckView.swift:231:8: warning: Struct 'DeckPageIndicator' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Views/Components/TokenUsageView.swift:13:8: warning: Struct 'TokenUsageTabContent' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Views/Components/TokenUsageView.swift:303:8: warning: Struct 'TokenUsageBadge' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Views/Components/ValidationProtocols.swift:4:9: warning: Property 'isEditing' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Views/Components/ValidationProtocols.swift:5:9: warning: Property 'beginEditing' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Views/Components/ValidationProtocols.swift:6:9: warning: Property 'toggleEditing' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Views/Components/ValidationProtocols.swift:7:9: warning: Property 'onChange' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Views/OnboardingInterviewView.swift:346:9: warning: Parameter 'coordinator' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Views/OnboardingInterviewView.swift:420:41: warning: Property 'dismiss' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/ResRefs/Models/ResRef.swift:233:9: warning: Property 'artifactId' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/ResRefs/Models/ResRef.swift:234:9: warning: Property 'location' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/ResumeTree/Views/NodeHeaderView.swift:947:9: warning: Property 'isCollection' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resumes/AI/Services/PhaseReviewManager.swift:101:9: warning: Property 'openRouterService' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resumes/AI/Services/PhaseReviewManager.swift:156:9: warning: Property 'showSkillExperiencePicker' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resumes/AI/Services/PhaseReviewManager.swift:161:9: warning: Property 'pendingSkillQueries' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resumes/AI/Services/PhaseReviewManager.swift:166:10: warning: Function 'submitSkillExperienceResults(_:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resumes/AI/Services/PhaseReviewManager.swift:170:10: warning: Function 'cancelSkillExperienceQuery()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resumes/AI/Services/PhaseReviewManager.swift:254:10: warning: Function 'sectionsWithActiveReviewPhases(for:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resumes/AI/Services/PhaseReviewManager.swift:675:18: warning: Function 'advanceToNextPhase(resume:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resumes/AI/Services/PhaseReviewManager.swift:890:10: warning: Function 'goToItem(at:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resumes/AI/Services/RevisionNavigationManager.swift:15:9: warning: Property 'currentConversationId' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resumes/AI/Services/RevisionNavigationManager.swift:16:9: warning: Property 'currentModelId' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resumes/AI/Services/RevisionNavigationManager.swift:17:9: warning: Property 'openRouterService' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resumes/AI/Services/RevisionNavigationManager.swift:19:10: warning: Function 'showReviewSheet()' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resumes/AI/Tools/QueryUserExperienceLevelTool.swift:51:34: warning: Parameter 'context' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resumes/AI/Tools/QueryUserExperienceLevelTool.swift:100:9: warning: Property 'results' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resumes/AI/Tools/ResumeToolRegistry.swift:26:34: warning: Parameter 'context' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resumes/AI/Tools/ResumeToolRegistry.swift:34:9: warning: Property 'resume' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resumes/AI/Tools/ResumeToolRegistry.swift:36:9: warning: Property 'jobApp' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resumes/AI/Tools/ResumeToolRegistry.swift:38:9: warning: Property 'presentUI' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resumes/AI/Tools/ResumeToolRegistry.swift:59:9: warning: Property 'keyword' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resumes/AI/Tools/ResumeToolRegistry.swift:60:9: warning: Property 'level' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resumes/AI/Tools/ResumeToolRegistry.swift:61:9: warning: Property 'comment' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resumes/AI/Types/ResumeUpdateNode.swift:23:9: warning: Property 'nodeType' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resumes/AI/Types/ResumeUpdateNode.swift:26:9: warning: Property 'oldValueArray' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resumes/AI/Types/ResumeUpdateNode.swift:27:9: warning: Property 'newValueArray' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resumes/AI/Types/ResumeUpdateNode.swift:188:9: warning: Property 'sourceNodeIds' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Resumes/AI/Types/ResumeUpdateNode.swift:309:9: warning: Property 'pendingItemIds' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Shared/AI/Models/LLM/LLMClient.swift:14:10: warning: Function 'executeTextWithPDF(prompt:modelId:pdfData:temperature:maxTokens:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Shared/AI/Models/LLM/LLMDomain.swift:40:9: warning: Property 'type' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Shared/AI/Models/LLM/LLMDomain.swift:46:9: warning: Property 'format' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Shared/AI/Models/LLM/OpenAIResponsesClient.swift:48:10: warning: Function 'executeTextWithPDF(prompt:modelId:pdfData:temperature:maxTokens:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Shared/AI/Models/LLM/SwiftOpenAIClient.swift:153:10: warning: Function 'executeTextWithPDF(prompt:modelId:pdfData:temperature:maxTokens:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Shared/AI/Models/Services/LLMFacade.swift:236:10: warning: Function 'executeTextWithPDF(prompt:modelId:pdfData:temperature:maxTokens:backend:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Shared/AI/Models/Services/LLMFacade.swift:778:9: warning: Parameter 'temperature' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Shared/AI/Models/Services/LLMRequestBuilder.swift:235:17: warning: Function 'buildPDFRequest(prompt:modelId:pdfData:filename:temperature:maxTokens:)' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Shared/AI/Services/GoogleAIService.swift:20:13: warning: Property 'totalTokenCount' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Shared/AI/Services/GoogleAIService.swift:26:13: warning: Property 'description' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Shared/AI/Services/GoogleAIService.swift:27:13: warning: Property 'inputTokenLimit' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Shared/AI/Services/GoogleAIService.swift:29:13: warning: Property 'supportsPDFs' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Shared/AI/Services/GoogleAIService.swift:31:13: warning: Property 'name' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Shared/AI/Services/GoogleAIService.swift:37:13: warning: Property 'mimeType' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Shared/AI/Services/GoogleAIService.swift:38:13: warning: Property 'sizeBytes' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Shared/Utilities/Logger.swift:103:13: warning: Property 'enableConsoleOutput' is assigned, but never used
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Templates/Models/Template.swift:20:9: warning: Property 'manifest' is unused
+/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Templates/Utilities/TemplateManifestDefaults.swift:49:13: warning: Property 'type' is assigned, but never used

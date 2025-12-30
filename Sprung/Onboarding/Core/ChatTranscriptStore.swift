@@ -13,14 +13,11 @@ actor ChatTranscriptStore: OnboardingEventEmitter {
     struct StreamingMessage {
         let id: UUID
         var text: String
-        var reasoningExpected: Bool
     }
     // MARK: - Reasoning Summary (Sidebar Display)
     private(set) var currentReasoningSummary: String?
     private(set) var isReasoningActive = false
     // MARK: - Synchronous Caches (for SwiftUI)
-    nonisolated(unsafe) private(set) var messagesSync: [OnboardingMessage] = []
-    nonisolated(unsafe) private(set) var streamingMessageSync: StreamingMessage?
     nonisolated(unsafe) private(set) var currentReasoningSummarySync: String?
     nonisolated(unsafe) private(set) var isReasoningActiveSync = false
     // MARK: - Initialization
@@ -39,7 +36,6 @@ actor ChatTranscriptStore: OnboardingEventEmitter {
             isSystemGenerated: isSystemGenerated
         )
         messages.append(message)
-        messagesSync = messages
         return message.id
     }
     /// Append assistant message
@@ -51,23 +47,11 @@ actor ChatTranscriptStore: OnboardingEventEmitter {
             timestamp: Date()
         )
         messages.append(message)
-        messagesSync = messages
         return message.id
     }
     /// Get all messages
     func getAllMessages() -> [OnboardingMessage] {
         messages
-    }
-
-    /// Remove a message by ID (used when message send fails)
-    func removeMessage(id: UUID) -> OnboardingMessage? {
-        guard let index = messages.firstIndex(where: { $0.id == id }) else {
-            return nil
-        }
-        let removed = messages.remove(at: index)
-        messagesSync = messages
-        Logger.info("🗑️ Removed message \(id) from transcript", category: .ai)
-        return removed
     }
     // MARK: - Responses API Threading
     /// Set previous response ID for Responses API threading
@@ -83,19 +67,12 @@ actor ChatTranscriptStore: OnboardingEventEmitter {
         previousResponseId
     }
     // MARK: - Streaming Message Management
-    /// Begin streaming a new message
-    func beginStreamingMessage(initialText: String, reasoningExpected: Bool) -> UUID {
-        let id = UUID()
-        return beginStreamingMessage(id: id, initialText: initialText, reasoningExpected: reasoningExpected)
-    }
     /// Begin streaming a message with specific ID
     func beginStreamingMessage(id: UUID, initialText: String, reasoningExpected: Bool) -> UUID {
         streamingMessage = StreamingMessage(
             id: id,
-            text: initialText,
-            reasoningExpected: reasoningExpected
+            text: initialText
         )
-        streamingMessageSync = streamingMessage
         let message = OnboardingMessage(
             id: id,
             role: .assistant,
@@ -103,7 +80,6 @@ actor ChatTranscriptStore: OnboardingEventEmitter {
             timestamp: Date()
         )
         messages.append(message)
-        messagesSync = messages
         return id
     }
     /// Update streaming message with delta
@@ -111,20 +87,16 @@ actor ChatTranscriptStore: OnboardingEventEmitter {
         guard var streaming = streamingMessage, streaming.id == id else { return }
         streaming.text += delta
         streamingMessage = streaming
-        streamingMessageSync = streaming
         if let index = messages.firstIndex(where: { $0.id == id }) {
             messages[index].text += delta
-            messagesSync = messages
         }
     }
     /// Finalize streaming message
     func finalizeStreamingMessage(id: UUID, finalText: String, toolCalls: [OnboardingMessage.ToolCallInfo]? = nil) {
         streamingMessage = nil
-        streamingMessageSync = nil
         if let index = messages.firstIndex(where: { $0.id == id }) {
             messages[index].text = finalText
             messages[index].toolCalls = toolCalls
-            messagesSync = messages
         }
     }
     // MARK: - Reasoning Summary (Sidebar Display)
@@ -157,15 +129,10 @@ actor ChatTranscriptStore: OnboardingEventEmitter {
         currentReasoningSummarySync = nil
         isReasoningActiveSync = false
     }
-    /// Get latest reasoning summary
-    func getLatestReasoningSummary() -> String? {
-        latestReasoningSummary
-    }
     // MARK: - State Management
     /// Restore messages from checkpoint
     func restoreMessages(_ restoredMessages: [OnboardingMessage]) {
         messages = restoredMessages
-        messagesSync = messages
         Logger.info("📥 Restored \(messages.count) messages to ChatTranscriptStore", category: .ai)
     }
     /// Reset all messages and state
@@ -177,8 +144,6 @@ actor ChatTranscriptStore: OnboardingEventEmitter {
         currentReasoningSummary = nil
         isReasoningActive = false
         // Reset sync caches
-        messagesSync = []
-        streamingMessageSync = nil
         currentReasoningSummarySync = nil
         isReasoningActiveSync = false
         Logger.info("🔄 ChatTranscriptStore reset", category: .ai)

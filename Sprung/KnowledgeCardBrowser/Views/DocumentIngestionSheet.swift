@@ -23,7 +23,6 @@ struct DocumentIngestionSheet: View {
     @State private var coordinator: StandaloneKCCoordinator?
     @State private var sources: [URL] = []
     @State private var showFileImporter = false
-    @State private var showFolderPicker = false
     @State private var showExistingArtifactsPicker = false
     /// Artifact IDs that have been added from archived artifacts (for display)
     @State private var addedArchivedArtifactIds: Set<String> = []

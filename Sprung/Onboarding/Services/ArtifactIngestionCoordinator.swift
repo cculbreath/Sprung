@@ -86,31 +86,6 @@ actor ArtifactIngestionCoordinator {
         }
     }
 
-    /// Check if there are pending artifacts for a plan item
-    func hasPendingArtifacts(forPlanItem planItemId: String) -> Bool {
-        guard let artifactIds = artifactsByPlanItem[planItemId] else { return false }
-        return artifactIds.contains { pendingArtifacts[$0]?.status == .pending || pendingArtifacts[$0]?.status == .processing }
-    }
-
-    /// Get all pending artifacts for a plan item
-    func getPendingArtifacts(forPlanItem planItemId: String) -> [PendingArtifact] {
-        guard let artifactIds = artifactsByPlanItem[planItemId] else { return [] }
-        return artifactIds.compactMap { pendingArtifacts[$0] }
-            .filter { $0.status == .pending || $0.status == .processing }
-    }
-
-    /// Get status message for pending artifacts
-    func getPendingStatusMessage(forPlanItem planItemId: String) -> String? {
-        let pending = getPendingArtifacts(forPlanItem: planItemId)
-        guard !pending.isEmpty else { return nil }
-
-        if pending.count == 1 {
-            return "Waiting for \(pending[0].filename) to finish processing..."
-        } else {
-            return "Waiting for \(pending.count) items to finish processing..."
-        }
-    }
-
     /// Cancel all active ingestion tasks across all kernels
     func cancelAllIngestion() async {
         Logger.info("🛑 ArtifactIngestionCoordinator: Cancelling all ingestion tasks", category: .ai)
@@ -158,7 +133,6 @@ actor ArtifactIngestionCoordinator {
         }
 
         pending.status = .failed
-        pending.statusMessage = error
         pendingArtifacts[pendingId] = pending
 
         await notifyIngestionFailed(

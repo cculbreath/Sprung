@@ -431,7 +431,7 @@ struct OnboardingRequestBuilder {
     // MARK: - Tool Choice
 
     /// Determine appropriate tool_choice for the given message context
-    private func determineToolChoice(for text: String, isSystemGenerated: Bool) async -> ToolChoiceMode {
+    private func determineToolChoice(for _: String, isSystemGenerated: Bool) async -> ToolChoiceMode {
         if isSystemGenerated {
             return .auto
         }

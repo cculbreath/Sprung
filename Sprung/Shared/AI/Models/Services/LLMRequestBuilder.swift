@@ -230,38 +230,6 @@ struct LLMRequestBuilder {
         }
     }
 
-    /// Build parameters for a request with a PDF document
-    /// Uses OpenRouter's file content type for native PDF support
-    static func buildPDFRequest(
-        prompt: String,
-        modelId: String,
-        pdfData: Data,
-        filename: String = "document.pdf",
-        temperature: Double,
-        maxTokens: Int? = nil
-    ) -> ChatCompletionParameters {
-        let base64PDF = pdfData.base64EncodedString()
-        let dataURL = "data:application/pdf;base64,\(base64PDF)"
-        let fileDetail = ChatCompletionParameters.Message.ContentType.MessageContent.FileDetail(
-            filename: filename,
-            fileData: dataURL
-        )
-        let contentParts: [ChatCompletionParameters.Message.ContentType.MessageContent] = [
-            .text(prompt),
-            .file(fileDetail)
-        ]
-        let message = ChatCompletionParameters.Message(
-            role: .user,
-            content: .contentArray(contentParts)
-        )
-        return ChatCompletionParameters(
-            messages: [message],
-            model: .custom(modelId),
-            maxTokens: maxTokens,
-            temperature: temperature
-        )
-    }
-
     /// Build parameters for a request with tool/function calling support
     static func buildToolRequest(
         messages: [ChatCompletionParameters.Message],

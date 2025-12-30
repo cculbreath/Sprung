@@ -798,11 +798,6 @@ actor StateCoordinator: OnboardingEventEmitter {
         // Update SessionUIState's excluded tools (this also republishes permissions)
         await uiState.includeTool(toolName)
     }
-    var isProcessing: Bool {
-        get async {
-            await uiState.isProcessing
-        }
-    }
     var isActive: Bool {
         get async {
             await uiState.isActive

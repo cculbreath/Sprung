@@ -439,15 +439,6 @@ final class OnboardingDependencyContainer {
         Logger.info("🏗️ OnboardingDependencyContainer late initialization completed", category: .ai)
     }
     // MARK: - Service Updates
-    func updateLLMFacade(_ facade: LLMFacade?) {
-        self.llmFacade = facade
-        lifecycleController.updateLLMFacade(facade)
-        Task {
-            await gitIngestionKernel.updateLLMFacade(facade)
-            await documentProcessingService.updateLLMFacade(facade)
-            await cardMergeService.updateLLMFacade(facade)
-        }
-    }
     func reregisterTools(onModelAvailabilityIssue: @escaping (String) -> Void) {
         toolRegistrar.registerTools(
             documentExtractionService: documentExtractionService,
@@ -482,10 +473,5 @@ final class OnboardingDependencyContainer {
         )
         kcAgentService = service
         return service
-    }
-
-    /// Knowledge cards created during onboarding (persisted as ResRefs with isFromOnboarding=true)
-    var onboardingKnowledgeCards: [ResRef] {
-        resRefStore.resRefs.filter { $0.isFromOnboarding }
     }
 }

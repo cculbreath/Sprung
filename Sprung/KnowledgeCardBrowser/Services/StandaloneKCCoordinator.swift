@@ -115,68 +115,6 @@ class StandaloneKCCoordinator {
 
     // MARK: - Public API: Single Card Generation
 
-    /// Generate a knowledge card from the given source URLs.
-    /// Sources can be document files (PDF, DOCX, TXT) or git repository folders.
-    func generateCard(from sources: [URL]) async throws {
-        guard !sources.isEmpty else {
-            throw StandaloneKCError.noSources
-        }
-
-        guard llmFacade != nil else {
-            throw StandaloneKCError.llmNotConfigured
-        }
-
-        status = .idle
-        errorMessage = nil
-        generatedCard = nil
-
-        do {
-            // Phase 1: Extract all sources (persisted to SwiftData)
-            let artifacts = try await extractor.extractAllSources(sources) { [weak self] current, total, filename in
-                self?.status = .extracting(current: current, total: total, filename: filename)
-            }
-
-            guard !artifacts.isEmpty else {
-                throw StandaloneKCError.noArtifactsExtracted
-            }
-
-            // Track artifact IDs for export
-            currentArtifactIds = Set(artifacts.compactMap { $0["id"].string })
-
-            // Phase 2: Extract metadata
-            status = .analyzingMetadata
-            let metadata = try await analyzer.extractMetadata(from: artifacts)
-
-            // Phase 3: Generate KC via agent
-            status = .generatingCard(current: 1, total: 1)
-            let generated = try await runKCAgent(artifactIds: currentArtifactIds, artifacts: artifacts, metadata: metadata)
-
-            // Phase 4: Persist to ResRef
-            let resRef = createResRef(from: generated, metadata: metadata, artifacts: artifacts)
-            resRefStore?.addResRef(resRef)
-
-            self.generatedCard = resRef
-            status = .completed(created: 1, enhanced: 0)
-
-            Logger.info("✅ StandaloneKCCoordinator: Knowledge card created - \(resRef.name)", category: .ai)
-
-        } catch {
-            let message = error.localizedDescription
-            status = .failed(message)
-            errorMessage = message
-            Logger.error("❌ StandaloneKCCoordinator: Failed - \(message)", category: .ai)
-            throw error
-        }
-    }
-
-    /// Reset the coordinator state for a new ingestion
-    func reset() {
-        status = .idle
-        generatedCard = nil
-        errorMessage = nil
-        currentArtifactIds = []
-    }
-
     /// Generate a knowledge card from URLs and/or pre-loaded archived artifacts.
     func generateCardWithExisting(from sources: [URL], existingArtifactIds: Set<String>) async throws {
         guard !sources.isEmpty || !existingArtifactIds.isEmpty else {
@@ -230,7 +168,7 @@ class StandaloneKCCoordinator {
             let generated = try await runKCAgent(artifactIds: currentArtifactIds, artifacts: allArtifacts, metadata: metadata)
 
             // Phase 5: Persist to ResRef
-            let resRef = createResRef(from: generated, metadata: metadata, artifacts: allArtifacts)
+            let resRef = createResRef(from: generated, metadata: metadata)
             resRefStore?.addResRef(resRef)
 
             self.generatedCard = resRef
@@ -508,7 +446,7 @@ class StandaloneKCCoordinator {
             location: nil
         )
 
-        return createResRef(from: generated, metadata: metadata, artifacts: artifacts)
+        return createResRef(from: generated, metadata: metadata)
     }
 
     /// Run the KC expand agent to expand an existing card with new evidence.
@@ -621,7 +559,7 @@ class StandaloneKCCoordinator {
     // MARK: - Private: ResRef Creation
 
     /// Create ResRef from fact-based GeneratedCard
-    private func createResRef(from card: GeneratedCard, metadata: CardMetadata, artifacts: [JSON]) -> ResRef {
+    private func createResRef(from card: GeneratedCard, metadata: CardMetadata) -> ResRef {
         // Encode sources as JSON
         var sourcesJSON: String?
         if !card.sources.isEmpty {
