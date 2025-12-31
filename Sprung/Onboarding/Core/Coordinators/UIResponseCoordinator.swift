@@ -32,10 +32,12 @@ final class UIResponseCoordinator {
             await state.setUserApprovedKCSkip(approved)
             Logger.info("📋 Skip phase approval: \(approved ? "approved" : "rejected")", category: .ai)
 
-            // Force next_phase tool call if approved - prevents LLM from looping
+            // FORCED PHASE TRANSITION: When user approves, execute immediately
+            // This bypasses the LLM to prevent dead-end stalls where the LLM
+            // acknowledges but fails to call next_phase
             if approved {
-                await state.setPendingForcedToolChoice(OnboardingToolName.nextPhase.rawValue)
-                Logger.info("🎯 Forcing toolChoice to next_phase after skip approval", category: .ai)
+                await forcePhaseTransition()
+                Logger.info("⚡ Forced phase transition executed after user approval", category: .ai)
             }
         }
 
@@ -48,9 +50,9 @@ final class UIResponseCoordinator {
         // For skip phase approval, provide clear feedback on user decision
         if result.source == "skip_phase_approval" {
             let approved = selectionIds.contains("approve")
-            output["status"].string = approved ? "approved" : "rejected"
+            output["status"].string = approved ? "phase_advanced" : "rejected"
             output["message"].string = approved
-                ? "User approved skipping to next phase. You may now call next_phase."
+                ? "User approved skip. Phase has been advanced. Begin new phase immediately."
                 : "User rejected skip request. Continue working on current phase objectives."
         } else {
             output["message"].string = "User selected option(s): \(selectionIds.joined(separator: ", "))"
@@ -58,6 +60,28 @@ final class UIResponseCoordinator {
         }
         await completePendingUIToolCall(output: output)
         Logger.info("✅ Choice selection - info included in tool response", category: .ai)
+    }
+
+    // MARK: - Forced Phase Transition
+
+    /// Force an immediate phase transition without waiting for LLM to call next_phase.
+    /// Used when user approves a phase skip to prevent dead-end stalls.
+    private func forcePhaseTransition() async {
+        let currentPhase = await state.phase
+        guard let nextPhase = currentPhase.next() else {
+            Logger.warning("⚠️ Cannot force phase transition: already at final phase", category: .ai)
+            return
+        }
+
+        Logger.info("⚡ Forcing phase transition: \(currentPhase.rawValue) → \(nextPhase.rawValue)", category: .ai)
+
+        // Emit phase transition request - StateCoordinator will handle the actual transition
+        // This triggers: setPhase() → phaseTransitionApplied → handlePhaseTransition (sends intro prompt)
+        await eventBus.publish(.phaseTransitionRequested(
+            from: currentPhase.rawValue,
+            to: nextPhase.rawValue,
+            reason: "User approved skip to next phase"
+        ))
     }
     // MARK: - Upload Handling
     func completeUploadAndResume(id: UUID, fileURLs: [URL], coordinator: OnboardingInterviewCoordinator) async {
