@@ -38,7 +38,7 @@ final class OnboardingUIState {
     /// ID of the currently expanded/editing timeline entry (nil = all collapsed)
     var editingTimelineEntryId: String?
     // MARK: - Wizard State
-    var wizardStep: StateCoordinator.WizardStep = .introduction
+    var wizardStep: StateCoordinator.WizardStep = .voice
     var completedWizardSteps: Set<StateCoordinator.WizardStep> = []
     var phase: InterviewPhase = .phase1VoiceContext
     // MARK: - Tool Pane State (Mirrored from ToolHandler)

@@ -10,16 +10,16 @@ import Observation
 @Observable
 final class WizardProgressTracker {
     // MARK: - Observable State
-    private(set) var currentStep: OnboardingWizardStep = .introduction
+    private(set) var currentStep: OnboardingWizardStep = .voice
     private(set) var completedSteps: Set<OnboardingWizardStep> = []
     private(set) var stepStatuses: [OnboardingWizardStep: OnboardingWizardStepStatus] = [:]
     // MARK: - Public API
     /// Resets wizard progress to initial state.
     func reset() {
-        currentStep = .introduction
+        currentStep = .voice
         completedSteps.removeAll()
         stepStatuses.removeAll()
-        Logger.debug("[WizardStep] Reset to introduction", category: .ai)
+        Logger.debug("[WizardStep] Reset to voice", category: .ai)
     }
     /// Synchronizes tracker state with authoritative onboarding state.
     /// - Parameters:

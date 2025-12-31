@@ -75,12 +75,12 @@ struct OnboardingChoicePrompt: Identifiable, Codable {
         self.source = source
     }
 }
+/// Wizard steps that correspond to the 4-phase interview structure
 enum OnboardingWizardStep: String, CaseIterable, Hashable, Codable {
-    case introduction
-    case resumeIntake
-    case artifactDiscovery
-    case writingCorpus
-    case wrapUp
+    case voice      // Phase 1: Voice & Context
+    case story      // Phase 2: Career Story
+    case evidence   // Phase 3: Evidence Collection
+    case strategy   // Phase 4: Strategic Synthesis
 }
 enum OnboardingWizardStepStatus: String, Codable {
     case pending
@@ -90,16 +90,14 @@ enum OnboardingWizardStepStatus: String, Codable {
 extension OnboardingWizardStep {
     var title: String {
         switch self {
-        case .introduction:
-            return "Introduction"
-        case .resumeIntake:
-            return "Résumé Intake"
-        case .artifactDiscovery:
-            return "Artifact Discovery"
-        case .writingCorpus:
-            return "Writing Corpus"
-        case .wrapUp:
-            return "Wrap Up"
+        case .voice:
+            return "Voice"
+        case .story:
+            return "Story"
+        case .evidence:
+            return "Evidence"
+        case .strategy:
+            return "Strategy"
         }
     }
 }

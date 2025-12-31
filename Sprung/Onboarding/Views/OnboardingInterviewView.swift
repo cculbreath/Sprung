@@ -242,7 +242,9 @@ private extension OnboardingInterviewView {
         state: OnboardingInterviewViewModel
     ) -> some View {
         Group {
-            if coordinator.wizardTracker.currentStep == .introduction {
+            // Show intro card at the start of voice phase before interview begins
+            let interviewStarted = !coordinator.ui.messages.isEmpty
+            if coordinator.wizardTracker.currentStep == .voice && !interviewStarted {
                 OnboardingInterviewIntroductionCard()
                     .matchedGeometryEffect(id: "mainCard", in: wizardTransition)
                     .transition(.asymmetric(
@@ -269,9 +271,10 @@ private extension OnboardingInterviewView {
     }
     func continueButtonTitle(for step: OnboardingWizardStep) -> String {
         switch step {
-        case .wrapUp:
+        case .strategy:
             return "Finish"
-        case .introduction:
+        case .voice:
+            // Show "Begin Interview" only before interview has started
             return "Begin Interview"
         default:
             return "Continue"
@@ -285,18 +288,19 @@ private extension OnboardingInterviewView {
         coordinator: OnboardingInterviewCoordinator
     ) -> Bool {
         switch coordinator.wizardTracker.currentStep {
-        case .introduction:
-            // Allow clicking even without API key - we'll redirect to setup wizard
-            return false
-        case .resumeIntake:
+        case .voice:
+            // Before interview starts: allow clicking (we'll redirect to setup wizard if needed)
+            // During interview: disable if processing or has pending prompts
+            let interviewStarted = !coordinator.ui.messages.isEmpty
+            if !interviewStarted { return false }
             return coordinator.ui.isProcessing ||
-            coordinator.pendingChoicePrompt != nil ||
-            coordinator.pendingApplicantProfileRequest != nil ||
-            coordinator.pendingApplicantProfileIntake != nil
-        case .artifactDiscovery:
+                coordinator.pendingChoicePrompt != nil ||
+                coordinator.pendingApplicantProfileRequest != nil ||
+                coordinator.pendingApplicantProfileIntake != nil
+        case .story:
             return coordinator.ui.isProcessing ||
-            coordinator.pendingSectionToggleRequest != nil
-        default:
+                coordinator.pendingSectionToggleRequest != nil
+        case .evidence, .strategy:
             return coordinator.ui.isProcessing
         }
     }
@@ -304,42 +308,44 @@ private extension OnboardingInterviewView {
     func continueButtonTooltip(
         coordinator: OnboardingInterviewCoordinator
     ) -> String? {
+        let interviewStarted = !coordinator.ui.messages.isEmpty
         switch coordinator.wizardTracker.currentStep {
-        case .introduction:
-            if appEnvironment.appState.openAiApiKey.isEmpty {
+        case .voice:
+            if !interviewStarted && appEnvironment.appState.openAiApiKey.isEmpty {
                 return "OpenAI API key required. Click to open setup wizard."
             }
+            if interviewStarted && coordinator.ui.isProcessing {
+                return "Waiting for AI response..."
+            }
             return nil
-        case .resumeIntake, .artifactDiscovery, .writingCorpus:
+        case .story, .evidence:
             if coordinator.ui.isProcessing {
                 return "Waiting for AI response..."
             }
             return nil
-        default:
+        case .strategy:
             return nil
         }
     }
     func handleContinue(
         coordinator: OnboardingInterviewCoordinator
     ) {
+        let interviewStarted = !coordinator.ui.messages.isEmpty
         switch coordinator.wizardTracker.currentStep {
-        case .introduction:
-            // Show setup wizard if API key is missing
-            if appEnvironment.appState.openAiApiKey.isEmpty {
-                showSetupWizard = true
-                return
+        case .voice:
+            if !interviewStarted {
+                // Show setup wizard if API key is missing
+                if appEnvironment.appState.openAiApiKey.isEmpty {
+                    showSetupWizard = true
+                    return
+                }
+                beginInterview()
             }
-            beginInterview()
-        case .resumeIntake:
+            // During interview: wizard steps derived from objectives - no manual setting needed
+        case .story, .evidence:
             // Wizard steps are now derived from objectives - no manual setting needed
             break
-        case .artifactDiscovery:
-            // Wizard steps are now derived from objectives - no manual setting needed
-            break
-        case .writingCorpus:
-            // Wizard steps are now derived from objectives - no manual setting needed
-            break
-        case .wrapUp:
+        case .strategy:
             handleCancel()
         }
     }

@@ -382,21 +382,21 @@ struct OnboardingInterviewToolPane: View {
     private func uploadRequests() -> [OnboardingUploadRequest] {
         var filtered: [OnboardingUploadRequest]
         switch coordinator.wizardTracker.currentStep {
-        case .resumeIntake:
+        case .voice:
+            // Phase 1: Resume, LinkedIn, profile photo
             filtered = coordinator.pendingUploadRequests.filter {
                 [.resume, .linkedIn].contains($0.kind) ||
                     ($0.kind == .generic && $0.metadata.targetKey == "basics.image")
             }
-        case .artifactDiscovery:
+        case .story:
+            // Phase 2: Additional artifacts
             filtered = coordinator.pendingUploadRequests.filter { [.artifact, .generic].contains($0.kind) }
-        case .writingCorpus:
+        case .evidence:
+            // Phase 3: Writing samples and other evidence
             filtered = coordinator.pendingUploadRequests.filter { $0.kind == .writingSample }
-        case .wrapUp:
+        case .strategy:
+            // Phase 4: All remaining uploads
             filtered = coordinator.pendingUploadRequests
-        case .introduction:
-            filtered = coordinator.pendingUploadRequests.filter {
-                $0.kind == .generic && $0.metadata.targetKey == "basics.image"
-            }
         }
         // Always include any pending requests that weren't captured by step-based filtering
         // This ensures generic uploads (like profile photos) always appear
@@ -487,8 +487,8 @@ struct OnboardingInterviewToolPane: View {
 
     /// Show profile summary until skeleton timeline is loaded to prevent jarring transition
     private var shouldShowProfileUntilTimelineLoads: Bool {
-        // Only applies during resume intake step when building the timeline
-        guard coordinator.wizardTracker.currentStep == .resumeIntake else { return false }
+        // Only applies during voice phase when building the timeline
+        guard coordinator.wizardTracker.currentStep == .voice else { return false }
         // If timeline has loaded, no need to show placeholder
         guard coordinator.ui.skeletonTimeline == nil else { return false }
         // If we have a stored profile summary, show it

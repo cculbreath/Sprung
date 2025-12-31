@@ -42,14 +42,14 @@ actor StateCoordinator: OnboardingEventEmitter {
     private(set) var userApprovedKCSkip: Bool = false
 
     // MARK: - Wizard Progress (Computed from ObjectiveStore)
+    /// Wizard steps that correspond to the 4-phase interview structure
     enum WizardStep: String, CaseIterable {
-        case introduction
-        case resumeIntake
-        case artifactDiscovery
-        case writingCorpus
-        case wrapUp
+        case voice      // Phase 1: Voice & Context
+        case story      // Phase 2: Career Story
+        case evidence   // Phase 3: Evidence Collection
+        case strategy   // Phase 4: Strategic Synthesis
     }
-    private(set) var currentWizardStep: WizardStep = .introduction
+    private(set) var currentWizardStep: WizardStep = .voice
     private(set) var completedWizardSteps: Set<WizardStep> = []
     // MARK: - Stream Queue (Delegated to StreamQueueManager)
     // StreamQueueManager handles serial LLM streaming and parallel tool call batching
@@ -106,43 +106,41 @@ actor StateCoordinator: OnboardingEventEmitter {
         let hasWriting = await objectiveStore.getObjectiveStatus(OnboardingObjectiveId.oneWritingSample.rawValue) == .completed
         let hasDossier = await objectiveStore.getObjectiveStatus(OnboardingObjectiveId.dossierComplete.rawValue) == .completed
 
-        // First: Set current wizard step based on actual phase (handles "proceed anyway" scenarios)
+        // First: Set current wizard step based on actual phase (1:1 mapping)
         switch phase {
         case .phase1VoiceContext:
-            // Check if we've started (objectives registered)
-            let allObjectives = await objectiveStore.getAllObjectives()
-            currentWizardStep = allObjectives.isEmpty ? .introduction : .resumeIntake
+            currentWizardStep = .voice
         case .phase2CareerStory:
-            currentWizardStep = .artifactDiscovery
+            currentWizardStep = .story
         case .phase3EvidenceCollection:
-            currentWizardStep = .writingCorpus
+            currentWizardStep = .evidence
         case .phase4StrategicSynthesis:
-            currentWizardStep = .wrapUp
+            currentWizardStep = .strategy
         case .complete:
-            currentWizardStep = .wrapUp
+            currentWizardStep = .strategy  // Stay on strategy when complete
         }
 
         // Second: Mark steps as completed based on phase progression
         // If we've advanced past a phase, mark its wizard step as complete
         // (handles "proceed anyway" scenarios where objectives may be skipped)
 
-        // Resume Intake: complete if objectives done OR we've moved past Phase 1
+        // Voice: complete if Phase 1 objectives done OR we've moved past Phase 1
         if (hasProfile && hasTimeline && hasSections) ||
            phase == .phase2CareerStory || phase == .phase3EvidenceCollection || phase == .phase4StrategicSynthesis || phase == .complete {
-            completedWizardSteps.insert(.resumeIntake)
+            completedWizardSteps.insert(.voice)
         }
-        // Artifact Discovery: complete if objectives done OR we've moved past Phase 2
+        // Story: complete if Phase 2 objectives done OR we've moved past Phase 2
         if (hasEvidenceAudit && hasCardsGenerated) ||
            phase == .phase3EvidenceCollection || phase == .phase4StrategicSynthesis || phase == .complete {
-            completedWizardSteps.insert(.artifactDiscovery)
+            completedWizardSteps.insert(.story)
         }
-        // Writing Corpus: complete if objectives done OR we've moved to Phase 4 or complete
+        // Evidence: complete if Phase 3 objectives done OR we've moved to Phase 4 or complete
         if (hasWriting && hasDossier) || phase == .phase4StrategicSynthesis || phase == .complete {
-            completedWizardSteps.insert(.writingCorpus)
+            completedWizardSteps.insert(.evidence)
         }
-        // Wrap Up completed when interview is complete
+        // Strategy: completed when interview is complete
         if phase == .complete {
-            completedWizardSteps.insert(.wrapUp)
+            completedWizardSteps.insert(.strategy)
         }
     }
     // MARK: - Event Subscription Setup
@@ -583,7 +581,7 @@ actor StateCoordinator: OnboardingEventEmitter {
     // MARK: - Reset
     func reset() async {
         phase = .phase1VoiceContext
-        currentWizardStep = .introduction
+        currentWizardStep = .voice
         completedWizardSteps.removeAll()
         // Reset all services
         await objectiveStore.reset()
