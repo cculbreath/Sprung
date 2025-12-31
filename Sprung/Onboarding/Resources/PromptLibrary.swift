@@ -14,19 +14,24 @@ enum PromptLibrary {
 
     // MARK: - Interview Phase Prompts
 
-    /// Phase 1 introductory prompt (Core Facts collection)
+    /// Phase 1 introductory prompt (Voice & Context)
     static let phase1Intro: String = {
         loadPrompt(named: "phase1_intro_prompt")
     }()
 
-    /// Phase 2 introductory prompt (Knowledge Card generation)
+    /// Phase 2 introductory prompt (Career Story)
     static let phase2Intro: String = {
         loadPrompt(named: "phase2_intro_prompt")
     }()
 
-    /// Phase 3 introductory prompt (Writing Corpus collection)
+    /// Phase 3 introductory prompt (Evidence Collection)
     static let phase3Intro: String = {
         loadPrompt(named: "phase3_intro_prompt")
+    }()
+
+    /// Phase 4 introductory prompt (Strategic Synthesis)
+    static let phase4Intro: String = {
+        loadPrompt(named: "phase4_intro_prompt")
     }()
 
     // MARK: - Fact-Based Knowledge Card Prompts

@@ -42,12 +42,15 @@ struct ToolBundlePolicy {
 
     // MARK: - Safe Escape Tools
 
-    /// Minimal set of tools that should always be available (for error recovery)
-    /// NOTE: get_user_option removed - it was causing the model to prefer generic tools
-    /// over specialized ones. It's now explicitly included only in bundles that need it.
+    /// Minimal set of tools that should always be available (for error recovery).
+    /// CRITICAL: ask_user_skip_to_next_phase is in safeEscapeTools.
+    /// When user agrees to skip, it FORCES phase advance immediately.
+    /// No interviewer intermediation—prevents dead-end stalls.
     static let safeEscapeTools: Set<String> = [
-        OnboardingToolName.updateDossierNotes.rawValue,  // Scratchpad always available
-        OnboardingToolName.askUserSkipToNextPhase.rawValue  // Escape hatch for blocked transitions
+        OnboardingToolName.updateDossierNotes.rawValue,       // Scratchpad always available
+        OnboardingToolName.askUserSkipToNextPhase.rawValue,   // Escape hatch - FORCES advance on user agreement
+        OnboardingToolName.persistData.rawValue,              // Always allow dossier updates
+        OnboardingToolName.getUserOption.rawValue             // Always allow structured questions
     ]
 
     // MARK: - Artifact Access Tools
@@ -62,170 +65,167 @@ struct ToolBundlePolicy {
 
     // MARK: - Subphase Tool Bundles
 
-    /// Tool bundles for each subphase
-    /// Key principle: Artifact access tools are ALWAYS included in Phase 2-3 subphases
+    /// Tool bundles for each subphase.
+    /// INTERVIEW REVITALIZATION PLAN:
+    /// - Phase 1: Voice & Context — Writing samples front-loaded
+    /// - Phase 2: Career Story — Active interviewing with dossier weaving
+    /// - Phase 3: Evidence Collection — Strategic document requests, batched notifications
+    /// - Phase 4: Strategic Synthesis — Strengths/pitfalls, final dossier
+    ///
+    /// NOTE: During long-running agent ops (PDF ingestion, card inventory, merge),
+    /// interviewer should actively use get_user_option and persist_data
+    /// to gather dossier insights. User should never wait in silence.
     static let subphaseBundles: [InterviewSubphase: Set<String>] = [
-        // MARK: Phase 1 Subphases
+        // MARK: Phase 1: Voice & Context
+        .p1_welcome: [
+            OnboardingToolName.getUserOption.rawValue,        // For structured questions
+            OnboardingToolName.persistData.rawValue           // For dossier entries
+        ],
+
+        .p1_writingSamples: [
+            OnboardingToolName.getUserUpload.rawValue,        // For file uploads
+            OnboardingToolName.ingestWritingSample.rawValue,  // For pasted text
+            OnboardingToolName.getUserOption.rawValue,        // For follow-up questions
+            OnboardingToolName.persistData.rawValue,
+            OnboardingToolName.cancelUserUpload.rawValue
+        ],
+
+        .p1_jobSearchContext: [
+            OnboardingToolName.getUserOption.rawValue,        // PRIMARY TOOL - use liberally
+            OnboardingToolName.persistData.rawValue,          // Save dossier entries
+            OnboardingToolName.ingestWritingSample.rawValue   // If they paste something
+        ],
+
         .p1_profileIntake: [
             OnboardingToolName.getApplicantProfile.rawValue,
+            OnboardingToolName.getUserUpload.rawValue,        // Contacts import
             OnboardingToolName.getUserOption.rawValue,
-            OnboardingToolName.getUserUpload.rawValue,  // For contacts import
+            OnboardingToolName.validateApplicantProfile.rawValue,
+            OnboardingToolName.validatedApplicantProfileData.rawValue
+        ],
+
+        .p1_profileValidation: [
             OnboardingToolName.validateApplicantProfile.rawValue,
             OnboardingToolName.validatedApplicantProfileData.rawValue,
-            OnboardingToolName.createWebArtifact.rawValue  // For saving web_search content from profile URLs
-        ],
-        .p1_photoCollection: [
-            OnboardingToolName.getUserUpload.rawValue,
-            OnboardingToolName.cancelUserUpload.rawValue,
-            OnboardingToolName.getUserOption.rawValue,
-            // Progression: after photo, model starts timeline
-            OnboardingToolName.createTimelineCard.rawValue,
-            OnboardingToolName.displayTimelineEntriesForReview.rawValue
-        ],
-        .p1_resumeUpload: [
-            OnboardingToolName.getUserUpload.rawValue,
-            OnboardingToolName.cancelUserUpload.rawValue,
-            OnboardingToolName.listArtifacts.rawValue,
-            OnboardingToolName.getArtifact.rawValue,
-            // Progression: after resume upload, model creates timeline cards
-            OnboardingToolName.createTimelineCard.rawValue,
-            OnboardingToolName.displayTimelineEntriesForReview.rawValue
-        ],
-        .p1_timelineEditing: [
-            // Resume upload is offered at the START of timeline editing - include upload tools
-            OnboardingToolName.getUserUpload.rawValue,
-            OnboardingToolName.cancelUserUpload.rawValue,
-            // Timeline card management
-            OnboardingToolName.createTimelineCard.rawValue,
-            OnboardingToolName.updateTimelineCard.rawValue,
-            OnboardingToolName.deleteTimelineCard.rawValue,
-            OnboardingToolName.reorderTimelineCards.rawValue,
-            OnboardingToolName.getTimelineEntries.rawValue,
-            OnboardingToolName.displayTimelineEntriesForReview.rawValue,
-            OnboardingToolName.listArtifacts.rawValue,
-            OnboardingToolName.getArtifact.rawValue,
-            // Progression tools - model needs these to advance the interview
-            OnboardingToolName.submitForValidation.rawValue,
-            OnboardingToolName.configureEnabledSections.rawValue,
             OnboardingToolName.nextPhase.rawValue
         ],
-        .p1_timelineValidation: [
-            OnboardingToolName.submitForValidation.rawValue,
-            OnboardingToolName.displayTimelineEntriesForReview.rawValue,
-            OnboardingToolName.updateTimelineCard.rawValue,
-            OnboardingToolName.deleteTimelineCard.rawValue,
-            OnboardingToolName.createTimelineCard.rawValue,
-            // Progression tools
-            OnboardingToolName.configureEnabledSections.rawValue,
-            OnboardingToolName.nextPhase.rawValue
-        ],
-        .p1_sectionConfig: [
-            // Specialized section config tool
-            OnboardingToolName.configureEnabledSections.rawValue,
-            // Progression tools
-            OnboardingToolName.nextPhase.rawValue
-        ],
-        .p1_dossierSeed: [
-            OnboardingToolName.persistData.rawValue,
-            OnboardingToolName.setObjectiveStatus.rawValue,
-            OnboardingToolName.nextPhase.rawValue
-        ],
+
         .p1_phaseTransition: [
             OnboardingToolName.nextPhase.rawValue,
             OnboardingToolName.setObjectiveStatus.rawValue
         ],
 
-        // MARK: Phase 2 Subphases (all include artifact access)
-        .p2_bootstrap: [
-            OnboardingToolName.startPhaseTwo.rawValue,
-            // Progression: after bootstrap, model collects documents
-            OnboardingToolName.openDocumentCollection.rawValue,
-            OnboardingToolName.getUserUpload.rawValue,
-            OnboardingToolName.setObjectiveStatus.rawValue,
-            OnboardingToolName.nextPhase.rawValue
+        // MARK: Phase 2: Career Story
+        .p2_timelineCollection: [
+            OnboardingToolName.getUserUpload.rawValue,        // Resume upload
+            OnboardingToolName.createTimelineCard.rawValue,
+            OnboardingToolName.updateTimelineCard.rawValue,
+            OnboardingToolName.deleteTimelineCard.rawValue,
+            OnboardingToolName.getTimelineEntries.rawValue,
+            OnboardingToolName.displayTimelineEntriesForReview.rawValue,
+            OnboardingToolName.listArtifacts.rawValue,
+            OnboardingToolName.getArtifact.rawValue
         ],
-        .p2_documentCollection: [
-            OnboardingToolName.getUserUpload.rawValue,
-            OnboardingToolName.cancelUserUpload.rawValue,
-            OnboardingToolName.openDocumentCollection.rawValue,
-            // KC generation is now triggered by UI buttons (Done with Uploads → Generate Cards)
-            OnboardingToolName.setObjectiveStatus.rawValue,
-            OnboardingToolName.nextPhase.rawValue
+
+        .p2_timelineEnrichment: [    // Active interviewing about each role
+            OnboardingToolName.getUserOption.rawValue,        // For structured dossier questions
+            OnboardingToolName.persistData.rawValue,          // For dossier insights
+            OnboardingToolName.updateTimelineCard.rawValue,
+            OnboardingToolName.createTimelineCard.rawValue,
+            OnboardingToolName.getTimelineEntries.rawValue,
+            OnboardingToolName.displayTimelineEntriesForReview.rawValue
         ],
-        .p2_cardAssignment: [
+
+        .p2_workPreferences: [       // Dossier weaving
+            OnboardingToolName.getUserOption.rawValue,        // PRIMARY - rapid structured questions
+            OnboardingToolName.persistData.rawValue           // Save preferences to dossier
+        ],
+
+        .p2_sectionConfig: [
+            OnboardingToolName.configureEnabledSections.rawValue,
             OnboardingToolName.getUserOption.rawValue,
-            OnboardingToolName.setObjectiveStatus.rawValue
-        ],
-        .p2_userApprovalWait: [
-            OnboardingToolName.getUserOption.rawValue,
-            OnboardingToolName.setObjectiveStatus.rawValue
-        ],
-        .p2_kcGeneration: [
-            // Card generation handled by UI (Approve & Create button)
-            OnboardingToolName.setObjectiveStatus.rawValue,
             OnboardingToolName.nextPhase.rawValue
         ],
-        .p2_cardSubmission: [
-            OnboardingToolName.setObjectiveStatus.rawValue,
+
+        .p2_documentSuggestions: [   // Strategic suggestions before Phase 3
+            OnboardingToolName.persistData.rawValue,          // Save document wishlist
             OnboardingToolName.nextPhase.rawValue
         ],
+
         .p2_phaseTransition: [
             OnboardingToolName.nextPhase.rawValue,
             OnboardingToolName.setObjectiveStatus.rawValue
         ],
 
-        // MARK: Phase 3 Subphases (all include artifact access)
-        .p3_bootstrap: [
-            OnboardingToolName.startPhaseThree.rawValue,
-            // Progression: after bootstrap, model collects writing samples
-            OnboardingToolName.getUserUpload.rawValue,
-            OnboardingToolName.ingestWritingSample.rawValue
-        ],
-        .p3_writingCollection: [
-            OnboardingToolName.getUserOption.rawValue,  // For structured questions about sample types
-            OnboardingToolName.ingestWritingSample.rawValue,
+        // MARK: Phase 3: Evidence Collection
+        .p3_documentCollection: [
+            OnboardingToolName.openDocumentCollection.rawValue,
             OnboardingToolName.getUserUpload.rawValue,
             OnboardingToolName.cancelUserUpload.rawValue,
-            // Progression: after collection, model compiles dossier
-            OnboardingToolName.setObjectiveStatus.rawValue,
-            OnboardingToolName.submitExperienceDefaults.rawValue
+            OnboardingToolName.listArtifacts.rawValue,
+            OnboardingToolName.getArtifact.rawValue,
+            OnboardingToolName.createWebArtifact.rawValue,
+            OnboardingToolName.getUserOption.rawValue,        // For questions during agent waits
+            OnboardingToolName.persistData.rawValue,          // For dossier insights during waits
+            OnboardingToolName.setObjectiveStatus.rawValue
         ],
-        .p3_sampleReview: [
-            OnboardingToolName.getUserOption.rawValue,  // For structured feedback on samples
-            OnboardingToolName.ingestWritingSample.rawValue,
-            OnboardingToolName.setObjectiveStatus.rawValue,
-            // Progression: after review, model compiles dossier
-            OnboardingToolName.submitExperienceDefaults.rawValue,
+
+        .p3_gitCollection: [
+            OnboardingToolName.listArtifacts.rawValue,
+            OnboardingToolName.getArtifact.rawValue,
+            OnboardingToolName.getUserOption.rawValue,        // For questions during agent waits
+            OnboardingToolName.persistData.rawValue,          // For dossier insights during waits
+            OnboardingToolName.setObjectiveStatus.rawValue
+        ],
+
+        .p3_cardGeneration: [
+            OnboardingToolName.listArtifacts.rawValue,
+            OnboardingToolName.getArtifact.rawValue,
+            OnboardingToolName.getUserOption.rawValue,        // INTERVIEW WHILE KC GENERATION RUNS
+            OnboardingToolName.persistData.rawValue,          // Gather strategic insights during wait
+            OnboardingToolName.setObjectiveStatus.rawValue
+        ],
+
+        .p3_cardReview: [            // LLM reviews generated cards
+            OnboardingToolName.listArtifacts.rawValue,
+            OnboardingToolName.getArtifact.rawValue,
+            OnboardingToolName.getUserOption.rawValue,        // For clarifying questions
+            OnboardingToolName.persistData.rawValue,          // For card improvements
+            OnboardingToolName.nextPhase.rawValue
+        ],
+
+        .p3_phaseTransition: [
+            OnboardingToolName.nextPhase.rawValue,
+            OnboardingToolName.setObjectiveStatus.rawValue
+        ],
+
+        // MARK: Phase 4: Strategic Synthesis
+        .p4_strengthsSynthesis: [
+            OnboardingToolName.getUserOption.rawValue,
+            OnboardingToolName.persistData.rawValue,
+            OnboardingToolName.listArtifacts.rawValue,
+            OnboardingToolName.getArtifact.rawValue
+        ],
+
+        .p4_pitfallsAnalysis: [
+            OnboardingToolName.getUserOption.rawValue,
+            OnboardingToolName.persistData.rawValue
+        ],
+
+        .p4_dossierCompletion: [
+            OnboardingToolName.getUserOption.rawValue,        // For gap-filling questions
+            OnboardingToolName.persistData.rawValue,
             OnboardingToolName.submitCandidateDossier.rawValue
         ],
-        .p3_dossierCompilation: [
-            OnboardingToolName.getUserOption.rawValue,  // For structured questions during dossier gathering
-            OnboardingToolName.persistData.rawValue,
+
+        .p4_experienceDefaults: [
             OnboardingToolName.submitExperienceDefaults.rawValue,
-            OnboardingToolName.submitCandidateDossier.rawValue,
-            OnboardingToolName.setObjectiveStatus.rawValue,
-            // Progression: after compilation, model validates dossier
             OnboardingToolName.submitForValidation.rawValue,
-            OnboardingToolName.nextPhase.rawValue
+            OnboardingToolName.getUserOption.rawValue
         ],
-        .p3_dossierValidation: [
-            OnboardingToolName.persistData.rawValue,
-            OnboardingToolName.submitForValidation.rawValue,
-            OnboardingToolName.getUserOption.rawValue,
-            // Progression: after validation, model submits final data
-            OnboardingToolName.setObjectiveStatus.rawValue,
+
+        .p4_completion: [
             OnboardingToolName.submitCandidateDossier.rawValue,
-            OnboardingToolName.nextPhase.rawValue
-        ],
-        .p3_dataSubmission: [
-            OnboardingToolName.persistData.rawValue,
-            OnboardingToolName.submitExperienceDefaults.rawValue,
-            OnboardingToolName.submitCandidateDossier.rawValue,
-            OnboardingToolName.setObjectiveStatus.rawValue,
-            OnboardingToolName.nextPhase.rawValue
-        ],
-        .p3_interviewComplete: [
-            OnboardingToolName.persistData.rawValue,
             OnboardingToolName.nextPhase.rawValue
         ]
     ]
@@ -244,86 +244,78 @@ struct ToolBundlePolicy {
         objectives: [String: String]
     ) -> InterviewSubphase {
         switch phase {
-        case .phase1CoreFacts:
+        case .phase1VoiceContext:
             return inferPhase1Subphase(toolPaneCard: toolPaneCard, objectives: objectives)
-        case .phase2DeepDive:
+        case .phase2CareerStory:
             return inferPhase2Subphase(toolPaneCard: toolPaneCard, objectives: objectives)
-        case .phase3WritingCorpus:
+        case .phase3EvidenceCollection:
             return inferPhase3Subphase(toolPaneCard: toolPaneCard, objectives: objectives)
+        case .phase4StrategicSynthesis:
+            return inferPhase4Subphase(toolPaneCard: toolPaneCard, objectives: objectives)
         case .complete:
-            return .p3_interviewComplete
+            return .p4_completion
         }
     }
 
-    /// Infer Phase 1 subphase
+    /// Infer Phase 1 subphase (Voice & Context)
     private static func inferPhase1Subphase(
         toolPaneCard: OnboardingToolPaneCard,
         objectives: [String: String]
     ) -> InterviewSubphase {
         // UI state takes precedence
         switch toolPaneCard {
+        case .uploadRequest:
+            // Could be writing samples or contacts import
+            if objectives[OnboardingObjectiveId.writingSamplesCollected.rawValue] == "in_progress" ||
+               objectives[OnboardingObjectiveId.writingSamplesCollected.rawValue] == "pending" {
+                return .p1_writingSamples
+            }
+            return .p1_profileIntake
         case .applicantProfileRequest, .applicantProfileIntake:
             return .p1_profileIntake
-        case .uploadRequest:
-            // Check if we're in photo collection or resume upload phase
-            if objectives[OnboardingObjectiveId.contactPhotoCollected.rawValue] == "in_progress" {
-                return .p1_photoCollection
-            }
-            if objectives[OnboardingObjectiveId.skeletonTimeline.rawValue] == "in_progress" ||
-               objectives[OnboardingObjectiveId.skeletonTimeline.rawValue] == "pending" {
-                return .p1_resumeUpload
-            }
-            return .p1_resumeUpload
-        case .editTimelineCards:
-            return .p1_timelineEditing
-        case .confirmTimelineCards, .validationPrompt:
-            return .p1_timelineValidation
-        case .sectionToggle:
-            return .p1_sectionConfig
+        case .validationPrompt:
+            return .p1_profileValidation
+        case .choicePrompt:
+            return .p1_jobSearchContext
         default:
             break
         }
 
-        // Infer from objective state
-        let profileStatus = objectives[OnboardingObjectiveId.applicantProfile.rawValue] ?? "pending"
-        let photoStatus = objectives[OnboardingObjectiveId.contactPhotoCollected.rawValue] ?? "pending"
-        let timelineStatus = objectives[OnboardingObjectiveId.skeletonTimeline.rawValue] ?? "pending"
-        let sectionsStatus = objectives[OnboardingObjectiveId.enabledSections.rawValue] ?? "pending"
-        let dossierStatus = objectives[OnboardingObjectiveId.dossierSeed.rawValue] ?? "pending"
+        // Infer from objective state (new Phase 1 objectives)
+        let writingSamplesStatus = objectives[OnboardingObjectiveId.writingSamplesCollected.rawValue] ?? "pending"
+        let voicePrimersStatus = objectives[OnboardingObjectiveId.voicePrimersExtracted.rawValue] ?? "pending"
+        let jobSearchStatus = objectives[OnboardingObjectiveId.jobSearchContextCaptured.rawValue] ?? "pending"
+        let profileStatus = objectives[OnboardingObjectiveId.applicantProfileComplete.rawValue] ?? "pending"
 
-        // Check profile intake
+        // Start with welcome if nothing started
+        if writingSamplesStatus == "pending" && jobSearchStatus == "pending" && profileStatus == "pending" {
+            return .p1_welcome
+        }
+
+        // Writing samples collection
+        if writingSamplesStatus == "pending" || writingSamplesStatus == "in_progress" {
+            return .p1_writingSamples
+        }
+
+        // Job search context (dossier questions)
+        if jobSearchStatus == "pending" || jobSearchStatus == "in_progress" {
+            return .p1_jobSearchContext
+        }
+
+        // Profile intake
         if profileStatus == "pending" || profileStatus == "in_progress" {
-            if photoStatus == "in_progress" {
-                return .p1_photoCollection
-            }
             return .p1_profileIntake
         }
 
-        // Check photo collection (after profile but before timeline)
-        if photoStatus == "pending" || photoStatus == "in_progress" {
-            return .p1_photoCollection
+        // Profile validation or ready for transition
+        if voicePrimersStatus == "completed" && profileStatus == "completed" {
+            return .p1_phaseTransition
         }
 
-        // Check timeline editing
-        if timelineStatus == "pending" || timelineStatus == "in_progress" {
-            return .p1_timelineEditing
-        }
-
-        // Check section config
-        if sectionsStatus == "pending" || sectionsStatus == "in_progress" {
-            return .p1_sectionConfig
-        }
-
-        // Check dossier seed
-        if dossierStatus == "pending" || dossierStatus == "in_progress" {
-            return .p1_dossierSeed
-        }
-
-        // All complete - ready for transition
-        return .p1_phaseTransition
+        return .p1_profileValidation
     }
 
-    /// Infer Phase 2 subphase
+    /// Infer Phase 2 subphase (Career Story)
     private static func inferPhase2Subphase(
         toolPaneCard: OnboardingToolPaneCard,
         objectives: [String: String]
@@ -331,52 +323,50 @@ struct ToolBundlePolicy {
         // UI state takes precedence
         switch toolPaneCard {
         case .uploadRequest:
-            return .p2_documentCollection
-        case .validationPrompt:
-            return .p2_cardAssignment
+            return .p2_timelineCollection
+        case .editTimelineCards, .confirmTimelineCards:
+            return .p2_timelineCollection
         case .choicePrompt:
-            return .p2_userApprovalWait
+            return .p2_workPreferences
+        case .sectionToggle:
+            return .p2_sectionConfig
+        case .validationPrompt:
+            return .p2_timelineEnrichment
         default:
             break
         }
 
         // Infer from objective state
-        // NOTE: Must match ObjectiveStore Phase 2 objectives (interviewed_one_experience, one_card_generated)
-        let interviewStatus = objectives[OnboardingObjectiveId.interviewedOneExperience.rawValue] ?? "pending"
-        let cardsStatus = objectives[OnboardingObjectiveId.oneCardGenerated.rawValue] ?? "pending"
+        let timelineStatus = objectives[OnboardingObjectiveId.skeletonTimelineComplete.rawValue] ?? "pending"
+        let enrichedStatus = objectives[OnboardingObjectiveId.timelineEnriched.rawValue] ?? "pending"
+        let preferencesStatus = objectives[OnboardingObjectiveId.workPreferencesCaptured.rawValue] ?? "pending"
+        let sectionsStatus = objectives[OnboardingObjectiveId.enabledSections.rawValue] ?? "pending"
 
-        // Bootstrap phase (no objectives started)
-        if interviewStatus == "pending" && cardsStatus == "pending" {
-            return .p2_bootstrap
+        // Timeline collection
+        if timelineStatus == "pending" || timelineStatus == "in_progress" {
+            return .p2_timelineCollection
         }
 
-        // Interview/document collection in progress
-        if interviewStatus == "in_progress" {
-            // Could be document collection or card assignment
-            // Default to document collection if we don't have enough context
-            return .p2_documentCollection
+        // Timeline enrichment (active interviewing)
+        if enrichedStatus == "pending" || enrichedStatus == "in_progress" {
+            return .p2_timelineEnrichment
         }
 
-        // Interview complete, ready for card generation
-        if interviewStatus == "completed" && cardsStatus == "pending" {
-            return .p2_kcGeneration
+        // Work preferences
+        if preferencesStatus == "pending" || preferencesStatus == "in_progress" {
+            return .p2_workPreferences
         }
 
-        // Cards generation in progress
-        if cardsStatus == "in_progress" {
-            return .p2_kcGeneration
+        // Section config
+        if sectionsStatus == "pending" || sectionsStatus == "in_progress" {
+            return .p2_sectionConfig
         }
 
-        // Cards complete, ready for submission
-        if cardsStatus == "completed" {
-            return .p2_phaseTransition
-        }
-
-        // Default to KC generation if we have documents but interview started
-        return .p2_kcGeneration
+        // Document suggestions or transition
+        return .p2_documentSuggestions
     }
 
-    /// Infer Phase 3 subphase
+    /// Infer Phase 3 subphase (Evidence Collection)
     private static func inferPhase3Subphase(
         toolPaneCard: OnboardingToolPaneCard,
         objectives: [String: String]
@@ -384,42 +374,88 @@ struct ToolBundlePolicy {
         // UI state takes precedence
         switch toolPaneCard {
         case .uploadRequest:
-            return .p3_writingCollection
+            return .p3_documentCollection
+        case .choicePrompt:
+            return .p3_gitCollection
         case .validationPrompt:
-            return .p3_dossierValidation
+            return .p3_cardReview
         default:
             break
         }
 
         // Infer from objective state
-        let writingStatus = objectives[OnboardingObjectiveId.oneWritingSample.rawValue] ?? "pending"
+        let docsStatus = objectives[OnboardingObjectiveId.evidenceDocumentsCollected.rawValue] ?? "pending"
+        let gitStatus = objectives[OnboardingObjectiveId.gitReposAnalyzed.rawValue] ?? "pending"
+        let inventoryStatus = objectives[OnboardingObjectiveId.cardInventoryComplete.rawValue] ?? "pending"
+        let kcStatus = objectives[OnboardingObjectiveId.knowledgeCardsGenerated.rawValue] ?? "pending"
+
+        // Document collection
+        if docsStatus == "pending" || docsStatus == "in_progress" {
+            return .p3_documentCollection
+        }
+
+        // Git collection
+        if gitStatus == "pending" || gitStatus == "in_progress" {
+            return .p3_gitCollection
+        }
+
+        // Card generation
+        if inventoryStatus == "pending" || inventoryStatus == "in_progress" ||
+           kcStatus == "pending" || kcStatus == "in_progress" {
+            return .p3_cardGeneration
+        }
+
+        // Card review or transition
+        if kcStatus == "completed" {
+            return .p3_cardReview
+        }
+
+        return .p3_phaseTransition
+    }
+
+    /// Infer Phase 4 subphase (Strategic Synthesis)
+    private static func inferPhase4Subphase(
+        toolPaneCard: OnboardingToolPaneCard,
+        objectives: [String: String]
+    ) -> InterviewSubphase {
+        // UI state takes precedence
+        switch toolPaneCard {
+        case .validationPrompt:
+            return .p4_experienceDefaults
+        case .choicePrompt:
+            return .p4_dossierCompletion
+        default:
+            break
+        }
+
+        // Infer from objective state
+        let strengthsStatus = objectives[OnboardingObjectiveId.strengthsIdentified.rawValue] ?? "pending"
+        let pitfallsStatus = objectives[OnboardingObjectiveId.pitfallsDocumented.rawValue] ?? "pending"
         let dossierStatus = objectives[OnboardingObjectiveId.dossierComplete.rawValue] ?? "pending"
-        let validationStatus = objectives[OnboardingObjectiveId.dossierCompleteValidation.rawValue] ?? "pending"
-        let persistedStatus = objectives[OnboardingObjectiveId.dossierCompletePersisted.rawValue] ?? "pending"
+        let defaultsStatus = objectives[OnboardingObjectiveId.experienceDefaultsSet.rawValue] ?? "pending"
 
-        // Bootstrap phase
-        if writingStatus == "pending" && dossierStatus == "pending" {
-            return .p3_bootstrap
+        // Strengths synthesis
+        if strengthsStatus == "pending" || strengthsStatus == "in_progress" {
+            return .p4_strengthsSynthesis
         }
 
-        // Writing sample collection
-        if writingStatus == "pending" || writingStatus == "in_progress" {
-            return .p3_writingCollection
+        // Pitfalls analysis
+        if pitfallsStatus == "pending" || pitfallsStatus == "in_progress" {
+            return .p4_pitfallsAnalysis
         }
 
-        // Dossier compilation
+        // Dossier completion
         if dossierStatus == "pending" || dossierStatus == "in_progress" {
-            if validationStatus == "in_progress" {
-                return .p3_dossierValidation
-            }
-            if persistedStatus == "in_progress" {
-                return .p3_dataSubmission
-            }
-            return .p3_dossierCompilation
+            return .p4_dossierCompletion
+        }
+
+        // Experience defaults
+        if defaultsStatus == "pending" || defaultsStatus == "in_progress" {
+            return .p4_experienceDefaults
         }
 
         // All complete
-        return .p3_interviewComplete
+        return .p4_completion
     }
 
     // MARK: - Bundle Selection
@@ -445,7 +481,8 @@ struct ToolBundlePolicy {
                 // Always include the forced tool - this is required by OpenAI API
                 var bundle: Set<String> = [ft.name]
                 bundle.formUnion(safeEscapeTools)
-                if subphase.phase != .phase1CoreFacts {
+                // Artifact access tools for Phase 2-4 (not Phase 1)
+                if subphase.phase != .phase1VoiceContext {
                     bundle.formUnion(artifactAccessTools)
                 }
                 return bundle
@@ -453,7 +490,8 @@ struct ToolBundlePolicy {
                 // Always include the forced tool - this is required by OpenAI API
                 var bundle: Set<String> = [ct.name]
                 bundle.formUnion(safeEscapeTools)
-                if subphase.phase != .phase1CoreFacts {
+                // Artifact access tools for Phase 2-4 (not Phase 1)
+                if subphase.phase != .phase1VoiceContext {
                     bundle.formUnion(artifactAccessTools)
                 }
                 return bundle
@@ -468,8 +506,8 @@ struct ToolBundlePolicy {
         // Always include safe escape tools
         bundle.formUnion(safeEscapeTools)
 
-        // Include artifact access tools for Phase 2-3 subphases
-        if subphase.phase != .phase1CoreFacts {
+        // Include artifact access tools for Phase 2-4 subphases (not Phase 1)
+        if subphase.phase != .phase1VoiceContext {
             bundle.formUnion(artifactAccessTools)
         }
 
@@ -493,8 +531,8 @@ struct ToolBundlePolicy {
         // Always include safe escape tools
         allowed.formUnion(safeEscapeTools)
 
-        // Include artifact access tools for Phase 2-3
-        if phase != .phase1CoreFacts {
+        // Include artifact access tools for Phase 2-4 (not Phase 1)
+        if phase != .phase1VoiceContext {
             allowed.formUnion(artifactAccessTools)
         }
 

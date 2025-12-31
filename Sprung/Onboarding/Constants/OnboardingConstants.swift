@@ -65,58 +65,69 @@ enum OnboardingToolName: String, CaseIterable {
 // MARK: - Objective IDs
 /// All objective IDs used in the onboarding interview flow.
 /// Organized by phase with sub-objectives using dot notation.
+///
+/// INTERVIEW REVITALIZATION PLAN — New Objective Structure:
+/// Phase 1: writing_samples_collected, voice_primers_extracted, job_search_context_captured, applicant_profile_complete
+/// Phase 2: skeleton_timeline_complete, timeline_enriched, work_preferences_captured, unique_circumstances_documented
+/// Phase 3: evidence_documents_collected, git_repos_analyzed, card_inventory_complete, knowledge_cards_generated
+/// Phase 4: strengths_identified, pitfalls_documented, dossier_complete, experience_defaults_set
 enum OnboardingObjectiveId: String, CaseIterable {
-    // MARK: Phase 1 Objectives
-    // Applicant Profile
+    // MARK: Phase 1: Voice & Context
+    /// At least one substantial writing sample collected
+    case writingSamplesCollected = "writing_samples_collected"
+    /// Voice analysis complete (runs in background after writing sample upload)
+    case voicePrimersExtracted = "voice_primers_extracted"
+    /// Core dossier field populated (why searching, priorities)
+    case jobSearchContextCaptured = "job_search_context_captured"
+    /// Contact info validated (name, email, phone, location)
+    case applicantProfileComplete = "applicant_profile_complete"
+    // Legacy Phase 1 objectives (backwards compatibility)
     case applicantProfile = "applicant_profile"
-    case applicantProfileContactIntake = "applicant_profile.contact_intake"
-    case applicantProfileContactIntakeActivateCard = "applicant_profile.contact_intake.activate_card"
-    case applicantProfileContactIntakePersisted = "applicant_profile.contact_intake.persisted"
-    case applicantProfileProfilePhoto = "applicant_profile.profile_photo"
-    case applicantProfileProfilePhotoRetrieveProfile = "applicant_profile.profile_photo.retrieve_profile"
-    case applicantProfileProfilePhotoEvaluateNeed = "applicant_profile.profile_photo.evaluate_need"
-    case applicantProfileProfilePhotoCollectUpload = "applicant_profile.profile_photo.collect_upload"
-    // Contact Flow
     case contactSourceSelected = "contact_source_selected"
     case contactDataCollected = "contact_data_collected"
     case contactDataValidated = "contact_data_validated"
     case contactPhotoCollected = "contact_photo_collected"
-    // Skeleton Timeline
-    case skeletonTimeline = "skeleton_timeline"
-    case skeletonTimelineIntakeArtifacts = "skeleton_timeline.intake_artifacts"
-    case skeletonTimelineTimelineEditor = "skeleton_timeline.timeline_editor"
-    case skeletonTimelineContextInterview = "skeleton_timeline.context_interview"
-    case skeletonTimelineCompletenessSignal = "skeleton_timeline.completeness_signal"
-    // Enabled Sections
+
+    // MARK: Phase 2: Career Story
+    /// All positions captured with dates
+    case skeletonTimelineComplete = "skeleton_timeline_complete"
+    /// Each position has narrative context beyond dates
+    case timelineEnriched = "timeline_enriched"
+    /// Remote/location/arrangement preferences captured
+    case workPreferencesCaptured = "work_preferences_captured"
+    /// Gaps, pivots, constraints explained
+    case uniqueCircumstancesDocumented = "unique_circumstances_documented"
+    /// User has configured which sections to include
     case enabledSections = "enabled_sections"
-    // Dossier Seed (optional)
+    // Legacy Phase 2 objectives (backwards compatibility)
+    case skeletonTimeline = "skeleton_timeline"
     case dossierSeed = "dossier_seed"
-    // MARK: Phase 2 Objectives
-    // Evidence Audit
     case evidenceAuditCompleted = "evidence_audit_completed"
-    case evidenceAuditAnalyze = "evidence_audit_completed.analyze"
-    case evidenceAuditRequest = "evidence_audit_completed.request"
-    // Cards Generated
     case cardsGenerated = "cards_generated"
-    case cardsGeneratedReviewDrafts = "cards_generated.review_drafts"
-    case cardsGeneratedPersist = "cards_generated.persist"
-    // Legacy Phase 2 (may still be referenced)
     case interviewedOneExperience = "interviewed_one_experience"
-    case interviewedOneExperiencePrepSelection = "interviewed_one_experience.prep_selection"
-    case interviewedOneExperienceDiscoveryInterview = "interviewed_one_experience.discovery_interview"
-    case interviewedOneExperienceCaptureNotes = "interviewed_one_experience.capture_notes"
     case oneCardGenerated = "one_card_generated"
-    case oneCardGeneratedDraft = "one_card_generated.draft"
-    case oneCardGeneratedValidation = "one_card_generated.validation"
-    case oneCardGeneratedPersisted = "one_card_generated.persisted"
-    // MARK: Phase 3 Objectives
-    // Writing Sample
-    case oneWritingSample = "one_writing_sample"
-    case oneWritingSampleCollectionSetup = "one_writing_sample.collection_setup"
-    case oneWritingSampleIngestSample = "one_writing_sample.ingest_sample"
-    // Dossier Complete
+
+    // MARK: Phase 3: Evidence Collection
+    /// Supporting documents uploaded
+    case evidenceDocumentsCollected = "evidence_documents_collected"
+    /// Code repositories processed
+    case gitReposAnalyzed = "git_repos_analyzed"
+    /// All knowledge cards identified from documents
+    case cardInventoryComplete = "card_inventory_complete"
+    /// Knowledge cards created and persisted
+    case knowledgeCardsGenerated = "knowledge_cards_generated"
+
+    // MARK: Phase 4: Strategic Synthesis
+    /// Strategic strengths documented with evidence
+    case strengthsIdentified = "strengths_identified"
+    /// Potential concerns + mitigation strategies documented
+    case pitfallsDocumented = "pitfalls_documented"
+    /// All dossier fields populated with rich narratives
     case dossierComplete = "dossier_complete"
-    case dossierCompleteCompileAssets = "dossier_complete.compile_assets"
+    /// Resume defaults configured
+    case experienceDefaultsSet = "experience_defaults_set"
+    // Legacy Phase 3 objectives (backwards compatibility)
+    case oneWritingSample = "one_writing_sample"
     case dossierCompleteValidation = "dossier_complete.validation"
     case dossierCompletePersisted = "dossier_complete.persisted"
 }
@@ -137,50 +148,58 @@ enum OnboardingDataType: String, CaseIterable {
 // MARK: - Interview Subphases
 /// Granular subphases for precise tool bundling.
 /// Each subphase maps to a specific set of tools the model needs.
+///
+/// INTERVIEW REVITALIZATION PLAN:
+/// - Phase 1: Voice & Context — Writing samples front-loaded, voice primers extracted
+/// - Phase 2: Career Story — Active interviewing, dossier weaving throughout
+/// - Phase 3: Evidence Collection — Strategic document requests, batched notifications
+/// - Phase 4: Strategic Synthesis — Strengths/pitfalls analysis, final dossier
 enum InterviewSubphase: String, CaseIterable, Codable {
-    // MARK: Phase 1: Core Facts
+    // MARK: Phase 1: Voice & Context
+    case p1_welcome = "p1_welcome"                         // Initial welcome
+    case p1_writingSamples = "p1_writing_samples"         // Front-loaded writing sample collection
+    case p1_jobSearchContext = "p1_job_search_context"    // Dossier questions about priorities
     case p1_profileIntake = "p1_profile_intake"           // Collecting contact info
-    case p1_photoCollection = "p1_photo_collection"       // Offering/collecting profile photo
-    case p1_resumeUpload = "p1_resume_upload"             // Offering resume upload before timeline
-    case p1_timelineEditing = "p1_timeline_editing"       // Building skeleton timeline
-    case p1_timelineValidation = "p1_timeline_validation" // Reviewing timeline before submission
-    case p1_sectionConfig = "p1_section_config"           // Configuring enabled sections
-    case p1_dossierSeed = "p1_dossier_seed"               // Asking 2-3 questions about goals
+    case p1_profileValidation = "p1_profile_validation"   // Validating profile
     case p1_phaseTransition = "p1_phase_transition"       // Ready to advance to Phase 2
 
-    // MARK: Phase 2: Deep Dive
-    case p2_bootstrap = "p2_bootstrap"                     // Calling start_phase_two
-    case p2_documentCollection = "p2_document_collection" // Dropzone open, collecting documents
-    case p2_cardAssignment = "p2_card_assignment"         // Proposing card-to-artifact assignments
-    case p2_userApprovalWait = "p2_user_approval_wait"   // Waiting for user approval
-    case p2_kcGeneration = "p2_kc_generation"             // Knowledge card generation
-    case p2_cardSubmission = "p2_card_submission"         // Submitting generated cards
-    case p2_phaseTransition = "p2_phase_transition"       // Ready to advance to Phase 3
+    // MARK: Phase 2: Career Story
+    case p2_timelineCollection = "p2_timeline_collection"     // Resume upload or conversational collection
+    case p2_timelineEnrichment = "p2_timeline_enrichment"     // Active interviewing about each role
+    case p2_workPreferences = "p2_work_preferences"           // Dossier weaving (remote, location, etc.)
+    case p2_sectionConfig = "p2_section_config"               // Configuring enabled sections
+    case p2_documentSuggestions = "p2_document_suggestions"   // Strategic suggestions before Phase 3
+    case p2_phaseTransition = "p2_phase_transition"           // Ready to advance to Phase 3
 
-    // MARK: Phase 3: Writing Corpus
-    case p3_bootstrap = "p3_bootstrap"                     // Calling start_phase_three
-    case p3_writingCollection = "p3_writing_collection"   // Collecting writing samples
-    case p3_sampleReview = "p3_sample_review"             // Evaluating sample quality
-    case p3_dossierCompilation = "p3_dossier_compilation" // Compiling Phase 1-3 assets
-    case p3_dossierValidation = "p3_dossier_validation"   // User reviewing dossier
-    case p3_dataSubmission = "p3_data_submission"         // Submitting final data
-    case p3_interviewComplete = "p3_interview_complete"   // Interview finished
+    // MARK: Phase 3: Evidence Collection
+    case p3_documentCollection = "p3_document_collection"     // Strategic document requests
+    case p3_gitCollection = "p3_git_collection"               // Git repository selection
+    case p3_cardGeneration = "p3_card_generation"             // Card inventory + merge + KC generation
+    case p3_cardReview = "p3_card_review"                     // LLM reviews generated cards
+    case p3_phaseTransition = "p3_phase_transition"           // Ready to advance to Phase 4
+
+    // MARK: Phase 4: Strategic Synthesis
+    case p4_strengthsSynthesis = "p4_strengths_synthesis"     // Identify strategic strengths
+    case p4_pitfallsAnalysis = "p4_pitfalls_analysis"         // Document concerns + mitigations
+    case p4_dossierCompletion = "p4_dossier_completion"       // Fill remaining dossier gaps
+    case p4_experienceDefaults = "p4_experience_defaults"     // Configure resume defaults
+    case p4_completion = "p4_completion"                       // Final wrap-up
 
     /// The parent phase for this subphase
     var phase: InterviewPhase {
         switch self {
-        case .p1_profileIntake, .p1_photoCollection, .p1_resumeUpload,
-             .p1_timelineEditing, .p1_timelineValidation, .p1_sectionConfig,
-             .p1_dossierSeed, .p1_phaseTransition:
-            return .phase1CoreFacts
-        case .p2_bootstrap, .p2_documentCollection, .p2_cardAssignment,
-             .p2_userApprovalWait, .p2_kcGeneration, .p2_cardSubmission,
-             .p2_phaseTransition:
-            return .phase2DeepDive
-        case .p3_bootstrap, .p3_writingCollection, .p3_sampleReview,
-             .p3_dossierCompilation, .p3_dossierValidation, .p3_dataSubmission,
-             .p3_interviewComplete:
-            return .phase3WritingCorpus
+        case .p1_welcome, .p1_writingSamples, .p1_jobSearchContext,
+             .p1_profileIntake, .p1_profileValidation, .p1_phaseTransition:
+            return .phase1VoiceContext
+        case .p2_timelineCollection, .p2_timelineEnrichment, .p2_workPreferences,
+             .p2_sectionConfig, .p2_documentSuggestions, .p2_phaseTransition:
+            return .phase2CareerStory
+        case .p3_documentCollection, .p3_gitCollection, .p3_cardGeneration,
+             .p3_cardReview, .p3_phaseTransition:
+            return .phase3EvidenceCollection
+        case .p4_strengthsSynthesis, .p4_pitfallsAnalysis, .p4_dossierCompletion,
+             .p4_experienceDefaults, .p4_completion:
+            return .phase4StrategicSynthesis
         }
     }
 }

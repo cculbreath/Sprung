@@ -23,9 +23,10 @@ final class PhaseScriptRegistry {
     // MARK: - Init
     init() {
         self.scripts = [
-            .phase1CoreFacts: PhaseOneScript(),
-            .phase2DeepDive: PhaseTwoScript(),
-            .phase3WritingCorpus: PhaseThreeScript()
+            .phase1VoiceContext: PhaseOneScript(),
+            .phase2CareerStory: PhaseTwoScript(),
+            .phase3EvidenceCollection: PhaseThreeScript(),
+            .phase4StrategicSynthesis: PhaseFourScript()
         ]
     }
 
@@ -45,16 +46,8 @@ final class PhaseScriptRegistry {
     /// Determines the next phase after the given phase.
     /// Returns nil if already at the final phase.
     func nextPhase(after currentPhase: InterviewPhase) -> InterviewPhase? {
-        switch currentPhase {
-        case .phase1CoreFacts:
-            return .phase2DeepDive
-        case .phase2DeepDive:
-            return .phase3WritingCorpus
-        case .phase3WritingCorpus:
-            return .complete
-        case .complete:
-            return nil
-        }
+        // Delegate to InterviewPhase.next() for consistency
+        currentPhase.next()
     }
 
     /// Validates whether the current phase can transition to the next phase.
@@ -65,27 +58,59 @@ final class PhaseScriptRegistry {
         dataStore: InterviewDataStore
     ) async -> PhaseTransitionValidation {
         switch currentPhase {
-        case .phase1CoreFacts:
+        case .phase1VoiceContext:
             return await validatePhaseOneToTwo(coordinator: coordinator)
-        case .phase2DeepDive:
+        case .phase2CareerStory:
+            return await validatePhaseTwoToThree(coordinator: coordinator)
+        case .phase3EvidenceCollection:
             // Check user approval flag from StateCoordinator
             let userApproved = await coordinator.state.userApprovedKCSkip
-            return await validatePhaseTwoToThree(
+            return await validatePhaseThreeToFour(
                 coordinator: coordinator,
                 userApprovedSkip: userApproved
             )
-        case .phase3WritingCorpus:
-            return await validatePhaseThreeToComplete(dataStore: dataStore)
+        case .phase4StrategicSynthesis:
+            return await validatePhaseFourToComplete(dataStore: dataStore)
         case .complete:
             return .alreadyComplete
         }
     }
 
     // MARK: - Private Validation Methods
+
+    /// Phase 1 → Phase 2: Validate voice/context collection before career story
     private func validatePhaseOneToTwo(
         coordinator: OnboardingInterviewCoordinator
     ) async -> PhaseTransitionValidation {
-        // VALIDATION: skeleton_timeline MUST have at least one entry before Phase 2
+        // VALIDATION: Applicant profile MUST be validated before Phase 2
+        // Writing samples are encouraged but not required (can continue to develop voice later)
+        let profile = coordinator.ui.applicantProfile
+
+        // Check if profile has basic required fields
+        let hasName = !(profile?["name"].stringValue.isEmpty ?? true)
+        let hasEmail = !(profile?["email"].stringValue.isEmpty ?? true)
+
+        if !hasName || !hasEmail {
+            Logger.warning("⚠️ next_phase blocked: applicant profile incomplete", category: .ai)
+            return .blocked(
+                reason: "missing_applicant_profile",
+                message: """
+                    Cannot advance to Phase 2: Applicant profile is incomplete. \
+                    At minimum, collect name and email before proceeding. \
+                    Use validate_applicant_profile to confirm the profile is ready.
+                    """
+            )
+        }
+
+        Logger.info("✅ Phase 1→2 validated: profile complete", category: .ai)
+        return .allowed
+    }
+
+    /// Phase 2 → Phase 3: Validate career story before evidence collection
+    private func validatePhaseTwoToThree(
+        coordinator: OnboardingInterviewCoordinator
+    ) async -> PhaseTransitionValidation {
+        // VALIDATION: skeleton_timeline MUST have at least one entry before Phase 3
         let timeline = coordinator.ui.skeletonTimeline
         let experiences = timeline?["experiences"].array ?? []
 
@@ -94,7 +119,7 @@ final class PhaseScriptRegistry {
             return .blocked(
                 reason: "missing_skeleton_timeline",
                 message: """
-                    Cannot advance to Phase 2: No timeline entries exist. \
+                    Cannot advance to Phase 3: No timeline entries exist. \
                     You must create skeleton timeline cards from the user's resume or work history before proceeding. \
                     Use create_timeline_card to add work experience, education, and other entries. \
                     If user uploaded a resume, extract the positions and create cards for each.
@@ -102,11 +127,12 @@ final class PhaseScriptRegistry {
             )
         }
 
-        Logger.info("✅ skeleton_timeline validated (\(experiences.count) entries) for Phase 1 → Phase 2", category: .ai)
+        Logger.info("✅ Phase 2→3 validated: \(experiences.count) timeline entries exist", category: .ai)
         return .allowed
     }
 
-    private func validatePhaseTwoToThree(
+    /// Phase 3 → Phase 4: Validate evidence collection before strategic synthesis
+    private func validatePhaseThreeToFour(
         coordinator: OnboardingInterviewCoordinator,
         userApprovedSkip: Bool
     ) async -> PhaseTransitionValidation {
@@ -120,7 +146,7 @@ final class PhaseScriptRegistry {
         if knowledgeCards.isEmpty {
             // If user has explicitly approved skipping via UI, allow it
             if userApprovedSkip {
-                Logger.info("✅ User approved skip to Phase 3 without knowledge cards (via UI)", category: .ai)
+                Logger.info("✅ User approved skip to Phase 4 without knowledge cards (via UI)", category: .ai)
                 return .allowed
             }
 
@@ -130,7 +156,7 @@ final class PhaseScriptRegistry {
             return .blocked(
                 reason: "no_knowledge_cards",
                 message: """
-                    Cannot advance to Phase 3: No knowledge cards were generated. \
+                    Cannot advance to Phase 4: No knowledge cards were generated. \
                     Knowledge cards are required to create tailored resume content.
 
                     OPTIONS:
@@ -143,11 +169,12 @@ final class PhaseScriptRegistry {
             )
         }
 
-        Logger.info("✅ Phase 2→3 validated: \(knowledgeCards.count) knowledge cards exist", category: .ai)
+        Logger.info("✅ Phase 3→4 validated: \(knowledgeCards.count) knowledge cards exist", category: .ai)
         return .allowed
     }
 
-    private func validatePhaseThreeToComplete(
+    /// Phase 4 → Complete: Validate strategic synthesis before completing interview
+    private func validatePhaseFourToComplete(
         dataStore: InterviewDataStore
     ) async -> PhaseTransitionValidation {
         // VALIDATION: experience_defaults MUST be persisted before completing the interview
@@ -170,7 +197,7 @@ final class PhaseScriptRegistry {
             )
         }
 
-        Logger.info("✅ experience_defaults validated for Phase 3 → Complete transition", category: .ai)
+        Logger.info("✅ Phase 4→Complete validated: experience_defaults persisted", category: .ai)
         return .allowed
     }
     // MARK: - Base Developer Message
