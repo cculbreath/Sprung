@@ -16,13 +16,88 @@ Extract facts into these categories:
 
 | Category | Description | Examples |
 |----------|-------------|----------|
-| `responsibility` | Job duties, scope, authority | "Led 12-person engineering team", "Owned CI/CD pipeline" |
-| `achievement` | Outcomes, results, impact | "Reduced latency by 40%", "Shipped 3 months early" |
-| `technology` | Tools, languages, platforms | "Built with Python/FastAPI", "AWS Lambda architecture" |
-| `metric` | Quantified measures | "47 microservices", "$2M cost savings", "99.9% uptime" |
-| `scope` | Scale, size, complexity | "Served 10M daily users", "500-service ecosystem" |
-| `context` | Situation, constraints, environment | "During acquisition", "Legacy modernization" |
-| `recognition` | Awards, promotions, external validation | "Promoted to Staff Engineer", "Patent granted" |
+| `technical_decision` | Design choice WITH rationale | "Selected two-stage purification over single-stage due to membrane compatibility requirements" |
+| `problem_solved` | Root cause identified + resolution | "Identified oxidation causing regulator fouling; mitigated via nitrogen purge protocol" |
+| `capability_built` | System, tool, or process created | "Built custom thermal/pressure instrumentation synchronized with high-speed video" |
+| `artifact_produced` | Tangible deliverable | "Produced 200+ canisters for prototype testing", "Delivered 27-page design report" |
+| `responsibility` | Role, scope, authority | "Led device characterization and test fixture development" |
+| `scope_indicator` | Scale/complexity evidence (numbers welcome but not required) | "Multi-axis control: 3 axes, 17 buttons, 5 pots, 3 displays" |
+| `collaboration` | Team/stakeholder interaction | "Coordinated with Watring technician on furnace modifications" |
+| `recognition` | External validation | "Published in PRX 2024", "Promoted to Senior Lecturer" |
+| `context` | Situation, constraints, environment | "Pre-production R&D with no established manufacturing process" |
+
+### Category Selection Guidance
+
+For R&D and pre-production work:
+- Prefer `technical_decision` over generic achievement claims when describing design choices
+- Prefer `problem_solved` over vague accomplishment statements
+- Prefer `capability_built` over "demonstrated expertise in..."
+- Use `scope_indicator` for complexity evidence even without hard metrics
+
+For corporate/production work:
+- Use `scope_indicator` with quantified business impact when available
+- Use `artifact_produced` for outcomes with measurable deliverables
+
+## Field Purposes (DISTINCT ROLES)
+
+These three outputs serve different purposes. DO NOT duplicate content across them.
+
+### facts[]
+Raw evidence with source attribution. These are ATOMIC observations from source documents.
+- Must include source reference (artifact_id, location, verbatim_quote)
+- One fact per entry—don't combine multiple observations
+- Preserve original phrasing and specificity
+
+Example:
+```json
+{
+  "category": "scope_indicator",
+  "statement": "Control system integrates 17 buttons, 5 potentiometers, 3 seven-segment displays, and 3 RGB status LEDs",
+  "confidence": "high",
+  "source": {
+    "artifact_id": "nrd_git_analysis",
+    "location": "UI module summary",
+    "verbatim_quote": "17 buttons, 5 pots, 3 seven-segment DROs, 3 RGB LEDs integrated"
+  }
+}
+```
+
+### suggested_bullets[]
+Resume bullet TEMPLATES with [PLACEHOLDERS] for customization. These combine multiple facts into impact-oriented statements.
+- Use [BRACKETED_PLACEHOLDERS] for values that might change per application
+- Focus on action + scope + outcome structure
+- Generate 3-5 templates, not finished prose
+
+Example:
+```json
+[
+  "Built [dual-MCU/multi-controller] motion platform controlling [3 axes] with [17-input] operator interface",
+  "Designed [I2C/communication] protocol enabling [reliable/robust] inter-processor coordination with [retry logic]",
+  "Integrated [N displays + M indicators] for real-time operator feedback during [precision operations]"
+]
+```
+
+### outcomes[]
+What CHANGED because of this work. Qualitative is fine—focus on the delta, not the activity.
+- Separate from facts (facts = what was done; outcomes = what resulted)
+- Can be inferred if evidence supports it
+- Don't repeat scope—focus on impact
+
+Example:
+```json
+[
+  "Replaced manual machine control with repeatable automated sequences",
+  "Enabled single-operator management of previously two-person process",
+  "Reduced setup time from hours to minutes through saved position presets"
+]
+```
+
+### Anti-Pattern Detection
+
+If you find yourself writing the same text in multiple fields, STOP. Ask:
+- **Facts**: Is this a raw observation from a source?
+- **Bullets**: Is this a template for resume use?
+- **Outcomes**: Is this describing what changed?
 
 ## Source Attribution
 
@@ -57,6 +132,31 @@ All artifacts are available as text files in a temporary directory. Use these st
 ## Card Inventory Data
 
 You will receive the card's metadata from the cross-document merge phase. Use this as a GUIDE for what facts to look for, but extract facts from the actual source documents.
+
+## Verbatim Excerpt Preservation
+
+For each card, identify 1-3 passages (100-500 words each) worth preserving verbatim.
+
+Preserve excerpts that contain:
+- **Technical rationale**: Explanation of WHY a design decision was made
+- **Voice/framing**: Passages that show how the candidate describes their work
+- **Unique insight**: Analysis or perspective not captured in structured facts
+- **Narrative arc**: Story of problem → approach → resolution
+
+```json
+{
+  "verbatim_excerpts": [
+    {
+      "context": "Design rationale for control system architecture",
+      "location": "huntsville_report p22-23",
+      "text": "The proposed system integrates machine vision with multi-axis joystick input, offering a cost-effective $6.1-7.6k alternative to the existing PLC-only approach. This enables rapid iteration during R&D while preserving migration path to hardened production controls. The PC-based architecture was selected over embedded-only solutions because...",
+      "preservation_reason": "Shows first-principles engineering thinking and cost-conscious design"
+    }
+  ]
+}
+```
+
+DO NOT summarize these passages. Copy them verbatim with light formatting cleanup only.
 
 ## DO NOT:
 
@@ -97,35 +197,102 @@ Call `return_result` with this structure:
     "title": "{TITLE}",
     "facts": [
       {
-        "category": "achievement",
-        "statement": "Reduced deployment time from 4 hours to 15 minutes",
+        "category": "technical_decision",
+        "statement": "Selected dual-MCU architecture: Arduino Mega for UI responsiveness, Teensy 3.6 for motion control timing",
         "confidence": "high",
         "source": {
-          "artifact_id": "perf-review-2023",
-          "location": "accomplishments section",
-          "verbatim_quote": "deployment time dropped from 4 hours to just 15 minutes"
+          "artifact_id": "nrd-design-doc",
+          "location": "architecture section",
+          "verbatim_quote": "Arduino handles the UI so the motion controller never stalls waiting for input"
         }
       },
       {
-        "category": "scope",
-        "statement": "Migration involved 47 microservices",
+        "category": "capability_built",
+        "statement": "Built custom I2C command protocol with retry logic for reliable inter-processor communication",
         "confidence": "high",
         "source": {
-          "artifact_id": "project-report",
-          "location": "executive summary",
-          "verbatim_quote": "completed migration of all 47 microservices"
+          "artifact_id": "nrd-git-analysis",
+          "location": "communication module summary",
+          "verbatim_quote": "I2C command/response protocol with CRC and exponential backoff"
+        }
+      },
+      {
+        "category": "scope_indicator",
+        "statement": "Control system integrates 17 buttons, 5 potentiometers, 3 seven-segment displays, and 3 RGB status LEDs",
+        "confidence": "high",
+        "source": {
+          "artifact_id": "nrd-git-analysis",
+          "location": "UI module summary",
+          "verbatim_quote": "17 buttons, 5 pots, 3 seven-segment DROs, 3 RGB LEDs"
         }
       }
     ],
     "suggested_bullets": [
-      "Led migration of [47] microservices, reducing deployment time by [94%] from [4 hours] to [15 minutes]"
+      "Designed [dual-MCU/multi-controller] motion platform controlling [3 axes] with [17-input] operator interface",
+      "Built [I2C/SPI] communication protocol enabling [reliable] inter-processor coordination with [retry logic]"
     ],
-    "technologies": ["Kubernetes", "Docker", "AWS ECS"],
-    "date_range": "2022-2023",
-    "sources_used": ["perf-review-2023", "project-report"]
+    "outcomes": [
+      "Replaced manual machine control with repeatable automated sequences",
+      "Enabled single-operator management of previously two-person process"
+    ],
+    "verbatim_excerpts": [
+      {
+        "context": "Design rationale for dual-MCU architecture",
+        "location": "nrd-design-doc, architecture section",
+        "text": "The dual-MCU approach separates concerns: Arduino Mega handles the user interface and never stalls waiting for motion commands to complete. The Teensy 3.6 runs at 120MHz and handles all time-critical motion control with deterministic timing. I2C bridges the two with a simple command/response protocol that includes CRC checks and exponential backoff for reliability.",
+        "preservation_reason": "Shows engineering rationale and system design thinking"
+      }
+    ],
+    "technologies": ["C++", "Arduino", "Teensy 3.6", "I2C"],
+    "date_range": "2023-2024",
+    "sources_used": ["nrd-design-doc", "nrd-git-analysis"]
   }
 }
 ```
+
+## Skill Cards: Evidence-Based Structure
+
+For `skill` card types, use a DIFFERENT output structure that references evidence cards:
+
+```json
+{
+  "result": {
+    "card_id": "{CARD_ID}",
+    "card_type": "skill",
+    "title": "Embedded C++ / Design Patterns",
+
+    "proficiency_summary": "Production embedded development using OOP patterns for hardware abstraction and state management",
+
+    "evidence_cards": [
+      {
+        "card_id": "nrd_cnc_project",
+        "demonstrates": "Singleton for hardware abstraction, Observer for UI state updates",
+        "specific_example": "MotorController singleton managing DRV8825 drivers"
+      },
+      {
+        "card_id": "sybtexas_project",
+        "demonstrates": "Hierarchical state machines, I2C command protocol",
+        "specific_example": "Menu state machine with enter/exit lifecycle hooks"
+      }
+    ],
+
+    "depth_indicators": {
+      "time_span": "2023-present",
+      "active_months": "18+",
+      "codebase_size": "~15k lines across projects"
+    },
+
+    "technologies": ["C++11/14", "Arduino", "Teensy", "ESP32"],
+
+    "suggested_bullets": [
+      "Applied [PATTERN] patterns in [CONTEXT] for [BENEFIT]",
+      "Designed [ABSTRACTION] enabling [CAPABILITY] across [SCOPE]"
+    ]
+  }
+}
+```
+
+The skill card REFERENCES evidence; it doesn't duplicate the project descriptions.
 
 ## Quality Check
 
@@ -135,3 +302,4 @@ Before submitting:
 3. No facts are duplicated
 4. Confidence levels accurately reflect evidence strength
 5. Suggested bullets reference actual extracted facts
+6. Skill cards reference evidence_cards instead of duplicating project content

@@ -42,6 +42,12 @@ class ResRef: Identifiable, Codable {
     /// Evidence quality from merge: "strong", "moderate", "weak"
     var evidenceQuality: String?
 
+    /// JSON-encoded array of verbatim excerpts preserving voice and context
+    var verbatimExcerptsJSON: String?
+
+    /// For skill cards: JSON-encoded array of ResRef UUIDs that demonstrate this skill
+    var evidenceCardIdsJSON: String?
+
     init(
         name: String = "", content: String = "",
         enabledByDefault: Bool = false,
@@ -87,6 +93,8 @@ class ResRef: Identifiable, Codable {
         case factsJSON
         case suggestedBulletsJSON
         case technologiesJSON
+        case verbatimExcerptsJSON
+        case evidenceCardIdsJSON
     }
     required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -104,6 +112,8 @@ class ResRef: Identifiable, Codable {
         factsJSON = try container.decodeIfPresent(String.self, forKey: .factsJSON)
         suggestedBulletsJSON = try container.decodeIfPresent(String.self, forKey: .suggestedBulletsJSON)
         technologiesJSON = try container.decodeIfPresent(String.self, forKey: .technologiesJSON)
+        verbatimExcerptsJSON = try container.decodeIfPresent(String.self, forKey: .verbatimExcerptsJSON)
+        evidenceCardIdsJSON = try container.decodeIfPresent(String.self, forKey: .evidenceCardIdsJSON)
     }
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -121,6 +131,8 @@ class ResRef: Identifiable, Codable {
         try container.encodeIfPresent(factsJSON, forKey: .factsJSON)
         try container.encodeIfPresent(suggestedBulletsJSON, forKey: .suggestedBulletsJSON)
         try container.encodeIfPresent(technologiesJSON, forKey: .technologiesJSON)
+        try container.encodeIfPresent(verbatimExcerptsJSON, forKey: .verbatimExcerptsJSON)
+        try container.encodeIfPresent(evidenceCardIdsJSON, forKey: .evidenceCardIdsJSON)
     }
 
     // MARK: - Computed Properties for Fact-Based Cards
@@ -197,6 +209,46 @@ class ResRef: Identifiable, Codable {
         Dictionary(grouping: facts, by: { $0.category })
     }
 
+    /// Decoded array of verbatim excerpts preserving voice and context
+    var verbatimExcerpts: [VerbatimExcerpt] {
+        get {
+            guard let json = verbatimExcerptsJSON,
+                  let data = json.data(using: .utf8),
+                  let decoded = try? JSONDecoder().decode([VerbatimExcerpt].self, from: data) else {
+                return []
+            }
+            return decoded
+        }
+        set {
+            if newValue.isEmpty {
+                verbatimExcerptsJSON = nil
+            } else if let data = try? JSONEncoder().encode(newValue),
+                      let json = String(data: data, encoding: .utf8) {
+                verbatimExcerptsJSON = json
+            }
+        }
+    }
+
+    /// For skill cards: IDs of ResRefs that demonstrate this skill
+    var evidenceCardIds: [UUID] {
+        get {
+            guard let json = evidenceCardIdsJSON,
+                  let data = json.data(using: .utf8),
+                  let decoded = try? JSONDecoder().decode([UUID].self, from: data) else {
+                return []
+            }
+            return decoded
+        }
+        set {
+            if newValue.isEmpty {
+                evidenceCardIdsJSON = nil
+            } else if let data = try? JSONEncoder().encode(newValue),
+                      let json = String(data: data, encoding: .utf8) {
+                evidenceCardIdsJSON = json
+            }
+        }
+    }
+
     /// Card type display name with icon
     var cardTypeDisplay: (name: String, icon: String) {
         switch cardType?.lowercased() {
@@ -242,5 +294,22 @@ struct ResRefFactSource: Codable {
         case artifactId = "artifact_id"
         case location
         case verbatimQuote = "verbatim_quote"
+    }
+}
+
+/// Verbatim excerpt preserving voice and context from source documents
+struct VerbatimExcerpt: Codable {
+    /// What this excerpt demonstrates
+    let context: String
+    /// Source document + location
+    let location: String
+    /// 100-500 word verbatim passage
+    let text: String
+    /// Why this matters (voice, technical depth, unique insight)
+    let preservationReason: String
+
+    enum CodingKeys: String, CodingKey {
+        case context, location, text
+        case preservationReason = "preservation_reason"
     }
 }

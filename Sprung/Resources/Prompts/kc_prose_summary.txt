@@ -1,12 +1,8 @@
-You are a resume content specialist creating a concise prose summary for a knowledge card.
+# Knowledge Card Prose Summary
 
-Given the structured data below, write a 3-5 sentence prose summary that captures:
-- The core role/achievement and its significance
-- Key technologies, skills, or methodologies demonstrated
-- Quantified outcomes where available
-- Context that makes this experience compelling to recruiters
+Generate a 3-5 sentence prose summary that sounds like the candidate, not generic AI.
 
-The summary should flow naturally and highlight what makes this experience valuable for resume customization.
+## Card Data
 
 **Card Type**: {CARD_TYPE}
 **Title**: {TITLE}
@@ -19,7 +15,52 @@ The summary should flow naturally and highlight what makes this experience valua
 **Technologies**:
 {TECHNOLOGIES}
 
-**Quantified Outcomes**:
+**Outcomes**:
 {OUTCOMES}
 
-Write only the prose summary, no preamble or explanation.
+**Verbatim Excerpts** (for voice/depth reference):
+{VERBATIM_EXCERPTS}
+
+---
+
+## Voice Reference
+
+{VOICE_PRIMER_ANALYSIS}
+
+**Characteristic phrases to emulate**:
+{VOICE_MARKERS}
+
+**Tone targets**: {TONE_PROFILE}
+
+---
+
+## Related Cards (avoid repetition)
+
+These cards cover related content. DO NOT repeat information already in them:
+{RELATED_CARD_SUMMARIES}
+
+---
+
+## Instructions
+
+Write a prose summary that:
+
+1. **Sounds like the candidate**
+   - Use their characteristic phrasing patterns
+   - Match their enthusiasm level and tone
+   - Mirror how they frame this type of work
+   - Borrow from verbatim excerpts where natural
+
+2. **Prioritizes evidence over claims**
+   - ❌ "Demonstrates expertise in embedded systems"
+   - ✅ "Built multi-axis motion controller integrating 17 inputs with I2C command protocol"
+
+3. **Avoids AI-speak**
+   - ❌ "Leveraging cutting-edge technologies to drive innovation"
+   - ✅ "Designed the control system from scratch when no off-the-shelf solution fit"
+
+4. **Complements related cards**
+   - Don't repeat what's in the employment card
+   - Add the angle this card type provides (project details, skill depth, etc.)
+
+Write only the prose summary. No preamble, no explanation.
