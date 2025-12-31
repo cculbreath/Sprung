@@ -120,6 +120,11 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
             // Emit batch started event - this prevents validation prompts from interrupting uploads
             await emit(.batchUploadStarted(expectedCount: expectedCount))
             pendingBatch = PendingBatch(expectedCount: expectedCount)
+
+            // Send developer message to LLM so it knows to continue interviewing
+            // This is the "batched notification" pattern from the interview revitalization plan
+            let estimatedSeconds = Int(timeoutPerDocumentSeconds * 0.3 * Double(expectedCount))
+            await sendBackgroundStartedMessage(documentCount: expectedCount, estimatedSeconds: estimatedSeconds)
         }
 
         // Start/restart timeout task (scales with total number of documents)
@@ -266,6 +271,10 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
             await emit(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
             Logger.info("✅ Batch of \(artifacts.count) artifact(s) sent as user message", category: .ai)
         }
+
+        // Send developer message to LLM that background processing is complete
+        // This tells the LLM to weave acknowledgment naturally into its response
+        await sendBackgroundCompletedMessage(documentCount: artifacts.count)
     }
 
     /// Build the extracted content message for artifacts
@@ -449,6 +458,37 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
 
         await emit(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
         Logger.info("🖼️ Image artifact sent to LLM: \(artifactId)", category: .ai)
+    }
+
+    // MARK: - Background Processing Notifications
+
+    /// Send developer message when background processing starts
+    /// This tells the LLM to continue interviewing about other topics while waiting
+    private func sendBackgroundStartedMessage(documentCount: Int, estimatedSeconds: Int) async {
+        let message = """
+            BACKGROUND: Processing \(documentCount) document\(documentCount == 1 ? "" : "s") (~\(estimatedSeconds)s).
+            Continue the interview while this runs. Use get_user_option for structured dossier questions.
+            Topics: work preferences, availability, career narrative, hidden strengths.
+            Do NOT acknowledge this message directly—just continue the conversation.
+            """
+        var payload = JSON()
+        payload["text"].string = message
+        await emit(.llmSendDeveloperMessage(payload: payload))
+        Logger.info("📤 Background processing started notification sent to LLM", category: .ai)
+    }
+
+    /// Send developer message when background processing completes
+    /// This tells the LLM that documents are ready for review
+    private func sendBackgroundCompletedMessage(documentCount: Int) async {
+        let message = """
+            BACKGROUND COMPLETE: \(documentCount) document\(documentCount == 1 ? "" : "s") processed and ready.
+            Weave acknowledgment naturally into your next response—do not interrupt current topic abruptly.
+            Review the extracted content above and continue building the candidate profile.
+            """
+        var payload = JSON()
+        payload["text"].string = message
+        await emit(.llmSendDeveloperMessage(payload: payload))
+        Logger.info("📤 Background processing completed notification sent to LLM", category: .ai)
     }
 
     /// Send git repository analysis artifact to LLM
