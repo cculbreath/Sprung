@@ -564,27 +564,23 @@ final class OnboardingInterviewCoordinator {
     /// Delete an artifact record and notify the LLM via developer message.
     /// Called when user deletes an artifact from the Artifacts tab.
     func deleteArtifactRecord(id: String) async {
-        // Delete from repository (returns the deleted artifact for notification)
-        guard let deleted = await state.deleteArtifactRecord(id: id) else {
-            Logger.warning("⚠️ Failed to delete artifact: \(id) - not found", category: .ai)
+        // Find the artifact in SwiftData
+        guard let artifact = container.artifactRecordStore.artifact(byIdString: id) else {
+            Logger.warning("Failed to delete artifact: \(id) - not found", category: .ai)
             return
         }
 
-        let filename = deleted["filename"].stringValue
-        let title = deleted["metadata"]["title"].string ?? filename
+        let filename = artifact.filename
+        let title = artifact.title ?? filename
 
-        // Delete from SwiftData persistence (critical for session restore)
-        if let artifactRecord = container.sessionStore.findArtifactById(id) {
-            container.sessionStore.deleteArtifact(artifactRecord)
-            Logger.info("💾 Artifact deleted from SwiftData: \(filename)", category: .ai)
-        } else {
-            Logger.warning("⚠️ Artifact not found in SwiftData for deletion: \(id)", category: .ai)
-        }
+        // Delete from SwiftData
+        container.artifactRecordStore.deleteArtifact(artifact)
 
-        // Update UI state
-        await MainActor.run {
-            ui.artifactRecords = container.artifactRepository.artifactRecordsSync
-        }
+        // Also delete from in-memory repository (for event-driven components)
+        _ = await state.deleteArtifactRecord(id: id)
+
+        // Update UI state with fresh SwiftData query
+        await updateArtifactUIState()
 
         // Send developer message to notify LLM
         await sendDeveloperMessage(
@@ -597,116 +593,114 @@ final class OnboardingInterviewCoordinator {
             ]
         )
 
-        Logger.info("🗑️ Artifact deleted and LLM notified: \(filename)", category: .ai)
+        Logger.info("Artifact deleted and LLM notified: \(filename)", category: .ai)
+    }
+
+    // MARK: - Artifact UI State
+
+    /// Update UI state with fresh artifact data from SwiftData.
+    private func updateArtifactUIState() async {
+        guard let session = container.sessionPersistenceHandler.getActiveSession() else { return }
+        let currentArtifacts = container.artifactRecordStore.artifacts(for: session)
+        let archivedArtifacts = container.artifactRecordStore.archivedArtifacts
+
+        await MainActor.run {
+            ui.artifactRecordsSwiftData = currentArtifacts
+            ui.archivedArtifactCount = archivedArtifacts.count
+        }
     }
 
     // MARK: - Archived Artifacts Management
 
-    /// Load archived artifacts from SwiftData into the repository cache.
+    /// Load archived artifacts count for UI display.
     /// Called during coordinator initialization.
     func loadArchivedArtifacts() async {
-        let archivedJSON = container.sessionPersistenceHandler.getArchivedArtifactsAsJSON()
-        await container.artifactRepository.setArchivedArtifacts(archivedJSON)
+        let archivedCount = container.artifactRecordStore.archivedArtifacts.count
         await MainActor.run {
-            ui.archivedArtifactCount = archivedJSON.count
+            ui.archivedArtifactCount = archivedCount
         }
-        Logger.info("📦 Loaded \(archivedJSON.count) archived artifacts", category: .ai)
+        Logger.info("Loaded \(archivedCount) archived artifacts", category: .ai)
     }
 
-    /// Get archived artifacts for UI display.
-    func getArchivedArtifacts() -> [JSON] {
-        container.artifactRepository.archivedArtifactsSync
+    /// Get archived artifacts for UI display (directly from SwiftData).
+    func getArchivedArtifacts() -> [ArtifactRecord] {
+        container.artifactRecordStore.archivedArtifacts
+    }
+
+    /// Get current session artifacts for UI display (directly from SwiftData).
+    func getCurrentSessionArtifacts() -> [ArtifactRecord] {
+        guard let session = container.sessionPersistenceHandler.getActiveSession() else { return [] }
+        return container.artifactRecordStore.artifacts(for: session)
     }
 
     /// Promote an archived artifact to the current session.
     /// This makes the artifact available to the LLM and adds it to the current interview.
     func promoteArchivedArtifact(id: String) async {
         guard let session = container.sessionPersistenceHandler.getActiveSession() else {
-            Logger.warning("⚠️ Cannot promote artifact: no active session", category: .ai)
+            Logger.warning("Cannot promote artifact: no active session", category: .ai)
             return
         }
 
-        guard let artifactRecord = container.sessionStore.findArtifactById(id) else {
-            Logger.warning("⚠️ Cannot promote artifact: not found in SwiftData: \(id)", category: .ai)
+        guard let artifact = container.artifactRecordStore.artifact(byIdString: id) else {
+            Logger.warning("Cannot promote artifact: not found in SwiftData: \(id)", category: .ai)
             return
         }
 
         // Update SwiftData: move artifact to current session
-        container.sessionStore.promoteArtifact(artifactRecord, to: session)
+        container.artifactRecordStore.promoteArtifact(artifact, to: session)
 
-        // Convert to JSON for in-memory storage
-        let artifactJSON = artifactRecordToJSON(artifactRecord)
+        // Convert to JSON for in-memory repository and LLM notification
+        let artifactJSON = artifactRecordToJSON(artifact)
 
-        // Add to current session's in-memory artifact list
+        // Add to in-memory artifact list for event-driven components
         await container.artifactRepository.addArtifactRecord(artifactJSON)
-
-        // Remove from archived cache
-        await container.artifactRepository.removeFromArchivedCache(id: id)
 
         // Emit event to notify LLM and other handlers
         await eventBus.publish(.artifactRecordProduced(record: artifactJSON))
 
         // Update UI state
-        await MainActor.run {
-            ui.artifactRecords = container.artifactRepository.artifactRecordsSync
-            ui.archivedArtifactCount = container.artifactRepository.archivedArtifactsSync.count
-        }
+        await updateArtifactUIState()
 
-        let filename = artifactRecord.sourceFilename
-        Logger.info("📦 Promoted archived artifact: \(filename)", category: .ai)
+        Logger.info("Promoted archived artifact: \(artifact.filename)", category: .ai)
     }
 
     /// Permanently delete an archived artifact.
     /// This removes the artifact from SwiftData - it cannot be recovered.
     func deleteArchivedArtifact(id: String) async {
-        guard let artifactRecord = container.sessionStore.findArtifactById(id) else {
-            Logger.warning("⚠️ Cannot delete archived artifact: not found: \(id)", category: .ai)
+        guard let artifact = container.artifactRecordStore.artifact(byIdString: id) else {
+            Logger.warning("Cannot delete archived artifact: not found: \(id)", category: .ai)
             return
         }
 
-        let filename = artifactRecord.sourceFilename
+        let filename = artifact.filename
 
         // Delete from SwiftData
-        container.sessionStore.deleteArtifact(artifactRecord)
-
-        // Remove from archived cache
-        await container.artifactRepository.removeFromArchivedCache(id: id)
+        container.artifactRecordStore.deleteArtifact(artifact)
 
         // Update UI state
-        await MainActor.run {
-            ui.archivedArtifactCount = container.artifactRepository.archivedArtifactsSync.count
-        }
+        await updateArtifactUIState()
 
-        Logger.info("🗑️ Permanently deleted archived artifact: \(filename)", category: .ai)
+        Logger.info("Permanently deleted archived artifact: \(filename)", category: .ai)
     }
 
     /// Demote an artifact from the current session to archived status.
     /// This removes the artifact from the current interview but keeps it available for future use.
     func demoteArtifact(id: String) async {
-        guard let artifactRecord = container.sessionStore.findArtifactById(id) else {
-            Logger.warning("⚠️ Cannot demote artifact: not found: \(id)", category: .ai)
+        guard let artifact = container.artifactRecordStore.artifact(byIdString: id) else {
+            Logger.warning("Cannot demote artifact: not found: \(id)", category: .ai)
             return
         }
 
-        let filename = artifactRecord.sourceFilename
+        let filename = artifact.filename
 
-        // Remove from session (set session to nil)
-        artifactRecord.session = nil
-        container.sessionStore.saveContext()
+        // Demote in SwiftData (removes from session, keeps artifact)
+        container.artifactRecordStore.demoteArtifact(artifact)
 
         // Remove from in-memory current artifacts
         _ = await container.artifactRepository.deleteArtifactRecord(id: id)
 
-        // Refresh archived cache
-        await container.artifactRepository.refreshArchivedArtifacts(
-            container.sessionPersistenceHandler.getArchivedArtifactsAsJSON()
-        )
-
         // Update UI state
-        await MainActor.run {
-            ui.artifactRecords = container.artifactRepository.artifactRecordsSync
-            ui.archivedArtifactCount = container.artifactRepository.archivedArtifactsSync.count
-        }
+        await updateArtifactUIState()
 
         // Notify LLM that artifact was removed from current interview
         await sendDeveloperMessage(
@@ -723,7 +717,7 @@ final class OnboardingInterviewCoordinator {
 
     /// Convert OnboardingArtifactRecord to JSON format.
     /// Uses metadataJSON as base to preserve all fields (card_inventory, summary, etc.)
-    private func artifactRecordToJSON(_ record: OnboardingArtifactRecord) -> JSON {
+    private func artifactRecordToJSON(_ record: ArtifactRecord) -> JSON {
         // Start with the full persisted record (includes card_inventory, metadata, etc.)
         var json: JSON
         if let metadataJSON = record.metadataJSON,
@@ -736,12 +730,19 @@ final class OnboardingInterviewCoordinator {
         // Override with canonical SwiftData fields (in case of any discrepancy)
         json["id"].string = record.id.uuidString
         json["source_type"].string = record.sourceType
-        json["filename"].string = record.sourceFilename
+        json["filename"].string = record.filename
         json["extracted_text"].string = record.extractedContent
-        json["source_hash"].string = record.sourceHash
+        json["source_hash"].string = record.sha256
         json["raw_file_path"].string = record.rawFileRelativePath
         json["plan_item_id"].string = record.planItemId
         json["ingested_at"].string = ISO8601DateFormatter().string(from: record.ingestedAt)
+        json["summary"].string = record.summary
+        json["brief_description"].string = record.briefDescription
+        json["title"].string = record.title
+        json["content_type"].string = record.contentType
+        json["size_bytes"].int = record.sizeInBytes
+        json["has_card_inventory"].bool = record.hasCardInventory
+        json["card_inventory"].string = record.cardInventoryJSON
         return json
     }
 
