@@ -491,10 +491,11 @@ struct OnboardingRequestBuilder {
     private func shouldEnableParallelToolCalls() async -> Bool {
         let currentPhase = await stateCoordinator.phase
 
-        // Enable parallel tool calls for Phase 1 and Phase 2
-        // Phase 1: skeleton timeline extraction and validation
-        // Phase 2: document collection and KC generation
-        return currentPhase == .phase1CoreFacts || currentPhase == .phase2DeepDive
+        // Enable parallel tool calls for Phases 1-3
+        // Phase 1: voice context and profile collection
+        // Phase 2: career story and timeline enrichment
+        // Phase 3: document collection and KC generation
+        return currentPhase == .phase1VoiceContext || currentPhase == .phase2CareerStory || currentPhase == .phase3EvidenceCollection
     }
 
     // MARK: - Working Memory

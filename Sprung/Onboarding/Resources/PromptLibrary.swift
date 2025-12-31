@@ -108,6 +108,14 @@ enum PromptLibrary {
         loadPrompt(named: "agent_ready_workflow")
     }()
 
+    // MARK: - Voice Primer Prompts
+
+    /// Voice primer extraction prompt template
+    /// Contains placeholder: {WRITING_SAMPLES}
+    static let voicePrimerExtraction: String = {
+        loadPrompt(named: "voice_primer_extraction")
+    }()
+
     // MARK: - Card Pipeline Prompts
 
     /// Card inventory prompt template

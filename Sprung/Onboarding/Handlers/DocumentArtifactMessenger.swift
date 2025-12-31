@@ -272,7 +272,7 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
     /// Phase 1 & 3: Include full extracted text (needed for skeleton timeline, finalization)
     /// Phase 2: Summaries + inventory stats (token-efficient)
     private func buildExtractedContentMessage(artifacts: [JSON], phase: InterviewPhase) -> String {
-        let sendFullContent = phase != .phase2DeepDive
+        let sendFullContent = phase != .phase2CareerStory
         var messageText = "I've uploaded \(artifacts.count == 1 ? "a document" : "\(artifacts.count) documents"):\n\n"
 
         for (index, artifact) in artifacts.enumerated() {

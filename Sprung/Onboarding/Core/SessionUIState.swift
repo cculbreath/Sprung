@@ -144,16 +144,16 @@ actor SessionUIState: OnboardingEventEmitter {
     /// - next_phase: ungated when user approves timeline validation
     private func applyPhaseExclusions(_ phase: InterviewPhase) {
         switch phase {
-        case .phase1CoreFacts:
+        case .phase1VoiceContext:
             // Gate submit_for_validation until user clicks "Done with Timeline"
-            // Gate next_phase until user approves timeline validation
+            // Gate next_phase until user approves validation
             excludedTools = [
                 OnboardingToolName.submitForValidation.rawValue,
                 OnboardingToolName.nextPhase.rawValue
             ]
             Logger.info("🔒 Phase 1 tool gating: submit_for_validation and next_phase excluded until user actions", category: .ai)
 
-        case .phase2DeepDive, .phase3WritingCorpus, .complete:
+        case .phase2CareerStory, .phase3EvidenceCollection, .phase4StrategicSynthesis, .complete:
             // Clear Phase 1 exclusions when entering new phases
             excludedTools = []
         }

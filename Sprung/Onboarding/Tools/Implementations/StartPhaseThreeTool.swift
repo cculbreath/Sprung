@@ -34,7 +34,7 @@ struct StartPhaseThreeTool: InterviewTool {
         // VALIDATION: Must be in Phase 3 to call this tool
         // The LLM must use next_phase to transition first, which validates the transition
         let currentPhase = await coordinator.currentPhase
-        if currentPhase != .phase3WritingCorpus {
+        if currentPhase != .phase3EvidenceCollection {
             Logger.warning(
                 "⚠️ start_phase_three rejected: current phase is \(currentPhase.rawValue), not phase3",
                 category: .ai

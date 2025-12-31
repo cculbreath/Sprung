@@ -8,6 +8,7 @@ import SwiftData
 enum CoverRefType: String, Codable {
     case writingSample
     case backgroundFact
+    case voicePrimer  // Voice characteristics extracted from writing samples
 }
 @Model
 class CoverRef: Identifiable, Codable {

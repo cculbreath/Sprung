@@ -98,10 +98,13 @@ struct NextPhaseTool: InterviewTool {
             }
 
             // Chain to the bootstrap tool for the new phase
-            if nextPhase == .phase2DeepDive {
+            if nextPhase == .phase2CareerStory {
                 response["next_required_tool"].string = OnboardingToolName.startPhaseTwo.rawValue
-            } else if nextPhase == .phase3WritingCorpus {
+            } else if nextPhase == .phase3EvidenceCollection {
                 response["next_required_tool"].string = OnboardingToolName.startPhaseThree.rawValue
+            } else if nextPhase == .phase4StrategicSynthesis {
+                // Phase 4 doesn't have a bootstrap tool - proceeds directly
+                response["next_required_tool"].string = nil
             }
 
             return .immediate(response)

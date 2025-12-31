@@ -34,10 +34,10 @@ struct DisplayTimelineForReviewTool: InterviewTool {
             coordinator.ui.isTimelineEditorActive = true
         }
 
-        // Mark timeline_editor sub-objective as in_progress
+        // Mark timeline enrichment objective as in_progress
         // This gates submit_for_validation(skeleton_timeline) - it can only be called after the editor is displayed
         await coordinator.eventBus.publish(.objectiveStatusUpdateRequested(
-            id: OnboardingObjectiveId.skeletonTimelineTimelineEditor.rawValue,
+            id: OnboardingObjectiveId.timelineEnriched.rawValue,
             status: "in_progress",
             source: "display_timeline_tool",
             notes: "Timeline editor activated",

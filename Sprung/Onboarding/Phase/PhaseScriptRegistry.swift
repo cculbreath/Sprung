@@ -84,11 +84,12 @@ final class PhaseScriptRegistry {
     ) async -> PhaseTransitionValidation {
         // VALIDATION: Applicant profile MUST be validated before Phase 2
         // Writing samples are encouraged but not required (can continue to develop voice later)
-        let profile = coordinator.ui.applicantProfile
+        let artifacts = await coordinator.state.artifacts
+        let profile = artifacts.applicantProfile
 
         // Check if profile has basic required fields
-        let hasName = !(profile?["name"].stringValue.isEmpty ?? true)
-        let hasEmail = !(profile?["email"].stringValue.isEmpty ?? true)
+        let hasName = !(profile?["name"].stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        let hasEmail = !(profile?["email"].stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
 
         if !hasName || !hasEmail {
             Logger.warning("⚠️ next_phase blocked: applicant profile incomplete", category: .ai)

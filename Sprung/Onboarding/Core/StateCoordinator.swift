@@ -23,7 +23,7 @@ actor StateCoordinator: OnboardingEventEmitter {
     // Runtime tool exclusions (e.g., one-time bootstrap tools)
     private var excludedTools: Set<String> = []
     // MARK: - Core Interview State
-    private(set) var phase: InterviewPhase = .phase1CoreFacts
+    private(set) var phase: InterviewPhase = .phase1VoiceContext
     private(set) var evidenceRequirements: [EvidenceRequirement] = []
 
     // MARK: - Dossier Tracking (Opportunistic Collection)
@@ -108,14 +108,16 @@ actor StateCoordinator: OnboardingEventEmitter {
 
         // First: Set current wizard step based on actual phase (handles "proceed anyway" scenarios)
         switch phase {
-        case .phase1CoreFacts:
+        case .phase1VoiceContext:
             // Check if we've started (objectives registered)
             let allObjectives = await objectiveStore.getAllObjectives()
             currentWizardStep = allObjectives.isEmpty ? .introduction : .resumeIntake
-        case .phase2DeepDive:
+        case .phase2CareerStory:
             currentWizardStep = .artifactDiscovery
-        case .phase3WritingCorpus:
+        case .phase3EvidenceCollection:
             currentWizardStep = .writingCorpus
+        case .phase4StrategicSynthesis:
+            currentWizardStep = .wrapUp
         case .complete:
             currentWizardStep = .wrapUp
         }
@@ -126,16 +128,16 @@ actor StateCoordinator: OnboardingEventEmitter {
 
         // Resume Intake: complete if objectives done OR we've moved past Phase 1
         if (hasProfile && hasTimeline && hasSections) ||
-           phase == .phase2DeepDive || phase == .phase3WritingCorpus || phase == .complete {
+           phase == .phase2CareerStory || phase == .phase3EvidenceCollection || phase == .phase4StrategicSynthesis || phase == .complete {
             completedWizardSteps.insert(.resumeIntake)
         }
         // Artifact Discovery: complete if objectives done OR we've moved past Phase 2
         if (hasEvidenceAudit && hasCardsGenerated) ||
-           phase == .phase3WritingCorpus || phase == .complete {
+           phase == .phase3EvidenceCollection || phase == .phase4StrategicSynthesis || phase == .complete {
             completedWizardSteps.insert(.artifactDiscovery)
         }
-        // Writing Corpus: complete if objectives done OR interview is complete
-        if (hasWriting && hasDossier) || phase == .complete {
+        // Writing Corpus: complete if objectives done OR we've moved to Phase 4 or complete
+        if (hasWriting && hasDossier) || phase == .phase4StrategicSynthesis || phase == .complete {
             completedWizardSteps.insert(.writingCorpus)
         }
         // Wrap Up completed when interview is complete
@@ -580,7 +582,7 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     // MARK: - Reset
     func reset() async {
-        phase = .phase1CoreFacts
+        phase = .phase1VoiceContext
         currentWizardStep = .introduction
         completedWizardSteps.removeAll()
         // Reset all services

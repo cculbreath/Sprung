@@ -20,6 +20,8 @@ struct CoverRefCardView: View {
             return .blue
         case .writingSample:
             return .purple
+        case .voicePrimer:
+            return .teal
         }
     }
 
@@ -29,6 +31,8 @@ struct CoverRefCardView: View {
             return "info.circle.fill"
         case .writingSample:
             return "doc.text.fill"
+        case .voicePrimer:
+            return "waveform.and.person.filled"
         }
     }
 
@@ -38,6 +42,8 @@ struct CoverRefCardView: View {
             return coverRef.isDossier ? "Dossier" : "Background Fact"
         case .writingSample:
             return "Writing Sample"
+        case .voicePrimer:
+            return "Voice Primer"
         }
     }
 

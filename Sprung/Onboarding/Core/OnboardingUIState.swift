@@ -40,7 +40,7 @@ final class OnboardingUIState {
     // MARK: - Wizard State
     var wizardStep: StateCoordinator.WizardStep = .introduction
     var completedWizardSteps: Set<StateCoordinator.WizardStep> = []
-    var phase: InterviewPhase = .phase1CoreFacts
+    var phase: InterviewPhase = .phase1VoiceContext
     // MARK: - Tool Pane State (Mirrored from ToolHandler)
     // Note: ToolHandler (via ToolRouter) manages its own state, but we might want to mirror it here
     // or keep accessing it via the router. For now, we'll keep the pattern of accessing via router

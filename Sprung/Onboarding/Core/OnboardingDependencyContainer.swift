@@ -339,10 +339,10 @@ final class OnboardingDependencyContainer {
 
     private static func createStateStores(eventBus: EventCoordinator, phasePolicy: PhasePolicy) -> StateStores {
         StateStores(
-            objectiveStore: ObjectiveStore(eventBus: eventBus, phasePolicy: phasePolicy, initialPhase: .phase1CoreFacts),
+            objectiveStore: ObjectiveStore(eventBus: eventBus, phasePolicy: phasePolicy, initialPhase: .phase1VoiceContext),
             artifactRepository: ArtifactRepository(eventBus: eventBus),
             chatTranscriptStore: ChatTranscriptStore(eventBus: eventBus),
-            sessionUIState: SessionUIState(eventBus: eventBus, phasePolicy: phasePolicy, initialPhase: .phase1CoreFacts)
+            sessionUIState: SessionUIState(eventBus: eventBus, phasePolicy: phasePolicy, initialPhase: .phase1VoiceContext)
         )
     }
 

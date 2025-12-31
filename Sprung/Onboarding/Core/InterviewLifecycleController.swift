@@ -99,7 +99,7 @@ final class InterviewLifecycleController {
         Logger.info("🚀 Starting fresh interview", category: .ai)
         await resetForFreshStart()
         _ = sessionPersistenceHandler.startSession(resumeExisting: false)
-        await state.setPhase(.phase1CoreFacts)
+        await state.setPhase(.phase1VoiceContext)
         await phaseTransitionController.registerObjectivesForCurrentPhase()
         subscribeToStateUpdates?()
         await documentArtifactHandler.start()
@@ -128,7 +128,7 @@ final class InterviewLifecycleController {
         Logger.info("📥 Synced \(ui.messages.count) messages to UI", category: .ai)
 
         // Restore UI state
-        let phase = InterviewPhase(rawValue: session.phase) ?? .phase1CoreFacts
+        let phase = InterviewPhase(rawValue: session.phase) ?? .phase1VoiceContext
         ui.phase = phase
 
         // Restore merged inventory and excluded card IDs (expensive LLM results)

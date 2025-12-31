@@ -81,7 +81,7 @@ struct SubmitForValidationTool: InterviewTool {
         if payload.validationType == OnboardingDataType.skeletonTimeline.rawValue {
             // Gate: user must have clicked "Done with Timeline" in the editor
             let editorStatus = await coordinator.state.getObjectiveStatus(
-                OnboardingObjectiveId.skeletonTimelineTimelineEditor.rawValue
+                OnboardingObjectiveId.timelineEnriched.rawValue
             )
             guard editorStatus == .completed else {
                 var response = JSON()

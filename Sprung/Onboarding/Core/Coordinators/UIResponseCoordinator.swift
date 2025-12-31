@@ -189,9 +189,9 @@ final class UIResponseCoordinator {
         toolRouter.clearValidationPrompt()
         await eventBus.publish(.validationPromptCleared)
 
-        // Mark timeline_editor objective as completed
+        // Mark timeline enrichment objective as completed
         await eventBus.publish(.objectiveStatusUpdateRequested(
-            id: OnboardingObjectiveId.skeletonTimelineTimelineEditor.rawValue,
+            id: OnboardingObjectiveId.timelineEnriched.rawValue,
             status: "completed",
             source: "user_done_with_timeline",
             notes: "User clicked Done with Timeline",

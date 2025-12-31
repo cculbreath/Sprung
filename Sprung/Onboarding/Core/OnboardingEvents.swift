@@ -78,6 +78,11 @@ enum OnboardingEvent {
     case candidateDossierPersisted(dossier: JSON) // emitted when final candidate dossier is persisted
     case experienceDefaultsGenerated(defaults: JSON) // emitted when LLM generates resume defaults from knowledge cards
 
+    // MARK: - Voice Primer Operations
+    case voicePrimerExtractionStarted(sampleCount: Int) // emitted when voice primer extraction begins
+    case voicePrimerExtractionCompleted(primer: JSON) // emitted when voice primer extraction succeeds
+    case voicePrimerExtractionFailed(error: String) // emitted when voice primer extraction fails
+
     // MARK: - Dossier Collection (Opportunistic)
     /// Emitted when a dossier field is collected via persist_data(dataType: "candidate_dossier_entry")
     /// Used to track which fields have been collected to avoid duplicate questions
@@ -451,7 +456,8 @@ actor EventCoordinator {
              .artifactMetadataUpdateRequested, .artifactMetadataUpdated,
              .knowledgeCardPersisted, .knowledgeCardsReplaced,
              .doneWithUploadsClicked, .generateCardsButtonClicked, .mergeComplete,
-             .writingSamplePersisted, .candidateDossierPersisted, .experienceDefaultsGenerated:
+             .writingSamplePersisted, .candidateDossierPersisted, .experienceDefaultsGenerated,
+             .voicePrimerExtractionStarted, .voicePrimerExtractionCompleted, .voicePrimerExtractionFailed:
             return .artifact
         // Evidence Requirements (treated as state/objectives)
         case .evidenceRequirementAdded, .evidenceRequirementUpdated, .evidenceRequirementRemoved:
@@ -597,6 +603,12 @@ actor EventCoordinator {
             let workCount = defaults["work"].arrayValue.count
             let skillsCount = defaults["skills"].arrayValue.count
             description = "Experience defaults generated (\(workCount) work, \(skillsCount) skills)"
+        case .voicePrimerExtractionStarted(let sampleCount):
+            description = "Voice primer extraction started from \(sampleCount) sample(s)"
+        case .voicePrimerExtractionCompleted:
+            description = "Voice primer extraction completed"
+        case .voicePrimerExtractionFailed(let error):
+            description = "Voice primer extraction failed: \(error)"
         case .doneWithUploadsClicked:
             description = "Done with uploads clicked - triggering merge"
         case .generateCardsButtonClicked:

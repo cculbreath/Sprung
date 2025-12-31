@@ -68,51 +68,46 @@ actor ObjectiveStore: OnboardingEventEmitter {
     }
     // MARK: - Objective Catalog
     /// Hierarchical objective metadata for each phase.
-    /// Structure matches the objective tree in PhaseOneScript.swift prompt.
+    /// Structure matches the new 4-phase interview revitalization plan.
     private static let objectiveMetadata: [InterviewPhase: [(id: String, label: String, parentId: String?)]] = [
-        .phase1CoreFacts: [
-            // applicant_profile (top-level)
-            (OnboardingObjectiveId.applicantProfile.rawValue, "Applicant profile", nil),
-            (OnboardingObjectiveId.applicantProfileContactIntake.rawValue, "Contact information intake", OnboardingObjectiveId.applicantProfile.rawValue),
-            (OnboardingObjectiveId.applicantProfileContactIntakeActivateCard.rawValue, "Activate applicant profile card", OnboardingObjectiveId.applicantProfileContactIntake.rawValue),
-            (OnboardingObjectiveId.applicantProfileContactIntakePersisted.rawValue, "ApplicantProfile updated with user-validated data", OnboardingObjectiveId.applicantProfileContactIntake.rawValue),
-            (OnboardingObjectiveId.applicantProfileProfilePhoto.rawValue, "Optional profile photo", OnboardingObjectiveId.applicantProfile.rawValue),
-            (OnboardingObjectiveId.applicantProfileProfilePhotoRetrieveProfile.rawValue, "Retrieve ApplicantProfile", OnboardingObjectiveId.applicantProfileProfilePhoto.rawValue),
-            (OnboardingObjectiveId.applicantProfileProfilePhotoEvaluateNeed.rawValue, "Check if photo upload required", OnboardingObjectiveId.applicantProfileProfilePhoto.rawValue),
-            (OnboardingObjectiveId.applicantProfileProfilePhotoCollectUpload.rawValue, "Activate photo upload card", OnboardingObjectiveId.applicantProfileProfilePhoto.rawValue),
-            // skeleton_timeline (top-level)
-            (OnboardingObjectiveId.skeletonTimeline.rawValue, "Skeleton timeline", nil),
-            (OnboardingObjectiveId.skeletonTimelineIntakeArtifacts.rawValue, "Use get_user_upload and chat interview to gather timeline data", OnboardingObjectiveId.skeletonTimeline.rawValue),
-            (OnboardingObjectiveId.skeletonTimelineTimelineEditor.rawValue, "Use TimelineEntry UI to collaborate with user", OnboardingObjectiveId.skeletonTimeline.rawValue),
-            (OnboardingObjectiveId.skeletonTimelineContextInterview.rawValue, "Use chat interview to understand gaps and narrative structure", OnboardingObjectiveId.skeletonTimeline.rawValue),
-            (OnboardingObjectiveId.skeletonTimelineCompletenessSignal.rawValue, "Set status when skeleton timeline data gathering is complete", OnboardingObjectiveId.skeletonTimeline.rawValue),
-            // enabled_sections (top-level)
-            (OnboardingObjectiveId.enabledSections.rawValue, "Enabled sections", nil),
-            // dossier_seed (top-level)
-            (OnboardingObjectiveId.dossierSeed.rawValue, "Dossier seed questions", nil),
-            (OnboardingObjectiveId.contactSourceSelected.rawValue, "Contact source selected", nil),
-            (OnboardingObjectiveId.contactDataCollected.rawValue, "Contact data collected", nil),
+        .phase1VoiceContext: [
+            // Phase 1: Voice & Context objectives
+            (OnboardingObjectiveId.writingSamplesCollected.rawValue, "Writing samples collected", nil),
+            (OnboardingObjectiveId.voicePrimersExtracted.rawValue, "Voice primers extracted", OnboardingObjectiveId.writingSamplesCollected.rawValue),
+            (OnboardingObjectiveId.jobSearchContextCaptured.rawValue, "Job search context captured", nil),
+            (OnboardingObjectiveId.applicantProfileComplete.rawValue, "Applicant profile complete", nil),
+            // Legacy objectives for backwards compatibility
             (OnboardingObjectiveId.contactDataValidated.rawValue, "Contact data validated", nil),
             (OnboardingObjectiveId.contactPhotoCollected.rawValue, "Contact photo collected", nil)
         ],
-        .phase2DeepDive: [
-            (OnboardingObjectiveId.interviewedOneExperience.rawValue, "Experience interview completed", nil),
-            (OnboardingObjectiveId.interviewedOneExperiencePrepSelection.rawValue, "Select and frame experience to explore", OnboardingObjectiveId.interviewedOneExperience.rawValue),
-            (OnboardingObjectiveId.interviewedOneExperienceDiscoveryInterview.rawValue, "Conduct structured deep-dive interview", OnboardingObjectiveId.interviewedOneExperience.rawValue),
-            (OnboardingObjectiveId.interviewedOneExperienceCaptureNotes.rawValue, "Summarize interview takeaways for cards", OnboardingObjectiveId.interviewedOneExperience.rawValue),
-            (OnboardingObjectiveId.oneCardGenerated.rawValue, "Knowledge card generated", nil),
-            (OnboardingObjectiveId.oneCardGeneratedDraft.rawValue, "Draft knowledge card content", OnboardingObjectiveId.oneCardGenerated.rawValue),
-            (OnboardingObjectiveId.oneCardGeneratedValidation.rawValue, "Review card with user via validation UI", OnboardingObjectiveId.oneCardGenerated.rawValue),
-            (OnboardingObjectiveId.oneCardGeneratedPersisted.rawValue, "Persist approved knowledge card", OnboardingObjectiveId.oneCardGenerated.rawValue)
+        .phase2CareerStory: [
+            // Phase 2: Career Story objectives
+            (OnboardingObjectiveId.skeletonTimelineComplete.rawValue, "Skeleton timeline complete", nil),
+            (OnboardingObjectiveId.timelineEnriched.rawValue, "Timeline enriched with context", OnboardingObjectiveId.skeletonTimelineComplete.rawValue),
+            (OnboardingObjectiveId.workPreferencesCaptured.rawValue, "Work preferences captured", nil),
+            (OnboardingObjectiveId.uniqueCircumstancesDocumented.rawValue, "Unique circumstances documented", nil),
+            (OnboardingObjectiveId.enabledSections.rawValue, "Enabled sections configured", nil),
+            // Legacy objectives for backwards compatibility
+            (OnboardingObjectiveId.skeletonTimeline.rawValue, "Skeleton timeline", nil),
+            (OnboardingObjectiveId.dossierSeed.rawValue, "Dossier seed questions", nil)
         ],
-        .phase3WritingCorpus: [
-            (OnboardingObjectiveId.oneWritingSample.rawValue, "Writing sample collected", nil),
-            (OnboardingObjectiveId.oneWritingSampleCollectionSetup.rawValue, "Request writing sample and capture preferences", OnboardingObjectiveId.oneWritingSample.rawValue),
-            (OnboardingObjectiveId.oneWritingSampleIngestSample.rawValue, "Collect/upload at least one writing sample", OnboardingObjectiveId.oneWritingSample.rawValue),
-            (OnboardingObjectiveId.dossierComplete.rawValue, "Dossier completed", nil),
-            (OnboardingObjectiveId.dossierCompleteCompileAssets.rawValue, "Compile applicant assets into dossier", OnboardingObjectiveId.dossierComplete.rawValue),
-            (OnboardingObjectiveId.dossierCompleteValidation.rawValue, "Present dossier summary for validation", OnboardingObjectiveId.dossierComplete.rawValue),
-            (OnboardingObjectiveId.dossierCompletePersisted.rawValue, "Persist final dossier and confirm wrap-up", OnboardingObjectiveId.dossierComplete.rawValue)
+        .phase3EvidenceCollection: [
+            // Phase 3: Evidence Collection objectives
+            (OnboardingObjectiveId.evidenceDocumentsCollected.rawValue, "Evidence documents collected", nil),
+            (OnboardingObjectiveId.gitReposAnalyzed.rawValue, "Git repositories analyzed", nil),
+            (OnboardingObjectiveId.cardInventoryComplete.rawValue, "Card inventory complete", nil),
+            (OnboardingObjectiveId.knowledgeCardsGenerated.rawValue, "Knowledge cards generated", nil),
+            // Legacy objectives for backwards compatibility
+            (OnboardingObjectiveId.evidenceAuditCompleted.rawValue, "Evidence audit completed", nil),
+            (OnboardingObjectiveId.cardsGenerated.rawValue, "Cards generated", nil),
+            (OnboardingObjectiveId.oneWritingSample.rawValue, "Writing sample collected", nil)
+        ],
+        .phase4StrategicSynthesis: [
+            // Phase 4: Strategic Synthesis objectives
+            (OnboardingObjectiveId.strengthsIdentified.rawValue, "Strengths identified", nil),
+            (OnboardingObjectiveId.pitfallsDocumented.rawValue, "Pitfalls documented", nil),
+            (OnboardingObjectiveId.dossierComplete.rawValue, "Dossier complete", nil),
+            (OnboardingObjectiveId.experienceDefaultsSet.rawValue, "Experience defaults set", nil)
         ],
         .complete: []
     ]

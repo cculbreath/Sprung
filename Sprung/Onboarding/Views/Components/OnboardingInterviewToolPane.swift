@@ -110,9 +110,9 @@ struct OnboardingInterviewToolPane: View {
             } else {
                 // No pending request - route based on phase
                 switch coordinator.ui.phase {
-                case .phase3WritingCorpus:
+                case .phase3EvidenceCollection:
                     Task { await coordinator.uploadWritingSamples(urls) }
-                case .phase2DeepDive:
+                case .phase2CareerStory:
                     // Phase 2: upload files and re-activate document collection UI if it was closed
                     let wasDocCollectionActive = coordinator.ui.isDocumentCollectionActive
                     Task {
@@ -236,7 +236,7 @@ struct OnboardingInterviewToolPane: View {
     @ViewBuilder
     private var phaseSpecificInterviewContent: some View {
         switch coordinator.ui.phase {
-        case .phase2DeepDive:
+        case .phase2CareerStory:
             // Show DocumentCollectionView when active, otherwise show KC generation view
             if coordinator.ui.isDocumentCollectionActive {
                 DocumentCollectionView(
@@ -298,7 +298,7 @@ struct OnboardingInterviewToolPane: View {
                     )
                 }
             }
-        case .phase3WritingCorpus:
+        case .phase3EvidenceCollection:
             WritingCorpusCollectionView(
                 coordinator: coordinator,
                 onDropFiles: { urls in
@@ -685,12 +685,14 @@ private struct InterviewTabEmptyState: View {
 
     private var icon: String {
         switch phase {
-        case .phase1CoreFacts:
+        case .phase1VoiceContext:
             return "person.text.rectangle"
-        case .phase2DeepDive:
+        case .phase2CareerStory:
             return "doc.badge.plus"
-        case .phase3WritingCorpus:
+        case .phase3EvidenceCollection:
             return "text.document"
+        case .phase4StrategicSynthesis:
+            return "chart.bar.doc.horizontal"
         case .complete:
             return "checkmark.circle"
         }
@@ -698,12 +700,14 @@ private struct InterviewTabEmptyState: View {
 
     private var title: String {
         switch phase {
-        case .phase1CoreFacts:
+        case .phase1VoiceContext:
             return "Building Your Profile"
-        case .phase2DeepDive:
-            return "Deep Dive"
-        case .phase3WritingCorpus:
-            return "Writing Samples"
+        case .phase2CareerStory:
+            return "Career Story"
+        case .phase3EvidenceCollection:
+            return "Evidence Collection"
+        case .phase4StrategicSynthesis:
+            return "Strategic Synthesis"
         case .complete:
             return "Interview Complete"
         }
@@ -711,12 +715,14 @@ private struct InterviewTabEmptyState: View {
 
     private var message: String {
         switch phase {
-        case .phase1CoreFacts:
+        case .phase1VoiceContext:
             return "The AI is gathering information about your background. Interactive cards will appear here as the conversation progresses."
-        case .phase2DeepDive:
-            return "Upload documents or add artifacts to support your experience entries."
-        case .phase3WritingCorpus:
-            return "Upload writing samples to help capture your voice and style."
+        case .phase2CareerStory:
+            return "Building your career timeline. Add experience entries and enrich each with context."
+        case .phase3EvidenceCollection:
+            return "Upload documents, code repositories, and other evidence to support your experience."
+        case .phase4StrategicSynthesis:
+            return "Synthesizing your experience into strategic recommendations for your job search."
         case .complete:
             return "The interview has been completed. You can browse your collected data in the other tabs."
         }
