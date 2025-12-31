@@ -186,7 +186,8 @@ struct OnboardingInterviewToolPane: View {
                     }
                 }
             )
-        } else if let profileSummary = coordinator.pendingApplicantProfileSummary {
+        } else if let profileSummary = coordinator.pendingApplicantProfileSummary, !shouldShowWritingSampleUI {
+            // Show profile summary UNLESS we should be showing writing sample UI
             ApplicantProfileSummaryCard(
                 profile: profileSummary,
                 imageData: nil
@@ -500,12 +501,33 @@ struct OnboardingInterviewToolPane: View {
         return false
     }
 
+    /// True when we should show the Phase 1 writing sample collection UI
+    private var shouldShowWritingSampleUI: Bool {
+        // Only in Phase 1
+        guard coordinator.ui.phase == .phase1VoiceContext else { return false }
+        // Profile must be complete
+        let profileComplete = coordinator.ui.objectiveStatuses[OnboardingObjectiveId.applicantProfileComplete.rawValue] == "completed"
+        // Writing samples must NOT be complete
+        let writingSamplesComplete = coordinator.ui.objectiveStatuses[OnboardingObjectiveId.writingSamplesCollected.rawValue] == "completed"
+        return profileComplete && !writingSamplesComplete
+    }
+
     /// Show profile summary until skeleton timeline is loaded to prevent jarring transition
+    /// BUT: Don't show it during writing samples collection - show the upload UI instead
     private var shouldShowProfileUntilTimelineLoads: Bool {
         // Only applies during voice phase when building the timeline
         guard coordinator.wizardTracker.currentStep == .voice else { return false }
         // If timeline has loaded, no need to show placeholder
         guard coordinator.ui.skeletonTimeline == nil else { return false }
+
+        // DON'T show profile summary if we should be showing writing sample UI
+        // (profile complete + writing samples not yet complete)
+        let profileComplete = coordinator.ui.objectiveStatuses[OnboardingObjectiveId.applicantProfileComplete.rawValue] == "completed"
+        let writingSamplesComplete = coordinator.ui.objectiveStatuses[OnboardingObjectiveId.writingSamplesCollected.rawValue] == "completed"
+        if profileComplete && !writingSamplesComplete {
+            return false  // Let Phase1WritingSampleView show instead
+        }
+
         // If we have a stored profile summary, show it
         return coordinator.ui.lastApplicantProfileSummary != nil
     }

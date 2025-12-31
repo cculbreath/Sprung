@@ -283,15 +283,15 @@ final class UIResponseCoordinator {
             notes: "Profile confirmed via intake card",
             details: ["method": "intake_card"]
         ))
-        // Mark the main applicant_profile objective as complete
+        // Mark the main applicant_profile_complete objective as complete
         await eventBus.publish(.objectiveStatusUpdateRequested(
-            id: OnboardingObjectiveId.applicantProfile.rawValue,
+            id: OnboardingObjectiveId.applicantProfileComplete.rawValue,
             status: "completed",
             source: "ui_profile_confirmed",
             notes: "Applicant profile validated and saved",
             details: ["method": "intake_card"]
         ))
-        Logger.info("✅ applicant_profile objective marked complete", category: .ai)
+        Logger.info("✅ applicant_profile_complete objective marked complete", category: .ai)
         // Build user message with the validated profile information
         var userMessage = JSON()
         userMessage["role"].string = "user"
@@ -367,13 +367,13 @@ final class UIResponseCoordinator {
             details: nil
         ))
         await eventBus.publish(.objectiveStatusUpdateRequested(
-            id: OnboardingObjectiveId.applicantProfile.rawValue,
+            id: OnboardingObjectiveId.applicantProfileComplete.rawValue,
             status: "completed",
             source: "ui_profile_draft",
             notes: "Applicant profile validated and saved",
             details: nil
         ))
-        Logger.info("✅ applicant_profile objective marked complete via draft submission", category: .ai)
+        Logger.info("✅ applicant_profile_complete objective marked complete via draft submission", category: .ai)
 
         // Build comprehensive tool output that includes profile data
         // This eliminates the need for a separate user message, reducing LLM round trips
