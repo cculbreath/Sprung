@@ -1,0 +1,50 @@
+Analyze the candidate's collected materials and synthesize their key strengths for job applications.
+
+## Input Data
+
+**Timeline**:
+{TIMELINE}
+
+**Knowledge Cards**:
+{KC_SUMMARIES}
+
+**Dossier Fields Collected**:
+{DOSSIER_ENTRIES}
+
+## Task
+
+Identify 3-5 strategic strengths that differentiate this candidate. For each strength:
+
+1. **Category**: Name the strength type (e.g., "Technical Depth + Communication", "Rapid Learning", "Cross-Domain Expertise")
+2. **Evidence**: Cite specific examples from their materials
+3. **Why It Matters**: Explain the value proposition to employers
+4. **How to Use**: Provide practical positioning advice for resumes and interviews
+
+## Output Format
+
+Return a structured analysis:
+
+```
+Strength 1: [Category Name]
+Evidence: [Specific examples from their timeline/KCs]
+Value: [Why employers care]
+Positioning: [How to surface this in applications]
+
+Strength 2: [Category Name]
+Evidence: [Specific examples]
+Value: [Why employers care]
+Positioning: [How to surface this]
+
+Strength 3: [Category Name]
+Evidence: [Specific examples]
+Value: [Why employers care]
+Positioning: [How to surface this]
+```
+
+## Guidelines
+
+- Look for patterns across multiple artifacts
+- Identify rare combinations (technical + soft skills, depth + breadth)
+- Focus on differentiators, not table stakes
+- Use specific language from their materials
+- Think like a career strategist, not just a resume writer

@@ -1,0 +1,60 @@
+Analyze the candidate's collected materials and identify potential concerns that could arise during the job search, along with mitigation strategies.
+
+## Input Data
+
+**Timeline**:
+{TIMELINE}
+
+**Knowledge Cards**:
+{KC_SUMMARIES}
+
+**Dossier Fields Collected**:
+{DOSSIER_ENTRIES}
+
+## Task
+
+Identify 2-4 potential concerns that employers might have, and provide concrete mitigation strategies. For each concern:
+
+1. **The Concern**: What might raise questions
+2. **Why It Matters**: The underlying employer worry
+3. **Mitigation Strategy**: How to address it proactively
+4. **In Applications**: Specific advice for resume/cover letter
+5. **In Interviews**: Talking points if asked
+
+## Output Format
+
+Return a structured analysis:
+
+```
+Pitfall 1: [Concern Name]
+Issue: [What might raise questions]
+Employer Worry: [The underlying concern]
+Mitigation: [Strategy to address proactively]
+Resume Advice: [Specific positioning suggestion]
+Interview Talking Point: [How to frame if asked]
+
+Pitfall 2: [Concern Name]
+Issue: [What might raise questions]
+Employer Worry: [The underlying concern]
+Mitigation: [Strategy to address]
+Resume Advice: [Positioning suggestion]
+Interview Talking Point: [How to frame]
+```
+
+## Common Patterns to Watch For
+
+- Employment gaps (explain with growth narrative)
+- Job hopping (frame as intentional career building)
+- Career pivots (connect the dots, show transferable skills)
+- Lack of specific experience (highlight adjacent skills, learning ability)
+- Overqualification (address motivation authentically)
+- Non-traditional background (turn into unique perspective)
+
+## Guidelines
+
+- Be honest but constructive - this helps them prepare
+- Always pair concerns with actionable mitigations
+- Focus on perception, not judgment
+- Help them frame narratives proactively
+- Don't manufacture concerns that don't exist
+- If the candidate is genuinely strong, say so - not everyone has pitfalls

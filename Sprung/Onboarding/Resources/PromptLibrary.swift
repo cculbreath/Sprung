@@ -116,6 +116,20 @@ enum PromptLibrary {
         loadPrompt(named: "voice_primer_extraction")
     }()
 
+    // MARK: - Strategic Synthesis Prompts
+
+    /// Strengths synthesis prompt template
+    /// Contains placeholders: {TIMELINE}, {KC_SUMMARIES}, {DOSSIER_ENTRIES}
+    static let strengthsSynthesis: String = {
+        loadPrompt(named: "strengths_synthesis_prompt")
+    }()
+
+    /// Pitfalls analysis prompt template
+    /// Contains placeholders: {TIMELINE}, {KC_SUMMARIES}, {DOSSIER_ENTRIES}
+    static let pitfallsAnalysis: String = {
+        loadPrompt(named: "pitfalls_analysis_prompt")
+    }()
+
     // MARK: - Card Pipeline Prompts
 
     /// Card inventory prompt template
