@@ -191,8 +191,7 @@ final class OnboardingInterviewCoordinator {
     /// Delete the current SwiftData session (used when starting over)
     func deleteCurrentSession() {
         if let session = container.sessionPersistenceHandler.getActiveSession() {
-            container.sessionStore.deleteSession(session)
-            Logger.info("🗑️ Deleted SwiftData session: \(session.id)", category: .ai)
+            container.sessionPersistenceHandler.deleteSession(session)
         }
     }
 

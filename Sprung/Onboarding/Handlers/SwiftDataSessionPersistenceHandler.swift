@@ -67,6 +67,15 @@ final class SwiftDataSessionPersistenceHandler {
         currentSession = nil
     }
 
+    /// Delete a session and clear current session reference if it matches
+    func deleteSession(_ session: OnboardingSession) {
+        if currentSession?.id == session.id {
+            currentSession = nil
+        }
+        sessionStore.deleteSession(session)
+        Logger.info("Session deleted: \(session.id)", category: .ai)
+    }
+
     /// Check if there's an active session to resume
     func hasActiveSession() -> Bool {
         sessionStore.getActiveSession() != nil
