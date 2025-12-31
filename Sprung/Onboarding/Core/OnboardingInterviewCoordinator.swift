@@ -277,6 +277,30 @@ final class OnboardingInterviewCoordinator {
         await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
     }
 
+    /// Called when user clicks "Skip" button in Phase 1 writing sample collection
+    /// Marks the writing samples objective complete (even with no samples) and continues flow
+    func skipWritingSamplesCollection() async {
+        Logger.info("📝 User skipped writing samples collection", category: .ai)
+
+        // Mark the writing samples objective as completed (skipped is still complete)
+        await eventBus.publish(.objectiveStatusUpdateRequested(
+            id: OnboardingObjectiveId.writingSamplesCollected.rawValue,
+            status: "completed",
+            source: "user_action",
+            notes: "User chose to skip writing samples",
+            details: nil
+        ))
+
+        // Send a system-generated user message to inform the LLM
+        var userMessage = SwiftyJSON.JSON()
+        userMessage["role"].string = "user"
+        userMessage["content"].string = """
+            I don't have writing samples available right now. \
+            Please continue with the interview - we can develop my voice through conversation.
+            """
+        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+    }
+
     // MARK: - Evidence Handling
     func handleEvidenceUpload(url: URL, requirementId: String) async {
         await container.artifactIngestionCoordinator.handleEvidenceUpload(url: url, requirementId: requirementId)

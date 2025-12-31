@@ -13,12 +13,11 @@
 //  TOOL AVAILABILITY: Defined in ToolBundlePolicy.swift (single source of truth)
 //
 //  FLOW:
-//  1. Welcome + explain value of writing samples
-//  2. Collect writing samples (cover letters, emails, proposals)
+//  1. Welcome + quick profile intake (contact info) - START HERE
+//  2. Collect ALL writing samples (cover letters, emails, proposals)
 //     └── Voice primer extraction runs in background
-//  3. Initial dossier questions (job search context, priorities)
-//  4. Quick profile intake (contact info)
-//  5. Validate profile and transition to Phase 2
+//  3. Job search context questions (dossier building)
+//  4. Transition to Phase 2
 //
 import Foundation
 
@@ -26,36 +25,56 @@ struct PhaseOneScript: PhaseScript {
     let phase: InterviewPhase = .phase1VoiceContext
 
     let requiredObjectives: [String] = OnboardingObjectiveId.rawValues([
-        .writingSamplesCollected,  // At least one substantial writing sample
-        .jobSearchContextCaptured, // Core dossier field populated
-        .applicantProfileComplete  // Contact info validated
+        .applicantProfileComplete, // Contact info validated (START HERE)
+        .writingSamplesCollected,  // All available writing samples collected
+        .jobSearchContextCaptured  // Core dossier field populated
         // voicePrimersExtracted is NOT required - it runs in background and may complete after phase advance
     ])
 
     var objectiveWorkflows: [String: ObjectiveWorkflow] {
         [
-            // MARK: - Writing Samples Collection
-            OnboardingObjectiveId.writingSamplesCollected.rawValue: ObjectiveWorkflow(
-                id: OnboardingObjectiveId.writingSamplesCollected.rawValue,
+            // MARK: - Applicant Profile (START HERE)
+            OnboardingObjectiveId.applicantProfileComplete.rawValue: ObjectiveWorkflow(
+                id: OnboardingObjectiveId.applicantProfileComplete.rawValue,
                 onBegin: { _ in
                     let title = """
-                        BE WARM AND EXPLAIN VALUE: Welcome the user and explain why writing samples help. \
-                        Say something like: "Before we dive into your work history, I'd love to see how you write. \
-                        Cover letters, professional emails, even thoughtful LinkedIn messages—anything that shows your voice \
-                        helps me craft applications that sound authentically like you." \
-                        Then call get_user_upload to show the upload form, or ask if they'd like to paste text in chat.
+                        START WITH PROFILE: Welcome the user warmly and gather contact information first. \
+                        Say: "Welcome! I'm excited to help you build compelling job applications. \
+                        Let's start with the basics so I have your contact information ready for resumes and cover letters." \
+                        Call validate_applicant_profile to show the profile form. Keep it quick—2-3 minutes max.
                         """
                     let details = [
-                        "action": "call_get_user_upload_or_ask_for_paste",
-                        "objective": OnboardingObjectiveId.writingSamplesCollected.rawValue,
-                        "upload_type": "writing_sample",
-                        "allowed_types": "pdf,docx,txt,md"
+                        "action": "call_validate_applicant_profile",
+                        "objective": OnboardingObjectiveId.applicantProfileComplete.rawValue,
+                        "priority": "first"
                     ]
                     return [.developerMessage(title: title, details: details, payload: nil)]
                 },
                 onComplete: { context in
                     let title = """
-                        Writing sample captured. Voice primer extraction is running in background. \
+                        Profile validated. Now transition to writing samples. \
+                        The sidebar shows a writing sample upload panel—it's already visible. \
+                        Explain the value of writing samples and encourage uploading MULTIPLE samples. \
+                        Say: "Now for the fun part! I'd love to see how you write. The more samples you share, \
+                        the better I can match your style."
+                        """
+                    let details = [
+                        "next_objective": OnboardingObjectiveId.writingSamplesCollected.rawValue,
+                        "status": context.status.rawValue,
+                        "note": "writing_sample_panel_visible_in_sidebar"
+                    ]
+                    return [.developerMessage(title: title, details: details, payload: nil)]
+                }
+            ),
+
+            // MARK: - Writing Samples Collection
+            OnboardingObjectiveId.writingSamplesCollected.rawValue: ObjectiveWorkflow(
+                id: OnboardingObjectiveId.writingSamplesCollected.rawValue,
+                dependsOn: [OnboardingObjectiveId.applicantProfileComplete.rawValue],
+                autoStartWhenReady: true,
+                onComplete: { context in
+                    let title = """
+                        Writing samples captured. Voice primer extraction is running in background. \
                         Now gather job search context using get_user_option for structured questions. \
                         Ask about: what's driving their search, what matters most in their next role. \
                         Follow up conversationally based on their answers.
@@ -91,29 +110,9 @@ struct PhaseOneScript: PhaseScript {
                 autoStartWhenReady: true,
                 onComplete: { context in
                     let title = """
-                        Job search context captured. Now collect contact information. \
-                        Call get_applicant_profile to show the profile card, or ask for contact details. \
-                        Keep it brief: name, email, phone, location are the essentials.
-                        """
-                    let details = [
-                        "next_objective": OnboardingObjectiveId.applicantProfileComplete.rawValue,
-                        "status": context.status.rawValue,
-                        "action": "call_get_applicant_profile"
-                    ]
-                    return [.developerMessage(title: title, details: details, payload: nil)]
-                }
-            ),
-
-            // MARK: - Applicant Profile
-            OnboardingObjectiveId.applicantProfileComplete.rawValue: ObjectiveWorkflow(
-                id: OnboardingObjectiveId.applicantProfileComplete.rawValue,
-                dependsOn: [OnboardingObjectiveId.jobSearchContextCaptured.rawValue],
-                autoStartWhenReady: true,
-                onComplete: { context in
-                    let title = """
-                        Profile validated. All Phase 1 objectives are satisfied. \
+                        Job search context captured. All Phase 1 objectives are satisfied. \
                         Transition to Phase 2 to build the career timeline. \
-                        Brief the user: "I have your writing samples, understand your priorities, and have your contact info. \
+                        Brief the user: "Perfect. I have your contact info, writing samples, and understand your priorities. \
                         Next, let's build out your career timeline."
                         """
                     let details = [

@@ -312,8 +312,23 @@ struct OnboardingInterviewToolPane: View {
                     Task { await coordinator.endInterview() }
                 }
             )
+        case .phase1VoiceContext:
+            // Phase 1: Show writing sample collection with skip option
+            Phase1WritingSampleView(
+                coordinator: coordinator,
+                onDropFiles: { urls in
+                    Task { await coordinator.uploadWritingSamples(urls) }
+                },
+                onSelectFiles: { openWritingSamplePanel() },
+                onDoneWithSamples: {
+                    Task { await coordinator.completeWritingSamplesCollection() }
+                },
+                onSkipSamples: {
+                    Task { await coordinator.skipWritingSamplesCollection() }
+                }
+            )
         default:
-            // Phase 1 or other: show empty state with guidance
+            // Other phases: show empty state with guidance
             InterviewTabEmptyState(phase: coordinator.ui.phase)
         }
     }
