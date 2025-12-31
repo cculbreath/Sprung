@@ -38,12 +38,11 @@ struct DocumentCollectionView: View {
     }
 
     private var artifactCount: Int {
-        coordinator.ui.artifactRecords.count
+        coordinator.ui.artifactRecordsSwiftData.count
     }
 
     private var artifactsMissingInventory: Int {
-        let artifacts = coordinator.ui.artifactRecords.map { ArtifactRecord(json: $0) }
-        return artifacts.filter { !$0.extractedContent.isEmpty && !$0.hasCardInventory }.count
+        coordinator.ui.artifactRecordsSwiftData.filter { !$0.extractedContent.isEmpty && !$0.hasCardInventory }.count
     }
 
     var body: some View {
@@ -359,10 +358,10 @@ struct ArchivedArtifactsPickerSheet: View {
     let coordinator: OnboardingInterviewCoordinator
     let onDismiss: () -> Void
 
-    @State private var selectedIds: Set<String> = []
+    @State private var selectedIds: Set<UUID> = []
 
     private var archivedArtifacts: [ArtifactRecord] {
-        coordinator.getArchivedArtifacts().map { ArtifactRecord(json: $0) }
+        coordinator.getArchivedArtifacts()
     }
 
     var body: some View {
@@ -423,7 +422,7 @@ struct ArchivedArtifactsPickerSheet: View {
                 Button("Add to Interview") {
                     Task {
                         for id in selectedIds {
-                            await coordinator.promoteArchivedArtifact(id: id)
+                            await coordinator.promoteArchivedArtifact(id: id.uuidString)
                         }
                         onDismiss()
                     }
@@ -496,7 +495,7 @@ private struct ArchivedArtifactPickerRow: View {
             iconName = "photo"
             iconColor = .green
         default:
-            if artifact.metadata["source_type"].string == "git_repository" {
+            if artifact.sourceType == "git_repository" {
                 iconName = "chevron.left.forwardslash.chevron.right"
                 iconColor = .orange
             } else {

@@ -112,7 +112,7 @@ struct ArchivedArtifactRow: View {
             iconName = "photo"
             iconColor = .green
         default:
-            if artifact.metadata["source_type"].string == "git_repository" {
+            if artifact.sourceType == "git_repository" {
                 iconName = "chevron.left.forwardslash.chevron.right"
                 iconColor = .orange
             } else {

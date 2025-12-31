@@ -21,7 +21,7 @@ final class StateCoordinatorTests: XCTestCase {
         let schema = Schema([
             // Add all models required by ArtifactRepository/ChatStore
             OnboardingSession.self,
-            OnboardingArtifactRecord.self,
+            ArtifactRecord.self,
             OnboardingMessageRecord.self,
             OnboardingObjectiveRecord.self,
             OnboardingPlanItemRecord.self
@@ -29,10 +29,10 @@ final class StateCoordinatorTests: XCTestCase {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         modelContainer = try ModelContainer(for: schema, configurations: config)
         modelContext = modelContainer.mainContext
-        
+
         // Setup Event Bus
         eventBus = EventCoordinator()
-        
+
         // Setup Policy
         let policy = PhasePolicy(
             requiredObjectives: [
@@ -42,12 +42,15 @@ final class StateCoordinatorTests: XCTestCase {
                 .phase1CoreFacts: ["tool_a"]
             ]
         )
-        
+
         // Setup Services
-        // Note: ArtifactRepository and ChatTranscriptStore initializers might need checking
-        // Assuming they take context and eventBus
         let sessionStore = OnboardingSessionStore(modelContext: modelContext)
-        let persistenceHandler = SwiftDataSessionPersistenceHandler(sessionStore: sessionStore, eventBus: eventBus)
+        let artifactRecordStore = ArtifactRecordStore(context: modelContext)
+        let persistenceHandler = SwiftDataSessionPersistenceHandler(
+            eventBus: eventBus,
+            sessionStore: sessionStore,
+            artifactRecordStore: artifactRecordStore
+        )
         
         artifactRepo = ArtifactRepository(eventBus: eventBus, sessionPersistenceHandler: persistenceHandler)
         chatStore = ChatTranscriptStore(eventBus: eventBus, sessionPersistenceHandler: persistenceHandler)

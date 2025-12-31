@@ -28,7 +28,7 @@ enum SprungSchema {
         // Onboarding Session Models
         OnboardingSession.self,
         OnboardingObjectiveRecord.self,
-        OnboardingArtifactRecord.self,
+        ArtifactRecord.self,
         OnboardingMessageRecord.self,
         OnboardingPlanItemRecord.self,
         // Discovery Models (SearchPreferences and DiscoverySettings moved to UserDefaults)

@@ -1,6 +1,26 @@
 import Foundation
 import SwiftyJSON
 
+/// Lightweight display info for artifacts in knowledge card review UI.
+/// Uses String id to match KnowledgeCardSource.artifactId references.
+struct ArtifactDisplayInfo: Identifiable {
+    let id: String
+    let filename: String
+    let title: String?
+
+    init(json: JSON) {
+        self.id = json["id"].stringValue
+        self.filename = json["filename"].stringValue
+        self.title = json["title"].string ?? json["metadata"]["title"].string
+    }
+
+    init(from record: ArtifactRecord) {
+        self.id = record.id.uuidString
+        self.filename = record.filename
+        self.title = record.title
+    }
+}
+
 /// A source reference linking a knowledge card to evidence
 struct KnowledgeCardSource: Identifiable, Equatable, Codable {
     var id: UUID

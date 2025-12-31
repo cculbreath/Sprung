@@ -4,18 +4,18 @@ import SwiftyJSON
 /// Tab content showing current interview artifacts and archived artifacts.
 struct ArtifactsTabContent: View {
     let coordinator: OnboardingInterviewCoordinator
-    @State private var expandedArtifactIds: Set<String> = []
+    @State private var expandedArtifactIds: Set<UUID> = []
     @State private var artifactToDelete: ArtifactRecord?
     @State private var artifactToDemote: ArtifactRecord?
     @State private var archivedArtifactToDelete: ArtifactRecord?
     @State private var isArchivedSectionExpanded: Bool = false
 
     private var artifacts: [ArtifactRecord] {
-        coordinator.ui.artifactRecords.map { ArtifactRecord(json: $0) }
+        coordinator.ui.artifactRecordsSwiftData
     }
 
     private var archivedArtifacts: [ArtifactRecord] {
-        coordinator.getArchivedArtifacts().map { ArtifactRecord(json: $0) }
+        coordinator.getArchivedArtifacts()
     }
 
     var body: some View {
@@ -38,7 +38,7 @@ struct ArtifactsTabContent: View {
             Button("Delete", role: .destructive) {
                 if let artifact = artifactToDelete {
                     Task {
-                        await coordinator.deleteArtifactRecord(id: artifact.id)
+                        await coordinator.deleteArtifactRecord(id: artifact.id.uuidString)
                     }
                     artifactToDelete = nil
                 }
@@ -58,7 +58,7 @@ struct ArtifactsTabContent: View {
             Button("Delete Permanently", role: .destructive) {
                 if let artifact = archivedArtifactToDelete {
                     Task {
-                        await coordinator.deleteArchivedArtifact(id: artifact.id)
+                        await coordinator.deleteArchivedArtifact(id: artifact.id.uuidString)
                     }
                     archivedArtifactToDelete = nil
                 }
@@ -78,7 +78,7 @@ struct ArtifactsTabContent: View {
             Button("Remove", role: .destructive) {
                 if let artifact = artifactToDemote {
                     Task {
-                        await coordinator.demoteArtifact(id: artifact.id)
+                        await coordinator.demoteArtifact(id: artifact.id.uuidString)
                     }
                     artifactToDemote = nil
                 }
@@ -172,7 +172,7 @@ struct ArtifactsTabContent: View {
                         },
                         onPromote: {
                             Task {
-                                await coordinator.promoteArchivedArtifact(id: artifact.id)
+                                await coordinator.promoteArchivedArtifact(id: artifact.id.uuidString)
                             }
                         },
                         onDelete: {

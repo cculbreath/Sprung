@@ -7,6 +7,7 @@
 //
 import Foundation
 import SwiftData
+import SwiftyJSON
 
 /// Persisted artifact record with extracted content and metadata.
 /// Single source of truth for artifacts - uses SwiftData for persistence.
@@ -116,6 +117,15 @@ final class ArtifactRecord {
     }
 
     // MARK: - Metadata Accessors
+
+    /// Parsed metadata as SwiftyJSON (for backwards compatibility with views)
+    var metadata: JSON {
+        guard let metadataJSON,
+              let data = metadataJSON.data(using: .utf8) else {
+            return JSON()
+        }
+        return (try? JSON(data: data)) ?? JSON()
+    }
 
     /// Parsed card inventory (lazily decoded from JSON string)
     var cardInventory: DocumentInventory? {

@@ -529,7 +529,7 @@ private struct KnowledgeCardValidationHost: View {
     let prompt: OnboardingValidationPrompt
     let coordinator: OnboardingInterviewCoordinator
     @State private var draft: KnowledgeCardDraft
-    private let artifactRecords: [ArtifactRecord]
+    private let artifactDisplayInfos: [ArtifactDisplayInfo]
     init(
         prompt: OnboardingValidationPrompt,
         artifactsJSON: [JSON],
@@ -538,12 +538,12 @@ private struct KnowledgeCardValidationHost: View {
         self.prompt = prompt
         self.coordinator = coordinator
         _draft = State(initialValue: KnowledgeCardDraft(json: prompt.payload))
-        artifactRecords = artifactsJSON.map { ArtifactRecord(json: $0) }
+        artifactDisplayInfos = artifactsJSON.map { ArtifactDisplayInfo(json: $0) }
     }
     var body: some View {
         KnowledgeCardReviewCard(
             card: $draft,
-            artifacts: artifactRecords,
+            artifacts: artifactDisplayInfos,
             onApprove: { approved in
                 Task {
                     await coordinator.submitValidationAndResume(

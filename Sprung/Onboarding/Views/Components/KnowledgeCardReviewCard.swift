@@ -4,13 +4,13 @@ import SwiftyJSON
 struct KnowledgeCardReviewCard: View {
     @Binding var card: KnowledgeCardDraft
     @State private var expandedSources: Set<UUID> = []
-    let artifacts: [ArtifactRecord]
+    let artifacts: [ArtifactDisplayInfo]
     let onApprove: (KnowledgeCardDraft) -> Void
     let onReject: (String) -> Void
 
     init(
         card: Binding<KnowledgeCardDraft>,
-        artifacts: [ArtifactRecord],
+        artifacts: [ArtifactDisplayInfo],
         onApprove: @escaping (KnowledgeCardDraft) -> Void,
         onReject: @escaping (String) -> Void
     ) {

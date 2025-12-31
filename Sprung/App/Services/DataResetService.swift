@@ -21,7 +21,7 @@ final class DataResetService {
     /// - Returns: Number of records deleted
     @discardableResult
     func clearArtifactRecords(context: ModelContext) throws -> Int {
-        let descriptor = FetchDescriptor<OnboardingArtifactRecord>()
+        let descriptor = FetchDescriptor<ArtifactRecord>()
         let artifacts = (try? context.fetch(descriptor)) ?? []
         let count = artifacts.count
 
@@ -30,7 +30,7 @@ final class DataResetService {
         }
 
         try context.save()
-        Logger.info("🗑️ Cleared \(count) artifact records", category: .appLifecycle)
+        Logger.info("Cleared \(count) artifact records", category: .appLifecycle)
         return count
     }
 

@@ -715,7 +715,7 @@ final class OnboardingInterviewCoordinator {
         Logger.info("📦 Demoted artifact to archive: \(filename)", category: .ai)
     }
 
-    /// Convert OnboardingArtifactRecord to JSON format.
+    /// Convert ArtifactRecord to JSON format.
     /// Uses metadataJSON as base to preserve all fields (card_inventory, summary, etc.)
     private func artifactRecordToJSON(_ record: ArtifactRecord) -> JSON {
         // Start with the full persisted record (includes card_inventory, metadata, etc.)
