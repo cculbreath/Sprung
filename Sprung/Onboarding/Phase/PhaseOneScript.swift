@@ -52,15 +52,15 @@ struct PhaseOneScript: PhaseScript {
                 },
                 onComplete: { context in
                     let title = """
-                        Profile validated. Now transition to writing samples. \
-                        The sidebar shows a writing sample upload panel—it's already visible. \
-                        Explain the value of writing samples and encourage uploading MULTIPLE samples. \
-                        Say: "Now for the fun part! I'd love to see how you write. The more samples you share, \
-                        the better I can match your style."
+                        Profile validated. Optionally offer profile photo upload using get_user_upload with \
+                        target_key="basics.image" and upload_type="photo". If user declines or after photo is uploaded, \
+                        transition to writing samples. The sidebar shows a writing sample upload panel. \
+                        Encourage uploading MULTIPLE writing samples.
                         """
                     let details = [
                         "next_objective": OnboardingObjectiveId.writingSamplesCollected.rawValue,
                         "status": context.status.rawValue,
+                        "optional_step": "profile_photo",
                         "note": "writing_sample_panel_visible_in_sidebar"
                     ]
                     return [.developerMessage(title: title, details: details, payload: nil)]
