@@ -42,24 +42,16 @@ enum OnboardingToolName: String, CaseIterable {
     case updateDossierNotes = "update_dossier_notes"
     case listArtifacts = "list_artifacts"
     case getArtifact = "get_artifact"
-    case getContextPack = "get_context_pack"
     case requestRawFile = "request_raw_file"
     case nextPhase = "next_phase"
     case askUserSkipToNextPhase = "ask_user_skip_to_next_phase"
     // Phase 2 Tools
     case startPhaseTwo = "start_phase_two"
     case getTimelineEntries = "get_timeline_entries"
-    case displayKnowledgeCardPlan = "display_knowledge_card_plan"
     case openDocumentCollection = "open_document_collection"
-    case setCurrentKnowledgeCard = "set_current_knowledge_card"
-    case requestEvidence = "request_evidence"
-    case submitKnowledgeCard = "submit_knowledge_card"
+    // Knowledge card workflow: Upload docs → Done with Uploads (merge) → Approve & Create button
     case persistData = "persist_data"
     case setObjectiveStatus = "set_objective_status"
-
-    // Multi-Agent Tools (Phase 2)
-    // NOTE: propose_card_assignments removed - merge now triggered by "Done with Uploads" button
-    case dispatchKCAgents = "dispatch_kc_agents"
 
     // Web Browsing Tools
     case createWebArtifact = "create_web_artifact"
@@ -161,7 +153,7 @@ enum InterviewSubphase: String, CaseIterable, Codable {
     case p2_documentCollection = "p2_document_collection" // Dropzone open, collecting documents
     case p2_cardAssignment = "p2_card_assignment"         // Proposing card-to-artifact assignments
     case p2_userApprovalWait = "p2_user_approval_wait"   // Waiting for user approval
-    case p2_kcGeneration = "p2_kc_generation"             // Dispatching KC agents
+    case p2_kcGeneration = "p2_kc_generation"             // Knowledge card generation
     case p2_cardSubmission = "p2_card_submission"         // Submitting generated cards
     case p2_phaseTransition = "p2_phase_transition"       // Ready to advance to Phase 3
 

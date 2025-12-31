@@ -70,27 +70,13 @@ final class UIStateUpdateHandler {
             }
         case .batchUploadStarted(let expectedCount):
             ui.hasBatchUploadInProgress = true
-            Logger.info("📦 Batch upload started: \(expectedCount) document(s) expected, blocking validation prompts", category: .ai)
-            // Prevent the LLM from thrashing retrieval while the user is still selecting/uploads are still in progress.
-            // The upload UI already provides context; retrieval during this window tends to produce spammy tool calls.
-            await state.excludeTool(OnboardingToolName.getContextPack.rawValue)
+            Logger.info("📦 Batch upload started: \(expectedCount) document(s) expected", category: .ai)
         case .batchUploadCompleted:
             ui.hasBatchUploadInProgress = false
-            Logger.info("📦 Batch upload completed, validation prompts can proceed", category: .ai)
-            // Restore normal retrieval tools after uploads are complete.
-            await state.includeTool(OnboardingToolName.getContextPack.rawValue)
+            Logger.info("📦 Batch upload completed", category: .ai)
         case .extractionStateChanged(let inProgress, let statusMessage):
             ui.updateExtraction(inProgress: inProgress, statusMessage: statusMessage)
             Logger.info("📄 Extraction state: \(inProgress ? "started" : "completed") - \(statusMessage ?? "no message")", category: .ai)
-
-        // MARK: KC Agent Dispatch Events (categorized as .processing)
-        case .kcAgentsDispatchStarted(let count, _):
-            ui.isGeneratingCards = true
-            Logger.info("🤖 UI: KC agents dispatch started (\(count) agents)", category: .ai)
-
-        case .kcAgentsDispatchCompleted(let successCount, let failureCount):
-            ui.isGeneratingCards = false
-            Logger.info("✅ UI: KC agents dispatch completed (\(successCount) success, \(failureCount) failed)", category: .ai)
 
         default:
             break
@@ -106,16 +92,16 @@ final class UIStateUpdateHandler {
             await syncWizardProgressFromState()
 
         // MARK: Multi-Agent Workflow State (categorized as .artifact)
-        case .cardAssignmentsProposed(let assignmentCount, let gapCount):
+        case .mergeComplete(let cardCount, let gapCount):
             ui.cardAssignmentsReadyForApproval = true
-            ui.proposedAssignmentCount = assignmentCount
+            ui.proposedAssignmentCount = cardCount
             ui.identifiedGapCount = gapCount
-            Logger.info("📋 UI: Card assignments ready for approval (\(assignmentCount) assignments, \(gapCount) gaps)", category: .ai)
+            Logger.info("📋 UI: Merge complete - \(cardCount) cards ready for approval (\(gapCount) gaps)", category: .ai)
 
         case .generateCardsButtonClicked:
             ui.cardAssignmentsReadyForApproval = false
             ui.isGeneratingCards = true
-            Logger.info("🚀 UI: Generate Cards initiated - starting KC agents", category: .ai)
+            Logger.info("🚀 UI: Generate Cards initiated", category: .ai)
 
         default:
             break

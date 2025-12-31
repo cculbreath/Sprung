@@ -121,12 +121,6 @@ actor SessionUIState: OnboardingEventEmitter {
     private(set) var pendingExtraction: OnboardingPendingExtraction?
     private(set) var pendingStreamingStatus: String?
 
-    // MARK: - KC Validation Queue (Auto-Validation from Agent Completion)
-    /// Queue of card IDs waiting for user validation (FIFO order)
-    /// Cards are enqueued automatically when KC agents complete
-    private(set) var pendingKCValidationQueue: [String] = []
-    /// Whether current validation is from KC auto-queue (vs tool-initiated)
-    private(set) var isAutoValidation: Bool = false
     // MARK: - Initialization
     init(eventBus: EventCoordinator, phasePolicy: PhasePolicy, initialPhase: InterviewPhase) {
         self.eventBus = eventBus
@@ -223,23 +217,6 @@ actor SessionUIState: OnboardingEventEmitter {
         await setWaitingState(newWaitingState)
     }
 
-    // MARK: - KC Auto-Validation Queue Management
-
-    /// Remove and return the next card ID from the validation queue
-    func dequeueNextKCValidation() -> String? {
-        guard !pendingKCValidationQueue.isEmpty else { return nil }
-        return pendingKCValidationQueue.removeFirst()
-    }
-
-    /// Check if there are pending KC validations in the queue
-    func hasQueuedKCValidations() -> Bool {
-        !pendingKCValidationQueue.isEmpty
-    }
-
-    /// Set whether current validation is auto-initiated (from KC agent completion)
-    func setAutoValidation(_ isAuto: Bool) {
-        isAutoValidation = isAuto
-    }
     /// Set pending extraction
     /// - Parameters:
     ///   - extraction: The pending extraction state, or nil to clear
@@ -363,9 +340,6 @@ actor SessionUIState: OnboardingEventEmitter {
         pendingExtraction = nil
         pendingStreamingStatus = nil
         excludedTools = []
-        // Reset KC validation queue
-        pendingKCValidationQueue = []
-        isAutoValidation = false
         Logger.info("🔄 SessionUIState reset", category: .ai)
     }
 }

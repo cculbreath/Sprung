@@ -56,7 +56,6 @@ struct ToolBundlePolicy {
     static let artifactAccessTools: Set<String> = [
         OnboardingToolName.listArtifacts.rawValue,
         OnboardingToolName.getArtifact.rawValue,
-        OnboardingToolName.getContextPack.rawValue,
         OnboardingToolName.requestRawFile.rawValue,
         OnboardingToolName.createWebArtifact.rawValue  // For saving web_search content
     ]
@@ -142,56 +141,37 @@ struct ToolBundlePolicy {
             // Progression: after bootstrap, model collects documents
             OnboardingToolName.openDocumentCollection.rawValue,
             OnboardingToolName.getUserUpload.rawValue,
-            // Allow model to progress itself and dispatch agents once docs are ready
             OnboardingToolName.setObjectiveStatus.rawValue,
-            OnboardingToolName.dispatchKCAgents.rawValue,
             OnboardingToolName.nextPhase.rawValue
         ],
         .p2_documentCollection: [
             OnboardingToolName.getUserUpload.rawValue,
             OnboardingToolName.cancelUserUpload.rawValue,
-            // NOTE: scanGitRepo removed - it's triggered by UI button, not LLM
             OnboardingToolName.openDocumentCollection.rawValue,
-            // Card merge is now triggered by "Done with Uploads" button, not LLM tool
-            OnboardingToolName.dispatchKCAgents.rawValue,
+            // KC generation is now triggered by UI buttons (Done with Uploads → Generate Cards)
             OnboardingToolName.setObjectiveStatus.rawValue,
             OnboardingToolName.nextPhase.rawValue
         ],
         .p2_cardAssignment: [
             OnboardingToolName.getUserOption.rawValue,
-            // Fallback: allow manual KC creation if an agent fails
-            OnboardingToolName.submitKnowledgeCard.rawValue,
-            // Progression: after assignment, model dispatches agents
-            OnboardingToolName.dispatchKCAgents.rawValue,
             OnboardingToolName.setObjectiveStatus.rawValue
         ],
         .p2_userApprovalWait: [
             OnboardingToolName.getUserOption.rawValue,
-            // Fallback: allow manual KC creation if an agent fails
-            OnboardingToolName.submitKnowledgeCard.rawValue,
-            // Progression: after approval, model dispatches agents
-            OnboardingToolName.dispatchKCAgents.rawValue,
             OnboardingToolName.setObjectiveStatus.rawValue
         ],
         .p2_kcGeneration: [
-            OnboardingToolName.dispatchKCAgents.rawValue,
+            // Card generation handled by UI (Approve & Create button)
             OnboardingToolName.setObjectiveStatus.rawValue,
-            // Cards are auto-presented for validation - no submit_knowledge_card needed
-            // Keep submitKnowledgeCard available for manual card creation (edge case)
-            OnboardingToolName.submitKnowledgeCard.rawValue,
             OnboardingToolName.nextPhase.rawValue
         ],
         .p2_cardSubmission: [
-            // Keep for manual card creation (LLM crafts card without agent)
-            OnboardingToolName.submitKnowledgeCard.rawValue,
             OnboardingToolName.setObjectiveStatus.rawValue,
             OnboardingToolName.nextPhase.rawValue
         ],
         .p2_phaseTransition: [
             OnboardingToolName.nextPhase.rawValue,
-            OnboardingToolName.setObjectiveStatus.rawValue,
-            // Fallback: keep manual KC tool available if dispatch had failures
-            OnboardingToolName.submitKnowledgeCard.rawValue
+            OnboardingToolName.setObjectiveStatus.rawValue
         ],
 
         // MARK: Phase 3 Subphases (all include artifact access)

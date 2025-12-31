@@ -38,10 +38,6 @@ final class CoordinatorEventRouter {
         self.onboardingPersistence = onboardingPersistence
     }
 
-    // MARK: - Pending Card Management
-    func hasPendingKnowledgeCard() -> Bool {
-        knowledgeCardWorkflow.hasPendingKnowledgeCard()
-    }
     func subscribeToEvents(lifecycle: InterviewLifecycleController) {
         lifecycle.subscribeToEvents { [weak self] event in
             await self?.handleEvent(event)
@@ -127,42 +123,16 @@ final class CoordinatorEventRouter {
                 Logger.warning("📊 CoordinatorEventRouter: Could not convert phaseName '\(phaseName)' to InterviewPhase", category: .ai)
             }
 
-        // MARK: - Knowledge Card Workflow Events (delegated to KnowledgeCardWorkflowService)
-        case .knowledgeCardDoneButtonClicked(let itemId):
-            await knowledgeCardWorkflow.handleDoneButtonClicked(itemId: itemId)
+        // MARK: - Card Generation Workflow
+        case .doneWithUploadsClicked:
+            await knowledgeCardWorkflow.handleDoneWithUploadsClicked()
 
-        case .knowledgeCardSubmissionPending(let card):
-            knowledgeCardWorkflow.handleSubmissionPending(card: card)
-
-        case .knowledgeCardAutoPersistRequested:
-            await knowledgeCardWorkflow.handleAutoPersistRequested()
-
-        case .planItemStatusChangeRequested(let itemId, let status):
-            await knowledgeCardWorkflow.handlePlanItemStatusChange(itemId: itemId, status: status)
-
-        // MARK: - Multi-Agent KC Generation Workflow
         case .generateCardsButtonClicked:
             await knowledgeCardWorkflow.handleGenerateCardsButtonClicked()
 
-        case .cardAssignmentsProposed:
-            // Event handled by UI for awareness; gating done in tool
-            Logger.info("📋 Card assignments proposed - dispatch_kc_agents gated until user approval", category: .ai)
-
-        // MARK: - KC Auto-Validation (from Agent Completion)
-        case .kcAgentCompleted(let agentId, let cardId, let cardTitle):
-            await knowledgeCardWorkflow.handleKCAgentCompleted(agentId: agentId, cardId: cardId, cardTitle: cardTitle)
-
-        case .kcAgentFailed(let agentId, let cardId, let error):
-            await knowledgeCardWorkflow.handleKCAgentFailed(agentId: agentId, cardId: cardId, error: error)
-
-        case .kcAgentsDispatchCompleted(let successCount, let failureCount):
-            await knowledgeCardWorkflow.handleKCAgentsDispatchCompleted(successCount: successCount, failureCount: failureCount)
-
-        case .kcAutoValidationApproved:
-            await knowledgeCardWorkflow.handleKCAutoValidationApproved()
-
-        case .kcAutoValidationRejected(let reason):
-            await knowledgeCardWorkflow.handleKCAutoValidationRejected(reason: reason)
+        case .mergeComplete:
+            // Event handled by UI; user clicks Approve & Create to generate
+            Logger.info("📋 Merge complete - awaiting user approval via Approve & Create button", category: .ai)
 
         // MARK: - Dossier Collection Trigger (Parallel-Safe)
         case .extractionStateChanged(let inProgress, _):

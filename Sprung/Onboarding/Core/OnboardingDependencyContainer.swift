@@ -109,10 +109,10 @@ final class OnboardingDependencyContainer {
 
     // MARK: - Multi-Agent Infrastructure
     let agentActivityTracker: AgentActivityTracker
-    private var kcAgentService: KnowledgeCardAgentService?
 
     // MARK: - Card Pipeline Services
     let cardMergeService: CardMergeService
+    let chatInventoryService: ChatInventoryService?
 
     // MARK: - Usage Tracking
     let tokenUsageTracker: TokenUsageTracker
@@ -175,6 +175,16 @@ final class OnboardingDependencyContainer {
             artifactRepository: stores.artifactRepository,
             llmFacade: llmFacade
         )
+        if let facade = llmFacade {
+            self.chatInventoryService = ChatInventoryService(
+                llmFacade: facade,
+                chatTranscriptStore: stores.chatTranscriptStore,
+                artifactRepository: stores.artifactRepository,
+                eventBus: core.eventBus
+            )
+        } else {
+            self.chatInventoryService = nil
+        }
 
         // 5. Initialize document services
         let docs = Self.createDocumentComponents(
@@ -265,11 +275,16 @@ final class OnboardingDependencyContainer {
         let kcWorkflow = KnowledgeCardWorkflowService(
             ui: ui,
             state: state,
-            sessionUIState: sessionUIState,
-            toolRouter: tools.toolRouter,
             resRefStore: resRefStore,
-            eventBus: core.eventBus
+            eventBus: core.eventBus,
+            cardMergeService: cardMergeService,
+            chatInventoryService: chatInventoryService,
+            agentActivityTracker: agentActivityTracker,
+            sessionUIState: stores.sessionUIState
         )
+        // Configure LLM facade provider for prose summary generation
+        let llmFacadeRef = llmFacade
+        kcWorkflow.setLLMFacadeProvider { llmFacadeRef }
 
         let onboardingPersistence = OnboardingPersistenceService(
             ui: ui,
@@ -457,21 +472,5 @@ final class OnboardingDependencyContainer {
     }
     func getExperienceDefaultsStore() -> ExperienceDefaultsStore {
         experienceDefaultsStore
-    }
-
-    /// Returns or creates the KC agent service for parallel knowledge card generation
-    func getKCAgentService() -> KnowledgeCardAgentService {
-        if let service = kcAgentService {
-            return service
-        }
-        let service = KnowledgeCardAgentService(
-            artifactRepository: artifactRepository,
-            llmFacade: llmFacade,
-            tracker: agentActivityTracker,
-            eventBus: eventBus,
-            sessionStore: sessionStore
-        )
-        kcAgentService = service
-        return service
     }
 }

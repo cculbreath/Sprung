@@ -71,24 +71,20 @@ struct ReadFileTool: AgentTool {
         parameters: Parameters,
         repoRoot: URL
     ) throws -> Result {
-        let filePath = parameters.path
+        // Resolve and validate path (handles ".", "/", relative paths)
+        let filePath = try resolveAndValidatePath(parameters.path, repoRoot: repoRoot)
         let offset = max(1, parameters.offset ?? 1)
         let limit = min(2000, parameters.limit ?? 500)
 
-        // Security: Validate path is within repo root
-        let fileURL = URL(fileURLWithPath: filePath)
-        guard fileURL.standardized.path.hasPrefix(repoRoot.standardized.path) else {
-            throw GitToolError.pathOutsideRepo(filePath)
-        }
-
         // Check file exists
         guard FileManager.default.fileExists(atPath: filePath) else {
-            throw GitToolError.fileNotFound(filePath)
+            throw GitToolError.fileNotFound(parameters.path)
         }
 
         // Check if binary
+        let fileURL = URL(fileURLWithPath: filePath)
         if isBinaryFile(at: fileURL) {
-            throw GitToolError.binaryFile(filePath)
+            throw GitToolError.binaryFile(parameters.path)
         }
 
         // Read file
@@ -247,20 +243,17 @@ struct ListDirectoryTool: AgentTool {
         repoRoot: URL,
         gitignorePatterns _: [String] = []
     ) throws -> Result {
-        let dirPath = parameters.path
+        // Resolve and validate path (handles ".", "/", relative paths)
+        let dirPath = try resolveAndValidatePath(parameters.path, repoRoot: repoRoot)
         let maxDepth = min(5, parameters.depth ?? 2)
         let limit = min(500, parameters.limit ?? 100)
 
-        // Security: Validate path is within repo root
         let dirURL = URL(fileURLWithPath: dirPath)
-        guard dirURL.standardized.path.hasPrefix(repoRoot.standardized.path) else {
-            throw GitToolError.pathOutsideRepo(dirPath)
-        }
 
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: dirPath, isDirectory: &isDirectory),
               isDirectory.boolValue else {
-            throw GitToolError.notADirectory(dirPath)
+            throw GitToolError.notADirectory(parameters.path)
         }
 
         var entries: [Entry] = []
@@ -428,14 +421,11 @@ struct GlobSearchTool: AgentTool {
         repoRoot: URL
     ) throws -> Result {
         let pattern = parameters.pattern
-        let searchPath = parameters.path ?? repoRoot.path
+        // Resolve and validate path (handles ".", "/", relative paths, nil defaults to repoRoot)
+        let searchPath = try resolveAndValidatePath(parameters.path ?? ".", repoRoot: repoRoot)
         let limit = min(200, parameters.limit ?? 50)
 
-        // Security: Validate path is within repo root
         let searchURL = URL(fileURLWithPath: searchPath)
-        guard searchURL.standardized.path.hasPrefix(repoRoot.standardized.path) else {
-            throw GitToolError.pathOutsideRepo(searchPath)
-        }
 
         // Parse the glob pattern
         let regex = try globToRegex(pattern)
@@ -638,15 +628,10 @@ struct GrepSearchTool: AgentTool {
         repoRoot: URL,
         ripgrepPath: URL? = nil
     ) throws -> Result {
-        let searchPath = parameters.path ?? repoRoot.path
+        // Resolve and validate path (handles ".", "/", relative paths, nil defaults to repoRoot)
+        let searchPath = try resolveAndValidatePath(parameters.path ?? ".", repoRoot: repoRoot)
         let limit = min(50, parameters.limit ?? 20)
         let contextLines = min(5, parameters.contextLines ?? 2)
-
-        // Security: Validate path is within repo root
-        let searchURL = URL(fileURLWithPath: searchPath)
-        guard searchURL.standardized.path.hasPrefix(repoRoot.standardized.path) else {
-            throw GitToolError.pathOutsideRepo(searchPath)
-        }
 
         // Try ripgrep first, fall back to native
         if let rgPath = ripgrepPath ?? findRipgrep() {
@@ -958,4 +943,40 @@ enum GitToolError: LocalizedError {
             return "Tool execution failed: \(message)"
         }
     }
+}
+
+// MARK: - Path Resolution Utilities
+
+/// Resolves a user-provided path (which may be relative, ".", "/", or empty) against a repository root.
+/// Returns the resolved absolute path and validates it's within the repo root.
+/// - Parameters:
+///   - userPath: The path provided by the LLM (could be ".", "/", "", relative, or absolute)
+///   - repoRoot: The repository/sandbox root directory
+/// - Returns: The resolved absolute path within the repo
+/// - Throws: GitToolError.pathOutsideRepo if the resolved path escapes the repo root
+func resolveAndValidatePath(_ userPath: String, repoRoot: URL) throws -> String {
+    // Handle empty string, ".", "/" as root of repo
+    let normalizedPath: String
+    if userPath.isEmpty || userPath == "." || userPath == "./" {
+        normalizedPath = repoRoot.path
+    } else if userPath == "/" {
+        // "/" should mean the repo root, not filesystem root
+        normalizedPath = repoRoot.path
+    } else if userPath.hasPrefix("/") {
+        // Absolute path - check if it's already under repoRoot
+        normalizedPath = userPath
+    } else {
+        // Relative path - resolve against repoRoot
+        normalizedPath = repoRoot.appendingPathComponent(userPath).path
+    }
+
+    // Resolve symlinks and normalize the path
+    let resolvedURL = URL(fileURLWithPath: normalizedPath).standardized
+
+    // Security check: ensure resolved path is within repo root
+    guard resolvedURL.path.hasPrefix(repoRoot.standardized.path) else {
+        throw GitToolError.pathOutsideRepo(userPath)
+    }
+
+    return resolvedURL.path
 }

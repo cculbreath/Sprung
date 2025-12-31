@@ -88,9 +88,7 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             // GPT-5.1 supports: none, low, medium, high (not "minimal")
             // Hard tasks use elevated reasoning; all others use default from settings
             let hardTaskTools: Set<String> = [
-                "submit_knowledge_card",
-                "validate_applicant_profile",
-                "display_knowledge_card_plan"
+                "validate_applicant_profile"
             ]
             let reasoningEffort: String? = {
                 if let name = toolName, hardTaskTools.contains(name) {

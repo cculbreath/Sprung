@@ -52,9 +52,20 @@ actor CardMergeService {
                 // Don't use .convertFromSnakeCase - DocumentInventory has explicit CodingKeys
                 let decoder = JSONDecoder()
                 decoder.dateDecodingStrategy = .iso8601
-                let inventory = try decoder.decode(DocumentInventory.self, from: inventoryData)
+                let decodedInventory = try decoder.decode(DocumentInventory.self, from: inventoryData)
+
+                // IMPORTANT: Use the actual artifact ID, not the stale documentId from the inventory.
+                // Artifacts can be reprocessed/recreated with new UUIDs, but the stored inventory
+                // retains the old documentId. The merge output needs current IDs for agent export.
+                let actualArtifactId = artifact["id"].stringValue
+                let inventory = DocumentInventory(
+                    documentId: actualArtifactId,
+                    documentType: decodedInventory.documentType,
+                    proposedCards: decodedInventory.proposedCards,
+                    generatedAt: decodedInventory.generatedAt
+                )
                 inventories.append(inventory)
-                Logger.debug("📦 Decoded inventory for artifact: \(artifact["id"].stringValue) with \(inventory.proposedCards.count) cards", category: .ai)
+                Logger.debug("📦 Decoded inventory for artifact: \(actualArtifactId) with \(inventory.proposedCards.count) cards", category: .ai)
             } catch {
                 Logger.warning("⚠️ Failed to decode inventory for artifact: \(artifact["id"].stringValue): \(error.localizedDescription)", category: .ai)
             }

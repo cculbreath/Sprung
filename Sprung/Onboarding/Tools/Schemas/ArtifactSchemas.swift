@@ -88,31 +88,6 @@ enum ArtifactSchemas {
         )
     }
 
-    /// Complete schema for get_context_pack tool
-    static var getContextPack: JSONSchema {
-        JSONSchema(
-            type: .object,
-            description: "Get curated context bundle for a purpose. Single call instead of multiple retrievals.",
-            properties: [
-                "purpose": JSONSchema(
-                    type: .string,
-                    description: "Context purpose: timeline_review, artifact_overview, card_context, gap_analysis",
-                    enum: ["timeline_review", "artifact_overview", "card_context", "gap_analysis"]
-                ),
-                "max_chars": JSONSchema(
-                    type: .integer,
-                    description: "Max total chars for pack (default: 3000). Includes all items."
-                ),
-                "card_id": JSONSchema(
-                    type: .string,
-                    description: "For card_context: specific card ID to get context for"
-                )
-            ],
-            required: ["purpose"],
-            additionalProperties: false
-        )
-    }
-
     /// Complete schema for request_raw_file tool
     static var requestRawFile: JSONSchema {
         JSONSchema(

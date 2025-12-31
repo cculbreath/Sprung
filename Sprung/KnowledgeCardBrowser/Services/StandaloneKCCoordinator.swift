@@ -7,7 +7,7 @@
 //  directly ingest documents and generate knowledge cards without going
 //  through the full onboarding process.
 //
-//  Pipeline: Upload Sources → Extract → Classify → Inventory → Merge → KC Agent → Persist
+//  Pipeline: Upload Sources → Extract → Inventory → Merge → Convert → Persist
 //
 
 import Foundation
@@ -96,17 +96,12 @@ class StandaloneKCCoordinator {
     /// Tracks artifact IDs created during current operation (for export)
     private var currentArtifactIds: Set<String> = []
 
-    // MARK: - Configuration
-
-    private let kcAgentModelId: String
-
     // MARK: - Initialization
 
     init(llmFacade: LLMFacade?, resRefStore: ResRefStore?, sessionStore: OnboardingSessionStore?) {
         self.llmFacade = llmFacade
         self.resRefStore = resRefStore
         self.sessionStore = sessionStore
-        self.kcAgentModelId = UserDefaults.standard.string(forKey: "onboardingKCAgentModelId") ?? "anthropic/claude-haiku-4.5"
 
         // Initialize sub-modules
         self.extractor = StandaloneKCExtractor(llmFacade: llmFacade, sessionStore: sessionStore)
@@ -159,16 +154,17 @@ class StandaloneKCCoordinator {
             // Track artifact IDs for export
             currentArtifactIds = allArtifactIds
 
-            // Phase 3: Extract metadata
-            status = .analyzingMetadata
-            let metadata = try await analyzer.extractMetadata(from: allArtifacts)
+            // Phase 3: Analyze and inventory (same as onboarding workflow)
+            status = .inventorying
+            let merged = try await analyzer.analyzeArtifacts(allArtifacts)
 
-            // Phase 4: Generate KC via agent
+            guard let firstCard = merged.mergedCards.first else {
+                throw StandaloneKCError.noArtifactsExtracted
+            }
+
+            // Phase 4: Convert merged card to ResRef
             status = .generatingCard(current: 1, total: 1)
-            let generated = try await runKCAgent(artifactIds: currentArtifactIds, artifacts: allArtifacts, metadata: metadata)
-
-            // Phase 5: Persist to ResRef
-            let resRef = createResRef(from: generated, metadata: metadata)
+            let resRef = try await convertMergedCard(firstCard, artifacts: allArtifacts)
             resRefStore?.addResRef(resRef)
 
             self.generatedCard = resRef
@@ -265,7 +261,7 @@ class StandaloneKCCoordinator {
             status = .generatingCard(current: index + 1, total: totalOperations)
 
             do {
-                let card = try await runKCAgentForProposal(proposal, artifacts: artifacts)
+                let card = try await convertMergedCard(proposal, artifacts: artifacts)
                 resRefStore?.addResRef(card)
                 createdCount += 1
                 Logger.info("✅ StandaloneKCCoordinator: Created card - \(card.name)", category: .ai)
@@ -274,345 +270,46 @@ class StandaloneKCCoordinator {
             }
         }
 
-        // Enhance existing cards using expand agent
+        // Enhance existing cards with new facts from proposals
         for (index, (proposal, existingCard)) in enhancements.enumerated() {
             status = .generatingCard(current: newCards.count + index + 1, total: totalOperations)
 
-            do {
-                // Get the new artifact IDs from the proposal
-                var newArtifactIds = Set([proposal.primarySource.documentId])
-                newArtifactIds.formUnion(proposal.supportingSources.map { $0.documentId })
-
-                // Filter artifacts to only include those referenced in the proposal
-                let newArtifacts = artifacts.filter { artifact in
-                    guard let id = artifact["id"].string else { return false }
-                    return newArtifactIds.contains(id)
-                }
-
-                // Run expand agent
-                try await runExpandAgent(existingCard: existingCard, newArtifacts: newArtifacts)
-                enhancedCount += 1
-                Logger.info("✅ StandaloneKCCoordinator: Expanded card - \(existingCard.name)", category: .ai)
-            } catch {
-                Logger.warning("⚠️ StandaloneKCCoordinator: Expand agent failed for \(existingCard.name), falling back to simple merge: \(error.localizedDescription)", category: .ai)
-                // Fall back to simple fact merging if expand agent fails
-                analyzer.enhanceResRef(existingCard, with: proposal)
-                enhancedCount += 1
-            }
+            // Use simple fact merging to enhance existing card
+            analyzer.enhanceResRef(existingCard, with: proposal)
+            enhancedCount += 1
+            Logger.info("✅ StandaloneKCCoordinator: Enhanced card - \(existingCard.name)", category: .ai)
         }
 
         status = .completed(created: createdCount, enhanced: enhancedCount)
         return (created: createdCount, enhanced: enhancedCount)
     }
 
-    // MARK: - Private: KC Agent Generation
+    // MARK: - Private: Card Conversion
 
-    private func runKCAgent(artifactIds: Set<String>, artifacts: [JSON], metadata: CardMetadata) async throws -> GeneratedCard {
-        guard let facade = llmFacade, let store = sessionStore else {
+    /// Convert a merged card to ResRef using direct conversion (same approach as onboarding)
+    private func convertMergedCard(_ proposal: MergedCardInventory.MergedCard, artifacts: [JSON]) async throws -> ResRef {
+        guard let facade = llmFacade else {
             throw StandaloneKCError.llmNotConfigured
         }
 
-        // Export artifacts to filesystem for agent access
-        let exportDir = try store.exportArtifactsByIds(artifactIds)
-        defer {
-            store.cleanupExportedArtifacts(at: exportDir)
-        }
-
-        // Build CardProposal
-        let artifactIdList = artifacts.compactMap { $0["id"].string }
-        let proposal = CardProposal(
-            cardId: UUID().uuidString,
-            cardType: metadata.cardType,
-            title: metadata.title,
-            timelineEntryId: nil,
-            assignedArtifactIds: artifactIdList,
-            chatExcerpts: [],
-            notes: nil
-        )
-
-        // Build prompts for fact-based extraction
-        let systemPrompt = KCAgentPrompts.systemPrompt(
-            cardId: UUID().uuidString,
-            cardType: metadata.cardType,
-            title: metadata.title
-        )
-
-        let initialPrompt = KCAgentPrompts.initialPrompt(
-            proposal: proposal,
-            allArtifacts: artifacts
-        )
-
-        // Create tool executor with exported filesystem
-        let toolExecutor = SubAgentToolExecutor(filesystemRoot: exportDir)
-
-        // Run agent
-        let runner = AgentRunner.forKnowledgeCard(
-            agentId: UUID().uuidString,
-            cardTitle: metadata.title,
-            systemPrompt: systemPrompt,
-            initialPrompt: initialPrompt,
-            modelId: kcAgentModelId,
-            toolExecutor: toolExecutor,
-            llmFacade: facade,
-            eventBus: nil,
-            tracker: nil
-        )
-
-        let output = try await runner.run()
-
-        // Parse result
-        guard let result = output.result?["result"] else {
-            throw StandaloneKCError.agentNoResult
-        }
-
-        let generated = GeneratedCard.fromAgentOutput(result, cardId: proposal.cardId)
-
-        // Validate
-        if let error = generated.validationError() {
-            throw StandaloneKCError.agentInvalidOutput(error)
-        }
-
-        return generated
-    }
-
-    private func runKCAgentForProposal(_ proposal: MergedCardInventory.MergedCard, artifacts: [JSON]) async throws -> ResRef {
-        guard let facade = llmFacade, let store = sessionStore else {
-            throw StandaloneKCError.llmNotConfigured
-        }
-
-        // Export artifacts to filesystem for agent access
-        let exportDir = try store.exportArtifactsByIds(currentArtifactIds)
-        defer {
-            store.cleanupExportedArtifacts(at: exportDir)
-        }
-
-        // Build CardProposal
-        var artifactIdList = [proposal.primarySource.documentId]
-        artifactIdList.append(contentsOf: proposal.supportingSources.map { $0.documentId })
-
-        let cardProposal = CardProposal(
-            cardId: proposal.cardId,
-            cardType: proposal.cardType,
-            title: proposal.title,
-            timelineEntryId: nil,
-            assignedArtifactIds: artifactIdList,
-            chatExcerpts: [],
-            notes: nil
-        )
-
-        // Build prompts for fact-based extraction
-        let systemPrompt = KCAgentPrompts.systemPrompt(
-            cardId: proposal.cardId,
-            cardType: proposal.cardType,
-            title: proposal.title
-        )
-
-        let initialPrompt = KCAgentPrompts.initialPrompt(
-            proposal: cardProposal,
-            allArtifacts: artifacts
-        )
-
-        // Create tool executor with exported filesystem
-        let toolExecutor = SubAgentToolExecutor(filesystemRoot: exportDir)
-
-        // Run agent
-        let runner = AgentRunner.forKnowledgeCard(
-            agentId: UUID().uuidString,
-            cardTitle: proposal.title,
-            systemPrompt: systemPrompt,
-            initialPrompt: initialPrompt,
-            modelId: kcAgentModelId,
-            toolExecutor: toolExecutor,
-            llmFacade: facade,
-            eventBus: nil,
-            tracker: nil
-        )
-
-        let output = try await runner.run()
-
-        // Parse result
-        guard let result = output.result?["result"] else {
-            throw StandaloneKCError.agentNoResult
-        }
-
-        let generated = GeneratedCard.fromAgentOutput(result, cardId: proposal.cardId)
-
-        // Build metadata from proposal
-        let metadata = CardMetadata(
-            cardType: proposal.cardType,
-            title: proposal.title,
-            organization: nil,
-            timePeriod: proposal.dateRange,
-            location: nil
-        )
-
-        return createResRef(from: generated, metadata: metadata)
-    }
-
-    /// Run the KC expand agent to expand an existing card with new evidence.
-    /// Updates the ResRef in place with expanded facts, bullets, and technologies.
-    private func runExpandAgent(existingCard: ResRef, newArtifacts: [JSON]) async throws {
-        guard let facade = llmFacade, let store = sessionStore else {
-            throw StandaloneKCError.llmNotConfigured
-        }
-
-        // Export new artifacts to filesystem for agent access
-        let newArtifactIds = Set(newArtifacts.compactMap { $0["id"].string })
-        let exportDir = try store.exportArtifactsByIds(newArtifactIds)
-        defer {
-            store.cleanupExportedArtifacts(at: exportDir)
-        }
-
-        // Build expand prompts
-        let systemPrompt = KCAgentPrompts.expandSystemPrompt(
-            cardId: existingCard.id.uuidString,
-            cardType: existingCard.cardType ?? "employment",
-            title: existingCard.name
-        )
-
-        let initialPrompt = KCAgentPrompts.expandInitialPrompt(
-            existingCard: existingCard,
-            newArtifacts: newArtifacts
-        )
-
-        // Create tool executor with exported filesystem
-        let toolExecutor = SubAgentToolExecutor(filesystemRoot: exportDir)
-
-        // Run agent
-        let runner = AgentRunner.forKnowledgeCard(
-            agentId: UUID().uuidString,
-            cardTitle: "Expand: \(existingCard.name)",
-            systemPrompt: systemPrompt,
-            initialPrompt: initialPrompt,
-            modelId: kcAgentModelId,
-            toolExecutor: toolExecutor,
-            llmFacade: facade,
-            eventBus: nil,
-            tracker: nil
-        )
-
-        let output = try await runner.run()
-
-        // Parse result
-        guard let result = output.result?["result"] else {
-            throw StandaloneKCError.agentNoResult
-        }
-
-        // Update the existing card with expanded data
-        updateResRefFromExpandedOutput(existingCard, output: result, newArtifacts: newArtifacts)
-    }
-
-    /// Update an existing ResRef with expanded output from the expand agent.
-    private func updateResRefFromExpandedOutput(_ resRef: ResRef, output: JSON, newArtifacts: [JSON]) {
-        // Update facts JSON
-        if let factsArray = output["facts"].array, !factsArray.isEmpty {
-            if let data = try? JSONSerialization.data(withJSONObject: factsArray.map { $0.object }),
-               let jsonString = String(data: data, encoding: .utf8) {
-                resRef.factsJSON = jsonString
+        // Build artifact lookup for source attribution
+        var artifactLookup: [String: String] = [:]
+        for artifact in artifacts {
+            let id = artifact["id"].stringValue
+            let filename = artifact["filename"].stringValue
+            if !id.isEmpty && !filename.isEmpty {
+                artifactLookup[id] = filename
             }
         }
 
-        // Update suggested bullets
-        let newBullets = output["suggested_bullets"].arrayValue.map { $0.stringValue }
-        if !newBullets.isEmpty {
-            if let data = try? JSONSerialization.data(withJSONObject: newBullets),
-               let jsonString = String(data: data, encoding: .utf8) {
-                resRef.suggestedBulletsJSON = jsonString
-            }
-            // Update content to reflect new bullets
-            resRef.content = newBullets.map { "• \($0)" }.joined(separator: "\n")
-        }
+        // Use the same converter as onboarding
+        let converter = MergedCardToResRefConverter(llmFacade: facade, eventBus: nil)
+        let resRef = try await converter.convert(mergedCard: proposal, artifactLookup: artifactLookup)
 
-        // Update technologies
-        let newTechs = output["technologies"].arrayValue.map { $0.stringValue }
-        if !newTechs.isEmpty {
-            if let data = try? JSONSerialization.data(withJSONObject: newTechs),
-               let jsonString = String(data: data, encoding: .utf8) {
-                resRef.technologiesJSON = jsonString
-            }
-        }
+        // Mark as standalone (not from onboarding)
+        resRef.isFromOnboarding = false
 
-        // Merge sources - add new artifact IDs
-        var existingSources: [[String: String]] = []
-        if let sourcesJSON = resRef.sourcesJSON,
-           let data = sourcesJSON.data(using: .utf8),
-           let decoded = try? JSONSerialization.jsonObject(with: data) as? [[String: String]] {
-            existingSources = decoded
-        }
-
-        let existingIds = Set(existingSources.compactMap { $0["artifact_id"] })
-        for artifact in newArtifacts {
-            if let id = artifact["id"].string, !existingIds.contains(id) {
-                existingSources.append(["type": "artifact", "artifact_id": id])
-            }
-        }
-
-        if let data = try? JSONSerialization.data(withJSONObject: existingSources),
-           let jsonString = String(data: data, encoding: .utf8) {
-            resRef.sourcesJSON = jsonString
-        }
-
-        // Update the store
-        resRefStore?.updateResRef(resRef)
-    }
-
-    // MARK: - Private: ResRef Creation
-
-    /// Create ResRef from fact-based GeneratedCard
-    private func createResRef(from card: GeneratedCard, metadata: CardMetadata) -> ResRef {
-        // Encode sources as JSON
-        var sourcesJSON: String?
-        if !card.sources.isEmpty {
-            let sourcesArray = card.sources.map { artifactId -> [String: String] in
-                ["type": "artifact", "artifact_id": artifactId]
-            }
-            if let data = try? JSONSerialization.data(withJSONObject: sourcesArray),
-               let jsonString = String(data: data, encoding: .utf8) {
-                sourcesJSON = jsonString
-            }
-        }
-
-        // Build content from suggested bullets for display
-        let content: String
-        if let bullets = card.suggestedBullets, !bullets.isEmpty {
-            content = bullets.map { "• \($0)" }.joined(separator: "\n")
-        } else {
-            content = "Knowledge card: \(card.title)"
-        }
-
-        // Encode technologies as JSON
-        var technologiesJSON: String?
-        if let techs = card.technologies, !techs.isEmpty {
-            if let data = try? JSONSerialization.data(withJSONObject: techs),
-               let jsonString = String(data: data, encoding: .utf8) {
-                technologiesJSON = jsonString
-            }
-        }
-
-        // Encode suggested bullets as JSON
-        var suggestedBulletsJSON: String?
-        if let bullets = card.suggestedBullets, !bullets.isEmpty {
-            if let data = try? JSONSerialization.data(withJSONObject: bullets),
-               let jsonString = String(data: data, encoding: .utf8) {
-                suggestedBulletsJSON = jsonString
-            }
-        }
-
-        return ResRef(
-            name: card.title.isEmpty ? metadata.title : card.title,
-            content: content,
-            enabledByDefault: true,
-            cardType: metadata.cardType,
-            timePeriod: card.timePeriod ?? metadata.timePeriod,
-            organization: card.organization ?? metadata.organization,
-            location: card.location ?? metadata.location,
-            sourcesJSON: sourcesJSON,
-            isFromOnboarding: false,  // Standalone, not from onboarding
-            tokenCount: card.tokenCount,
-            factsJSON: card.factsJSON,
-            suggestedBulletsJSON: suggestedBulletsJSON,
-            technologiesJSON: technologiesJSON
-        )
+        return resRef
     }
 }
 
@@ -624,8 +321,7 @@ enum StandaloneKCError: LocalizedError {
     case extractionServiceNotAvailable
     case noArtifactsExtracted
     case extractionFailed(String)
-    case agentNoResult
-    case agentInvalidOutput(String)
+    case conversionFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -639,10 +335,8 @@ enum StandaloneKCError: LocalizedError {
             return "No content could be extracted from the provided documents"
         case .extractionFailed(let message):
             return message
-        case .agentNoResult:
-            return "Knowledge card agent completed without producing a result"
-        case .agentInvalidOutput(let message):
-            return "Invalid knowledge card output: \(message)"
+        case .conversionFailed(let message):
+            return "Failed to convert card: \(message)"
         }
     }
 }

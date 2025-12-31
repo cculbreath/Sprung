@@ -37,12 +37,13 @@ struct DocumentCollectionView: View {
         coordinator.ui.pendingExtraction != nil
     }
 
-    private var planItems: [KnowledgeCardPlanItem] {
-        coordinator.ui.knowledgeCardPlan
-    }
-
     private var artifactCount: Int {
         coordinator.ui.artifactRecords.count
+    }
+
+    private var artifactsMissingInventory: Int {
+        let artifacts = coordinator.ui.artifactRecords.map { ArtifactRecord(json: $0) }
+        return artifacts.filter { !$0.extractedContent.isEmpty && !$0.hasCardInventory }.count
     }
 
     var body: some View {
@@ -55,14 +56,9 @@ struct DocumentCollectionView: View {
 
             Divider()
 
-            // Main content: KC list + dropzone
+            // Main content: dropzone + artifact summary
             ScrollView {
                 VStack(spacing: 16) {
-                    // Knowledge Card Plan
-                    if !planItems.isEmpty {
-                        knowledgeCardPlanSection
-                    }
-
                     // Large dropzone
                     dropzoneSection
 
@@ -124,34 +120,6 @@ struct DocumentCollectionView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-    }
-
-    // MARK: - Knowledge Card Plan
-
-    private var knowledgeCardPlanSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Planned Knowledge Cards")
-                    .font(.subheadline.weight(.semibold))
-                Spacer()
-                Text("\(planItems.count) cards")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            VStack(spacing: 4) {
-                ForEach(planItems) { item in
-                    DocumentCollectionCardRow(item: item)
-                }
-            }
-        }
-        .padding(12)
-        .background(Color(nsColor: .windowBackgroundColor))
-        .cornerRadius(8)
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
-        )
     }
 
     // MARK: - Dropzone
@@ -271,18 +239,32 @@ struct DocumentCollectionView: View {
     // MARK: - Artifact Summary
 
     private var artifactSummarySection: some View {
-        HStack {
-            Image(systemName: "doc.on.doc.fill")
-                .foregroundStyle(.green)
-            Text("\(artifactCount) document\(artifactCount == 1 ? "" : "s") uploaded")
-                .font(.subheadline.weight(.medium))
-            Spacer()
-            Text("View in Artifacts tab")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Image(systemName: "doc.on.doc.fill")
+                    .foregroundStyle(.green)
+                Text("\(artifactCount) document\(artifactCount == 1 ? "" : "s") uploaded")
+                    .font(.subheadline.weight(.medium))
+                Spacer()
+                Text("View in Artifacts tab")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            // Warning for artifacts missing inventory
+            if artifactsMissingInventory > 0 {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .font(.caption)
+                    Text("\(artifactsMissingInventory) artifact\(artifactsMissingInventory == 1 ? "" : "s") not yet processed for knowledge cards")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+            }
         }
         .padding(12)
-        .background(Color.green.opacity(0.1))
+        .background(artifactsMissingInventory > 0 ? Color.orange.opacity(0.1) : Color.green.opacity(0.1))
         .cornerRadius(8)
     }
 
@@ -324,39 +306,6 @@ struct DocumentCollectionView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
-    }
-}
-
-// MARK: - Card Row
-
-private struct DocumentCollectionCardRow: View {
-    let item: KnowledgeCardPlanItem
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: item.type == .job ? "briefcase.fill" : "star.fill")
-                .font(.caption)
-                .foregroundStyle(item.type == .job ? .blue : .purple)
-                .frame(width: 20)
-
-            Text(item.title)
-                .font(.caption)
-                .lineLimit(1)
-
-            Spacer()
-
-            Text(item.type == .job ? "Job" : "Skill")
-                .font(.caption2)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(item.type == .job ? Color.blue.opacity(0.1) : Color.purple.opacity(0.1))
-                .foregroundStyle(item.type == .job ? .blue : .purple)
-                .cornerRadius(4)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(4)
     }
 }
 

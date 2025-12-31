@@ -427,13 +427,6 @@ actor StateCoordinator: OnboardingEventEmitter {
             await artifactRepository.addKnowledgeCard(card)
         case .knowledgeCardsReplaced(let cards):
             await artifactRepository.setKnowledgeCards(cards)
-        case .toolGatingRequested(let toolName, let exclude):
-            // Handle tool gating via events
-            if exclude {
-                await excludeTool(toolName)
-            } else {
-                await includeTool(toolName)
-            }
         default:
             break
         }
@@ -677,32 +670,9 @@ actor StateCoordinator: OnboardingEventEmitter {
                 experienceCards: await artifactRepository.getExperienceCards(),
                 writingSamples: await artifactRepository.getWritingSamples(),
                 artifactRecords: await artifactRepository.getArtifacts().artifactRecords,
-                knowledgeCards: await artifactRepository.getKnowledgeCards(),
-                cardProposals: await artifactRepository.getCardProposals()
+                knowledgeCards: await artifactRepository.getKnowledgeCards()
             )
         }
-    }
-
-    /// Store card proposals from propose_card_assignments tool
-    func storeCardProposals(_ proposals: JSON) async {
-        await artifactRepository.setCardProposals(proposals)
-    }
-
-    /// Get card proposals for dispatch_kc_agents
-    func getCardProposals() async -> JSON {
-        await artifactRepository.getCardProposals()
-    }
-
-    // MARK: - Pending Knowledge Cards (Milestone 7)
-
-    /// Retrieve a pending card by ID
-    func getPendingCard(id: String) async -> JSON? {
-        await artifactRepository.getPendingCard(id: id)
-    }
-
-    /// Remove a pending card after submission
-    func removePendingCard(id: String) async {
-        await artifactRepository.removePendingCard(id: id)
     }
 
     func listArtifactSummaries() async -> [JSON] {

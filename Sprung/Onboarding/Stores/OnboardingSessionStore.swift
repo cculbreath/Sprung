@@ -277,48 +277,6 @@ final class OnboardingSessionStore: SwiftDataStore {
         saveContext()
     }
 
-    // MARK: - Plan Item Management
-
-    /// Set the knowledge card plan items (replaces existing)
-    func setPlanItems(_ session: OnboardingSession, items: [KnowledgeCardPlanItem]) {
-        // Remove existing items
-        for item in session.planItems {
-            modelContext.delete(item)
-        }
-        session.planItems.removeAll()
-
-        // Add new items
-        for item in items {
-            let record = OnboardingPlanItemRecord(
-                itemId: item.id,
-                title: item.title,
-                type: item.type.rawValue,
-                descriptionText: item.description,
-                status: item.status.rawValue,
-                timelineEntryId: item.timelineEntryId
-            )
-            record.session = session
-            session.planItems.append(record)
-            modelContext.insert(record)
-        }
-        session.lastActiveAt = Date()
-        saveContext()
-        Logger.info("📦 Set \(items.count) plan items", category: .ai)
-    }
-
-    /// Update a plan item status
-    func updatePlanItemStatus(_ session: OnboardingSession, itemId: String, status: String) {
-        if let record = session.planItems.first(where: { $0.itemId == itemId }) {
-            record.status = status
-            saveContext()
-        }
-    }
-
-    /// Get plan items for a session
-    func getPlanItems(_ session: OnboardingSession) -> [OnboardingPlanItemRecord] {
-        session.planItems
-    }
-
     // MARK: - Restore Helpers
 
     /// Convert stored messages to OnboardingMessage models
@@ -345,20 +303,6 @@ final class OnboardingSessionStore: SwiftDataStore {
                 timestamp: record.timestamp,
                 isSystemGenerated: record.isSystemGenerated,
                 toolCalls: toolCalls
-            )
-        }
-    }
-
-    /// Convert stored plan items to KnowledgeCardPlanItem models
-    func restorePlanItems(_ session: OnboardingSession) -> [KnowledgeCardPlanItem] {
-        getPlanItems(session).map { record in
-            KnowledgeCardPlanItem(
-                id: record.itemId,
-                title: record.title,
-                type: KnowledgeCardPlanItem.ItemType(rawValue: record.type) ?? .job,
-                description: record.descriptionText,
-                status: KnowledgeCardPlanItem.Status(rawValue: record.status) ?? .pending,
-                timelineEntryId: record.timelineEntryId
             )
         }
     }
@@ -443,9 +387,9 @@ final class OnboardingSessionStore: SwiftDataStore {
         return Set(csv.split(separator: ",").map { String($0) })
     }
 
-    // MARK: - Artifact Export for KC Agents
+    // MARK: - Artifact Export for Analysis
 
-    /// Export session artifacts to a temporary filesystem directory for KC agent access.
+    /// Export session artifacts to a temporary filesystem directory for analysis.
     /// Creates a folder per artifact with extracted_text.txt, summary.txt, and card_inventory.json.
     /// - Returns: URL of the temporary directory containing exported artifacts
     func exportArtifactsToFilesystem(_ session: OnboardingSession) throws -> URL {
@@ -561,6 +505,74 @@ final class OnboardingSessionStore: SwiftDataStore {
                 } else {
                     try cardInventoryString.write(to: inventoryPath, atomically: true, encoding: .utf8)
                 }
+            }
+
+            // Export git analysis data for git repositories (rich structured data for analysis)
+            let rawData = metadata["raw_data"]
+            if rawData.exists() && metadata["type"].stringValue == "git_analysis" {
+                var report = "# Git Repository Analysis\n\n"
+
+                // Contributors
+                let contributors = rawData["contributors"].arrayValue
+                if !contributors.isEmpty {
+                    report += "## Contributors\n"
+                    for contributor in contributors {
+                        let name = contributor["name"].stringValue
+                        let commits = contributor["commits"].intValue
+                        let email = contributor["email"].stringValue
+                        report += "- \(name) (\(email)): \(commits) commits\n"
+                    }
+                    report += "\n"
+                }
+
+                // Commit stats
+                let totalCommits = rawData["total_commits"].intValue
+                let firstCommit = rawData["first_commit"].stringValue
+                let lastCommit = rawData["last_commit"].stringValue
+                if totalCommits > 0 {
+                    report += "## Commit Statistics\n"
+                    report += "- Total commits: \(totalCommits)\n"
+                    if !firstCommit.isEmpty { report += "- First commit: \(firstCommit)\n" }
+                    if !lastCommit.isEmpty { report += "- Last commit: \(lastCommit)\n" }
+                    report += "\n"
+                }
+
+                // Recent commits (valuable for understanding what was built)
+                let recentCommits = rawData["recent_commits"].arrayValue
+                if !recentCommits.isEmpty {
+                    report += "## Recent Commits (showing development activity)\n"
+                    for commit in recentCommits.prefix(20) {
+                        let hash = commit["hash"].stringValue
+                        let author = commit["author"].stringValue
+                        let message = commit["message"].stringValue
+                        report += "- [\(hash)] \(message) (\(author))\n"
+                    }
+                    report += "\n"
+                }
+
+                // File types (technologies used)
+                let fileTypes = rawData["file_types"].dictionaryValue
+                if !fileTypes.isEmpty {
+                    report += "## File Types & Technologies\n"
+                    let sorted = fileTypes.sorted { $0.value.intValue > $1.value.intValue }
+                    for (ext, count) in sorted.prefix(15) {
+                        report += "- .\(ext): \(count.intValue) files\n"
+                    }
+                    report += "\n"
+                }
+
+                // Branches
+                let branches = rawData["branches"].arrayValue
+                if !branches.isEmpty {
+                    report += "## Branches\n"
+                    for branch in branches.prefix(10) {
+                        report += "- \(branch.stringValue)\n"
+                    }
+                    report += "\n"
+                }
+
+                let analysisPath = artifactDir.appendingPathComponent("git_analysis.txt")
+                try report.write(to: analysisPath, atomically: true, encoding: .utf8)
             }
         }
     }

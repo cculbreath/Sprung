@@ -1,455 +1,267 @@
 import Foundation
 import SwiftyJSON
 
-/// Service responsible for knowledge card workflow: generation, validation, persistence, and plan item management.
-/// Extracted from CoordinatorEventRouter to improve separation of concerns.
+/// Service responsible for knowledge card workflow: merge and generation.
+/// Handles the full pipeline from "Done with Uploads" through card generation.
 @MainActor
 final class KnowledgeCardWorkflowService {
     private let ui: OnboardingUIState
     private let state: StateCoordinator
-    private let sessionUIState: SessionUIState
-    private let toolRouter: ToolHandler
     private let resRefStore: ResRefStore
     private let eventBus: EventCoordinator
+    private let cardMergeService: CardMergeService
+    private let chatInventoryService: ChatInventoryService?
+    private let agentActivityTracker: AgentActivityTracker
+    private weak var sessionUIState: SessionUIState?
 
-    // Pending knowledge card for auto-persist after user confirmation
-    private var pendingKnowledgeCard: JSON?
-
-    // Track failed KC agent generations so the coordinator LLM can fall back to manual card creation.
-    private var failedKCCards: [(cardId: String, title: String, error: String)] = []
+    // LLM facade for prose generation (set after container init due to circular dependency)
+    private var llmFacadeProvider: (() -> LLMFacade?)?
 
     init(
         ui: OnboardingUIState,
         state: StateCoordinator,
-        sessionUIState: SessionUIState,
-        toolRouter: ToolHandler,
         resRefStore: ResRefStore,
-        eventBus: EventCoordinator
+        eventBus: EventCoordinator,
+        cardMergeService: CardMergeService,
+        chatInventoryService: ChatInventoryService?,
+        agentActivityTracker: AgentActivityTracker,
+        sessionUIState: SessionUIState
     ) {
         self.ui = ui
         self.state = state
-        self.sessionUIState = sessionUIState
-        self.toolRouter = toolRouter
         self.resRefStore = resRefStore
         self.eventBus = eventBus
+        self.cardMergeService = cardMergeService
+        self.chatInventoryService = chatInventoryService
+        self.agentActivityTracker = agentActivityTracker
+        self.sessionUIState = sessionUIState
     }
 
-    // MARK: - Pending Card Management
-
-    func hasPendingKnowledgeCard() -> Bool {
-        pendingKnowledgeCard != nil
+    /// Set the LLM facade provider after container initialization
+    func setLLMFacadeProvider(_ provider: @escaping () -> LLMFacade?) {
+        self.llmFacadeProvider = provider
     }
 
     // MARK: - Event Handlers
 
-    /// Handle "Done with this card" button click
-    func handleDoneButtonClicked(itemId: String?) async {
-        // Clear batch upload flag - user clicking "Done" means they're done with uploads
-        // This is a safety measure in case batch completion didn't fire properly
-        if ui.hasBatchUploadInProgress {
-            ui.hasBatchUploadInProgress = false
-            Logger.info("📦 Cleared batch upload flag on 'Done' button click", category: .ai)
+    /// Handle "Done with Uploads" button click - runs the card merge workflow
+    func handleDoneWithUploadsClicked() async {
+        Logger.info("📋 Processing Done with Uploads - triggering card merge", category: .ai)
+
+        // Deactivate document collection UI and indicate merge is in progress
+        ui.isDocumentCollectionActive = false
+        ui.isMergingCards = true
+        await sessionUIState?.setDocumentCollectionActive(false)
+
+        // Track merge in Agents pane
+        let agentId = agentActivityTracker.trackAgent(
+            type: .cardMerge,
+            name: "Merging Card Inventories",
+            task: nil as Task<Void, Never>?
+        )
+
+        agentActivityTracker.appendTranscript(
+            agentId: agentId,
+            entryType: .system,
+            content: "Starting card inventory merge"
+        )
+
+        // Extract chat inventory before merge (so it's included in the merge)
+        if let chatInventoryService = chatInventoryService {
+            agentActivityTracker.appendTranscript(
+                agentId: agentId,
+                entryType: .system,
+                content: "Extracting facts from conversation..."
+            )
+            do {
+                if let chatArtifactId = try await chatInventoryService.extractAndCreateArtifact() {
+                    agentActivityTracker.appendTranscript(
+                        agentId: agentId,
+                        entryType: .toolResult,
+                        content: "Chat transcript artifact created",
+                        details: "ID: \(chatArtifactId)"
+                    )
+                    Logger.info("💬 Chat inventory extracted and added to artifacts", category: .ai)
+                } else {
+                    agentActivityTracker.appendTranscript(
+                        agentId: agentId,
+                        entryType: .system,
+                        content: "No career facts found in conversation"
+                    )
+                }
+            } catch {
+                Logger.warning("⚠️ Chat inventory extraction failed: \(error.localizedDescription)", category: .ai)
+                agentActivityTracker.appendTranscript(
+                    agentId: agentId,
+                    entryType: .system,
+                    content: "Chat extraction skipped: \(error.localizedDescription)"
+                )
+                // Continue with merge - chat extraction is optional
+            }
         }
 
-        // Ungate submit_knowledge_card tool
-        await state.includeTool(OnboardingToolName.submitKnowledgeCard.rawValue)
+        // Get timeline for context
+        let timeline = await state.artifacts.skeletonTimeline
 
-        // Send system-generated user message to trigger LLM response
-        // Using user message instead of developer message ensures the LLM responds immediately
-        // Force toolChoice to ensure the LLM calls submit_knowledge_card
-        let itemInfo = itemId ?? "unknown"
-        var userMessage = JSON()
-        userMessage["role"].string = "user"
-        userMessage["content"].string = """
-            I'm done with the "\(itemInfo)" card. \
-            Please generate and submit the knowledge card now.
-            """
-        await eventBus.publish(.llmEnqueueUserMessage(
-            payload: userMessage,
-            isSystemGenerated: true,
-            toolChoice: OnboardingToolName.submitKnowledgeCard.rawValue
-        ))
-
-        Logger.info("✅ Done button handled: tool ungated, user message sent with forced toolChoice for item '\(itemInfo)'", category: .ai)
-    }
-
-    /// Handle pending knowledge card submission
-    func handleSubmissionPending(card: JSON) {
-        pendingKnowledgeCard = card
-        Logger.info("📝 Pending knowledge card stored: \(card["title"].stringValue)", category: .ai)
-    }
-
-    /// Handle auto-persist request after user confirms
-    func handleAutoPersistRequested() async {
-        guard let card = pendingKnowledgeCard else {
-            Logger.warning("⚠️ Auto-persist requested but no pending card", category: .ai)
+        // Run the merge
+        let mergedInventory: MergedCardInventory
+        do {
+            mergedInventory = try await cardMergeService.mergeInventories(timeline: timeline)
+        } catch CardMergeService.CardMergeError.noInventories {
+            agentActivityTracker.markFailed(agentId: agentId, error: "No document inventories available")
+            ui.isMergingCards = false
+            Logger.warning("⚠️ No document inventories available for merge", category: .ai)
+            await sendChatMessage("I'm done uploading documents, but no card inventories were found. Please check the documents.")
+            return
+        } catch {
+            agentActivityTracker.markFailed(agentId: agentId, error: error.localizedDescription)
+            ui.isMergingCards = false
+            Logger.error("❌ Card merge failed: \(error.localizedDescription)", category: .ai)
+            await sendChatMessage("I'm done uploading documents. Card merge failed: \(error.localizedDescription)")
             return
         }
 
-        let cardTitle = card["title"].stringValue
-        Logger.info("💾 Persisting knowledge card to SwiftData: \(cardTitle)", category: .ai)
+        // Update transcript with results
+        let stats = mergedInventory.stats
+        let typeBreakdown = "employment: \(stats.cardsByType.employment), project: \(stats.cardsByType.project), skill: \(stats.cardsByType.skill), achievement: \(stats.cardsByType.achievement), education: \(stats.cardsByType.education)"
+        agentActivityTracker.appendTranscript(
+            agentId: agentId,
+            entryType: .toolResult,
+            content: "Merged \(mergedInventory.mergedCards.count) cards from \(stats.totalInputCards) input cards",
+            details: "Types: \(typeBreakdown)"
+        )
 
-        // Persist to SwiftData (ResRef) - single source of truth for knowledge cards
-        persistToResRef(card: card)
+        // Store merged inventory for detail views and gaps
+        ui.mergedInventory = mergedInventory
 
-        // Emit persisted event (for UI updates)
-        await eventBus.publish(.knowledgeCardPersisted(card: card))
-
-        // Update plan item status if linked
-        if let planItemId = card["plan_item_id"].string {
-            await handlePlanItemStatusChange(itemId: planItemId, status: "completed")
+        // Persist merged inventory to SwiftData (expensive LLM call result)
+        if let inventoryJSON = try? JSONEncoder().encode(mergedInventory),
+           let jsonString = String(data: inventoryJSON, encoding: .utf8) {
+            await eventBus.publish(.mergedInventoryStored(inventoryJSON: jsonString))
         }
 
-        // Clear pending card
-        pendingKnowledgeCard = nil
+        // Mark agent complete and emit merge complete event
+        agentActivityTracker.markCompleted(agentId: agentId)
+        await eventBus.publish(.mergeComplete(cardCount: mergedInventory.mergedCards.count, gapCount: mergedInventory.gaps.count))
 
-        // Emit success event
-        await eventBus.publish(.knowledgeCardAutoPersisted(title: cardTitle))
+        // Update UI to show card assignments are ready
+        ui.cardAssignmentsReadyForApproval = true
+        ui.identifiedGapCount = mergedInventory.gaps.count
 
-        // Send LLM message about successful persistence
-        var userMessage = JSON()
-        userMessage["role"].string = "user"
-        userMessage["content"].string = """
-            Knowledge card confirmed and persisted: "\(cardTitle)".
-            The plan item has been marked complete.
-            Proceed to the next pending plan item, or call display_knowledge_card_plan to see progress.
-            """
-        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+        // Build user message with card type summary and gaps
+        var typeSummary: String = ""
+        if stats.cardsByType.employment > 0 { typeSummary += "\(stats.cardsByType.employment) employment" }
+        if stats.cardsByType.project > 0 { typeSummary += (typeSummary.isEmpty ? "" : ", ") + "\(stats.cardsByType.project) project" }
+        if stats.cardsByType.skill > 0 { typeSummary += (typeSummary.isEmpty ? "" : ", ") + "\(stats.cardsByType.skill) skill" }
+        if stats.cardsByType.achievement > 0 { typeSummary += (typeSummary.isEmpty ? "" : ", ") + "\(stats.cardsByType.achievement) achievement" }
+        if stats.cardsByType.education > 0 { typeSummary += (typeSummary.isEmpty ? "" : ", ") + "\(stats.cardsByType.education) education" }
 
-        Logger.info("✅ Knowledge card persisted: \(cardTitle)", category: .ai)
+        var gapSummary = ""
+        if !mergedInventory.gaps.isEmpty {
+            let gapDescriptions = mergedInventory.gaps.prefix(5).map { gap -> String in
+                let gapTypeDescription: String
+                switch gap.gapType {
+                case .missingPrimarySource: gapTypeDescription = "needs primary documentation"
+                case .insufficientDetail: gapTypeDescription = "needs more detail"
+                case .noQuantifiedOutcomes: gapTypeDescription = "needs quantified outcomes"
+                }
+                return "• \(gap.cardTitle): \(gapTypeDescription)"
+            }
+            gapSummary = "\n\nDocumentation gaps identified (\(mergedInventory.gaps.count) total):\n" + gapDescriptions.joined(separator: "\n")
+            if mergedInventory.gaps.count > 5 {
+                gapSummary += "\n...and \(mergedInventory.gaps.count - 5) more"
+            }
+        }
+
+        // Merge complete - clear flag
+        ui.isMergingCards = false
+
+        // Notify LLM of results with gaps
+        await sendChatMessage("""
+            I'm done uploading documents. The system has merged card inventories and found \(mergedInventory.mergedCards.count) potential knowledge cards (\(typeSummary)). \
+            Please review the proposed cards with me. I can exclude any cards that aren't relevant to me.\(gapSummary)
+            """)
     }
 
-    /// Handle "Generate Cards" button click - ungates dispatch_kc_agents and mandates its use
+    /// Handle "Generate Cards" button click - converts merged cards directly to ResRefs
     func handleGenerateCardsButtonClicked() async {
-        Logger.info("🚀 Generate Cards button clicked - ungating dispatch_kc_agents", category: .ai)
+        Logger.info("🚀 Generate Cards button clicked - converting merged cards to ResRefs", category: .ai)
 
-        // Ungate dispatch_kc_agents tool
-        await state.includeTool(OnboardingToolName.dispatchKCAgents.rawValue)
-
-        // Send system-generated user message with forced toolChoice
-        var userMessage = JSON()
-        userMessage["role"].string = "user"
-        userMessage["content"].string = """
-            I've reviewed the card assignments and I'm ready to generate the knowledge cards. \
-            Please proceed with generating the cards now.
-            """
-        await eventBus.publish(.llmEnqueueUserMessage(
-            payload: userMessage,
-            isSystemGenerated: true,
-            toolChoice: OnboardingToolName.dispatchKCAgents.rawValue
-        ))
-
-        Logger.info("✅ Generate Cards: tool ungated, user message sent with forced toolChoice for dispatch_kc_agents", category: .ai)
-    }
-
-    // MARK: - KC Agent Completion Handlers
-
-    /// Handle KC agent failure - surface error to user
-    func handleKCAgentFailed(agentId _: String, cardId: String, error: String) async {
-        Logger.error("❌ KC agent failed: cardId=\(cardId.prefix(8)), error=\(error)", category: .ai)
-
-        // Ensure manual fallback tool is available (subphase bundling must also include it).
-        await state.includeTool(OnboardingToolName.submitKnowledgeCard.rawValue)
-
-        // Capture failure details for a single summary message after dispatch completes.
-        let planItems = await MainActor.run { ui.knowledgeCardPlan }
-        let title = planItems.first(where: { $0.id == cardId })?.title ?? "Unknown card"
-        failedKCCards.append((cardId: cardId, title: title, error: error))
-
-        // Surface error to user via the error event (displayed in chat/UI)
-        let failureMessage = "Knowledge card generation failed: \(error)"
-        await eventBus.publish(.errorOccurred(failureMessage))
-    }
-
-    /// After all agents finish, instruct the coordinator LLM to fill gaps manually if needed.
-    func handleKCAgentsDispatchCompleted(successCount: Int, failureCount: Int) async {
-        guard failureCount > 0 else {
-            failedKCCards.removeAll()
+        // Get merged inventory from UI state (populated by card merge)
+        guard let mergedInventory = ui.mergedInventory else {
+            Logger.error("❌ No merged inventory found - user must click 'Done with Uploads' first", category: .ai)
+            await eventBus.publish(.errorOccurred("No merged cards found. Please upload documents and click 'Done with Uploads' first."))
             return
         }
 
-        await state.includeTool(OnboardingToolName.submitKnowledgeCard.rawValue)
+        // Filter out excluded cards
+        let excludedIds = Set(ui.excludedCardIds)
+        let cardsToConvert = mergedInventory.mergedCards.filter { !excludedIds.contains($0.cardId) }
 
-        let failures = failedKCCards
-        failedKCCards.removeAll()
+        guard !cardsToConvert.isEmpty else {
+            Logger.warning("⚠️ All cards have been excluded", category: .ai)
+            await eventBus.publish(.errorOccurred("All cards have been excluded. Please include at least one card."))
+            return
+        }
 
-        var lines: [String] = []
-        lines.append("Some knowledge card agents failed (\(failureCount) failed, \(successCount) succeeded).")
-        if !failures.isEmpty {
-            lines.append("")
-            lines.append("Failed cards to create manually:")
-            for item in failures.prefix(10) {
-                lines.append("- \(item.title) (card_id: \(item.cardId))")
+        Logger.info("🚀 Converting \(cardsToConvert.count) merged cards to ResRefs (excluded: \(excludedIds.count))", category: .ai)
+
+        // Build artifact ID → filename lookup for source attribution
+        let allArtifacts = await state.artifactRecords
+        var artifactLookup: [String: String] = [:]
+        for artifact in allArtifacts {
+            let id = artifact["artifact_id"].stringValue
+            let filename = artifact["filename"].stringValue
+            if !id.isEmpty && !filename.isEmpty {
+                artifactLookup[id] = filename
             }
         }
-        lines.append("")
-        lines.append("Please create replacement cards manually using `submit_knowledge_card` (full card object + summary).")
-        lines.append("Use `get_context_pack` (optionally with `card_id`) and `list_artifacts/get_artifact` to pull the needed evidence first.")
 
+        // Create converter with LLM facade for prose generation
+        let llmFacade = llmFacadeProvider?()
+        let converter = MergedCardToResRefConverter(llmFacade: llmFacade, eventBus: eventBus)
+
+        // Update UI to show progress
+        ui.isGeneratingCards = true
+        var successCount = 0
+        var failureCount = 0
+
+        do {
+            let resRefs = try await converter.convertAll(
+                mergedCards: cardsToConvert,
+                artifactLookup: artifactLookup
+            ) { completed, total in
+                Logger.debug("📊 Card conversion progress: \(completed)/\(total)", category: .ai)
+            }
+
+            successCount = resRefs.count
+            failureCount = cardsToConvert.count - successCount
+
+            // Persist all ResRefs
+            for resRef in resRefs {
+                resRefStore.addResRef(resRef)
+            }
+
+            Logger.info("✅ Card generation complete: \(successCount) cards persisted", category: .ai)
+
+        } catch {
+            Logger.error("🚨 Card generation failed: \(error)", category: .ai)
+            failureCount = cardsToConvert.count
+            await eventBus.publish(.errorOccurred("Card generation failed: \(error.localizedDescription)"))
+        }
+
+        ui.isGeneratingCards = false
+
+        // Notify LLM about the results
+        await sendChatMessage("Knowledge card generation complete: \(successCount) cards created, \(failureCount) failed.")
+    }
+
+    // MARK: - Private Helpers
+
+    private func sendChatMessage(_ text: String) async {
         var userMessage = JSON()
         userMessage["role"].string = "user"
-        userMessage["content"].string = lines.joined(separator: "\n")
+        userMessage["content"].string = text
         await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
-
-        Logger.info("🛟 Manual KC fallback activated: submit_knowledge_card ungated after agent failures", category: .ai)
-    }
-
-    /// Handle KC agent completion - auto-persist without validation UI
-    /// User oversight happens at the pre-generation review stage (trashcan to exclude)
-    func handleKCAgentCompleted(agentId: String, cardId: String, cardTitle: String) async {
-        Logger.info("🎉 KC agent completed: '\(cardTitle)' (cardId: \(cardId.prefix(8)), agentId: \(agentId.prefix(8)))", category: .ai)
-
-        // Retrieve the pending card from state
-        guard let card = await state.getPendingCard(id: cardId) else {
-            Logger.warning("⚠️ KC auto-persist: pending card not found for ID \(cardId.prefix(8))", category: .ai)
-            return
-        }
-
-        let cardData = card["card"]
-
-        // Persist to ResRef (SwiftData) - single source of truth for knowledge cards
-        persistToResRef(card: cardData)
-
-        // Remove from pending storage
-        await state.removePendingCard(id: cardId)
-
-        // Update plan item status if linked
-        if let planItemId = cardData["plan_item_id"].string {
-            await handlePlanItemStatusChange(itemId: planItemId, status: "completed")
-        }
-
-        // Emit persisted event (for UI updates)
-        await eventBus.publish(.knowledgeCardPersisted(card: cardData))
-
-        Logger.info("✅ KC auto-persisted: \(cardTitle)", category: .ai)
-    }
-
-    /// Present the next card from the KC validation queue
-    private func presentNextKCValidation() async {
-        // Dequeue the next card ID
-        guard let cardId = await sessionUIState.dequeueNextKCValidation() else {
-            Logger.debug("📋 No KC validations in queue", category: .ai)
-            return
-        }
-
-        // Retrieve the pending card from state
-        guard let card = await state.getPendingCard(id: cardId) else {
-            Logger.warning("⚠️ KC auto-validation: pending card not found for ID \(cardId.prefix(8))", category: .ai)
-            // Try the next card in queue
-            if await sessionUIState.hasQueuedKCValidations() {
-                await presentNextKCValidation()
-            }
-            return
-        }
-
-        let cardTitle = card["card"]["title"].stringValue
-
-        // Mark as auto-validation (not tool-initiated)
-        await sessionUIState.setAutoValidation(true)
-
-        // Store as pending knowledge card for auto-persist
-        pendingKnowledgeCard = card
-
-        // Build summary for validation UI
-        let wordCount = card["card"]["content"].stringValue.components(separatedBy: .whitespacesAndNewlines).count
-        let summary = "Knowledge card for \(cardTitle) (\(wordCount) words)"
-
-        // Create validation prompt
-        let prompt = OnboardingValidationPrompt(
-            dataType: "knowledge_card",
-            payload: card["card"],
-            message: summary
-        )
-
-        // Emit validation prompt request (will show UI)
-        await eventBus.publish(.validationPromptRequested(prompt: prompt))
-        Logger.info("🎯 KC auto-validation presented: \(cardTitle)", category: .ai)
-    }
-
-    /// Present next KC validation after user completes one (called from UIResponseCoordinator)
-    func presentNextKCValidationIfQueued() async {
-        if await sessionUIState.hasQueuedKCValidations() {
-            await presentNextKCValidation()
-        } else {
-            // Clear auto-validation flag when queue is empty
-            await sessionUIState.setAutoValidation(false)
-        }
-    }
-
-    /// Handle KC auto-validation approval - persist card and send developer message
-    func handleKCAutoValidationApproved() async {
-        guard let card = pendingKnowledgeCard else {
-            Logger.warning("⚠️ KC auto-validation approved but no pending card", category: .ai)
-            await presentNextKCValidationIfQueued()
-            return
-        }
-
-        let cardData = card["card"]
-        let cardTitle = cardData["title"].stringValue
-        let cardId = cardData["id"].stringValue
-
-        // Persist to ResRef (SwiftData) - this is the authoritative source for knowledge cards
-        // Phase transition validation queries ResRefStore directly
-        persistToResRef(card: cardData)
-
-        // Clear pending card
-        pendingKnowledgeCard = nil
-
-        // Remove from pending storage
-        await state.removePendingCard(id: cardId)
-
-        // Clear validation prompt
-        toolRouter.clearValidationPrompt()
-        await eventBus.publish(.validationPromptCleared)
-
-        // Send developer message to LLM
-        let message = """
-        Knowledge card "\(cardTitle)" has been approved and persisted.
-        Card ID: \(cardId)
-        """
-        await eventBus.publish(.llmSendDeveloperMessage(payload: JSON(["text": message])))
-
-        Logger.info("✅ KC auto-validation approved and persisted: \(cardTitle)", category: .ai)
-
-        // Present next card from queue (if any)
-        await presentNextKCValidationIfQueued()
-    }
-
-    /// Handle KC auto-validation rejection - send developer message with reason
-    func handleKCAutoValidationRejected(reason: String) async {
-        guard let card = pendingKnowledgeCard else {
-            Logger.warning("⚠️ KC auto-validation rejected but no pending card", category: .ai)
-            await presentNextKCValidationIfQueued()
-            return
-        }
-
-        let cardData = card["card"]
-        let cardTitle = cardData["title"].stringValue
-        let cardId = cardData["id"].stringValue
-
-        // Clear pending card (not persisted)
-        pendingKnowledgeCard = nil
-
-        // Remove from pending storage (rejected, won't be resubmitted automatically)
-        await state.removePendingCard(id: cardId)
-
-        // Clear validation prompt
-        toolRouter.clearValidationPrompt()
-        await eventBus.publish(.validationPromptCleared)
-
-        // Send developer message to LLM
-        let message = """
-        Knowledge card "\(cardTitle)" was rejected by the user.
-        Card ID: \(cardId)
-        Reason: \(reason)
-        You may dispatch another KC agent to regenerate this card if needed.
-        """
-        await eventBus.publish(.llmSendDeveloperMessage(payload: JSON(["text": message])))
-
-        Logger.info("❌ KC auto-validation rejected: \(cardTitle) - \(reason)", category: .ai)
-
-        // Present next card from queue (if any)
-        await presentNextKCValidationIfQueued()
-    }
-
-    // MARK: - Plan Item Status
-
-    /// Handle plan item status change request - updates UI state directly
-    func handlePlanItemStatusChange(itemId: String, status: String) async {
-        // Convert status string to enum
-        let planStatus: KnowledgeCardPlanItem.Status
-        switch status.lowercased() {
-        case "completed":
-            planStatus = .completed
-        case "in_progress":
-            planStatus = .inProgress
-        case "skipped":
-            planStatus = .skipped
-        default:
-            planStatus = .pending
-        }
-
-        // Update UI state directly (no coordinator needed)
-        guard let index = ui.knowledgeCardPlan.firstIndex(where: { $0.id == itemId }) else {
-            Logger.warning("⚠️ Could not find plan item \(itemId) to update status", category: .ai)
-            return
-        }
-        let item = ui.knowledgeCardPlan[index]
-        ui.knowledgeCardPlan[index] = KnowledgeCardPlanItem(
-            id: item.id,
-            title: item.title,
-            type: item.type,
-            description: item.description,
-            status: planStatus,
-            timelineEntryId: item.timelineEntryId
-        )
-        Logger.info("📋 Plan item status updated: \(itemId) → \(status)", category: .ai)
-    }
-
-    // MARK: - Persistence
-
-    /// Persist knowledge card to SwiftData as a ResRef for use in resume generation
-    /// Handles fact-based format with structured facts, suggested bullets, and technologies
-    private func persistToResRef(card: JSON) {
-        let title = card["title"].stringValue
-        let cardType = card["type"].string
-        let timePeriod = card["time_period"].string
-        let organization = card["organization"].string
-        let location = card["location"].string
-        let tokenCount = card["token_count"].int
-
-        // Encode sources array as JSON string
-        var sourcesJSON: String?
-        if let sourcesArray = card["sources"].array, !sourcesArray.isEmpty {
-            if let data = try? JSON(sourcesArray).rawData(),
-               let jsonString = String(data: data, encoding: .utf8) {
-                sourcesJSON = jsonString
-            }
-        }
-
-        // Fact-based format: extract structured data
-        let factsJSON = card["facts_json"].string
-        var suggestedBulletsJSON: String?
-        if let bullets = card["suggested_bullets"].array, !bullets.isEmpty {
-            if let data = try? JSON(bullets).rawData(),
-               let jsonString = String(data: data, encoding: .utf8) {
-                suggestedBulletsJSON = jsonString
-            }
-        }
-        var technologiesJSON: String?
-        if let techs = card["technologies"].array, !techs.isEmpty {
-            if let data = try? JSON(techs).rawData(),
-               let jsonString = String(data: data, encoding: .utf8) {
-                technologiesJSON = jsonString
-            }
-        }
-
-        // Build content from suggested bullets for display/search purposes
-        let content: String
-        if let bullets = card["suggested_bullets"].array, !bullets.isEmpty {
-            content = bullets.map { "• \($0.stringValue)" }.joined(separator: "\n")
-        } else {
-            content = "Knowledge card: \(title)"
-        }
-
-        let resRef = ResRef(
-            name: title,
-            content: content,
-            enabledByDefault: true,  // Knowledge cards default to enabled
-            cardType: cardType,
-            timePeriod: timePeriod,
-            organization: organization,
-            location: location,
-            sourcesJSON: sourcesJSON,
-            isFromOnboarding: true,
-            tokenCount: tokenCount,
-            factsJSON: factsJSON,
-            suggestedBulletsJSON: suggestedBulletsJSON,
-            technologiesJSON: technologiesJSON
-        )
-
-        resRefStore.addResRef(resRef)
-        let factCount = card["suggested_bullets"].arrayValue.count
-        Logger.info("✅ Knowledge card persisted to ResRef: \(title) (\(factCount) bullets, \(tokenCount ?? 0) tokens)", category: .ai)
     }
 }

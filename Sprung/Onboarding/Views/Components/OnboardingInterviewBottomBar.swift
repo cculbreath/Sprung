@@ -23,7 +23,7 @@ struct OnboardingInterviewBottomBar: View {
                 .buttonBorderShape(.capsule)
                 .buttonStyle(.glass)
             }
-            Button("Cancel") {
+            Button("Close") {
                 onCancel()
             }
             .buttonStyle(.glass)

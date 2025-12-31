@@ -2,9 +2,8 @@
 //  AgentRunner.swift
 //  Sprung
 //
-//  Isolated agent execution loop for sub-agents (KC agents, etc.).
+//  Isolated agent execution loop for sub-agents (e.g., Git analysis agents).
 //  Each AgentRunner has its own conversation thread, tool executor, and response ID chain.
-//  Based on GitAnalysisAgent pattern but generalized for any sub-agent type.
 //
 //  CRITICAL: Sub-agents are completely isolated from the main coordinator:
 //  - Own responseId chain (never touches main's)
@@ -265,7 +264,12 @@ actor AgentRunner {
                     You must call the `return_result` tool to submit your completed knowledge card.
 
                     Do not respond with text only - you MUST call `return_result` with a JSON object containing:
-                    - card_type, title, prose (500-2000+ words), highlights, skills, metrics, sources
+                    - card_type: one of job/skill/education/project/employment/achievement
+                    - title: non-empty card title
+                    - facts: array of extracted facts (minimum 3) with category, statement, confidence, source
+                    - suggested_bullets: resume bullet templates
+                    - technologies: tools and skills mentioned
+                    - sources_used: artifact filenames used as evidence
 
                     Call `return_result` now with your completed card.
                     """
@@ -277,51 +281,9 @@ actor AgentRunner {
                 // Successfully got tool calls - reset retry counter
                 textOnlyRetries = 0
 
-                // Check for completion tool first
-                if let completionCall = toolCalls.first(where: { $0.function.name == "return_result" }) {
-                    let result = try parseCompletionResult(arguments: completionCall.function.arguments)
-
-                    if config.agentType == .knowledgeCard,
-                       let errorMessage = knowledgeCardCompletionValidationError(result) {
-                        invalidCompletionRetries += 1
-                        await logTranscript(
-                            type: .error,
-                            content: "Invalid return_result payload (attempt \(invalidCompletionRetries)/\(maxInvalidCompletionRetries))",
-                            details: errorMessage
-                        )
-
-                        if invalidCompletionRetries >= maxInvalidCompletionRetries {
-                            throw AgentRunnerError.invalidOutput("Invalid return_result payload: \(errorMessage)")
-                        }
-
-                        let correctionMessage = """
-                        Your last `return_result` payload was invalid:
-                        \(errorMessage)
-
-                        Fix the JSON and call `return_result` again. Requirements:
-                        - result.card_type: one of job/skill/education/project/employment/achievement
-                        - result.title: non-empty
-                        - result.facts: array of extracted facts with category, statement, confidence, source
-                        - result.suggested_bullets: array of resume bullet templates
-                        - result.technologies: array of technologies/tools mentioned
-                        - result.sources_used: artifact IDs used as evidence
-                        """
-                        messages.append(buildUserMessage(content: correctionMessage))
-                        await logTranscript(type: .system, content: "Sent return_result correction request")
-                        continue
-                    }
-
-                    completionResult = result
-                    isCompleted = true
-                    await logTranscript(
-                        type: .tool,
-                        content: "return_result",
-                        details: "Agent returned result successfully"
-                    )
-                    break
-                }
-
-                // Execute non-completion tools in parallel
+                // Execute non-completion tools in parallel FIRST, then handle completion
+                // This ensures we send tool results for ALL tool calls even when return_result is present
+                // (OpenAI API requires results for every tool call in a batch)
                 let executableCalls = toolCalls.filter { $0.function.name != "return_result" }
                 let toolNames = executableCalls.compactMap { $0.function.name }.joined(separator: ", ")
                 await updateStatus("(Turn \(turnCount)) Running: \(toolNames)")
@@ -364,6 +326,57 @@ actor AgentRunner {
                         details: String(result.prefix(500))
                     )
                     messages.append(buildToolResultMessage(toolCallId: toolId, result: result))
+                }
+
+                // NOW check for completion tool (after all other tool results are added)
+                // This ensures we send results for ALL tool calls before breaking the loop
+                if let completionCall = toolCalls.first(where: { $0.function.name == "return_result" }) {
+                    // Add tool result for return_result itself (required by API)
+                    messages.append(buildToolResultMessage(
+                        toolCallId: completionCall.id ?? UUID().uuidString,
+                        result: "{\"status\": \"result_captured\"}"
+                    ))
+
+                    let result = try parseCompletionResult(arguments: completionCall.function.arguments)
+
+                    if config.agentType == .knowledgeCard,
+                       let errorMessage = knowledgeCardCompletionValidationError(result) {
+                        invalidCompletionRetries += 1
+                        await logTranscript(
+                            type: .error,
+                            content: "Invalid return_result payload (attempt \(invalidCompletionRetries)/\(maxInvalidCompletionRetries))",
+                            details: errorMessage
+                        )
+
+                        if invalidCompletionRetries >= maxInvalidCompletionRetries {
+                            throw AgentRunnerError.invalidOutput("Invalid return_result payload: \(errorMessage)")
+                        }
+
+                        let correctionMessage = """
+                        Your last `return_result` payload was invalid:
+                        \(errorMessage)
+
+                        Fix the JSON and call `return_result` again. Requirements:
+                        - result.card_type: one of job/skill/education/project/employment/achievement
+                        - result.title: non-empty
+                        - result.facts: array of extracted facts with category, statement, confidence, source
+                        - result.suggested_bullets: array of resume bullet templates
+                        - result.technologies: array of technologies/tools mentioned
+                        - result.sources_used: artifact IDs used as evidence
+                        """
+                        messages.append(buildUserMessage(content: correctionMessage))
+                        await logTranscript(type: .system, content: "Sent return_result correction request")
+                        continue
+                    }
+
+                    completionResult = result
+                    isCompleted = true
+                    await logTranscript(
+                        type: .tool,
+                        content: "return_result",
+                        details: "Agent returned result successfully"
+                    )
+                    break
                 }
             }
 
@@ -532,7 +545,7 @@ actor AgentRunner {
     ) async {
         guard let eventBus = eventBus else { return }
 
-        let source: UsageSource = (config.agentType == .knowledgeCard) ? .kcAgent : .mainCoordinator
+        let source: UsageSource = (config.agentType == .knowledgeCard) ? .cardGeneration : .mainCoordinator
         await eventBus.publish(.llmTokenUsageReceived(
             modelId: modelId,
             inputTokens: inputTokens,

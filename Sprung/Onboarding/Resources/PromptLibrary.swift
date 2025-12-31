@@ -57,6 +57,13 @@ enum PromptLibrary {
         loadPrompt(named: "kc_expand_initial")
     }()
 
+    /// Prose summary generation prompt for MergedCard → ResRef conversion
+    /// Contains placeholders: {CARD_TYPE}, {TITLE}, {ORGANIZATION}, {TIME_PERIOD},
+    /// {KEY_FACTS}, {TECHNOLOGIES}, {OUTCOMES}
+    static let kcProseSummary: String = {
+        loadPrompt(named: "kc_prose_summary")
+    }()
+
     // MARK: - Document Extraction Prompts
 
     /// Default PDF/document extraction prompt

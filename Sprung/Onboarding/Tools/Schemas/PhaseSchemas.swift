@@ -53,7 +53,7 @@ enum PhaseSchemas {
             type: .object,
             description: """
                 Advance to the next interview phase. Use when user wants to skip or when objectives are complete.
-                Normal progression uses phase-specific tools (dispatch_kc_agents, submit_knowledge_card, etc.).
+                Normal progression uses phase-specific tools. In Phase 2, KC generation is handled by UI buttons.
                 RETURNS:
                 - { "status": "completed", "new_phase": "...", "next_required_tool": "..." }
                 - If objectives skipped: includes "skipped_objectives" array

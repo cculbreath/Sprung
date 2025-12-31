@@ -277,8 +277,9 @@ private extension OnboardingInterviewView {
             return "Continue"
         }
     }
-    func shouldShowBackButton(for step: OnboardingWizardStep) -> Bool {
-        step != .introduction
+    func shouldShowBackButton(for _: OnboardingWizardStep) -> Bool {
+        // Go Back functionality was never implemented - hide the button
+        false
     }
     func isContinueDisabled(
         coordinator: OnboardingInterviewCoordinator

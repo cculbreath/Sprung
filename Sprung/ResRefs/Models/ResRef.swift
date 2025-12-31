@@ -37,6 +37,10 @@ class ResRef: Identifiable, Codable {
     var suggestedBulletsJSON: String?
     /// JSON-encoded array of technologies, tools, and frameworks
     var technologiesJSON: String?
+    /// JSON-encoded array of quantified outcomes from merge
+    var outcomesJSON: String?
+    /// Evidence quality from merge: "strong", "moderate", "weak"
+    var evidenceQuality: String?
 
     init(
         name: String = "", content: String = "",

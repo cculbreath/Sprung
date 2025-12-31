@@ -83,20 +83,13 @@ enum OnboardingEvent {
     /// Used to track which fields have been collected to avoid duplicate questions
     case dossierFieldCollected(field: String)
 
-    // MARK: - Knowledge Card Workflow (event-driven coordination)
-    case knowledgeCardDoneButtonClicked(itemId: String?) // UI emits when user clicks "Done with this card"
-    case knowledgeCardSubmissionPending(card: JSON) // Tool emits when card submitted for approval
-    case knowledgeCardAutoPersistRequested // Request to auto-persist pending card after user confirms
-    case knowledgeCardAutoPersisted(title: String) // Emitted after successful auto-persist
-    case toolGatingRequested(toolName: String, exclude: Bool) // Request to gate/ungate a tool
-    case planItemStatusChangeRequested(itemId: String, status: String) // Request to change plan item status
-
-    // MARK: - Multi-Agent KC Generation Workflow
-    /// UI emits when user clicks "Generate Cards" button (approves card assignments)
-    /// Handler ungates dispatch_kc_agents and mandates its use via toolChoice
+    // MARK: - Card Generation Workflow
+    /// UI emits when user clicks "Done with Uploads" button to trigger merge
+    case doneWithUploadsClicked
+    /// UI emits when user clicks "Approve & Create" button (approves card assignments)
     case generateCardsButtonClicked
-    /// Emitted after propose_card_assignments to gate dispatch until user approval
-    case cardAssignmentsProposed(assignmentCount: Int, gapCount: Int)
+    /// Emitted when card inventory merge completes
+    case mergeComplete(cardCount: Int, gapCount: Int)
     /// Emitted when merged inventory is produced (for persistence)
     case mergedInventoryStored(inventoryJSON: String)
     /// Emitted when user changes excluded card IDs
@@ -116,23 +109,6 @@ enum OnboardingEvent {
     case gitAgentToolExecuting(toolName: String, turn: Int)
     case gitAgentProgressUpdated(message: String, turn: Int)
 
-    // MARK: - KC Agent Dispatch (parallel knowledge card generation)
-    /// Emitted when dispatch_kc_agents is called to start parallel generation
-    case kcAgentsDispatchStarted(count: Int, cardIds: [String])
-    /// Emitted when all KC agents have completed (success or failure)
-    case kcAgentsDispatchCompleted(successCount: Int, failureCount: Int)
-    /// Emitted when a single KC agent starts processing
-    case kcAgentStarted(agentId: String, cardId: String, cardTitle: String)
-    /// Emitted when a single KC agent completes successfully
-    case kcAgentCompleted(agentId: String, cardId: String, cardTitle: String)
-    /// Emitted when a single KC agent fails
-    case kcAgentFailed(agentId: String, cardId: String, error: String)
-    /// Emitted when a KC agent is manually killed
-    case kcAgentKilled(agentId: String, cardId: String)
-    /// Emitted when KC auto-validation is approved by user (no tool call involved)
-    case kcAutoValidationApproved
-    /// Emitted when KC auto-validation is rejected by user (no tool call involved)
-    case kcAutoValidationRejected(reason: String)
     // MARK: - Timeline Operations
     case timelineCardCreated(card: JSON)
     case timelineCardUpdated(id: String, fields: JSON)
@@ -177,7 +153,6 @@ enum OnboardingEvent {
     case llmBudgetExceeded(inputTokens: Int, threshold: Int)  // Triggers PRI thread reset (Milestone 8)
     // Session persistence events
     case llmResponseIdUpdated(responseId: String?)  // previousResponseId updated after API response
-    case knowledgeCardPlanUpdated(items: [KnowledgeCardPlanItem], currentFocus: String?, message: String?)  // Plan updated
     // MARK: - Phase Management (§6 spec)
     case phaseTransitionRequested(from: String, to: String, reason: String?)
     case phaseTransitionApplied(phase: String, timestamp: Date)
@@ -234,8 +209,6 @@ enum OnboardingEvent {
             return "knowledgeCardPersisted"
         case .knowledgeCardsReplaced(let cards):
             return "knowledgeCardsReplaced(count: \(cards.count))"
-        case .knowledgeCardPlanUpdated(let items, let currentFocus, _):
-            return "knowledgeCardPlanUpdated(items: \(items.count), focus: \(currentFocus ?? "none"))"
         case .skeletonTimelineReplaced:
             return "skeletonTimelineReplaced"
         case .applicantProfileStored:
@@ -256,8 +229,6 @@ enum OnboardingEvent {
             return "stateSnapshot(keys: \(updatedKeys.joined(separator: ", ")))"
         case .profileSummaryUpdateRequested:
             return "profileSummaryUpdateRequested"
-        case .knowledgeCardSubmissionPending:
-            return "knowledgeCardSubmissionPending"
         case .writingSamplePersisted:
             return "writingSamplePersisted"
         case .candidateDossierPersisted:
@@ -470,7 +441,7 @@ actor EventCoordinator {
         case .objectiveStatusRequested, .objectiveStatusUpdateRequested, .objectiveStatusChanged:
             return .objective
         // Tool events
-        case .toolCallRequested, .toolCallCompleted, .knowledgeCardPlanUpdated,
+        case .toolCallRequested, .toolCallCompleted,
              .mergedInventoryStored, .excludedCardIdsChanged:
             return .tool
         // Artifact events
@@ -479,10 +450,7 @@ actor EventCoordinator {
              .artifactRecordProduced, .artifactRecordsReplaced,
              .artifactMetadataUpdateRequested, .artifactMetadataUpdated,
              .knowledgeCardPersisted, .knowledgeCardsReplaced,
-             .knowledgeCardDoneButtonClicked, .knowledgeCardSubmissionPending,
-             .knowledgeCardAutoPersistRequested, .knowledgeCardAutoPersisted,
-             .toolGatingRequested, .planItemStatusChangeRequested,
-             .generateCardsButtonClicked, .cardAssignmentsProposed,
+             .doneWithUploadsClicked, .generateCardsButtonClicked, .mergeComplete,
              .writingSamplePersisted, .candidateDossierPersisted, .experienceDefaultsGenerated:
             return .artifact
         // Evidence Requirements (treated as state/objectives)
@@ -494,11 +462,6 @@ actor EventCoordinator {
              .gitAgentTurnStarted, .gitAgentToolExecuting, .gitAgentProgressUpdated:
             return .processing
 
-        // KC Agent Dispatch (treated as processing)
-        case .kcAgentsDispatchStarted, .kcAgentsDispatchCompleted,
-             .kcAgentStarted, .kcAgentCompleted, .kcAgentFailed, .kcAgentKilled,
-             .kcAutoValidationApproved, .kcAutoValidationRejected:
-            return .processing
         // Toolpane events
         case .choicePromptRequested, .choicePromptCleared, .uploadRequestPresented,
              .uploadRequestCancelled, .validationPromptRequested, .validationPromptCleared,
@@ -634,22 +597,12 @@ actor EventCoordinator {
             let workCount = defaults["work"].arrayValue.count
             let skillsCount = defaults["skills"].arrayValue.count
             description = "Experience defaults generated (\(workCount) work, \(skillsCount) skills)"
-        case .knowledgeCardDoneButtonClicked(let itemId):
-            description = "Knowledge card done button clicked: \(itemId ?? "no item")"
-        case .knowledgeCardSubmissionPending(let card):
-            description = "Knowledge card submission pending: \(card["title"].stringValue)"
-        case .knowledgeCardAutoPersistRequested:
-            description = "Knowledge card auto-persist requested"
-        case .knowledgeCardAutoPersisted(let title):
-            description = "Knowledge card auto-persisted: \(title)"
-        case .toolGatingRequested(let toolName, let exclude):
-            description = "Tool gating requested: \(toolName) (exclude: \(exclude))"
-        case .planItemStatusChangeRequested(let itemId, let status):
-            description = "Plan item status change requested: \(itemId) → \(status)"
+        case .doneWithUploadsClicked:
+            description = "Done with uploads clicked - triggering merge"
         case .generateCardsButtonClicked:
             description = "Generate cards button clicked"
-        case .cardAssignmentsProposed(let assignmentCount, let gapCount):
-            description = "Card assignments proposed: \(assignmentCount) assignments, \(gapCount) gaps"
+        case .mergeComplete(let cardCount, let gapCount):
+            description = "Merge complete: \(cardCount) cards, \(gapCount) gaps"
         case .evidenceRequirementAdded(let req):
             description = "Evidence requirement added: \(req.description)"
         case .evidenceRequirementUpdated(let req):
@@ -669,22 +622,6 @@ actor EventCoordinator {
             description = "Git agent executing \(toolName) (turn \(turn))"
         case .gitAgentProgressUpdated(let message, let turn):
             description = "Git agent (turn \(turn)): \(message)"
-        case .kcAgentsDispatchStarted(let count, _):
-            description = "KC agents dispatch started (\(count) agents)"
-        case .kcAgentsDispatchCompleted(let successCount, let failureCount):
-            description = "KC agents dispatch completed (\(successCount) succeeded, \(failureCount) failed)"
-        case .kcAgentStarted(_, let cardId, let cardTitle):
-            description = "KC agent started: \(cardTitle) (\(cardId.prefix(8))...)"
-        case .kcAgentCompleted(_, let cardId, let cardTitle):
-            description = "KC agent completed: \(cardTitle) (\(cardId.prefix(8))...)"
-        case .kcAgentFailed(_, let cardId, let error):
-            description = "KC agent failed: \(cardId.prefix(8))... - \(error.prefix(50))"
-        case .kcAgentKilled(_, let cardId):
-            description = "KC agent killed: \(cardId.prefix(8))..."
-        case .kcAutoValidationApproved:
-            description = "KC auto-validation approved"
-        case .kcAutoValidationRejected(let reason):
-            description = "KC auto-validation rejected: \(reason.prefix(50))"
         case .timelineCardCreated:
             description = "Timeline card created"
         case .timelineCardUpdated(let id, _):
@@ -779,8 +716,6 @@ actor EventCoordinator {
             description = "Token usage [\(source.displayName)]: \(modelId) - in: \(inputTokens), out: \(outputTokens)\(cachedStr)"
         case .llmBudgetExceeded(let inputTokens, let threshold):
             description = "🛑 Token budget exceeded: \(inputTokens) > \(threshold) - triggering PRI reset"
-        case .knowledgeCardPlanUpdated(let items, let focus, _):
-            description = "Knowledge card plan updated: \(items.count) items, focus: \(focus ?? "none")"
         case .mergedInventoryStored(let inventoryJSON):
             description = "Merged inventory stored: \(inventoryJSON.count) chars"
         case .excludedCardIdsChanged(let excludedIds):

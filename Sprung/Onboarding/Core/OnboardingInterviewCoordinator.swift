@@ -73,11 +73,6 @@ final class OnboardingInterviewCoordinator {
         container.tokenUsageTracker
     }
 
-    /// Returns the KC agent service for parallel knowledge card generation
-    func getKCAgentService() -> KnowledgeCardAgentService {
-        container.getKCAgentService()
-    }
-
     /// Returns the card merge service for merging document inventories
     var cardMergeService: CardMergeService {
         container.cardMergeService
@@ -351,40 +346,15 @@ final class OnboardingInterviewCoordinator {
         await eventBus.publish(.uploadRequestCancelled(id: id))
     }
 
-    // MARK: - Knowledge Card Plan
-    func updateKnowledgeCardPlan(
-        items: [KnowledgeCardPlanItem],
-        currentFocus: String?,
-        message: String?
-    ) async {
-        ui.knowledgeCardPlan = items
-        ui.knowledgeCardPlanFocus = currentFocus
-        ui.knowledgeCardPlanMessage = message
-        // Emit event for persistence
-        await eventBus.publish(.knowledgeCardPlanUpdated(items: items, currentFocus: currentFocus, message: message))
-        Logger.info("📋 Knowledge card plan updated: \(items.count) items, focus=\(currentFocus ?? "none"), phase=\(ui.phase.rawValue)", category: .ai)
-    }
-
-    /// Get the currently focused plan item ID
-    func getCurrentPlanItemFocus() -> String? {
-        ui.knowledgeCardPlanFocus
-    }
-
-    /// Check if there's a pending knowledge card awaiting validation
-    func hasPendingKnowledgeCard() -> Bool {
-        coordinatorEventRouter.hasPendingKnowledgeCard()
-    }
-
     // MARK: - Artifact Ingestion (Git Repos, Documents)
     // Uses ArtifactIngestionCoordinator for unified ingestion pipeline
 
     /// Start git repository analysis using the async ingestion pipeline
     func startGitRepoAnalysis(_ repoURL: URL) async {
-        let currentPlanItemId = ui.knowledgeCardPlanFocus
         Logger.info("🔬 Starting git repo analysis via ingestion pipeline: \(repoURL.path)", category: .ai)
         await container.artifactIngestionCoordinator.ingestGitRepository(
             repoURL: repoURL,
-            planItemId: currentPlanItemId
+            planItemId: nil
         )
     }
 
@@ -822,166 +792,11 @@ final class OnboardingInterviewCoordinator {
         Logger.info("📂 Document collection activated - tools gated until 'Done with Uploads'", category: .ai)
     }
 
-    /// Finish uploads and trigger card merge directly (bypassing LLM tool call).
+    /// Finish uploads and trigger card merge via event.
     /// Called when user clicks "Done with Uploads" button.
     func finishUploadsAndMergeCards() async {
-        Logger.info("📋 User finished uploads - triggering card merge directly", category: .ai)
-
-        // Deactivate document collection UI and clear waiting state (re-enable tools)
-        await MainActor.run {
-            ui.isDocumentCollectionActive = false
-        }
-        await container.sessionUIState.setDocumentCollectionActive(false)
-
-        // Track merge in Agents pane
-        let agentId = await MainActor.run {
-            agentActivityTracker.trackAgent(
-                type: .cardMerge,
-                name: "Merging Card Inventories",
-                task: nil as Task<Void, Never>?
-            )
-        }
-
-        await MainActor.run {
-            agentActivityTracker.appendTranscript(
-                agentId: agentId,
-                entryType: .system,
-                content: "Starting card inventory merge"
-            )
-        }
-
-        // Get timeline for context
-        let timeline = await state.artifacts.skeletonTimeline
-
-        // Run the merge
-        let mergedInventory: MergedCardInventory
-        do {
-            mergedInventory = try await cardMergeService.mergeInventories(timeline: timeline)
-        } catch CardMergeService.CardMergeError.noInventories {
-            await MainActor.run {
-                agentActivityTracker.markFailed(agentId: agentId, error: "No document inventories available")
-            }
-            Logger.warning("⚠️ No document inventories available for merge", category: .ai)
-            await sendChatMessage("I'm done uploading documents, but no card inventories were found. Please check the documents.")
-            return
-        } catch {
-            await MainActor.run {
-                agentActivityTracker.markFailed(agentId: agentId, error: error.localizedDescription)
-            }
-            Logger.error("❌ Card merge failed: \(error.localizedDescription)", category: .ai)
-            await sendChatMessage("I'm done uploading documents. Card merge failed: \(error.localizedDescription)")
-            return
-        }
-
-        // Update transcript with results
-        let stats = mergedInventory.stats
-        let typeBreakdown = "employment: \(stats.cardsByType.employment), project: \(stats.cardsByType.project), skill: \(stats.cardsByType.skill), achievement: \(stats.cardsByType.achievement), education: \(stats.cardsByType.education)"
-        await MainActor.run {
-            agentActivityTracker.appendTranscript(
-                agentId: agentId,
-                entryType: .toolResult,
-                content: "Merged \(mergedInventory.mergedCards.count) cards from \(stats.totalInputCards) input cards",
-                details: "Types: \(typeBreakdown)"
-            )
-        }
-
-        // Build plan items from merged inventory
-        let planItems = mergedInventory.mergedCards.map { mergedCard in
-            return KnowledgeCardPlanItem(
-                id: mergedCard.cardId,
-                title: mergedCard.title,
-                type: planItemType(from: mergedCard.cardType),
-                description: mergedCard.dateRange,
-                status: .pending,
-                timelineEntryId: nil
-            )
-        }
-
-        // Update UI with plan items
-        await updateKnowledgeCardPlan(
-            items: planItems,
-            currentFocus: nil,
-            message: "Review card assignments below"
-        )
-
-        // Store proposals for dispatch_kc_agents
-        var proposals = JSON([])
-        for mergedCard in mergedInventory.mergedCards {
-            var proposal = JSON()
-            proposal["card_id"].string = mergedCard.cardId
-            proposal["card_type"].string = mergedCard.cardType
-            proposal["title"].string = mergedCard.title
-            proposals.arrayObject?.append(proposal.dictionaryObject ?? [:])
-        }
-        await state.storeCardProposals(proposals)
-
-        // Gate dispatch_kc_agents until user approves
-        await state.excludeTool(OnboardingToolName.dispatchKCAgents.rawValue)
-
-        // Store merged inventory for detail views and gaps
-        await MainActor.run {
-            ui.mergedInventory = mergedInventory
-        }
-
-        // Persist merged inventory to SwiftData (expensive LLM call result)
-        if let inventoryJSON = try? JSONEncoder().encode(mergedInventory),
-           let jsonString = String(data: inventoryJSON, encoding: .utf8) {
-            await eventBus.publish(.mergedInventoryStored(inventoryJSON: jsonString))
-        }
-
-        // Emit event for UI
-        await eventBus.publish(.cardAssignmentsProposed(
-            assignmentCount: mergedInventory.mergedCards.count,
-            gapCount: mergedInventory.gaps.count
-        ))
-
-        // Mark agent as completed
-        await MainActor.run {
-            agentActivityTracker.markCompleted(agentId: agentId)
-        }
-
-        Logger.info("✅ Merged \(mergedInventory.mergedCards.count) cards from documents", category: .ai)
-
-        // Build summary for LLM
-        let cardsByType = Dictionary(grouping: mergedInventory.mergedCards, by: { $0.cardType })
-        let typeSummary = cardsByType.map { "\($0.value.count) \($0.key)" }.joined(separator: ", ")
-
-        // Build gap summary for LLM
-        var gapSummary = ""
-        if !mergedInventory.gaps.isEmpty {
-            let gapDescriptions = mergedInventory.gaps.prefix(5).map { gap -> String in
-                let gapTypeDescription: String
-                switch gap.gapType {
-                case .missingPrimarySource: gapTypeDescription = "needs primary documentation"
-                case .insufficientDetail: gapTypeDescription = "needs more detail"
-                case .noQuantifiedOutcomes: gapTypeDescription = "needs quantified outcomes"
-                }
-                return "• \(gap.cardTitle): \(gapTypeDescription)"
-            }
-            gapSummary = "\n\nDocumentation gaps identified (\(mergedInventory.gaps.count) total):\n" + gapDescriptions.joined(separator: "\n")
-            if mergedInventory.gaps.count > 5 {
-                gapSummary += "\n...and \(mergedInventory.gaps.count - 5) more"
-            }
-        }
-
-        // Notify LLM of results with gaps
-        await sendChatMessage("""
-            I'm done uploading documents. The system has merged card inventories and found \(mergedInventory.mergedCards.count) potential knowledge cards (\(typeSummary)). \
-            Please review the proposed cards with me. I can exclude any cards that aren't relevant to me.\(gapSummary)
-            """)
-    }
-
-    /// Convert card type string to plan item type
-    private func planItemType(from cardType: String) -> KnowledgeCardPlanItem.ItemType {
-        switch cardType {
-        case "employment": return .job
-        case "job": return .job
-        case "skill": return .skill
-        case "project": return .project
-        case "achievement": return .achievement
-        case "education": return .education
-        default: return .job
-        }
+        Logger.info("📋 User finished uploads - emitting doneWithUploadsClicked event", category: .ai)
+        await eventBus.publish(.doneWithUploadsClicked)
     }
 
     // MARK: - Data Store Management

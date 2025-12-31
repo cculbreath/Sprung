@@ -13,6 +13,5 @@ struct OnboardingArtifacts {
     var experienceCards: [JSON] = []
     var writingSamples: [JSON] = []
     var artifactRecords: [JSON] = []
-    var knowledgeCards: [JSON] = [] // Phase 3: Knowledge card storage
-    var cardProposals: JSON = JSON([]) // Multi-agent: Proposed card-to-artifact mappings
+    var knowledgeCards: [JSON] = []
 }

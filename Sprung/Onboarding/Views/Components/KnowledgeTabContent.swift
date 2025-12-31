@@ -9,10 +9,6 @@ struct KnowledgeTabContent: View {
         coordinator.allKnowledgeCards
     }
 
-    private var planItems: [KnowledgeCardPlanItem] {
-        coordinator.ui.knowledgeCardPlan
-    }
-
     private var resRefStore: ResRefStore {
         coordinator.getResRefStore()
     }
@@ -44,11 +40,6 @@ struct KnowledgeTabContent: View {
                 .clipShape(RoundedRectangle(cornerRadius: 10))
             }
             .buttonStyle(.plain)
-
-            // Onboarding progress (if in interview)
-            if !planItems.isEmpty {
-                onboardingProgressSection
-            }
 
             // Documentation gaps (if any)
             if !documentationGaps.isEmpty {
@@ -120,46 +111,6 @@ struct KnowledgeTabContent: View {
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
-    }
-
-    private var onboardingProgressSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Onboarding Progress")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                let completed = planItems.filter { $0.status == .completed }.count
-                Text("\(completed)/\(planItems.count)")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.tertiary)
-            }
-
-            // Progress bar
-            GeometryReader { geometry in
-                let completed = planItems.filter { $0.status == .completed }.count
-                let progress = planItems.isEmpty ? 0 : CGFloat(completed) / CGFloat(planItems.count)
-
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(Color(nsColor: .separatorColor))
-                        .frame(height: 6)
-
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(Color.green)
-                        .frame(width: geometry.size.width * progress, height: 6)
-                        .animation(.easeInOut(duration: 0.3), value: progress)
-                }
-            }
-            .frame(height: 6)
-        }
-        .padding(12)
-        .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
-        )
     }
 
     private var documentationGapsSection: some View {

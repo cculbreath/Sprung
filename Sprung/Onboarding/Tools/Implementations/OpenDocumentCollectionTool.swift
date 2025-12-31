@@ -34,8 +34,8 @@ struct OpenDocumentCollectionTool: InterviewTool {
                 When user clicks "Done with Uploads":
                 1. System automatically merges card inventories across all documents
                 2. You receive a chat message with merged card summary and any documentation gaps
-                3. User can review/exclude cards in the sidebar, then click "Generate Cards"
-                4. DO NOT call dispatch_kc_agents - it's triggered by the "Generate Cards" button
+                3. User can review/exclude cards in the sidebar, then click "Approve & Create"
+                4. Card generation is handled by the UI, not LLM tools
                 """,
             properties: [
                 "message": UserInteractionSchemas.documentCollectionMessage,
@@ -65,14 +65,14 @@ struct OpenDocumentCollectionTool: InterviewTool {
 
         // Get counts from MainActor-isolated UI state
         let artifactCount = await MainActor.run { coordinator.ui.artifactRecords.count }
-        let planCount = await MainActor.run { coordinator.ui.knowledgeCardPlan.count }
+        let mergedCardCount = await MainActor.run { coordinator.ui.mergedInventory?.mergedCards.count ?? 0 }
 
         // Build minimal response
         var response = JSON()
         response["status"].string = "completed"
         response["ui_displayed"].bool = true
         response["artifact_count"].int = artifactCount
-        response["kc_plan_count"].int = planCount
+        response["merged_card_count"].int = mergedCardCount
         response["await_user_action"].string = "done_with_uploads"
 
         if let message = message {

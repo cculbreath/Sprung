@@ -282,11 +282,82 @@ class GitAnalysisAgent {
                 }
             }
 
+            // Max turns reached - force completion
+            Logger.warning("⚠️ GitAgent: Max turns (\(maxTurns)) reached, forcing completion...", category: .ai)
+            await updateProgress("(Turn \(turnCount + 1)) Forcing completion...")
+
+            if let forcedResult = try await forceCompletion(facade: facade) {
+                status = .completed
+                return forcedResult
+            }
+
             throw GitAgentError.maxTurnsExceeded
 
         } catch {
             status = .failed(error.localizedDescription)
             throw error
+        }
+    }
+
+    // MARK: - Forced Completion
+
+    /// Forces the agent to call complete_analysis when max turns is reached.
+    /// Adds a strong system message and makes one final LLM call.
+    private func forceCompletion(facade: LLMFacade) async throws -> GitAnalysisResult? {
+        // Add forceful message to conversation
+        let forceMessage = ChatCompletionParameters.Message(
+            role: .system,
+            content: .text("""
+                CRITICAL: You have reached the maximum number of analysis turns.
+                You MUST call the complete_analysis tool NOW with your findings so far.
+                Summarize what you've discovered and output the card inventory.
+                Do NOT call any other tools - only call complete_analysis immediately.
+                """)
+        )
+        messages.append(forceMessage)
+
+        // Make one final call with auto tool choice (so it can call complete_analysis)
+        let response = try await facade.executeWithTools(
+            messages: messages,
+            tools: tools,
+            toolChoice: .auto,
+            modelId: modelId,
+            temperature: 0.2  // Lower temperature for more focused output
+        )
+
+        // Track token usage for this forced call
+        if let usage = response.usage {
+            let inputTokens = usage.promptTokens ?? 0
+            let outputTokens = usage.completionTokens ?? 0
+            let cachedTokens = usage.promptTokensDetails?.cachedTokens ?? 0
+
+            if let agentId = agentId {
+                tracker?.addTokenUsage(
+                    agentId: agentId,
+                    input: inputTokens,
+                    output: outputTokens,
+                    cached: cachedTokens
+                )
+            }
+        }
+
+        guard let choice = response.choices?.first,
+              let message = choice.message,
+              let toolCalls = message.toolCalls,
+              let completionCall = toolCalls.first(where: { $0.function.name == CompleteAnalysisTool.name }) else {
+            Logger.error("❌ GitAgent: Forced completion failed - no complete_analysis call received", category: .ai)
+            return nil
+        }
+
+        do {
+            let result = try parseCompleteAnalysis(arguments: completionCall.function.arguments)
+            await emitEvent(.gitAgentProgressUpdated(message: "Analysis complete (forced)!", turn: turnCount + 1))
+            await updateProgress("Analysis complete (forced)!")
+            Logger.info("✅ GitAgent: Forced completion succeeded", category: .ai)
+            return result
+        } catch {
+            Logger.error("❌ GitAgent: Forced completion parsing failed: \(error.localizedDescription)", category: .ai)
+            return nil
         }
     }
 
@@ -573,11 +644,13 @@ class GitAnalysisAgent {
         currentAction = message
         progress.append("[\(Date().formatted(date: .omitted, time: .standard))] \(message)")
         Logger.info("🤖 GitAgent: \(message)", category: .ai)
-        // Update extraction status without blocking chat input
-        await emitEvent(.extractionStateChanged(true, statusMessage: "Git analysis: \(message)"))
-        // Update agent-specific status message for detail view
+        // Update agent-specific status message in tracker (shown in BackgroundAgentStatusBar)
+        // Note: We only emit extractionStateChanged if there's no tracker, to avoid duplicate status displays
         if let agentId = agentId {
             tracker?.updateStatusMessage(agentId: agentId, message: message)
+        } else {
+            // Fallback for agents not using the tracker - emit extraction state
+            await emitEvent(.extractionStateChanged(true, statusMessage: "Git analysis: \(message)"))
         }
     }
 

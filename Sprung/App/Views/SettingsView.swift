@@ -11,8 +11,6 @@ struct SettingsView: View {
     @AppStorage("onboardingGitIngestModelId") private var gitIngestModelId: String = "anthropic/claude-haiku-4.5"
     @AppStorage("onboardingDocSummaryModelId") private var docSummaryModelId: String = "gemini-2.5-flash-lite"
     @AppStorage("onboardingCardMergeModelId") private var cardMergeModelId: String = "openai/gpt-5"
-    @AppStorage("onboardingKCAgentModelId") private var kcAgentModelId: String = "anthropic/claude-haiku-4.5"
-    @AppStorage("onboardingKCAgentMaxConcurrent") private var kcAgentMaxConcurrent: Int = 5
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var onboardingWebSearchAllowed: Bool = true
     @AppStorage("onboardingInterviewReasoningEffort") private var onboardingReasoningEffort: String = "none"
     @AppStorage("onboardingInterviewHardTaskReasoningEffort") private var onboardingHardTaskReasoningEffort: String = "medium"
@@ -133,7 +131,6 @@ struct SettingsView: View {
                 pdfExtractionModelPicker
                 docSummaryModelPicker
                 gitIngestModelPicker
-                kcAgentModelPicker
                 backgroundProcessingModelPicker
                 knowledgeCardTokenLimitPicker
 
@@ -287,13 +284,11 @@ struct SettingsView: View {
         .task {
             sanitizePDFExtractionModelIfNeeded()
             sanitizeGitIngestModelIfNeeded()
-            sanitizeKCAgentModelIfNeeded()
             sanitizeBackgroundProcessingModelIfNeeded()
         }
         .onChange(of: enabledLLMStore.enabledModels.map(\.modelId)) { _, _ in
             sanitizePDFExtractionModelIfNeeded()
             sanitizeGitIngestModelIfNeeded()
-            sanitizeKCAgentModelIfNeeded()
             sanitizeBackgroundProcessingModelIfNeeded()
         }
         .sheet(isPresented: $showSetupWizard) {
@@ -605,38 +600,6 @@ private extension SettingsView {
         }
     }
 
-    var kcAgentModelPicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if allOpenRouterModels.isEmpty {
-                Label("Enable OpenRouter models in Options before adjusting KC Agent model.", systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-                    .font(.callout)
-            } else {
-                Picker("KC Agent Model", selection: Binding(
-                    get: { kcAgentModelId },
-                    set: { newValue in
-                        kcAgentModelId = newValue
-                        _ = sanitizeKCAgentModelIfNeeded()
-                    }
-                )) {
-                    ForEach(allOpenRouterModels, id: \.modelId) { model in
-                        Text(model.displayName.isEmpty ? model.modelId : model.displayName)
-                            .tag(model.modelId)
-                    }
-                }
-                .pickerStyle(.menu)
-                Text("Model for parallel knowledge card generation agents.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-
-                Stepper("Max Concurrent Agents: \(kcAgentMaxConcurrent)", value: $kcAgentMaxConcurrent, in: 1...10)
-                Text("Maximum number of KC agents running simultaneously.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
     var backgroundProcessingModelPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
             if allOpenRouterModels.isEmpty {
@@ -690,21 +653,6 @@ private extension SettingsView {
         )
         if adjusted {
             backgroundProcessingModelId = sanitized
-        }
-        return sanitized
-    }
-
-    @discardableResult
-    func sanitizeKCAgentModelIfNeeded() -> String {
-        let ids = allOpenRouterModels.map(\.modelId)
-        let fallback = "anthropic/claude-haiku-4.5"
-        let (sanitized, adjusted) = ModelPreferenceValidator.sanitize(
-            requested: kcAgentModelId,
-            available: ids,
-            fallback: fallback
-        )
-        if adjusted {
-            kcAgentModelId = sanitized
         }
         return sanitized
     }

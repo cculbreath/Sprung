@@ -2,8 +2,8 @@
 //  SubAgentToolExecutor.swift
 //  Sprung
 //
-//  Minimal tool executor for isolated sub-agents (KC agents, etc.).
-//  Uses the SAME FileSystemTools as GitAnalysisAgent for unified access:
+//  Minimal tool executor for isolated sub-agents (e.g., Git analysis agents).
+//  Uses the same FileSystemTools as GitAnalysisAgent for unified access:
 //
 //  FILESYSTEM TOOLS (same as Git agent):
 //  - read_file: Read file content with line numbers
@@ -131,7 +131,7 @@ actor SubAgentToolExecutor {
 
         let function = ChatCompletionParameters.ChatFunction(
             name: tool.name,
-            strict: true,
+            strict: false,
             description: tool.description,
             parameters: schema
         )
@@ -184,49 +184,63 @@ actor SubAgentToolExecutor {
     }
 
     private func buildReturnResultTool() -> ChatCompletionParameters.Tool {
-        let chatSourceSchema = JSONSchema(
+        // Schema for individual facts extracted from artifacts
+        let factSchema = JSONSchema(
             type: .object,
-            description: "A source excerpt from the user conversation used as evidence",
+            description: "An extracted fact from the source artifacts",
             properties: [
-                "excerpt": JSONSchema(type: .string, description: "Direct quote from the user"),
-                "context": JSONSchema(type: .string, description: "Why this excerpt matters / what it supports")
+                "category": JSONSchema(
+                    type: .string,
+                    description: "Fact category",
+                    enum: ["responsibility", "achievement", "skill", "metric", "context", "collaboration"]
+                ),
+                "statement": JSONSchema(type: .string, description: "The extracted fact as a clear statement"),
+                "confidence": JSONSchema(
+                    type: .string,
+                    description: "Confidence level",
+                    enum: ["high", "medium", "low"]
+                ),
+                "source": JSONSchema(type: .string, description: "Artifact filename this fact came from")
             ],
-            required: ["excerpt", "context"],
+            required: ["category", "statement", "confidence", "source"],
             additionalProperties: false
         )
 
         let resultSchema = JSONSchema(
             type: .object,
-            description: "Knowledge card generation output",
+            description: "Knowledge card generation output - fact-based format",
             properties: [
                 "card_type": JSONSchema(
                     type: .string,
                     description: "Card type/category",
-                    enum: ["job", "skill", "education", "project"]
+                    enum: ["job", "skill", "education", "project", "employment", "achievement"]
                 ),
                 "title": JSONSchema(type: .string, description: "Card title (non-empty)"),
-                "prose": JSONSchema(
-                    type: .string,
-                    description: "Comprehensive narrative prose (500-2000+ words). Must be non-empty."
-                ),
-                "highlights": JSONSchema(type: .array, description: "Key achievements (bullets)", items: JSONSchema(type: .string)),
-                "skills": JSONSchema(type: .array, description: "Skills demonstrated", items: JSONSchema(type: .string)),
-                "metrics": JSONSchema(type: .array, description: "Quantitative results", items: JSONSchema(type: .string)),
-                "sources": JSONSchema(
+                "facts": JSONSchema(
                     type: .array,
-                    description: "File names used as evidence (prefer non-empty); include assigned files whenever possible.",
+                    description: "Array of extracted facts from the artifacts. Include ALL relevant facts (minimum 3).",
+                    items: factSchema
+                ),
+                "suggested_bullets": JSONSchema(
+                    type: .array,
+                    description: "Resume bullet point templates derived from facts",
                     items: JSONSchema(type: .string)
                 ),
-                "chat_sources": JSONSchema(
+                "technologies": JSONSchema(
                     type: .array,
-                    description: "Conversation excerpts used as evidence (can be empty array)",
-                    items: chatSourceSchema
+                    description: "Technologies, tools, and skills mentioned",
+                    items: JSONSchema(type: .string)
                 ),
-                "time_period": JSONSchema(type: .string, description: "Date range (empty string if not applicable)"),
+                "sources_used": JSONSchema(
+                    type: .array,
+                    description: "Artifact filenames used as evidence sources",
+                    items: JSONSchema(type: .string)
+                ),
+                "date_range": JSONSchema(type: .string, description: "Date range (empty string if not applicable)"),
                 "organization": JSONSchema(type: .string, description: "Organization name (empty string if not applicable)"),
                 "location": JSONSchema(type: .string, description: "Location/remote (empty string if not applicable)")
             ],
-            required: ["card_type", "title", "prose", "highlights", "skills", "metrics", "sources", "chat_sources", "time_period", "organization", "location"],
+            required: ["card_type", "title", "facts", "suggested_bullets", "technologies", "sources_used", "date_range", "organization", "location"],
             additionalProperties: false
         )
 
@@ -238,13 +252,12 @@ actor SubAgentToolExecutor {
                 The result JSON will be returned to the calling coordinator.
 
                 For knowledge card agents, the result should include:
-                - card_type: "job" or "skill"
+                - card_type: "job", "skill", "education", "project", "employment", or "achievement"
                 - title: Title of the knowledge card
-                - prose: Comprehensive narrative (500-2000+ words)
-                - sources: Array of file names used
-                - highlights: Key achievements or competencies
-                - skills: Relevant skills demonstrated
-                - metrics: Quantitative achievements if available
+                - facts: Array of extracted facts with category, statement, confidence, and source
+                - suggested_bullets: Resume bullet templates derived from facts
+                - technologies: Tools, languages, frameworks mentioned
+                - sources_used: Artifact filenames used as evidence
                 """,
             properties: [
                 "result": resultSchema

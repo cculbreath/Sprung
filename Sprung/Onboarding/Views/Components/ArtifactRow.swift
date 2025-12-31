@@ -51,10 +51,21 @@ struct ArtifactRow: View {
 
                         Spacer()
 
+                        // Status indicators
                         if hasContent {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
-                                .font(.caption)
+                            if artifact.hasCardInventory {
+                                // Content extracted AND inventory generated
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.green)
+                                    .font(.caption)
+                                    .help("Content extracted, inventory generated")
+                            } else {
+                                // Content extracted but NO inventory yet
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(.orange)
+                                    .font(.caption)
+                                    .help("No card inventory generated")
+                            }
                         }
 
                         Image(systemName: "chevron.right")

@@ -134,9 +134,8 @@ final class PhaseScriptRegistry {
                     Knowledge cards are required to create tailored resume content.
 
                     OPTIONS:
-                    1. If KC agents failed, use submit_knowledge_card to create cards manually
-                    2. Use dispatch_kc_agents to retry agent-based generation
-                    3. Use submit_for_validation with validation_type="skip_kc_approval" to ask user \
+                    1. Ask the user to upload more documents and click "Generate Cards" to retry
+                    2. Use submit_for_validation with validation_type="skip_kc_approval" to ask user \
                        if they want to proceed without knowledge cards
 
                     The user must explicitly approve via the UI before phase advance is allowed.

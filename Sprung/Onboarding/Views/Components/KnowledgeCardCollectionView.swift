@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// View that displays the knowledge card collection plan and generation workflow.
-/// Multi-agent workflow: plan → assignments → Generate Cards button → parallel generation
+/// View that displays the knowledge card collection from merged inventory.
+/// Multi-agent workflow: merge → assignments → Generate Cards button → parallel generation
 struct KnowledgeCardCollectionView: View {
     let coordinator: OnboardingInterviewCoordinator
     let onGenerateCards: () -> Void
@@ -10,20 +10,16 @@ struct KnowledgeCardCollectionView: View {
     @State private var selectedCardId: String?
     @State private var showGapsPopover = false
 
-    private var planItems: [KnowledgeCardPlanItem] {
-        coordinator.ui.knowledgeCardPlan
-    }
-
-    private var message: String? {
-        coordinator.ui.knowledgeCardPlanMessage
-    }
-
-    private var hasCompletedCards: Bool {
-        planItems.contains { $0.status == .completed }
+    private var mergedCards: [MergedCardInventory.MergedCard] {
+        coordinator.ui.mergedInventory?.mergedCards ?? []
     }
 
     private var isReadyForGeneration: Bool {
         coordinator.ui.cardAssignmentsReadyForApproval
+    }
+
+    private var isMerging: Bool {
+        coordinator.ui.isMergingCards
     }
 
     private var isGenerating: Bool {
@@ -31,7 +27,7 @@ struct KnowledgeCardCollectionView: View {
     }
 
     private var includedCardCount: Int {
-        planItems.count - coordinator.ui.excludedCardIds.count
+        mergedCards.count - coordinator.ui.excludedCardIds.count
     }
 
     private var gapCount: Int {
@@ -46,10 +42,10 @@ struct KnowledgeCardCollectionView: View {
         VStack(alignment: .leading, spacing: 8) {
             headerSection
 
-            if planItems.isEmpty {
+            if mergedCards.isEmpty {
                 emptyState
             } else {
-                planListSection
+                cardListSection
             }
 
             // Show Generate Cards button when assignments are ready
@@ -60,11 +56,6 @@ struct KnowledgeCardCollectionView: View {
             // Show generation progress when generating
             if isGenerating {
                 generatingProgressView
-            }
-
-            // Show advance button when at least one card is complete
-            if hasCompletedCards && !isGenerating {
-                advanceToNextPhaseButton
             }
         }
         .padding(12)
@@ -83,27 +74,18 @@ struct KnowledgeCardCollectionView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
                 Spacer()
-                progressSummary
+                if !mergedCards.isEmpty {
+                    Text("\(mergedCards.count) card\(mergedCards.count == 1 ? "" : "s")")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
-            if let message = message {
-                Text(message)
+            if isReadyForGeneration {
+                Text("Review card assignments below")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
-            }
-        }
-    }
-
-    private var progressSummary: some View {
-        let completed = planItems.filter { $0.status == .completed }.count
-        let total = planItems.count
-
-        return Group {
-            if total > 0 {
-                Text("\(completed)/\(total)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -112,31 +94,29 @@ struct KnowledgeCardCollectionView: View {
         ContentUnavailableView(
             "Building Plan",
             systemImage: "list.bullet.clipboard",
-            description: Text("The interviewer is analyzing your timeline to plan knowledge card collection...")
+            description: Text("Upload documents and click 'Done with Uploads' to generate card assignments...")
         )
         .frame(maxWidth: .infinity, minHeight: 150)
         .frame(maxHeight: .infinity)
     }
 
-    private var planListSection: some View {
+    private var cardListSection: some View {
         ScrollView {
             VStack(spacing: 4) {
-                ForEach(planItems) { item in
-                    let isExcluded = coordinator.ui.excludedCardIds.contains(item.id)
-                    let mergedCard = mergedInventory?.mergedCards.first { $0.cardId == item.id }
+                ForEach(mergedCards, id: \.cardId) { card in
+                    let isExcluded = coordinator.ui.excludedCardIds.contains(card.cardId)
 
-                    KnowledgeCardPlanRow(
-                        item: item,
+                    MergedCardRow(
+                        card: card,
                         isGenerating: isGenerating,
                         showAssignments: isReadyForGeneration,
                         isExcluded: isExcluded,
-                        isSelected: selectedCardId == item.id,
-                        mergedCard: mergedCard,
+                        isSelected: selectedCardId == card.cardId,
                         onToggleExclude: {
                             if isExcluded {
-                                coordinator.ui.excludedCardIds.remove(item.id)
+                                coordinator.ui.excludedCardIds.remove(card.cardId)
                             } else {
-                                coordinator.ui.excludedCardIds.insert(item.id)
+                                coordinator.ui.excludedCardIds.insert(card.cardId)
                             }
                             // Persist exclusion changes
                             Task {
@@ -145,7 +125,7 @@ struct KnowledgeCardCollectionView: View {
                         },
                         onSelect: {
                             withAnimation(.easeInOut(duration: 0.2)) {
-                                selectedCardId = selectedCardId == item.id ? nil : item.id
+                                selectedCardId = selectedCardId == card.cardId ? nil : card.cardId
                             }
                         }
                     )
@@ -159,8 +139,8 @@ struct KnowledgeCardCollectionView: View {
         VStack(spacing: 6) {
             Button(action: onGenerateCards) {
                 HStack {
-                    Image(systemName: "sparkles")
-                    Text("Generate \(includedCardCount) Knowledge Card\(includedCardCount == 1 ? "" : "s")")
+                    Image(systemName: "checkmark.circle.fill")
+                    Text("Approve & Create \(includedCardCount) Card\(includedCardCount == 1 ? "" : "s")")
                 }
                 .font(.caption.weight(.semibold))
                 .frame(maxWidth: .infinity)
@@ -168,7 +148,7 @@ struct KnowledgeCardCollectionView: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
             .tint(.green)
-            .disabled(includedCardCount == 0)
+            .disabled(includedCardCount == 0 || isMerging)
 
             if gapCount > 0 {
                 Button {
@@ -184,7 +164,7 @@ struct KnowledgeCardCollectionView: View {
                 }
             }
 
-            Text("Review the assignments in chat before generating")
+            Text("Click cards above to review details, use trash to exclude")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -208,30 +188,14 @@ struct KnowledgeCardCollectionView: View {
         .background(Color.accentColor.opacity(0.1))
         .cornerRadius(8)
     }
-
-    private var advanceToNextPhaseButton: some View {
-        Button(action: onAdvanceToNextPhase) {
-            HStack {
-                Image(systemName: "arrow.right.circle.fill")
-                Text("Advance to Writing Samples")
-            }
-            .font(.caption.weight(.medium))
-            .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.small)
-        .tint(.blue)
-        .padding(.top, 4)
-    }
 }
 
-private struct KnowledgeCardPlanRow: View {
-    let item: KnowledgeCardPlanItem
+private struct MergedCardRow: View {
+    let card: MergedCardInventory.MergedCard
     let isGenerating: Bool
     let showAssignments: Bool
     let isExcluded: Bool
     let isSelected: Bool
-    let mergedCard: MergedCardInventory.MergedCard?
     let onToggleExclude: () -> Void
     let onSelect: () -> Void
 
@@ -247,9 +211,9 @@ private struct KnowledgeCardPlanRow: View {
                 Button(action: onSelect) {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack {
-                            Text(item.title)
+                            Text(card.title)
                                 .font(.caption.weight(.medium))
-                                .foregroundStyle(isExcluded ? .secondary : (item.status == .completed ? .secondary : .primary))
+                                .foregroundStyle(isExcluded ? .secondary : .primary)
                                 .strikethrough(isExcluded)
                                 .italic(isExcluded)
                                 .lineLimit(1)
@@ -259,8 +223,8 @@ private struct KnowledgeCardPlanRow: View {
                             typeTag
                         }
 
-                        if let description = item.description {
-                            Text(description)
+                        if let dateRange = card.dateRange, !dateRange.isEmpty {
+                            Text(dateRange)
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                                 .strikethrough(isExcluded)
@@ -272,11 +236,9 @@ private struct KnowledgeCardPlanRow: View {
                 .buttonStyle(.plain)
 
                 // Expand indicator
-                if mergedCard != nil {
-                    Image(systemName: isSelected ? "chevron.down" : "chevron.right")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
+                Image(systemName: isSelected ? "chevron.down" : "chevron.right")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
 
                 // Exclude/Restore button (only when ready for generation)
                 if showAssignments && !isGenerating {
@@ -291,7 +253,7 @@ private struct KnowledgeCardPlanRow: View {
             }
 
             // Expanded detail section
-            if isSelected, let card = mergedCard {
+            if isSelected {
                 CardDetailSection(card: card)
                     .padding(.leading, 28)
                     .transition(.opacity.combined(with: .move(edge: .top)))
@@ -310,27 +272,12 @@ private struct KnowledgeCardPlanRow: View {
 
     @ViewBuilder
     private var statusIcon: some View {
-        switch item.status {
-        case .completed:
-            Image(systemName: "checkmark.circle.fill")
-                .font(.caption)
-                .foregroundStyle(.green)
-        case .inProgress:
-            if isGenerating {
-                ProgressView()
-                    .scaleEffect(0.6)
-                    .frame(width: 14, height: 14)
-            } else {
-                Image(systemName: "circle.dotted")
-                    .font(.caption)
-                    .foregroundStyle(Color.accentColor)
-            }
-        case .pending:
+        if isGenerating {
+            ProgressView()
+                .scaleEffect(0.6)
+                .frame(width: 14, height: 14)
+        } else {
             Image(systemName: "circle")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        case .skipped:
-            Image(systemName: "minus.circle.fill")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -339,12 +286,13 @@ private struct KnowledgeCardPlanRow: View {
     private var typeTag: some View {
         let typeName: String
         let typeColor: Color
-        switch item.type {
-        case .job: typeName = "Job"; typeColor = .blue
-        case .skill: typeName = "Skill"; typeColor = .purple
-        case .project: typeName = "Project"; typeColor = .orange
-        case .achievement: typeName = "Achievement"; typeColor = .green
-        case .education: typeName = "Education"; typeColor = .cyan
+        switch card.cardType.lowercased() {
+        case "job", "employment": typeName = "Job"; typeColor = .blue
+        case "skill": typeName = "Skill"; typeColor = .purple
+        case "project": typeName = "Project"; typeColor = .orange
+        case "achievement": typeName = "Achievement"; typeColor = .green
+        case "education": typeName = "Education"; typeColor = .cyan
+        default: typeName = card.cardType.capitalized; typeColor = .gray
         }
         return Text(typeName)
             .font(.caption2)
@@ -358,10 +306,8 @@ private struct KnowledgeCardPlanRow: View {
     private var backgroundColor: Color {
         if isSelected {
             return Color.accentColor.opacity(0.08)
-        } else if item.status == .inProgress && isGenerating {
+        } else if isGenerating {
             return Color.accentColor.opacity(0.05)
-        } else if item.status == .completed {
-            return Color.green.opacity(0.03)
         }
         return Color(nsColor: .controlBackgroundColor)
     }
@@ -369,10 +315,8 @@ private struct KnowledgeCardPlanRow: View {
     private var borderColor: Color {
         if isSelected {
             return Color.accentColor.opacity(0.4)
-        } else if item.status == .inProgress && isGenerating {
+        } else if isGenerating {
             return Color.accentColor.opacity(0.5)
-        } else if item.status == .completed {
-            return Color.green.opacity(0.3)
         }
         return Color(nsColor: .separatorColor)
     }

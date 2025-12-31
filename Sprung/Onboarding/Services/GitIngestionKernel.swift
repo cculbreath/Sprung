@@ -122,7 +122,8 @@ actor GitIngestionKernel {
         }
 
         do {
-            await eventBus.publish(.extractionStateChanged(true, statusMessage: "Gathering repository data..."))
+            // Note: We don't emit extractionStateChanged here - the agent tracker handles status display
+            // to avoid duplicate status messages in BackgroundAgentStatusBar
             await appendTranscript(.system, "Starting repository analysis", details: repoPath)
 
             // Step 1: Gather raw git data
@@ -132,14 +133,14 @@ actor GitIngestionKernel {
             Logger.info("🔬 [GitIngest] gatherGitData completed, contributors: \(contributorCount)", category: .ai)
             await appendTranscript(.system, "Gathered repository metadata", details: "\(contributorCount) contributor(s) found")
 
-            await eventBus.publish(.extractionStateChanged(true, statusMessage: "Analyzing code patterns with multi-turn agent..."))
+            // Note: extractionStateChanged not emitted - agent tracker handles status
             await appendTranscript(.system, "Starting multi-turn code analysis agent")
             Logger.info("🔬 [GitIngest] About to call runAnalysisAgent (requires @MainActor hop)", category: .ai)
 
             // Step 2: Run multi-turn agent to analyze actual code
             let analysis = try await runAnalysisAgent(gitData: gitData, repoName: repoName, repoURL: repoURL, agentId: agentId, tracker: tracker)
 
-            await eventBus.publish(.extractionStateChanged(true, statusMessage: "Creating artifact record..."))
+            // Note: extractionStateChanged not emitted - agent tracker handles status
 
             // Step 3: Create artifact record
             // The analysis is now a DocumentInventory - encode it as card_inventory JSON string

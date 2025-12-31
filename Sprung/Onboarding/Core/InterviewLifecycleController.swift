@@ -130,17 +130,19 @@ final class InterviewLifecycleController {
         // Restore UI state
         let phase = InterviewPhase(rawValue: session.phase) ?? .phase1CoreFacts
         ui.phase = phase
-        ui.knowledgeCardPlan = sessionPersistenceHandler.getRestoredPlanItems(session)
 
         // Restore merged inventory and excluded card IDs (expensive LLM results)
+        let restoredExcludedIds = sessionPersistenceHandler.getRestoredExcludedCardIds(session)
+        ui.excludedCardIds = restoredExcludedIds
+
         if let mergedInventory = sessionPersistenceHandler.getRestoredMergedInventory(session) {
             ui.mergedInventory = mergedInventory
             ui.proposedAssignmentCount = mergedInventory.mergedCards.count
             ui.identifiedGapCount = mergedInventory.gaps.count
             ui.cardAssignmentsReadyForApproval = true
-            Logger.info("📥 Restored merged inventory: \(mergedInventory.mergedCards.count) cards", category: .ai)
+
+            Logger.info("📥 Restored merged inventory: \(mergedInventory.mergedCards.count) cards (excluding \(restoredExcludedIds.count) excluded)", category: .ai)
         }
-        ui.excludedCardIds = sessionPersistenceHandler.getRestoredExcludedCardIds(session)
 
         // Set phase in state coordinator
         await state.setPhase(phase)

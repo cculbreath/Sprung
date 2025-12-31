@@ -232,12 +232,6 @@ final class SwiftDataSessionPersistenceHandler {
         guard let session = currentSession else { return }
 
         switch event {
-        case .knowledgeCardPlanUpdated(let items, _, _):
-            sessionStore.setPlanItems(session, items: items)
-
-        case .planItemStatusChangeRequested(let itemId, let status):
-            sessionStore.updatePlanItemStatus(session, itemId: itemId, status: status)
-
         case .mergedInventoryStored(let inventoryJSON):
             sessionStore.updateMergedInventory(session, inventoryJSON: inventoryJSON)
 
@@ -385,11 +379,6 @@ final class SwiftDataSessionPersistenceHandler {
         }
 
         Logger.info("💾 Restored session state: \(messages.count) messages", category: .ai)
-    }
-
-    /// Get restored plan items for UI
-    func getRestoredPlanItems(_ session: OnboardingSession) -> [KnowledgeCardPlanItem] {
-        sessionStore.restorePlanItems(session)
     }
 
     /// Get restored objective statuses

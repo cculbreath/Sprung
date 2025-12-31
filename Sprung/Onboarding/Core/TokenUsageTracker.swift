@@ -51,7 +51,7 @@ struct TokenUsageEntry: Identifiable, Codable {
 /// Source of token usage
 enum UsageSource: String, Codable, CaseIterable {
     case mainCoordinator = "main_coordinator"
-    case kcAgent = "kc_agent"
+    case cardGeneration = "card_generation"
     case gitAgent = "git_agent"
     case documentExtraction = "doc_extraction"
     case documentSummarization = "doc_summary"
@@ -59,7 +59,7 @@ enum UsageSource: String, Codable, CaseIterable {
     var displayName: String {
         switch self {
         case .mainCoordinator: return "Main Coordinator"
-        case .kcAgent: return "KC Agents"
+        case .cardGeneration: return "Card Generation"
         case .gitAgent: return "Git Analysis"
         case .documentExtraction: return "Doc Extraction"
         case .documentSummarization: return "Doc Summary"
@@ -69,7 +69,7 @@ enum UsageSource: String, Codable, CaseIterable {
     var icon: String {
         switch self {
         case .mainCoordinator: return "bubble.left.and.bubble.right"
-        case .kcAgent: return "brain.head.profile"
+        case .cardGeneration: return "rectangle.stack.fill"
         case .gitAgent: return "chevron.left.forwardslash.chevron.right"
         case .documentExtraction: return "doc.text.magnifyingglass"
         case .documentSummarization: return "doc.text"

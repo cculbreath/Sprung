@@ -54,10 +54,6 @@ final class OnboardingUIState {
     var evidenceRequirements: [EvidenceRequirement] = []
     /// Stores last shown profile summary to display until skeleton timeline loads
     var lastApplicantProfileSummary: JSON?
-    // MARK: - Knowledge Card Plan State
-    var knowledgeCardPlan: [KnowledgeCardPlanItem] = []
-    var knowledgeCardPlanFocus: String?
-    var knowledgeCardPlanMessage: String?
 
     // MARK: - Document Collection Phase
     /// True when document collection UI should be displayed (Phase 2)
@@ -66,13 +62,15 @@ final class OnboardingUIState {
 
     // MARK: - Multi-Agent Workflow State
     /// True when card assignments have been proposed and await user approval
-    /// Set by .cardAssignmentsProposed event, cleared when dispatch begins
+    /// Set by .mergeComplete event, cleared when generation begins
     var cardAssignmentsReadyForApproval: Bool = false
     /// Number of card assignments proposed
     var proposedAssignmentCount: Int = 0
     /// Number of documentation gaps identified
     var identifiedGapCount: Int = 0
-    /// True when KC agents are actively generating cards
+    /// True when card inventories are being merged (after Done with Uploads)
+    var isMergingCards: Bool = false
+    /// True when actively generating knowledge cards
     var isGeneratingCards: Bool = false
     /// Full merged inventory for detail views and gap display
     var mergedInventory: MergedCardInventory?

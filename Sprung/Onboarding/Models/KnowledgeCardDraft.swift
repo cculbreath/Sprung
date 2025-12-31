@@ -118,6 +118,8 @@ struct ArtifactRecord: Identifiable, Equatable, Codable {
     var summary: String?
     var briefDescription: String?
     var metadata: JSON
+    /// True if this artifact has a card_inventory (was processed for KC generation)
+    var hasCardInventory: Bool
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -130,6 +132,7 @@ struct ArtifactRecord: Identifiable, Equatable, Codable {
         case summary
         case briefDescription = "brief_description"
         case metadata
+        case hasCardInventory = "has_card_inventory"
     }
 
     /// Display name for the artifact (title if available, otherwise filename)
@@ -180,5 +183,7 @@ struct ArtifactRecord: Identifiable, Equatable, Codable {
         // Try direct field first, then summary_metadata
         briefDescription = json["brief_description"].string ?? json["summary_metadata"]["brief_description"].string
         metadata = json["metadata"]
+        // Check if this artifact has a card_inventory (was processed for KC generation)
+        hasCardInventory = json["card_inventory"].exists() && !json["card_inventory"].stringValue.isEmpty
     }
 }
