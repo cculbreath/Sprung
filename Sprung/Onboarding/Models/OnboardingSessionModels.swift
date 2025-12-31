@@ -41,8 +41,8 @@ class OnboardingSession {
     var objectives: [OnboardingObjectiveRecord] = []
 
     // Note: .nullify keeps artifacts when session is deleted (they become archived)
-    @Relationship(deleteRule: .nullify, inverse: \OnboardingArtifactRecord.session)
-    var artifacts: [OnboardingArtifactRecord] = []
+    @Relationship(deleteRule: .nullify, inverse: \ArtifactRecord.session)
+    var artifacts: [ArtifactRecord] = []
 
     @Relationship(deleteRule: .cascade, inverse: \OnboardingMessageRecord.session)
     var messages: [OnboardingMessageRecord] = []
@@ -98,77 +98,6 @@ class OnboardingObjectiveRecord {
         self.objectiveId = objectiveId
         self.status = status
         self.updatedAt = updatedAt
-    }
-}
-
-// MARK: - Artifact Records
-
-/// Persisted artifact with extracted content.
-/// Stores the LLM-enriched text so we don't need to re-process on resume.
-@Model
-class OnboardingArtifactRecord {
-    var id: UUID
-    /// Source type: "pdf", "git", "vcard", "image", "docx", etc.
-    var sourceType: String
-    /// Original filename for display
-    var sourceFilename: String
-    /// Hash of source content for detecting re-uploads
-    var sourceHash: String?
-    /// LLM-enriched/extracted text content
-    var extractedContent: String
-    /// Additional metadata as JSON (git analysis, page count, etc.)
-    var metadataJSON: String?
-    /// Path to raw source file on disk (for files that need to stay on disk)
-    var rawFileRelativePath: String?
-    /// When the artifact was ingested
-    var ingestedAt: Date
-    /// Linked plan item ID (if associated with a knowledge card plan item)
-    var planItemId: String?
-
-    var session: OnboardingSession?
-
-    /// True if this artifact is archived (no session, available for reuse)
-    var isArchived: Bool {
-        session == nil
-    }
-
-    /// Folder name for filesystem export (sanitized filename without extension)
-    var artifactFolderName: String {
-        let baseName: String
-        if !sourceFilename.isEmpty {
-            let nameWithoutExt = URL(fileURLWithPath: sourceFilename).deletingPathExtension().lastPathComponent
-            baseName = nameWithoutExt.isEmpty ? sourceFilename : nameWithoutExt
-        } else {
-            baseName = id.uuidString
-        }
-        // Sanitize for filesystem
-        return baseName
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: ":", with: "_")
-            .replacingOccurrences(of: "\\", with: "_")
-            .replacingOccurrences(of: " ", with: "_")
-    }
-
-    init(
-        id: UUID = UUID(),
-        sourceType: String,
-        sourceFilename: String,
-        sourceHash: String? = nil,
-        extractedContent: String,
-        metadataJSON: String? = nil,
-        rawFileRelativePath: String? = nil,
-        ingestedAt: Date = Date(),
-        planItemId: String? = nil
-    ) {
-        self.id = id
-        self.sourceType = sourceType
-        self.sourceFilename = sourceFilename
-        self.sourceHash = sourceHash
-        self.extractedContent = extractedContent
-        self.metadataJSON = metadataJSON
-        self.rawFileRelativePath = rawFileRelativePath
-        self.ingestedAt = ingestedAt
-        self.planItemId = planItemId
     }
 }
 
