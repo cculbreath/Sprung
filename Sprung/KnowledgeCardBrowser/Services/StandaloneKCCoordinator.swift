@@ -91,20 +91,20 @@ class StandaloneKCCoordinator {
     private let analyzer: StandaloneKCAnalyzer
     private weak var llmFacade: LLMFacade?
     private weak var resRefStore: ResRefStore?
-    private weak var sessionStore: OnboardingSessionStore?
+    private weak var artifactRecordStore: ArtifactRecordStore?
 
     /// Tracks artifact IDs created during current operation (for export)
     private var currentArtifactIds: Set<String> = []
 
     // MARK: - Initialization
 
-    init(llmFacade: LLMFacade?, resRefStore: ResRefStore?, sessionStore: OnboardingSessionStore?) {
+    init(llmFacade: LLMFacade?, resRefStore: ResRefStore?, artifactRecordStore: ArtifactRecordStore?) {
         self.llmFacade = llmFacade
         self.resRefStore = resRefStore
-        self.sessionStore = sessionStore
+        self.artifactRecordStore = artifactRecordStore
 
         // Initialize sub-modules
-        self.extractor = StandaloneKCExtractor(llmFacade: llmFacade, sessionStore: sessionStore)
+        self.extractor = StandaloneKCExtractor(llmFacade: llmFacade, artifactRecordStore: artifactRecordStore)
         self.analyzer = StandaloneKCAnalyzer(llmFacade: llmFacade, resRefStore: resRefStore)
     }
 

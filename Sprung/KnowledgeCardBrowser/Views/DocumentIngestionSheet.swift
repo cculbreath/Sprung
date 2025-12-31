@@ -16,7 +16,7 @@ struct DocumentIngestionSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(ResRefStore.self) private var resRefStore
     @Environment(LLMFacade.self) private var llmFacade
-    @Environment(OnboardingSessionStore.self) private var sessionStore
+    @Environment(ArtifactRecordStore.self) private var artifactRecordStore
 
     // MARK: - State
 
@@ -50,12 +50,12 @@ struct DocumentIngestionSheet: View {
             coordinator = StandaloneKCCoordinator(
                 llmFacade: llmFacade,
                 resRefStore: resRefStore,
-                sessionStore: sessionStore
+                artifactRecordStore: artifactRecordStore
             )
         }
         .sheet(isPresented: $showExistingArtifactsPicker) {
             ExistingArtifactsPickerSheet(
-                sessionStore: sessionStore,
+                artifactRecordStore: artifactRecordStore,
                 onDismiss: { showExistingArtifactsPicker = false },
                 onSelect: { artifactIds in
                     addedArchivedArtifactIds.formUnion(artifactIds)
@@ -139,7 +139,7 @@ struct DocumentIngestionSheet: View {
     }
 
     private var archivedArtifactCount: Int {
-        sessionStore.getArchivedArtifacts().count
+        artifactRecordStore.archivedArtifacts.count
     }
 
     private var addButtonsSection: some View {
@@ -455,14 +455,14 @@ struct DocumentIngestionSheet: View {
 
 /// Sheet for selecting archived artifacts to use in KC generation
 private struct ExistingArtifactsPickerSheet: View {
-    let sessionStore: OnboardingSessionStore
+    let artifactRecordStore: ArtifactRecordStore
     let onDismiss: () -> Void
     let onSelect: (Set<String>) -> Void
 
     @State private var selectedIds: Set<String> = []
 
-    private var archivedArtifacts: [OnboardingArtifactRecord] {
-        sessionStore.getArchivedArtifacts()
+    private var archivedArtifacts: [ArtifactRecord] {
+        artifactRecordStore.archivedArtifacts
     }
 
     var body: some View {
@@ -535,7 +535,7 @@ private struct ExistingArtifactsPickerSheet: View {
 }
 
 private struct ExistingArtifactRow: View {
-    let artifact: OnboardingArtifactRecord
+    let artifact: ArtifactRecord
     let isSelected: Bool
     let onToggle: () -> Void
 
@@ -550,7 +550,7 @@ private struct ExistingArtifactRow: View {
                     .frame(width: 24, height: 24)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(artifact.sourceFilename)
+                    Text(artifact.filename)
                         .font(.subheadline.weight(.medium))
                         .lineLimit(1)
 

@@ -15,12 +15,12 @@ class StandaloneKCExtractor {
     // MARK: - Dependencies
 
     private var extractionService: DocumentExtractionService?
-    private weak var sessionStore: OnboardingSessionStore?
+    private weak var artifactRecordStore: ArtifactRecordStore?
 
     // MARK: - Initialization
 
-    init(llmFacade: LLMFacade?, sessionStore: OnboardingSessionStore?) {
-        self.sessionStore = sessionStore
+    init(llmFacade: LLMFacade?, artifactRecordStore: ArtifactRecordStore?) {
+        self.artifactRecordStore = artifactRecordStore
         self.extractionService = DocumentExtractionService(llmFacade: llmFacade, eventBus: nil)
     }
 
@@ -51,7 +51,7 @@ class StandaloneKCExtractor {
                     artifacts.append(artifact)
                 }
             } catch {
-                Logger.warning("⚠️ StandaloneKCExtractor: Failed to extract \(filename): \(error.localizedDescription)", category: .ai)
+                Logger.warning("StandaloneKCExtractor: Failed to extract \(filename): \(error.localizedDescription)", category: .ai)
                 // Continue with other sources even if one fails
             }
         }
@@ -63,48 +63,47 @@ class StandaloneKCExtractor {
     /// - Parameter artifactIds: Set of artifact IDs to load
     /// - Returns: Array of artifact JSON objects
     func loadArchivedArtifacts(_ artifactIds: Set<String>) -> [JSON] {
-        guard let store = sessionStore else { return [] }
+        guard let store = artifactRecordStore else { return [] }
 
         var loadedArtifacts: [JSON] = []
 
         for id in artifactIds {
-            guard let record = store.findArtifactById(id) else {
-                Logger.warning("⚠️ StandaloneKCExtractor: Archived artifact not found: \(id)", category: .ai)
+            guard let record = store.artifact(byIdString: id) else {
+                Logger.warning("StandaloneKCExtractor: Archived artifact not found: \(id)", category: .ai)
                 continue
             }
 
             let artifactJSON = artifactRecordToJSON(record)
             loadedArtifacts.append(artifactJSON)
 
-            Logger.debug("📦 StandaloneKCExtractor: Loaded archived artifact: \(record.sourceFilename)", category: .ai)
+            Logger.debug("StandaloneKCExtractor: Loaded archived artifact: \(record.filename)", category: .ai)
         }
 
         return loadedArtifacts
     }
 
-    /// Convert OnboardingArtifactRecord to JSON format
-    func artifactRecordToJSON(_ record: OnboardingArtifactRecord) -> JSON {
+    /// Convert ArtifactRecord to JSON format
+    func artifactRecordToJSON(_ record: ArtifactRecord) -> JSON {
         var artifactJSON = JSON()
         artifactJSON["id"].string = record.id.uuidString
-        artifactJSON["filename"].string = record.sourceFilename
+        artifactJSON["filename"].string = record.filename
         artifactJSON["source_type"].string = record.sourceType
         artifactJSON["extracted_text"].string = record.extractedContent
-        artifactJSON["sha256"].string = record.sourceHash
+        artifactJSON["sha256"].string = record.sha256
+        artifactJSON["content_type"].string = record.contentType
+        artifactJSON["size_bytes"].int = record.sizeInBytes
+        artifactJSON["summary"].string = record.summary
+        artifactJSON["brief_description"].string = record.briefDescription
+        artifactJSON["title"].string = record.title
+        artifactJSON["has_card_inventory"].bool = record.hasCardInventory
+        artifactJSON["card_inventory"].string = record.cardInventoryJSON
 
         // Parse metadata JSON
         if let metadataJSONString = record.metadataJSON,
            let data = metadataJSONString.data(using: .utf8),
            let metadata = try? JSON(data: data) {
-            if let summary = metadata["summary"].string {
-                artifactJSON["summary"].string = summary
-            }
-            if let brief = metadata["brief_description"].string {
-                artifactJSON["brief_description"].string = brief
-            }
-            if let title = metadata["title"].string {
-                artifactJSON["metadata"]["title"].string = title
-            }
-            // Include summary_metadata if present
+            artifactJSON["metadata"] = metadata
+            // Also extract summary_metadata to top level for easier access
             if !metadata["summary_metadata"].dictionaryValue.isEmpty {
                 artifactJSON["summary_metadata"] = metadata["summary_metadata"]
             }
@@ -301,32 +300,37 @@ class StandaloneKCExtractor {
     /// - Returns: The artifact ID (UUID string) of the persisted record
     @discardableResult
     private func persistArtifactToSwiftData(_ artifactJSON: JSON) -> String {
-        guard let store = sessionStore else {
-            Logger.debug("📦 StandaloneKCExtractor: No session store, skipping persistence", category: .ai)
+        guard let store = artifactRecordStore else {
+            Logger.debug("StandaloneKCExtractor: No artifact store, skipping persistence", category: .ai)
             return artifactJSON["id"].stringValue
         }
 
         // Check for existing artifact by hash to avoid duplicates
         if let hash = artifactJSON["sha256"].string,
-           let existing = store.findExistingArtifactByHash(hash) {
-            Logger.debug("📦 StandaloneKCExtractor: Artifact already exists, returning existing ID", category: .ai)
+           let existing = store.artifact(bySha256: hash) {
+            Logger.debug("StandaloneKCExtractor: Artifact already exists, returning existing ID", category: .ai)
             return existing.id.uuidString
         }
 
         let sourceType = artifactJSON["source_type"].string ?? "document"
         let filename = artifactJSON["filename"].stringValue
         let extractedContent = artifactJSON["extracted_text"].stringValue
-        let sourceHash = artifactJSON["sha256"].string
+        let sha256 = artifactJSON["sha256"].string
+        let contentType = artifactJSON["content_type"].string
+        let sizeInBytes = artifactJSON["size_bytes"].intValue
+        let summary = artifactJSON["summary"].string
+        let briefDescription = artifactJSON["brief_description"].string
+        let title = artifactJSON["metadata"]["title"].string
 
         // Build metadata JSON including summary
         var metadataDict: [String: Any] = [:]
-        if let summary = artifactJSON["summary"].string {
+        if let summary = summary {
             metadataDict["summary"] = summary
         }
-        if let brief = artifactJSON["brief_description"].string {
+        if let brief = briefDescription {
             metadataDict["brief_description"] = brief
         }
-        if let title = artifactJSON["metadata"]["title"].string {
+        if let title = title {
             metadataDict["title"] = title
         }
         if !artifactJSON["summary_metadata"].dictionaryValue.isEmpty {
@@ -342,16 +346,21 @@ class StandaloneKCExtractor {
             metadataJSONString = nil
         }
 
-        // Persist as standalone artifact (session = nil)
+        // Persist as standalone artifact (session = nil, archived)
         let record = store.addStandaloneArtifact(
             sourceType: sourceType,
-            sourceFilename: filename,
+            filename: filename,
             extractedContent: extractedContent,
-            sourceHash: sourceHash,
+            sha256: sha256,
+            contentType: contentType,
+            sizeInBytes: sizeInBytes,
+            summary: summary,
+            briefDescription: briefDescription,
+            title: title,
             metadataJSON: metadataJSONString
         )
 
-        Logger.info("📦 StandaloneKCExtractor: Persisted artifact to SwiftData: \(filename)", category: .ai)
+        Logger.info("StandaloneKCExtractor: Persisted artifact to SwiftData: \(filename)", category: .ai)
         return record.id.uuidString
     }
 }
