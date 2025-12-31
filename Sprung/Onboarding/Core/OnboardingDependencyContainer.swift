@@ -92,6 +92,8 @@ final class OnboardingDependencyContainer {
     let sessionPersistenceHandler: SwiftDataSessionPersistenceHandler
     // MARK: - Tool Execution
     let toolExecutor: ToolExecutor
+    // MARK: - Artifact Store (SwiftData)
+    let artifactRecordStore: ArtifactRecordStore
     // MARK: - External Dependencies (Passed In)
     private let applicantProfileStore: ApplicantProfileStore
     private let resRefStore: ResRefStore
@@ -142,6 +144,9 @@ final class OnboardingDependencyContainer {
         self.experienceDefaultsStore = experienceDefaultsStore
         self.sessionStore = sessionStore
         self.dataStore = dataStore
+
+        // Initialize artifact store using same context as sessionStore
+        self.artifactRecordStore = ArtifactRecordStore(context: sessionStore.modelContext)
 
         // 1. Initialize core infrastructure
         let core = Self.createCoreInfrastructure()
