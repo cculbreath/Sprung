@@ -78,8 +78,10 @@ struct ToolBundlePolicy {
     static let subphaseBundles: [InterviewSubphase: Set<String>] = [
         // MARK: Phase 1: Voice & Context
         .p1_welcome: [
+            OnboardingToolName.agentReady.rawValue,           // Initial handshake at interview start
             OnboardingToolName.getUserOption.rawValue,        // For structured questions
-            OnboardingToolName.persistData.rawValue           // For dossier entries
+            OnboardingToolName.persistData.rawValue,          // For dossier entries
+            OnboardingToolName.validateApplicantProfile.rawValue  // Profile intake starts here
         ],
 
         .p1_writingSamples: [
@@ -258,6 +260,7 @@ struct ToolBundlePolicy {
     }
 
     /// Infer Phase 1 subphase (Voice & Context)
+    /// NEW ORDER: profile → writing samples → job search context
     private static func inferPhase1Subphase(
         toolPaneCard: OnboardingToolPaneCard,
         objectives: [String: String]
@@ -265,12 +268,8 @@ struct ToolBundlePolicy {
         // UI state takes precedence
         switch toolPaneCard {
         case .uploadRequest:
-            // Could be writing samples or contacts import
-            if objectives[OnboardingObjectiveId.writingSamplesCollected.rawValue] == "in_progress" ||
-               objectives[OnboardingObjectiveId.writingSamplesCollected.rawValue] == "pending" {
-                return .p1_writingSamples
-            }
-            return .p1_profileIntake
+            // Writing samples upload (after profile is complete)
+            return .p1_writingSamples
         case .applicantProfileRequest, .applicantProfileIntake:
             return .p1_profileIntake
         case .validationPrompt:
@@ -281,38 +280,33 @@ struct ToolBundlePolicy {
             break
         }
 
-        // Infer from objective state (new Phase 1 objectives)
-        let writingSamplesStatus = objectives[OnboardingObjectiveId.writingSamplesCollected.rawValue] ?? "pending"
-        let voicePrimersStatus = objectives[OnboardingObjectiveId.voicePrimersExtracted.rawValue] ?? "pending"
-        let jobSearchStatus = objectives[OnboardingObjectiveId.jobSearchContextCaptured.rawValue] ?? "pending"
+        // Infer from objective state
+        // NEW PHASE 1 ORDER: profile → writing samples → job search context
         let profileStatus = objectives[OnboardingObjectiveId.applicantProfileComplete.rawValue] ?? "pending"
+        let writingSamplesStatus = objectives[OnboardingObjectiveId.writingSamplesCollected.rawValue] ?? "pending"
+        let jobSearchStatus = objectives[OnboardingObjectiveId.jobSearchContextCaptured.rawValue] ?? "pending"
 
-        // Start with welcome if nothing started
-        if writingSamplesStatus == "pending" && jobSearchStatus == "pending" && profileStatus == "pending" {
-            return .p1_welcome
+        // Start with welcome/profile if profile not complete
+        if profileStatus == "pending" || profileStatus == "in_progress" {
+            // If profile validation is in progress, show validation subphase
+            if profileStatus == "in_progress" {
+                return .p1_profileValidation
+            }
+            return .p1_welcome  // Welcome includes profile intake tools
         }
 
-        // Writing samples collection
+        // After profile: writing samples collection
         if writingSamplesStatus == "pending" || writingSamplesStatus == "in_progress" {
             return .p1_writingSamples
         }
 
-        // Job search context (dossier questions)
+        // After writing samples: job search context
         if jobSearchStatus == "pending" || jobSearchStatus == "in_progress" {
             return .p1_jobSearchContext
         }
 
-        // Profile intake
-        if profileStatus == "pending" || profileStatus == "in_progress" {
-            return .p1_profileIntake
-        }
-
-        // Profile validation or ready for transition
-        if voicePrimersStatus == "completed" && profileStatus == "completed" {
-            return .p1_phaseTransition
-        }
-
-        return .p1_profileValidation
+        // All complete: ready for phase transition
+        return .p1_phaseTransition
     }
 
     /// Infer Phase 2 subphase (Career Story)
