@@ -68,5 +68,45 @@ struct DocumentInventory: Codable {
             case crossReferences = "cross_references"
             case extractionNotes = "extraction_notes"
         }
+
+        /// Memberwise initializer (needed since we have a custom decoder)
+        init(
+            cardType: CardType,
+            proposedTitle: String,
+            evidenceStrength: EvidenceStrength,
+            evidenceLocations: [String],
+            keyFacts: [String],
+            technologies: [String],
+            quantifiedOutcomes: [String],
+            dateRange: String?,
+            crossReferences: [String],
+            extractionNotes: String?
+        ) {
+            self.cardType = cardType
+            self.proposedTitle = proposedTitle
+            self.evidenceStrength = evidenceStrength
+            self.evidenceLocations = evidenceLocations
+            self.keyFacts = keyFacts
+            self.technologies = technologies
+            self.quantifiedOutcomes = quantifiedOutcomes
+            self.dateRange = dateRange
+            self.crossReferences = crossReferences
+            self.extractionNotes = extractionNotes
+        }
+
+        /// Custom decoder that provides defaults for optional arrays
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            cardType = try container.decode(CardType.self, forKey: .cardType)
+            proposedTitle = try container.decode(String.self, forKey: .proposedTitle)
+            evidenceStrength = try container.decode(EvidenceStrength.self, forKey: .evidenceStrength)
+            evidenceLocations = try container.decodeIfPresent([String].self, forKey: .evidenceLocations) ?? []
+            keyFacts = try container.decodeIfPresent([String].self, forKey: .keyFacts) ?? []
+            technologies = try container.decodeIfPresent([String].self, forKey: .technologies) ?? []
+            quantifiedOutcomes = try container.decodeIfPresent([String].self, forKey: .quantifiedOutcomes) ?? []
+            dateRange = try container.decodeIfPresent(String.self, forKey: .dateRange)
+            crossReferences = try container.decodeIfPresent([String].self, forKey: .crossReferences) ?? []
+            extractionNotes = try container.decodeIfPresent(String.self, forKey: .extractionNotes)
+        }
     }
 }

@@ -430,19 +430,21 @@ actor GoogleAIService {
 
     // MARK: - High-Level API
 
-    /// Extract text from a PDF file using Google's Files API
-    /// This is the main entry point for PDF extraction
-    func extractTextFromPDF(
+    /// Extract visual/graphical content descriptions from a PDF using Gemini vision.
+    /// This is the second pass of two-pass extraction: text is extracted locally via PDFKit,
+    /// while this method extracts descriptions of figures, charts, diagrams, and other visual content.
+    /// - Parameters:
+    ///   - pdfData: The PDF file data
+    ///   - filename: Display name for logging
+    ///   - modelId: Gemini model to use
+    ///   - prompt: Graphics extraction prompt (from PromptLibrary.pdfGraphicsExtraction)
+    /// - Returns: JSON string with graphics descriptions and token usage
+    func extractGraphicsFromPDF(
         pdfData: Data,
         filename: String,
         modelId: String,
-        prompt: String? = nil,
-        maxOutputTokens: Int? = nil
-    ) async throws -> (title: String?, content: String, tokenUsage: GeminiTokenUsage?) {
-        let extractionPrompt = prompt ?? DocumentExtractionPrompts.defaultExtractionPrompt
-        let effectiveMaxOutputTokens = maxOutputTokens ?? 32768
-        let maxChars = 250_000
-
+        prompt: String
+    ) async throws -> (graphics: String, tokenUsage: GeminiTokenUsage?) {
         // Upload file
         let uploadedFile = try await uploadFile(
             data: pdfData,
@@ -463,43 +465,22 @@ actor GoogleAIService {
             }
         }
 
-        // Generate content
+        // Get model's max output tokens (no artificial cap)
+        let models = try? await fetchAvailableModels()
+        let modelMaxTokens = models?.first(where: { $0.id == modelId })?.outputTokenLimit ?? 65536
+
+        // Generate content with graphics-focused prompt
         let (result, tokenUsage) = try await extractPDFContent(
             fileURI: activeFile.uri,
             mimeType: "application/pdf",
             modelId: modelId,
-            prompt: extractionPrompt,
-            maxOutputTokens: effectiveMaxOutputTokens
+            prompt: prompt,
+            maxOutputTokens: modelMaxTokens
         )
 
-        // Try to parse as JSON for title extraction
-        if let jsonData = result.data(using: .utf8),
-           let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
-            let title = json["title"] as? String
-            let content = json["content"] as? String ?? result
-            let capped = capExtractionContent(content, maxChars: maxChars)
-            return (title, capped.content, tokenUsage)
-        }
+        Logger.info("📊 Graphics extraction complete for \(filename) (\(result.count) chars)", category: .ai)
 
-        // If not valid JSON, try to extract from markdown code block
-        if result.contains("```json") {
-            let pattern = "```json\\s*([\\s\\S]*?)```"
-            if let regex = try? NSRegularExpression(pattern: pattern),
-               let match = regex.firstMatch(in: result, range: NSRange(result.startIndex..., in: result)),
-               let jsonRange = Range(match.range(at: 1), in: result) {
-                let jsonString = String(result[jsonRange])
-                if let jsonData = jsonString.data(using: .utf8),
-                   let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
-                    let title = json["title"] as? String
-                    let content = json["content"] as? String ?? result
-                    let capped = capExtractionContent(content, maxChars: maxChars)
-                    return (title, capped.content, tokenUsage)
-                }
-            }
-        }
-
-        let capped = capExtractionContent(result, maxChars: maxChars)
-        return (nil, capped.content, tokenUsage)
+        return (result, tokenUsage)
     }
 
     private func capExtractionContent(_ content: String, maxChars: Int) -> (content: String, originalChars: Int, wasTruncated: Bool) {

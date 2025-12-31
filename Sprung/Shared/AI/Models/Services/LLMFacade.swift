@@ -865,32 +865,38 @@ final class LLMFacade {
 
     // MARK: - Gemini Document Extraction
 
-    /// Extract text from a PDF file using Google's Gemini Files API.
-    /// Handles large files (up to 2GB) with automatic upload/cleanup.
+    /// Extract visual/graphical content descriptions from a PDF using Gemini vision.
+    /// This is the second pass of two-pass extraction: text is extracted locally via PDFKit,
+    /// while this method extracts descriptions of figures, charts, diagrams, and other visual content.
     ///
     /// - Parameters:
     ///   - pdfData: The PDF file data
     ///   - filename: Display name for the file
-    ///   - modelId: Gemini model ID (e.g., "gemini-2.0-flash")
-    ///   - prompt: Extraction prompt (uses default if nil)
-    ///   - maxOutputTokens: Maximum output tokens (uses default if nil)
-    /// - Returns: Tuple of (title, content, tokenUsage)
-    func extractTextFromPDF(
+    ///   - modelId: Gemini model ID (uses default PDF extraction model if nil)
+    /// - Returns: Tuple of (graphics JSON string, tokenUsage)
+    func extractGraphicsFromPDF(
         pdfData: Data,
         filename: String,
-        modelId: String,
-        prompt: String? = nil,
-        maxOutputTokens: Int? = nil
-    ) async throws -> (title: String?, content: String, tokenUsage: GoogleAIService.GeminiTokenUsage?) {
+        modelId: String? = nil
+    ) async throws -> (graphics: String, tokenUsage: GoogleAIService.GeminiTokenUsage?) {
         guard let service = googleAIService else {
             throw LLMError.clientError("Google AI service is not configured. Call registerGoogleAIService first.")
         }
-        return try await service.extractTextFromPDF(
+
+        // Use configured model or default
+        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId") ?? "gemini-2.5-flash"
+
+        // Build prompt with filename substitution
+        let prompt = PromptLibrary.substitute(
+            template: PromptLibrary.pdfGraphicsExtraction,
+            replacements: ["FILENAME": filename]
+        )
+
+        return try await service.extractGraphicsFromPDF(
             pdfData: pdfData,
             filename: filename,
-            modelId: modelId,
-            prompt: prompt,
-            maxOutputTokens: maxOutputTokens
+            modelId: effectiveModelId,
+            prompt: prompt
         )
     }
 

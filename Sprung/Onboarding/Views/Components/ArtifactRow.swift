@@ -68,6 +68,21 @@ struct ArtifactRow: View {
                             }
                         }
 
+                        // Graphics extraction status (PDFs only)
+                        if artifact.isPDF {
+                            if artifact.graphicsExtractionFailed {
+                                Image(systemName: "photo.badge.exclamationmark")
+                                    .foregroundStyle(.orange)
+                                    .font(.caption)
+                                    .help("Graphics analysis failed: \(artifact.graphicsExtractionError ?? "Unknown error")")
+                            } else if artifact.hasGraphicsContent {
+                                Image(systemName: "photo.badge.checkmark")
+                                    .foregroundStyle(.green)
+                                    .font(.caption)
+                                    .help("Visual content analyzed")
+                            }
+                        }
+
                         Image(systemName: "chevron.right")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
@@ -149,8 +164,13 @@ struct ArtifactRow: View {
                         }
                     }
 
+                    // Card inventory section (if available)
+                    if let inventory = artifact.cardInventory, !inventory.proposedCards.isEmpty {
+                        cardInventorySection(inventory)
+                    }
+
                     if hasContent {
-                        // Content section
+                        // Content section - truncate to prevent UI hang on large documents
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
                                 Text("Extracted Content")
@@ -162,8 +182,13 @@ struct ArtifactRow: View {
                                     .foregroundStyle(.tertiary)
                             }
 
+                            let previewLimit = 10_000
+                            let contentPreview = artifact.extractedContent.count > previewLimit
+                                ? String(artifact.extractedContent.prefix(previewLimit)) + "\n\n[... truncated for display - \(artifact.extractedContent.count - previewLimit) more characters ...]"
+                                : artifact.extractedContent
+
                             ScrollView {
-                                Text(artifact.extractedContent)
+                                Text(contentPreview)
                                     .font(.caption)
                                     .foregroundStyle(.primary)
                                     .textSelection(.enabled)
@@ -250,6 +275,144 @@ struct ArtifactRow: View {
             .padding(8)
             .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
             .cornerRadius(6)
+        }
+    }
+
+    @ViewBuilder
+    private func cardInventorySection(_ inventory: DocumentInventory) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Header
+            HStack {
+                Image(systemName: "rectangle.stack.badge.person.crop")
+                    .foregroundStyle(.teal)
+                Text("Card Inventory (\(inventory.proposedCards.count) cards)")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(inventory.documentType.capitalized)
+                    .font(.caption2)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.teal.opacity(0.15))
+                    .foregroundStyle(.teal)
+                    .cornerRadius(4)
+            }
+
+            // Cards list
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(Array(inventory.proposedCards.enumerated()), id: \.offset) { _, card in
+                    cardEntryRow(card)
+                }
+            }
+        }
+        .padding(8)
+        .background(Color.teal.opacity(0.05))
+        .cornerRadius(6)
+    }
+
+    @ViewBuilder
+    private func cardEntryRow(_ card: DocumentInventory.ProposedCardEntry) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            // Title row with type icon and evidence strength
+            HStack(spacing: 6) {
+                Image(systemName: cardTypeIcon(card.cardType))
+                    .foregroundStyle(cardTypeColor(card.cardType))
+                    .font(.caption)
+
+                Text(card.proposedTitle)
+                    .font(.caption.weight(.medium))
+                    .lineLimit(2)
+
+                Spacer()
+
+                // Evidence strength badge
+                Text(card.evidenceStrength.rawValue.capitalized)
+                    .font(.caption2)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(evidenceStrengthColor(card.evidenceStrength).opacity(0.15))
+                    .foregroundStyle(evidenceStrengthColor(card.evidenceStrength))
+                    .cornerRadius(3)
+            }
+
+            // Key facts (if any)
+            if !card.keyFacts.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(card.keyFacts.prefix(3), id: \.self) { fact in
+                        HStack(alignment: .top, spacing: 4) {
+                            Text("•")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Text(fact)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+                    }
+                    if card.keyFacts.count > 3 {
+                        Text("+\(card.keyFacts.count - 3) more facts")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+
+            // Technologies as badges
+            if !card.technologies.isEmpty {
+                FlowLayout(spacing: 4) {
+                    ForEach(card.technologies.prefix(8), id: \.self) { tech in
+                        badgePill(tech, color: .indigo)
+                    }
+                    if card.technologies.count > 8 {
+                        Text("+\(card.technologies.count - 8)")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+
+            // Date range if available
+            if let dateRange = card.dateRange, !dateRange.isEmpty {
+                HStack(spacing: 4) {
+                    Image(systemName: "calendar")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                    Text(dateRange)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .padding(6)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .cornerRadius(4)
+    }
+
+    private func cardTypeIcon(_ type: DocumentInventory.ProposedCardEntry.CardType) -> String {
+        switch type {
+        case .employment: return "briefcase.fill"
+        case .project: return "hammer.fill"
+        case .skill: return "lightbulb.fill"
+        case .achievement: return "star.fill"
+        case .education: return "graduationcap.fill"
+        }
+    }
+
+    private func cardTypeColor(_ type: DocumentInventory.ProposedCardEntry.CardType) -> Color {
+        switch type {
+        case .employment: return .blue
+        case .project: return .orange
+        case .skill: return .purple
+        case .achievement: return .yellow
+        case .education: return .green
+        }
+    }
+
+    private func evidenceStrengthColor(_ strength: DocumentInventory.ProposedCardEntry.EvidenceStrength) -> Color {
+        switch strength {
+        case .primary: return .green
+        case .supporting: return .blue
+        case .mention: return .gray
         }
     }
 

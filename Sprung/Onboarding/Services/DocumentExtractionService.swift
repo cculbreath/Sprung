@@ -46,8 +46,19 @@ actor DocumentExtractionService {
         let contentType: String
         let sizeInBytes: Int
         let sha256: String
-        let extractedContent: String
+        let extractedContent: String      // Combined content (text + graphics for backward compat)
         let metadata: [String: Any]
+
+        // Two-pass extraction results (PDFs only)
+        let plainTextContent: String?     // Pass 1: PDFKit local extraction
+        let graphicsContent: String?      // Pass 2: LLM visual descriptions
+        let graphicsExtractionStatus: GraphicsExtractionStatus
+
+        enum GraphicsExtractionStatus: String {
+            case success = "success"
+            case failed = "failed"
+            case skipped = "skipped"   // Non-PDF or extraction not applicable
+        }
     }
 
     struct Quality {
@@ -219,7 +230,10 @@ actor DocumentExtractionService {
             sizeInBytes: sizeInBytes,
             sha256: sha256,
             extractedContent: rawText,
-            metadata: metadata
+            metadata: metadata,
+            plainTextContent: rawText,
+            graphicsContent: nil,
+            graphicsExtractionStatus: .skipped  // Non-PDF documents
         )
 
         let status: ExtractionResult.Status = initialIssues.contains("text_extraction_warning") ? .partial : .ok
@@ -329,10 +343,12 @@ actor DocumentExtractionService {
         return hashed.map { String(format: "%02x", $0) }.joined()
     }
 
-    // MARK: - PDF Extraction
+    // MARK: - PDF Extraction (Two-Pass)
 
-    /// Extract content from a PDF using Google's Files API
-    /// Handles PDFs up to 2GB natively without chunking
+    /// Extract content from a PDF using two-pass parallel extraction:
+    /// - Pass 1: Local PDFKit text extraction (fast, reliable)
+    /// - Pass 2: LLM graphics extraction (describes figures, charts, diagrams)
+    /// Both passes run in parallel. Graphics extraction failure doesn't block processing.
     private func extractPDFDirect(
         fileURL: URL,
         fileData: Data,
@@ -357,7 +373,7 @@ actor DocumentExtractionService {
         await notifyProgress(.fileAnalysis, .active, detail: "Preparing PDF (\(String(format: "%.1f", sizeMB)) MB)...")
 
         Logger.info(
-            "📄 Starting Google Files API extraction",
+            "📄 Starting two-pass PDF extraction",
             category: .ai,
             metadata: [
                 "filename": filename,
@@ -368,49 +384,144 @@ actor DocumentExtractionService {
         )
 
         await notifyProgress(.fileAnalysis, .completed, detail: "Using \(modelId)")
-        await notifyProgress(.aiExtraction, .active, detail: "Uploading \(filename) to Google...")
+        await notifyProgress(.aiExtraction, .active, detail: "Extracting text and analyzing graphics...")
 
-        let extractionPrompt = DocumentExtractionPrompts.promptWithDocumentHints(
-            filename: filename,
-            pageCount: pageCount,
-            sizeInBytes: sizeInBytes
+        let extractionStart = Date()
+
+        // Two-pass parallel extraction
+        // Pass 1: Local PDFKit text extraction
+        // Pass 2: LLM graphics extraction (gracefully handles failure)
+
+        // Run both passes in parallel
+        async let textTask: (String?, [String], Int?) = extractPlainText(from: fileURL)
+        async let graphicsTask: (graphics: String?, error: String?) = extractGraphicsWithGracefulFailure(
+            pdfData: fileData,
+            filename: filename
         )
 
-        // Keep short docs eligible for verbatim transcription, but prevent runaway outputs on long docs.
-        let maxOutputTokens: Int = {
-            if let pageCount, pageCount <= 10 { return 32768 }
-            if sizeMB <= 2.0 { return 24576 }
-            return 16384
-        }()
+        // Wait for both to complete
+        let (plainText, textIssues, _) = await textTask
+        let graphicsResult = await graphicsTask
 
-        let llmStart = Date()
+        // Pass 1 must succeed - we need text content
+        guard let plainText, !plainText.isEmpty else {
+            await notifyProgress(.aiExtraction, .failed, detail: "No text extracted from PDF")
+            throw ExtractionError.noTextExtracted
+        }
+
+        // Log results
+        let durationMs = Int(Date().timeIntervalSince(extractionStart) * 1000)
+        Logger.info(
+            "📄 Two-pass PDF extraction completed",
+            category: .diagnostics,
+            metadata: [
+                "filename": filename,
+                "duration_ms": "\(durationMs)",
+                "text_chars": "\(plainText.count)",
+                "graphics_status": graphicsResult.graphics != nil ? "success" : "failed",
+                "page_count": pageCount.map(String.init) ?? "unknown"
+            ]
+        )
+
+        // Emit token usage for graphics extraction if available
+        // (Text extraction is local, no token usage)
+
+        await notifyProgress(.aiExtraction, .completed)
+
+        // Combine content for downstream processing
+        let combinedContent: String
+        if let graphics = graphicsResult.graphics {
+            combinedContent = """
+            --- EXTRACTED TEXT ---
+            \(plainText)
+
+            --- VISUAL CONTENT ANALYSIS ---
+            \(graphics)
+            """
+        } else {
+            combinedContent = plainText
+        }
+
+        // Determine graphics extraction status
+        let graphicsStatus: ExtractedArtifact.GraphicsExtractionStatus
+        if graphicsResult.graphics != nil {
+            graphicsStatus = .success
+        } else {
+            graphicsStatus = .failed
+        }
+
+        // Derive title from filename
+        let derivedTitle = filename
+            .replacingOccurrences(of: ".pdf", with: "")
+            .replacingOccurrences(of: "_", with: " ")
+            .replacingOccurrences(of: "-", with: " ")
+
+        var metadata: [String: Any] = [
+            "character_count": combinedContent.count,
+            "plain_text_chars": plainText.count,
+            "source_format": contentType,
+            "purpose": purpose,
+            "source_file_url": fileURL.absoluteString,
+            "source_filename": filename,
+            "extraction_method": "two_pass_parallel"
+        ]
+        if let pageCount {
+            metadata["page_count"] = pageCount
+        }
+        metadata["graphics_extraction_status"] = graphicsStatus.rawValue
+        if let graphicsError = graphicsResult.error {
+            metadata["graphics_extraction_error"] = graphicsError
+        }
+        if let graphics = graphicsResult.graphics {
+            metadata["graphics_chars"] = graphics.count
+        }
+
+        let artifact = ExtractedArtifact(
+            id: UUID().uuidString,
+            filename: filename,
+            title: derivedTitle,
+            contentType: contentType,
+            sizeInBytes: sizeInBytes,
+            sha256: sha256,
+            extractedContent: combinedContent,
+            metadata: metadata,
+            plainTextContent: plainText,
+            graphicsContent: graphicsResult.graphics,
+            graphicsExtractionStatus: graphicsStatus
+        )
+
+        let issues = textIssues + (graphicsResult.error != nil ? ["graphics_extraction_failed"] : [])
+        let quality = Quality(confidence: estimateConfidence(for: plainText, issues: issues), issues: issues)
+
+        return ExtractionResult(
+            status: graphicsResult.error != nil ? .partial : .ok,
+            artifact: artifact,
+            quality: quality,
+            derivedApplicantProfile: nil,
+            derivedSkeletonTimeline: nil,
+            persisted: false
+        )
+    }
+
+    /// Extract graphics from PDF with graceful failure handling.
+    /// Returns (graphics: String?, error: String?) - graphics is nil if extraction failed.
+    private func extractGraphicsWithGracefulFailure(
+        pdfData: Data,
+        filename: String
+    ) async -> (graphics: String?, error: String?) {
+        guard let facade = llmFacade else {
+            return (nil, "LLM not configured")
+        }
+
         do {
-            guard let facade = llmFacade else {
-                throw ExtractionError.llmNotConfigured
-            }
-            let (extractedTitle, extractedText, tokenUsage) = try await facade.extractTextFromPDF(
-                pdfData: fileData,
-                filename: filename,
-                modelId: modelId,
-                prompt: extractionPrompt,
-                maxOutputTokens: maxOutputTokens
+            let (graphics, tokenUsage) = try await facade.extractGraphicsFromPDF(
+                pdfData: pdfData,
+                filename: filename
             )
 
-            let llmDurationMs = Int(Date().timeIntervalSince(llmStart) * 1000)
-            Logger.info(
-                "📄 Google Files API extraction completed",
-                category: .diagnostics,
-                metadata: [
-                    "filename": filename,
-                    "duration_ms": "\(llmDurationMs)",
-                    "chars": "\(extractedText.count)",
-                    "page_count": pageCount.map(String.init) ?? "unknown",
-                    "max_output_tokens": "\(maxOutputTokens)"
-                ]
-            )
-
-            // Emit token usage event if available
+            // Emit token usage if available
             if let usage = tokenUsage, let eventBus = eventBus {
+                let modelId = currentModelId()
                 await eventBus.publish(.llmTokenUsageReceived(
                     modelId: modelId,
                     inputTokens: usage.promptTokenCount,
@@ -421,62 +532,11 @@ actor DocumentExtractionService {
                 ))
             }
 
-            if extractedText.isEmpty {
-                await notifyProgress(.aiExtraction, .failed, detail: "No text extracted")
-                throw ExtractionError.noTextExtracted
-            }
-
-            await notifyProgress(.aiExtraction, .completed)
-
-            var metadata: [String: Any] = [
-                "character_count": extractedText.count,
-                "source_format": contentType,
-                "purpose": purpose,
-                "source_file_url": fileURL.absoluteString,
-                "source_filename": filename,
-                "extraction_method": "google_files_api",
-                "max_output_tokens": maxOutputTokens
-            ]
-            if let pageCount {
-                metadata["page_count"] = pageCount
-            }
-            if let title = extractedTitle {
-                metadata["title"] = title
-            }
-
-            let artifact = ExtractedArtifact(
-                id: UUID().uuidString,
-                filename: filename,
-                title: extractedTitle,
-                contentType: contentType,
-                sizeInBytes: sizeInBytes,
-                sha256: sha256,
-                extractedContent: extractedText,
-                metadata: metadata
-            )
-
-            let quality = Quality(confidence: estimateConfidence(for: extractedText, issues: []), issues: [])
-
-            return ExtractionResult(
-                status: .ok,
-                artifact: artifact,
-                quality: quality,
-                derivedApplicantProfile: nil,
-                derivedSkeletonTimeline: nil,
-                persisted: false
-            )
-        } catch let error as LLMError {
-            Logger.error("📄 LLMFacade PDF extraction failed: \(error.localizedDescription)", category: .ai)
-            await notifyProgress(.aiExtraction, .failed, detail: error.localizedDescription)
-            throw ExtractionError.llmFailed(error.localizedDescription)
-        } catch let error as GoogleAIService.GoogleAIError {
-            Logger.error("📄 Google Files API extraction failed: \(error.localizedDescription)", category: .ai)
-            await notifyProgress(.aiExtraction, .failed, detail: error.localizedDescription)
-            throw ExtractionError.llmFailed(error.localizedDescription)
+            return (graphics, nil)
         } catch {
-            Logger.error("📄 PDF extraction failed: \(error.localizedDescription)", category: .ai)
-            await notifyProgress(.aiExtraction, .failed, detail: error.localizedDescription)
-            throw ExtractionError.llmFailed(error.localizedDescription)
+            Logger.warning("⚠️ Graphics extraction failed for \(filename): \(error.localizedDescription)", category: .ai)
+            return (nil, error.localizedDescription)
         }
     }
+
 }

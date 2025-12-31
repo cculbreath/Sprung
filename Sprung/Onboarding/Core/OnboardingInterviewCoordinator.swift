@@ -573,6 +573,14 @@ final class OnboardingInterviewCoordinator {
         let filename = deleted["filename"].stringValue
         let title = deleted["metadata"]["title"].string ?? filename
 
+        // Delete from SwiftData persistence (critical for session restore)
+        if let artifactRecord = container.sessionStore.findArtifactById(id) {
+            container.sessionStore.deleteArtifact(artifactRecord)
+            Logger.info("💾 Artifact deleted from SwiftData: \(filename)", category: .ai)
+        } else {
+            Logger.warning("⚠️ Artifact not found in SwiftData for deletion: \(id)", category: .ai)
+        }
+
         // Update UI state
         await MainActor.run {
             ui.artifactRecords = container.artifactRepository.artifactRecordsSync

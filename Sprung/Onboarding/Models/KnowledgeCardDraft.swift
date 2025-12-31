@@ -120,6 +120,8 @@ struct ArtifactRecord: Identifiable, Equatable, Codable {
     var metadata: JSON
     /// True if this artifact has a card_inventory (was processed for KC generation)
     var hasCardInventory: Bool
+    /// Raw JSON string of the card inventory (if processed)
+    var cardInventoryJSON: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -133,6 +135,22 @@ struct ArtifactRecord: Identifiable, Equatable, Codable {
         case briefDescription = "brief_description"
         case metadata
         case hasCardInventory = "has_card_inventory"
+        case cardInventoryJSON = "card_inventory"
+    }
+
+    /// Parsed card inventory (lazily decoded from JSON string)
+    var cardInventory: DocumentInventory? {
+        guard let jsonString = cardInventoryJSON,
+              let data = jsonString.data(using: .utf8) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        decoder.dateDecodingStrategy = .iso8601
+        do {
+            return try decoder.decode(DocumentInventory.self, from: data)
+        } catch {
+            Logger.warning("⚠️ Failed to decode card inventory for \(filename): \(error.localizedDescription)", category: .ai)
+            return nil
+        }
     }
 
     /// Display name for the artifact (title if available, otherwise filename)
@@ -157,6 +175,39 @@ struct ArtifactRecord: Identifiable, Equatable, Codable {
     var summaryTokens: Int {
         guard let summary, !summary.isEmpty else { return 0 }
         return Self.estimateTokens(summary)
+    }
+
+    // MARK: - Graphics Extraction Status (Two-Pass PDF Extraction)
+
+    /// True if this is a PDF document
+    var isPDF: Bool {
+        contentType == "application/pdf"
+    }
+
+    /// True if graphics extraction failed for this PDF
+    var graphicsExtractionFailed: Bool {
+        metadata["graphics_extraction_status"].string == "failed"
+    }
+
+    /// Error message from graphics extraction (if failed)
+    var graphicsExtractionError: String? {
+        metadata["graphics_extraction_error"].string
+    }
+
+    /// True if this artifact has graphics content descriptions
+    var hasGraphicsContent: Bool {
+        guard let graphics = metadata["graphics_content"].string else { return false }
+        return !graphics.isEmpty
+    }
+
+    /// Plain text content from PDFKit extraction (Pass 1)
+    var plainTextContent: String? {
+        metadata["plain_text_content"].string
+    }
+
+    /// Graphics content descriptions from LLM extraction (Pass 2)
+    var graphicsContent: String? {
+        metadata["graphics_content"].string
     }
 
     init(json: JSON) {
@@ -184,6 +235,8 @@ struct ArtifactRecord: Identifiable, Equatable, Codable {
         briefDescription = json["brief_description"].string ?? json["summary_metadata"]["brief_description"].string
         metadata = json["metadata"]
         // Check if this artifact has a card_inventory (was processed for KC generation)
-        hasCardInventory = json["card_inventory"].exists() && !json["card_inventory"].stringValue.isEmpty
+        let inventoryString = json["card_inventory"].string
+        hasCardInventory = inventoryString != nil && !inventoryString!.isEmpty
+        cardInventoryJSON = inventoryString
     }
 }

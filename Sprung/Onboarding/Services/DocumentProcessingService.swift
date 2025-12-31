@@ -96,34 +96,48 @@ actor DocumentProcessingService {
         let artifactId = artifact.id
         Logger.info("✅ Text extraction completed: \(artifactId)", category: .ai)
 
-        // Steps 3 & 4: Generate summary and card inventory IN PARALLEL
-        // Both are independent LLM calls that only need extractedText
-        statusCallback?("Running summary + card inventory in parallel...")
-        let isPDF = fileURL.pathExtension.lowercased() == "pdf"
-        let isResume = documentType == "resume"
-        let pdfData: Data? = isPDF && !isResume ? try? Data(contentsOf: fileURL) : nil
+        // Skip summary and card inventory for writing samples - they only need text extraction
+        let isWritingSample = documentType == "writing_sample"
 
-        // Launch both tasks in parallel
-        async let summaryTask: DocumentSummary? = generateSummary(
-            extractedText: extractedText,
-            filename: filename,
-            facade: llmFacade
-        )
-        async let inventoryTask: DocumentInventory? = generateInventory(
-            artifactId: artifactId,
-            filename: filename,
-            extractedText: extractedText,
-            pdfData: pdfData,
-            isPDF: isPDF,
-            isResume: isResume
-        )
+        let documentSummary: DocumentSummary?
+        let inventory: DocumentInventory?
 
-        // Await both results
-        let (documentSummary, inventory) = await (summaryTask, inventoryTask)
-        let summaryChars = documentSummary?.summary.count ?? 0
-        let cardCount = inventory?.proposedCards.count ?? 0
-        statusCallback?("Summary (\(summaryChars) chars) + \(cardCount) cards complete")
-        Logger.info("✅ Parallel processing complete: summary=\(summaryChars) chars, cards=\(cardCount)", category: .ai)
+        if isWritingSample {
+            // Writing samples don't need summary or card inventory
+            statusCallback?("Writing sample extracted - skipping summary/inventory")
+            Logger.info("📝 Skipping summary/inventory for writing sample: \(filename)", category: .ai)
+            documentSummary = nil
+            inventory = nil
+        } else {
+            // Steps 3 & 4: Generate summary and card inventory IN PARALLEL
+            // Both are independent LLM calls that only need extractedText
+            statusCallback?("Running summary + card inventory in parallel...")
+            let isPDF = fileURL.pathExtension.lowercased() == "pdf"
+            let isResume = documentType == "resume"
+            let pdfData: Data? = isPDF && !isResume ? try? Data(contentsOf: fileURL) : nil
+
+            // Launch both tasks in parallel
+            async let summaryTask: DocumentSummary? = generateSummary(
+                extractedText: extractedText,
+                filename: filename,
+                facade: llmFacade
+            )
+            async let inventoryTask: DocumentInventory? = generateInventory(
+                artifactId: artifactId,
+                filename: filename,
+                extractedText: extractedText,
+                pdfData: pdfData,
+                isPDF: isPDF,
+                isResume: isResume
+            )
+
+            // Await both results
+            (documentSummary, inventory) = await (summaryTask, inventoryTask)
+            let summaryChars = documentSummary?.summary.count ?? 0
+            let cardCount = inventory?.proposedCards.count ?? 0
+            statusCallback?("Summary (\(summaryChars) chars) + \(cardCount) cards complete")
+            Logger.info("✅ Parallel processing complete: summary=\(summaryChars) chars, cards=\(cardCount)", category: .ai)
+        }
 
         // Step 5: Create artifact record
         var artifactRecord = JSON()
@@ -135,6 +149,20 @@ actor DocumentProcessingService {
         artifactRecord["document_type"].string = documentType
         artifactRecord["storage_path"].string = storagePath
         artifactRecord["extracted_text"].string = extractedText
+
+        // Two-pass extraction fields (PDFs) - stored in metadata for access via ArtifactRecord
+        var graphicsMeta = JSON()
+        if let plainText = artifact.plainTextContent {
+            graphicsMeta["plain_text_content"].string = plainText
+        }
+        if let graphics = artifact.graphicsContent {
+            graphicsMeta["graphics_content"].string = graphics
+        }
+        graphicsMeta["graphics_extraction_status"].string = artifact.graphicsExtractionStatus.rawValue
+        if let graphicsError = artifact.metadata["graphics_extraction_error"] as? String {
+            graphicsMeta["graphics_extraction_error"].string = graphicsError
+        }
+
         // Determine content type from file extension
         let contentType: String
         switch fileURL.pathExtension.lowercased() {
@@ -210,6 +238,10 @@ actor DocumentProcessingService {
         var combinedMetadata = metadata
         if !artifact.metadata.isEmpty {
             combinedMetadata["extraction"] = JSON(artifact.metadata)
+        }
+        // Add graphics extraction fields to metadata (for ArtifactRecord access)
+        for (key, value) in graphicsMeta.dictionaryValue {
+            combinedMetadata[key] = value
         }
         if !combinedMetadata.dictionaryValue.isEmpty {
             artifactRecord["metadata"] = combinedMetadata
