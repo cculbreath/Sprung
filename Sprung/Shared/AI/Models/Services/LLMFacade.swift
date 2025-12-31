@@ -924,7 +924,7 @@ final class LLMFacade {
     }
 
     /// Generate structured JSON output from a prompt using Gemini's native structured output mode.
-    /// When a schema is provided, uses `responseMimeType: "application/json"` and `responseSchema`
+    /// When a schema is provided, uses `responseMimeType: "application/json"` and `responseJsonSchema`
     /// to guarantee schema-conforming JSON output.
     ///
     /// - Parameters:

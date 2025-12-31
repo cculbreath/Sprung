@@ -378,7 +378,7 @@ actor GoogleAIService {
                 "temperature": 0.2,
                 "maxOutputTokens": 4096,
                 "responseMimeType": "application/json",
-                "responseSchema": DocumentExtractionPrompts.summaryJsonSchema
+                "responseJsonSchema": DocumentExtractionPrompts.summaryJsonSchema
             ]
         ]
 
@@ -544,7 +544,7 @@ actor GoogleAIService {
         // If schema provided, use native structured output mode
         if let schema = jsonSchema {
             generationConfig["responseMimeType"] = "application/json"
-            generationConfig["responseSchema"] = schema
+            generationConfig["responseJsonSchema"] = schema
             Logger.info("📝 Using Gemini native structured output with schema (maxTokens: \(maxOutputTokens))", category: .ai)
         }
 
@@ -712,7 +712,7 @@ actor GoogleAIService {
             "temperature": temperature,
             "maxOutputTokens": 65536,
             "responseMimeType": "application/json",
-            "responseSchema": jsonSchema
+            "responseJsonSchema": jsonSchema
         ]
 
         // For Gemini 2.5+ models, disable thinking to prevent output truncation
