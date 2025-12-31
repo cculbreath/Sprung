@@ -229,7 +229,8 @@ final class OnboardingDependencyContainer {
         // 9. Initialize session persistence handler
         self.sessionPersistenceHandler = SwiftDataSessionPersistenceHandler(
             eventBus: core.eventBus,
-            sessionStore: sessionStore
+            sessionStore: sessionStore,
+            artifactRecordStore: artifactRecordStore
         )
 
         // 10. Initialize lifecycle controller (merged with session coordinator)

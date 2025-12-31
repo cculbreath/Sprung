@@ -3,7 +3,7 @@
 //  Sprung
 //
 //  Event-driven persistence handler for onboarding sessions using SwiftData.
-//  Listens to relevant events and persists session state to OnboardingSessionStore.
+//  Listens to relevant events and persists session state to stores.
 //
 import Foundation
 import SwiftyJSON
@@ -15,6 +15,7 @@ final class SwiftDataSessionPersistenceHandler {
     // MARK: - Dependencies
     private let eventBus: EventCoordinator
     private let sessionStore: OnboardingSessionStore
+    private let artifactRecordStore: ArtifactRecordStore
 
     // MARK: - State
     private(set) var currentSession: OnboardingSession?
@@ -24,11 +25,13 @@ final class SwiftDataSessionPersistenceHandler {
     // MARK: - Initialization
     init(
         eventBus: EventCoordinator,
-        sessionStore: OnboardingSessionStore
+        sessionStore: OnboardingSessionStore,
+        artifactRecordStore: ArtifactRecordStore
     ) {
         self.eventBus = eventBus
         self.sessionStore = sessionStore
-        Logger.info("💾 SwiftDataSessionPersistenceHandler initialized", category: .ai)
+        self.artifactRecordStore = artifactRecordStore
+        Logger.info("SwiftDataSessionPersistenceHandler initialized", category: .ai)
     }
 
     // MARK: - Session Lifecycle
@@ -38,14 +41,14 @@ final class SwiftDataSessionPersistenceHandler {
         if resumeExisting, let existing = sessionStore.getActiveSession() {
             currentSession = existing
             sessionStore.touchSession(existing)
-            Logger.info("💾 Resuming existing session: \(existing.id)", category: .ai)
+            Logger.info("Resuming existing session: \(existing.id)", category: .ai)
             return existing
         }
 
         // Create new session
         let session = sessionStore.createSession()
         currentSession = session
-        Logger.info("💾 Created new session: \(session.id)", category: .ai)
+        Logger.info("Created new session: \(session.id)", category: .ai)
         return session
     }
 
@@ -55,10 +58,10 @@ final class SwiftDataSessionPersistenceHandler {
 
         if markComplete {
             sessionStore.completeSession(session)
-            Logger.info("💾 Session completed: \(session.id)", category: .ai)
+            Logger.info("Session completed: \(session.id)", category: .ai)
         } else {
             sessionStore.touchSession(session)
-            Logger.info("💾 Session paused: \(session.id)", category: .ai)
+            Logger.info("Session paused: \(session.id)", category: .ai)
         }
 
         currentSession = nil
@@ -151,7 +154,7 @@ final class SwiftDataSessionPersistenceHandler {
         }
         subscriptionTasks.append(timelineTask)
 
-        Logger.info("▶️ SwiftDataSessionPersistenceHandler started", category: .ai)
+        Logger.info("SwiftDataSessionPersistenceHandler started", category: .ai)
     }
 
     /// Stop listening to events
@@ -164,7 +167,7 @@ final class SwiftDataSessionPersistenceHandler {
         }
         subscriptionTasks.removeAll()
 
-        Logger.info("⏹️ SwiftDataSessionPersistenceHandler stopped", category: .ai)
+        Logger.info("SwiftDataSessionPersistenceHandler stopped", category: .ai)
     }
 
     // MARK: - Event Handlers
@@ -196,8 +199,8 @@ final class SwiftDataSessionPersistenceHandler {
             persistArtifact(session: session, record: record)
 
         case .artifactMetadataUpdated(let artifact):
-            // Re-persist when metadata is updated
-            persistArtifact(session: session, record: artifact)
+            // Update metadata when artifact is updated
+            updateArtifactMetadata(record: artifact)
 
         default:
             break
@@ -270,9 +273,8 @@ final class SwiftDataSessionPersistenceHandler {
 
         case .timelineUIUpdateNeeded(let timeline):
             // Persist timeline when individual cards are created/updated/deleted
-            // StateCoordinator emits this after any card operation with the full updated timeline
             sessionStore.updateSkeletonTimeline(session, timelineJSON: timeline.rawString())
-            Logger.debug("💾 Persisted timeline after card update (\(timeline["experiences"].array?.count ?? 0) cards)", category: .ai)
+            Logger.debug("Persisted timeline after card update (\(timeline["experiences"].array?.count ?? 0) cards)", category: .ai)
 
         default:
             break
@@ -283,7 +285,7 @@ final class SwiftDataSessionPersistenceHandler {
 
     private func persistUserMessage(session: OnboardingSession, messageId: String, payload: JSON) {
         guard let text = payload["text"].string else {
-            Logger.warning("💾 Cannot persist user message: missing text", category: .ai)
+            Logger.warning("Cannot persist user message: missing text", category: .ai)
             return
         }
 
@@ -298,7 +300,7 @@ final class SwiftDataSessionPersistenceHandler {
             isSystemGenerated: isSystemGenerated
         )
 
-        Logger.debug("💾 Persisted user message: \(messageId)", category: .ai)
+        Logger.debug("Persisted user message: \(messageId)", category: .ai)
     }
 
     private func persistAssistantMessage(
@@ -325,44 +327,89 @@ final class SwiftDataSessionPersistenceHandler {
         // Batch save after message is added
         sessionStore.saveMessages()
 
-        Logger.debug("💾 Persisted assistant message: \(id)", category: .ai)
+        Logger.debug("Persisted assistant message: \(id)", category: .ai)
     }
 
     private func persistArtifact(session: OnboardingSession, record: JSON) {
-        let artifactId = record["id"].string
+        let artifactIdString = record["id"].string
         let sourceType = record["source_type"].stringValue
         let filename = record["filename"].stringValue
         let extractedContent = record["extracted_text"].stringValue
-        let sourceHash = record["source_hash"].string
-        // Persist the full record JSON (includes card_inventory, metadata, etc.)
+        let sha256 = record["source_hash"].string
+        let contentType = record["content_type"].string
+        let sizeInBytes = record["size_bytes"].intValue
+        let summary = record["summary"].string
+        let briefDescription = record["brief_description"].string
+        let title = record["title"].string ?? record["metadata"]["title"].string
+        let hasCardInventory = record["has_card_inventory"].boolValue
+        let cardInventoryJSON = record["card_inventory"].string
+        // Persist the full record JSON for metadata
         let metadataJSON = record.rawString()
+        let rawFileRelativePath = record["raw_file_path"].string
         let planItemId = record["plan_item_id"].string
 
         // Check if this is a promoted artifact (already exists with this ID globally)
-        if let existingId = artifactId,
-           sessionStore.findArtifactById(existingId) != nil {
+        if let existingId = artifactIdString,
+           artifactRecordStore.artifact(byIdString: existingId) != nil {
             // Artifact was promoted - already in SwiftData, skip re-add
-            Logger.debug("💾 Artifact already persisted (promoted): \(filename)", category: .ai)
+            Logger.debug("Artifact already persisted (promoted): \(filename)", category: .ai)
             return
         }
 
         // Check if artifact already exists in this session by hash
-        if sessionStore.findExistingArtifact(session, filename: filename, hash: sourceHash) != nil {
-            Logger.debug("💾 Artifact already exists in session, skipping: \(filename)", category: .ai)
+        if let hash = sha256,
+           artifactRecordStore.existingArtifact(in: session, filename: filename, sha256: hash) != nil {
+            Logger.debug("Artifact already exists in session, skipping: \(filename)", category: .ai)
             return
         }
 
-        _ = sessionStore.addArtifact(
-            session,
+        _ = artifactRecordStore.addArtifact(
+            to: session,
             sourceType: sourceType,
-            sourceFilename: filename,
+            filename: filename,
             extractedContent: extractedContent,
-            sourceHash: sourceHash,
+            sha256: sha256,
+            contentType: contentType,
+            sizeInBytes: sizeInBytes,
+            summary: summary,
+            briefDescription: briefDescription,
+            title: title,
+            hasCardInventory: hasCardInventory,
+            cardInventoryJSON: cardInventoryJSON,
             metadataJSON: metadataJSON,
+            rawFileRelativePath: rawFileRelativePath,
             planItemId: planItemId
         )
 
-        Logger.info("💾 Persisted artifact: \(filename)", category: .ai)
+        Logger.info("Persisted artifact: \(filename)", category: .ai)
+    }
+
+    private func updateArtifactMetadata(record: JSON) {
+        guard let idString = record["id"].string,
+              let artifact = artifactRecordStore.artifact(byIdString: idString) else {
+            Logger.warning("Cannot update artifact metadata: artifact not found", category: .ai)
+            return
+        }
+
+        // Update fields from JSON
+        if let summary = record["summary"].string {
+            artifact.summary = summary
+        }
+        if let briefDescription = record["brief_description"].string {
+            artifact.briefDescription = briefDescription
+        }
+        if let title = record["title"].string ?? record["metadata"]["title"].string {
+            artifact.title = title
+        }
+        if let cardInventoryJSON = record["card_inventory"].string {
+            artifact.cardInventoryJSON = cardInventoryJSON
+            artifact.hasCardInventory = !cardInventoryJSON.isEmpty
+        }
+        // Update full metadata JSON
+        artifact.metadataJSON = record.rawString()
+
+        artifactRecordStore.updateArtifact(artifact)
+        Logger.debug("Updated artifact metadata: \(artifact.filename)", category: .ai)
     }
 
     // MARK: - Session Restore
@@ -378,7 +425,7 @@ final class SwiftDataSessionPersistenceHandler {
             await chatStore.setPreviousResponseId(responseId)
         }
 
-        Logger.info("💾 Restored session state: \(messages.count) messages", category: .ai)
+        Logger.info("Restored session state: \(messages.count) messages", category: .ai)
     }
 
     /// Get restored objective statuses
@@ -386,29 +433,9 @@ final class SwiftDataSessionPersistenceHandler {
         sessionStore.restoreObjectiveStatuses(session)
     }
 
-    /// Get restored artifacts as JSON for restoring to ArtifactRepository
+    /// Get restored artifacts as JSON for restoring to ArtifactRepository (legacy support)
     func getRestoredArtifacts(_ session: OnboardingSession) -> [JSON] {
-        sessionStore.getArtifacts(session).map { record in
-            // Start with the full persisted record (includes card_inventory, metadata, etc.)
-            var json: JSON
-            if let metadataJSON = record.metadataJSON,
-               let data = metadataJSON.data(using: .utf8),
-               let fullRecord = try? JSON(data: data) {
-                json = fullRecord
-            } else {
-                json = JSON()
-            }
-            // Override with canonical SwiftData fields (in case of any discrepancy)
-            json["id"].string = record.id.uuidString
-            json["source_type"].string = record.sourceType
-            json["filename"].string = record.sourceFilename
-            json["extracted_text"].string = record.extractedContent
-            json["source_hash"].string = record.sourceHash
-            json["raw_file_path"].string = record.rawFileRelativePath
-            json["plan_item_id"].string = record.planItemId
-            json["ingested_at"].string = ISO8601DateFormatter().string(from: record.ingestedAt)
-            return json
-        }
+        artifactRecordStore.artifacts(for: session).map { artifactRecordToJSON($0) }
     }
 
     /// Get restored skeleton timeline JSON
@@ -450,39 +477,39 @@ final class SwiftDataSessionPersistenceHandler {
 
     // MARK: - Archived Artifacts
 
-    /// Get all archived artifacts as JSON for UI display
+    /// Get all archived artifacts as JSON for UI display (legacy support)
     func getArchivedArtifactsAsJSON() -> [JSON] {
-        sessionStore.getArchivedArtifacts().map { artifactRecordToJSON($0) }
+        artifactRecordStore.archivedArtifacts.map { artifactRecordToJSON($0) }
     }
 
     /// Get archived artifacts count (for UI visibility decisions)
     func getArchivedArtifactsCount() -> Int {
-        sessionStore.getArchivedArtifacts().count
+        artifactRecordStore.archivedArtifacts.count
     }
 
-    /// Convert an OnboardingArtifactRecord to JSON format
-    private func artifactRecordToJSON(_ record: OnboardingArtifactRecord) -> JSON {
+    /// Convert an ArtifactRecord to JSON format
+    private func artifactRecordToJSON(_ record: ArtifactRecord) -> JSON {
         var json = JSON()
         json["id"].string = record.id.uuidString
         json["source_type"].string = record.sourceType
-        json["filename"].string = record.sourceFilename
+        json["filename"].string = record.filename
         json["extracted_text"].string = record.extractedContent
-        json["source_hash"].string = record.sourceHash
+        json["source_hash"].string = record.sha256
         json["raw_file_path"].string = record.rawFileRelativePath
         json["plan_item_id"].string = record.planItemId
         json["ingested_at"].string = ISO8601DateFormatter().string(from: record.ingestedAt)
         json["is_archived"].bool = record.isArchived
+        json["content_type"].string = record.contentType
+        json["size_bytes"].int = record.sizeInBytes
+        json["summary"].string = record.summary
+        json["brief_description"].string = record.briefDescription
+        json["title"].string = record.title
+        json["has_card_inventory"].bool = record.hasCardInventory
+        json["card_inventory"].string = record.cardInventoryJSON
         if let metadataJSON = record.metadataJSON,
            let data = metadataJSON.data(using: .utf8),
            let metadata = try? JSON(data: data) {
             json["metadata"] = metadata
-            // Also extract summary/brief_description to top level for easier access
-            if let summary = metadata["summary"].string {
-                json["summary"].string = summary
-            }
-            if let brief = metadata["brief_description"].string {
-                json["brief_description"].string = brief
-            }
         }
         return json
     }
