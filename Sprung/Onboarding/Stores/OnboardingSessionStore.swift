@@ -3,12 +3,13 @@
 //  Sprung
 //
 //  Manages SwiftData persistence for onboarding sessions.
-//  Enables resume functionality by persisting session state, artifacts, and messages.
+//  Enables resume functionality by persisting session state and messages.
+//
+//  Note: Artifact management has been moved to ArtifactRecordStore.
 //
 import Foundation
 import Observation
 import SwiftData
-import SwiftyJSON
 
 @Observable
 @MainActor
@@ -17,7 +18,7 @@ final class OnboardingSessionStore: SwiftDataStore {
 
     init(context: ModelContext) {
         modelContext = context
-        Logger.info("📦 OnboardingSessionStore initialized", category: .ai)
+        Logger.info("OnboardingSessionStore initialized", category: .ai)
     }
 
     // MARK: - Session Management
@@ -45,7 +46,7 @@ final class OnboardingSessionStore: SwiftDataStore {
         let session = OnboardingSession(phase: phase)
         modelContext.insert(session)
         saveContext()
-        Logger.info("📦 Created new onboarding session: \(session.id)", category: .ai)
+        Logger.info("Created new onboarding session: \(session.id)", category: .ai)
         return session
     }
 
@@ -60,7 +61,7 @@ final class OnboardingSessionStore: SwiftDataStore {
         session.phase = phase
         session.lastActiveAt = Date()
         saveContext()
-        Logger.info("📦 Session phase updated to: \(phase)", category: .ai)
+        Logger.info("Session phase updated to: \(phase)", category: .ai)
     }
 
     /// Update previousResponseId for OpenAI thread continuity
@@ -69,7 +70,7 @@ final class OnboardingSessionStore: SwiftDataStore {
         session.lastActiveAt = Date()
         saveContext()
         if let id = responseId {
-            Logger.debug("📦 Session previousResponseId updated: \(id.prefix(12))...", category: .ai)
+            Logger.debug("Session previousResponseId updated: \(id.prefix(12))...", category: .ai)
         }
     }
 
@@ -78,14 +79,14 @@ final class OnboardingSessionStore: SwiftDataStore {
         session.isComplete = true
         session.lastActiveAt = Date()
         saveContext()
-        Logger.info("📦 Session marked complete: \(session.id)", category: .ai)
+        Logger.info("Session marked complete: \(session.id)", category: .ai)
     }
 
     /// Delete a session and all related data
     func deleteSession(_ session: OnboardingSession) {
         modelContext.delete(session)
         saveContext()
-        Logger.info("📦 Deleted session: \(session.id)", category: .ai)
+        Logger.info("Deleted session: \(session.id)", category: .ai)
     }
 
     // MARK: - Objective Management
@@ -108,129 +109,6 @@ final class OnboardingSessionStore: SwiftDataStore {
     /// Get all objectives for a session
     func getObjectives(_ session: OnboardingSession) -> [OnboardingObjectiveRecord] {
         session.objectives
-    }
-
-    // MARK: - Artifact Management
-
-    /// Add an artifact record
-    func addArtifact(
-        _ session: OnboardingSession,
-        sourceType: String,
-        sourceFilename: String,
-        extractedContent: String,
-        sourceHash: String? = nil,
-        metadataJSON: String? = nil,
-        rawFileRelativePath: String? = nil,
-        planItemId: String? = nil
-    ) -> OnboardingArtifactRecord {
-        let record = OnboardingArtifactRecord(
-            sourceType: sourceType,
-            sourceFilename: sourceFilename,
-            sourceHash: sourceHash,
-            extractedContent: extractedContent,
-            metadataJSON: metadataJSON,
-            rawFileRelativePath: rawFileRelativePath,
-            planItemId: planItemId
-        )
-        record.session = session
-        session.artifacts.append(record)
-        modelContext.insert(record)
-        session.lastActiveAt = Date()
-        saveContext()
-        Logger.info("📦 Added artifact: \(sourceFilename) (\(sourceType))", category: .ai)
-        return record
-    }
-
-    /// Check if an artifact already exists (by filename + hash)
-    func findExistingArtifact(_ session: OnboardingSession, filename: String, hash: String?) -> OnboardingArtifactRecord? {
-        session.artifacts.first { artifact in
-            artifact.sourceFilename == filename &&
-            (hash == nil || artifact.sourceHash == hash)
-        }
-    }
-
-    /// Get all artifacts for a session
-    func getArtifacts(_ session: OnboardingSession) -> [OnboardingArtifactRecord] {
-        session.artifacts
-    }
-
-    // MARK: - Archived Artifact Management
-
-    /// Get all archived artifacts (session == nil, available for reuse)
-    func getArchivedArtifacts() -> [OnboardingArtifactRecord] {
-        let descriptor = FetchDescriptor<OnboardingArtifactRecord>(
-            predicate: #Predicate { $0.session == nil },
-            sortBy: [SortDescriptor(\.ingestedAt, order: .reverse)]
-        )
-        return (try? modelContext.fetch(descriptor)) ?? []
-    }
-
-    /// Find artifact by ID globally (across all sessions and archived)
-    func findArtifactById(_ id: UUID) -> OnboardingArtifactRecord? {
-        var descriptor = FetchDescriptor<OnboardingArtifactRecord>(
-            predicate: #Predicate { $0.id == id }
-        )
-        descriptor.fetchLimit = 1
-        return (try? modelContext.fetch(descriptor))?.first
-    }
-
-    /// Find artifact by ID string (convenience for JSON-based lookups)
-    func findArtifactById(_ idString: String) -> OnboardingArtifactRecord? {
-        guard let uuid = UUID(uuidString: idString) else { return nil }
-        return findArtifactById(uuid)
-    }
-
-    /// Promote an archived artifact to the current session
-    func promoteArtifact(_ artifact: OnboardingArtifactRecord, to session: OnboardingSession) {
-        artifact.session = session
-        session.artifacts.append(artifact)
-        session.lastActiveAt = Date()
-        saveContext()
-        Logger.info("📦 Promoted archived artifact to session: \(artifact.sourceFilename)", category: .ai)
-    }
-
-    /// Permanently delete an artifact
-    func deleteArtifact(_ artifact: OnboardingArtifactRecord) {
-        let filename = artifact.sourceFilename
-        modelContext.delete(artifact)
-        saveContext()
-        Logger.info("📦 Permanently deleted artifact: \(filename)", category: .ai)
-    }
-
-    /// Add a standalone artifact (no session, immediately archived)
-    /// Used by KC Browser for document ingestion outside of onboarding
-    func addStandaloneArtifact(
-        sourceType: String,
-        sourceFilename: String,
-        extractedContent: String,
-        sourceHash: String? = nil,
-        metadataJSON: String? = nil,
-        rawFileRelativePath: String? = nil,
-        planItemId: String? = nil
-    ) -> OnboardingArtifactRecord {
-        let record = OnboardingArtifactRecord(
-            sourceType: sourceType,
-            sourceFilename: sourceFilename,
-            sourceHash: sourceHash,
-            extractedContent: extractedContent,
-            metadataJSON: metadataJSON,
-            rawFileRelativePath: rawFileRelativePath,
-            planItemId: planItemId
-        )
-        // Note: session is nil, so artifact is immediately archived
-        modelContext.insert(record)
-        saveContext()
-        Logger.info("📦 Added standalone artifact (archived): \(sourceFilename) (\(sourceType))", category: .ai)
-        return record
-    }
-
-    /// Check if an artifact with matching hash already exists (global deduplication)
-    func findExistingArtifactByHash(_ hash: String) -> OnboardingArtifactRecord? {
-        var descriptor = FetchDescriptor<OnboardingArtifactRecord>(
-            predicate: #Predicate { $0.sourceHash == hash }
-        )
-        descriptor.fetchLimit = 1
-        return (try? modelContext.fetch(descriptor))?.first
     }
 
     // MARK: - Message Management
@@ -319,7 +197,7 @@ final class OnboardingSessionStore: SwiftDataStore {
         session.skeletonTimelineJSON = timelineJSON
         session.lastActiveAt = Date()
         saveContext()
-        Logger.debug("📦 Session skeleton timeline updated", category: .ai)
+        Logger.debug("Session skeleton timeline updated", category: .ai)
     }
 
     /// Get skeleton timeline JSON
@@ -332,7 +210,7 @@ final class OnboardingSessionStore: SwiftDataStore {
         session.applicantProfileJSON = profileJSON
         session.lastActiveAt = Date()
         saveContext()
-        Logger.debug("📦 Session applicant profile updated", category: .ai)
+        Logger.debug("Session applicant profile updated", category: .ai)
     }
 
     /// Get applicant profile JSON
@@ -345,7 +223,7 @@ final class OnboardingSessionStore: SwiftDataStore {
         session.enabledSectionsCSV = sections.sorted().joined(separator: ",")
         session.lastActiveAt = Date()
         saveContext()
-        Logger.debug("📦 Session enabled sections updated: \(sections.count) sections", category: .ai)
+        Logger.debug("Session enabled sections updated: \(sections.count) sections", category: .ai)
     }
 
     /// Get enabled sections
@@ -363,7 +241,7 @@ final class OnboardingSessionStore: SwiftDataStore {
         session.mergedInventoryJSON = inventoryJSON
         session.lastActiveAt = Date()
         saveContext()
-        Logger.info("💾 Persisted merged card inventory (\(inventoryJSON?.count ?? 0) chars)", category: .ai)
+        Logger.info("Persisted merged card inventory (\(inventoryJSON?.count ?? 0) chars)", category: .ai)
     }
 
     /// Get merged inventory JSON
@@ -376,7 +254,7 @@ final class OnboardingSessionStore: SwiftDataStore {
         session.excludedCardIdsCSV = excludedIds.sorted().joined(separator: ",")
         session.lastActiveAt = Date()
         saveContext()
-        Logger.debug("📦 Session excluded card IDs updated: \(excludedIds.count) excluded", category: .ai)
+        Logger.debug("Session excluded card IDs updated: \(excludedIds.count) excluded", category: .ai)
     }
 
     /// Get excluded card IDs
@@ -385,205 +263,5 @@ final class OnboardingSessionStore: SwiftDataStore {
             return []
         }
         return Set(csv.split(separator: ",").map { String($0) })
-    }
-
-    // MARK: - Artifact Export for Analysis
-
-    /// Export session artifacts to a temporary filesystem directory for analysis.
-    /// Creates a folder per artifact with extracted_text.txt, summary.txt, and card_inventory.json.
-    /// - Returns: URL of the temporary directory containing exported artifacts
-    func exportArtifactsToFilesystem(_ session: OnboardingSession) throws -> URL {
-        // Create temp directory
-        let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("sprung-artifacts-\(UUID().uuidString)")
-
-        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-
-        // Export each artifact to its own folder
-        for artifact in session.artifacts {
-            let artifactDir = tempDir.appendingPathComponent(artifact.artifactFolderName)
-            try FileManager.default.createDirectory(at: artifactDir, withIntermediateDirectories: true)
-
-            // Write extracted text
-            if !artifact.extractedContent.isEmpty {
-                let textPath = artifactDir.appendingPathComponent("extracted_text.txt")
-                try artifact.extractedContent.write(to: textPath, atomically: true, encoding: .utf8)
-            }
-
-            // Parse metadataJSON for summary and card_inventory
-            if let metadataString = artifact.metadataJSON,
-               let metadataData = metadataString.data(using: .utf8) {
-                let metadata = try JSON(data: metadataData)
-
-                // Write summary
-                let summary = metadata["summary"].stringValue
-                if !summary.isEmpty {
-                    let summaryPath = artifactDir.appendingPathComponent("summary.txt")
-                    try summary.write(to: summaryPath, atomically: true, encoding: .utf8)
-                }
-
-                // Write card inventory if present
-                let cardInventoryString = metadata["card_inventory"].stringValue
-                if !cardInventoryString.isEmpty {
-                    let inventoryPath = artifactDir.appendingPathComponent("card_inventory.json")
-                    // Pretty-print if possible
-                    if let data = cardInventoryString.data(using: .utf8),
-                       let parsed = try? JSON(data: data),
-                       let prettyData = try? parsed.rawData(options: .prettyPrinted),
-                       let prettyString = String(data: prettyData, encoding: .utf8) {
-                        try prettyString.write(to: inventoryPath, atomically: true, encoding: .utf8)
-                    } else {
-                        try cardInventoryString.write(to: inventoryPath, atomically: true, encoding: .utf8)
-                    }
-                }
-            }
-        }
-
-        Logger.info("📁 Exported \(session.artifacts.count) artifacts to \(tempDir.path)", category: .ai)
-        return tempDir
-    }
-
-    /// Export specific artifacts by ID to a temporary filesystem directory.
-    /// Used by standalone KC generation (artifacts not in a session).
-    /// - Parameter artifactIds: Set of artifact IDs to export
-    /// - Returns: URL of the temporary directory containing exported artifacts
-    func exportArtifactsByIds(_ artifactIds: Set<String>) throws -> URL {
-        // Create temp directory
-        let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("sprung-artifacts-\(UUID().uuidString)")
-
-        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-
-        // Find and export each artifact
-        var exportedCount = 0
-        for idString in artifactIds {
-            guard let artifact = findArtifactById(idString) else {
-                Logger.warning("⚠️ Artifact not found for export: \(idString)", category: .ai)
-                continue
-            }
-
-            try exportArtifact(artifact, to: tempDir)
-            exportedCount += 1
-        }
-
-        Logger.info("📁 Exported \(exportedCount) artifacts to \(tempDir.path)", category: .ai)
-        return tempDir
-    }
-
-    /// Export a single artifact to a directory
-    private func exportArtifact(_ artifact: OnboardingArtifactRecord, to directory: URL) throws {
-        let artifactDir = directory.appendingPathComponent(artifact.artifactFolderName)
-        try FileManager.default.createDirectory(at: artifactDir, withIntermediateDirectories: true)
-
-        // Write extracted text
-        if !artifact.extractedContent.isEmpty {
-            let textPath = artifactDir.appendingPathComponent("extracted_text.txt")
-            try artifact.extractedContent.write(to: textPath, atomically: true, encoding: .utf8)
-        }
-
-        // Parse metadataJSON for summary and card_inventory
-        if let metadataString = artifact.metadataJSON,
-           let metadataData = metadataString.data(using: .utf8),
-           let metadata = try? JSON(data: metadataData) {
-
-            // Write summary
-            let summary = metadata["summary"].stringValue
-            if !summary.isEmpty {
-                let summaryPath = artifactDir.appendingPathComponent("summary.txt")
-                try summary.write(to: summaryPath, atomically: true, encoding: .utf8)
-            }
-
-            // Write card inventory if present
-            let cardInventoryString = metadata["card_inventory"].stringValue
-            if !cardInventoryString.isEmpty {
-                let inventoryPath = artifactDir.appendingPathComponent("card_inventory.json")
-                if let data = cardInventoryString.data(using: .utf8),
-                   let parsed = try? JSON(data: data),
-                   let prettyData = try? parsed.rawData(options: .prettyPrinted),
-                   let prettyString = String(data: prettyData, encoding: .utf8) {
-                    try prettyString.write(to: inventoryPath, atomically: true, encoding: .utf8)
-                } else {
-                    try cardInventoryString.write(to: inventoryPath, atomically: true, encoding: .utf8)
-                }
-            }
-
-            // Export git analysis data for git repositories (rich structured data for analysis)
-            let rawData = metadata["raw_data"]
-            if rawData.exists() && metadata["type"].stringValue == "git_analysis" {
-                var report = "# Git Repository Analysis\n\n"
-
-                // Contributors
-                let contributors = rawData["contributors"].arrayValue
-                if !contributors.isEmpty {
-                    report += "## Contributors\n"
-                    for contributor in contributors {
-                        let name = contributor["name"].stringValue
-                        let commits = contributor["commits"].intValue
-                        let email = contributor["email"].stringValue
-                        report += "- \(name) (\(email)): \(commits) commits\n"
-                    }
-                    report += "\n"
-                }
-
-                // Commit stats
-                let totalCommits = rawData["total_commits"].intValue
-                let firstCommit = rawData["first_commit"].stringValue
-                let lastCommit = rawData["last_commit"].stringValue
-                if totalCommits > 0 {
-                    report += "## Commit Statistics\n"
-                    report += "- Total commits: \(totalCommits)\n"
-                    if !firstCommit.isEmpty { report += "- First commit: \(firstCommit)\n" }
-                    if !lastCommit.isEmpty { report += "- Last commit: \(lastCommit)\n" }
-                    report += "\n"
-                }
-
-                // Recent commits (valuable for understanding what was built)
-                let recentCommits = rawData["recent_commits"].arrayValue
-                if !recentCommits.isEmpty {
-                    report += "## Recent Commits (showing development activity)\n"
-                    for commit in recentCommits.prefix(20) {
-                        let hash = commit["hash"].stringValue
-                        let author = commit["author"].stringValue
-                        let message = commit["message"].stringValue
-                        report += "- [\(hash)] \(message) (\(author))\n"
-                    }
-                    report += "\n"
-                }
-
-                // File types (technologies used)
-                let fileTypes = rawData["file_types"].dictionaryValue
-                if !fileTypes.isEmpty {
-                    report += "## File Types & Technologies\n"
-                    let sorted = fileTypes.sorted { $0.value.intValue > $1.value.intValue }
-                    for (ext, count) in sorted.prefix(15) {
-                        report += "- .\(ext): \(count.intValue) files\n"
-                    }
-                    report += "\n"
-                }
-
-                // Branches
-                let branches = rawData["branches"].arrayValue
-                if !branches.isEmpty {
-                    report += "## Branches\n"
-                    for branch in branches.prefix(10) {
-                        report += "- \(branch.stringValue)\n"
-                    }
-                    report += "\n"
-                }
-
-                let analysisPath = artifactDir.appendingPathComponent("git_analysis.txt")
-                try report.write(to: analysisPath, atomically: true, encoding: .utf8)
-            }
-        }
-    }
-
-    /// Clean up an exported artifact directory
-    func cleanupExportedArtifacts(at url: URL) {
-        do {
-            try FileManager.default.removeItem(at: url)
-            Logger.info("🧹 Cleaned up exported artifacts", category: .ai)
-        } catch {
-            Logger.warning("⚠️ Failed to cleanup exported artifacts: \(error)", category: .ai)
-        }
     }
 }
