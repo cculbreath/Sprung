@@ -98,8 +98,6 @@ enum OnboardingObjectiveId: String, CaseIterable {
     case dossierSeed = "dossier_seed"
     case evidenceAuditCompleted = "evidence_audit_completed"
     case cardsGenerated = "cards_generated"
-    case interviewedOneExperience = "interviewed_one_experience"
-    case oneCardGenerated = "one_card_generated"
 
     // MARK: Phase 3: Evidence Collection
     /// Supporting documents uploaded
@@ -122,11 +120,9 @@ enum OnboardingObjectiveId: String, CaseIterable {
     case experienceDefaultsSet = "experience_defaults_set"
     // Legacy Phase 3 objectives (backwards compatibility)
     case oneWritingSample = "one_writing_sample"
-    case dossierCompleteValidation = "dossier_complete.validation"
-    case dossierCompletePersisted = "dossier_complete.persisted"
 }
 // MARK: - Data Types
-/// Data types used with persist_data and artifact storage.
+/// Data types used for artifact storage and session persistence.
 enum OnboardingDataType: String, CaseIterable {
     case applicantProfile = "applicant_profile"
     case skeletonTimeline = "skeleton_timeline"
