@@ -177,8 +177,9 @@ actor GitIngestionKernel {
             // Find project cards for description
             let projectCards = analysis.proposedCards.filter { $0.cardType == .project }
             if let mainProject = projectCards.first {
-                if !mainProject.keyFacts.isEmpty {
-                    extractedParts.append(mainProject.keyFacts.joined(separator: ". "))
+                let factStatements = mainProject.keyFacts.map { $0.statement }
+                if !factStatements.isEmpty {
+                    extractedParts.append(factStatements.joined(separator: ". "))
                 }
             }
 

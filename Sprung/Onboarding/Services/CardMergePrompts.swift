@@ -63,8 +63,22 @@ enum CardMergePrompts {
                     description: "Additional document sources"
                 ),
                 "combined_key_facts": SchemaGenerator.array(
-                    of: SchemaGenerator.string(),
-                    description: "All unique facts from all sources (max 5)"
+                    of: SchemaGenerator.object(
+                        description: "Categorized fact",
+                        properties: [
+                            "category": SchemaGenerator.string(
+                                description: "Fact category",
+                                enumValues: [
+                                    "hypothesis_formation", "experimental_design", "methodology_innovation",
+                                    "data_analysis", "results_interpretation", "peer_review", "collaboration",
+                                    "leadership", "achievement", "technical", "responsibility", "impact", "general"
+                                ]
+                            ),
+                            "statement": SchemaGenerator.string(description: "The fact statement")
+                        ],
+                        required: ["category", "statement"]
+                    ),
+                    description: "All unique facts from all sources with preserved categories (max 5)"
                 ),
                 "combined_technologies": SchemaGenerator.array(
                     of: SchemaGenerator.string(),

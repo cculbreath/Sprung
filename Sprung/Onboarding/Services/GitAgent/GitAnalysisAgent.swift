@@ -613,12 +613,14 @@ class GitAnalysisAgent {
 
             // Convert to DocumentInventory.ProposedCardEntry format
             let proposedCards: [DocumentInventory.ProposedCardEntry] = params.cards.map { card in
-                DocumentInventory.ProposedCardEntry(
+                // Convert plain string facts to CategorizedFact with default category
+                let categorizedFacts = card.keyFacts.map { CategorizedFact(category: .general, statement: $0) }
+                return DocumentInventory.ProposedCardEntry(
                     cardType: DocumentInventory.ProposedCardEntry.CardType(rawValue: card.cardType) ?? .skill,
                     proposedTitle: card.proposedTitle,
                     evidenceStrength: DocumentInventory.ProposedCardEntry.EvidenceStrength(rawValue: card.evidenceStrength) ?? .primary,
                     evidenceLocations: card.evidenceLocations,
-                    keyFacts: card.keyFacts,
+                    keyFacts: categorizedFacts,
                     technologies: card.technologies,
                     quantifiedOutcomes: card.quantifiedOutcomes,
                     dateRange: card.dateRange,

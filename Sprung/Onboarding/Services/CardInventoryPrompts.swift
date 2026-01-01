@@ -81,10 +81,18 @@ enum CardInventoryPrompts {
         1. **proposed_title**: Create a specific, descriptive title (e.g., "Senior Software Engineer at Google" not just "Software Engineer")
         2. **evidence_strength**: Rate as "primary" (main source), "supporting" (adds detail), or "mention" (brief reference)
         3. **evidence_locations**: Note where in the document this appears (page numbers, section names, chapter titles)
-        4. **key_facts**: Extract specific facts - names, dates, numbers, responsibilities. Be thorough.
+        4. **key_facts**: Extract specific facts with categories (see categories below)
         5. **technologies**: List all technologies, tools, frameworks, methodologies mentioned
         6. **quantified_outcomes**: Capture ALL metrics, percentages, dollar amounts, scale indicators
         7. **cross_references**: Note relationships to other potential cards
+
+        ## Fact Categories
+        Each key_fact must have a category. Use R&D categories for research/academic work:
+        - hypothesis_formation, experimental_design, methodology_innovation
+        - data_analysis, results_interpretation, peer_review, collaboration
+
+        Use Professional categories for industry/business work:
+        - leadership, achievement, technical, responsibility, impact, collaboration, general
 
         ## Important
 
@@ -131,8 +139,26 @@ enum CardInventoryPrompts {
                         ],
                         "key_facts": [
                             "type": "array",
-                            "items": ["type": "string"],
-                            "description": "Specific facts with numbers/names preserved"
+                            "description": "Specific facts with categories",
+                            "items": [
+                                "type": "object",
+                                "properties": [
+                                    "category": [
+                                        "type": "string",
+                                        "enum": [
+                                            "hypothesis_formation", "experimental_design", "methodology_innovation",
+                                            "data_analysis", "results_interpretation", "peer_review", "collaboration",
+                                            "leadership", "achievement", "technical", "responsibility", "impact", "general"
+                                        ],
+                                        "description": "Category of this fact"
+                                    ],
+                                    "statement": [
+                                        "type": "string",
+                                        "description": "The fact statement with specific numbers/names preserved"
+                                    ]
+                                ],
+                                "required": ["category", "statement"]
+                            ]
                         ],
                         "technologies": [
                             "type": "array",

@@ -33,10 +33,15 @@ struct MergedCardInventory: Codable {
         /// Additional sources
         let supportingSources: [SupportingSource]
 
-        /// All facts from all sources (deduplicated)
-        let combinedKeyFacts: [String]
+        /// All facts from all sources (deduplicated, with categories preserved)
+        let combinedKeyFacts: [CategorizedFact]
         let combinedTechnologies: [String]
         let combinedOutcomes: [String]
+
+        /// Convenience accessor for fact statements only (backwards compatibility)
+        var keyFactStatements: [String] {
+            combinedKeyFacts.map { $0.statement }
+        }
 
         let dateRange: String?
         let evidenceQuality: EvidenceQuality

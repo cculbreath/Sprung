@@ -340,8 +340,8 @@ private struct CardDetailSection: View {
             }
 
             // Key facts
-            if !card.combinedKeyFacts.isEmpty {
-                DetailList(title: "Key Facts", items: card.combinedKeyFacts, icon: "lightbulb.fill", color: .yellow)
+            if !card.keyFactStatements.isEmpty {
+                DetailList(title: "Key Facts", items: card.keyFactStatements, icon: "lightbulb.fill", color: .yellow)
             }
 
             // Technologies

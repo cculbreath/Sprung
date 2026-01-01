@@ -111,7 +111,16 @@ class StandaloneKCAnalyzer {
                 proposedTitle: cardJSON["title"].stringValue,
                 evidenceStrength: evidenceStrength,
                 evidenceLocations: cardJSON["evidence_locations"].arrayValue.map { $0.stringValue },
-                keyFacts: cardJSON["key_facts"].arrayValue.map { $0.stringValue },
+                keyFacts: cardJSON["key_facts"].arrayValue.map { factJSON -> CategorizedFact in
+                    if factJSON.type == .string {
+                        // Legacy string format
+                        return CategorizedFact(category: .general, statement: factJSON.stringValue)
+                    } else {
+                        // New structured format
+                        let category = FactCategory(rawValue: factJSON["category"].stringValue) ?? .general
+                        return CategorizedFact(category: category, statement: factJSON["statement"].stringValue)
+                    }
+                },
                 technologies: cardJSON["technologies"].arrayValue.map { $0.stringValue },
                 quantifiedOutcomes: cardJSON["quantified_outcomes"].arrayValue.map { $0.stringValue },
                 dateRange: cardJSON["date_range"].string,
@@ -177,7 +186,7 @@ class StandaloneKCAnalyzer {
         }
 
         // Add new key facts as bullets if not already present
-        let newBullets = proposal.combinedKeyFacts.filter { fact in
+        let newBullets = proposal.keyFactStatements.filter { fact in
             !existingBullets.contains { $0.lowercased().contains(fact.lowercased().prefix(30)) }
         }
         existingBullets.append(contentsOf: newBullets)
@@ -261,7 +270,7 @@ class StandaloneKCAnalyzer {
                     supportingSources.append(MergedCardInventory.MergedCard.SupportingSource(
                         documentId: inventory.documentId,
                         evidenceLocations: proposed.evidenceLocations,
-                        adds: proposed.keyFacts
+                        adds: proposed.keyFacts.map { $0.statement }
                     ))
 
                     existing = MergedCardInventory.MergedCard(

@@ -47,6 +47,27 @@ Then identify every distinct knowledge card this document provides evidence for.
 - **supporting**: This document adds valuable detail but another doc is likely the primary source.
 - **mention**: This document references the topic but with minimal detail.
 
+## Fact Categories
+
+Each key_fact must include a category. Choose the most appropriate:
+
+**R&D Categories** (for research, academic, or scientific work):
+- **hypothesis_formation**: Developing research questions, identifying gaps in knowledge
+- **experimental_design**: Planning experiments, defining methodologies, setting up studies
+- **methodology_innovation**: Creating new techniques, improving existing methods
+- **data_analysis**: Statistical analysis, data processing, computational methods
+- **results_interpretation**: Drawing conclusions, synthesizing findings
+- **peer_review**: Publication review, academic collaboration, scholarly contribution
+
+**Professional Categories** (for industry and business work):
+- **leadership**: Managing teams, directing projects, mentoring, decision-making
+- **achievement**: Measurable outcomes, awards, certifications, quantified results
+- **technical**: Skills, tools, technologies, implementation details
+- **responsibility**: Job duties, scope of role, ongoing responsibilities
+- **impact**: Business value, scale, influence on organization
+- **collaboration**: Cross-functional work, partnerships, stakeholder engagement
+- **general**: Facts that don't fit other categories
+
 ## Critical Rules
 
 1. Be specific in titles: "Allen-Bradley PLC Control System Design" not "automation work"

@@ -52,7 +52,7 @@ final class MergedCardToResRefConverter {
             proseSummary = await generateProseSummary(for: mergedCard, using: facade)
         } else {
             // Fallback: bullet list of key facts
-            proseSummary = mergedCard.combinedKeyFacts.map { "• \($0)" }.joined(separator: "\n")
+            proseSummary = mergedCard.keyFactStatements.map { "• \($0)" }.joined(separator: "\n")
         }
 
         // Build sources JSON from primary and supporting sources
@@ -146,7 +146,7 @@ final class MergedCardToResRefConverter {
                 "TITLE": card.title,
                 "ORGANIZATION": extractOrganization(from: card) ?? "(not specified)",
                 "TIME_PERIOD": card.dateRange ?? "(not specified)",
-                "KEY_FACTS": card.combinedKeyFacts.map { "- \($0)" }.joined(separator: "\n"),
+                "KEY_FACTS": card.keyFactStatements.map { "- \($0)" }.joined(separator: "\n"),
                 "TECHNOLOGIES": card.combinedTechnologies.isEmpty
                     ? "(none listed)"
                     : card.combinedTechnologies.joined(separator: ", "),
@@ -178,7 +178,7 @@ final class MergedCardToResRefConverter {
         } catch {
             Logger.warning("⚠️ Failed to generate prose summary for '\(card.title)': \(error)", category: .ai)
             // Fallback to bullet list
-            return card.combinedKeyFacts.map { "• \($0)" }.joined(separator: "\n")
+            return card.keyFactStatements.map { "• \($0)" }.joined(separator: "\n")
         }
     }
 
@@ -215,14 +215,14 @@ final class MergedCardToResRefConverter {
         return json
     }
 
-    private func buildFactsJSON(keyFacts: [String]) -> String? {
+    private func buildFactsJSON(keyFacts: [CategorizedFact]) -> String? {
         guard !keyFacts.isEmpty else { return nil }
 
-        // Convert key facts to structured fact format
+        // Use preserved categories from pipeline - no re-categorization needed
         let facts: [[String: Any]] = keyFacts.map { fact in
             [
-                "category": categorize(fact: fact),
-                "statement": fact,
+                "category": fact.category.rawValue,
+                "statement": fact.statement,
                 "confidence": "high",
                 "source": nil as Any? as Any
             ]
@@ -235,24 +235,7 @@ final class MergedCardToResRefConverter {
         return json
     }
 
-    private func categorize(fact: String) -> String {
-        let lower = fact.lowercased()
-        if lower.contains("led") || lower.contains("managed") || lower.contains("team") {
-            return "leadership"
-        }
-        if lower.contains("%") || lower.contains("reduced") || lower.contains("increased") || lower.contains("saved") {
-            return "achievement"
-        }
-        if lower.contains("developed") || lower.contains("built") || lower.contains("created") || lower.contains("implemented") {
-            return "technical"
-        }
-        if lower.contains("responsible") || lower.contains("duties") || lower.contains("maintained") {
-            return "responsibility"
-        }
-        return "general"
-    }
-
-    private func buildSuggestedBullets(facts: [String], outcomes: [String]) -> [String] {
+    private func buildSuggestedBullets(facts: [CategorizedFact], outcomes: [String]) -> [String] {
         var bullets: [String] = []
 
         // Prioritize quantified outcomes
@@ -263,8 +246,8 @@ final class MergedCardToResRefConverter {
         // Add top facts that aren't duplicated in outcomes
         let outcomeSet = Set(outcomes.map { $0.lowercased() })
         for fact in facts {
-            if !outcomeSet.contains(fact.lowercased()) && bullets.count < 5 {
-                bullets.append(fact)
+            if !outcomeSet.contains(fact.statement.lowercased()) && bullets.count < 5 {
+                bullets.append(fact.statement)
             }
         }
 

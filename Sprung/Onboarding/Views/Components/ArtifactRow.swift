@@ -342,9 +342,9 @@ struct ArtifactRow: View {
             }
 
             // Key facts (if any)
-            if !card.keyFacts.isEmpty {
+            if !card.keyFactStatements.isEmpty {
                 VStack(alignment: .leading, spacing: 2) {
-                    ForEach(card.keyFacts.prefix(3), id: \.self) { fact in
+                    ForEach(card.keyFactStatements.prefix(3), id: \.self) { fact in
                         HStack(alignment: .top, spacing: 4) {
                             Text("•")
                                 .font(.caption2)
@@ -355,8 +355,8 @@ struct ArtifactRow: View {
                                 .lineLimit(2)
                         }
                     }
-                    if card.keyFacts.count > 3 {
-                        Text("+\(card.keyFacts.count - 3) more facts")
+                    if card.keyFactStatements.count > 3 {
+                        Text("+\(card.keyFactStatements.count - 3) more facts")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     }
