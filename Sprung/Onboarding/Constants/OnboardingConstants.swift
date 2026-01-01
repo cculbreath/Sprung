@@ -37,7 +37,6 @@ enum OnboardingToolName: String, CaseIterable {
     case displayTimelineEntriesForReview = "display_timeline_entries_for_review"
     case submitForValidation = "submit_for_validation"
     case validateApplicantProfile = "validate_applicant_profile"
-    case validatedApplicantProfileData = "validated_applicant_profile_data"
     case configureEnabledSections = "configure_enabled_sections"
     case updateDossierNotes = "update_dossier_notes"
     case listArtifacts = "list_artifacts"
@@ -46,18 +45,13 @@ enum OnboardingToolName: String, CaseIterable {
     case nextPhase = "next_phase"
     case askUserSkipToNextPhase = "ask_user_skip_to_next_phase"
     // Phase 2 Tools
-    case startPhaseTwo = "start_phase_two"
     case getTimelineEntries = "get_timeline_entries"
     case openDocumentCollection = "open_document_collection"
-    // Knowledge card workflow: Upload docs → Done with Uploads (merge) → Approve & Create button
-    case persistData = "persist_data"
-    case setObjectiveStatus = "set_objective_status"
 
     // Web Browsing Tools
     case createWebArtifact = "create_web_artifact"
 
-    // Phase 3 Tools
-    case startPhaseThree = "start_phase_three"
+    // Phase 3/4 Tools
     case ingestWritingSample = "ingest_writing_sample"
     case submitExperienceDefaults = "submit_experience_defaults"
     case submitCandidateDossier = "submit_candidate_dossier"
@@ -169,6 +163,7 @@ enum InterviewSubphase: String, CaseIterable, Codable {
     case p2_workPreferences = "p2_work_preferences"           // Dossier weaving (remote, location, etc.)
     case p2_sectionConfig = "p2_section_config"               // Configuring enabled sections
     case p2_documentSuggestions = "p2_document_suggestions"   // Strategic suggestions before Phase 3
+    case p2_timelineValidation = "p2_timeline_validation"     // User clicked "Done with Timeline", needs validation
     case p2_phaseTransition = "p2_phase_transition"           // Ready to advance to Phase 3
 
     // MARK: Phase 3: Evidence Collection
@@ -192,7 +187,7 @@ enum InterviewSubphase: String, CaseIterable, Codable {
              .p1_profileIntake, .p1_profileValidation, .p1_phaseTransition:
             return .phase1VoiceContext
         case .p2_timelineCollection, .p2_timelineEnrichment, .p2_workPreferences,
-             .p2_sectionConfig, .p2_documentSuggestions, .p2_phaseTransition:
+             .p2_sectionConfig, .p2_documentSuggestions, .p2_timelineValidation, .p2_phaseTransition:
             return .phase2CareerStory
         case .p3_documentCollection, .p3_gitCollection, .p3_cardGeneration,
              .p3_cardReview, .p3_phaseTransition:

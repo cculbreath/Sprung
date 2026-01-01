@@ -48,12 +48,8 @@ final class OnboardingUIState {
     // MARK: - Sync Caches (Mirrored from StateCoordinator)
     var pendingExtraction: OnboardingPendingExtraction?
     var pendingStreamingStatus: String?
-    /// Artifact records from SwiftData (primary source of truth)
-    var artifactRecordsSwiftData: [ArtifactRecord] = []
     /// Legacy: Artifact records as JSON (for event-driven components during migration)
     var artifactRecords: [JSON] = []
-    /// Number of archived artifacts available for reuse (from previous sessions)
-    var archivedArtifactCount: Int = 0
     var evidenceRequirements: [EvidenceRequirement] = []
     /// Stores last shown profile summary to display until skeleton timeline loads
     var lastApplicantProfileSummary: JSON?

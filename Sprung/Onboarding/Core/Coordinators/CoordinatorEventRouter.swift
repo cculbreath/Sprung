@@ -153,6 +153,14 @@ final class CoordinatorEventRouter {
                 }
             }
 
+        // MARK: - Document Collection UI
+        case .documentCollectionActiveChanged(let isActive):
+            // When document collection mode is activated, dismiss profile summary so DocumentCollectionView can show
+            if isActive {
+                toolRouter.profileHandler.dismissProfileSummary()
+                Logger.info("📋 Profile summary dismissed for document collection mode", category: .ai)
+            }
+
         // All other events are handled elsewhere or don't need handling here
         default:
             break

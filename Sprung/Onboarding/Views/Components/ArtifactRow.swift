@@ -59,6 +59,12 @@ struct ArtifactRow: View {
                                     .foregroundStyle(.green)
                                     .font(.caption)
                                     .help("Content extracted, inventory generated")
+                            } else if artifact.isWritingSample {
+                                // Writing samples don't need inventory - show success
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.green)
+                                    .font(.caption)
+                                    .help("Writing sample extracted")
                             } else {
                                 // Content extracted but NO inventory yet
                                 Image(systemName: "exclamationmark.triangle.fill")

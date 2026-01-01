@@ -264,4 +264,32 @@ final class OnboardingSessionStore: SwiftDataStore {
         }
         return Set(csv.split(separator: ",").map { String($0) })
     }
+
+    // MARK: - UI State Management
+
+    /// Update document collection active state
+    func updateDocumentCollectionActive(_ session: OnboardingSession, isActive: Bool) {
+        session.isDocumentCollectionActive = isActive
+        session.lastActiveAt = Date()
+        saveContext()
+        Logger.debug("Session document collection active: \(isActive)", category: .ai)
+    }
+
+    /// Get document collection active state
+    func getDocumentCollectionActive(_ session: OnboardingSession) -> Bool {
+        session.isDocumentCollectionActive ?? false
+    }
+
+    /// Update timeline editor active state
+    func updateTimelineEditorActive(_ session: OnboardingSession, isActive: Bool) {
+        session.isTimelineEditorActive = isActive
+        session.lastActiveAt = Date()
+        saveContext()
+        Logger.debug("Session timeline editor active: \(isActive)", category: .ai)
+    }
+
+    /// Get timeline editor active state
+    func getTimelineEditorActive(_ session: OnboardingSession) -> Bool {
+        session.isTimelineEditorActive ?? false
+    }
 }

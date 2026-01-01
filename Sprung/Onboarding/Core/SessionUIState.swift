@@ -242,6 +242,8 @@ actor SessionUIState: OnboardingEventEmitter {
     func setDocumentCollectionActive(_ active: Bool) async {
         let newWaitingState: WaitingState? = active ? .documentCollection : nil
         await setWaitingState(newWaitingState)
+        // Emit event for session persistence
+        await emit(.documentCollectionActiveChanged(active))
         if active {
             Logger.info("📂 Document collection mode activated - tools gated until 'Done with Uploads'", category: .ai)
         }

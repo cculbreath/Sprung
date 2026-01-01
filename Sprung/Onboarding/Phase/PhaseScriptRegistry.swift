@@ -111,7 +111,7 @@ final class PhaseScriptRegistry {
     private func validatePhaseTwoToThree(
         coordinator: OnboardingInterviewCoordinator
     ) async -> PhaseTransitionValidation {
-        // VALIDATION: skeleton_timeline MUST have at least one entry before Phase 3
+        // VALIDATION 1: skeleton_timeline MUST have at least one entry before Phase 3
         let timeline = coordinator.ui.skeletonTimeline
         let experiences = timeline?["experiences"].array ?? []
 
@@ -128,7 +128,22 @@ final class PhaseScriptRegistry {
             )
         }
 
-        Logger.info("✅ Phase 2→3 validated: \(experiences.count) timeline entries exist", category: .ai)
+        // VALIDATION 2: skeleton_timeline MUST be validated (user clicked "Done with Timeline")
+        let timelineStatus = coordinator.ui.objectiveStatuses[OnboardingObjectiveId.skeletonTimelineComplete.rawValue]
+        if timelineStatus != "completed" {
+            Logger.warning("⚠️ next_phase blocked: skeleton_timeline not validated", category: .ai)
+            return .blocked(
+                reason: "timeline_not_validated",
+                message: """
+                    Cannot advance to Phase 3: The skeleton timeline has not been validated. \
+                    The user must review and approve the timeline entries before proceeding. \
+                    Use submit_for_validation with validation_type="skeleton_timeline" to request user approval. \
+                    After user approves, the objective status will be set to "completed" and you can call next_phase.
+                    """
+            )
+        }
+
+        Logger.info("✅ Phase 2→3 validated: \(experiences.count) timeline entries exist and validated", category: .ai)
         return .allowed
     }
 

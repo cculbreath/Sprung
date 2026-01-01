@@ -144,9 +144,9 @@ final class InterviewLifecycleController {
             Logger.info("📥 Restored merged inventory: \(mergedInventory.mergedCards.count) cards (excluding \(restoredExcludedIds.count) excluded)", category: .ai)
         }
 
-        // Set phase in state coordinator
-        await state.setPhase(phase)
-        await phaseTransitionController.registerObjectivesForCurrentPhase()
+        // Restore phase in state coordinator - registers objectives for ALL phases up to current
+        // This ensures Phase 1/2 objectives are registered when resuming a Phase 3+ session
+        await state.restorePhase(phase)
 
         // Restore objective statuses
         let objectiveStatuses = sessionPersistenceHandler.getRestoredObjectiveStatuses(session)
@@ -164,6 +164,9 @@ final class InterviewLifecycleController {
 
         // Restore timeline, profile, and sections
         await restoreTimelineAndProfile(from: session)
+
+        // Restore UI states (document collection, timeline editor)
+        await restoreUIStates(from: session)
 
         // Mark session as resumed
         _ = sessionPersistenceHandler.startSession(resumeExisting: true)
@@ -221,6 +224,25 @@ final class InterviewLifecycleController {
         if !sections.isEmpty {
             await state.restoreEnabledSections(sections)
             Logger.info("📥 Restored \(sections.count) enabled sections", category: .ai)
+        }
+    }
+
+    /// Restore UI states (document collection, timeline editor) from persisted session
+    private func restoreUIStates(from session: OnboardingSession) async {
+        // Restore document collection active state
+        let isDocCollectionActive = sessionPersistenceHandler.getRestoredDocumentCollectionActive(session)
+        if isDocCollectionActive {
+            ui.isDocumentCollectionActive = true
+            // Also set the waiting state in SessionUIState for tool gating
+            // Note: We don't call setDocumentCollectionActive to avoid re-emitting the event
+            Logger.info("📥 Restored document collection active state", category: .ai)
+        }
+
+        // Restore timeline editor active state
+        let isTimelineEditorActive = sessionPersistenceHandler.getRestoredTimelineEditorActive(session)
+        if isTimelineEditorActive {
+            ui.isTimelineEditorActive = true
+            Logger.info("📥 Restored timeline editor active state", category: .ai)
         }
     }
 

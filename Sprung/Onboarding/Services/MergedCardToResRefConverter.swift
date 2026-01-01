@@ -98,7 +98,9 @@ final class MergedCardToResRefConverter {
         return resRef
     }
 
-    /// Convert multiple MergedCards in parallel.
+    /// Convert multiple MergedCards sequentially.
+    /// Note: Sequential processing is required because ResRef is a SwiftData PersistentModel
+    /// which is not Sendable and cannot be passed across task boundaries.
     /// - Parameters:
     ///   - mergedCards: Array of merged cards
     ///   - artifactLookup: Mapping of artifact IDs to filenames
@@ -110,29 +112,16 @@ final class MergedCardToResRefConverter {
         onProgress: ((Int, Int) -> Void)? = nil
     ) async throws -> [ResRef] {
         let total = mergedCards.count
-        var completed = 0
         var results: [ResRef] = []
 
-        // Process in parallel with controlled concurrency
-        await withTaskGroup(of: ResRef?.self) { group in
-            for card in mergedCards {
-                group.addTask {
-                    do {
-                        return try await self.convert(mergedCard: card, artifactLookup: artifactLookup)
-                    } catch {
-                        Logger.error("🚨 Failed to convert card '\(card.title)': \(error)", category: .ai)
-                        return nil
-                    }
-                }
+        for (index, card) in mergedCards.enumerated() {
+            do {
+                let resRef = try await convert(mergedCard: card, artifactLookup: artifactLookup)
+                results.append(resRef)
+            } catch {
+                Logger.error("🚨 Failed to convert card '\(card.title)': \(error)", category: .ai)
             }
-
-            for await result in group {
-                completed += 1
-                onProgress?(completed, total)
-                if let resRef = result {
-                    results.append(resRef)
-                }
-            }
+            onProgress?(index + 1, total)
         }
 
         Logger.info("✅ Converted \(results.count)/\(total) merged cards to ResRefs", category: .ai)

@@ -1,22 +1,26 @@
 import SwiftUI
+import SwiftData
 import SwiftyJSON
 
 /// Tab content showing current interview artifacts and archived artifacts.
 struct ArtifactsTabContent: View {
     let coordinator: OnboardingInterviewCoordinator
+
+    /// Current session artifacts (have a session relationship)
+    @Query(filter: #Predicate<ArtifactRecord> { $0.session != nil },
+           sort: \ArtifactRecord.ingestedAt)
+    private var artifacts: [ArtifactRecord]
+
+    /// Archived artifacts (no session, available for reuse)
+    @Query(filter: #Predicate<ArtifactRecord> { $0.session == nil },
+           sort: \ArtifactRecord.ingestedAt, order: .reverse)
+    private var archivedArtifacts: [ArtifactRecord]
+
     @State private var expandedArtifactIds: Set<UUID> = []
     @State private var artifactToDelete: ArtifactRecord?
     @State private var artifactToDemote: ArtifactRecord?
     @State private var archivedArtifactToDelete: ArtifactRecord?
     @State private var isArchivedSectionExpanded: Bool = false
-
-    private var artifacts: [ArtifactRecord] {
-        coordinator.ui.artifactRecordsSwiftData
-    }
-
-    private var archivedArtifacts: [ArtifactRecord] {
-        coordinator.getArchivedArtifacts()
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {

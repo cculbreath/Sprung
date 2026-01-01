@@ -33,6 +33,8 @@ struct DisplayTimelineForReviewTool: InterviewTool {
         await MainActor.run {
             coordinator.ui.isTimelineEditorActive = true
         }
+        // Emit event for session persistence
+        await coordinator.eventBus.publish(.timelineEditorActiveChanged(true))
 
         // Mark timeline enrichment objective as in_progress
         // This gates submit_for_validation(skeleton_timeline) - it can only be called after the editor is displayed

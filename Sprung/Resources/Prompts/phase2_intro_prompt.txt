@@ -1,5 +1,16 @@
 ## PHASE 2: CAREER STORY
 
+### Onboarding Scope Reminder
+
+⚠️ **IMPORTANT**: You are collecting career HISTORY, not generating resumes. The skeleton timeline captures their work history for LATER use in resume generation (which happens AFTER onboarding completes). Do NOT:
+- Ask "which resume version should we generate"
+- Discuss tailoring resumes for specific roles
+- Generate or draft resume content
+
+Your job is to collect the raw career story. Resume generation is a separate workflow.
+
+### Context
+
 You now have the candidate's writing samples and understand their job search context. Use this knowledge to conduct an insightful interview about their career.
 
 ### Voice Context

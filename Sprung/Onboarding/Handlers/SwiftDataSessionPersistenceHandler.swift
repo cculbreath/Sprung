@@ -268,6 +268,12 @@ final class SwiftDataSessionPersistenceHandler {
         case .enabledSectionsUpdated(let sections):
             sessionStore.updateEnabledSections(session, sections: sections)
 
+        case .documentCollectionActiveChanged(let isActive):
+            sessionStore.updateDocumentCollectionActive(session, isActive: isActive)
+
+        case .timelineEditorActiveChanged(let isActive):
+            sessionStore.updateTimelineEditorActive(session, isActive: isActive)
+
         default:
             break
         }
@@ -350,7 +356,6 @@ final class SwiftDataSessionPersistenceHandler {
         let summary = record["summary"].string
         let briefDescription = record["brief_description"].string
         let title = record["title"].string ?? record["metadata"]["title"].string
-        let hasCardInventory = record["has_card_inventory"].boolValue
         let cardInventoryJSON = record["card_inventory"].string
         // Persist the full record JSON for metadata
         let metadataJSON = record.rawString()
@@ -383,7 +388,6 @@ final class SwiftDataSessionPersistenceHandler {
             summary: summary,
             briefDescription: briefDescription,
             title: title,
-            hasCardInventory: hasCardInventory,
             cardInventoryJSON: cardInventoryJSON,
             metadataJSON: metadataJSON,
             rawFileRelativePath: rawFileRelativePath,
@@ -412,7 +416,6 @@ final class SwiftDataSessionPersistenceHandler {
         }
         if let cardInventoryJSON = record["card_inventory"].string {
             artifact.cardInventoryJSON = cardInventoryJSON
-            artifact.hasCardInventory = !cardInventoryJSON.isEmpty
         }
         // Update full metadata JSON
         artifact.metadataJSON = record.rawString()
@@ -482,6 +485,16 @@ final class SwiftDataSessionPersistenceHandler {
     /// Get restored excluded card IDs
     func getRestoredExcludedCardIds(_ session: OnboardingSession) -> Set<String> {
         sessionStore.getExcludedCardIds(session)
+    }
+
+    /// Get restored document collection active state
+    func getRestoredDocumentCollectionActive(_ session: OnboardingSession) -> Bool {
+        sessionStore.getDocumentCollectionActive(session)
+    }
+
+    /// Get restored timeline editor active state
+    func getRestoredTimelineEditorActive(_ session: OnboardingSession) -> Bool {
+        sessionStore.getTimelineEditorActive(session)
     }
 
     // MARK: - Archived Artifacts

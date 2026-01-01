@@ -725,7 +725,7 @@ final class LLMFacade {
             "id": response.id,
             "object": "chat.completion",
             "created": Int(Date().timeIntervalSince1970),
-            "model": response.model ?? "unknown",
+            "model": response.model,
             "choices": [[
                 "index": 0,
                 "message": messageDict,

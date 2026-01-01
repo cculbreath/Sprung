@@ -39,10 +39,14 @@ final class ArtifactRecord {
     var title: String?
 
     // MARK: - Knowledge Card Integration
-    /// True if this artifact has been processed for KC generation
-    var hasCardInventory: Bool
     /// Raw JSON string of the card inventory (DocumentInventory)
     var cardInventoryJSON: String?
+
+    /// True if this artifact has a card inventory (computed from cardInventoryJSON)
+    var hasCardInventory: Bool {
+        guard let json = cardInventoryJSON else { return false }
+        return !json.isEmpty
+    }
 
     // MARK: - Metadata
     /// Additional metadata as JSON (git analysis, page count, graphics content, etc.)
@@ -91,6 +95,25 @@ final class ArtifactRecord {
     /// True if this is a PDF document
     var isPDF: Bool {
         contentType == "application/pdf"
+    }
+
+    /// True if this is a writing sample (should not have card inventory)
+    var isWritingSample: Bool {
+        // Check source type
+        if sourceType == "writing_sample" {
+            return true
+        }
+        // Check document_type in metadata
+        if let docType = metadataString("document_type") {
+            if docType == "writingSample" || docType == "writing_sample" {
+                return true
+            }
+        }
+        // Check for writing_type in metadata
+        if metadataString("writing_type") != nil {
+            return true
+        }
+        return false
     }
 
     /// ID as string for compatibility with existing code
@@ -191,7 +214,6 @@ final class ArtifactRecord {
         summary: String? = nil,
         briefDescription: String? = nil,
         title: String? = nil,
-        hasCardInventory: Bool = false,
         cardInventoryJSON: String? = nil,
         metadataJSON: String? = nil,
         rawFileRelativePath: String? = nil,
@@ -208,7 +230,6 @@ final class ArtifactRecord {
         self.summary = summary
         self.briefDescription = briefDescription
         self.title = title
-        self.hasCardInventory = hasCardInventory
         self.cardInventoryJSON = cardInventoryJSON
         self.metadataJSON = metadataJSON
         self.rawFileRelativePath = rawFileRelativePath

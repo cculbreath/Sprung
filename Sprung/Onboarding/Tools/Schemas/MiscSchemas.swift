@@ -266,63 +266,63 @@ enum MiscSchemas {
 
     // MARK: - Array Schemas (for section data)
 
-    /// Work experience array schema - used by SubmitExperienceDefaultsTool and PersistDataTool
+    /// Work experience array schema - used by SubmitExperienceDefaultsTool
     static let workArray = JSONSchema(
         type: .array,
         description: "Work experience entries (only if 'work' section enabled)",
         items: workItemSchema()
     )
 
-    /// Education array schema - used by SubmitExperienceDefaultsTool and PersistDataTool
+    /// Education array schema - used by SubmitExperienceDefaultsTool
     static let educationArray = JSONSchema(
         type: .array,
         description: "Education entries (only if 'education' section enabled)",
         items: educationItemSchema()
     )
 
-    /// Projects array schema - used by SubmitExperienceDefaultsTool and PersistDataTool
+    /// Projects array schema - used by SubmitExperienceDefaultsTool
     static let projectsArray = JSONSchema(
         type: .array,
         description: "Project entries (only if 'projects' section enabled)",
         items: projectItemSchema()
     )
 
-    /// Skills array schema - used by SubmitExperienceDefaultsTool and PersistDataTool
+    /// Skills array schema - used by SubmitExperienceDefaultsTool
     static let skillsArray = JSONSchema(
         type: .array,
         description: "Skill categories (only if 'skills' section enabled)",
         items: skillItemSchema()
     )
 
-    /// Languages array schema - used by SubmitExperienceDefaultsTool and PersistDataTool
+    /// Languages array schema - used by SubmitExperienceDefaultsTool
     static let languagesArray = JSONSchema(
         type: .array,
         description: "Language proficiencies (only if 'languages' section enabled)",
         items: languageItemSchema()
     )
 
-    /// Volunteer array schema - used by SubmitExperienceDefaultsTool and PersistDataTool
+    /// Volunteer array schema - used by SubmitExperienceDefaultsTool
     static let volunteerArray = JSONSchema(
         type: .array,
         description: "Volunteer experiences (only if 'volunteer' section enabled)",
         items: volunteerItemSchema()
     )
 
-    /// Awards array schema - used by SubmitExperienceDefaultsTool and PersistDataTool
+    /// Awards array schema - used by SubmitExperienceDefaultsTool
     static let awardsArray = JSONSchema(
         type: .array,
         description: "Awards received (only if 'awards' section enabled)",
         items: awardItemSchema()
     )
 
-    /// Certificates array schema - used by SubmitExperienceDefaultsTool and PersistDataTool
+    /// Certificates array schema - used by SubmitExperienceDefaultsTool
     static let certificatesArray = JSONSchema(
         type: .array,
         description: "Professional certificates (only if 'certificates' section enabled)",
         items: certificateItemSchema()
     )
 
-    /// Publications array schema - used by SubmitExperienceDefaultsTool and PersistDataTool
+    /// Publications array schema - used by SubmitExperienceDefaultsTool
     static let publicationsArray = JSONSchema(
         type: .array,
         description: "Publications (only if 'publications' section enabled)",
@@ -342,49 +342,6 @@ enum MiscSchemas {
             Proven track record leading cross-functional teams and delivering high-impact products.
             Passionate about developer experience and engineering excellence."
             """
-    )
-
-    // MARK: - PersistDataTool Schemas
-
-    /// DataType enum for PersistDataTool
-    static let persistDataType = JSONSchema(
-        type: .string,
-        description: """
-            Type of data being persisted. Each type triggers specific coordinator events and state updates.
-            Valid types:
-            - applicant_profile: Contact info (name, email, phone, location, URLs, social profiles)
-            - skeleton_timeline: Complete timeline of positions/education entries
-            - experience_defaults: Resume defaults generated from knowledge cards. REQUIRED structure:
-                {
-                    "work": [{ "name": "Company", "position": "Title", "location": "City, ST", "startDate": "YYYY-MM", "endDate": "YYYY-MM" or "Present", "summary": "Brief role description", "highlights": ["Achievement 1", "Achievement 2", ...] }],
-                    "education": [{ "institution": "School", "area": "Field of Study", "studyType": "Degree Type", "startDate": "YYYY", "endDate": "YYYY", "score": "GPA if relevant" }],
-                    "projects": [{ "name": "Project Name", "description": "What it does", "startDate": "YYYY-MM", "endDate": "YYYY-MM", "highlights": ["Key accomplishment"], "keywords": ["tech", "stack"] }],
-                    "skills": [{ "name": "Skill Category", "level": "Expert/Advanced/Intermediate", "keywords": ["specific", "technologies"] }],
-                    "languages": [{ "language": "English", "fluency": "Native" }]
-                }
-            - enabled_sections: Alternative format for enabled sections (array of section names)
-            - candidate_dossier_entry: Single Q&A entry for dossier seed (requires: question, answer, asked_at)
-            - knowledge_card: Deep dive expertise card from Phase 2
-            - writing_sample: Writing sample (Phase 3)
-            - candidate_dossier: Final compiled candidate dossier (Phase 3)
-            """,
-        enum: [
-            "applicant_profile",
-            "skeleton_timeline",
-            "experience_defaults",
-            "enabled_sections",
-            "candidate_dossier_entry",
-            "knowledge_card",
-            "writing_sample",
-            "candidate_dossier"
-        ]
-    )
-
-    /// Data payload schema for PersistDataTool
-    static let persistDataPayload = JSONSchema(
-        type: .object,
-        description: "JSON payload containing the data to persist. Schema varies by dataType.",
-        additionalProperties: true
     )
 
     // MARK: - IngestWritingSampleTool Schemas

@@ -110,6 +110,14 @@ struct OnboardingInterviewToolPane: View {
             } else {
                 // No pending request - route based on phase
                 switch coordinator.ui.phase {
+                case .phase1VoiceContext:
+                    // Phase 1: If we're in writing samples collection, route to writing samples
+                    // Otherwise use direct upload (e.g., for profile photo before writing samples)
+                    if shouldShowWritingSampleUI {
+                        Task { await coordinator.uploadWritingSamples(urls) }
+                    } else {
+                        Task { await coordinator.uploadFilesDirectly(urls) }
+                    }
                 case .phase3EvidenceCollection:
                     Task { await coordinator.uploadWritingSamples(urls) }
                 case .phase2CareerStory:
@@ -123,7 +131,7 @@ struct OnboardingInterviewToolPane: View {
                         }
                     }
                 default:
-                    // Phase 1 or complete - use direct upload without document collection
+                    // Phase 4 or complete - use direct upload without document collection
                     Task { await coordinator.uploadFilesDirectly(urls) }
                 }
             }
@@ -134,6 +142,29 @@ struct OnboardingInterviewToolPane: View {
 
     @ViewBuilder
     private var interviewTabContent: some View {
+        VStack(spacing: 0) {
+            // Main content
+            interviewTabMainContent
+
+            // Persistent "Skip to Next Phase" button at bottom
+            if coordinator.ui.phase != .complete {
+                Divider()
+                    .padding(.top, 12)
+                SkipToNextPhaseCard(
+                    currentPhase: coordinator.ui.phase,
+                    onSkip: {
+                        Task {
+                            await coordinator.advanceToNextPhaseFromUI()
+                        }
+                    }
+                )
+                .padding(.top, 8)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var interviewTabMainContent: some View {
         let uploads = uploadRequests()
         if !uploads.isEmpty {
             uploadRequestsView(uploads)
@@ -238,7 +269,8 @@ struct OnboardingInterviewToolPane: View {
     private var phaseSpecificInterviewContent: some View {
         switch coordinator.ui.phase {
         case .phase2CareerStory:
-            // Show DocumentCollectionView when active, otherwise show KC generation view
+            // Show DocumentCollectionView when active, KnowledgeCardCollectionView during card workflow,
+            // otherwise show empty state (timeline is in Timeline tab)
             if coordinator.ui.isDocumentCollectionActive {
                 DocumentCollectionView(
                     coordinator: coordinator,
@@ -265,54 +297,66 @@ struct OnboardingInterviewToolPane: View {
                         await coordinator.fetchURLForArtifact(urlString)
                     }
                 )
+            } else if coordinator.ui.isMergingCards || coordinator.ui.cardAssignmentsReadyForApproval || coordinator.ui.isGeneratingCards {
+                // Card workflow in progress - show knowledge card collection view
+                KnowledgeCardCollectionView(
+                    coordinator: coordinator,
+                    onGenerateCards: {
+                        Task {
+                            await coordinator.eventBus.publish(.generateCardsButtonClicked)
+                        }
+                    },
+                    onAdvanceToNextPhase: {
+                        Task {
+                            await coordinator.requestPhaseAdvanceFromUI()
+                        }
+                    }
+                )
             } else {
-                VStack(spacing: 12) {
-                    PersistentUploadDropZone(
-                        onDropFiles: { urls, extractionMethod in
-                            Task {
-                                await coordinator.uploadFilesDirectly(urls, extractionMethod: extractionMethod)
-                                // Re-activate document collection UI to allow re-merge
-                                await coordinator.activateDocumentCollection()
-                            }
-                        },
-                        onSelectFiles: { openDirectUploadPanel() },
-                        onSelectGitRepo: { repoURL in
-                            Task {
-                                await coordinator.startGitRepoAnalysis(repoURL)
-                                // Re-activate document collection UI to allow re-merge
-                                await coordinator.activateDocumentCollection()
-                            }
-                        }
-                    )
-                    KnowledgeCardCollectionView(
-                        coordinator: coordinator,
-                        onGenerateCards: {
-                            Task {
-                                await coordinator.eventBus.publish(.generateCardsButtonClicked)
-                            }
-                        },
-                        onAdvanceToNextPhase: {
-                            Task {
-                                await coordinator.requestPhaseAdvanceFromUI()
-                            }
-                        }
-                    )
-                }
+                // Default: empty state - timeline is in Timeline tab
+                InterviewTabEmptyState(phase: .phase2CareerStory)
             }
         case .phase3EvidenceCollection:
-            WritingCorpusCollectionView(
-                coordinator: coordinator,
-                onDropFiles: { urls in
-                    Task { await coordinator.uploadWritingSamples(urls) }
-                },
-                onSelectFiles: { openWritingSamplePanel() },
-                onDoneWithSamples: {
-                    Task { await coordinator.completeWritingSamplesCollection() }
-                },
-                onEndInterview: {
-                    Task { await coordinator.endInterview() }
-                }
-            )
+            // Show DocumentCollectionView when active, otherwise show writing corpus view
+            if coordinator.ui.isDocumentCollectionActive {
+                DocumentCollectionView(
+                    coordinator: coordinator,
+                    onAssessCompleteness: {
+                        Task {
+                            await coordinator.finishUploadsAndMergeCards()
+                        }
+                    },
+                    onCancelExtractionsAndFinish: {
+                        Task {
+                            await coordinator.cancelExtractionAgentsAndFinishUploads()
+                        }
+                    },
+                    onDropFiles: { urls, extractionMethod in
+                        Task { await coordinator.uploadFilesDirectly(urls, extractionMethod: extractionMethod) }
+                    },
+                    onSelectFiles: { openDirectUploadPanel() },
+                    onSelectGitRepo: { repoURL in
+                        Task { await coordinator.startGitRepoAnalysis(repoURL) }
+                    },
+                    onFetchURL: { urlString in
+                        await coordinator.fetchURLForArtifact(urlString)
+                    }
+                )
+            } else {
+                WritingCorpusCollectionView(
+                    coordinator: coordinator,
+                    onDropFiles: { urls in
+                        Task { await coordinator.uploadWritingSamples(urls) }
+                    },
+                    onSelectFiles: { openWritingSamplePanel() },
+                    onDoneWithSamples: {
+                        Task { await coordinator.completeWritingSamplesCollection() }
+                    },
+                    onEndInterview: {
+                        Task { await coordinator.endInterview() }
+                    }
+                )
+            }
         case .phase1VoiceContext:
             // Phase 1: Show writing sample collection with skip option
             Phase1WritingSampleView(
@@ -399,25 +443,34 @@ struct OnboardingInterviewToolPane: View {
         var filtered: [OnboardingUploadRequest]
         switch coordinator.wizardTracker.currentStep {
         case .voice:
-            // Phase 1: Resume, LinkedIn, profile photo
+            // Phase 1: Resume, LinkedIn, profile photo ONLY
+            // IMPORTANT: Do NOT include writing samples here - the sidebar has a dedicated Phase1WritingSampleView
             filtered = coordinator.pendingUploadRequests.filter {
                 [.resume, .linkedIn].contains($0.kind) ||
                     ($0.kind == .generic && $0.metadata.targetKey == "basics.image")
             }
+            // For voice phase, also add any generic requests that aren't writing samples
+            // but EXCLUDE writing samples since Phase1WritingSampleView handles those
+            for request in coordinator.pendingUploadRequests
+            where !filtered.contains(where: { $0.id == request.id })
+                && request.kind != .writingSample {
+                filtered.append(request)
+            }
         case .story:
             // Phase 2: Additional artifacts
             filtered = coordinator.pendingUploadRequests.filter { [.artifact, .generic].contains($0.kind) }
+            // Include other non-writing sample requests not captured by filtering
+            for request in coordinator.pendingUploadRequests
+            where !filtered.contains(where: { $0.id == request.id })
+                && request.kind != .writingSample {
+                filtered.append(request)
+            }
         case .evidence:
             // Phase 3: Writing samples and other evidence
             filtered = coordinator.pendingUploadRequests.filter { $0.kind == .writingSample }
         case .strategy:
             // Phase 4: All remaining uploads
             filtered = coordinator.pendingUploadRequests
-        }
-        // Always include any pending requests that weren't captured by step-based filtering
-        // This ensures generic uploads (like profile photos) always appear
-        for request in coordinator.pendingUploadRequests where !filtered.contains(where: { $0.id == request.id }) {
-            filtered.append(request)
         }
         if !filtered.isEmpty {
             let kinds = filtered.map { $0.kind.rawValue }.joined(separator: ",")
@@ -762,6 +815,75 @@ private struct InterviewTabEmptyState: View {
             return "Synthesizing your experience into strategic recommendations for your job search."
         case .complete:
             return "The interview has been completed. You can browse your collected data in the other tabs."
+        }
+    }
+}
+
+// MARK: - Skip to Next Phase Card
+
+private struct SkipToNextPhaseCard: View {
+    let currentPhase: InterviewPhase
+    let onSkip: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "forward.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("Ready to move on?")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(nextPhaseDescription)
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button(action: onSkip) {
+                HStack {
+                    Text("Skip to \(nextPhaseName)")
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+        .padding(12)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private var nextPhaseName: String {
+        switch currentPhase {
+        case .phase1VoiceContext:
+            return "Career Story"
+        case .phase2CareerStory:
+            return "Evidence Collection"
+        case .phase3EvidenceCollection:
+            return "Strategic Synthesis"
+        case .phase4StrategicSynthesis:
+            return "Complete Interview"
+        case .complete:
+            return "Complete"
+        }
+    }
+
+    private var nextPhaseDescription: String {
+        switch currentPhase {
+        case .phase1VoiceContext:
+            return "Next: Map out your career timeline from your resume or through conversation."
+        case .phase2CareerStory:
+            return "Next: Upload documents, code repos, and other evidence to support your experience."
+        case .phase3EvidenceCollection:
+            return "Next: Synthesize your strengths, identify pitfalls, and finalize your candidate dossier."
+        case .phase4StrategicSynthesis:
+            return "Finish the interview and start building resumes and applications."
+        case .complete:
+            return "Interview complete."
         }
     }
 }

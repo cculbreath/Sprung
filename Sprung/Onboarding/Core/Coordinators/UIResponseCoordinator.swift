@@ -208,6 +208,8 @@ final class UIResponseCoordinator {
     func completeTimelineEditingAndRequestValidation() async {
         // Deactivate the timeline editor mode
         ui.isTimelineEditorActive = false
+        // Emit event for session persistence
+        await eventBus.publish(.timelineEditorActiveChanged(false))
 
         // Clear the validation/editor prompt (legacy, may not be set)
         toolRouter.clearValidationPrompt()
@@ -441,6 +443,21 @@ final class UIResponseCoordinator {
     }
     // MARK: - Chat & Control
     func sendChatMessage(_ text: String) async {
+        // Clear any waiting state that blocks tools - user sending a message signals readiness to proceed
+        // This handles stuck states where uploads completed but waiting state wasn't cleared
+        let previousWaitingState = await sessionUIState.getWaitingState()
+        if previousWaitingState != nil {
+            await sessionUIState.setWaitingState(nil)
+            Logger.info("💬 Chatbox message cleared waiting state: \(previousWaitingState?.rawValue ?? "none")", category: .ai)
+        }
+
+        // Also clear document collection mode if active - user is ready to proceed
+        if ui.isDocumentCollectionActive {
+            ui.isDocumentCollectionActive = false
+            await eventBus.publish(.documentCollectionActiveChanged(false))
+            Logger.info("💬 Chatbox message cleared document collection mode", category: .ai)
+        }
+
         // Add the message to chat transcript IMMEDIATELY so user sees it in the UI
         let messageId = await state.appendUserMessage(text, isSystemGenerated: false)
         // Emit event so coordinator can sync its messages array to UI

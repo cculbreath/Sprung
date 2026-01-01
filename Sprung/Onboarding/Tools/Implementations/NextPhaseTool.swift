@@ -97,15 +97,8 @@ struct NextPhaseTool: InterviewTool {
                 response["skipped_objectives"] = JSON(missingObjectives)
             }
 
-            // Chain to the bootstrap tool for the new phase
-            if nextPhase == .phase2CareerStory {
-                response["next_required_tool"].string = OnboardingToolName.startPhaseTwo.rawValue
-            } else if nextPhase == .phase3EvidenceCollection {
-                response["next_required_tool"].string = OnboardingToolName.startPhaseThree.rawValue
-            } else if nextPhase == .phase4StrategicSynthesis {
-                // Phase 4 doesn't have a bootstrap tool - proceeds directly
-                response["next_required_tool"].string = nil
-            }
+            // Phase transition complete - no bootstrap tool needed
+            // The LLM will continue with the new phase's tools automatically
 
             return .immediate(response)
         }

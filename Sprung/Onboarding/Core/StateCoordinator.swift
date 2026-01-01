@@ -85,6 +85,27 @@ actor StateCoordinator: OnboardingEventEmitter {
         await updateWizardProgress()
     }
 
+    /// Restore phase during session resume - registers objectives for ALL phases up to and including the target.
+    /// This ensures objectives from earlier phases (like skeleton_timeline_complete from Phase 2)
+    /// are registered and can have their status restored when resuming a Phase 3+ session.
+    func restorePhase(_ phase: InterviewPhase) async {
+        self.phase = phase
+        // Don't reset approval flags - they should be restored from session
+        Logger.info("📍 Restoring phase to: \(phase)", category: .ai)
+
+        // Register objectives for ALL phases up to and including the target phase
+        // This ensures earlier phase objectives exist for status restoration
+        let allPhases: [InterviewPhase] = [.phase1VoiceContext, .phase2CareerStory, .phase3EvidenceCollection, .phase4StrategicSynthesis]
+        for p in allPhases {
+            await objectiveStore.registerDefaultObjectives(for: p)
+            if p == phase { break }
+        }
+
+        await uiState.setPhase(phase)
+        await updateWizardProgress()
+        Logger.info("📋 Registered objectives for phases up to \(phase)", category: .ai)
+    }
+
     /// Set user approval for skipping KC generation.
     /// Only call this when user explicitly approves via UI interaction.
     func setUserApprovedKCSkip(_ approved: Bool) {

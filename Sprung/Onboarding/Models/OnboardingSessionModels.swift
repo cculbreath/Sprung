@@ -35,6 +35,10 @@ class OnboardingSession {
     var mergedInventoryJSON: String?
     /// Excluded card IDs as comma-separated string
     var excludedCardIdsCSV: String?
+    /// Whether document collection UI was active (for session restore)
+    var isDocumentCollectionActive: Bool?
+    /// Whether timeline editor was active (for session restore)
+    var isTimelineEditorActive: Bool?
 
     // MARK: - Relationships
     @Relationship(deleteRule: .cascade, inverse: \OnboardingObjectiveRecord.session)
@@ -61,7 +65,9 @@ class OnboardingSession {
         applicantProfileJSON: String? = nil,
         enabledSectionsCSV: String? = nil,
         mergedInventoryJSON: String? = nil,
-        excludedCardIdsCSV: String? = nil
+        excludedCardIdsCSV: String? = nil,
+        isDocumentCollectionActive: Bool? = nil,
+        isTimelineEditorActive: Bool? = nil
     ) {
         self.id = id
         self.previousResponseId = previousResponseId
@@ -74,6 +80,8 @@ class OnboardingSession {
         self.enabledSectionsCSV = enabledSectionsCSV
         self.mergedInventoryJSON = mergedInventoryJSON
         self.excludedCardIdsCSV = excludedCardIdsCSV
+        self.isDocumentCollectionActive = isDocumentCollectionActive
+        self.isTimelineEditorActive = isTimelineEditorActive
     }
 }
 

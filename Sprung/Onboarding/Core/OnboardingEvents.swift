@@ -39,6 +39,8 @@ enum OnboardingEvent {
     case applicantProfileStored(JSON)
     case skeletonTimelineStored(JSON)
     case enabledSectionsUpdated(Set<String>)
+    case documentCollectionActiveChanged(Bool)
+    case timelineEditorActiveChanged(Bool)
     // MARK: - Tool Execution
     case toolCallRequested(ToolCall, statusMessage: String? = nil)
     case toolCallCompleted(id: UUID, result: JSON, statusMessage: String? = nil)
@@ -437,7 +439,8 @@ actor EventCoordinator {
             return .llm
         // State events
         case .stateSnapshot, .stateAllowedToolsUpdated,
-             .applicantProfileStored, .skeletonTimelineStored, .enabledSectionsUpdated:
+             .applicantProfileStored, .skeletonTimelineStored, .enabledSectionsUpdated,
+             .documentCollectionActiveChanged, .timelineEditorActiveChanged:
             return .state
         // Phase events
         case .phaseTransitionRequested, .phaseTransitionApplied:
@@ -547,6 +550,10 @@ actor EventCoordinator {
             description = "Timeline stored"
         case .enabledSectionsUpdated:
             description = "Sections updated"
+        case .documentCollectionActiveChanged(let isActive):
+            description = "Document collection \(isActive ? "activated" : "deactivated")"
+        case .timelineEditorActiveChanged(let isActive):
+            description = "Timeline editor \(isActive ? "activated" : "deactivated")"
         case .toolCallRequested(_, let statusMessage):
             let statusInfo = statusMessage.map { " - \($0)" } ?? ""
             description = "Tool call requested\(statusInfo)"

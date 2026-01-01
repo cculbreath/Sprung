@@ -94,7 +94,6 @@ final class ArtifactRecordStore: SwiftDataStore {
         summary: String? = nil,
         briefDescription: String? = nil,
         title: String? = nil,
-        hasCardInventory: Bool = false,
         cardInventoryJSON: String? = nil,
         metadataJSON: String? = nil,
         rawFileRelativePath: String? = nil,
@@ -110,7 +109,6 @@ final class ArtifactRecordStore: SwiftDataStore {
             summary: summary,
             briefDescription: briefDescription,
             title: title,
-            hasCardInventory: hasCardInventory,
             cardInventoryJSON: cardInventoryJSON,
             metadataJSON: metadataJSON,
             rawFileRelativePath: rawFileRelativePath,
@@ -136,7 +134,6 @@ final class ArtifactRecordStore: SwiftDataStore {
         summary: String? = nil,
         briefDescription: String? = nil,
         title: String? = nil,
-        hasCardInventory: Bool = false,
         cardInventoryJSON: String? = nil,
         metadataJSON: String? = nil,
         rawFileRelativePath: String? = nil,
@@ -152,7 +149,6 @@ final class ArtifactRecordStore: SwiftDataStore {
             summary: summary,
             briefDescription: briefDescription,
             title: title,
-            hasCardInventory: hasCardInventory,
             cardInventoryJSON: cardInventoryJSON,
             metadataJSON: metadataJSON,
             rawFileRelativePath: rawFileRelativePath,
@@ -181,7 +177,6 @@ final class ArtifactRecordStore: SwiftDataStore {
     /// Update artifact's card inventory
     func updateCardInventory(_ artifact: ArtifactRecord, cardInventoryJSON: String?) {
         artifact.cardInventoryJSON = cardInventoryJSON
-        artifact.hasCardInventory = cardInventoryJSON != nil && !cardInventoryJSON!.isEmpty
         saveContext()
     }
 

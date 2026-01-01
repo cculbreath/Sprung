@@ -49,7 +49,6 @@ struct ToolBundlePolicy {
     static let safeEscapeTools: Set<String> = [
         OnboardingToolName.updateDossierNotes.rawValue,       // Scratchpad always available
         OnboardingToolName.askUserSkipToNextPhase.rawValue,   // Escape hatch - FORCES advance on user agreement
-        OnboardingToolName.persistData.rawValue,              // Always allow dossier updates
         OnboardingToolName.getUserOption.rawValue             // Always allow structured questions
     ]
 
@@ -73,14 +72,13 @@ struct ToolBundlePolicy {
     /// - Phase 4: Strategic Synthesis — Strengths/pitfalls, final dossier
     ///
     /// NOTE: During long-running agent ops (PDF ingestion, card inventory, merge),
-    /// interviewer should actively use get_user_option and persist_data
-    /// to gather dossier insights. User should never wait in silence.
+    /// interviewer should actively use get_user_option to gather insights.
+    /// User should never wait in silence.
     static let subphaseBundles: [InterviewSubphase: Set<String>] = [
         // MARK: Phase 1: Voice & Context
         .p1_welcome: [
             OnboardingToolName.agentReady.rawValue,           // Initial handshake at interview start
             OnboardingToolName.getUserOption.rawValue,        // For structured questions
-            OnboardingToolName.persistData.rawValue,          // For dossier entries
             OnboardingToolName.validateApplicantProfile.rawValue  // Profile intake starts here
         ],
 
@@ -88,13 +86,11 @@ struct ToolBundlePolicy {
             OnboardingToolName.getUserUpload.rawValue,        // For file uploads
             OnboardingToolName.ingestWritingSample.rawValue,  // For pasted text
             OnboardingToolName.getUserOption.rawValue,        // For follow-up questions
-            OnboardingToolName.persistData.rawValue,
             OnboardingToolName.cancelUserUpload.rawValue
         ],
 
         .p1_jobSearchContext: [
             OnboardingToolName.getUserOption.rawValue,        // PRIMARY TOOL - use liberally
-            OnboardingToolName.persistData.rawValue,          // Save dossier entries
             OnboardingToolName.ingestWritingSample.rawValue   // If they paste something
         ],
 
@@ -102,19 +98,16 @@ struct ToolBundlePolicy {
             OnboardingToolName.getApplicantProfile.rawValue,
             OnboardingToolName.getUserUpload.rawValue,        // Contacts import
             OnboardingToolName.getUserOption.rawValue,
-            OnboardingToolName.validateApplicantProfile.rawValue,
-            OnboardingToolName.validatedApplicantProfileData.rawValue
+            OnboardingToolName.validateApplicantProfile.rawValue
         ],
 
         .p1_profileValidation: [
             OnboardingToolName.validateApplicantProfile.rawValue,
-            OnboardingToolName.validatedApplicantProfileData.rawValue,
             OnboardingToolName.nextPhase.rawValue
         ],
 
         .p1_phaseTransition: [
-            OnboardingToolName.nextPhase.rawValue,
-            OnboardingToolName.setObjectiveStatus.rawValue
+            OnboardingToolName.nextPhase.rawValue
         ],
 
         // MARK: Phase 2: Career Story
@@ -131,7 +124,6 @@ struct ToolBundlePolicy {
 
         .p2_timelineEnrichment: [    // Active interviewing about each role
             OnboardingToolName.getUserOption.rawValue,        // For structured dossier questions
-            OnboardingToolName.persistData.rawValue,          // For dossier insights
             OnboardingToolName.updateTimelineCard.rawValue,
             OnboardingToolName.createTimelineCard.rawValue,
             OnboardingToolName.getTimelineEntries.rawValue,
@@ -139,8 +131,7 @@ struct ToolBundlePolicy {
         ],
 
         .p2_workPreferences: [       // Dossier weaving
-            OnboardingToolName.getUserOption.rawValue,        // PRIMARY - rapid structured questions
-            OnboardingToolName.persistData.rawValue           // Save preferences to dossier
+            OnboardingToolName.getUserOption.rawValue         // PRIMARY - rapid structured questions
         ],
 
         .p2_sectionConfig: [
@@ -150,13 +141,16 @@ struct ToolBundlePolicy {
         ],
 
         .p2_documentSuggestions: [   // Strategic suggestions before Phase 3
-            OnboardingToolName.persistData.rawValue,          // Save document wishlist
             OnboardingToolName.nextPhase.rawValue
         ],
 
+        .p2_timelineValidation: [    // After user clicks "Done with Timeline"
+            OnboardingToolName.submitForValidation.rawValue,
+            OnboardingToolName.getTimelineEntries.rawValue
+        ],
+
         .p2_phaseTransition: [
-            OnboardingToolName.nextPhase.rawValue,
-            OnboardingToolName.setObjectiveStatus.rawValue
+            OnboardingToolName.nextPhase.rawValue
         ],
 
         // MARK: Phase 3: Evidence Collection
@@ -167,56 +161,45 @@ struct ToolBundlePolicy {
             OnboardingToolName.listArtifacts.rawValue,
             OnboardingToolName.getArtifact.rawValue,
             OnboardingToolName.createWebArtifact.rawValue,
-            OnboardingToolName.getUserOption.rawValue,        // For questions during agent waits
-            OnboardingToolName.persistData.rawValue,          // For dossier insights during waits
-            OnboardingToolName.setObjectiveStatus.rawValue
+            OnboardingToolName.getUserOption.rawValue         // For questions during agent waits
         ],
 
         .p3_gitCollection: [
             OnboardingToolName.listArtifacts.rawValue,
             OnboardingToolName.getArtifact.rawValue,
-            OnboardingToolName.getUserOption.rawValue,        // For questions during agent waits
-            OnboardingToolName.persistData.rawValue,          // For dossier insights during waits
-            OnboardingToolName.setObjectiveStatus.rawValue
+            OnboardingToolName.getUserOption.rawValue         // For questions during agent waits
         ],
 
         .p3_cardGeneration: [
             OnboardingToolName.listArtifacts.rawValue,
             OnboardingToolName.getArtifact.rawValue,
-            OnboardingToolName.getUserOption.rawValue,        // INTERVIEW WHILE KC GENERATION RUNS
-            OnboardingToolName.persistData.rawValue,          // Gather strategic insights during wait
-            OnboardingToolName.setObjectiveStatus.rawValue
+            OnboardingToolName.getUserOption.rawValue         // INTERVIEW WHILE KC GENERATION RUNS
         ],
 
         .p3_cardReview: [            // LLM reviews generated cards
             OnboardingToolName.listArtifacts.rawValue,
             OnboardingToolName.getArtifact.rawValue,
             OnboardingToolName.getUserOption.rawValue,        // For clarifying questions
-            OnboardingToolName.persistData.rawValue,          // For card improvements
             OnboardingToolName.nextPhase.rawValue
         ],
 
         .p3_phaseTransition: [
-            OnboardingToolName.nextPhase.rawValue,
-            OnboardingToolName.setObjectiveStatus.rawValue
+            OnboardingToolName.nextPhase.rawValue
         ],
 
         // MARK: Phase 4: Strategic Synthesis
         .p4_strengthsSynthesis: [
             OnboardingToolName.getUserOption.rawValue,
-            OnboardingToolName.persistData.rawValue,
             OnboardingToolName.listArtifacts.rawValue,
             OnboardingToolName.getArtifact.rawValue
         ],
 
         .p4_pitfallsAnalysis: [
-            OnboardingToolName.getUserOption.rawValue,
-            OnboardingToolName.persistData.rawValue
+            OnboardingToolName.getUserOption.rawValue
         ],
 
         .p4_dossierCompletion: [
             OnboardingToolName.getUserOption.rawValue,        // For gap-filling questions
-            OnboardingToolName.persistData.rawValue,
             OnboardingToolName.submitCandidateDossier.rawValue
         ],
 
@@ -318,14 +301,16 @@ struct ToolBundlePolicy {
         switch toolPaneCard {
         case .uploadRequest:
             return .p2_timelineCollection
-        case .editTimelineCards, .confirmTimelineCards:
+        case .editTimelineCards:
             return .p2_timelineCollection
+        case .confirmTimelineCards, .validationPrompt:
+            // User clicked "Done with Timeline" - need to validate before advancing
+            // This enables submit_for_validation tool
+            return .p2_timelineValidation
         case .choicePrompt:
             return .p2_workPreferences
         case .sectionToggle:
             return .p2_sectionConfig
-        case .validationPrompt:
-            return .p2_timelineEnrichment
         default:
             break
         }

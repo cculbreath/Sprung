@@ -6,6 +6,7 @@
 //  and "Assess Completeness" button to trigger LLM evaluation.
 //
 import SwiftUI
+import SwiftData
 import UniformTypeIdentifiers
 
 /// Document collection view for Phase 2 evidence gathering.
@@ -19,16 +20,21 @@ struct DocumentCollectionView: View {
     let onSelectGitRepo: (URL) -> Void
     let onFetchURL: (String) async -> Void
 
+    /// Current session artifacts (have a session relationship)
+    @Query(filter: #Predicate<ArtifactRecord> { $0.session != nil },
+           sort: \ArtifactRecord.ingestedAt)
+    private var artifacts: [ArtifactRecord]
+
+    /// Archived artifacts (no session, available for reuse)
+    @Query(filter: #Predicate<ArtifactRecord> { $0.session == nil },
+           sort: \ArtifactRecord.ingestedAt, order: .reverse)
+    private var archivedArtifacts: [ArtifactRecord]
+
     @State private var isDropTargeted = false
     @State private var showGitRepoPicker = false
     @State private var showActiveAgentsAlert = false
     @State private var showArchivedArtifactsPicker = false
     @State private var showURLEntry = false
-
-    /// Number of archived artifacts available for reuse
-    private var archivedArtifactCount: Int {
-        coordinator.ui.archivedArtifactCount
-    }
 
     /// Check if extraction agents are still working
     private var hasActiveExtractionAgents: Bool {
@@ -38,11 +44,11 @@ struct DocumentCollectionView: View {
     }
 
     private var artifactCount: Int {
-        coordinator.ui.artifactRecordsSwiftData.count
+        artifacts.count
     }
 
     private var artifactsMissingInventory: Int {
-        coordinator.ui.artifactRecordsSwiftData.filter { !$0.extractedContent.isEmpty && !$0.hasCardInventory }.count
+        artifacts.filter { !$0.extractedContent.isEmpty && !$0.hasCardInventory }.count
     }
 
     var body: some View {
@@ -173,11 +179,11 @@ struct DocumentCollectionView: View {
                     }
 
                     // Previously imported docs button (only show if there are archived artifacts)
-                    if archivedArtifactCount > 0 {
+                    if !archivedArtifacts.isEmpty {
                         Button {
                             showArchivedArtifactsPicker = true
                         } label: {
-                            Label("Use Previously Imported (\(archivedArtifactCount))", systemImage: "clock.arrow.circlepath")
+                            Label("Use Previously Imported (\(archivedArtifacts.count))", systemImage: "clock.arrow.circlepath")
                         }
                         .buttonStyle(.bordered)
                         .tint(.secondary)
@@ -358,11 +364,12 @@ struct ArchivedArtifactsPickerSheet: View {
     let coordinator: OnboardingInterviewCoordinator
     let onDismiss: () -> Void
 
-    @State private var selectedIds: Set<UUID> = []
+    /// Archived artifacts (no session, available for reuse)
+    @Query(filter: #Predicate<ArtifactRecord> { $0.session == nil },
+           sort: \ArtifactRecord.ingestedAt, order: .reverse)
+    private var archivedArtifacts: [ArtifactRecord]
 
-    private var archivedArtifacts: [ArtifactRecord] {
-        coordinator.getArchivedArtifacts()
-    }
+    @State private var selectedIds: Set<UUID> = []
 
     var body: some View {
         VStack(spacing: 0) {

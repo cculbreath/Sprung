@@ -150,8 +150,6 @@ final class OnboardingInterviewCoordinator {
     }
     // MARK: - Interview Lifecycle
     func startInterview(resumeExisting: Bool = false) async -> Bool {
-        // Load archived artifacts before starting
-        await loadArchivedArtifacts()
         return await lifecycleController.startInterview(resumeExisting: resumeExisting)
     }
 
@@ -253,28 +251,51 @@ final class OnboardingInterviewCoordinator {
         await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
     }
 
-    /// Called when user clicks "Done with Writing Samples" button in Phase 3
-    /// Marks the writing samples objective complete and triggers dossier compilation
+    /// Called when user clicks "Done with Writing Samples" button
+    /// Behavior differs based on phase:
+    /// - Phase 1: Marks `writingSamplesCollected` complete and continues interview
+    /// - Phase 3: Marks `oneWritingSample` complete and triggers dossier compilation
     func completeWritingSamplesCollection() async {
-        Logger.info("📝 User marked writing samples collection as complete", category: .ai)
+        let currentPhase = ui.phase
+        Logger.info("📝 User marked writing samples collection as complete (phase: \(currentPhase))", category: .ai)
 
-        // Mark the writing samples objective as completed
-        await eventBus.publish(.objectiveStatusUpdateRequested(
-            id: OnboardingObjectiveId.oneWritingSample.rawValue,
-            status: "completed",
-            source: "user_action",
-            notes: "User clicked 'Done with Writing Samples' button",
-            details: nil
-        ))
+        if currentPhase == .phase1VoiceContext {
+            // Phase 1: Mark the Phase 1 writing samples objective as completed
+            await eventBus.publish(.objectiveStatusUpdateRequested(
+                id: OnboardingObjectiveId.writingSamplesCollected.rawValue,
+                status: "completed",
+                source: "user_action",
+                notes: "User clicked 'Done with Writing Samples' button in Phase 1",
+                details: nil
+            ))
 
-        // Send a system-generated user message to trigger dossier compilation
-        var userMessage = SwiftyJSON.JSON()
-        userMessage["role"].string = "user"
-        userMessage["content"].string = """
-            I'm done uploading writing samples. \
-            Please proceed to compile my candidate dossier.
-            """
-        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+            // Send a system-generated user message to continue the interview
+            var userMessage = SwiftyJSON.JSON()
+            userMessage["role"].string = "user"
+            userMessage["content"].string = """
+                I've finished uploading my writing samples. \
+                Please continue with the interview.
+                """
+            await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+        } else {
+            // Phase 3: Mark the Phase 3 writing samples objective as completed
+            await eventBus.publish(.objectiveStatusUpdateRequested(
+                id: OnboardingObjectiveId.oneWritingSample.rawValue,
+                status: "completed",
+                source: "user_action",
+                notes: "User clicked 'Done with Writing Samples' button in Phase 3",
+                details: nil
+            ))
+
+            // Send a system-generated user message to trigger dossier compilation
+            var userMessage = SwiftyJSON.JSON()
+            userMessage["role"].string = "user"
+            userMessage["content"].string = """
+                I'm done uploading writing samples. \
+                Please proceed to compile my candidate dossier.
+                """
+            await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+        }
     }
 
     /// Called when user clicks "Skip" button in Phase 1 writing sample collection
@@ -494,11 +515,56 @@ final class OnboardingInterviewCoordinator {
         await uiResponseCoordinator.submitProfileURL(urlString)
     }
     // MARK: - Phase Advance
-    /// Request phase advance from UI button (sends user message to trigger next_phase tool)
-    func requestPhaseAdvanceFromUI() async {
+    /// Directly advance to the next phase from UI button click (bypasses LLM)
+    func advanceToNextPhaseFromUI() async {
+        let currentPhase = ui.phase
+
+        // Determine next phase and its start tool
+        let nextPhase: InterviewPhase?
+        switch currentPhase {
+        case .phase1VoiceContext:
+            nextPhase = .phase2CareerStory
+        case .phase2CareerStory:
+            nextPhase = .phase3EvidenceCollection
+        case .phase3EvidenceCollection:
+            nextPhase = .phase4StrategicSynthesis
+        case .phase4StrategicSynthesis:
+            nextPhase = .complete
+        case .complete:
+            nextPhase = nil
+        }
+
+        guard let nextPhase else {
+            Logger.warning("Cannot advance from \(currentPhase.rawValue) - no next phase", category: .ai)
+            return
+        }
+
+        Logger.info("🚀 Phase advance triggered from UI: \(currentPhase.rawValue) → \(nextPhase.rawValue)", category: .ai)
+
+        // Trigger the phase transition directly
+        await timeline.requestPhaseTransition(
+            from: currentPhase.rawValue,
+            to: nextPhase.rawValue,
+            reason: "User clicked advance button"
+        )
+
+        // Send a synthetic message to notify LLM of the phase change
         var payload = JSON()
-        payload["text"].string = "<chatbox>I'm ready to move on to the next phase.</chatbox>"
+        if nextPhase == .complete {
+            payload["text"].string = "<system>User has completed the interview.</system>"
+        } else {
+            payload["text"].string = """
+                <system>User has advanced to \(nextPhase.rawValue). \
+                Continue the interview in the new phase.</system>
+                """
+        }
         await eventBus.publish(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
+    }
+
+    /// Legacy: Request phase advance by asking LLM (use advanceToNextPhaseFromUI instead)
+    func requestPhaseAdvanceFromUI() async {
+        // Now just calls the direct method
+        await advanceToNextPhaseFromUI()
     }
     // MARK: - UI Response Handling (Send User Messages)
     func submitChoiceSelection(_ selectionIds: [String]) async {
@@ -602,9 +668,6 @@ final class OnboardingInterviewCoordinator {
         // Also delete from in-memory repository (for event-driven components)
         _ = await state.deleteArtifactRecord(id: id)
 
-        // Update UI state with fresh SwiftData query
-        await updateArtifactUIState()
-
         // Send developer message to notify LLM
         await sendDeveloperMessage(
             title: "Artifact Deleted by User",
@@ -619,31 +682,7 @@ final class OnboardingInterviewCoordinator {
         Logger.info("Artifact deleted and LLM notified: \(filename)", category: .ai)
     }
 
-    // MARK: - Artifact UI State
-
-    /// Update UI state with fresh artifact data from SwiftData.
-    private func updateArtifactUIState() async {
-        guard let session = container.sessionPersistenceHandler.getActiveSession() else { return }
-        let currentArtifacts = container.artifactRecordStore.artifacts(for: session)
-        let archivedArtifacts = container.artifactRecordStore.archivedArtifacts
-
-        await MainActor.run {
-            ui.artifactRecordsSwiftData = currentArtifacts
-            ui.archivedArtifactCount = archivedArtifacts.count
-        }
-    }
-
     // MARK: - Archived Artifacts Management
-
-    /// Load archived artifacts count for UI display.
-    /// Called during coordinator initialization.
-    func loadArchivedArtifacts() async {
-        let archivedCount = container.artifactRecordStore.archivedArtifacts.count
-        await MainActor.run {
-            ui.archivedArtifactCount = archivedCount
-        }
-        Logger.info("Loaded \(archivedCount) archived artifacts", category: .ai)
-    }
 
     /// Get archived artifacts for UI display (directly from SwiftData).
     func getArchivedArtifacts() -> [ArtifactRecord] {
@@ -655,6 +694,7 @@ final class OnboardingInterviewCoordinator {
         guard let session = container.sessionPersistenceHandler.getActiveSession() else { return [] }
         return container.artifactRecordStore.artifacts(for: session)
     }
+
 
     /// Promote an archived artifact to the current session.
     /// This makes the artifact available to the LLM and adds it to the current interview.
@@ -681,9 +721,6 @@ final class OnboardingInterviewCoordinator {
         // Emit event to notify LLM and other handlers
         await eventBus.publish(.artifactRecordProduced(record: artifactJSON))
 
-        // Update UI state
-        await updateArtifactUIState()
-
         Logger.info("Promoted archived artifact: \(artifact.filename)", category: .ai)
     }
 
@@ -699,9 +736,6 @@ final class OnboardingInterviewCoordinator {
 
         // Delete from SwiftData
         container.artifactRecordStore.deleteArtifact(artifact)
-
-        // Update UI state
-        await updateArtifactUIState()
 
         Logger.info("Permanently deleted archived artifact: \(filename)", category: .ai)
     }
@@ -721,9 +755,6 @@ final class OnboardingInterviewCoordinator {
 
         // Remove from in-memory current artifacts
         _ = await container.artifactRepository.deleteArtifactRecord(id: id)
-
-        // Update UI state
-        await updateArtifactUIState()
 
         // Notify LLM that artifact was removed from current interview
         await sendDeveloperMessage(

@@ -118,7 +118,8 @@ struct ToolPaneTabsView<InterviewContent: View>: View {
             let experiences = coordinator.ui.skeletonTimeline?["experiences"].array
             return experiences?.isEmpty == false ? experiences!.count : 0
         case .artifacts:
-            return coordinator.ui.artifactRecords.isEmpty ? 0 : coordinator.ui.artifactRecords.count
+            // Query SwiftData directly to match ArtifactsTabContent
+            return coordinator.getCurrentSessionArtifacts().count
         case .knowledge:
             // Show total knowledge cards count
             return coordinator.allKnowledgeCards.count
