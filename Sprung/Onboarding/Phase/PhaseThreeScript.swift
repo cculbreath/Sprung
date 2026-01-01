@@ -134,20 +134,6 @@ struct PhaseThreeScript: PhaseScript {
                     // Force next_phase tool call
                     return [.developerMessage(title: title, details: details, payload: nil, toolChoice: OnboardingToolName.nextPhase.rawValue)]
                 }
-            ),
-
-            // MARK: - Legacy Objective Support
-            OnboardingObjectiveId.evidenceAuditCompleted.rawValue: ObjectiveWorkflow(
-                id: OnboardingObjectiveId.evidenceAuditCompleted.rawValue,
-                onComplete: { _ in [] }  // Handled by new objectives
-            ),
-            OnboardingObjectiveId.cardsGenerated.rawValue: ObjectiveWorkflow(
-                id: OnboardingObjectiveId.cardsGenerated.rawValue,
-                onComplete: { _ in [] }  // Handled by knowledgeCardsGenerated
-            ),
-            OnboardingObjectiveId.oneWritingSample.rawValue: ObjectiveWorkflow(
-                id: OnboardingObjectiveId.oneWritingSample.rawValue,
-                onComplete: { _ in [] }  // Writing samples now collected in Phase 1
             )
         ]
     }

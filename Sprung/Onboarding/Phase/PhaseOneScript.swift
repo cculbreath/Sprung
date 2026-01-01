@@ -123,16 +123,6 @@ struct PhaseOneScript: PhaseScript {
                     // Force next_phase tool call
                     return [.developerMessage(title: title, details: details, payload: nil, toolChoice: OnboardingToolName.nextPhase.rawValue)]
                 }
-            ),
-
-            // MARK: - Legacy Objective Support (for backwards compatibility)
-            OnboardingObjectiveId.contactDataValidated.rawValue: ObjectiveWorkflow(
-                id: OnboardingObjectiveId.contactDataValidated.rawValue,
-                onComplete: { _ in [] }  // No-op, handled by new objectives
-            ),
-            OnboardingObjectiveId.contactPhotoCollected.rawValue: ObjectiveWorkflow(
-                id: OnboardingObjectiveId.contactPhotoCollected.rawValue,
-                onComplete: { _ in [] }  // No-op, photo is optional in new flow
             )
         ]
     }

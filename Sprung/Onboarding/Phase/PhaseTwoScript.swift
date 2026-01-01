@@ -138,16 +138,6 @@ struct PhaseTwoScript: PhaseScript {
                     // Force next_phase tool call
                     return [.developerMessage(title: title, details: details, payload: nil, toolChoice: OnboardingToolName.nextPhase.rawValue)]
                 }
-            ),
-
-            // MARK: - Legacy Objective Support
-            OnboardingObjectiveId.skeletonTimeline.rawValue: ObjectiveWorkflow(
-                id: OnboardingObjectiveId.skeletonTimeline.rawValue,
-                onComplete: { _ in [] }  // Handled by new skeletonTimelineComplete objective
-            ),
-            OnboardingObjectiveId.dossierSeed.rawValue: ObjectiveWorkflow(
-                id: OnboardingObjectiveId.dossierSeed.rawValue,
-                onComplete: { _ in [] }  // Dossier is now woven throughout, not a separate step
             )
         ]
     }
