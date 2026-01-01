@@ -124,8 +124,75 @@ final class MergedCardToResRefConverter {
             onProgress?(index + 1, total)
         }
 
+        // Second pass: Link skill cards to evidence cards (employment/project cards that demonstrate the skill)
+        linkSkillsToEvidenceCards(results)
+
         Logger.info("✅ Converted \(results.count)/\(total) merged cards to ResRefs", category: .ai)
         return results
+    }
+
+    /// Link skill cards to employment/project cards that demonstrate those skills.
+    /// Populates `evidenceCardIdsJSON` for skill ResRefs.
+    private func linkSkillsToEvidenceCards(_ resRefs: [ResRef]) {
+        // Build technology -> ResRef mapping from non-skill cards
+        var techToCardIds: [String: [String]] = [:]
+        let evidenceCards = resRefs.filter { $0.cardType == "employment" || $0.cardType == "project" }
+
+        for card in evidenceCards {
+            guard let techJSON = card.technologiesJSON,
+                  let data = techJSON.data(using: .utf8),
+                  let technologies = try? JSONDecoder().decode([String].self, from: data) else {
+                continue
+            }
+
+            for tech in technologies {
+                let normalizedTech = tech.lowercased()
+                techToCardIds[normalizedTech, default: []].append(card.id.uuidString)
+            }
+        }
+
+        // Link skill cards to evidence cards
+        let skillCards = resRefs.filter { $0.cardType == "skill" }
+        for skill in skillCards {
+            // Try to match skill name against technologies
+            let skillName = skill.name.lowercased()
+
+            // Collect all cards that demonstrate this skill
+            var evidenceIds = Set<String>()
+
+            // Direct match: skill name matches a technology
+            if let directMatches = techToCardIds[skillName] {
+                evidenceIds.formUnion(directMatches)
+            }
+
+            // Partial match: skill name contains or is contained in technology names
+            for (tech, cardIds) in techToCardIds {
+                if tech.contains(skillName) || skillName.contains(tech) {
+                    evidenceIds.formUnion(cardIds)
+                }
+            }
+
+            // Also check if the skill's own technologies overlap with evidence cards
+            if let skillTechJSON = skill.technologiesJSON,
+               let data = skillTechJSON.data(using: .utf8),
+               let skillTechnologies = try? JSONDecoder().decode([String].self, from: data) {
+                for tech in skillTechnologies {
+                    if let matches = techToCardIds[tech.lowercased()] {
+                        evidenceIds.formUnion(matches)
+                    }
+                }
+            }
+
+            // Populate evidenceCardIdsJSON if we found evidence
+            if !evidenceIds.isEmpty {
+                let sortedIds = Array(evidenceIds).sorted()
+                if let data = try? JSONEncoder().encode(sortedIds),
+                   let json = String(data: data, encoding: .utf8) {
+                    skill.evidenceCardIdsJSON = json
+                    Logger.debug("🔗 Linked skill '\(skill.name)' to \(sortedIds.count) evidence cards", category: .ai)
+                }
+            }
+        }
     }
 
     // MARK: - Private Helpers
