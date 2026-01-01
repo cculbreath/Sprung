@@ -117,14 +117,15 @@ actor StateCoordinator: OnboardingEventEmitter {
     // MARK: - Wizard Progress (Queries ObjectiveStore)
     private func updateWizardProgress() async {
         // Phase 1 objectives
-        let hasProfile = await objectiveStore.getObjectiveStatus(OnboardingObjectiveId.applicantProfile.rawValue) == .completed
-        let hasTimeline = await objectiveStore.getObjectiveStatus(OnboardingObjectiveId.skeletonTimeline.rawValue) == .completed
+        let hasProfile = await objectiveStore.getObjectiveStatus(OnboardingObjectiveId.applicantProfileComplete.rawValue) == .completed
+        // Phase 2 objectives
+        let hasTimeline = await objectiveStore.getObjectiveStatus(OnboardingObjectiveId.skeletonTimelineComplete.rawValue) == .completed
         let hasSections = await objectiveStore.getObjectiveStatus(OnboardingObjectiveId.enabledSections.rawValue) == .completed
-        // Phase 2 objectives (updated for evidence-based flow)
-        let hasEvidenceAudit = await objectiveStore.getObjectiveStatus(OnboardingObjectiveId.evidenceAuditCompleted.rawValue) == .completed
-        let hasCardsGenerated = await objectiveStore.getObjectiveStatus(OnboardingObjectiveId.cardsGenerated.rawValue) == .completed
         // Phase 3 objectives
-        let hasWriting = await objectiveStore.getObjectiveStatus(OnboardingObjectiveId.oneWritingSample.rawValue) == .completed
+        let hasCardInventory = await objectiveStore.getObjectiveStatus(OnboardingObjectiveId.cardInventoryComplete.rawValue) == .completed
+        let hasCardsGenerated = await objectiveStore.getObjectiveStatus(OnboardingObjectiveId.knowledgeCardsGenerated.rawValue) == .completed
+        let hasWriting = await objectiveStore.getObjectiveStatus(OnboardingObjectiveId.writingSamplesCollected.rawValue) == .completed
+        // Phase 4 objectives
         let hasDossier = await objectiveStore.getObjectiveStatus(OnboardingObjectiveId.dossierComplete.rawValue) == .completed
 
         // First: Set current wizard step based on actual phase (1:1 mapping)
@@ -151,7 +152,7 @@ actor StateCoordinator: OnboardingEventEmitter {
             completedWizardSteps.insert(.voice)
         }
         // Story: complete if Phase 2 objectives done OR we've moved past Phase 2
-        if (hasEvidenceAudit && hasCardsGenerated) ||
+        if (hasCardInventory && hasCardsGenerated) ||
            phase == .phase3EvidenceCollection || phase == .phase4StrategicSynthesis || phase == .complete {
             completedWizardSteps.insert(.story)
         }
