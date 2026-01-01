@@ -10,6 +10,7 @@ enum APIKeyType: String {
     case openRouter = "openRouterApiKey"
     case openAI = "openAiApiKey"
     case gemini = "geminiApiKey"
+    case anthropic = "anthropicApiKey"
 }
 struct APIKeyManager {
     private static let service = Bundle.main.bundleIdentifier ?? "physicscloud.Sprung"

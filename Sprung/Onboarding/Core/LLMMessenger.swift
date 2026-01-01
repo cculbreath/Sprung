@@ -21,6 +21,8 @@ actor LLMMessenger: OnboardingEventEmitter {
     private let stateCoordinator: StateCoordinator
     private let contextAssembler: ConversationContextAssembler
     private let requestBuilder: OnboardingRequestBuilder
+    private let anthropicRequestBuilder: AnthropicRequestBuilder
+    private let toolRegistry: ToolRegistry
     private var isActive = false
     // Stream cancellation tracking
     private var currentStreamTask: Task<Void, Error>?
@@ -36,6 +38,7 @@ actor LLMMessenger: OnboardingEventEmitter {
         self.eventBus = eventBus
         self.networkRouter = networkRouter
         self.stateCoordinator = state
+        self.toolRegistry = toolRegistry
         self.contextAssembler = ConversationContextAssembler(state: state)
         self.requestBuilder = OnboardingRequestBuilder(
             baseDeveloperMessage: baseDeveloperMessage,
@@ -43,7 +46,20 @@ actor LLMMessenger: OnboardingEventEmitter {
             contextAssembler: contextAssembler,
             stateCoordinator: state
         )
+        self.anthropicRequestBuilder = AnthropicRequestBuilder(
+            baseDeveloperMessage: baseDeveloperMessage,
+            toolRegistry: toolRegistry,
+            contextAssembler: contextAssembler,
+            stateCoordinator: state
+        )
         Logger.info("📬 LLMMessenger initialized (using LLMFacade)", category: .ai)
+    }
+
+    // MARK: - Backend Selection
+
+    /// Check if the onboarding interview should use Anthropic backend
+    private func isUsingAnthropic() async -> Bool {
+        return await stateCoordinator.getOnboardingProvider() == .anthropic
     }
     /// Start listening to message request events
     func startEventSubscriptions() async {
@@ -90,6 +106,19 @@ actor LLMMessenger: OnboardingEventEmitter {
     }
 
     private func executeUserMessage(_ payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String? = nil, originalText: String? = nil, bundledDeveloperMessages: [JSON] = [], toolChoice: String? = nil) async {
+        // Route to Anthropic if selected
+        if await isUsingAnthropic() {
+            await executeUserMessageViaAnthropic(
+                payload,
+                isSystemGenerated: isSystemGenerated,
+                chatboxMessageId: chatboxMessageId,
+                originalText: originalText,
+                bundledDeveloperMessages: bundledDeveloperMessages,
+                toolChoice: toolChoice
+            )
+            return
+        }
+
         await emit(.llmStatus(status: .busy))
         let text = payload["content"].string ?? payload["text"].stringValue
 
@@ -223,6 +252,13 @@ actor LLMMessenger: OnboardingEventEmitter {
             Logger.warning("LLMMessenger not active, ignoring developer message", category: .ai)
             return
         }
+
+        // Route to Anthropic if selected
+        if await isUsingAnthropic() {
+            await executeDeveloperMessageViaAnthropic(payload)
+            return
+        }
+
         await emit(.llmStatus(status: .busy))
         let text = payload["text"].stringValue
         let toolChoiceName = payload["toolChoice"].string
@@ -307,6 +343,12 @@ actor LLMMessenger: OnboardingEventEmitter {
     }
 
     private func executeToolResponse(_ payload: JSON) async {
+        // Route to Anthropic if selected
+        if await isUsingAnthropic() {
+            await executeToolResponseViaAnthropic(payload)
+            return
+        }
+
         await emit(.llmStatus(status: .busy))
         // Track pending tool response for retry on stream error
         await stateCoordinator.setPendingToolResponses([payload])
@@ -395,6 +437,12 @@ actor LLMMessenger: OnboardingEventEmitter {
     /// Execute batched tool responses (for parallel tool calls)
     /// OpenAI API requires all tool outputs from parallel calls to be sent together in one request
     private func executeBatchedToolResponses(_ payloads: [JSON]) async {
+        // Route to Anthropic if selected
+        if await isUsingAnthropic() {
+            await executeBatchedToolResponsesViaAnthropic(payloads)
+            return
+        }
+
         await emit(.llmStatus(status: .busy))
         // Track pending tool responses for retry on stream error
         await stateCoordinator.setPendingToolResponses(payloads)
@@ -710,5 +758,358 @@ actor LLMMessenger: OnboardingEventEmitter {
         _ = alert.runModal()
 
         Logger.error("🔧 Conversation sync error alert shown - auto-recovery failed (callId: \(callId ?? "unknown"))", category: .ai)
+    }
+
+    // MARK: - Anthropic Execution Methods
+
+    /// Execute user message via Anthropic Messages API
+    private func executeUserMessageViaAnthropic(
+        _ payload: JSON,
+        isSystemGenerated: Bool,
+        chatboxMessageId: String? = nil,
+        originalText: String? = nil,
+        bundledDeveloperMessages: [JSON] = [],
+        toolChoice: String? = nil
+    ) async {
+        await emit(.llmStatus(status: .busy))
+        let text = payload["content"].string ?? payload["text"].stringValue
+
+        // Extract image data if present
+        let imageData = payload["image_data"].string
+        let imageContentType = payload["content_type"].string
+
+        do {
+            let request = await anthropicRequestBuilder.buildUserMessageRequest(
+                text: text,
+                isSystemGenerated: isSystemGenerated,
+                bundledDeveloperMessages: bundledDeveloperMessages,
+                forcedToolChoice: toolChoice,
+                imageBase64: imageData,
+                imageContentType: imageContentType
+            )
+            let messageId = UUID().uuidString
+            await emit(.llmUserMessageSent(messageId: messageId, payload: payload, isSystemGenerated: isSystemGenerated))
+
+            currentStreamTask = Task {
+                var retryCount = 0
+                let maxRetries = 3
+                var lastError: Error?
+
+                while retryCount <= maxRetries {
+                    do {
+                        Logger.info("🔍 About to call llmFacade.anthropicMessagesStream", category: .ai)
+                        Logger.debug("📋 Anthropic request model: \(request.model)", category: .ai)
+
+                        let stream = try await llmFacade.anthropicMessagesStream(parameters: request)
+                        var adapter = AnthropicStreamAdapter()
+
+                        for try await event in stream {
+                            // Process event through adapter to get domain events
+                            let domainEvents = adapter.process(event)
+                            for domainEvent in domainEvents {
+                                await emit(domainEvent)
+
+                                // Handle tool calls by dispatching to tool executor
+                                if case .toolCallRequested(let call, _) = domainEvent {
+                                    await executeToolCall(call)
+                                }
+                            }
+                        }
+
+                        await emit(.llmStatus(status: .idle))
+                        await emit(.llmStreamCompleted)
+                        return // Success - exit retry loop
+                    } catch {
+                        lastError = error
+                        let isRetriableError = isRetriable(error)
+                        if isRetriableError && retryCount < maxRetries {
+                            retryCount += 1
+                            let delay = Double(retryCount) * 2.0
+                            Logger.warning("⚠️ Anthropic transient error (attempt \(retryCount)/\(maxRetries)), retrying in \(delay)s: \(error)", category: .ai)
+                            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                        } else {
+                            if let apiError = error as? APIError {
+                                Logger.error("❌ Anthropic API Error details: \(apiError)", category: .ai)
+                            }
+                            throw error
+                        }
+                    }
+                }
+
+                if let error = lastError {
+                    Logger.error("❌ Anthropic user message failed after \(maxRetries) retries: \(error)", category: .ai)
+                    throw error
+                }
+            }
+
+            try await currentStreamTask?.value
+            currentStreamTask = nil
+            await stateCoordinator.markStreamCompleted()
+        } catch is CancellationError {
+            Logger.info("Anthropic user message stream cancelled", category: .ai)
+            await stateCoordinator.markStreamCompleted()
+        } catch {
+            Logger.error("❌ Anthropic failed to send message: \(error)", category: .ai)
+            await emit(.errorOccurred("Failed to send message: \(error.localizedDescription)"))
+            await emit(.llmStatus(status: .error))
+
+            if let chatboxMessageId = chatboxMessageId, let originalText = originalText {
+                await emit(.llmUserMessageFailed(
+                    messageId: chatboxMessageId,
+                    originalText: originalText,
+                    error: error.localizedDescription
+                ))
+            } else {
+                await surfaceErrorToUI(error: error)
+            }
+            await stateCoordinator.markStreamCompleted()
+        }
+    }
+
+    /// Execute developer message via Anthropic Messages API
+    private func executeDeveloperMessageViaAnthropic(_ payload: JSON) async {
+        await emit(.llmStatus(status: .busy))
+        let text = payload["text"].stringValue
+        let toolChoiceName = payload["toolChoice"].string
+        Logger.info("📨 Sending Anthropic developer message (\(text.prefix(100))...)", category: .ai)
+
+        do {
+            let request = await anthropicRequestBuilder.buildDeveloperMessageRequest(
+                text: text,
+                toolChoice: toolChoiceName
+            )
+            let messageId = UUID().uuidString
+            await emit(.llmDeveloperMessageSent(messageId: messageId, payload: payload))
+
+            currentStreamTask = Task {
+                var retryCount = 0
+                let maxRetries = 3
+                var lastError: Error?
+
+                while retryCount <= maxRetries {
+                    do {
+                        let stream = try await llmFacade.anthropicMessagesStream(parameters: request)
+                        var adapter = AnthropicStreamAdapter()
+
+                        for try await event in stream {
+                            let domainEvents = adapter.process(event)
+                            for domainEvent in domainEvents {
+                                await emit(domainEvent)
+
+                                if case .toolCallRequested(let call, _) = domainEvent {
+                                    await executeToolCall(call)
+                                }
+                            }
+                        }
+
+                        await emit(.llmStatus(status: .idle))
+                        await emit(.llmStreamCompleted)
+                        return
+                    } catch {
+                        lastError = error
+                        let isRetriableError = isRetriable(error)
+                        if isRetriableError && retryCount < maxRetries {
+                            retryCount += 1
+                            let delay = Double(retryCount) * 2.0
+                            Logger.warning("⚠️ Anthropic transient error (attempt \(retryCount)/\(maxRetries)), retrying in \(delay)s: \(error)", category: .ai)
+                            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                        } else {
+                            Logger.error("❌ Anthropic developer message stream failed: \(error)", category: .ai)
+                            throw error
+                        }
+                    }
+                }
+
+                if let error = lastError {
+                    Logger.error("❌ Anthropic developer message failed after \(maxRetries) retries: \(error)", category: .ai)
+                    throw error
+                }
+            }
+
+            try await currentStreamTask?.value
+            currentStreamTask = nil
+            Logger.info("✅ Anthropic developer message completed successfully", category: .ai)
+            await stateCoordinator.markStreamCompleted()
+        } catch is CancellationError {
+            Logger.info("Anthropic developer message stream cancelled", category: .ai)
+            await stateCoordinator.markStreamCompleted()
+        } catch {
+            Logger.error("❌ Anthropic failed to send developer message: \(error)", category: .ai)
+            await emit(.errorOccurred("Failed to send developer message: \(error.localizedDescription)"))
+            await emit(.llmStatus(status: .error))
+            await surfaceErrorToUI(error: error)
+            await stateCoordinator.markStreamCompleted()
+        }
+    }
+
+    /// Execute tool response via Anthropic Messages API
+    private func executeToolResponseViaAnthropic(_ payload: JSON) async {
+        await emit(.llmStatus(status: .busy))
+        await stateCoordinator.setPendingToolResponses([payload])
+
+        do {
+            let callId = payload["callId"].stringValue
+            let output = payload["output"]
+            let toolName = payload["toolName"].stringValue
+
+            let toolChoice: String?
+            if let payloadToolChoice = payload["toolChoice"].string {
+                toolChoice = payloadToolChoice
+            } else {
+                toolChoice = await stateCoordinator.popPendingForcedToolChoice()
+            }
+
+            Logger.debug("📤 Anthropic tool response: callId=\(callId), output=\(output.rawString() ?? "nil")", category: .ai)
+            Logger.info("📤 Sending Anthropic tool response for callId=\(String(callId.prefix(12)))...", category: .ai)
+
+            let request = await anthropicRequestBuilder.buildToolResponseRequest(
+                output: output,
+                callId: callId,
+                toolName: toolName,
+                forcedToolChoice: toolChoice
+            )
+
+            let messageId = UUID().uuidString
+            await emit(.llmSentToolResponseMessage(messageId: messageId, payload: payload))
+
+            currentStreamTask = Task {
+                var retryCount = 0
+                let maxRetries = 3
+                var lastError: Error?
+
+                while retryCount <= maxRetries {
+                    do {
+                        let stream = try await llmFacade.anthropicMessagesStream(parameters: request)
+                        var adapter = AnthropicStreamAdapter()
+
+                        for try await event in stream {
+                            let domainEvents = adapter.process(event)
+                            for domainEvent in domainEvents {
+                                await emit(domainEvent)
+
+                                if case .toolCallRequested(let call, _) = domainEvent {
+                                    await executeToolCall(call)
+                                }
+                            }
+                        }
+
+                        await stateCoordinator.clearPendingToolResponses()
+                        await emit(.llmStatus(status: .idle))
+                        await emit(.llmStreamCompleted)
+                        return
+                    } catch {
+                        lastError = error
+                        let isRetriableError = isRetriable(error)
+                        if isRetriableError && retryCount < maxRetries {
+                            retryCount += 1
+                            let delay = Double(retryCount) * 2.0
+                            Logger.warning("⚠️ Anthropic transient error (attempt \(retryCount)/\(maxRetries)), retrying in \(delay)s: \(error)", category: .ai)
+                            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                        } else {
+                            Logger.error("❌ Anthropic tool response stream failed: \(error)", category: .ai)
+                            throw error
+                        }
+                    }
+                }
+
+                if let error = lastError {
+                    Logger.error("❌ Anthropic tool response failed after \(maxRetries) retries: \(error)", category: .ai)
+                    throw error
+                }
+            }
+
+            try await currentStreamTask?.value
+            currentStreamTask = nil
+            await stateCoordinator.markStreamCompleted()
+        } catch is CancellationError {
+            Logger.info("Anthropic tool response stream cancelled", category: .ai)
+            await stateCoordinator.markStreamCompleted()
+        } catch {
+            await emit(.errorOccurred("Failed to send Anthropic tool response: \(error.localizedDescription)"))
+            await emit(.llmStatus(status: .error))
+            await stateCoordinator.markStreamCompleted()
+        }
+    }
+
+    /// Execute batched tool responses via Anthropic Messages API
+    private func executeBatchedToolResponsesViaAnthropic(_ payloads: [JSON]) async {
+        await emit(.llmStatus(status: .busy))
+        await stateCoordinator.setPendingToolResponses(payloads)
+
+        do {
+            Logger.info("📤 Sending Anthropic batched tool responses (\(payloads.count) responses)", category: .ai)
+
+            let request = await anthropicRequestBuilder.buildBatchedToolResponseRequest(payloads: payloads)
+            let messageId = UUID().uuidString
+
+            for payload in payloads {
+                await emit(.llmSentToolResponseMessage(messageId: messageId, payload: payload))
+            }
+
+            currentStreamTask = Task {
+                var retryCount = 0
+                let maxRetries = 3
+                var lastError: Error?
+
+                while retryCount <= maxRetries {
+                    do {
+                        let stream = try await llmFacade.anthropicMessagesStream(parameters: request)
+                        var adapter = AnthropicStreamAdapter()
+
+                        for try await event in stream {
+                            let domainEvents = adapter.process(event)
+                            for domainEvent in domainEvents {
+                                await emit(domainEvent)
+
+                                if case .toolCallRequested(let call, _) = domainEvent {
+                                    await executeToolCall(call)
+                                }
+                            }
+                        }
+
+                        await stateCoordinator.clearPendingToolResponses()
+                        await emit(.llmStatus(status: .idle))
+                        await emit(.llmStreamCompleted)
+                        return
+                    } catch {
+                        lastError = error
+                        let isRetriableError = isRetriable(error)
+                        if isRetriableError && retryCount < maxRetries {
+                            retryCount += 1
+                            let delay = Double(retryCount) * 2.0
+                            Logger.warning("⚠️ Anthropic transient error (attempt \(retryCount)/\(maxRetries)), retrying in \(delay)s: \(error)", category: .ai)
+                            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                        } else {
+                            Logger.error("❌ Anthropic batched tool response stream failed: \(error)", category: .ai)
+                            throw error
+                        }
+                    }
+                }
+
+                if let error = lastError {
+                    Logger.error("❌ Anthropic batched tool response failed after \(maxRetries) retries: \(error)", category: .ai)
+                    throw error
+                }
+            }
+
+            try await currentStreamTask?.value
+            currentStreamTask = nil
+            await stateCoordinator.markStreamCompleted()
+        } catch is CancellationError {
+            Logger.info("Anthropic batched tool response stream cancelled", category: .ai)
+            await stateCoordinator.markStreamCompleted()
+        } catch {
+            await emit(.errorOccurred("Failed to send Anthropic batched tool responses: \(error.localizedDescription)"))
+            await emit(.llmStatus(status: .error))
+            await stateCoordinator.markStreamCompleted()
+        }
+    }
+
+    /// Execute a tool call received from Anthropic
+    /// This dispatches to the tool registry for execution
+    private func executeToolCall(_ call: ToolCall) async {
+        // The tool call event has already been emitted
+        // The tool executor (ToolOrchestrator) will pick it up and execute
+        Logger.debug("🔧 Anthropic tool call dispatched: \(call.name)", category: .ai)
     }
 }

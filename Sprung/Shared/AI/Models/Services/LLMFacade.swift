@@ -39,11 +39,13 @@ final class LLMFacade {
         case openRouter
         case openAI
         case gemini
+        case anthropic
         var displayName: String {
             switch self {
             case .openRouter: return "OpenRouter"
             case .openAI: return "OpenAI"
             case .gemini: return "Gemini"
+            case .anthropic: return "Anthropic"
             }
         }
     }
@@ -59,6 +61,7 @@ final class LLMFacade {
     // Direct service references for specialized APIs
     private var openAIService: OpenAIService?
     private var googleAIService: GoogleAIService?
+    private var anthropicService: AnthropicService?
     init(
         client: LLMClient,
         llmService: OpenRouterServiceBackend,
@@ -87,6 +90,10 @@ final class LLMFacade {
 
     func registerGoogleAIService(_ service: GoogleAIService) {
         self.googleAIService = service
+    }
+
+    func registerAnthropicService(_ service: AnthropicService) {
+        self.anthropicService = service
     }
     private func resolveClient(for backend: Backend) throws -> LLMClient {
         guard let resolved = backendClients[backend] else {
@@ -861,6 +868,31 @@ final class LLMFacade {
             throw LLMError.clientError("OpenAI service is not configured. Call registerOpenAIService first.")
         }
         return try await service.responseCreateStream(parameters)
+    }
+
+    // MARK: - Anthropic Messages API Stream
+
+    /// Execute an Anthropic Messages API request and return the raw stream.
+    /// This is used by orchestration layers (like Onboarding) that need to process
+    /// stream events themselves while still using LLMFacade for service management.
+    ///
+    /// - Parameter parameters: The AnthropicMessageParameter for the request
+    /// - Returns: AsyncThrowingStream of AnthropicStreamEvent events
+    func anthropicMessagesStream(
+        parameters: AnthropicMessageParameter
+    ) async throws -> AsyncThrowingStream<AnthropicStreamEvent, Error> {
+        guard let service = anthropicService else {
+            throw LLMError.clientError("Anthropic service is not configured. Call registerAnthropicService first.")
+        }
+        return try await service.messagesStream(parameters: parameters)
+    }
+
+    /// List available Anthropic models.
+    func anthropicListModels() async throws -> AnthropicModelsResponse {
+        guard let service = anthropicService else {
+            throw LLMError.clientError("Anthropic service is not configured. Call registerAnthropicService first.")
+        }
+        return try await service.listModels()
     }
 
     // MARK: - Gemini Document Extraction

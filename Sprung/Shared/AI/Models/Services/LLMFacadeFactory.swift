@@ -124,4 +124,37 @@ struct LLMFacadeFactory {
 
         return googleAIService
     }
+
+    /// Registers Anthropic backend with the facade.
+    ///
+    /// - Parameters:
+    ///   - facade: The facade to register with
+    ///   - apiKey: Anthropic API key
+    ///   - debugEnabled: Whether to enable debug logging
+    /// - Returns: The AnthropicService for additional use (e.g., onboarding)
+    @discardableResult
+    static func registerAnthropic(
+        facade: LLMFacade,
+        apiKey: String,
+        debugEnabled: Bool
+    ) -> AnthropicService {
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = 180
+        configuration.timeoutIntervalForResource = 600
+        configuration.waitsForConnectivity = true
+        let session = URLSession(configuration: configuration)
+        let httpClient = URLSessionHTTPClientAdapter(urlSession: session)
+
+        let anthropicService = AnthropicServiceFactory.service(
+            apiKey: apiKey,
+            httpClient: httpClient,
+            debugEnabled: debugEnabled
+        )
+
+        facade.registerAnthropicService(anthropicService)
+
+        Logger.info("✅ Anthropic backend registered via LLMFacadeFactory", category: .appLifecycle)
+
+        return anthropicService
+    }
 }

@@ -11,7 +11,12 @@ struct APIKeysSettingsView: View {
     @State private var openRouterApiKey: String = APIKeyManager.get(.openRouter) ?? ""
     @State private var openAiTTSApiKey: String = APIKeyManager.get(.openAI) ?? ""
     @State private var geminiApiKey: String = APIKeyManager.get(.gemini) ?? ""
+    @State private var anthropicApiKey: String = APIKeyManager.get(.anthropic) ?? ""
     @State private var showModelSelectionSheet = false
+    @State private var selectedOnboardingProvider: OnboardingProvider = {
+        let rawValue = UserDefaults.standard.string(forKey: "onboardingProvider") ?? "openai"
+        return OnboardingProvider(rawValue: rawValue) ?? .openai
+    }()
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Manage credentials used for importing jobs and accessing external AI services. Leave a field blank to remove the saved key.")
@@ -44,6 +49,34 @@ struct APIKeysSettingsView: View {
                 testEndpoint: .gemini,
                 onSave: handleGeminiSave
             )
+            APIKeyEditor(
+                title: "Anthropic (Claude)",
+                systemImage: "brain.head.profile",
+                value: $anthropicApiKey,
+                placeholder: "sk-ant-…",
+                help: "Used for onboarding interview when Anthropic provider is selected.",
+                testEndpoint: .anthropic,
+                onSave: handleAnthropicSave
+            )
+            Divider()
+            // Onboarding Provider Selection
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Onboarding Interview Provider")
+                    .font(.headline)
+                Picker("Provider", selection: $selectedOnboardingProvider) {
+                    ForEach(OnboardingProvider.allCases, id: \.self) { provider in
+                        Text(provider.displayName).tag(provider)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: selectedOnboardingProvider) { _, newValue in
+                    UserDefaults.standard.set(newValue.rawValue, forKey: "onboardingProvider")
+                }
+                Text("Select which AI provider to use for the onboarding interview.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 4)
             Divider()
             HStack(spacing: 12) {
                 Button("Choose OpenRouter Models…") {
@@ -115,10 +148,22 @@ struct APIKeysSettingsView: View {
         }
         NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
     }
+    private func handleAnthropicSave(_ newValue: String) {
+        let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            APIKeyManager.delete(.anthropic)
+            anthropicApiKey = ""
+        } else {
+            _ = APIKeyManager.set(.anthropic, value: trimmed)
+            anthropicApiKey = trimmed
+        }
+        NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
+    }
     private func refreshKeys() {
         openRouterApiKey = APIKeyManager.get(.openRouter) ?? ""
         openAiTTSApiKey = APIKeyManager.get(.openAI) ?? ""
         geminiApiKey = APIKeyManager.get(.gemini) ?? ""
+        anthropicApiKey = APIKeyManager.get(.anthropic) ?? ""
     }
 }
 
@@ -127,6 +172,7 @@ enum APITestEndpoint {
     case openRouter
     case openAI
     case gemini
+    case anthropic
 
     var testURL: URL {
         switch self {
@@ -136,6 +182,8 @@ enum APITestEndpoint {
             return URL(string: "https://api.openai.com/v1/models")!
         case .gemini:
             return URL(string: "https://generativelanguage.googleapis.com/v1beta/models")!
+        case .anthropic:
+            return URL(string: "https://api.anthropic.com/v1/models")!
         }
     }
 
@@ -153,6 +201,10 @@ enum APITestEndpoint {
             var components = URLComponents(url: testURL, resolvingAgainstBaseURL: false)!
             components.queryItems = [URLQueryItem(name: "key", value: apiKey)]
             request.url = components.url
+        case .anthropic:
+            // Anthropic uses x-api-key header
+            request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+            request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         }
         return request
     }

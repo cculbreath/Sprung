@@ -111,6 +111,16 @@ final class AppDependencies {
             )
         }
 
+        // Register Anthropic backend if API key is configured
+        if let anthropicKey = APIKeyManager.get(.anthropic)?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !anthropicKey.isEmpty {
+            _ = LLMFacadeFactory.registerAnthropic(
+                facade: llmFacade,
+                apiKey: anthropicKey,
+                debugEnabled: Logger.isVerboseEnabled
+            )
+        }
+
         // Register Gemini backend for document extraction
         // GoogleAIService handles API key internally via APIKeyManager
         _ = LLMFacadeFactory.registerGemini(facade: llmFacade)
