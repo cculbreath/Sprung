@@ -65,7 +65,8 @@ actor VoicePrimerExtractionService {
 
             // Build summary and persist to CoverRefStore
             let summary = buildVoicePrimerSummary()
-            await persistVoicePrimer(summary: summary)
+            let primerJSON = primer.rawString()
+            await persistVoicePrimer(summary: summary, primerJSON: primerJSON)
 
             await eventBus.publish(.voicePrimerExtractionCompleted(primer: primer))
             Logger.info("🎤 Voice primer extraction completed successfully", category: .ai)
@@ -227,16 +228,17 @@ actor VoicePrimerExtractionService {
     }
 
     @MainActor
-    private func persistVoicePrimer(summary: String) {
+    private func persistVoicePrimer(summary: String, primerJSON: String?) {
         let coverRef = CoverRef(
             name: "Voice Primer",
             content: summary,
             enabledByDefault: true,
-            type: .voicePrimer
+            type: .voicePrimer,
+            voicePrimerJSON: primerJSON
         )
 
         coverRefStore.addCoverRef(coverRef)
-        Logger.info("🎤 Voice primer persisted to CoverRefStore", category: .ai)
+        Logger.info("🎤 Voice primer persisted to CoverRefStore with structured JSON", category: .ai)
     }
 
     // MARK: - Errors

@@ -5,6 +5,7 @@
 //
 import Foundation
 import SwiftData
+import SwiftyJSON
 enum CoverRefType: String, Codable {
     case writingSample
     case backgroundFact
@@ -18,10 +19,16 @@ class CoverRef: Identifiable, Codable {
     var enabledByDefault: Bool
     var type: CoverRefType
     var isDossier: Bool
+
+    // Voice primer structured fields (only populated when type == .voicePrimer)
+    /// JSON-encoded voice primer analysis from VoicePrimerExtractionService
+    var voicePrimerJSON: String?
+
     init(
         name: String = "", content: String = "",
         enabledByDefault: Bool = false, type: CoverRefType,
-        isDossier: Bool = false
+        isDossier: Bool = false,
+        voicePrimerJSON: String? = nil
     ) {
         id = UUID().uuidString
         self.content = content
@@ -29,6 +36,7 @@ class CoverRef: Identifiable, Codable {
         self.enabledByDefault = enabledByDefault
         self.type = type
         self.isDossier = isDossier
+        self.voicePrimerJSON = voicePrimerJSON
     }
     // Manual Codable implementation
     enum CodingKeys: String, CodingKey {
@@ -38,6 +46,7 @@ class CoverRef: Identifiable, Codable {
         case enabledByDefault
         case type
         case isDossier
+        case voicePrimerJSON
     }
     // Required initializer for Decodable
     required init(from decoder: Decoder) throws {
@@ -48,6 +57,7 @@ class CoverRef: Identifiable, Codable {
         enabledByDefault = try container.decode(Bool.self, forKey: .enabledByDefault)
         type = try container.decode(CoverRefType.self, forKey: .type)
         isDossier = try container.decodeIfPresent(Bool.self, forKey: .isDossier) ?? false
+        voicePrimerJSON = try container.decodeIfPresent(String.self, forKey: .voicePrimerJSON)
     }
     // Required function for Encodable
     func encode(to encoder: Encoder) throws {
@@ -58,5 +68,44 @@ class CoverRef: Identifiable, Codable {
         try container.encode(enabledByDefault, forKey: .enabledByDefault)
         try container.encode(type, forKey: .type)
         try container.encode(isDossier, forKey: .isDossier)
+        try container.encodeIfPresent(voicePrimerJSON, forKey: .voicePrimerJSON)
+    }
+
+    // MARK: - Voice Primer Accessors
+
+    /// Parse the voice primer JSON into SwiftyJSON for programmatic access.
+    /// Returns nil if this is not a voice primer or JSON is not set.
+    var voicePrimer: SwiftyJSON.JSON? {
+        guard type == .voicePrimer,
+              let jsonString = voicePrimerJSON,
+              let data = jsonString.data(using: .utf8) else {
+            return nil
+        }
+        return try? SwiftyJSON.JSON(data: data)
+    }
+
+    /// Extract specific voice characteristic (e.g., "tone", "structure", "vocabulary", "rhetoric")
+    func voiceCharacteristic(_ key: String) -> SwiftyJSON.JSON? {
+        voicePrimer?[key]
+    }
+
+    /// Get tone description
+    var toneDescription: String? {
+        voicePrimer?["tone"]["description"].string
+    }
+
+    /// Get vocabulary technical level
+    var vocabularyLevel: String? {
+        voicePrimer?["vocabulary"]["technical_level"].string
+    }
+
+    /// Get writing strengths from markers
+    var writingStrengths: [String] {
+        voicePrimer?["markers"]["strengths"].arrayValue.compactMap { $0.string } ?? []
+    }
+
+    /// Get writing recommendations from markers
+    var writingRecommendations: [String] {
+        voicePrimer?["markers"]["recommendations"].arrayValue.compactMap { $0.string } ?? []
     }
 }
