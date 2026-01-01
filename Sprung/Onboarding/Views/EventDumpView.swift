@@ -295,15 +295,9 @@ struct EventDumpView: View {
             output += String(repeating: "=", count: 80) + "\n\n"
             output += metricsText + "\n\n"
             output += String(repeating: "=", count: 80) + "\n\n"
-            // Note: Streaming events are now consolidated at source in EventCoordinator
-            // The consolidation function below is kept for backward compatibility
-            let consolidatedEvents = self.consolidateStreamingEvents(events)
-            let countInfo = consolidatedEvents.count < events.count
-                ? " (consolidated from \(events.count))"
-                : ""
-            output += "Recent Events (\(consolidatedEvents.count)\(countInfo)):\n\n"
-            for (index, event) in consolidatedEvents.enumerated() {
-                output += "#\(consolidatedEvents.count - index)\n"
+            output += "Recent Events (\(events.count)):\n\n"
+            for (index, event) in events.enumerated() {
+                output += "#\(events.count - index)\n"
                 output += event + "\n\n"
             }
             do {
@@ -314,59 +308,6 @@ struct EventDumpView: View {
             }
         }
     }
-    private func consolidateStreamingEvents(_ events: [String]) -> [String] {
-        guard !events.isEmpty else { return [] }
-        var consolidated: [String] = []
-        var currentMessageId: String?
-        var streamingUpdateCount = 0
-        var totalChars = 0
-        for event in events {
-            // Check if this is a streamingMessageUpdated event
-            if event.hasPrefix("streamingMessageUpdated(id: ") {
-                // Extract message ID from event string (first 8 chars of UUID)
-                let idStartIndex = event.index(event.startIndex, offsetBy: "streamingMessageUpdated(id: ".count)
-                let idEndIndex = event.index(idStartIndex, offsetBy: 8)
-                let messageId = String(event[idStartIndex..<idEndIndex])
-                // Extract character count
-                if let deltaRange = event.range(of: "delta: "),
-                   let charsRange = event.range(of: " chars", range: deltaRange.upperBound..<event.endIndex) {
-                    let countString = event[deltaRange.upperBound..<charsRange.lowerBound]
-                    if let count = Int(countString) {
-                        if currentMessageId == messageId {
-                            // Same message - accumulate
-                            streamingUpdateCount += 1
-                            totalChars += count
-                        } else {
-                            // Different message - flush previous if exists
-                            if let prevId = currentMessageId, streamingUpdateCount > 0 {
-                                consolidated.append("streamingMessageUpdated(id: \(prevId)) - \(streamingUpdateCount) updates, \(totalChars) chars total")
-                            }
-                            // Start new accumulation
-                            currentMessageId = messageId
-                            streamingUpdateCount = 1
-                            totalChars = count
-                        }
-                        continue
-                    }
-                }
-            }
-            // Not a streaming update - flush accumulated if exists
-            if let prevId = currentMessageId, streamingUpdateCount > 0 {
-                consolidated.append("streamingMessageUpdated(id: \(prevId)) - \(streamingUpdateCount) updates, \(totalChars) chars total")
-                currentMessageId = nil
-                streamingUpdateCount = 0
-                totalChars = 0
-            }
-            // Add the non-streaming event
-            consolidated.append(event)
-        }
-        // Flush any remaining accumulated streaming events
-        if let prevId = currentMessageId, streamingUpdateCount > 0 {
-            consolidated.append("streamingMessageUpdated(id: \(prevId)) - \(streamingUpdateCount) updates, \(totalChars) chars total")
-        }
-        return consolidated
-    }
-
     // MARK: - Conversation Log Functions
 
     private func loadConversationLog() {
