@@ -75,10 +75,7 @@ actor ObjectiveStore: OnboardingEventEmitter {
             (OnboardingObjectiveId.writingSamplesCollected.rawValue, "Writing samples collected", nil),
             (OnboardingObjectiveId.voicePrimersExtracted.rawValue, "Voice primers extracted", OnboardingObjectiveId.writingSamplesCollected.rawValue),
             (OnboardingObjectiveId.jobSearchContextCaptured.rawValue, "Job search context captured", nil),
-            (OnboardingObjectiveId.applicantProfileComplete.rawValue, "Applicant profile complete", nil),
-            // Legacy objectives for backwards compatibility
-            (OnboardingObjectiveId.contactDataValidated.rawValue, "Contact data validated", nil),
-            (OnboardingObjectiveId.contactPhotoCollected.rawValue, "Contact photo collected", nil)
+            (OnboardingObjectiveId.applicantProfileComplete.rawValue, "Applicant profile complete", nil)
         ],
         .phase2CareerStory: [
             // Phase 2: Career Story objectives
@@ -86,21 +83,14 @@ actor ObjectiveStore: OnboardingEventEmitter {
             (OnboardingObjectiveId.timelineEnriched.rawValue, "Timeline enriched with context", OnboardingObjectiveId.skeletonTimelineComplete.rawValue),
             (OnboardingObjectiveId.workPreferencesCaptured.rawValue, "Work preferences captured", nil),
             (OnboardingObjectiveId.uniqueCircumstancesDocumented.rawValue, "Unique circumstances documented", nil),
-            (OnboardingObjectiveId.enabledSections.rawValue, "Enabled sections configured", nil),
-            // Legacy objectives for backwards compatibility
-            (OnboardingObjectiveId.skeletonTimeline.rawValue, "Skeleton timeline", nil),
-            (OnboardingObjectiveId.dossierSeed.rawValue, "Dossier seed questions", nil)
+            (OnboardingObjectiveId.enabledSections.rawValue, "Enabled sections configured", nil)
         ],
         .phase3EvidenceCollection: [
             // Phase 3: Evidence Collection objectives
             (OnboardingObjectiveId.evidenceDocumentsCollected.rawValue, "Evidence documents collected", nil),
             (OnboardingObjectiveId.gitReposAnalyzed.rawValue, "Git repositories analyzed", nil),
             (OnboardingObjectiveId.cardInventoryComplete.rawValue, "Card inventory complete", nil),
-            (OnboardingObjectiveId.knowledgeCardsGenerated.rawValue, "Knowledge cards generated", nil),
-            // Legacy objectives for backwards compatibility
-            (OnboardingObjectiveId.evidenceAuditCompleted.rawValue, "Evidence audit completed", nil),
-            (OnboardingObjectiveId.cardsGenerated.rawValue, "Cards generated", nil),
-            (OnboardingObjectiveId.oneWritingSample.rawValue, "Writing sample collected", nil)
+            (OnboardingObjectiveId.knowledgeCardsGenerated.rawValue, "Knowledge cards generated", nil)
         ],
         .phase4StrategicSynthesis: [
             // Phase 4: Strategic Synthesis objectives
