@@ -150,7 +150,5 @@ Call `next_phase` to proceed.
 - `list_artifacts`, `get_artifact`: Access collected materials
 - `create_web_artifact`: Capture web content
 - `get_user_option`: Present multiple-choice questions (USE DURING WAITS)
-- `persist_data`: Save dossier insights gathered during waits
-- `set_objective_status`: Mark objectives complete
 - `ask_user_skip_to_next_phase`: Offer phase skip for stuck states
 - `next_phase`: Advance to Phase 4

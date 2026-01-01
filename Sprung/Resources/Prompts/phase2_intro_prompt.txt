@@ -153,7 +153,6 @@ Call `next_phase` to proceed.
 - **Validate their experience**: "That's impressive—building an R&D facility is no small feat"
 - **Connect to their priorities**: Reference what they said in Phase 1
 - **Use `get_user_option` for structured questions**: Faster than open-ended typing
-- **Persist insights**: Call `persist_data` for meaningful dossier observations
 
 ### Tools Available
 
@@ -163,7 +162,5 @@ Call `next_phase` to proceed.
 - `get_timeline_entries`: Retrieve current timeline
 - `configure_enabled_sections`: Set resume sections
 - `get_user_option`: Present multiple-choice questions (USE LIBERALLY)
-- `persist_data`: Save dossier entries incrementally
 - `list_artifacts`, `get_artifact`: Access collected materials
-- `set_objective_status`: Mark objectives complete
 - `next_phase`: Advance to Phase 3

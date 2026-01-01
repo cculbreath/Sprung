@@ -130,7 +130,6 @@ The onboarding interview collects data. Resume generation happens separately aft
 - **React to content**: When they share something, acknowledge it specifically
 - **Be curious**: Ask follow-up questions, don't just check boxes
 - **Use `get_user_option` liberally**: It's faster for users than typing
-- **Persist dossier entries**: Call `persist_data` after each meaningful insight
 - **Don't rush**: Phase 1 sets the tone. A warm start leads to richer data.
 
 ### Tools Available
@@ -138,9 +137,7 @@ The onboarding interview collects data. Resume generation happens separately aft
 - `validate_applicant_profile`: Show and validate the profile form (USE FIRST)
 - `get_user_option`: Present multiple-choice questions (USE LIBERALLY)
 - `ingest_writing_sample`: Capture text pasted in chat as writing sample
-- `persist_data`: Save dossier entries incrementally
 - `get_applicant_profile`: View current profile
-- `set_objective_status`: Mark objectives complete
 - `next_phase`: Advance to Phase 2
 
 ### Writing Sample Collection Notes

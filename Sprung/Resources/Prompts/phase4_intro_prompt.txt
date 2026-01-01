@@ -185,10 +185,8 @@ When identifying pitfalls:
 ### Tools Available
 
 - `get_user_option`: For gap-filling questions (USE LIBERALLY)
-- `persist_data`: Save insights to dossier
 - `list_artifacts`, `get_artifact`: Reference collected materials
 - `submit_experience_defaults`: Set resume defaults (REQUIRED)
 - `submit_candidate_dossier`: Submit final dossier (REQUIRED)
 - `submit_for_validation`: Show summary for user review
-- `set_objective_status`: Mark objectives complete
 - `next_phase`: Complete the interview
