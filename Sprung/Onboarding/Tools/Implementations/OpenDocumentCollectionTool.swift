@@ -63,8 +63,8 @@ struct OpenDocumentCollectionTool: InterviewTool {
 
         Logger.info("📂 Document collection UI activated", category: .ai)
 
-        // Get counts from MainActor-isolated UI state
-        let artifactCount = await MainActor.run { coordinator.ui.artifactRecords.count }
+        // Get artifact count from typed artifacts
+        let artifactCount = await MainActor.run { coordinator.sessionArtifacts.count }
         let mergedCardCount = await MainActor.run { coordinator.ui.mergedInventory?.mergedCards.count ?? 0 }
 
         // Build minimal response

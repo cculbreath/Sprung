@@ -297,7 +297,9 @@ final class OnboardingDependencyContainer {
             dataStore: dataStore,
             coverRefStore: coverRefStore,
             experienceDefaultsStore: experienceDefaultsStore,
-            eventBus: core.eventBus
+            eventBus: core.eventBus,
+            artifactRecordStore: self.artifactRecordStore,
+            sessionPersistenceHandler: self.sessionPersistenceHandler
         )
 
         self.coordinatorEventRouter = CoordinatorEventRouter(

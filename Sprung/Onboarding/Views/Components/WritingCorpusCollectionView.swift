@@ -6,7 +6,6 @@
 //  Displays an upload drop zone and tracks collected samples.
 //
 import SwiftUI
-import SwiftyJSON
 
 /// View that displays writing sample collection UI for Phase 3.
 /// Shows a drop zone for uploads and a list of collected writing samples.
@@ -17,16 +16,9 @@ struct WritingCorpusCollectionView: View {
     let onDoneWithSamples: () -> Void
     let onEndInterview: () -> Void
 
-    private var writingSamples: [JSON] {
-        // Check multiple fields since writing samples can come from different sources:
-        // - IngestWritingSampleTool (chat paste): sets source_type = "writing_sample"
-        // - File uploads via get_user_upload: sets document_type = "writingSample" or "writing_sample"
-        coordinator.ui.artifactRecords.filter { artifact in
-            artifact["source_type"].stringValue == "writing_sample" ||
-            artifact["document_type"].stringValue == "writingSample" ||
-            artifact["document_type"].stringValue == "writing_sample" ||
-            artifact["metadata"]["writing_type"].exists()
-        }
+    /// Writing samples from the current session (typed ArtifactRecord)
+    private var writingSamples: [ArtifactRecord] {
+        coordinator.sessionWritingSamples
     }
 
     /// Check if writing samples collection is complete (based on objective status)
@@ -170,8 +162,8 @@ struct WritingCorpusCollectionView: View {
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
 
-            ForEach(writingSamples.indices, id: \.self) { index in
-                WritingSampleRow(sample: writingSamples[index])
+            ForEach(writingSamples) { sample in
+                WritingSampleRow(sample: sample)
             }
         }
         .padding(.top, 4)
@@ -196,20 +188,22 @@ struct WritingCorpusCollectionView: View {
 }
 
 private struct WritingSampleRow: View {
-    let sample: JSON
+    let sample: ArtifactRecord
 
     private var name: String {
-        sample["metadata"]["name"].string ??
-        sample["filename"].stringValue.replacingOccurrences(of: ".txt", with: "")
+        sample.metadataString("name") ??
+        sample.filename.replacingOccurrences(of: ".txt", with: "")
     }
 
     private var writingType: String {
-        sample["metadata"]["writing_type"].string ?? "document"
+        sample.metadataString("writing_type") ?? "document"
     }
 
     private var wordCount: Int {
-        sample["metadata"]["word_count"].int ??
-        (sample["extracted_text"].stringValue.split(separator: " ").count)
+        if let count = sample.metadataString("word_count"), let num = Int(count) {
+            return num
+        }
+        return sample.extractedContent.split(separator: " ").count
     }
 
     var body: some View {

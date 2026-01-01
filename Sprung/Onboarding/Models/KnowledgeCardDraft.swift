@@ -8,12 +8,6 @@ struct ArtifactDisplayInfo: Identifiable {
     let filename: String
     let title: String?
 
-    init(json: JSON) {
-        self.id = json["id"].stringValue
-        self.filename = json["filename"].stringValue
-        self.title = json["title"].string ?? json["metadata"]["title"].string
-    }
-
     init(from record: ArtifactRecord) {
         self.id = record.id.uuidString
         self.filename = record.filename

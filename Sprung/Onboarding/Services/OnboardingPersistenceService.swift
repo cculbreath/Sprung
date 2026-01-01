@@ -10,19 +10,31 @@ final class OnboardingPersistenceService {
     private let coverRefStore: CoverRefStore
     private let experienceDefaultsStore: ExperienceDefaultsStore
     private let eventBus: EventCoordinator
+    private let artifactRecordStore: ArtifactRecordStore
+    private let sessionPersistenceHandler: SwiftDataSessionPersistenceHandler
 
     init(
         ui: OnboardingUIState,
         dataStore: InterviewDataStore,
         coverRefStore: CoverRefStore,
         experienceDefaultsStore: ExperienceDefaultsStore,
-        eventBus: EventCoordinator
+        eventBus: EventCoordinator,
+        artifactRecordStore: ArtifactRecordStore,
+        sessionPersistenceHandler: SwiftDataSessionPersistenceHandler
     ) {
         self.ui = ui
         self.dataStore = dataStore
         self.coverRefStore = coverRefStore
         self.experienceDefaultsStore = experienceDefaultsStore
         self.eventBus = eventBus
+        self.artifactRecordStore = artifactRecordStore
+        self.sessionPersistenceHandler = sessionPersistenceHandler
+    }
+
+    /// Typed artifacts for the current session
+    private var sessionWritingSamples: [ArtifactRecord] {
+        guard let session = sessionPersistenceHandler.currentSession else { return [] }
+        return artifactRecordStore.artifacts(for: session).filter { $0.isWritingSample }
     }
 
     // MARK: - Writing Corpus Persistence
@@ -31,30 +43,14 @@ final class OnboardingPersistenceService {
     func persistWritingCorpusOnComplete() async {
         Logger.info("💾 [persistWritingCorpus] START - Persisting writing corpus and dossier on interview completion", category: .ai)
 
-        // Get artifact records from UI state (synced from StateCoordinator)
-        let artifacts = ui.artifactRecords
-        Logger.info("💾 [persistWritingCorpus] Found \(artifacts.count) total artifact records in UI state", category: .ai)
+        // Get writing samples from typed ArtifactRecord store
+        let writingSamples = sessionWritingSamples
+        Logger.info("💾 [persistWritingCorpus] Found \(writingSamples.count) writing samples in session", category: .ai)
 
-        // Debug: Log all artifact source_type and document_type fields
-        for (index, artifact) in artifacts.enumerated() {
-            let sourceType = artifact["source_type"].stringValue
-            let docType = artifact["document_type"].stringValue
-            let hasWritingType = artifact["metadata"]["writing_type"].exists()
-            let filename = artifact["filename"].stringValue
-            Logger.debug("💾 [persistWritingCorpus] Artifact[\(index)]: filename='\(filename)' source_type='\(sourceType)' document_type='\(docType)' has_writing_type=\(hasWritingType)", category: .ai)
+        // Debug: Log all writing sample filenames
+        for (index, sample) in writingSamples.enumerated() {
+            Logger.debug("💾 [persistWritingCorpus] WritingSample[\(index)]: filename='\(sample.filename)' sourceType='\(sample.sourceType)'", category: .ai)
         }
-
-        // Persist writing samples to CoverRefStore
-        // Check multiple fields since writing samples can come from different sources:
-        // - IngestWritingSampleTool: sets source_type = "writing_sample"
-        // - File uploads via get_user_upload (Phase 3 writing sample flow): sets document_type = "writing_sample"
-        let writingSamples = artifacts.filter { artifact in
-            artifact["source_type"].stringValue == "writing_sample" ||
-            artifact["document_type"].stringValue == "writing_sample" ||
-            artifact["document_type"].stringValue == "writingSample" || // legacy
-            artifact["metadata"]["writing_type"].exists()
-        }
-        Logger.info("💾 [persistWritingCorpus] Filtered to \(writingSamples.count) writing samples", category: .ai)
 
         for sample in writingSamples {
             persistWritingSampleToCoverRef(sample: sample)
@@ -82,10 +78,10 @@ final class OnboardingPersistenceService {
     }
 
     /// Convert a writing sample artifact to CoverRef and persist
-    private func persistWritingSampleToCoverRef(sample: JSON) {
-        let name = sample["metadata"]["name"].string ??
-                   sample["filename"].stringValue.replacingOccurrences(of: ".txt", with: "")
-        let content = sample["extracted_text"].stringValue
+    private func persistWritingSampleToCoverRef(sample: ArtifactRecord) {
+        let name = sample.metadataString("name") ??
+                   sample.filename.replacingOccurrences(of: ".txt", with: "")
+        let content = sample.extractedContent
 
         // Skip if no content
         guard !content.isEmpty else {

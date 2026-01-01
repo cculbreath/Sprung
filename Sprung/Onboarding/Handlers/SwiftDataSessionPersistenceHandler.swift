@@ -499,11 +499,6 @@ final class SwiftDataSessionPersistenceHandler {
 
     // MARK: - Archived Artifacts
 
-    /// Get all archived artifacts as JSON for UI display (legacy support)
-    func getArchivedArtifactsAsJSON() -> [JSON] {
-        artifactRecordStore.archivedArtifacts.map { artifactRecordToJSON($0) }
-    }
-
     /// Get archived artifacts count (for UI visibility decisions)
     func getArchivedArtifactsCount() -> Int {
         artifactRecordStore.archivedArtifacts.count

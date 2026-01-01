@@ -6,7 +6,6 @@
 //  Shows upload drop zone with skip option for users without samples.
 //
 import SwiftUI
-import SwiftyJSON
 
 /// View that displays writing sample collection UI for Phase 1.
 /// Includes skip functionality for users without samples available.
@@ -17,13 +16,9 @@ struct Phase1WritingSampleView: View {
     let onDoneWithSamples: () -> Void
     let onSkipSamples: () -> Void
 
-    private var writingSamples: [JSON] {
-        coordinator.ui.artifactRecords.filter { artifact in
-            artifact["source_type"].stringValue == "writing_sample" ||
-            artifact["document_type"].stringValue == "writingSample" ||
-            artifact["document_type"].stringValue == "writing_sample" ||
-            artifact["metadata"]["writing_type"].exists()
-        }
+    /// Writing samples from the current session (typed ArtifactRecord)
+    private var writingSamples: [ArtifactRecord] {
+        coordinator.sessionWritingSamples
     }
 
     /// Check if writing samples collection is already complete
@@ -120,8 +115,8 @@ struct Phase1WritingSampleView: View {
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
 
-            ForEach(writingSamples.indices, id: \.self) { index in
-                Phase1WritingSampleRow(sample: writingSamples[index])
+            ForEach(writingSamples) { sample in
+                Phase1WritingSampleRow(sample: sample)
             }
         }
         .padding(.top, 4)
@@ -198,20 +193,22 @@ struct Phase1WritingSampleView: View {
 }
 
 private struct Phase1WritingSampleRow: View {
-    let sample: JSON
+    let sample: ArtifactRecord
 
     private var name: String {
-        sample["metadata"]["name"].string ??
-        sample["filename"].stringValue.replacingOccurrences(of: ".txt", with: "")
+        sample.metadataString("name") ??
+        sample.filename.replacingOccurrences(of: ".txt", with: "")
     }
 
     private var writingType: String {
-        sample["metadata"]["writing_type"].string ?? "document"
+        sample.metadataString("writing_type") ?? "document"
     }
 
     private var wordCount: Int {
-        sample["metadata"]["word_count"].int ??
-        (sample["extracted_text"].stringValue.split(separator: " ").count)
+        if let count = sample.metadataString("word_count"), let num = Int(count) {
+            return num
+        }
+        return sample.extractedContent.split(separator: " ").count
     }
 
     var body: some View {

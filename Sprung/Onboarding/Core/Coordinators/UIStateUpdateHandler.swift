@@ -88,7 +88,7 @@ final class UIStateUpdateHandler {
         case .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted,
              .artifactRecordProduced, .artifactRecordsReplaced,
              .knowledgeCardPersisted, .knowledgeCardsReplaced:
-            await syncArtifactRecordsFromState()
+            // Typed artifacts are accessed via coordinator.sessionArtifacts (no UI sync needed)
             await syncWizardProgressFromState()
 
         // MARK: Multi-Agent Workflow State (categorized as .artifact)
@@ -108,12 +108,6 @@ final class UIStateUpdateHandler {
         }
     }
 
-    // MARK: - Artifact Records Sync
-    private func syncArtifactRecordsFromState() async {
-        let records = await state.artifactRecords
-        ui.artifactRecords = records
-        Logger.debug("📦 UI artifact records synced: \(records.count) record(s)", category: .ai)
-    }
     // MARK: - LLM Events
     func handleLLMEvent(_ event: OnboardingEvent) async {
         switch event {
@@ -194,8 +188,8 @@ final class UIStateUpdateHandler {
     // MARK: - Initial State Sync
     func initialStateSync() async {
         await syncWizardProgressFromState()
-        await syncArtifactRecordsFromState()
+        // Typed artifacts are accessed via coordinator.sessionArtifacts (no UI sync needed)
         ui.messages = await state.messages
-        Logger.info("📥 Initial state sync: loaded \(ui.messages.count) messages, \(ui.artifactRecords.count) artifacts", category: .ai)
+        Logger.info("📥 Initial state sync: loaded \(ui.messages.count) messages", category: .ai)
     }
 }

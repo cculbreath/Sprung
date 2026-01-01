@@ -491,7 +491,7 @@ private struct ValidationPromptSheet: View {
         } else if validation.dataType == "knowledge_card" {
             KnowledgeCardValidationSheetContent(
                 prompt: validation,
-                artifactsJSON: coordinator.ui.artifactRecords,
+                artifacts: coordinator.sessionArtifacts,
                 coordinator: coordinator
             )
             .padding(16)
@@ -535,13 +535,13 @@ private struct KnowledgeCardValidationSheetContent: View {
 
     init(
         prompt: OnboardingValidationPrompt,
-        artifactsJSON: [JSON],
+        artifacts: [ArtifactRecord],
         coordinator: OnboardingInterviewCoordinator
     ) {
         self.prompt = prompt
         self.coordinator = coordinator
         _draft = State(initialValue: KnowledgeCardDraft(json: prompt.payload))
-        artifactDisplayInfos = artifactsJSON.map { ArtifactDisplayInfo(json: $0) }
+        artifactDisplayInfos = artifacts.map { ArtifactDisplayInfo(from: $0) }
     }
 
     var body: some View {

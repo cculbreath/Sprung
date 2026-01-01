@@ -40,6 +40,8 @@ final class OnboardingInterviewCoordinator {
     private var resRefStore: ResRefStore { container.getResRefStore() }
     private var coverRefStore: CoverRefStore { container.getCoverRefStore() }
     private var experienceDefaultsStore: ExperienceDefaultsStore { container.getExperienceDefaultsStore() }
+    private var artifactRecordStore: ArtifactRecordStore { container.artifactRecordStore }
+    private var sessionPersistenceHandler: SwiftDataSessionPersistenceHandler { container.sessionPersistenceHandler }
     // MARK: - Computed Properties (Read from StateCoordinator)
     var currentPhase: InterviewPhase {
         get async { await state.phase }
@@ -49,6 +51,17 @@ final class OnboardingInterviewCoordinator {
     }
     var artifacts: OnboardingArtifacts {
         get async { await state.artifacts }
+    }
+
+    /// Typed artifacts for the current session (SwiftData models)
+    var sessionArtifacts: [ArtifactRecord] {
+        guard let session = sessionPersistenceHandler.currentSession else { return [] }
+        return artifactRecordStore.artifacts(for: session)
+    }
+
+    /// Writing samples from the current session (typed)
+    var sessionWritingSamples: [ArtifactRecord] {
+        sessionArtifacts.filter { $0.isWritingSample }
     }
 
     /// All knowledge cards (ResRefs) including both onboarding and manually created
