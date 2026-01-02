@@ -404,58 +404,87 @@ actor DocumentExtractionService {
         let graphicsResult = await graphicsTask
 
         // Validate PDFKit extraction quality
+        let effectivePageCount = extractedPageCount ?? pageCount ?? 1
         let textQuality = validateTextExtraction(
             text: plainText ?? "",
-            pageCount: extractedPageCount ?? pageCount ?? 1
+            pageCount: effectivePageCount
         )
         Logger.info("PDF extraction quality: \(textQuality.diagnosticSummary)", category: .ai)
 
-        // Pass 1 must succeed - we need text content
-        guard let plainText, !plainText.isEmpty else {
-            await notifyProgress(.aiExtraction, .failed, detail: "No text extracted from PDF")
-            throw ExtractionError.noTextExtracted
-        }
+        // Determine final extracted text - use vision fallback if PDFKit quality is too low
+        let finalPlainText: String
+        let usedVisionFallback: Bool
 
-        // Log quality assessment for future vision fallback integration
-        if textQuality.isAcceptable {
+        if textQuality.requiresVisionFallback || (plainText?.isEmpty ?? true) {
+            // PDFKit failed - use vision extraction
+            Logger.warning("PDFKit quality too low (\(String(format: "%.0f%%", textQuality.score * 100))) - using vision extraction", category: .ai)
+            await notifyProgress(.aiExtraction, .active, detail: "Complex fonts detected - using vision extraction...")
+
+            do {
+                finalPlainText = try await extractWithVision(
+                    pdfData: fileData,
+                    filename: filename,
+                    pageCount: effectivePageCount,
+                    progress: progress
+                )
+                usedVisionFallback = true
+                Logger.info("Vision extraction successful: \(finalPlainText.count) chars", category: .ai)
+            } catch {
+                // If vision also fails and we have some PDFKit text, use it as fallback
+                if let pdfKitText = plainText, !pdfKitText.isEmpty {
+                    Logger.warning("Vision extraction failed, using low-quality PDFKit text: \(error.localizedDescription)", category: .ai)
+                    finalPlainText = pdfKitText
+                    usedVisionFallback = false
+                } else {
+                    await notifyProgress(.aiExtraction, .failed, detail: "Text extraction failed")
+                    throw error
+                }
+            }
+        } else if textQuality.isAcceptable {
+            // PDFKit text is good quality - use it
             Logger.info("PDFKit text quality acceptable (\(String(format: "%.0f%%", textQuality.score * 100)))", category: .ai)
-        } else if textQuality.requiresVisionFallback {
-            Logger.warning("PDFKit quality too low (\(String(format: "%.0f%%", textQuality.score * 100))) - vision fallback recommended", category: .ai)
+            finalPlainText = plainText!
+            usedVisionFallback = false
         } else {
-            Logger.warning("PDFKit quality marginal (\(String(format: "%.0f%%", textQuality.score * 100)))", category: .ai)
+            // Marginal quality - use PDFKit but log warning
+            Logger.warning("PDFKit quality marginal (\(String(format: "%.0f%%", textQuality.score * 100))), using anyway", category: .ai)
+            finalPlainText = plainText!
+            usedVisionFallback = false
         }
 
         // Log results
         let durationMs = Int(Date().timeIntervalSince(extractionStart) * 1000)
         Logger.info(
-            "📄 Two-pass PDF extraction completed",
+            "PDF extraction completed",
             category: .diagnostics,
             metadata: [
                 "filename": filename,
                 "duration_ms": "\(durationMs)",
-                "text_chars": "\(plainText.count)",
+                "text_chars": "\(finalPlainText.count)",
                 "graphics_status": graphicsResult.graphics != nil ? "success" : "failed",
-                "page_count": pageCount.map(String.init) ?? "unknown"
+                "page_count": "\(effectivePageCount)",
+                "used_vision": "\(usedVisionFallback)",
+                "pdfkit_quality": String(format: "%.0f%%", textQuality.score * 100)
             ]
         )
-
-        // Emit token usage for graphics extraction if available
-        // (Text extraction is local, no token usage)
 
         await notifyProgress(.aiExtraction, .completed)
 
         // Combine content for downstream processing
+        // Note: If vision was used, graphics extraction may have overlapping content
         let combinedContent: String
-        if let graphics = graphicsResult.graphics {
+        if !usedVisionFallback, let graphics = graphicsResult.graphics {
+            // Only include separate graphics section if we used PDFKit text
             combinedContent = """
             --- EXTRACTED TEXT ---
-            \(plainText)
+            \(finalPlainText)
 
             --- VISUAL CONTENT ANALYSIS ---
             \(graphics)
             """
         } else {
-            combinedContent = plainText
+            // Vision extraction already includes visual content descriptions
+            combinedContent = finalPlainText
         }
 
         // Determine graphics extraction status
@@ -474,17 +503,17 @@ actor DocumentExtractionService {
 
         var metadata: [String: Any] = [
             "character_count": combinedContent.count,
-            "plain_text_chars": plainText.count,
+            "plain_text_chars": finalPlainText.count,
             "source_format": contentType,
             "purpose": purpose,
             "source_file_url": fileURL.absoluteString,
             "source_filename": filename,
-            "extraction_method": "two_pass_parallel"
+            "extraction_method": usedVisionFallback ? "vision_fallback" : "two_pass_parallel",
+            "pdfkit_quality_score": textQuality.score
         ]
-        if let pageCount {
-            metadata["page_count"] = pageCount
-        }
+        metadata["page_count"] = effectivePageCount
         metadata["graphics_extraction_status"] = graphicsStatus.rawValue
+        metadata["used_vision_fallback"] = usedVisionFallback
         if let graphicsError = graphicsResult.error {
             metadata["graphics_extraction_error"] = graphicsError
         }
@@ -501,13 +530,19 @@ actor DocumentExtractionService {
             sha256: sha256,
             extractedContent: combinedContent,
             metadata: metadata,
-            plainTextContent: plainText,
-            graphicsContent: graphicsResult.graphics,
-            graphicsExtractionStatus: graphicsStatus
+            plainTextContent: finalPlainText,
+            graphicsContent: usedVisionFallback ? nil : graphicsResult.graphics,
+            graphicsExtractionStatus: usedVisionFallback ? .skipped : graphicsStatus
         )
 
-        let issues = textIssues + (graphicsResult.error != nil ? ["graphics_extraction_failed"] : [])
-        let quality = Quality(confidence: estimateConfidence(for: plainText, issues: issues), issues: issues)
+        var issues = textIssues
+        if usedVisionFallback {
+            issues.append("vision_fallback_used")
+        }
+        if graphicsResult.error != nil {
+            issues.append("graphics_extraction_failed")
+        }
+        let quality = Quality(confidence: estimateConfidence(for: finalPlainText, issues: issues), issues: issues)
 
         return ExtractionResult(
             status: graphicsResult.error != nil ? .partial : .ok,
