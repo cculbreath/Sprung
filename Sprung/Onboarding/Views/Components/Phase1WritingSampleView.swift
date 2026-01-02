@@ -121,6 +121,11 @@ struct Phase1WritingSampleView: View {
         .padding(.top, 4)
     }
 
+    /// Whether buttons should be disabled (during LLM processing)
+    private var buttonsDisabled: Bool {
+        coordinator.ui.isProcessing
+    }
+
     private var actionButtons: some View {
         VStack(spacing: 8) {
             // Done button (prominent when samples exist)
@@ -134,6 +139,7 @@ struct Phase1WritingSampleView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.regular)
+                .disabled(buttonsDisabled)
             }
 
             // Skip button (always available)
@@ -147,6 +153,7 @@ struct Phase1WritingSampleView: View {
             .buttonStyle(.bordered)
             .controlSize(.regular)
             .foregroundStyle(.secondary)
+            .disabled(buttonsDisabled)
         }
         .padding(.top, 8)
     }

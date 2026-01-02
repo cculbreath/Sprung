@@ -43,6 +43,11 @@ struct DocumentCollectionView: View {
         coordinator.ui.pendingExtraction != nil
     }
 
+    /// Whether buttons should be disabled (during LLM processing)
+    private var buttonsDisabled: Bool {
+        coordinator.ui.isProcessing
+    }
+
     private var artifactCount: Int {
         artifacts.count
     }
@@ -294,6 +299,7 @@ struct DocumentCollectionView: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(.blue)
+            .disabled(buttonsDisabled)
             .alert(
                 "Extraction in Progress",
                 isPresented: $showActiveAgentsAlert
