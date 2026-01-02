@@ -574,14 +574,22 @@ struct AnthropicRequestBuilder {
         }
     }
 
-    /// Ensures every tool_use block has a corresponding tool_result in the next message.
+    /// Ensures every tool_use block has a corresponding tool_result.
     /// Anthropic requires tool_result immediately after tool_use. Race conditions during
     /// user button clicks can cause tool_results to be missing from the transcript.
-    /// This function inserts synthetic tool_results for any missing ones.
+    /// This function inserts synthetic tool_results for any truly missing ones.
     private func ensureToolResultsPresent(_ messages: [AnthropicMessage]) -> [AnthropicMessage] {
+        // FIRST: Build a global set of ALL tool_result IDs that exist anywhere in the messages.
+        // This prevents inserting synthetic results for tool_uses that have results later.
+        var allExistingResultIds = Set<String>()
+        for message in messages {
+            let resultIds = extractToolResultIds(from: message)
+            allExistingResultIds.formUnion(resultIds)
+        }
+
         var result: [AnthropicMessage] = []
 
-        for (index, message) in messages.enumerated() {
+        for message in messages {
             result.append(message)
 
             // Only check assistant messages for tool_use blocks
@@ -591,55 +599,29 @@ struct AnthropicRequestBuilder {
             let toolUseIds = extractToolUseIds(from: message)
             guard !toolUseIds.isEmpty else { continue }
 
-            // Check the next message for corresponding tool_results
-            let nextIndex = index + 1
-            if nextIndex < messages.count {
-                let nextMessage = messages[nextIndex]
-                let existingResultIds = extractToolResultIds(from: nextMessage)
-                let missingIds = toolUseIds.filter { !existingResultIds.contains($0) }
+            // Check which tool_uses are TRULY missing (not anywhere in the conversation)
+            let trulyMissingIds = toolUseIds.filter { !allExistingResultIds.contains($0) }
 
-                if !missingIds.isEmpty {
-                    // Insert synthetic tool_results for missing IDs
-                    Logger.warning(
-                        "⚠️ Missing tool_result for \(missingIds.count) tool(s): \(missingIds.joined(separator: ", ").prefix(80)). " +
-                        "Inserting synthetic results.",
-                        category: .ai
-                    )
-
-                    // Create synthetic tool_result blocks
-                    var syntheticBlocks: [AnthropicContentBlock] = []
-                    for missingId in missingIds {
-                        syntheticBlocks.append(.toolResult(AnthropicToolResultBlock(
-                            toolUseId: missingId,
-                            content: "{\"status\":\"completed\",\"message\":\"Action completed by user\"}"
-                        )))
-                    }
-
-                    // If next message is a user message, we'll merge the synthetic results into it later
-                    // But we need to insert them BEFORE the next message
-                    // Since we already appended current message, insert synthetic user message
-                    if nextMessage.role == "user" {
-                        // The merge step will combine these
-                        result.append(AnthropicMessage(role: "user", content: .blocks(syntheticBlocks)))
-                    } else {
-                        // Next message is assistant - insert synthetic user message between
-                        result.append(AnthropicMessage(role: "user", content: .blocks(syntheticBlocks)))
-                    }
-                }
-            } else {
-                // This is the last message and it's an assistant with tool_use - need synthetic result
+            if !trulyMissingIds.isEmpty {
+                // Insert synthetic tool_results for truly missing IDs
                 Logger.warning(
-                    "⚠️ Final assistant message has \(toolUseIds.count) unanswered tool_use(s). Inserting synthetic results.",
+                    "⚠️ Missing tool_result for \(trulyMissingIds.count) tool(s): \(trulyMissingIds.joined(separator: ", ").prefix(80)). " +
+                    "Inserting synthetic results.",
                     category: .ai
                 )
 
+                // Create synthetic tool_result blocks
                 var syntheticBlocks: [AnthropicContentBlock] = []
-                for toolId in toolUseIds {
+                for missingId in trulyMissingIds {
                     syntheticBlocks.append(.toolResult(AnthropicToolResultBlock(
-                        toolUseId: toolId,
+                        toolUseId: missingId,
                         content: "{\"status\":\"completed\",\"message\":\"Action completed by user\"}"
                     )))
+                    // Track that we've now added this result
+                    allExistingResultIds.insert(missingId)
                 }
+
+                // Insert synthetic user message with tool_results
                 result.append(AnthropicMessage(role: "user", content: .blocks(syntheticBlocks)))
             }
         }
