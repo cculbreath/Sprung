@@ -22,6 +22,8 @@ struct SettingsView: View {
     @AppStorage("knowledgeCardTokenLimit") private var knowledgeCardTokenLimit: Int = 8000
     @AppStorage("onboardingMaxConcurrentExtractions") private var maxConcurrentExtractions: Int = 5
     @AppStorage("maxConcurrentPDFExtractions") private var maxConcurrentPDFExtractions: Int = 4
+    @AppStorage("pdfJudgeUseFourUp") private var pdfJudgeUseFourUp: Bool = false
+    @AppStorage("pdfJudgeDPI") private var pdfJudgeDPI: Int = 150
     @AppStorage("onboardingEphemeralTurns") private var ephemeralTurns: Int = 3
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(DiscoveryCoordinator.self) private var searchOpsCoordinator
@@ -788,6 +790,26 @@ private extension SettingsView {
                 }
             }
             Text("Pages processed in parallel when LLM vision is used for complex PDFs. Higher values use more API quota.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            Divider()
+                .padding(.vertical, 4)
+
+            // PDF Judge Settings
+            Toggle("Use 4-Up Composites for Judge", isOn: $pdfJudgeUseFourUp)
+            Text("When enabled, combines 4 pages into each composite image. When disabled, sends individual page images.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            Picker("Judge Image Resolution", selection: $pdfJudgeDPI) {
+                Text("100 DPI (Fast)").tag(100)
+                Text("150 DPI (Balanced)").tag(150)
+                Text("200 DPI (Quality)").tag(200)
+                Text("300 DPI (Max)").tag(300)
+            }
+            .pickerStyle(.menu)
+            Text("Resolution for sample page images sent to the extraction quality judge. Higher values improve accuracy but increase API costs.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }

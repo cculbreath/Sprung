@@ -20,11 +20,18 @@ actor PDFExtractionJudge {
     // MARK: - Judge Method
 
     /// Judge extraction quality by comparing PDFKit text to rasterized page images
+    /// - Parameters:
+    ///   - pageImages: URLs to individual page images or 4-up composites
+    ///   - pdfKitText: Text extracted via PDFKit for comparison
+    ///   - samplePages: Which page numbers were sampled
+    ///   - hasNullCharacters: Whether null characters were detected in PDFKit text
+    ///   - isComposite: True if images are 4-up composites, false if individual pages
     func judge(
         pageImages: [URL],
         pdfKitText: String,
         samplePages: [Int],
-        hasNullCharacters: Bool
+        hasNullCharacters: Bool,
+        isComposite: Bool = false
     ) async throws -> ExtractionJudgment {
 
         // If null characters detected, skip straight to OCR recommendation
@@ -33,7 +40,7 @@ actor PDFExtractionJudge {
             return ExtractionJudgment.quickFail(reason: "null_characters_detected")
         }
 
-        // Load individual page images
+        // Load images
         var imageData: [Data] = []
         for url in pageImages {
             let data = try Data(contentsOf: url)
@@ -46,10 +53,12 @@ actor PDFExtractionJudge {
         let prompt = buildJudgePrompt(
             textSample: textSample,
             samplePages: samplePages,
-            imageCount: pageImages.count
+            imageCount: pageImages.count,
+            isComposite: isComposite
         )
 
-        Logger.info("📊 Judge: Sending \(pageImages.count) page images to Gemini for analysis", category: .ai)
+        let imageType = isComposite ? "composite" : "page"
+        Logger.info("📊 Judge: Sending \(pageImages.count) \(imageType) images to Gemini for analysis", category: .ai)
 
         // Use Gemini's native vision API for image analysis
         let response = try await llmFacade.analyzeImagesWithGemini(
@@ -63,11 +72,15 @@ actor PDFExtractionJudge {
 
     // MARK: - Prompt Building
 
-    private func buildJudgePrompt(textSample: String, samplePages: [Int], imageCount: Int) -> String {
-        """
+    private func buildJudgePrompt(textSample: String, samplePages: [Int], imageCount: Int, isComposite: Bool) -> String {
+        let imageDescription = isComposite
+            ? "\(imageCount) composite images, each containing 4 pages in a 2x2 grid"
+            : "\(imageCount) individual page images"
+
+        return """
         You are evaluating PDF text extraction quality.
 
-        I'm showing you \(imageCount) sample page images from the document.
+        I'm showing you \(imageDescription) from the document.
         The pages sampled are: \(samplePages.map { String($0 + 1) }.joined(separator: ", "))
 
         Below is the text extracted by PDFKit from these same pages:

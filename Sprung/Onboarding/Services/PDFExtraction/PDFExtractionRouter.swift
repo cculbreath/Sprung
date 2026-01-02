@@ -109,6 +109,7 @@ actor PDFExtractionRouter {
         Logger.info("📄 PDFRouter: PDFKit extracted \(pdfKitText.count) characters", category: .ai)
 
         // Step 3: Rasterize sample pages for judge (~5% of pages, min 3, max 10)
+        let judgeConfig = RasterConfig.judge
         progress?("Rasterizing sample pages...")
         let samplePages = await rasterizer.selectSamplePages(pageCount: pageCount)
         Logger.info("📄 PDFRouter: Sampling \(samplePages.count) pages (~5%): \(samplePages.map { $0 + 1 })", category: .ai)
@@ -116,19 +117,35 @@ actor PDFExtractionRouter {
         let pageImages = try await rasterizer.rasterizePages(
             pdfDocument: pdfDocument,
             pages: samplePages,
-            config: .judge,
+            config: judgeConfig,
             workspace: workspace
         )
 
-        // Step 4: LLM Judge (using individual page images, not composites)
+        // Step 4: Optionally create 4-up composites based on settings
+        let judgeImages: [URL]
+        if judgeConfig.compositeMode == .fourUp {
+            progress?("Creating comparison composites...")
+            judgeImages = try await rasterizer.createFourUpComposites(
+                pageImages: pageImages,
+                workspace: workspace
+            )
+            Logger.info("📄 PDFRouter: Created \(judgeImages.count) composite images (4-up)", category: .ai)
+        } else {
+            judgeImages = pageImages
+            Logger.info("📄 PDFRouter: Using \(judgeImages.count) individual page images", category: .ai)
+        }
+
+        // Step 5: LLM Judge
         progress?("Analyzing extraction quality...")
-        Logger.info("📄 PDFRouter: Sending \(pageImages.count) page images to judge", category: .ai)
+        let isComposite = judgeConfig.compositeMode == .fourUp
+        Logger.info("📄 PDFRouter: Sending \(judgeImages.count) images to judge (\(judgeConfig.dpi) DPI, composite=\(isComposite))", category: .ai)
 
         let judgment = try await judge.judge(
-            pageImages: pageImages,
+            pageImages: judgeImages,
             pdfKitText: pdfKitText,
             samplePages: samplePages,
-            hasNullCharacters: hasNullChars
+            hasNullCharacters: hasNullChars,
+            isComposite: isComposite
         )
 
         Logger.info(
