@@ -127,7 +127,7 @@ actor PDFExtractionJudge {
 
     private func parseJudgment(_ response: String) throws -> ExtractionJudgment {
         // Clean up response (remove markdown code blocks if present)
-        var cleaned = response
+        let cleaned = response
             .replacingOccurrences(of: "```json", with: "")
             .replacingOccurrences(of: "```", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)

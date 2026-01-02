@@ -86,7 +86,7 @@ actor VisionOCRService {
     /// OCR multiple images with progress callback
     func recognizeImages(
         _ imageURLs: [URL],
-        progressHandler: ((Int, Int) -> Void)? = nil
+        progressHandler: (@Sendable (Int, Int) async -> Void)? = nil
     ) async throws -> String {
         var results: [String] = []
         let total = imageURLs.count
@@ -94,7 +94,7 @@ actor VisionOCRService {
         for (index, url) in imageURLs.enumerated() {
             let text = try await recognizeImage(url)
             results.append("--- Page \(index + 1) ---\n\(text)")
-            progressHandler?(index + 1, total)
+            await progressHandler?(index + 1, total)
         }
 
         return results.joined(separator: "\n\n")

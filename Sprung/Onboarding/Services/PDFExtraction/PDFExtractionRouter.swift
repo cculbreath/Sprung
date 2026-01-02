@@ -221,10 +221,8 @@ actor PDFExtractionRouter {
 
             // Run Vision OCR
             await updateStatus(agentId, "Running OCR on \(pageCount) pages...")
-            let text = try await visionOCR.recognizeImages(allPages) { [weak self, agentId] completed, total in
-                Task { @MainActor in
-                    await self?.updateStatus(agentId, "OCR: \(completed)/\(total) pages")
-                }
+            let text = try await visionOCR.recognizeImages(allPages) { [weak self] completed, total in
+                await self?.updateStatus(agentId, "OCR: \(completed)/\(total) pages")
             }
 
             await logTranscript(agentId, .system, "Vision OCR extracted \(text.count) characters")
@@ -263,7 +261,7 @@ actor PDFExtractionRouter {
         let maxConcurrent = UserDefaults.standard.integer(forKey: "maxConcurrentPDFExtractions")
         await logTranscript(agentId, .system, "Starting parallel vision extraction (max \(max(maxConcurrent, 4)) concurrent)")
 
-        let pageTexts = try await parallelExtractor.extractPages(images: allPages) { [weak self, agentId] status in
+        let pageTexts = try await parallelExtractor.extractPages(images: allPages) { [weak self] status in
             await self?.updateStatus(agentId, status)
         }
 
@@ -279,37 +277,63 @@ actor PDFExtractionRouter {
     // MARK: - Agent Tracking
 
     @MainActor
-    private func registerAgent(id: String, name: String) {
-        agentTracker?.trackAgent(
+    private func registerAgentOnMain(_ tracker: AgentActivityTracker, id: String, name: String) {
+        _ = tracker.trackAgent(
             id: id,
             type: .pdfExtraction,
             name: name,
-            status: .running
+            status: .running,
+            task: nil as Task<Void, Never>?
         )
     }
 
-    @MainActor
-    private func updateStatus(_ agentId: String, _ message: String) {
-        agentTracker?.updateStatusMessage(agentId: agentId, message: message)
+    private func registerAgent(id: String, name: String) async {
+        guard let tracker = agentTracker else { return }
+        await registerAgentOnMain(tracker, id: id, name: name)
     }
 
     @MainActor
-    private func logTranscript(_ agentId: String, _ type: AgentTranscriptEntry.EntryType, _ content: String) {
-        agentTracker?.appendTranscript(
+    private func updateStatusOnMain(_ tracker: AgentActivityTracker, agentId: String, message: String) {
+        tracker.updateStatusMessage(agentId: agentId, message: message)
+    }
+
+    private func updateStatus(_ agentId: String, _ message: String) async {
+        guard let tracker = agentTracker else { return }
+        await updateStatusOnMain(tracker, agentId: agentId, message: message)
+    }
+
+    @MainActor
+    private func logTranscriptOnMain(_ tracker: AgentActivityTracker, agentId: String, type: AgentTranscriptEntry.EntryType, content: String) {
+        tracker.appendTranscript(
             agentId: agentId,
             entryType: type,
             content: content
         )
     }
 
-    @MainActor
-    private func completeAgent(id: String) {
-        agentTracker?.markCompleted(agentId: id)
+    private func logTranscript(_ agentId: String, _ type: AgentTranscriptEntry.EntryType, _ content: String) async {
+        guard let tracker = agentTracker else { return }
+        await logTranscriptOnMain(tracker, agentId: agentId, type: type, content: content)
     }
 
     @MainActor
-    private func failAgent(id: String, error: String) {
-        agentTracker?.markFailed(agentId: id, error: error)
+    private func completeAgentOnMain(_ tracker: AgentActivityTracker, id: String) {
+        tracker.markCompleted(agentId: id)
+    }
+
+    private func completeAgent(id: String) async {
+        guard let tracker = agentTracker else { return }
+        await completeAgentOnMain(tracker, id: id)
+    }
+
+    @MainActor
+    private func failAgentOnMain(_ tracker: AgentActivityTracker, id: String, error: String) {
+        tracker.markFailed(agentId: id, error: error)
+    }
+
+    private func failAgent(id: String, error: String) async {
+        guard let tracker = agentTracker else { return }
+        await failAgentOnMain(tracker, id: id, error: error)
     }
 
     // MARK: - Helpers
