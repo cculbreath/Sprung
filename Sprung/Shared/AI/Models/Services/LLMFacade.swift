@@ -1012,34 +1012,6 @@ final class LLMFacade {
         )
     }
 
-    /// Generate structured JSON from a PDF using Gemini's native structured output mode.
-    /// Uploads the PDF via Files API, processes with schema enforcement, and returns valid JSON.
-    /// - Parameters:
-    ///   - pdfData: The raw PDF data
-    ///   - filename: Display name for the file
-    ///   - prompt: The prompt describing what to extract
-    ///   - jsonSchema: JSON Schema dictionary for structured output
-    ///   - modelId: Gemini model ID (defaults to flash)
-    /// - Returns: Tuple of (JSON string, token usage)
-    func generateStructuredJSONFromPDF(
-        pdfData: Data,
-        filename: String,
-        prompt: String,
-        jsonSchema: [String: Any],
-        modelId: String? = nil
-    ) async throws -> (jsonString: String, tokenUsage: GoogleAIService.GeminiTokenUsage?) {
-        guard let service = googleAIService else {
-            throw LLMError.clientError("Google AI service is not configured. Call registerGoogleAIService first.")
-        }
-        return try await service.generateStructuredJSONFromPDF(
-            pdfData: pdfData,
-            filename: filename,
-            prompt: prompt,
-            jsonSchema: jsonSchema,
-            modelId: modelId
-        )
-    }
-
     // MARK: - Text-to-Speech
 
     /// Creates a TTS-capable client using the registered OpenAI service.
