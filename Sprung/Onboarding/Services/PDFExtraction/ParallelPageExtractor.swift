@@ -117,25 +117,36 @@ actor ParallelPageExtractor {
         let prompt = """
         Extract ALL content from this document page (page \(pageNumber) of \(totalPages)).
 
+        **IMPORTANT**: This is the ONLY opportunity to analyze visual content. After this extraction,
+        only text will be available. Capture ALL visually-evident skills and information now.
+
         ## Text Extraction
         - Extract all visible text verbatim
         - Preserve structure: headings, paragraphs, lists, tables
         - For tables, use markdown table format
         - Maintain reading order
 
-        ## Graphics Analysis (for resume building context)
-        For each diagram, chart, figure, image, or graphic on the page:
+        ## Graphics Analysis (CRITICAL for resume building)
+        This extraction feeds a resume builder. We need to identify skills demonstrated through visual work.
+
+        For each diagram, chart, figure, screenshot, photo, or graphic on the page:
         1. Count the total number of graphics
         2. Describe what each graphic shows (the data, information, or content it conveys)
-        3. **Skills Assessment**: Evaluate what skills are demonstrated by creating this graphic. Consider:
-           - Data visualization skills (Excel charts, Tableau dashboards, D3.js, matplotlib)
-           - Technical diagramming (architecture diagrams, flowcharts, UML, network diagrams)
-           - Scientific figure creation (publication-quality plots, experimental schematics)
-           - Design skills (infographics, presentations, marketing materials)
-           - CAD/engineering drawings, circuit schematics, mechanical drawings
-           - Geographic/mapping skills (GIS, cartography)
-           - Note the apparent tool/software used and proficiency level if discernible
-           - Flag if the graphic appears to be stock imagery, AI-generated, or third-party content (not a demonstrated skill)
+        3. **Skills Assessment** - Be thorough, this is our only chance to capture this:
+           - Data visualization (Excel, Tableau, Power BI, D3.js, matplotlib, R/ggplot, Plotly)
+           - Technical diagramming (architecture, flowcharts, UML, ERD, network topology, wireframes)
+           - Scientific/research figures (publication-quality plots, lab schematics, statistical analysis)
+           - Design & creative (infographics, presentations, marketing collateral, UI mockups)
+           - Engineering (CAD drawings, circuit schematics, P&ID, mechanical assemblies, 3D models)
+           - Geographic/spatial (GIS maps, cartography, spatial analysis)
+           - Code/technical (screenshots of IDEs, terminal output, code architecture)
+           - Project artifacts (Gantt charts, Kanban boards, sprint burndowns, process flows)
+
+           Note specifically:
+           - The tool/software likely used (if identifiable)
+           - Proficiency level (basic, intermediate, advanced, expert)
+           - Whether this appears to be original work by the document author
+           - Flag: stock imagery, AI-generated, clip art, or third-party content = "No skill demonstrated"
 
         If there are no graphics, return number_of_graphics: 0 with empty arrays.
         """
