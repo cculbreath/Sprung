@@ -111,10 +111,8 @@ actor DocumentProcessingService {
         } else {
             // Steps 3 & 4: Generate summary and card inventory IN PARALLEL
             // Both are independent LLM calls that only need extractedText
+            // (PDF-based inventory is no longer used since we have reliable text from vision fallback)
             statusCallback?("Running summary + card inventory in parallel...")
-            let isPDF = fileURL.pathExtension.lowercased() == "pdf"
-            let isResume = documentType == "resume"
-            let pdfData: Data? = isPDF && !isResume ? try? Data(contentsOf: fileURL) : nil
 
             // Launch both tasks in parallel
             async let summaryTask: DocumentSummary? = generateSummary(
@@ -125,10 +123,7 @@ actor DocumentProcessingService {
             async let inventoryTask: DocumentInventory? = generateInventory(
                 artifactId: artifactId,
                 filename: filename,
-                extractedText: extractedText,
-                pdfData: pdfData,
-                isPDF: isPDF,
-                isResume: isResume
+                extractedText: extractedText
             )
 
             // Await both results
@@ -136,7 +131,7 @@ actor DocumentProcessingService {
             let summaryChars = documentSummary?.summary.count ?? 0
             let cardCount = inventory?.proposedCards.count ?? 0
             statusCallback?("Summary (\(summaryChars) chars) + \(cardCount) cards complete")
-            Logger.info("✅ Parallel processing complete: summary=\(summaryChars) chars, cards=\(cardCount)", category: .ai)
+            Logger.info("Parallel processing complete: summary=\(summaryChars) chars, cards=\(cardCount)", category: .ai)
         }
 
         // Step 5: Create artifact record
@@ -282,86 +277,53 @@ actor DocumentProcessingService {
     }
 
     /// Generate card inventory (runs in parallel with summary)
-    /// Falls back to text-based extraction if PDF extraction fails
+    /// Always uses text-based extraction since we now have reliable extracted text
+    /// (either from high-quality PDFKit or vision fallback).
     private func generateInventory(
         artifactId: String,
         filename: String,
-        extractedText: String,
-        pdfData: Data?,
-        isPDF: Bool,
-        isResume: Bool
+        extractedText: String
     ) async -> DocumentInventory? {
+        // Validate text quality before generating inventory
+        let quality = validateTextExtraction(text: extractedText, pageCount: 1)
+        guard quality.score >= 0.5 else {
+            Logger.error("Text quality too low for card inventory: \(quality.diagnosticSummary)", category: .ai)
+            return nil
+        }
+
+        // Truncate if very long - cards don't need every word
+        let inventoryInput = String(extractedText.prefix(ExtractionConfig.inventoryInputLimit))
+
         do {
-            if isPDF && !isResume, let pdfData = pdfData {
-                // Use direct PDF inventory for non-resume documents
-                Logger.info("📄 Using direct PDF inventory (full document access)", category: .ai)
-                do {
-                    return try await inventoryService.inventoryDocumentFromPDF(
-                        documentId: artifactId,
-                        filename: filename,
-                        pdfData: pdfData
-                    )
-                } catch {
-                    // Fallback to text-based inventory on Gemini failure
-                    Logger.warning("⚠️ PDF inventory failed (\(error.localizedDescription)), falling back to text-based", category: .ai)
-                    return try await inventoryService.inventoryDocument(
-                        documentId: artifactId,
-                        filename: filename,
-                        content: extractedText
-                    )
-                }
-            } else {
-                // Use text-based inventory for resumes and non-PDFs
-                Logger.info("📄 Using text-based inventory", category: .ai)
-                return try await inventoryService.inventoryDocument(
-                    documentId: artifactId,
-                    filename: filename,
-                    content: extractedText
-                )
-            }
+            Logger.info("Generating text-based inventory (\(inventoryInput.count) chars)", category: .ai)
+            return try await inventoryService.inventoryDocument(
+                documentId: artifactId,
+                filename: filename,
+                content: inventoryInput
+            )
         } catch {
-            Logger.warning("⚠️ Card inventory generation failed: \(error.localizedDescription)", category: .ai)
+            Logger.warning("Card inventory generation failed: \(error.localizedDescription)", category: .ai)
             return nil
         }
     }
 
     // MARK: - Inventory Regeneration
 
-    /// Generate card inventory for an existing artifact (used for regeneration).
+    /// Regenerate card inventory for an existing artifact using text-based extraction.
     /// Updates the artifact's cardInventoryJSON directly.
-    /// - Parameter artifact: The artifact to regenerate inventory for
     @MainActor
     func generateInventoryForExistingArtifact(_ artifact: ArtifactRecord) async {
-        Logger.info("📦 Regenerating inventory for: \(artifact.filename)", category: .ai)
+        Logger.info("Regenerating inventory for: \(artifact.filename)", category: .ai)
 
         let artifactId = artifact.idString
         let filename = artifact.filename
         let extractedText = artifact.extractedContent
-        let isPDF = artifact.isPDF
-        let isResume = artifact.sourceType == "resume"
 
-        // Load PDF data if applicable
-        var pdfData: Data?
-        if isPDF && !isResume, let rawPath = artifact.rawFileRelativePath {
-            // Construct full path from relative path
-            if let storageDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
-                .appendingPathComponent("Sprung/OnboardingUploads") {
-                let fullPath = storageDir.appendingPathComponent(rawPath)
-                pdfData = try? Data(contentsOf: fullPath)
-                if pdfData != nil {
-                    Logger.info("📄 Loaded PDF data (\(pdfData!.count) bytes) for: \(filename)", category: .ai)
-                }
-            }
-        }
-
-        // Generate inventory
+        // Generate inventory using text-based extraction
         let inventory = await generateInventory(
             artifactId: artifactId,
             filename: filename,
-            extractedText: extractedText,
-            pdfData: pdfData,
-            isPDF: isPDF,
-            isResume: isResume
+            extractedText: extractedText
         )
 
         // Update artifact with new inventory
@@ -372,10 +334,10 @@ actor DocumentProcessingService {
             if let inventoryData = try? encoder.encode(inventoryResult),
                let inventoryString = String(data: inventoryData, encoding: .utf8) {
                 artifact.cardInventoryJSON = inventoryString
-                Logger.info("✅ Inventory regenerated for \(filename): \(inventoryResult.proposedCards.count) cards", category: .ai)
+                Logger.info("Inventory regenerated for \(filename): \(inventoryResult.proposedCards.count) cards", category: .ai)
             }
         } else {
-            Logger.warning("⚠️ Failed to regenerate inventory for: \(filename)", category: .ai)
+            Logger.warning("Failed to regenerate inventory for: \(filename)", category: .ai)
         }
     }
 }
