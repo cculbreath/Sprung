@@ -556,10 +556,25 @@ struct AnthropicRequestBuilder {
     }
 
     /// Merge content from two messages of the same role into a single message
+    /// Deduplicates tool_result blocks by tool_use_id (keeps first occurrence)
     private func mergeMessageContent(_ first: AnthropicMessage, with second: AnthropicMessage) -> AnthropicMessage {
         let firstBlocks = extractContentBlocks(first)
         let secondBlocks = extractContentBlocks(second)
-        let mergedBlocks = firstBlocks + secondBlocks
+
+        // Deduplicate tool_result blocks - keep first occurrence of each tool_use_id
+        var seenToolResultIds = Set<String>()
+        var mergedBlocks: [AnthropicContentBlock] = []
+
+        for block in firstBlocks + secondBlocks {
+            if case .toolResult(let result) = block {
+                if seenToolResultIds.contains(result.toolUseId) {
+                    Logger.debug("📝 Skipping duplicate tool_result for \(result.toolUseId.prefix(12))", category: .ai)
+                    continue
+                }
+                seenToolResultIds.insert(result.toolUseId)
+            }
+            mergedBlocks.append(block)
+        }
 
         return AnthropicMessage(role: first.role, content: .blocks(mergedBlocks))
     }
