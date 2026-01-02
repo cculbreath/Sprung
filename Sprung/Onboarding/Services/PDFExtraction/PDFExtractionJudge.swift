@@ -74,22 +74,32 @@ actor PDFExtractionJudge {
 
     private func buildJudgePrompt(textSample: String, samplePages: [Int], imageCount: Int, isComposite: Bool) -> String {
         let imageDescription = isComposite
-            ? "\(imageCount) composite images, each containing 4 pages in a 2x2 grid"
-            : "\(imageCount) individual page images"
+            ? "Each image is a 4-page composite (2x2 grid) from the source PDF."
+            : "Each image is a single page from the source PDF."
 
         return """
-        You are evaluating PDF text extraction quality.
+        You are evaluating the quality of text extraction/OCR performed by another tool on a PDF document.
 
-        I'm showing you \(imageDescription) from the document.
-        The pages sampled are: \(samplePages.map { String($0 + 1) }.joined(separator: ", "))
+        ## Your Task
 
-        Below is the text extracted by PDFKit from these same pages:
+        I'm providing you with:
+        1. **Sample images**: \(imageCount) images showing pages from the original PDF document. \(imageDescription) These images represent the GROUND TRUTH of what the document actually contains. The sampled pages are: \(samplePages.map { String($0 + 1) }.joined(separator: ", ")).
+
+        2. **Extracted text**: The complete text extraction from the ENTIRE document (may be truncated if very long). This is what a text extraction tool produced.
+
+        Your job is to:
+        - Look at the text visible in each sample image
+        - Find the corresponding section in the extracted text below
+        - Assess whether that extraction accurately captured the visible text
+        - Only judge extraction quality for content you can see in the images
 
         <extracted_text>
         \(textSample)
         </extracted_text>
 
-        Compare the extracted text to what you see in the images and respond with JSON:
+        ## Response Format
+
+        Respond with this JSON structure:
 
         ```json
         {
@@ -104,30 +114,30 @@ actor PDFExtractionJudge {
 
         ## Scoring Guide
 
-        **text_fidelity** (how well does extracted text match visible text?):
+        **text_fidelity** (how accurately does extracted text match what you see in the images?):
         - 95-100: Perfect or near-perfect match
         - 85-94: Minor whitespace/formatting differences only
         - 70-84: Some words wrong, garbled, or missing
         - 50-69: Significant portions wrong (e.g., single letters instead of words)
         - 0-49: Mostly broken or missing
 
-        **layout_complexity**:
+        **layout_complexity** (based on what you observe in the images):
         - low: Single column, standard paragraphs, minimal graphics
         - medium: Multi-column, tables, or moderate graphics
         - high: Complex layouts, heavy graphics, forms, or scientific notation
 
-        **issues_found** (check for these):
-        - "broken_smallcaps" - Single uppercase letters where words should be
-        - "missing_text" - Text visible in image but absent from extraction
+        **issues_found** (note any of these problems you observe):
+        - "broken_smallcaps" - Words rendered as single uppercase letters in extraction
+        - "missing_text" - Text visible in image but absent from extracted text
         - "garbled_text" - Nonsense characters or encoding issues
-        - "missing_tables" - Tables visible but not extracted properly
+        - "missing_tables" - Tables visible but not properly extracted
         - "missing_equations" - Math/equations not captured
         - "wrong_reading_order" - Text extracted in wrong sequence
 
         **recommended_method**:
-        - "pdfkit": Use if text_fidelity >= 90 AND layout is simple
-        - "visionOCR": Use if text_fidelity < 90 AND layout is simple/medium
-        - "llmVision": Use if layout is complex OR has math/equations OR OCR would struggle
+        - "pdfkit": Current extraction is good (fidelity >= 90, simple layout)
+        - "visionOCR": Need OCR but layout is manageable (fidelity < 90, simple/medium layout)
+        - "llmVision": Need vision AI for complex layout, math, or where OCR would struggle
 
         Respond ONLY with the JSON object, no other text.
         """
