@@ -19,9 +19,9 @@ actor PDFExtractionJudge {
 
     // MARK: - Judge Method
 
-    /// Judge extraction quality by comparing PDFKit text to rasterized images
+    /// Judge extraction quality by comparing PDFKit text to rasterized page images
     func judge(
-        compositeImages: [URL],
+        pageImages: [URL],
         pdfKitText: String,
         samplePages: [Int],
         hasNullCharacters: Bool
@@ -33,9 +33,9 @@ actor PDFExtractionJudge {
             return ExtractionJudgment.quickFail(reason: "null_characters_detected")
         }
 
-        // Load composite images
+        // Load individual page images
         var imageData: [Data] = []
-        for url in compositeImages {
+        for url in pageImages {
             let data = try Data(contentsOf: url)
             imageData.append(data)
         }
@@ -46,10 +46,10 @@ actor PDFExtractionJudge {
         let prompt = buildJudgePrompt(
             textSample: textSample,
             samplePages: samplePages,
-            imageCount: compositeImages.count
+            imageCount: pageImages.count
         )
 
-        Logger.info("📊 Judge: Sending \(compositeImages.count) composite images to Gemini for analysis", category: .ai)
+        Logger.info("📊 Judge: Sending \(pageImages.count) page images to Gemini for analysis", category: .ai)
 
         // Use Gemini's native vision API for image analysis
         let response = try await llmFacade.analyzeImagesWithGemini(
@@ -67,7 +67,7 @@ actor PDFExtractionJudge {
         """
         You are evaluating PDF text extraction quality.
 
-        I'm showing you \(imageCount) composite images, each containing 4 pages from the document.
+        I'm showing you \(imageCount) sample page images from the document.
         The pages sampled are: \(samplePages.map { String($0 + 1) }.joined(separator: ", "))
 
         Below is the text extracted by PDFKit from these same pages:

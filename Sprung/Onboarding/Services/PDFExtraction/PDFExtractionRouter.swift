@@ -108,10 +108,10 @@ actor PDFExtractionRouter {
         }
         Logger.info("📄 PDFRouter: PDFKit extracted \(pdfKitText.count) characters", category: .ai)
 
-        // Step 3: Rasterize samples for judge
+        // Step 3: Rasterize sample pages for judge (~5% of pages, min 3, max 10)
         progress?("Rasterizing sample pages...")
         let samplePages = await rasterizer.selectSamplePages(pageCount: pageCount)
-        Logger.info("📄 PDFRouter: Sampling pages: \(samplePages.map { $0 + 1 })", category: .ai)
+        Logger.info("📄 PDFRouter: Sampling \(samplePages.count) pages (~5%): \(samplePages.map { $0 + 1 })", category: .ai)
 
         let pageImages = try await rasterizer.rasterizePages(
             pdfDocument: pdfDocument,
@@ -120,20 +120,12 @@ actor PDFExtractionRouter {
             workspace: workspace
         )
 
-        // Step 4: Create 4-up composites
-        progress?("Creating comparison composites...")
-        let composites = try await rasterizer.createFourUpComposites(
-            pageImages: pageImages,
-            workspace: workspace
-        )
-        Logger.info("📄 PDFRouter: Created \(composites.count) composite images", category: .ai)
-
-        // Step 5: LLM Judge
+        // Step 4: LLM Judge (using individual page images, not composites)
         progress?("Analyzing extraction quality...")
-        Logger.info("📄 PDFRouter: Calling LLM judge to compare text vs images", category: .ai)
+        Logger.info("📄 PDFRouter: Sending \(pageImages.count) page images to judge", category: .ai)
 
         let judgment = try await judge.judge(
-            compositeImages: composites,
+            pageImages: pageImages,
             pdfKitText: pdfKitText,
             samplePages: samplePages,
             hasNullCharacters: hasNullChars

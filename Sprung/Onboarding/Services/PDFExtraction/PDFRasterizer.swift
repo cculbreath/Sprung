@@ -17,19 +17,22 @@ actor PDFRasterizer {
 
     // MARK: - Page Selection
 
-    /// Select pages to sample for maximum coverage.
-    /// With 4 images x 4-up = 16 pages sampled.
-    func selectSamplePages(pageCount: Int, imageLimit: Int = 4) -> [Int] {
-        let pagesPerImage = 4
-        let totalSamples = imageLimit * pagesPerImage  // 16 pages
+    /// Select pages to sample for quality judgment.
+    /// Uses ~5% of pages, with min 3 and max 10 to balance coverage vs API cost.
+    func selectSamplePages(pageCount: Int) -> [Int] {
+        let minSamples = 3
+        let maxSamples = 10
 
-        if pageCount <= totalSamples {
+        // Calculate 5% of pages, clamped to min/max
+        let targetSamples = max(minSamples, min(maxSamples, Int(ceil(Double(pageCount) * 0.05))))
+
+        if pageCount <= targetSamples {
             return Array(0..<pageCount)
         }
 
         // Spread samples evenly across document
-        let step = max(1, pageCount / totalSamples)
-        return (0..<totalSamples).map { min($0 * step, pageCount - 1) }
+        let step = max(1, pageCount / targetSamples)
+        return (0..<targetSamples).map { min($0 * step, pageCount - 1) }
     }
 
     // MARK: - Rasterization
