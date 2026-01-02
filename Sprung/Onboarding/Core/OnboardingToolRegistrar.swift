@@ -63,6 +63,13 @@ final class OnboardingToolRegistrar {
         toolRegistry.register(IngestWritingSampleTool(coordinator: coordinator, eventBus: eventBus))
         toolRegistry.register(SubmitExperienceDefaultsTool(coordinator: coordinator, eventBus: eventBus, dataStore: dataStore))
         toolRegistry.register(SubmitCandidateDossierTool(eventBus: eventBus, dataStore: dataStore))
+
+        // Filesystem tools for browsing exported artifacts (ephemeral responses, pruned after N turns)
+        toolRegistry.register(ReadArtifactFileTool())
+        toolRegistry.register(ListArtifactDirectoryTool())
+        toolRegistry.register(GlobArtifactSearchTool())
+        toolRegistry.register(GrepArtifactSearchTool())
+
         Logger.info("✅ Registered \(toolRegistry.allTools().count) tools", category: .ai)
     }
 }

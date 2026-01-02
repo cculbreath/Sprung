@@ -211,12 +211,21 @@ final class OnboardingDependencyContainer {
         self.toolExecutionCoordinator = tools.toolExecutionCoordinator
         self.chatboxHandler = tools.chatboxHandler
 
-        // 7. Initialize phase transition controller first (simpler dependency chain)
-        self.phaseTransitionController = PhaseTransitionController(
-            state: state, eventBus: core.eventBus, phaseRegistry: core.phaseRegistry
+        // 7. Initialize session persistence handler (needed by phase transition controller)
+        self.sessionPersistenceHandler = SwiftDataSessionPersistenceHandler(
+            eventBus: core.eventBus,
+            sessionStore: sessionStore,
+            artifactRecordStore: artifactRecordStore
         )
 
-        // 8. Initialize services
+        // 8. Initialize phase transition controller (depends on session persistence handler)
+        self.phaseTransitionController = PhaseTransitionController(
+            state: state, eventBus: core.eventBus, phaseRegistry: core.phaseRegistry,
+            artifactRecordStore: artifactRecordStore, sessionPersistenceHandler: sessionPersistenceHandler,
+            resRefStore: resRefStore
+        )
+
+        // 9. Initialize services
         let services = Self.createServices(
             eventBus: core.eventBus, state: state, toolRouter: tools.toolRouter,
             wizardTracker: wizardTracker, phaseTransitionController: phaseTransitionController,
@@ -225,13 +234,6 @@ final class OnboardingDependencyContainer {
         self.extractionManagementService = services.extractionManagementService
         self.timelineManagementService = services.timelineManagementService
         self.dataPersistenceService = services.dataPersistenceService
-
-        // 9. Initialize session persistence handler
-        self.sessionPersistenceHandler = SwiftDataSessionPersistenceHandler(
-            eventBus: core.eventBus,
-            sessionStore: sessionStore,
-            artifactRecordStore: artifactRecordStore
-        )
 
         // 10. Initialize lifecycle controller (merged with session coordinator)
         self.lifecycleController = InterviewLifecycleController(
@@ -286,7 +288,8 @@ final class OnboardingDependencyContainer {
             cardMergeService: cardMergeService,
             chatInventoryService: chatInventoryService,
             agentActivityTracker: agentActivityTracker,
-            sessionUIState: stores.sessionUIState
+            sessionUIState: stores.sessionUIState,
+            phaseTransitionController: phaseTransitionController
         )
         // Configure LLM facade provider for prose summary generation
         let llmFacadeRef = llmFacade

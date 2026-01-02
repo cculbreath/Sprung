@@ -13,6 +13,7 @@ final class KnowledgeCardWorkflowService {
     private let chatInventoryService: ChatInventoryService?
     private let agentActivityTracker: AgentActivityTracker
     private weak var sessionUIState: SessionUIState?
+    private weak var phaseTransitionController: PhaseTransitionController?
 
     // LLM facade for prose generation (set after container init due to circular dependency)
     private var llmFacadeProvider: (() -> LLMFacade?)?
@@ -25,7 +26,8 @@ final class KnowledgeCardWorkflowService {
         cardMergeService: CardMergeService,
         chatInventoryService: ChatInventoryService?,
         agentActivityTracker: AgentActivityTracker,
-        sessionUIState: SessionUIState
+        sessionUIState: SessionUIState,
+        phaseTransitionController: PhaseTransitionController?
     ) {
         self.ui = ui
         self.state = state
@@ -35,6 +37,7 @@ final class KnowledgeCardWorkflowService {
         self.chatInventoryService = chatInventoryService
         self.agentActivityTracker = agentActivityTracker
         self.sessionUIState = sessionUIState
+        self.phaseTransitionController = phaseTransitionController
     }
 
     /// Set the LLM facade provider after container initialization
@@ -237,9 +240,11 @@ final class KnowledgeCardWorkflowService {
             successCount = resRefs.count
             failureCount = cardsToConvert.count - successCount
 
-            // Persist all ResRefs
+            // Persist all ResRefs and update filesystem mirror
             for resRef in resRefs {
                 resRefStore.addResRef(resRef)
+                // Update filesystem mirror for LLM browsing
+                await phaseTransitionController?.updateResRefInFilesystem(resRef)
             }
 
             Logger.info("✅ Card generation complete: \(successCount) cards persisted", category: .ai)

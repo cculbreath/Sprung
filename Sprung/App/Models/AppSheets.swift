@@ -180,7 +180,8 @@ struct AppSheetsModifier: ViewModifier {
                             newlyAddedCardName = card.name
                             showReprocessConfirmation = true
                         }
-                    }
+                    },
+                    llmFacade: nil  // Regeneration not available outside onboarding
                 )
             }
             .alert("Re-run Job Pre-processing?", isPresented: $showReprocessConfirmation) {

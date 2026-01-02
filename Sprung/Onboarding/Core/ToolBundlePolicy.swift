@@ -62,6 +62,18 @@ struct ToolBundlePolicy {
         OnboardingToolName.createWebArtifact.rawValue  // For saving web_search content
     ]
 
+    // MARK: - Filesystem Browsing Tools
+
+    /// Filesystem-style tools for browsing exported artifacts.
+    /// Available in Phase 3 when artifacts are exported to temp folder.
+    /// Responses are ephemeral (pruned after N turns) - LLM should take notes.
+    static let filesystemBrowsingTools: Set<String> = [
+        OnboardingToolName.readFile.rawValue,
+        OnboardingToolName.listDirectory.rawValue,
+        OnboardingToolName.globSearch.rawValue,
+        OnboardingToolName.grepSearch.rawValue
+    ]
+
     // MARK: - Subphase Tool Bundles
 
     /// Tool bundles for each subphase.
@@ -493,6 +505,11 @@ struct ToolBundlePolicy {
             bundle.formUnion(artifactAccessTools)
         }
 
+        // Include filesystem browsing tools for Phase 3 (evidence collection)
+        if subphase.phase == .phase3EvidenceCollection {
+            bundle.formUnion(filesystemBrowsingTools)
+        }
+
         return bundle
     }
 
@@ -516,6 +533,11 @@ struct ToolBundlePolicy {
         // Include artifact access tools for Phase 2-4 (not Phase 1)
         if phase != .phase1VoiceContext {
             allowed.formUnion(artifactAccessTools)
+        }
+
+        // Include filesystem browsing tools for Phase 3
+        if phase == .phase3EvidenceCollection {
+            allowed.formUnion(filesystemBrowsingTools)
         }
 
         return allowed

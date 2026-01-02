@@ -20,6 +20,7 @@ struct SettingsView: View {
     @AppStorage("onboardingInterviewPromptCacheRetention") private var onboardingPromptCacheRetention: Bool = true
     @AppStorage("backgroundProcessingModelId") private var backgroundProcessingModelId: String = "google/gemini-2.0-flash-001"
     @AppStorage("knowledgeCardTokenLimit") private var knowledgeCardTokenLimit: Int = 8000
+    @AppStorage("onboardingMaxConcurrentExtractions") private var maxConcurrentExtractions: Int = 5
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(DiscoveryCoordinator.self) private var searchOpsCoordinator
     @Environment(\.modelContext) private var modelContext
@@ -155,6 +156,7 @@ struct SettingsView: View {
                 gitIngestModelPicker
                 backgroundProcessingModelPicker
                 knowledgeCardTokenLimitPicker
+                maxConcurrentExtractionsPicker
 
                 Toggle("Allow web search during interviews", isOn: $onboardingWebSearchAllowed)
 
@@ -753,6 +755,23 @@ private extension SettingsView {
                 }
             }
             Text("When total knowledge card tokens exceed this limit, only job-relevant cards are included in prompts.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    var maxConcurrentExtractionsPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Stepper(value: $maxConcurrentExtractions, in: 1...10) {
+                HStack {
+                    Text("Max Concurrent Extractions")
+                    Spacer()
+                    Text("\(maxConcurrentExtractions)")
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
+            Text("Maximum parallel document extractions during onboarding. Higher values process faster but may hit API rate limits.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }

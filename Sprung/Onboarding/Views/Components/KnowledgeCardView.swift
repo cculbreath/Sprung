@@ -7,8 +7,10 @@ struct KnowledgeCardView: View {
     let isTopCard: Bool
     let onEdit: () -> Void
     let onDelete: () -> Void
+    var onRegenerateSummary: (() -> Void)?
 
     @State private var isHovering = false
+    @State private var isRegenerating = false
 
     private var cardTypeColor: Color {
         switch resRef.cardType?.lowercased() {
@@ -71,6 +73,10 @@ struct KnowledgeCardView: View {
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovering = hovering
             }
+        }
+        .onChange(of: resRef.content) { _, _ in
+            // Reset regenerating state when content updates
+            isRegenerating = false
         }
     }
 
@@ -200,9 +206,33 @@ struct KnowledgeCardView: View {
 
     private var summarySection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label("Summary", systemImage: "doc.text")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
+            HStack {
+                Label("Summary", systemImage: "doc.text")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                if let onRegenerateSummary = onRegenerateSummary, isTopCard {
+                    Button(action: {
+                        isRegenerating = true
+                        onRegenerateSummary()
+                    }) {
+                        if isRegenerating {
+                            ProgressView()
+                                .scaleEffect(0.6)
+                                .frame(width: 14, height: 14)
+                        } else {
+                            Image(systemName: "arrow.trianglehead.2.clockwise")
+                                .font(.caption)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.blue)
+                    .help("Regenerate summary with AI")
+                    .disabled(isRegenerating)
+                }
+            }
 
             Text(resRef.content)
                 .font(.caption)

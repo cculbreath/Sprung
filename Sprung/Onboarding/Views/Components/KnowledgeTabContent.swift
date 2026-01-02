@@ -56,13 +56,17 @@ struct KnowledgeTabContent: View {
                 resRefStore: resRefStore,
                 onCardUpdated: { card in
                     resRefStore.updateResRef(card)
+                    Task { await coordinator.syncResRefToFilesystem(card) }
                 },
                 onCardDeleted: { card in
                     resRefStore.deleteResRef(card)
+                    // Note: file deletion from filesystem not implemented
                 },
                 onCardAdded: { card in
                     resRefStore.addResRef(card)
-                }
+                    Task { await coordinator.syncResRefToFilesystem(card) }
+                },
+                llmFacade: coordinator.llmFacade
             )
         }
     }

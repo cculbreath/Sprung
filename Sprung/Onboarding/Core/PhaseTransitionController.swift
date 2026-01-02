@@ -8,15 +8,25 @@ final class PhaseTransitionController {
     private let state: StateCoordinator
     private let eventBus: EventCoordinator
     private let phaseRegistry: PhaseScriptRegistry
+    private let artifactRecordStore: ArtifactRecordStore
+    private weak var sessionPersistenceHandler: SwiftDataSessionPersistenceHandler?
+    private let resRefStore: ResRefStore
+
     // MARK: - Initialization
     init(
         state: StateCoordinator,
         eventBus: EventCoordinator,
-        phaseRegistry: PhaseScriptRegistry
+        phaseRegistry: PhaseScriptRegistry,
+        artifactRecordStore: ArtifactRecordStore,
+        sessionPersistenceHandler: SwiftDataSessionPersistenceHandler,
+        resRefStore: ResRefStore
     ) {
         self.state = state
         self.eventBus = eventBus
         self.phaseRegistry = phaseRegistry
+        self.artifactRecordStore = artifactRecordStore
+        self.sessionPersistenceHandler = sessionPersistenceHandler
+        self.resRefStore = resRefStore
     }
     // MARK: - Phase Transition Handling
     func handlePhaseTransition(_ phaseName: String) async {
@@ -24,6 +34,13 @@ final class PhaseTransitionController {
             Logger.warning("Invalid phase name: \(phaseName)", category: .ai)
             return
         }
+
+        // Export artifacts to filesystem when entering Phase 3
+        // This enables the filesystem browsing tools (read_file, list_directory, glob_search, grep_search)
+        if phase == .phase3EvidenceCollection {
+            await exportArtifactsForFilesystemBrowsing()
+        }
+
         // Get the phase script's introductory prompt
         guard let script = phaseRegistry.script(for: phase) else {
             Logger.warning("No script found for phase: \(phaseName)", category: .ai)
@@ -104,5 +121,63 @@ final class PhaseTransitionController {
     }
     func missingObjectives() async -> [String] {
         await state.getMissingObjectives()
+    }
+
+    // MARK: - Artifact Filesystem Export
+
+    /// Export session artifacts and knowledge cards to a temporary filesystem directory for LLM browsing.
+    /// Sets the ArtifactFilesystemContext root so filesystem tools can access artifacts.
+    private func exportArtifactsForFilesystemBrowsing() async {
+        guard let session = sessionPersistenceHandler?.currentSession else {
+            Logger.warning("📁 No current session for artifact export", category: .ai)
+            return
+        }
+
+        do {
+            let exportRoot = try artifactRecordStore.exportArtifactsToFilesystem(session)
+
+            // Also export knowledge cards to the same root
+            let resRefs = resRefStore.resRefs
+            if !resRefs.isEmpty {
+                try artifactRecordStore.exportKnowledgeCards(resRefs, to: exportRoot)
+            }
+
+            await ArtifactFilesystemContext.shared.setRoot(exportRoot)
+            Logger.info("📁 Artifact filesystem initialized at \(exportRoot.path) (\(resRefs.count) KCs)", category: .ai)
+        } catch {
+            Logger.error("📁 Failed to export artifacts for filesystem browsing: \(error)", category: .ai)
+        }
+    }
+
+    /// Re-export a single artifact to the existing filesystem root (for incremental updates).
+    /// Called when artifacts are added or updated during Phase 3.
+    func updateArtifactInFilesystem(_ artifact: ArtifactRecord) async {
+        guard let rootURL = await ArtifactFilesystemContext.shared.rootURL else {
+            // Filesystem not initialized yet, nothing to update
+            return
+        }
+
+        do {
+            try artifactRecordStore.exportSingleArtifact(artifact, to: rootURL)
+            Logger.info("📁 Updated artifact in filesystem: \(artifact.filename)", category: .ai)
+        } catch {
+            Logger.error("📁 Failed to update artifact in filesystem: \(error)", category: .ai)
+        }
+    }
+
+    /// Export a single ResRef to the filesystem (for incremental updates when cards are created/modified).
+    /// Called when knowledge cards are persisted during Phase 3+.
+    func updateResRefInFilesystem(_ resRef: ResRef) async {
+        guard let rootURL = await ArtifactFilesystemContext.shared.rootURL else {
+            // Filesystem not initialized yet, nothing to update
+            return
+        }
+
+        do {
+            try artifactRecordStore.exportSingleResRef(resRef, to: rootURL)
+            Logger.info("📁 Updated knowledge card in filesystem: \(resRef.name)", category: .ai)
+        } catch {
+            Logger.error("📁 Failed to update knowledge card in filesystem: \(error)", category: .ai)
+        }
     }
 }

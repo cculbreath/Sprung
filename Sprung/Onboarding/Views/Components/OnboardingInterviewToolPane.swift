@@ -319,29 +319,46 @@ struct OnboardingInterviewToolPane: View {
             }
         case .phase3EvidenceCollection:
             // Phase 3 uses DocumentCollectionView for evidence/artifact collection
-            DocumentCollectionView(
-                coordinator: coordinator,
-                onAssessCompleteness: {
-                    Task {
-                        await coordinator.finishUploadsAndMergeCards()
+            // Show KnowledgeCardCollectionView when card workflow is in progress
+            if coordinator.ui.isMergingCards || coordinator.ui.cardAssignmentsReadyForApproval || coordinator.ui.isGeneratingCards {
+                KnowledgeCardCollectionView(
+                    coordinator: coordinator,
+                    onGenerateCards: {
+                        Task {
+                            await coordinator.eventBus.publish(.generateCardsButtonClicked)
+                        }
+                    },
+                    onAdvanceToNextPhase: {
+                        Task {
+                            await coordinator.requestPhaseAdvanceFromUI()
+                        }
                     }
-                },
-                onCancelExtractionsAndFinish: {
-                    Task {
-                        await coordinator.cancelExtractionAgentsAndFinishUploads()
+                )
+            } else {
+                DocumentCollectionView(
+                    coordinator: coordinator,
+                    onAssessCompleteness: {
+                        Task {
+                            await coordinator.finishUploadsAndMergeCards()
+                        }
+                    },
+                    onCancelExtractionsAndFinish: {
+                        Task {
+                            await coordinator.cancelExtractionAgentsAndFinishUploads()
+                        }
+                    },
+                    onDropFiles: { urls, extractionMethod in
+                        Task { await coordinator.uploadFilesDirectly(urls, extractionMethod: extractionMethod) }
+                    },
+                    onSelectFiles: { openDirectUploadPanel() },
+                    onSelectGitRepo: { repoURL in
+                        Task { await coordinator.startGitRepoAnalysis(repoURL) }
+                    },
+                    onFetchURL: { urlString in
+                        await coordinator.fetchURLForArtifact(urlString)
                     }
-                },
-                onDropFiles: { urls, extractionMethod in
-                    Task { await coordinator.uploadFilesDirectly(urls, extractionMethod: extractionMethod) }
-                },
-                onSelectFiles: { openDirectUploadPanel() },
-                onSelectGitRepo: { repoURL in
-                    Task { await coordinator.startGitRepoAnalysis(repoURL) }
-                },
-                onFetchURL: { urlString in
-                    await coordinator.fetchURLForArtifact(urlString)
-                }
-            )
+                )
+            }
         case .phase1VoiceContext:
             // Phase 1: Show writing sample collection with skip option
             // Drop handling is done by the pane-level drop zone

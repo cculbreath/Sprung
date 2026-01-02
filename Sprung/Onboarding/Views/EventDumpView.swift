@@ -174,6 +174,14 @@ struct EventDumpView: View {
                     }
                 }
                 ToolbarItem(placement: .automatic) {
+                    Button("Regen Inventories") {
+                        Task {
+                            await coordinator.regenerateCardInventoriesAndMerge()
+                        }
+                    }
+                    .help("Regenerate card inventories for all session artifacts missing them, then run merge")
+                }
+                ToolbarItem(placement: .automatic) {
                     Button("Reset All Data", role: .destructive) {
                         Task {
                             await coordinator.resetAllOnboardingData()

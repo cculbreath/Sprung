@@ -324,4 +324,58 @@ actor DocumentProcessingService {
             return nil
         }
     }
+
+    // MARK: - Inventory Regeneration
+
+    /// Generate card inventory for an existing artifact (used for regeneration).
+    /// Updates the artifact's cardInventoryJSON directly.
+    /// - Parameter artifact: The artifact to regenerate inventory for
+    @MainActor
+    func generateInventoryForExistingArtifact(_ artifact: ArtifactRecord) async {
+        Logger.info("📦 Regenerating inventory for: \(artifact.filename)", category: .ai)
+
+        let artifactId = artifact.idString
+        let filename = artifact.filename
+        let extractedText = artifact.extractedContent
+        let isPDF = artifact.isPDF
+        let isResume = artifact.sourceType == "resume"
+
+        // Load PDF data if applicable
+        var pdfData: Data?
+        if isPDF && !isResume, let rawPath = artifact.rawFileRelativePath {
+            // Construct full path from relative path
+            if let storageDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+                .appendingPathComponent("Sprung/OnboardingUploads") {
+                let fullPath = storageDir.appendingPathComponent(rawPath)
+                pdfData = try? Data(contentsOf: fullPath)
+                if pdfData != nil {
+                    Logger.info("📄 Loaded PDF data (\(pdfData!.count) bytes) for: \(filename)", category: .ai)
+                }
+            }
+        }
+
+        // Generate inventory
+        let inventory = await generateInventory(
+            artifactId: artifactId,
+            filename: filename,
+            extractedText: extractedText,
+            pdfData: pdfData,
+            isPDF: isPDF,
+            isResume: isResume
+        )
+
+        // Update artifact with new inventory
+        if let inventoryResult = inventory {
+            let encoder = JSONEncoder()
+            encoder.keyEncodingStrategy = .convertToSnakeCase
+            encoder.dateEncodingStrategy = .iso8601
+            if let inventoryData = try? encoder.encode(inventoryResult),
+               let inventoryString = String(data: inventoryData, encoding: .utf8) {
+                artifact.cardInventoryJSON = inventoryString
+                Logger.info("✅ Inventory regenerated for \(filename): \(inventoryResult.proposedCards.count) cards", category: .ai)
+            }
+        } else {
+            Logger.warning("⚠️ Failed to regenerate inventory for: \(filename)", category: .ai)
+        }
+    }
 }

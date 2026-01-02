@@ -74,6 +74,11 @@ final class OnboardingInterviewCoordinator {
         resRefStore
     }
 
+    /// Sync a knowledge card to the filesystem mirror (for LLM browsing)
+    func syncResRefToFilesystem(_ resRef: ResRef) async {
+        await container.phaseTransitionController.updateResRefInFilesystem(resRef)
+    }
+
     // MARK: - Multi-Agent Infrastructure
 
     /// Agent activity tracker for monitoring parallel agents
@@ -89,6 +94,11 @@ final class OnboardingInterviewCoordinator {
     /// Returns the card merge service for merging document inventories
     var cardMergeService: CardMergeService {
         container.cardMergeService
+    }
+
+    /// Returns the LLM facade for AI operations
+    var llmFacade: LLMFacade? {
+        container.llmFacade
     }
 
     // MARK: - UI State Properties (from ToolRouter)
@@ -949,6 +959,67 @@ final class OnboardingInterviewCoordinator {
     func clearEventHistory() async {
         await eventBus.clearHistory()
     }
+
+    /// Clear all card inventories and regenerate them with the new schema, then trigger merge
+    func regenerateCardInventoriesAndMerge() async {
+        Logger.info("🔄 Clearing and regenerating ALL card inventories (schema change)...", category: .ai)
+
+        // Get all non-writing-sample artifacts
+        let artifactsToProcess = sessionArtifacts.filter { !$0.isWritingSample }
+
+        Logger.info("📦 Found \(artifactsToProcess.count) artifacts to regenerate inventories for", category: .ai)
+
+        guard !artifactsToProcess.isEmpty else {
+            Logger.info("⚠️ No artifacts to process", category: .ai)
+            return
+        }
+
+        // Clear existing inventories first (schema changed)
+        for artifact in artifactsToProcess {
+            artifact.cardInventoryJSON = nil
+            Logger.info("🗑️ Cleared inventory for: \(artifact.filename)", category: .ai)
+        }
+
+        // Use same concurrency limit as document extraction
+        let maxConcurrent = UserDefaults.standard.integer(forKey: "onboardingMaxConcurrentExtractions")
+        let concurrencyLimit = maxConcurrent > 0 ? maxConcurrent : 5
+
+        Logger.info("📦 Processing \(artifactsToProcess.count) artifacts with concurrency limit \(concurrencyLimit)", category: .ai)
+
+        // Capture service reference for use in task group
+        let documentProcessingService = container.documentProcessingService
+
+        // Process with limited concurrency using TaskGroup
+        await withTaskGroup(of: Void.self) { group in
+            var inFlight = 0
+            var index = 0
+
+            for artifact in artifactsToProcess {
+                // Wait if we've hit the concurrency limit
+                if inFlight >= concurrencyLimit {
+                    await group.next()
+                    inFlight -= 1
+                }
+
+                group.addTask {
+                    await documentProcessingService.generateInventoryForExistingArtifact(artifact)
+                }
+                inFlight += 1
+                index += 1
+                Logger.info("📦 Dispatched \(index)/\(artifactsToProcess.count): \(artifact.filename)", category: .ai)
+            }
+
+            // Wait for all remaining tasks
+            for await _ in group { }
+        }
+
+        Logger.info("✅ All inventory regeneration complete", category: .ai)
+
+        // Trigger the merge
+        Logger.info("🔄 Triggering card merge...", category: .ai)
+        await eventBus.publish(.doneWithUploadsClicked)
+    }
+
     func resetAllOnboardingData() async {
         Logger.info("🗑️ Resetting all onboarding data", category: .ai)
         // Delete SwiftData session

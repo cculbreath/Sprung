@@ -10,6 +10,7 @@ struct KnowledgeCardBrowserOverlay: View {
     let onCardUpdated: (ResRef) -> Void
     let onCardDeleted: (ResRef) -> Void
     let onCardAdded: (ResRef) -> Void
+    var llmFacade: LLMFacade?
 
     @State private var currentIndex: Int = 0
     @State private var selectedFilter: CardTypeFilter = .all
@@ -20,6 +21,7 @@ struct KnowledgeCardBrowserOverlay: View {
     @State private var showAddSheet = false
     @State private var showIngestionSheet = false
     @State private var dealAnimation = false
+    @State private var regeneratingCardId: UUID?
 
     enum CardTypeFilter: String, CaseIterable {
         case all = "All"
@@ -378,7 +380,12 @@ struct KnowledgeCardBrowserOverlay: View {
                     currentIndex = index
                     cardToDelete = card
                     showDeleteConfirmation = true
-                }
+                },
+                onRegenerateSummary: llmFacade != nil ? {
+                    Task {
+                        await regenerateSummary(for: card)
+                    }
+                } : nil
             )
             .frame(width: cardWidth, height: cardHeight)
             .scaleEffect(scale)
@@ -551,5 +558,57 @@ struct KnowledgeCardBrowserOverlay: View {
                 }
             }
         }
+    }
+
+    // MARK: - Summary Regeneration
+
+    @MainActor
+    private func regenerateSummary(for card: ResRef) async {
+        guard let facade = llmFacade else { return }
+
+        regeneratingCardId = card.id
+        Logger.info("🔄 Regenerating summary for: \(card.name)", category: .ai)
+
+        let modelId = UserDefaults.standard.string(forKey: "onboardingProseSummaryModel")
+            ?? "google/gemini-2.0-flash-001"
+
+        // Build prompt from card data
+        let template = PromptLibrary.kcProseSummary
+        let prompt = PromptLibrary.substitute(
+            template: template,
+            replacements: [
+                "CARD_TYPE": card.cardType ?? "experience",
+                "TITLE": card.name,
+                "ORGANIZATION": card.organization ?? "(not specified)",
+                "TIME_PERIOD": card.timePeriod ?? "(not specified)",
+                "KEY_FACTS": card.facts.map { "- \($0.statement)" }.joined(separator: "\n"),
+                "TECHNOLOGIES": card.technologies.isEmpty
+                    ? "(none listed)"
+                    : card.technologies.joined(separator: ", "),
+                "OUTCOMES": card.suggestedBullets.isEmpty
+                    ? "(none listed)"
+                    : card.suggestedBullets.map { "- \($0)" }.joined(separator: "\n")
+            ]
+        )
+
+        do {
+            let summary = try await facade.executeText(
+                prompt: prompt,
+                modelId: modelId,
+                temperature: 0.3,
+                backend: .openRouter
+            )
+
+            // Update the card
+            var updatedCard = card
+            updatedCard.content = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+            onCardUpdated(updatedCard)
+
+            Logger.info("✅ Summary regenerated for: \(card.name)", category: .ai)
+        } catch {
+            Logger.error("❌ Failed to regenerate summary: \(error)", category: .ai)
+        }
+
+        regeneratingCardId = nil
     }
 }
