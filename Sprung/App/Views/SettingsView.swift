@@ -21,6 +21,7 @@ struct SettingsView: View {
     @AppStorage("backgroundProcessingModelId") private var backgroundProcessingModelId: String = "google/gemini-2.0-flash-001"
     @AppStorage("knowledgeCardTokenLimit") private var knowledgeCardTokenLimit: Int = 8000
     @AppStorage("onboardingMaxConcurrentExtractions") private var maxConcurrentExtractions: Int = 5
+    @AppStorage("onboardingEphemeralTurns") private var ephemeralTurns: Int = 3
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(DiscoveryCoordinator.self) private var searchOpsCoordinator
     @Environment(\.modelContext) private var modelContext
@@ -157,6 +158,7 @@ struct SettingsView: View {
                 backgroundProcessingModelPicker
                 knowledgeCardTokenLimitPicker
                 maxConcurrentExtractionsPicker
+                ephemeralTurnsPicker
 
                 Toggle("Allow web search during interviews", isOn: $onboardingWebSearchAllowed)
 
@@ -772,6 +774,23 @@ private extension SettingsView {
                 }
             }
             Text("Maximum parallel document extractions during onboarding. Higher values process faster but may hit API rate limits.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    var ephemeralTurnsPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Stepper(value: $ephemeralTurns, in: 1...10) {
+                HStack {
+                    Text("Ephemeral Content Turns")
+                    Spacer()
+                    Text("\(ephemeralTurns)")
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
+            Text("File contents from browsing tools are pruned from context after this many conversation turns to manage token usage.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }

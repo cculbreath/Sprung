@@ -28,10 +28,10 @@ struct OnboardingUploadStorage {
         guard let base = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             Logger.error("Failed to locate application support directory for uploads")
             // Fallback to temporary directory
-            uploadsDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("Onboarding/Uploads", isDirectory: true)
+            uploadsDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("Sprung/Onboarding/Uploads", isDirectory: true)
             return
         }
-        let directory = base.appendingPathComponent("Onboarding/Uploads", isDirectory: true)
+        let directory = base.appendingPathComponent("Sprung/Onboarding/Uploads", isDirectory: true)
         if !fileManager.fileExists(atPath: directory.path) {
             do {
                 try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)

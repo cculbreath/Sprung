@@ -574,17 +574,48 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     /// Store a completed tool result for inclusion in Anthropic conversation history
     /// Uses paired storage: result is attached directly to the tool call in the message
+    /// For ephemeral results, calculates and injects `expiry_turn` based on current turn count
     func addCompletedToolResult(callId: String, toolName: String, output: String) async {
+        // Check if this is an ephemeral result and inject expiry_turn if so
+        let processedOutput = await injectExpiryTurnIfEphemeral(output)
+
         // Legacy: Store in separate list (for backwards compatibility during migration)
-        await llmStateManager.addCompletedToolResult(callId: callId, toolName: toolName, output: output)
+        await llmStateManager.addCompletedToolResult(callId: callId, toolName: toolName, output: processedOutput)
 
         // NEW: Paired storage - attach result directly to the tool call in the message
-        let paired = await chatStore.setToolResult(callId: callId, result: output)
+        let paired = await chatStore.setToolResult(callId: callId, result: processedOutput)
         if paired {
             Logger.debug("✅ Tool result paired with call in message: \(toolName) (\(callId.prefix(8)))", category: .ai)
         } else {
             Logger.warning("⚠️ Tool result could not be paired - call not found: \(toolName) (\(callId.prefix(8)))", category: .ai)
         }
+    }
+
+    /// Inject expiry_turn into ephemeral tool results
+    /// Reads ephemeral_turns setting from UserDefaults and calculates absolute expiry turn
+    private func injectExpiryTurnIfEphemeral(_ output: String) async -> String {
+        guard let data = output.data(using: .utf8) else { return output }
+        var json = JSON(data)
+
+        // Check if marked as ephemeral
+        guard json["ephemeral"].boolValue else { return output }
+
+        // Calculate current turn count (assistant messages with tool calls)
+        let messages = await chatStore.getAllMessages()
+        let currentTurn = messages.filter { $0.role == .assistant && !($0.toolCalls?.isEmpty ?? true) }.count
+
+        // Get ephemeral turns from settings (default 3)
+        let ephemeralTurns = UserDefaults.standard.integer(forKey: "onboardingEphemeralTurns")
+        let turnsToKeep = ephemeralTurns > 0 ? ephemeralTurns : 3
+
+        // Inject absolute expiry turn
+        json["expiry_turn"].int = currentTurn + turnsToKeep
+
+        // Remove the relative ephemeral_turns field (no longer needed)
+        json["ephemeral_turns"] = JSON.null
+
+        Logger.debug("📝 Injected expiry_turn=\(currentTurn + turnsToKeep) for ephemeral result (current=\(currentTurn), keep=\(turnsToKeep))", category: .ai)
+        return json.rawString() ?? output
     }
 
     /// Get all completed tool results for building Anthropic conversation history

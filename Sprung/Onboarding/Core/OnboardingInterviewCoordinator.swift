@@ -1049,6 +1049,7 @@ final class OnboardingInterviewCoordinator {
         clearArtifacts()
         Logger.info("✅ Upload artifacts cleared", category: .ai)
         let uploadsDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("Sprung")
             .appendingPathComponent("Onboarding")
             .appendingPathComponent("Uploads")
         if FileManager.default.fileExists(atPath: uploadsDir.path) {

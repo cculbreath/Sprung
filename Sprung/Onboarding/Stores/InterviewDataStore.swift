@@ -15,10 +15,10 @@ actor InterviewDataStore {
         ).first else {
             Logger.error("Failed to locate application support directory for onboarding data")
             // Fallback to temporary directory
-            baseURL = FileManager.default.temporaryDirectory.appendingPathComponent("Onboarding/Data", isDirectory: true)
+            baseURL = FileManager.default.temporaryDirectory.appendingPathComponent("Sprung/Onboarding/Data", isDirectory: true)
             return
         }
-        let directory = appSupport.appendingPathComponent("Onboarding/Data", isDirectory: true)
+        let directory = appSupport.appendingPathComponent("Sprung/Onboarding/Data", isDirectory: true)
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         } catch {

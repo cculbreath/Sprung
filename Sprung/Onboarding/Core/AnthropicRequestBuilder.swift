@@ -52,18 +52,32 @@ struct AnthropicRequestBuilder {
         }
 
         // Build user message - with image if provided
+        // CRITICAL: If history ends with a user message (e.g., synthetic tool_result from race condition),
+        // we must merge the new content with it to maintain Anthropic's role alternation requirement.
+        let newUserBlocks: [AnthropicContentBlock]
         if let imageData = imageBase64 {
             let mimeType = imageContentType ?? "image/jpeg"
             let imageSource = AnthropicImageSource(mediaType: mimeType, data: imageData)
-
-            let contentBlocks: [AnthropicContentBlock] = [
+            newUserBlocks = [
                 .text(AnthropicTextBlock(text: text)),
                 .image(AnthropicImageBlock(source: imageSource))
             ]
-            messages.append(AnthropicMessage(role: "user", content: .blocks(contentBlocks)))
             Logger.info("🖼️ Including image attachment in user message (\(mimeType))", category: .ai)
         } else {
-            messages.append(.user(text))
+            newUserBlocks = [.text(AnthropicTextBlock(text: text))]
+        }
+
+        // Check if we need to merge with trailing user message from history
+        if let lastIndex = messages.indices.last,
+           messages[lastIndex].role == "user" {
+            // Merge new content with existing user message
+            let existingBlocks = extractContentBlocks(messages[lastIndex])
+            let mergedBlocks = existingBlocks + newUserBlocks
+            messages[lastIndex] = AnthropicMessage(role: "user", content: .blocks(mergedBlocks))
+            Logger.info("📝 Merged new user content with trailing user message (race condition handling)", category: .ai)
+        } else {
+            // Append as new user message
+            messages.append(AnthropicMessage(role: "user", content: .blocks(newUserBlocks)))
         }
 
         // Determine tool choice
@@ -138,7 +152,17 @@ struct AnthropicRequestBuilder {
         // For Anthropic, developer instructions go in the system prompt
         // We still need a user message to trigger a response
         // Use a minimal user prompt to represent the developer instruction
-        messages.append(.user("[System instruction received - please continue the conversation]"))
+        // CRITICAL: Check if history ends with user message (e.g., synthetic tool_result) and merge if so
+        let placeholderText = "[System instruction received - please continue the conversation]"
+        if let lastIndex = messages.indices.last,
+           messages[lastIndex].role == "user" {
+            let existingBlocks = extractContentBlocks(messages[lastIndex])
+            let mergedBlocks = existingBlocks + [.text(AnthropicTextBlock(text: placeholderText))]
+            messages[lastIndex] = AnthropicMessage(role: "user", content: .blocks(mergedBlocks))
+            Logger.info("📝 Merged developer placeholder with trailing user message (race condition handling)", category: .ai)
+        } else {
+            messages.append(.user(placeholderText))
+        }
 
         let toolChoice: AnthropicToolChoice
         if let toolName = toolChoiceName {

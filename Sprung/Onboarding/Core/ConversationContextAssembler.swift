@@ -68,12 +68,18 @@ actor ConversationContextAssembler {
     /// Build full conversation history (all messages from the interview)
     /// Used when restoring from checkpoint or starting fresh without previous_response_id
     /// For Anthropic: includes tool calls AND their results (tool_use + tool_result pairs)
+    /// Implements ephemeral pruning: tool results with `expiry_turn` are replaced with
+    /// placeholders after that turn is reached.
     func buildConversationHistory() async -> [InputItem] {
         let messages = await state.messages
 
         // Fallback: Get completed tool results from legacy storage (for backwards compatibility)
         let completedResults = await state.getCompletedToolResults()
         let legacyResultsByCallId = Dictionary(uniqueKeysWithValues: completedResults.map { ($0.callId, $0.output) })
+
+        // Calculate current turn number for ephemeral pruning
+        // Turn = count of assistant messages that have tool calls
+        let currentTurn = messages.filter { $0.role == .assistant && !($0.toolCalls?.isEmpty ?? true) }.count
 
         return messages.flatMap { message -> [InputItem] in
             let role: String
@@ -106,22 +112,32 @@ actor ConversationContextAssembler {
                     )))
                     Logger.debug("📝 Including tool call in history: \(toolCall.name) (id: \(toolCall.id))", category: .ai)
 
-                    // PRIORITY 1: Use paired result from the tool call itself (new storage)
-                    // PRIORITY 2: Fall back to legacy separate storage
-                    if let output = toolCall.result {
+                    // Get the output (prefer paired storage, fall back to legacy)
+                    let output = toolCall.result ?? legacyResultsByCallId[toolCall.id]
+
+                    if let output = output {
+                        // Check for ephemeral pruning using expiry_turn
+                        let expiryTurn = getExpiryTurn(from: output)
+                        if let expiryTurn = expiryTurn, currentTurn > expiryTurn {
+                            // Create a pruned placeholder instead of the full content
+                            let prunedOutput = createPrunedPlaceholder(toolName: toolCall.name, originalOutput: output)
+                            items.append(.functionToolCallOutput(FunctionToolCallOutput(
+                                callId: toolCall.id,
+                                output: prunedOutput,
+                                status: nil
+                            )))
+                            Logger.debug("🧹 Pruned ephemeral result: \(toolCall.name) (expiry=\(expiryTurn), current=\(currentTurn))", category: .ai)
+                            continue
+                        }
+
+                        // Include the result (strip ephemeral metadata)
+                        let cleanedOutput = stripEphemeralMetadata(from: output)
                         items.append(.functionToolCallOutput(FunctionToolCallOutput(
                             callId: toolCall.id,
-                            output: output,
+                            output: cleanedOutput,
                             status: nil
                         )))
-                        Logger.debug("📝 Including paired tool result: \(toolCall.name) (id: \(toolCall.id))", category: .ai)
-                    } else if let output = legacyResultsByCallId[toolCall.id] {
-                        items.append(.functionToolCallOutput(FunctionToolCallOutput(
-                            callId: toolCall.id,
-                            output: output,
-                            status: nil
-                        )))
-                        Logger.debug("📝 Including legacy tool result: \(toolCall.name) (id: \(toolCall.id))", category: .ai)
+                        Logger.debug("📝 Including tool result: \(toolCall.name) (id: \(toolCall.id))", category: .ai)
                     } else {
                         Logger.warning("⚠️ No result found for tool call: \(toolCall.name) (id: \(toolCall.id))", category: .ai)
                     }
@@ -130,6 +146,57 @@ actor ConversationContextAssembler {
 
             return items
         }
+    }
+
+    // MARK: - Ephemeral Pruning Helpers
+
+    /// Get expiry_turn from tool result if it's an ephemeral result
+    /// Returns nil if not ephemeral or no expiry_turn set
+    private func getExpiryTurn(from output: String) -> Int? {
+        guard let data = output.data(using: .utf8) else { return nil }
+        let json = JSON(data)
+        guard json["ephemeral"].boolValue else { return nil }
+        let expiryTurn = json["expiry_turn"].int
+        return expiryTurn
+    }
+
+    /// Strip ephemeral metadata fields from output before including in history
+    private func stripEphemeralMetadata(from output: String) -> String {
+        guard let data = output.data(using: .utf8) else { return output }
+        var json = JSON(data)
+        // Remove internal control fields
+        json["ephemeral"] = JSON.null
+        json["expiry_turn"] = JSON.null
+        return json.rawString() ?? output
+    }
+
+    /// Create a compact placeholder for pruned ephemeral content
+    private func createPrunedPlaceholder(toolName: String, originalOutput: String) -> String {
+        guard let data = originalOutput.data(using: .utf8) else {
+            return "{\"status\":\"pruned\",\"reason\":\"ephemeral content expired\"}"
+        }
+        let json = JSON(data)
+
+        // Build a minimal placeholder preserving key metadata
+        var placeholder = JSON()
+        placeholder["status"].string = "pruned"
+        placeholder["reason"].string = "ephemeral content expired - file contents removed from context"
+
+        // Preserve useful metadata without the large content
+        if let path = json["path"].string {
+            placeholder["path"].string = path
+        }
+        if let totalLines = json["total_lines"].int {
+            placeholder["total_lines"].int = totalLines
+        }
+        if let matchCount = json["match_count"].int {
+            placeholder["match_count"].int = matchCount
+        }
+        if let fileCount = json["file_count"].int {
+            placeholder["file_count"].int = fileCount
+        }
+
+        return placeholder.rawString() ?? "{\"status\":\"pruned\"}"
     }
 
     /// Check if we have conversation history (for determining if this is a fresh start after restore)

@@ -119,8 +119,15 @@ struct OnboardingInterviewToolPane: View {
                         Task { await coordinator.uploadFilesDirectly(urls) }
                     }
                 case .phase3EvidenceCollection:
-                    // Phase 3 is evidence collection, not writing samples
-                    Task { await coordinator.uploadFilesDirectly(urls) }
+                    // Phase 3: upload files and re-activate document collection UI if it was closed
+                    let wasDocCollectionActive = coordinator.ui.isDocumentCollectionActive
+                    Task {
+                        await coordinator.uploadFilesDirectly(urls)
+                        // Only re-activate if document collection was previously closed (after Done with Uploads)
+                        if !wasDocCollectionActive {
+                            await coordinator.activateDocumentCollection()
+                        }
+                    }
                 case .phase2CareerStory:
                     // Phase 2: upload files and re-activate document collection UI if it was closed
                     let wasDocCollectionActive = coordinator.ui.isDocumentCollectionActive
@@ -318,23 +325,9 @@ struct OnboardingInterviewToolPane: View {
                 InterviewTabEmptyState(phase: .phase2CareerStory)
             }
         case .phase3EvidenceCollection:
-            // Phase 3 uses DocumentCollectionView for evidence/artifact collection
-            // Show KnowledgeCardCollectionView when card workflow is in progress
-            if coordinator.ui.isMergingCards || coordinator.ui.cardAssignmentsReadyForApproval || coordinator.ui.isGeneratingCards {
-                KnowledgeCardCollectionView(
-                    coordinator: coordinator,
-                    onGenerateCards: {
-                        Task {
-                            await coordinator.eventBus.publish(.generateCardsButtonClicked)
-                        }
-                    },
-                    onAdvanceToNextPhase: {
-                        Task {
-                            await coordinator.requestPhaseAdvanceFromUI()
-                        }
-                    }
-                )
-            } else {
+            // Show DocumentCollectionView when active, KnowledgeCardCollectionView during card workflow,
+            // otherwise show empty state
+            if coordinator.ui.isDocumentCollectionActive {
                 DocumentCollectionView(
                     coordinator: coordinator,
                     onAssessCompleteness: {
@@ -358,6 +351,23 @@ struct OnboardingInterviewToolPane: View {
                         await coordinator.fetchURLForArtifact(urlString)
                     }
                 )
+            } else if coordinator.ui.isMergingCards || coordinator.ui.cardAssignmentsReadyForApproval || coordinator.ui.isGeneratingCards {
+                KnowledgeCardCollectionView(
+                    coordinator: coordinator,
+                    onGenerateCards: {
+                        Task {
+                            await coordinator.eventBus.publish(.generateCardsButtonClicked)
+                        }
+                    },
+                    onAdvanceToNextPhase: {
+                        Task {
+                            await coordinator.requestPhaseAdvanceFromUI()
+                        }
+                    }
+                )
+            } else {
+                // Default: empty state - document collection UI hidden after Done with Uploads
+                InterviewTabEmptyState(phase: .phase3EvidenceCollection)
             }
         case .phase1VoiceContext:
             // Phase 1: Show writing sample collection with skip option

@@ -173,6 +173,9 @@ struct ArtifactRow: View {
                     // Card inventory section (if available)
                     if let inventory = artifact.cardInventory, !inventory.proposedCards.isEmpty {
                         cardInventorySection(inventory)
+                    } else if let rawJSON = artifact.cardInventoryJSON, !rawJSON.isEmpty {
+                        // Show raw JSON if decoding failed or cards are empty
+                        rawCardInventorySection(rawJSON)
                     }
 
                     if hasContent {
@@ -313,6 +316,54 @@ struct ArtifactRow: View {
         }
         .padding(8)
         .background(Color.teal.opacity(0.05))
+        .cornerRadius(6)
+    }
+
+    @ViewBuilder
+    private func rawCardInventorySection(_ rawJSON: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Header
+            HStack {
+                Image(systemName: "rectangle.stack.badge.person.crop")
+                    .foregroundStyle(.orange)
+                Text("Card Inventory (Raw)")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("Decoding issue")
+                    .font(.caption2)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.orange.opacity(0.15))
+                    .foregroundStyle(.orange)
+                    .cornerRadius(4)
+            }
+
+            // Pretty-print the JSON
+            let prettyJSON: String = {
+                if let data = rawJSON.data(using: .utf8),
+                   let json = try? JSONSerialization.jsonObject(with: data),
+                   let prettyData = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),
+                   let prettyString = String(data: prettyData, encoding: .utf8) {
+                    return prettyString
+                }
+                return rawJSON
+            }()
+
+            ScrollView {
+                Text(prettyJSON)
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.primary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxHeight: 200)
+            .padding(6)
+            .background(Color(nsColor: .textBackgroundColor))
+            .cornerRadius(4)
+        }
+        .padding(8)
+        .background(Color.orange.opacity(0.05))
         .cornerRadius(6)
     }
 
