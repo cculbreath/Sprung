@@ -160,6 +160,7 @@ enum OnboardingEvent {
     case llmBudgetExceeded(inputTokens: Int, threshold: Int)  // Triggers PRI thread reset (Milestone 8)
     // Session persistence events
     case llmResponseIdUpdated(responseId: String?)  // previousResponseId updated after API response
+    case toolResultPairedWithMessage(messageId: UUID, toolCallsJSON: String)  // tool result paired with message (for persistence update)
     // MARK: - Phase Management (§6 spec)
     case phaseTransitionRequested(from: String, to: String, reason: String?)
     case phaseTransitionApplied(phase: String, timestamp: Date)
@@ -434,7 +435,7 @@ actor EventCoordinator {
              .llmToolCallBatchStarted, .llmExecuteBatchedToolResponses,
              .llmExecuteUserMessage, .llmExecuteToolResponse, .llmExecuteDeveloperMessage, .llmStreamCompleted,
              .llmReasoningSummaryDelta, .llmReasoningSummaryComplete, .llmReasoningItemsForToolCalls, .llmCancelRequested,
-             .llmResponseIdUpdated, .llmTokenUsageReceived, .llmBudgetExceeded,
+             .llmResponseIdUpdated, .llmTokenUsageReceived, .llmBudgetExceeded, .toolResultPairedWithMessage,
              .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized:
             return .llm
         // State events
@@ -730,6 +731,8 @@ actor EventCoordinator {
             description = "ToolPane card restored: \(card.rawValue)"
         case .llmResponseIdUpdated(let responseId):
             description = "LLM response ID updated: \(responseId?.prefix(12) ?? "nil")..."
+        case .toolResultPairedWithMessage(let messageId, _):
+            description = "Tool result paired with message: \(messageId)"
         case .llmTokenUsageReceived(let modelId, let inputTokens, let outputTokens, let cachedTokens, _, let source):
             let cachedStr = cachedTokens > 0 ? ", cached: \(cachedTokens)" : ""
             description = "Token usage [\(source.displayName)]: \(modelId) - in: \(inputTokens), out: \(outputTokens)\(cachedStr)"

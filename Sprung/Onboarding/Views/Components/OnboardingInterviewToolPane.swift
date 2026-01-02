@@ -119,7 +119,8 @@ struct OnboardingInterviewToolPane: View {
                         Task { await coordinator.uploadFilesDirectly(urls) }
                     }
                 case .phase3EvidenceCollection:
-                    Task { await coordinator.uploadWritingSamples(urls) }
+                    // Phase 3 is evidence collection, not writing samples
+                    Task { await coordinator.uploadFilesDirectly(urls) }
                 case .phase2CareerStory:
                     // Phase 2: upload files and re-activate document collection UI if it was closed
                     let wasDocCollectionActive = coordinator.ui.isDocumentCollectionActive
@@ -317,53 +318,35 @@ struct OnboardingInterviewToolPane: View {
                 InterviewTabEmptyState(phase: .phase2CareerStory)
             }
         case .phase3EvidenceCollection:
-            // Show DocumentCollectionView when active, otherwise show writing corpus view
-            if coordinator.ui.isDocumentCollectionActive {
-                DocumentCollectionView(
-                    coordinator: coordinator,
-                    onAssessCompleteness: {
-                        Task {
-                            await coordinator.finishUploadsAndMergeCards()
-                        }
-                    },
-                    onCancelExtractionsAndFinish: {
-                        Task {
-                            await coordinator.cancelExtractionAgentsAndFinishUploads()
-                        }
-                    },
-                    onDropFiles: { urls, extractionMethod in
-                        Task { await coordinator.uploadFilesDirectly(urls, extractionMethod: extractionMethod) }
-                    },
-                    onSelectFiles: { openDirectUploadPanel() },
-                    onSelectGitRepo: { repoURL in
-                        Task { await coordinator.startGitRepoAnalysis(repoURL) }
-                    },
-                    onFetchURL: { urlString in
-                        await coordinator.fetchURLForArtifact(urlString)
+            // Phase 3 uses DocumentCollectionView for evidence/artifact collection
+            DocumentCollectionView(
+                coordinator: coordinator,
+                onAssessCompleteness: {
+                    Task {
+                        await coordinator.finishUploadsAndMergeCards()
                     }
-                )
-            } else {
-                WritingCorpusCollectionView(
-                    coordinator: coordinator,
-                    onDropFiles: { urls in
-                        Task { await coordinator.uploadWritingSamples(urls) }
-                    },
-                    onSelectFiles: { openWritingSamplePanel() },
-                    onDoneWithSamples: {
-                        Task { await coordinator.completeWritingSamplesCollection() }
-                    },
-                    onEndInterview: {
-                        Task { await coordinator.endInterview() }
+                },
+                onCancelExtractionsAndFinish: {
+                    Task {
+                        await coordinator.cancelExtractionAgentsAndFinishUploads()
                     }
-                )
-            }
+                },
+                onDropFiles: { urls, extractionMethod in
+                    Task { await coordinator.uploadFilesDirectly(urls, extractionMethod: extractionMethod) }
+                },
+                onSelectFiles: { openDirectUploadPanel() },
+                onSelectGitRepo: { repoURL in
+                    Task { await coordinator.startGitRepoAnalysis(repoURL) }
+                },
+                onFetchURL: { urlString in
+                    await coordinator.fetchURLForArtifact(urlString)
+                }
+            )
         case .phase1VoiceContext:
             // Phase 1: Show writing sample collection with skip option
+            // Drop handling is done by the pane-level drop zone
             Phase1WritingSampleView(
                 coordinator: coordinator,
-                onDropFiles: { urls in
-                    Task { await coordinator.uploadWritingSamples(urls) }
-                },
                 onSelectFiles: { openWritingSamplePanel() },
                 onDoneWithSamples: {
                     Task { await coordinator.completeWritingSamplesCollection() }

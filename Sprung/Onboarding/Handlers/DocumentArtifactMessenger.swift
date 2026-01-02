@@ -235,9 +235,8 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
 
         Logger.info("📤 Sending batched artifacts to LLM: \(artifacts.count) document(s)", category: .ai)
 
-        // Build consolidated message content (phase-aware: full content in Phase 1/3, summaries in Phase 2)
-        let currentPhase = await stateCoordinator.phase
-        let messageText = buildExtractedContentMessage(artifacts: artifacts, phase: currentPhase)
+        // Build consolidated message content (summaries only to prevent context bloat)
+        let messageText = buildExtractedContentMessage(artifacts: artifacts)
 
         // Check if there's a pending UI tool call (from get_user_upload)
         // If so, complete it with extracted content instead of sending a separate user message
@@ -278,10 +277,9 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
     }
 
     /// Build the extracted content message for artifacts
-    /// Phase 1 & 3: Include full extracted text (needed for skeleton timeline, finalization)
-    /// Phase 2: Summaries + inventory stats (token-efficient)
-    private func buildExtractedContentMessage(artifacts: [JSON], phase: InterviewPhase) -> String {
-        let sendFullContent = phase != .phase2CareerStory
+    /// Writing samples: sent in full (small, helps model match voice)
+    /// Everything else: brief summaries to prevent context bloat - full content via get_artifact()
+    private func buildExtractedContentMessage(artifacts: [JSON]) -> String {
         var messageText = "I've uploaded \(artifacts.count == 1 ? "a document" : "\(artifacts.count) documents"):\n\n"
 
         for (index, artifact) in artifacts.enumerated() {
@@ -289,12 +287,17 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
             let artifactId = artifact["id"].stringValue
             let extractedText = artifact["extracted_text"].stringValue
             let summary = artifact["summary"].string ?? "Summary not available"
+            let briefDescription = artifact["brief_description"].string
             let sizeBytes = artifact["size_bytes"].int ?? 0
             let sizeKB = sizeBytes / 1024
 
             // Prefer detected type from classification over user-provided metadata
             let docTypeDetected = artifact["document_type_detected"].string
                 ?? artifact["metadata"]["document_type"].string
+
+            // Check if full content should be sent to LLM (set at ingestion time)
+            // True for writing samples and resume uploads - helps with voice matching
+            let includeFullContent = artifact["interview_context"].bool ?? false
 
             if artifacts.count > 1 {
                 messageText += "### Document \(index + 1): \(filename)\n"
@@ -308,25 +311,26 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
             }
             messageText += "- **Size**: \(sizeKB) KB\n\n"
 
-            if sendFullContent && !extractedText.isEmpty {
-                // Phase 1 & 3: Include full extracted text
-                messageText += "**Extracted Content**:\n\(extractedText)\n\n"
+            if includeFullContent && !extractedText.isEmpty {
+                // Full content for interview context artifacts (writing samples, resumes)
+                messageText += "**Full Text**:\n\(extractedText)\n\n"
             } else {
-                // Phase 2: Summary + inventory stats
-                messageText += "**Summary**:\n\(summary)\n\n"
+                // Everything else: brief summary only
+                if let brief = briefDescription, !brief.isEmpty {
+                    messageText += "**Description**: \(brief)\n\n"
+                } else {
+                    messageText += "**Summary**:\n\(summary)\n\n"
+                }
 
                 // Include inventory stats if available
                 messageText += buildInventoryStatsSection(artifact)
             }
         }
 
-        if !sendFullContent {
-            messageText += """
-                ---
-                Full document text available via `get_artifact(artifact_id)`.
-                Card inventories will be merged when user clicks "Done with Uploads".
-                """
-        }
+        messageText += """
+            ---
+            Full document text available via `get_artifact(artifact_id)`.
+            """
 
         return messageText
     }
@@ -384,9 +388,8 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
     }
 
     private func sendSingleArtifact(_ record: JSON) async {
-        // Use the batch helper with a single artifact (phase-aware)
-        let currentPhase = await stateCoordinator.phase
-        let messageText = buildExtractedContentMessage(artifacts: [record], phase: currentPhase)
+        // Build message content (summaries only to prevent context bloat)
+        let messageText = buildExtractedContentMessage(artifacts: [record])
         let artifactId = record["id"].stringValue
 
         // Check if there's a pending UI tool call (from get_user_upload)

@@ -4,6 +4,7 @@
 //
 //  Phase 1 UI component for collecting writing samples.
 //  Shows upload drop zone with skip option for users without samples.
+//  Drop handling is done by the pane-level drop zone in OnboardingInterviewToolPane.
 //
 import SwiftUI
 
@@ -11,7 +12,6 @@ import SwiftUI
 /// Includes skip functionality for users without samples available.
 struct Phase1WritingSampleView: View {
     let coordinator: OnboardingInterviewCoordinator
-    let onDropFiles: ([URL]) -> Void
     let onSelectFiles: () -> Void
     let onDoneWithSamples: () -> Void
     let onSkipSamples: () -> Void
@@ -38,9 +38,8 @@ struct Phase1WritingSampleView: View {
                     // Active writing sample collection
                     headerSection
 
-                    // Upload drop zone
+                    // Upload drop zone (visual hint - drop handled by pane-level)
                     WritingSampleDropZone(
-                        onDropFiles: onDropFiles,
                         onSelectFiles: onSelectFiles
                     )
 
@@ -254,12 +253,10 @@ private struct Phase1WritingSampleRow: View {
     }
 }
 
-// Re-use the drop zone from WritingCorpusCollectionView
+/// Visual hint for writing sample drop zone
+/// Drop handling is done by the pane-level drop zone in OnboardingInterviewToolPane
 private struct WritingSampleDropZone: View {
-    let onDropFiles: ([URL]) -> Void
     let onSelectFiles: () -> Void
-
-    @State private var isTargeted = false
 
     var body: some View {
         VStack(spacing: 8) {
@@ -286,41 +283,14 @@ private struct WritingSampleDropZone: View {
         .padding(.vertical, 20)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(isTargeted ? Color.accentColor.opacity(0.1) : Color(nsColor: .quaternarySystemFill))
+                .fill(Color(nsColor: .quaternarySystemFill))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .strokeBorder(
                     style: StrokeStyle(lineWidth: 2, dash: [6])
                 )
-                .foregroundStyle(isTargeted ? Color.accentColor : Color(nsColor: .separatorColor))
+                .foregroundStyle(Color(nsColor: .separatorColor))
         )
-        .onDrop(of: [.fileURL], isTargeted: $isTargeted) { providers in
-            handleDrop(providers: providers)
-            return true
-        }
-    }
-
-    private func handleDrop(providers: [NSItemProvider]) {
-        var urls: [URL] = []
-        let group = DispatchGroup()
-
-        for provider in providers {
-            group.enter()
-            provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, _ in
-                defer { group.leave() }
-                guard let data = item as? Data,
-                      let url = URL(dataRepresentation: data, relativeTo: nil) else {
-                    return
-                }
-                urls.append(url)
-            }
-        }
-
-        group.notify(queue: .main) {
-            if !urls.isEmpty {
-                onDropFiles(urls)
-            }
-        }
     }
 }

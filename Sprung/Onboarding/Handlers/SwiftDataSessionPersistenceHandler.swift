@@ -199,6 +199,9 @@ final class SwiftDataSessionPersistenceHandler {
                 Logger.info("💾 Cleared previousResponseId (thread reset)", category: .ai)
             }
 
+        case .toolResultPairedWithMessage(let messageId, let toolCallsJSON):
+            sessionStore.updateMessageToolCalls(session, messageId: messageId, toolCallsJSON: toolCallsJSON)
+
         default:
             break
         }

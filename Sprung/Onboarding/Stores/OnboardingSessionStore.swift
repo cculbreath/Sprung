@@ -155,6 +155,17 @@ final class OnboardingSessionStore: SwiftDataStore {
         saveContext()
     }
 
+    /// Update a message's toolCallsJSON by message ID (for tool result pairing)
+    func updateMessageToolCalls(_ session: OnboardingSession, messageId: UUID, toolCallsJSON: String) {
+        guard let record = session.messages.first(where: { $0.id == messageId }) else {
+            Logger.warning("Cannot update message toolCalls: message \(messageId) not found in session", category: .ai)
+            return
+        }
+        record.toolCallsJSON = toolCallsJSON
+        saveContext()
+        Logger.debug("💾 Updated toolCallsJSON for message \(messageId)", category: .ai)
+    }
+
     // MARK: - Restore Helpers
 
     /// Convert stored messages to OnboardingMessage models

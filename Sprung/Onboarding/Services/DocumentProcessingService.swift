@@ -147,6 +147,12 @@ actor DocumentProcessingService {
             artifactRecord["title"].string = title
         }
         artifactRecord["document_type"].string = documentType
+
+        // Set interview_context for uploads that should have full content sent to LLM
+        // (writing samples and resumes - helps with voice matching)
+        let interviewContextTypes = ["writing_sample", "resume"]
+        artifactRecord["interview_context"].bool = interviewContextTypes.contains(documentType)
+
         artifactRecord["storage_path"].string = storagePath
         artifactRecord["extracted_text"].string = extractedText
 

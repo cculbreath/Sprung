@@ -48,6 +48,11 @@ final class ArtifactRecord {
         return !json.isEmpty
     }
 
+    // MARK: - Interview Context
+    /// When true, full document content is sent to interview LLM (not just summary)
+    /// Set for writing samples and resume uploads - helps with voice matching
+    var interviewContext: Bool
+
     // MARK: - Metadata
     /// Additional metadata as JSON (git analysis, page count, graphics content, etc.)
     var metadataJSON: String?
@@ -215,6 +220,7 @@ final class ArtifactRecord {
         briefDescription: String? = nil,
         title: String? = nil,
         cardInventoryJSON: String? = nil,
+        interviewContext: Bool = false,
         metadataJSON: String? = nil,
         rawFileRelativePath: String? = nil,
         ingestedAt: Date = Date(),
@@ -231,6 +237,7 @@ final class ArtifactRecord {
         self.briefDescription = briefDescription
         self.title = title
         self.cardInventoryJSON = cardInventoryJSON
+        self.interviewContext = interviewContext
         self.metadataJSON = metadataJSON
         self.rawFileRelativePath = rawFileRelativePath
         self.ingestedAt = ingestedAt

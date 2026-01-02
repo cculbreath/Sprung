@@ -99,6 +99,39 @@ actor ChatTranscriptStore: OnboardingEventEmitter {
             messages[index].toolCalls = toolCalls
         }
     }
+
+    // MARK: - Tool Result Pairing
+
+    /// Update a tool call with its result (paired storage for Anthropic)
+    /// Searches all messages for the tool call ID and fills in the result
+    /// Emits `toolResultPairedWithMessage` event to trigger persistence update
+    /// - Returns: true if the tool call was found and updated
+    func setToolResult(callId: String, result: String) -> Bool {
+        // Search through messages to find the one with this tool call
+        for index in messages.indices.reversed() {
+            if messages[index].setToolResult(callId: callId, result: result) {
+                let message = messages[index]
+                Logger.debug("📝 Paired tool result with call \(callId.prefix(12)) in message \(message.id)", category: .ai)
+
+                // Emit event for persistence update with the updated toolCallsJSON
+                if let toolCalls = message.toolCalls,
+                   let data = try? JSONEncoder().encode(toolCalls),
+                   let json = String(data: data, encoding: .utf8) {
+                    Task {
+                        await eventBus.publish(.toolResultPairedWithMessage(messageId: message.id, toolCallsJSON: json))
+                    }
+                }
+                return true
+            }
+        }
+        Logger.warning("⚠️ Could not find tool call \(callId.prefix(12)) to pair with result", category: .ai)
+        return false
+    }
+
+    /// Get all messages with pending (incomplete) tool calls
+    func messagesWithPendingToolCalls() -> [OnboardingMessage] {
+        messages.filter { !$0.allToolCallsComplete }
+    }
     // MARK: - Reasoning Summary (Sidebar Display)
     /// Update the current reasoning summary for sidebar display (ChatGPT-style)
     func updateReasoningSummary(delta: String) {

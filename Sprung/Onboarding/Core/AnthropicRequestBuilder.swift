@@ -180,10 +180,10 @@ struct AnthropicRequestBuilder {
     ) async -> AnthropicMessageParameter {
         var messages: [AnthropicMessage] = []
 
-        // Include conversation history
+        // Include conversation history, excluding the current callId since we add it below
         let hasHistory = await contextAssembler.hasConversationHistory()
         if hasHistory {
-            let history = await buildAnthropicHistory()
+            let history = await buildAnthropicHistory(excludeToolCallIds: [callId])
             messages.append(contentsOf: history)
         }
 
@@ -268,10 +268,13 @@ struct AnthropicRequestBuilder {
     func buildBatchedToolResponseRequest(payloads: [JSON]) async -> AnthropicMessageParameter {
         var messages: [AnthropicMessage] = []
 
-        // Include conversation history
+        // Extract all callIds to exclude from history (we add them below)
+        let excludeCallIds = Set(payloads.map { $0["callId"].stringValue })
+
+        // Include conversation history, excluding the current callIds since we add them below
         let hasHistory = await contextAssembler.hasConversationHistory()
         if hasHistory {
-            let history = await buildAnthropicHistory()
+            let history = await buildAnthropicHistory(excludeToolCallIds: excludeCallIds)
             messages.append(contentsOf: history)
         }
 
@@ -342,7 +345,10 @@ struct AnthropicRequestBuilder {
 
     // MARK: - History Building
 
-    private func buildAnthropicHistory() async -> [AnthropicMessage] {
+    /// Build Anthropic message history from conversation transcript
+    /// - Parameter excludeToolCallIds: Tool call IDs that will be added explicitly after history
+    ///   (used when building tool response requests to avoid duplicate tool_results)
+    private func buildAnthropicHistory(excludeToolCallIds: Set<String> = []) async -> [AnthropicMessage] {
         // Get messages from transcript store through context assembler
         let inputItems = await contextAssembler.buildConversationHistory()
 
@@ -433,7 +439,8 @@ struct AnthropicRequestBuilder {
         // CRITICAL: Ensure every tool_use has a corresponding tool_result.
         // Race conditions (e.g., user button clicks) can cause tool_results to be missing.
         // Anthropic requires tool_result immediately after tool_use.
-        messages = ensureToolResultsPresent(messages)
+        // Exclude IDs that will be added explicitly after history (to avoid duplicates).
+        messages = ensureToolResultsPresent(messages, excludeToolCallIds: excludeToolCallIds)
 
         // Validate message structure before returning
         validateMessageStructure(messages)
@@ -593,10 +600,16 @@ struct AnthropicRequestBuilder {
     /// Anthropic requires tool_result immediately after tool_use. Race conditions during
     /// user button clicks can cause tool_results to be missing from the transcript.
     /// This function inserts synthetic tool_results for any truly missing ones.
-    private func ensureToolResultsPresent(_ messages: [AnthropicMessage]) -> [AnthropicMessage] {
+    /// - Parameter excludeToolCallIds: Tool call IDs that will be added explicitly after history
+    ///   (used when building tool response requests to avoid duplicates)
+    private func ensureToolResultsPresent(
+        _ messages: [AnthropicMessage],
+        excludeToolCallIds: Set<String> = []
+    ) -> [AnthropicMessage] {
         // FIRST: Build a global set of ALL tool_result IDs that exist anywhere in the messages.
         // This prevents inserting synthetic results for tool_uses that have results later.
-        var allExistingResultIds = Set<String>()
+        // Also include excluded IDs - these will be added explicitly by the caller.
+        var allExistingResultIds = excludeToolCallIds
         for message in messages {
             let resultIds = extractToolResultIds(from: message)
             allExistingResultIds.formUnion(resultIds)

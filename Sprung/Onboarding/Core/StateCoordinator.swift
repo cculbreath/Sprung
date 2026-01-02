@@ -573,8 +573,18 @@ actor StateCoordinator: OnboardingEventEmitter {
     // MARK: - Completed Tool Results (Anthropic History)
 
     /// Store a completed tool result for inclusion in Anthropic conversation history
+    /// Uses paired storage: result is attached directly to the tool call in the message
     func addCompletedToolResult(callId: String, toolName: String, output: String) async {
+        // Legacy: Store in separate list (for backwards compatibility during migration)
         await llmStateManager.addCompletedToolResult(callId: callId, toolName: toolName, output: output)
+
+        // NEW: Paired storage - attach result directly to the tool call in the message
+        let paired = await chatStore.setToolResult(callId: callId, result: output)
+        if paired {
+            Logger.debug("✅ Tool result paired with call in message: \(toolName) (\(callId.prefix(8)))", category: .ai)
+        } else {
+            Logger.warning("⚠️ Tool result could not be paired - call not found: \(toolName) (\(callId.prefix(8)))", category: .ai)
+        }
     }
 
     /// Get all completed tool results for building Anthropic conversation history

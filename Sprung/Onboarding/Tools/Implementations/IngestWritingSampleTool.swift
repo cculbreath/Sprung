@@ -98,6 +98,7 @@ struct IngestWritingSampleTool: InterviewTool {
         artifactRecord["filename"].string = "\(sampleName).txt"
         artifactRecord["extracted_text"].string = content
         artifactRecord["source_hash"].string = contentHash
+        artifactRecord["interview_context"].bool = true  // Full content sent to LLM
         artifactRecord["ingested_at"].string = ISO8601DateFormatter().string(from: Date())
 
         // Build metadata

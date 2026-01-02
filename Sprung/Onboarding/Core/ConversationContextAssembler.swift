@@ -70,10 +70,10 @@ actor ConversationContextAssembler {
     /// For Anthropic: includes tool calls AND their results (tool_use + tool_result pairs)
     func buildConversationHistory() async -> [InputItem] {
         let messages = await state.messages
-        // Get completed tool results for Anthropic history reconstruction
+
+        // Fallback: Get completed tool results from legacy storage (for backwards compatibility)
         let completedResults = await state.getCompletedToolResults()
-        // Build a lookup map: callId -> output
-        let resultsByCallId = Dictionary(uniqueKeysWithValues: completedResults.map { ($0.callId, $0.output) })
+        let legacyResultsByCallId = Dictionary(uniqueKeysWithValues: completedResults.map { ($0.callId, $0.output) })
 
         return messages.flatMap { message -> [InputItem] in
             let role: String
@@ -106,14 +106,24 @@ actor ConversationContextAssembler {
                     )))
                     Logger.debug("📝 Including tool call in history: \(toolCall.name) (id: \(toolCall.id))", category: .ai)
 
-                    // Include the corresponding tool result if we have it
-                    if let output = resultsByCallId[toolCall.id] {
+                    // PRIORITY 1: Use paired result from the tool call itself (new storage)
+                    // PRIORITY 2: Fall back to legacy separate storage
+                    if let output = toolCall.result {
                         items.append(.functionToolCallOutput(FunctionToolCallOutput(
                             callId: toolCall.id,
                             output: output,
                             status: nil
                         )))
-                        Logger.debug("📝 Including tool result in history: \(toolCall.name) (id: \(toolCall.id))", category: .ai)
+                        Logger.debug("📝 Including paired tool result: \(toolCall.name) (id: \(toolCall.id))", category: .ai)
+                    } else if let output = legacyResultsByCallId[toolCall.id] {
+                        items.append(.functionToolCallOutput(FunctionToolCallOutput(
+                            callId: toolCall.id,
+                            output: output,
+                            status: nil
+                        )))
+                        Logger.debug("📝 Including legacy tool result: \(toolCall.name) (id: \(toolCall.id))", category: .ai)
+                    } else {
+                        Logger.warning("⚠️ No result found for tool call: \(toolCall.name) (id: \(toolCall.id))", category: .ai)
                     }
                 }
             }

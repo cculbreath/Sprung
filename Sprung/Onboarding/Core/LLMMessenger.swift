@@ -968,6 +968,8 @@ actor LLMMessenger: OnboardingEventEmitter {
             Logger.debug("📤 Anthropic tool response: callId=\(callId), output=\(output.rawString() ?? "nil")", category: .ai)
             Logger.info("📤 Sending Anthropic tool response for callId=\(String(callId.prefix(12)))...", category: .ai)
 
+            // Note: Don't store result before building request - buildToolResponseRequest adds it explicitly
+            // We pass the callId to exclude from synthetic result insertion since we're about to add it
             let request = await anthropicRequestBuilder.buildToolResponseRequest(
                 output: output,
                 callId: callId,
@@ -1009,7 +1011,7 @@ actor LLMMessenger: OnboardingEventEmitter {
                         }
 
                         await stateCoordinator.clearPendingToolResponses()
-                        // Store completed tool result for Anthropic history reconstruction
+                        // Store completed tool result for future requests
                         let outputString = output.rawString() ?? "{}"
                         await stateCoordinator.addCompletedToolResult(
                             callId: callId,
@@ -1062,6 +1064,7 @@ actor LLMMessenger: OnboardingEventEmitter {
         do {
             Logger.info("📤 Sending Anthropic batched tool responses (\(payloads.count) responses)", category: .ai)
 
+            // Note: Don't store results before building request - buildBatchedToolResponseRequest adds them explicitly
             let request = await anthropicRequestBuilder.buildBatchedToolResponseRequest(payloads: payloads)
             let messageId = UUID().uuidString
 
@@ -1091,7 +1094,7 @@ actor LLMMessenger: OnboardingEventEmitter {
                         }
 
                         await stateCoordinator.clearPendingToolResponses()
-                        // Store completed tool results for Anthropic history reconstruction
+                        // Store completed tool results for future requests
                         for payload in payloads {
                             let callId = payload["callId"].stringValue
                             let toolName = payload["toolName"].stringValue
