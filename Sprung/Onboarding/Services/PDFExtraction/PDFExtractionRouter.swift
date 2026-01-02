@@ -28,11 +28,6 @@ actor PDFExtractionRouter {
     private let parallelExtractor: ParallelPageExtractor
     private let llmFacade: LLMFacade
 
-    // MARK: - State
-
-    private var workspace: PDFExtractionWorkspace?
-    private var progressCallback: (@Sendable (String) -> Void)?
-
     // MARK: - Init
 
     init(llmFacade: LLMFacade, agentTracker: AgentActivityTracker?) {
@@ -59,8 +54,6 @@ actor PDFExtractionRouter {
 
         // Create workspace for temp files
         let ws = try PDFExtractionWorkspace(documentName: filename)
-        self.workspace = ws
-        self.progressCallback = progress
 
         // Write input PDF
         try pdfData.write(to: await ws.inputPDFURL)
@@ -69,7 +62,8 @@ actor PDFExtractionRouter {
             let result = try await performExtraction(
                 pdfData: pdfData,
                 filename: filename,
-                workspace: ws
+                workspace: ws,
+                progress: progress
             )
 
             // Save output for debugging
@@ -85,22 +79,17 @@ actor PDFExtractionRouter {
         }
     }
 
-    // MARK: - Progress Reporting
-
-    private func reportProgress(_ message: String) {
-        progressCallback?(message)
-    }
-
     // MARK: - Extraction Pipeline
 
     private func performExtraction(
         pdfData: Data,
         filename: String,
-        workspace: PDFExtractionWorkspace
+        workspace: PDFExtractionWorkspace,
+        progress: (@Sendable (String) -> Void)?
     ) async throws -> PDFExtractionResult {
 
         // Step 1: Parse PDF
-        reportProgress("Analyzing PDF structure...")
+        progress?("Analyzing PDF structure...")
         Logger.info("📄 PDFRouter: Starting extraction for \(filename)", category: .ai)
 
         guard let pdfDocument = PDFDocument(data: pdfData) else {
@@ -110,7 +99,7 @@ actor PDFExtractionRouter {
         Logger.info("📄 PDFRouter: PDF has \(pageCount) pages", category: .ai)
 
         // Step 2: Quick PDFKit extraction
-        reportProgress("Extracting text layer...")
+        progress?("Extracting text layer...")
         let pdfKitText = extractWithPDFKit(pdfDocument)
         let hasNullChars = pdfKitText.contains("\u{0000}")
 
@@ -120,7 +109,7 @@ actor PDFExtractionRouter {
         Logger.info("📄 PDFRouter: PDFKit extracted \(pdfKitText.count) characters", category: .ai)
 
         // Step 3: Rasterize samples for judge
-        reportProgress("Rasterizing sample pages...")
+        progress?("Rasterizing sample pages...")
         let samplePages = await rasterizer.selectSamplePages(pageCount: pageCount)
         Logger.info("📄 PDFRouter: Sampling pages: \(samplePages.map { $0 + 1 })", category: .ai)
 
@@ -132,7 +121,7 @@ actor PDFExtractionRouter {
         )
 
         // Step 4: Create 4-up composites
-        reportProgress("Creating comparison composites...")
+        progress?("Creating comparison composites...")
         let composites = try await rasterizer.createFourUpComposites(
             pageImages: pageImages,
             workspace: workspace
@@ -140,7 +129,7 @@ actor PDFExtractionRouter {
         Logger.info("📄 PDFRouter: Created \(composites.count) composite images", category: .ai)
 
         // Step 5: LLM Judge
-        reportProgress("Analyzing extraction quality...")
+        progress?("Analyzing extraction quality...")
         Logger.info("📄 PDFRouter: Calling LLM judge to compare text vs images", category: .ai)
 
         let judgment = try await judge.judge(
@@ -167,11 +156,12 @@ actor PDFExtractionRouter {
             pageCount: pageCount,
             pdfKitText: pdfKitText,
             judgment: judgment,
-            workspace: workspace
+            workspace: workspace,
+            progress: progress
         )
 
         // Step 7: Sanitize
-        reportProgress("Extracted via \(method.displayDescription)")
+        progress?("Extracted via \(method.displayDescription)")
         let sanitizedText = sanitize(text)
 
         Logger.info(
@@ -194,22 +184,23 @@ actor PDFExtractionRouter {
         pageCount: Int,
         pdfKitText: String,
         judgment: ExtractionJudgment,
-        workspace: PDFExtractionWorkspace
+        workspace: PDFExtractionWorkspace,
+        progress: (@Sendable (String) -> Void)?
     ) async throws -> (String, PDFExtractionMethod) {
 
         switch judgment.recommendedMethod {
 
         case .pdfkit:
-            reportProgress("Using native text extraction")
+            progress?("Using native text extraction")
             Logger.info("📄 PDFRouter: Route: PDFKit (fidelity \(judgment.textFidelity)% acceptable)", category: .ai)
             return (pdfKitText, .pdfkit)
 
         case .visionOCR:
-            reportProgress("Using native Vision OCR...")
+            progress?("Using native Vision OCR...")
             Logger.info("📄 PDFRouter: Route: Vision OCR (free, native)", category: .ai)
 
             // Rasterize all pages for OCR
-            reportProgress("Rasterizing all \(pageCount) pages...")
+            progress?("Rasterizing all \(pageCount) pages...")
             let allPages = try await rasterizer.rasterizePages(
                 pdfDocument: pdfDocument,
                 pages: Array(0..<pageCount),
@@ -218,10 +209,9 @@ actor PDFExtractionRouter {
             )
 
             // Run Vision OCR
-            reportProgress("Running OCR on \(pageCount) pages...")
-            let callback = progressCallback
+            progress?("Running OCR on \(pageCount) pages...")
             let text = try await visionOCR.recognizeImages(allPages) { completed, total in
-                callback?("OCR: \(completed)/\(total) pages")
+                progress?("OCR: \(completed)/\(total) pages")
             }
 
             Logger.info("📄 PDFRouter: Vision OCR extracted \(text.count) characters", category: .ai)
@@ -232,7 +222,8 @@ actor PDFExtractionRouter {
             return try await extractWithLLMVision(
                 pdfDocument: pdfDocument,
                 pageCount: pageCount,
-                workspace: workspace
+                workspace: workspace,
+                progress: progress
             )
         }
     }
@@ -242,11 +233,12 @@ actor PDFExtractionRouter {
     private func extractWithLLMVision(
         pdfDocument: PDFDocument,
         pageCount: Int,
-        workspace: PDFExtractionWorkspace
+        workspace: PDFExtractionWorkspace,
+        progress: (@Sendable (String) -> Void)?
     ) async throws -> (String, PDFExtractionMethod) {
 
         // Rasterize all pages
-        reportProgress("Rasterizing \(pageCount) pages for vision extraction...")
+        progress?("Rasterizing \(pageCount) pages for vision extraction...")
         let allPages = try await rasterizer.rasterizePages(
             pdfDocument: pdfDocument,
             pages: Array(0..<pageCount),
@@ -258,9 +250,8 @@ actor PDFExtractionRouter {
         let maxConcurrent = UserDefaults.standard.integer(forKey: "maxConcurrentPDFExtractions")
         Logger.info("📄 PDFRouter: Starting parallel vision extraction (max \(max(maxConcurrent, 4)) concurrent)", category: .ai)
 
-        let callback = progressCallback
         let pageTexts = try await parallelExtractor.extractPages(images: allPages) { status in
-            callback?(status)
+            progress?(status)
         }
 
         let combinedText = pageTexts.enumerated().map { index, text in
