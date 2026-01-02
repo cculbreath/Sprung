@@ -110,6 +110,8 @@ actor DocumentExtractionService {
     private var llmFacade: LLMFacade?
     private let defaultModelId = "gemini-2.5-flash"
     private var eventBus: EventCoordinator?
+    private var pdfRouter: PDFExtractionRouter?
+    private weak var agentTracker: AgentActivityTracker?
 
     init(llmFacade: LLMFacade?, eventBus: EventCoordinator? = nil) {
         self.llmFacade = llmFacade
@@ -118,6 +120,28 @@ actor DocumentExtractionService {
 
     func updateEventBus(_ bus: EventCoordinator?) {
         self.eventBus = bus
+    }
+
+    /// Set the agent tracker for PDF extraction status display.
+    /// The router will be created lazily when first needed.
+    func setAgentTracker(_ tracker: AgentActivityTracker) {
+        self.agentTracker = tracker
+    }
+
+    /// Get or create the PDF extraction router.
+    /// Creates lazily on first use with available dependencies.
+    private func getOrCreateRouter() -> PDFExtractionRouter? {
+        if let router = pdfRouter {
+            return router
+        }
+        guard let facade = llmFacade else {
+            Logger.warning("Cannot create PDF router: LLMFacade not available", category: .ai)
+            return nil
+        }
+        let router = PDFExtractionRouter(llmFacade: facade, agentTracker: agentTracker)
+        self.pdfRouter = router
+        Logger.info("📄 PDF extraction router created", category: .ai)
+        return router
     }
 
     func setInvalidModelHandler(_ handler: @escaping (String) -> Void) {
@@ -343,12 +367,13 @@ actor DocumentExtractionService {
         return hashed.map { String(format: "%02x", $0) }.joined()
     }
 
-    // MARK: - PDF Extraction (Two-Pass)
+    // MARK: - PDF Extraction (Router-Based)
 
-    /// Extract content from a PDF using two-pass parallel extraction:
-    /// - Pass 1: Local PDFKit text extraction (fast, reliable)
-    /// - Pass 2: LLM graphics extraction (describes figures, charts, diagrams)
-    /// Both passes run in parallel. Graphics extraction failure doesn't block processing.
+    /// Extract content from a PDF using the intelligent extraction router.
+    /// The router uses LLM judgment to select the optimal extraction method:
+    /// - PDFKit: For high-quality text layer extraction (free, fast)
+    /// - Vision OCR: For documents with problematic fonts (free, native)
+    /// - LLM Vision: For complex layouts requiring AI understanding (paid, best quality)
     private func extractPDFDirect(
         fileURL: URL,
         fileData: Data,
@@ -366,160 +391,127 @@ actor DocumentExtractionService {
             await progress(ExtractionProgressUpdate(stage: stage, state: state, detail: detail))
         }
 
-        let modelId = currentModelId()
         let sizeMB = Double(sizeInBytes) / 1_048_576.0
-        let pageCount = PDFDocument(data: fileData)?.pageCount
+        let pageCount = PDFDocument(data: fileData)?.pageCount ?? 0
 
         await notifyProgress(.fileAnalysis, .active, detail: "Preparing PDF (\(String(format: "%.1f", sizeMB)) MB)...")
 
         Logger.info(
-            "📄 Starting two-pass PDF extraction",
+            "📄 Starting PDF extraction via router",
             category: .ai,
             metadata: [
                 "filename": filename,
                 "size_mb": String(format: "%.1f", sizeMB),
-                "model": modelId,
-                "page_count": pageCount.map(String.init) ?? "unknown"
+                "page_count": "\(pageCount)"
             ]
         )
 
-        await notifyProgress(.fileAnalysis, .completed, detail: "Using \(modelId)")
-        await notifyProgress(.aiExtraction, .active, detail: "Extracting text and analyzing graphics...")
+        await notifyProgress(.fileAnalysis, .completed)
+        await notifyProgress(.aiExtraction, .active, detail: "Analyzing document...")
 
         let extractionStart = Date()
 
-        // Two-pass parallel extraction
-        // Pass 1: Local PDFKit text extraction
-        // Pass 2: LLM graphics extraction (gracefully handles failure)
+        // Use the intelligent extraction router
+        guard let router = getOrCreateRouter() else {
+            // Fall back to simple PDFKit if router not configured
+            Logger.warning("PDF router not configured, falling back to simple PDFKit extraction", category: .ai)
+            let (text, issues, _) = extractPlainText(from: fileURL)
 
-        // Run both passes in parallel
-        async let textTask: (String?, [String], Int?) = extractPlainText(from: fileURL)
-        async let graphicsTask: (graphics: String?, error: String?) = extractGraphicsWithGracefulFailure(
-            pdfData: fileData,
-            filename: filename
-        )
-
-        // Wait for both to complete
-        let (plainText, textIssues, extractedPageCount) = await textTask
-        let graphicsResult = await graphicsTask
-
-        // Validate PDFKit extraction quality
-        let effectivePageCount = extractedPageCount ?? pageCount ?? 1
-        let textQuality = validateTextExtraction(
-            text: plainText ?? "",
-            pageCount: effectivePageCount
-        )
-        Logger.info("PDF extraction quality: \(textQuality.diagnosticSummary)", category: .ai)
-
-        // Determine final extracted text - use vision fallback if PDFKit quality is too low
-        let finalPlainText: String
-        let usedVisionFallback: Bool
-
-        if textQuality.requiresVisionFallback || (plainText?.isEmpty ?? true) {
-            // PDFKit failed - use vision extraction
-            Logger.warning("PDFKit quality too low (\(String(format: "%.0f%%", textQuality.score * 100))) - using vision extraction", category: .ai)
-            await notifyProgress(.aiExtraction, .active, detail: "Complex fonts detected - using vision extraction...")
-
-            do {
-                finalPlainText = try await extractWithVision(
-                    pdfData: fileData,
-                    filename: filename,
-                    pageCount: effectivePageCount,
-                    progress: progress
-                )
-                usedVisionFallback = true
-                Logger.info("Vision extraction successful: \(finalPlainText.count) chars", category: .ai)
-            } catch {
-                // If vision also fails and we have some PDFKit text, use it as fallback
-                if let pdfKitText = plainText, !pdfKitText.isEmpty {
-                    Logger.warning("Vision extraction failed, using low-quality PDFKit text: \(error.localizedDescription)", category: .ai)
-                    finalPlainText = pdfKitText
-                    usedVisionFallback = false
-                } else {
-                    await notifyProgress(.aiExtraction, .failed, detail: "Text extraction failed")
-                    throw error
-                }
+            guard let extractedText = text, !extractedText.isEmpty else {
+                await notifyProgress(.aiExtraction, .failed, detail: "No text extracted")
+                throw ExtractionError.noTextExtracted
             }
-        } else if textQuality.isAcceptable {
-            // PDFKit text is good quality - use it
-            Logger.info("PDFKit text quality acceptable (\(String(format: "%.0f%%", textQuality.score * 100)))", category: .ai)
-            finalPlainText = plainText!
-            usedVisionFallback = false
-        } else {
-            // Marginal quality - use PDFKit but log warning
-            Logger.warning("PDFKit quality marginal (\(String(format: "%.0f%%", textQuality.score * 100))), using anyway", category: .ai)
-            finalPlainText = plainText!
-            usedVisionFallback = false
+
+            await notifyProgress(.aiExtraction, .completed)
+
+            return createExtractionResult(
+                text: extractedText,
+                method: .pdfkit,
+                textFidelity: 70,
+                filename: filename,
+                fileURL: fileURL,
+                contentType: contentType,
+                sizeInBytes: sizeInBytes,
+                sha256: sha256,
+                purpose: purpose,
+                pageCount: pageCount,
+                issues: issues
+            )
         }
 
-        // Log results
+        // Use the router for intelligent extraction
+        let result = try await router.extractText(from: fileData, filename: filename)
+
         let durationMs = Int(Date().timeIntervalSince(extractionStart) * 1000)
         Logger.info(
-            "PDF extraction completed",
+            "📄 PDF extraction completed",
             category: .diagnostics,
             metadata: [
                 "filename": filename,
                 "duration_ms": "\(durationMs)",
-                "text_chars": "\(finalPlainText.count)",
-                "graphics_status": graphicsResult.graphics != nil ? "success" : "failed",
-                "page_count": "\(effectivePageCount)",
-                "used_vision": "\(usedVisionFallback)",
-                "pdfkit_quality": String(format: "%.0f%%", textQuality.score * 100)
+                "text_chars": "\(result.text.count)",
+                "method": result.method.rawValue,
+                "fidelity": "\(result.judgment.textFidelity)%",
+                "page_count": "\(result.pageCount)"
             ]
         )
 
-        await notifyProgress(.aiExtraction, .completed)
+        await notifyProgress(.aiExtraction, .completed, detail: "Extracted via \(result.method.displayDescription)")
 
-        // Combine content for downstream processing
-        // Note: If vision was used, graphics extraction may have overlapping content
-        let combinedContent: String
-        if !usedVisionFallback, let graphics = graphicsResult.graphics {
-            // Only include separate graphics section if we used PDFKit text
-            combinedContent = """
-            --- EXTRACTED TEXT ---
-            \(finalPlainText)
-
-            --- VISUAL CONTENT ANALYSIS ---
-            \(graphics)
-            """
-        } else {
-            // Vision extraction already includes visual content descriptions
-            combinedContent = finalPlainText
+        // Build issues list based on extraction result
+        var issues: [String] = []
+        issues.append(contentsOf: result.judgment.issuesFound)
+        if result.method == .visionOCR {
+            issues.append("vision_ocr_used")
+        } else if result.method == .llmVision {
+            issues.append("llm_vision_used")
         }
 
-        // Determine graphics extraction status
-        let graphicsStatus: ExtractedArtifact.GraphicsExtractionStatus
-        if graphicsResult.graphics != nil {
-            graphicsStatus = .success
-        } else {
-            graphicsStatus = .failed
-        }
+        return createExtractionResult(
+            text: result.text,
+            method: result.method,
+            textFidelity: result.judgment.textFidelity,
+            filename: filename,
+            fileURL: fileURL,
+            contentType: contentType,
+            sizeInBytes: sizeInBytes,
+            sha256: sha256,
+            purpose: purpose,
+            pageCount: result.pageCount,
+            issues: issues
+        )
+    }
 
-        // Derive title from filename
+    /// Create an ExtractionResult from the extraction data.
+    private func createExtractionResult(
+        text: String,
+        method: PDFExtractionMethod,
+        textFidelity: Int,
+        filename: String,
+        fileURL: URL,
+        contentType: String,
+        sizeInBytes: Int,
+        sha256: String,
+        purpose: String,
+        pageCount: Int,
+        issues: [String]
+    ) -> ExtractionResult {
         let derivedTitle = filename
             .replacingOccurrences(of: ".pdf", with: "")
             .replacingOccurrences(of: "_", with: " ")
             .replacingOccurrences(of: "-", with: " ")
 
-        var metadata: [String: Any] = [
-            "character_count": combinedContent.count,
-            "plain_text_chars": finalPlainText.count,
+        let metadata: [String: Any] = [
+            "character_count": text.count,
+            "plain_text_chars": text.count,
             "source_format": contentType,
             "purpose": purpose,
             "source_file_url": fileURL.absoluteString,
             "source_filename": filename,
-            "extraction_method": usedVisionFallback ? "vision_fallback" : "two_pass_parallel",
-            "pdfkit_quality_score": textQuality.score
+            "extraction_method": method.rawValue,
+            "text_fidelity": textFidelity,
+            "page_count": pageCount
         ]
-        metadata["page_count"] = effectivePageCount
-        metadata["graphics_extraction_status"] = graphicsStatus.rawValue
-        metadata["used_vision_fallback"] = usedVisionFallback
-        if let graphicsError = graphicsResult.error {
-            metadata["graphics_extraction_error"] = graphicsError
-        }
-        if let graphics = graphicsResult.graphics {
-            metadata["graphics_chars"] = graphics.count
-        }
 
         let artifact = ExtractedArtifact(
             id: UUID().uuidString,
@@ -528,351 +520,26 @@ actor DocumentExtractionService {
             contentType: contentType,
             sizeInBytes: sizeInBytes,
             sha256: sha256,
-            extractedContent: combinedContent,
+            extractedContent: text,
             metadata: metadata,
-            plainTextContent: finalPlainText,
-            graphicsContent: usedVisionFallback ? nil : graphicsResult.graphics,
-            graphicsExtractionStatus: usedVisionFallback ? .skipped : graphicsStatus
+            plainTextContent: text,
+            graphicsContent: nil,
+            graphicsExtractionStatus: .skipped
         )
 
-        var issues = textIssues
-        if usedVisionFallback {
-            issues.append("vision_fallback_used")
-        }
-        if graphicsResult.error != nil {
-            issues.append("graphics_extraction_failed")
-        }
-        let quality = Quality(confidence: estimateConfidence(for: finalPlainText, issues: issues), issues: issues)
+        let quality = Quality(
+            confidence: estimateConfidence(for: text, issues: issues),
+            issues: issues
+        )
 
         return ExtractionResult(
-            status: graphicsResult.error != nil ? .partial : .ok,
+            status: issues.isEmpty ? .ok : .partial,
             artifact: artifact,
             quality: quality,
             derivedApplicantProfile: nil,
             derivedSkeletonTimeline: nil,
             persisted: false
         )
-    }
-
-    /// Extract graphics from PDF with graceful failure handling.
-    /// Returns (graphics: String?, error: String?) - graphics is nil if extraction failed.
-    private func extractGraphicsWithGracefulFailure(
-        pdfData: Data,
-        filename: String
-    ) async -> (graphics: String?, error: String?) {
-        guard let facade = llmFacade else {
-            return (nil, "LLM not configured")
-        }
-
-        do {
-            let (graphics, tokenUsage) = try await facade.extractGraphicsFromPDF(
-                pdfData: pdfData,
-                filename: filename
-            )
-
-            // Emit token usage if available
-            if let usage = tokenUsage, let eventBus = eventBus {
-                let modelId = currentModelId()
-                await eventBus.publish(.llmTokenUsageReceived(
-                    modelId: modelId,
-                    inputTokens: usage.promptTokenCount,
-                    outputTokens: usage.candidatesTokenCount,
-                    cachedTokens: 0,
-                    reasoningTokens: 0,
-                    source: .documentExtraction
-                ))
-            }
-
-            return (graphics, nil)
-        } catch {
-            Logger.warning("⚠️ Graphics extraction failed for \(filename): \(error.localizedDescription)", category: .ai)
-            return (nil, error.localizedDescription)
-        }
-    }
-
-    // MARK: - Vision Text Extraction
-
-    /// Extract text from a PDF using Gemini vision.
-    /// Used when PDFKit text extraction fails (e.g., complex fonts).
-    /// Automatically chooses single-pass or chunked extraction based on page count.
-    ///
-    /// - Parameters:
-    ///   - pdfData: The PDF file data
-    ///   - filename: Display name for the file
-    ///   - pageCount: Number of pages in the PDF
-    ///   - progress: Progress handler for UI updates
-    /// - Returns: Extracted text content
-    func extractWithVision(
-        pdfData: Data,
-        filename: String,
-        pageCount: Int,
-        progress: ExtractionProgressHandler?
-    ) async throws -> String {
-        if pageCount <= ExtractionConfig.singlePassThreshold {
-            return try await extractTextSinglePass(
-                pdfData: pdfData,
-                filename: filename,
-                pageCount: pageCount,
-                progress: progress
-            )
-        } else {
-            return try await extractTextChunked(
-                pdfData: pdfData,
-                filename: filename,
-                pageCount: pageCount,
-                progress: progress
-            )
-        }
-    }
-
-    /// Single-pass vision text extraction for documents ≤30 pages.
-    private func extractTextSinglePass(
-        pdfData: Data,
-        filename: String,
-        pageCount: Int,
-        progress: ExtractionProgressHandler?
-    ) async throws -> String {
-        guard let facade = llmFacade else {
-            throw ExtractionError.llmNotConfigured
-        }
-
-        await progress?(ExtractionProgressUpdate(
-            stage: .aiExtraction,
-            state: .active,
-            detail: "Extracting text from \(pageCount) pages..."
-        ))
-
-        let prompt = DocumentExtractionPrompts.visionTextExtractionPrompt(
-            filename: filename,
-            pageCount: pageCount
-        )
-
-        let startTime = Date()
-
-        let (text, tokenUsage) = try await facade.generateFromPDF(
-            pdfData: pdfData,
-            filename: filename,
-            prompt: prompt,
-            maxOutputTokens: ExtractionConfig.singlePassMaxTokens
-        )
-
-        let duration = Date().timeIntervalSince(startTime)
-
-        Logger.info(
-            "Single-pass vision extraction complete",
-            category: .ai,
-            metadata: [
-                "chars": "\(text.count)",
-                "duration_sec": String(format: "%.1f", duration),
-                "input_tokens": "\(tokenUsage?.promptTokenCount ?? 0)",
-                "output_tokens": "\(tokenUsage?.candidatesTokenCount ?? 0)"
-            ]
-        )
-
-        // Emit token usage
-        if let usage = tokenUsage, let eventBus = eventBus {
-            let modelId = currentModelId()
-            await eventBus.publish(.llmTokenUsageReceived(
-                modelId: modelId,
-                inputTokens: usage.promptTokenCount,
-                outputTokens: usage.candidatesTokenCount,
-                cachedTokens: 0,
-                reasoningTokens: 0,
-                source: .documentExtraction
-            ))
-        }
-
-        await progress?(ExtractionProgressUpdate(
-            stage: .aiExtraction,
-            state: .active,
-            detail: "Extracted \(text.count.formatted()) characters"
-        ))
-
-        return text
-    }
-
-    /// Chunked vision text extraction for documents >30 pages with streaming progress.
-    private func extractTextChunked(
-        pdfData: Data,
-        filename: String,
-        pageCount: Int,
-        progress: ExtractionProgressHandler?
-    ) async throws -> String {
-        guard let document = PDFDocument(data: pdfData) else {
-            throw ExtractionError.unreadableData
-        }
-
-        let chunkSize = ExtractionConfig.chunkSize
-        let totalChunks = (pageCount + chunkSize - 1) / chunkSize
-        var chunks: [String] = []
-        var totalCharsExtracted = 0
-        let overallStart = Date()
-
-        Logger.info(
-            "Starting chunked extraction: \(pageCount) pages in \(totalChunks) chunks",
-            category: .ai
-        )
-
-        for (chunkIndex, chunkStart) in stride(from: 0, to: pageCount, by: chunkSize).enumerated() {
-            let chunkEnd = min(chunkStart + chunkSize, pageCount)
-            let chunkNum = chunkIndex + 1
-            let percentComplete = Int((Double(chunkIndex) / Double(totalChunks)) * 100)
-
-            // Calculate time estimate
-            let elapsed = Date().timeIntervalSince(overallStart)
-            let avgSecsPerChunk = chunkIndex > 0 ? elapsed / Double(chunkIndex) : 5.0
-            let remainingChunks = totalChunks - chunkIndex
-            let estimatedRemaining = Int(avgSecsPerChunk * Double(remainingChunks))
-
-            // Stream progress to UI
-            let progressDetail: String
-            if estimatedRemaining > 60 {
-                progressDetail = "Extracting pages \(chunkStart + 1)-\(chunkEnd) of \(pageCount) " +
-                               "(\(percentComplete)%) - ~\(estimatedRemaining / 60)m remaining"
-            } else if estimatedRemaining > 10 {
-                progressDetail = "Extracting pages \(chunkStart + 1)-\(chunkEnd) of \(pageCount) " +
-                               "(\(percentComplete)%) - ~\(estimatedRemaining)s remaining"
-            } else {
-                progressDetail = "Extracting pages \(chunkStart + 1)-\(chunkEnd) of \(pageCount) (\(percentComplete)%)"
-            }
-
-            await progress?(ExtractionProgressUpdate(
-                stage: .aiExtraction,
-                state: .active,
-                detail: progressDetail
-            ))
-
-            // Create PDF subset for this chunk
-            let chunkDocument = PDFDocument()
-            for pageIndex in chunkStart..<chunkEnd {
-                if let page = document.page(at: pageIndex) {
-                    chunkDocument.insert(page, at: chunkDocument.pageCount)
-                }
-            }
-
-            guard let chunkData = chunkDocument.dataRepresentation() else {
-                Logger.warning("Failed to create chunk PDF for pages \(chunkStart + 1)-\(chunkEnd)", category: .ai)
-                continue
-            }
-
-            // Extract this chunk with retry
-            let chunkText = try await extractChunkWithRetry(
-                pdfData: chunkData,
-                filename: filename,
-                startPage: chunkStart + 1,
-                endPage: chunkEnd,
-                totalPages: pageCount,
-                chunkNumber: chunkNum,
-                totalChunks: totalChunks
-            )
-
-            chunks.append(chunkText)
-            totalCharsExtracted += chunkText.count
-
-            Logger.info(
-                "Chunk \(chunkNum)/\(totalChunks) complete: \(chunkText.count) chars",
-                category: .ai
-            )
-
-            // Rate limit protection between chunks
-            if chunkEnd < pageCount {
-                try await Task.sleep(for: .milliseconds(ExtractionConfig.interChunkDelayMs))
-            }
-        }
-
-        let totalDuration = Date().timeIntervalSince(overallStart)
-
-        Logger.info(
-            "Chunked extraction complete",
-            category: .ai,
-            metadata: [
-                "total_chars": "\(totalCharsExtracted)",
-                "chunks": "\(chunks.count)/\(totalChunks)",
-                "duration_sec": String(format: "%.1f", totalDuration)
-            ]
-        )
-
-        // Final progress update
-        await progress?(ExtractionProgressUpdate(
-            stage: .aiExtraction,
-            state: .active,
-            detail: "Extracted \(totalCharsExtracted.formatted()) characters from \(pageCount) pages"
-        ))
-
-        guard !chunks.isEmpty else {
-            throw ExtractionError.noTextExtracted
-        }
-
-        // Combine chunks with page markers
-        return chunks.enumerated().map { (index, text) in
-            let startPage = index * chunkSize + 1
-            let endPage = min(startPage + chunkSize - 1, pageCount)
-            return "--- PAGES \(startPage)-\(endPage) ---\n\n\(text)"
-        }.joined(separator: "\n\n")
-    }
-
-    /// Extract a single chunk with retry logic.
-    private func extractChunkWithRetry(
-        pdfData: Data,
-        filename: String,
-        startPage: Int,
-        endPage: Int,
-        totalPages: Int,
-        chunkNumber: Int,
-        totalChunks: Int
-    ) async throws -> String {
-        guard let facade = llmFacade else {
-            throw ExtractionError.llmNotConfigured
-        }
-
-        let prompt = DocumentExtractionPrompts.visionTextExtractionPromptForChunk(
-            filename: filename,
-            startPage: startPage,
-            endPage: endPage,
-            totalPages: totalPages,
-            chunkNumber: chunkNumber,
-            totalChunks: totalChunks
-        )
-
-        var lastError: Error?
-        let maxRetries = ExtractionConfig.maxChunkRetries
-
-        for attempt in 1...(maxRetries + 1) {
-            do {
-                let (text, tokenUsage) = try await facade.generateFromPDF(
-                    pdfData: pdfData,
-                    filename: "\(filename)_pages_\(startPage)-\(endPage)",
-                    prompt: prompt,
-                    maxOutputTokens: ExtractionConfig.chunkMaxTokens
-                )
-
-                // Emit token usage
-                if let usage = tokenUsage, let eventBus = eventBus {
-                    let modelId = currentModelId()
-                    await eventBus.publish(.llmTokenUsageReceived(
-                        modelId: modelId,
-                        inputTokens: usage.promptTokenCount,
-                        outputTokens: usage.candidatesTokenCount,
-                        cachedTokens: 0,
-                        reasoningTokens: 0,
-                        source: .documentExtraction
-                    ))
-                }
-
-                return text
-            } catch {
-                lastError = error
-                Logger.warning(
-                    "Chunk \(chunkNumber) attempt \(attempt) failed: \(error.localizedDescription)",
-                    category: .ai
-                )
-                if attempt <= maxRetries {
-                    try await Task.sleep(for: .seconds(Double(attempt) * 2))
-                }
-            }
-        }
-
-        throw lastError ?? ExtractionError.llmFailed("Chunk extraction failed after \(maxRetries + 1) attempts")
     }
 
 }

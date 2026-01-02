@@ -21,6 +21,7 @@ struct SettingsView: View {
     @AppStorage("backgroundProcessingModelId") private var backgroundProcessingModelId: String = "google/gemini-2.0-flash-001"
     @AppStorage("knowledgeCardTokenLimit") private var knowledgeCardTokenLimit: Int = 8000
     @AppStorage("onboardingMaxConcurrentExtractions") private var maxConcurrentExtractions: Int = 5
+    @AppStorage("maxConcurrentPDFExtractions") private var maxConcurrentPDFExtractions: Int = 4
     @AppStorage("onboardingEphemeralTurns") private var ephemeralTurns: Int = 3
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(DiscoveryCoordinator.self) private var searchOpsCoordinator
@@ -774,6 +775,19 @@ private extension SettingsView {
                 }
             }
             Text("Maximum parallel document extractions during onboarding. Higher values process faster but may hit API rate limits.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            Stepper(value: $maxConcurrentPDFExtractions, in: 1...10) {
+                HStack {
+                    Text("PDF Vision Extraction Concurrency")
+                    Spacer()
+                    Text("\(maxConcurrentPDFExtractions)")
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
+            Text("Pages processed in parallel when LLM vision is used for complex PDFs. Higher values use more API quota.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
