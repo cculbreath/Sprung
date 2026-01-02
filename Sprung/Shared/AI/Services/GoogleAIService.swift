@@ -430,59 +430,6 @@ actor GoogleAIService {
 
     // MARK: - High-Level API
 
-    /// Extract visual/graphical content descriptions from a PDF using Gemini vision.
-    /// This is the second pass of two-pass extraction: text is extracted locally via PDFKit,
-    /// while this method extracts descriptions of figures, charts, diagrams, and other visual content.
-    /// - Parameters:
-    ///   - pdfData: The PDF file data
-    ///   - filename: Display name for logging
-    ///   - modelId: Gemini model to use
-    ///   - prompt: Graphics extraction prompt (from PromptLibrary.pdfGraphicsExtraction)
-    /// - Returns: JSON string with graphics descriptions and token usage
-    func extractGraphicsFromPDF(
-        pdfData: Data,
-        filename: String,
-        modelId: String,
-        prompt: String
-    ) async throws -> (graphics: String, tokenUsage: GeminiTokenUsage?) {
-        // Upload file
-        let uploadedFile = try await uploadFile(
-            data: pdfData,
-            mimeType: "application/pdf",
-            displayName: filename
-        )
-
-        // Wait for processing if needed
-        var activeFile = uploadedFile
-        if uploadedFile.state != "ACTIVE" {
-            activeFile = try await waitForFileProcessing(fileName: uploadedFile.name)
-        }
-
-        defer {
-            // Clean up uploaded file
-            Task {
-                try? await self.deleteFile(fileName: activeFile.name)
-            }
-        }
-
-        // Get model's max output tokens (no artificial cap)
-        let models = try? await fetchAvailableModels()
-        let modelMaxTokens = models?.first(where: { $0.id == modelId })?.outputTokenLimit ?? 65536
-
-        // Generate content with graphics-focused prompt
-        let (result, tokenUsage) = try await extractPDFContent(
-            fileURI: activeFile.uri,
-            mimeType: "application/pdf",
-            modelId: modelId,
-            prompt: prompt,
-            maxOutputTokens: modelMaxTokens
-        )
-
-        Logger.info("📊 Graphics extraction complete for \(filename) (\(result.count) chars)", category: .ai)
-
-        return (result, tokenUsage)
-    }
-
     /// Generate text from a PDF using Gemini vision.
     /// Uploads the PDF via Files API, sends a prompt, and returns the extracted/generated text.
     /// Used for vision-based text extraction when PDFKit fails.

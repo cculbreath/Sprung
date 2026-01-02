@@ -897,41 +897,6 @@ final class LLMFacade {
 
     // MARK: - Gemini Document Extraction
 
-    /// Extract visual/graphical content descriptions from a PDF using Gemini vision.
-    /// This is the second pass of two-pass extraction: text is extracted locally via PDFKit,
-    /// while this method extracts descriptions of figures, charts, diagrams, and other visual content.
-    ///
-    /// - Parameters:
-    ///   - pdfData: The PDF file data
-    ///   - filename: Display name for the file
-    ///   - modelId: Gemini model ID (uses default PDF extraction model if nil)
-    /// - Returns: Tuple of (graphics JSON string, tokenUsage)
-    func extractGraphicsFromPDF(
-        pdfData: Data,
-        filename: String,
-        modelId: String? = nil
-    ) async throws -> (graphics: String, tokenUsage: GoogleAIService.GeminiTokenUsage?) {
-        guard let service = googleAIService else {
-            throw LLMError.clientError("Google AI service is not configured. Call registerGoogleAIService first.")
-        }
-
-        // Use configured model or default
-        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId") ?? "gemini-2.5-flash"
-
-        // Build prompt with filename substitution
-        let prompt = PromptLibrary.substitute(
-            template: PromptLibrary.pdfGraphicsExtraction,
-            replacements: ["FILENAME": filename]
-        )
-
-        return try await service.extractGraphicsFromPDF(
-            pdfData: pdfData,
-            filename: filename,
-            modelId: effectiveModelId,
-            prompt: prompt
-        )
-    }
-
     /// Generate text from a PDF using Gemini vision.
     /// Used for vision-based text extraction when PDFKit fails on complex fonts.
     ///

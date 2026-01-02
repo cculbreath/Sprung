@@ -82,12 +82,6 @@ enum PromptLibrary {
         loadPrompt(named: "document_summary_prompt")
     }()
 
-    /// PDF graphics extraction prompt for visual content analysis.
-    /// Contains placeholder: {FILENAME}
-    static let pdfGraphicsExtraction: String = {
-        loadPrompt(named: "pdf_graphics_extraction")
-    }()
-
     // MARK: - Git Agent Prompts
 
     /// System prompt for git repository analysis agent
