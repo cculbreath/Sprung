@@ -51,7 +51,7 @@ final class ArtifactRecord {
     // MARK: - Interview Context
     /// When true, full document content is sent to interview LLM (not just summary)
     /// Set for writing samples and resume uploads - helps with voice matching
-    var interviewContext: Bool
+    var interviewContext: Bool = false
 
     // MARK: - Metadata
     /// Additional metadata as JSON (git analysis, page count, graphics content, etc.)
