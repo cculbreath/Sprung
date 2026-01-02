@@ -123,6 +123,7 @@ actor PDFExtractionJudge {
         Choose **llm** if:
         - ANY page has extraction errors AND complex layout (multi-column, tables, forms, math/equations, scientific diagrams)
         - Conventional OCR would likely fail to preserve structure or reading order on that page
+        - ANY page contains diagrams, charts, figures, or graphics with essential information NOT captured in the extracted text (e.g., data visualizations, flowcharts, annotated images, infographics)
 
         Provide your decision and briefly explain what you observed (mention specific pages if they drove the decision).
         """

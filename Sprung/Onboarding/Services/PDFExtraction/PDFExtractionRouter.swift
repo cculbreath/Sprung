@@ -253,17 +253,43 @@ actor PDFExtractionRouter {
         let maxConcurrent = UserDefaults.standard.integer(forKey: "maxConcurrentPDFExtractions")
         Logger.info("📄 PDFRouter: Starting parallel vision extraction (max \(max(maxConcurrent, 4)) concurrent)", category: .ai)
 
-        let pageTexts = try await parallelExtractor.extractPages(images: allPages) { status in
+        let pageResults = try await parallelExtractor.extractPages(images: allPages) { status in
             progress?(status)
         }
 
-        let combinedText = pageTexts.enumerated().map { index, text in
-            "--- Page \(index + 1) ---\n\(text)"
-        }.joined(separator: "\n\n")
+        // Combine text and graphics content
+        let combinedText = formatExtractionResults(pageResults)
 
-        Logger.info("📄 PDFRouter: LLM Vision extracted \(combinedText.count) characters from \(pageCount) pages", category: .ai)
+        // Log graphics summary
+        let totalGraphics = pageResults.reduce(0) { $0 + $1.graphics.numberOfGraphics }
+        Logger.info("📄 PDFRouter: LLM Vision extracted \(combinedText.count) characters, \(totalGraphics) graphics from \(pageCount) pages", category: .ai)
 
         return (combinedText, .llmVision)
+    }
+
+    /// Format page extraction results into combined text with graphics descriptions
+    private func formatExtractionResults(_ results: [PageExtractionResult]) -> String {
+        var output: [String] = []
+
+        for (index, result) in results.enumerated() {
+            var pageContent = "--- Page \(index + 1) ---\n\(result.text)"
+
+            // Append graphics descriptions if present
+            if result.graphics.numberOfGraphics > 0 {
+                pageContent += "\n\n[Graphics on this page: \(result.graphics.numberOfGraphics)]"
+
+                for (i, content) in result.graphics.graphicsContent.enumerated() {
+                    let quality = i < result.graphics.qualitativeAssessment.count
+                        ? result.graphics.qualitativeAssessment[i]
+                        : "unknown quality"
+                    pageContent += "\n• Figure \(i + 1): \(content) (\(quality))"
+                }
+            }
+
+            output.append(pageContent)
+        }
+
+        return output.joined(separator: "\n\n")
     }
 
     // MARK: - Helpers

@@ -2,13 +2,13 @@
 //  ParallelPageExtractor.swift
 //  Sprung
 //
-//  Extracts text from PDF pages in parallel using LLM vision.
+//  Extracts text and graphics from PDF pages in parallel using LLM vision.
 //  Respects configurable concurrency limit from Settings.
 //
 
 import Foundation
 
-/// Extracts text from PDF pages in parallel using LLM vision.
+/// Extracts text and graphics from PDF pages in parallel using LLM vision.
 actor ParallelPageExtractor {
 
     private let llmFacade: LLMFacade
@@ -25,13 +25,13 @@ actor ParallelPageExtractor {
 
     // MARK: - Extraction
 
-    /// Extract text from multiple page images in parallel
+    /// Extract text and graphics from multiple page images in parallel
     func extractPages(
         images: [URL],
         updateStatus: @escaping @MainActor @Sendable (String) async -> Void
-    ) async throws -> [String] {
+    ) async throws -> [PageExtractionResult] {
         let totalPages = images.count
-        var results: [Int: String] = [:]
+        var results: [Int: PageExtractionResult] = [:]
         var completedCount = 0
         let concurrency = maxConcurrency
 
@@ -40,7 +40,7 @@ actor ParallelPageExtractor {
         Logger.info("📄 ParallelPageExtractor: Starting extraction of \(totalPages) pages (concurrency: \(concurrency))", category: .ai)
 
         // Process pages in parallel with concurrency limit
-        try await withThrowingTaskGroup(of: (Int, String).self) { group in
+        try await withThrowingTaskGroup(of: (Int, PageExtractionResult).self) { group in
             var pendingIndices = Array(0..<totalPages)
             var activeCount = 0
 
@@ -50,18 +50,18 @@ actor ParallelPageExtractor {
                 activeCount += 1
 
                 group.addTask { [self] in
-                    let text = try await self.extractSinglePage(
+                    let result = try await self.extractSinglePage(
                         imageURL: images[index],
                         pageNumber: index + 1,
                         totalPages: totalPages
                     )
-                    return (index, text)
+                    return (index, result)
                 }
             }
 
             // Process results and add new tasks
-            for try await (index, text) in group {
-                results[index] = text
+            for try await (index, result) in group {
+                results[index] = result
                 completedCount += 1
                 activeCount -= 1
 
@@ -75,12 +75,12 @@ actor ParallelPageExtractor {
                     activeCount += 1
 
                     group.addTask { [self] in
-                        let text = try await self.extractSinglePage(
+                        let result = try await self.extractSinglePage(
                             imageURL: images[nextIndex],
                             pageNumber: nextIndex + 1,
                             totalPages: totalPages
                         )
-                        return (nextIndex, text)
+                        return (nextIndex, result)
                     }
                 }
             }
@@ -89,7 +89,20 @@ actor ParallelPageExtractor {
         Logger.info("📄 ParallelPageExtractor: Completed extraction of \(totalPages) pages", category: .ai)
 
         // Return results in page order
-        return (0..<totalPages).map { results[$0] ?? "" }
+        let emptyResult = PageExtractionResult(
+            text: "",
+            graphics: PageGraphicsInfo(numberOfGraphics: 0, graphicsContent: [], qualitativeAssessment: [])
+        )
+        return (0..<totalPages).map { results[$0] ?? emptyResult }
+    }
+
+    /// Legacy method for backward compatibility - returns just text
+    func extractPagesText(
+        images: [URL],
+        updateStatus: @escaping @MainActor @Sendable (String) async -> Void
+    ) async throws -> [String] {
+        let results = try await extractPages(images: images, updateStatus: updateStatus)
+        return results.map { $0.text }
     }
 
     // MARK: - Single Page Extraction
@@ -98,23 +111,60 @@ actor ParallelPageExtractor {
         imageURL: URL,
         pageNumber: Int,
         totalPages: Int
-    ) async throws -> String {
+    ) async throws -> PageExtractionResult {
         let imageData = try Data(contentsOf: imageURL)
 
         let prompt = """
-        Extract ALL text from this document page (page \(pageNumber) of \(totalPages)).
-        Preserve structure: headings, paragraphs, lists, tables.
-        For tables, use markdown format.
-        Output only the extracted text, no commentary.
+        Extract ALL content from this document page (page \(pageNumber) of \(totalPages)).
+
+        ## Text Extraction
+        - Extract all visible text verbatim
+        - Preserve structure: headings, paragraphs, lists, tables
+        - For tables, use markdown table format
+        - Maintain reading order
+
+        ## Graphics Analysis
+        For each diagram, chart, figure, image, or graphic on the page:
+        1. Count the total number of graphics
+        2. Describe what each graphic shows (the data, information, or content it conveys)
+        3. Assess the quality/type of each graphic (e.g., "professional vector chart", "scanned photograph", "hand-drawn diagram", "screenshot", "infographic")
+
+        If there are no graphics, return number_of_graphics: 0 with empty arrays.
         """
 
-        // Use Gemini's native vision API (model configured in Settings)
-        let text = try await llmFacade.analyzeImagesWithGemini(
+        // Use Gemini's structured output for guaranteed valid JSON
+        let response = try await llmFacade.analyzeImagesWithGeminiStructured(
             images: [imageData],
-            prompt: prompt
+            prompt: prompt,
+            jsonSchema: PageExtractionResult.jsonSchema
         )
 
-        return text
+        // Parse structured response
+        guard let data = response.data(using: .utf8) else {
+            Logger.warning("📄 ParallelPageExtractor: Failed to parse page \(pageNumber) response", category: .ai)
+            return PageExtractionResult(
+                text: response,  // Fallback: treat entire response as text
+                graphics: PageGraphicsInfo(numberOfGraphics: 0, graphicsContent: [], qualitativeAssessment: [])
+            )
+        }
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+        do {
+            let result = try decoder.decode(PageExtractionResult.self, from: data)
+            if result.graphics.numberOfGraphics > 0 {
+                Logger.info("📄 Page \(pageNumber): \(result.text.count) chars, \(result.graphics.numberOfGraphics) graphics", category: .ai)
+            }
+            return result
+        } catch {
+            Logger.warning("📄 ParallelPageExtractor: JSON decode failed for page \(pageNumber): \(error.localizedDescription)", category: .ai)
+            // Fallback: treat response as text
+            return PageExtractionResult(
+                text: response,
+                graphics: PageGraphicsInfo(numberOfGraphics: 0, graphicsContent: [], qualitativeAssessment: [])
+            )
+        }
     }
 }
 
