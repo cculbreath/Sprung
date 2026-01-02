@@ -117,17 +117,16 @@ actor ParallelPageExtractor {
         let prompt = """
         Extract ALL content from this document page (page \(pageNumber) of \(totalPages)).
 
-        **IMPORTANT**: This is the ONLY opportunity to analyze visual content. After this extraction,
-        only text will be available. Capture ALL visually-evident skills and information now.
-
-        ## Text Extraction
-        - Extract all visible text verbatim
+        ## Text Extraction (verbatim only)
+        - Extract all visible text VERBATIM - do not interpret or summarize
         - Preserve structure: headings, paragraphs, lists, tables
         - For tables, use markdown table format
         - Maintain reading order
+        - Text will be skill-assessed in a later processing stage
 
-        ## Graphics Analysis (CRITICAL for resume building)
-        This extraction feeds a resume builder. We need to identify skills demonstrated through visual work.
+        ## Graphics Analysis (CRITICAL - this is your ONLY opportunity)
+        After this extraction, only text is preserved - graphics cannot be re-analyzed later.
+        This feeds a resume builder, so identify all skills demonstrated through visual work.
 
         For each diagram, chart, figure, screenshot, photo, or graphic on the page:
         1. Count the total number of graphics
