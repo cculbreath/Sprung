@@ -9,6 +9,11 @@ import Foundation
 import SwiftyJSON
 /// Service that handles document processing workflow
 actor DocumentProcessingService {
+    // MARK: - Constants
+
+    /// Max characters for inventory input (truncate very long documents)
+    private static let inventoryInputLimit = 200_000
+
     // MARK: - Properties
     private let documentExtractionService: DocumentExtractionService
     private var llmFacade: LLMFacade?
@@ -49,19 +54,9 @@ actor DocumentProcessingService {
         let storagePath = fileURL.path
         Logger.info("💾 Document location: \(storagePath)", category: .ai)
 
-        // Step 2: Extract text using configured model
-        let modelId = UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId") ?? "gemini-2.5-flash"
-        Logger.info("🔍 Extracting text with model: \(modelId)", category: .ai)
+        // Step 2: Extract text using intelligent PDF extraction router
+        Logger.info("🔍 Extracting text from: \(filename)", category: .ai)
         statusCallback?("Extracting text from \(filename)...")
-
-        // Check for extraction method preference in metadata (for large PDFs)
-        let extractionMethod: LargePDFExtractionMethod?
-        if let methodString = metadata["extraction_method"].string {
-            extractionMethod = LargePDFExtractionMethod(rawValue: methodString)
-            Logger.info("📄 Using extraction method: \(methodString)", category: .ai)
-        } else {
-            extractionMethod = nil
-        }
 
         let extractionRequest = DocumentExtractionService.ExtractionRequest(
             fileURL: fileURL,
@@ -69,7 +64,6 @@ actor DocumentProcessingService {
             returnTypes: ["text"],
             autoPersist: false,
             timeout: nil,
-            extractionMethod: extractionMethod,
             displayFilename: filename
         )
         // Create progress handler that maps to status callback
@@ -277,22 +271,14 @@ actor DocumentProcessingService {
     }
 
     /// Generate card inventory (runs in parallel with summary)
-    /// Always uses text-based extraction since we now have reliable extracted text
-    /// (either from high-quality PDFKit or vision fallback).
+    /// Always uses text-based extraction since upstream PDF router ensures quality.
     private func generateInventory(
         artifactId: String,
         filename: String,
         extractedText: String
     ) async -> DocumentInventory? {
-        // Validate text quality before generating inventory
-        let quality = validateTextExtraction(text: extractedText, pageCount: 1)
-        guard quality.score >= 0.5 else {
-            Logger.error("Text quality too low for card inventory: \(quality.diagnosticSummary)", category: .ai)
-            return nil
-        }
-
         // Truncate if very long - cards don't need every word
-        let inventoryInput = String(extractedText.prefix(ExtractionConfig.inventoryInputLimit))
+        let inventoryInput = String(extractedText.prefix(Self.inventoryInputLimit))
 
         do {
             Logger.info("Generating text-based inventory (\(inventoryInput.count) chars)", category: .ai)

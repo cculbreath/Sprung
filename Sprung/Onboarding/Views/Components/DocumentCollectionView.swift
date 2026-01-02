@@ -15,7 +15,7 @@ struct DocumentCollectionView: View {
     let coordinator: OnboardingInterviewCoordinator
     let onAssessCompleteness: () -> Void
     let onCancelExtractionsAndFinish: () -> Void
-    let onDropFiles: ([URL], LargePDFExtractionMethod?) -> Void
+    let onDropFiles: ([URL]) -> Void
     let onSelectFiles: () -> Void
     let onSelectGitRepo: (URL) -> Void
     let onFetchURL: (String) async -> Void
@@ -195,7 +195,7 @@ struct DocumentCollectionView: View {
             .onDrop(of: DropZoneHandler.acceptedDropTypes, isTargeted: $isDropTargeted) { providers in
                 DropZoneHandler.handleDrop(providers: providers) { urls in
                     guard !urls.isEmpty else { return }
-                    onDropFiles(urls, nil)
+                    onDropFiles(urls)
                 }
                 return true
             }

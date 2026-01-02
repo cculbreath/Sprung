@@ -16,7 +16,6 @@ actor DocumentExtractionService {
         let returnTypes: [String]
         let autoPersist: Bool
         let timeout: TimeInterval?
-        let extractionMethod: LargePDFExtractionMethod?
         /// Original filename for user-facing messages (storage URL may have UUID prefix)
         let displayFilename: String?
 
@@ -26,7 +25,6 @@ actor DocumentExtractionService {
             returnTypes: [String] = [],
             autoPersist: Bool = false,
             timeout: TimeInterval? = nil,
-            extractionMethod: LargePDFExtractionMethod? = nil,
             displayFilename: String? = nil
         ) {
             self.fileURL = fileURL
@@ -34,7 +32,6 @@ actor DocumentExtractionService {
             self.returnTypes = returnTypes
             self.autoPersist = autoPersist
             self.timeout = timeout
-            self.extractionMethod = extractionMethod
             self.displayFilename = displayFilename
         }
     }
@@ -187,32 +184,21 @@ actor DocumentExtractionService {
 
         let sha256 = sha256Hex(for: fileData)
 
-        // For PDFs: Check extraction method preference
-        // - textExtract: Extract text locally with PDFKit, then send to LLM (bypasses size limits)
-        // - chunkedNative (default): Send PDF directly to Gemini (chunks if >20MB)
+        // PDFs use the intelligent extraction router
         if fileURL.pathExtension.lowercased() == "pdf" {
-            // Use text extraction if explicitly requested, or if large PDF with no preference
-            let useTextExtraction = request.extractionMethod == .textExtract
-
-            if useTextExtraction {
-                Logger.info("📄 Using text extraction method (PDFKit) for PDF", category: .ai)
-                // Use the same text-based flow as other documents
-                // extractPlainText handles PDFs via PDFKit
-            } else {
-                Logger.info("📄 Sending PDF directly to Gemini via Google Files API", category: .ai)
-                return try await extractPDFDirect(
-                    fileURL: fileURL,
-                    fileData: fileData,
-                    filename: filename,
-                    sizeInBytes: sizeInBytes,
-                    contentType: contentType,
-                    sha256: sha256,
-                    purpose: request.purpose,
-                    timeout: request.timeout,
-                    autoPersist: request.autoPersist,
-                    progress: progress
-                )
-            }
+            Logger.info("📄 Routing PDF to extraction pipeline", category: .ai)
+            return try await extractPDFDirect(
+                fileURL: fileURL,
+                fileData: fileData,
+                filename: filename,
+                sizeInBytes: sizeInBytes,
+                contentType: contentType,
+                sha256: sha256,
+                purpose: request.purpose,
+                timeout: request.timeout,
+                autoPersist: request.autoPersist,
+                progress: progress
+            )
         }
 
         // For non-PDF documents (DOCX, text): Extract text directly without LLM processing

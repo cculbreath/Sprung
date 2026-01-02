@@ -294,8 +294,8 @@ struct OnboardingInterviewToolPane: View {
                             await coordinator.cancelExtractionAgentsAndFinishUploads()
                         }
                     },
-                    onDropFiles: { urls, extractionMethod in
-                        Task { await coordinator.uploadFilesDirectly(urls, extractionMethod: extractionMethod) }
+                    onDropFiles: { urls in
+                        Task { await coordinator.uploadFilesDirectly(urls) }
                     },
                     onSelectFiles: { openDirectUploadPanel() },
                     onSelectGitRepo: { repoURL in
@@ -340,8 +340,8 @@ struct OnboardingInterviewToolPane: View {
                             await coordinator.cancelExtractionAgentsAndFinishUploads()
                         }
                     },
-                    onDropFiles: { urls, extractionMethod in
-                        Task { await coordinator.uploadFilesDirectly(urls, extractionMethod: extractionMethod) }
+                    onDropFiles: { urls in
+                        Task { await coordinator.uploadFilesDirectly(urls) }
                     },
                     onSelectFiles: { openDirectUploadPanel() },
                     onSelectGitRepo: { repoURL in

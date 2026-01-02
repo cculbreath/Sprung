@@ -10,16 +10,14 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct PersistentUploadDropZone: View {
-    let onDropFiles: ([URL], LargePDFExtractionMethod?) -> Void
+    let onDropFiles: ([URL]) -> Void
     let onSelectFiles: () -> Void
     let onSelectGitRepo: ((URL) -> Void)?
 
     @State private var isDropTargetHighlighted = false
-    @State private var pendingPDFFiles: [URL] = []
-    @State private var showingPDFExtractionChoice = false
 
     init(
-        onDropFiles: @escaping ([URL], LargePDFExtractionMethod?) -> Void,
+        onDropFiles: @escaping ([URL]) -> Void,
         onSelectFiles: @escaping () -> Void,
         onSelectGitRepo: ((URL) -> Void)? = nil
     ) {
@@ -30,11 +28,6 @@ struct PersistentUploadDropZone: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            // PDF extraction method choice UI (when PDFs are dropped)
-            if showingPDFExtractionChoice {
-                pdfExtractionChoiceRow
-            }
-
             // Document upload section
             documentUploadRow
 
@@ -43,93 +36,6 @@ struct PersistentUploadDropZone: View {
                 gitRepoRow
             }
         }
-    }
-
-    private var pdfExtractionChoiceRow: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Image(systemName: "doc.richtext")
-                    .foregroundStyle(.blue)
-                Text("PDF detected (\(formatSize(pendingPDFFiles.first)))")
-                    .font(.subheadline.weight(.medium))
-                Spacer()
-                Button(action: cancelPDFUpload) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
-
-            Text("Choose extraction method:")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            HStack(spacing: 12) {
-                ForEach(LargePDFExtractionMethod.allCases, id: \.self) { method in
-                    Button(action: { selectExtractionMethod(method) }) {
-                        VStack(spacing: 4) {
-                            Text(method.displayName)
-                                .font(.caption.weight(.medium))
-                            Text(method.description)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 12)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
-            }
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.blue.opacity(0.1))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(Color.blue.opacity(0.3), lineWidth: 1)
-        )
-    }
-
-    private func formatSize(_ url: URL?) -> String {
-        guard let url = url,
-              let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
-              let size = attrs[.size] as? Int else {
-            return "unknown size"
-        }
-        let mb = Double(size) / 1_048_576.0
-        return String(format: "%.1f MB", mb)
-    }
-
-    private func handleFilesSelected(_ urls: [URL]) {
-        // Check for any PDFs - offer extraction method choice for all PDFs
-        let pdfFiles = urls.filter { url in
-            url.pathExtension.lowercased() == "pdf"
-        }
-
-        if !pdfFiles.isEmpty {
-            // Show extraction method choice for PDFs
-            pendingPDFFiles = urls
-            showingPDFExtractionChoice = true
-        } else {
-            // Process non-PDF files normally
-            onDropFiles(urls, nil)
-        }
-    }
-
-    private func selectExtractionMethod(_ method: LargePDFExtractionMethod) {
-        let files = pendingPDFFiles
-        pendingPDFFiles = []
-        showingPDFExtractionChoice = false
-        onDropFiles(files, method)
-    }
-
-    private func cancelPDFUpload() {
-        pendingPDFFiles = []
-        showingPDFExtractionChoice = false
     }
 
     private var documentUploadRow: some View {
@@ -171,7 +77,10 @@ struct PersistentUploadDropZone: View {
         .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .onTapGesture { onSelectFiles() }
         .onDrop(of: DropZoneHandler.acceptedDropTypes, isTargeted: $isDropTargetHighlighted) { providers in
-            DropZoneHandler.handleDrop(providers: providers, completion: handleFilesSelected)
+            DropZoneHandler.handleDrop(providers: providers) { urls in
+                guard !urls.isEmpty else { return }
+                onDropFiles(urls)
+            }
             return true
         }
     }

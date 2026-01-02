@@ -491,7 +491,7 @@ final class UIResponseCoordinator {
 
     // MARK: - Direct File Upload (Persistent Drop Zone)
     /// Handles file uploads from the persistent drop zone (no pending request required)
-    func uploadFilesDirectly(_ fileURLs: [URL], extractionMethod: LargePDFExtractionMethod? = nil) async {
+    func uploadFilesDirectly(_ fileURLs: [URL]) async {
         guard !fileURLs.isEmpty else { return }
 
         let uploadStorage = OnboardingUploadStorage()
@@ -504,11 +504,6 @@ final class UIResponseCoordinator {
             var metadata = JSON()
             metadata["title"].string = "User uploaded document"
             metadata["instructions"].string = "Document uploaded via drag-and-drop"
-
-            // Include extraction method preference for large PDFs
-            if let method = extractionMethod {
-                metadata["extraction_method"].string = method.rawValue
-            }
 
             // Convert to ProcessedUploadInfo for the event
             // Use item.filename (original name) not storageURL.lastPathComponent (UUID)
@@ -533,7 +528,7 @@ final class UIResponseCoordinator {
             // DocumentArtifactMessenger handles batching and sends a consolidated message
             // with all extracted content once processing completes
 
-            Logger.info("✅ Direct upload started: \(fileURLs.count) file(s), extractionMethod: \(extractionMethod?.rawValue ?? "default")", category: .ai)
+            Logger.info("✅ Direct upload started: \(fileURLs.count) file(s)", category: .ai)
         } catch {
             Logger.error("❌ Direct upload failed: \(error.localizedDescription)", category: .ai)
             // Clean up any processed files on error
