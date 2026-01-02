@@ -117,6 +117,7 @@ struct ToolBundlePolicy {
             OnboardingToolName.createTimelineCard.rawValue,
             OnboardingToolName.updateTimelineCard.rawValue,
             OnboardingToolName.deleteTimelineCard.rawValue,
+            OnboardingToolName.reorderTimelineCards.rawValue,
             OnboardingToolName.getTimelineEntries.rawValue,
             OnboardingToolName.displayTimelineEntriesForReview.rawValue,
             OnboardingToolName.listArtifacts.rawValue,
@@ -127,6 +128,7 @@ struct ToolBundlePolicy {
             OnboardingToolName.getUserOption.rawValue,        // For structured dossier questions
             OnboardingToolName.updateTimelineCard.rawValue,
             OnboardingToolName.createTimelineCard.rawValue,
+            OnboardingToolName.reorderTimelineCards.rawValue,
             OnboardingToolName.getTimelineEntries.rawValue,
             OnboardingToolName.displayTimelineEntriesForReview.rawValue
         ],
