@@ -10,13 +10,28 @@ import Foundation
 // MARK: - Model Configuration
 /// Default model configuration for onboarding interview
 enum OnboardingModelConfig {
-    /// UserDefaults key for the selected interview model
+    /// UserDefaults key for the selected OpenAI interview model
     static let userDefaultsKey = "onboardingInterviewDefaultModelId"
+    /// UserDefaults key for the selected Anthropic interview model
+    static let anthropicModelKey = "onboardingAnthropicModelId"
+    /// UserDefaults key for the selected provider
+    static let providerKey = "onboardingProvider"
 
-    /// Returns the currently configured model ID from settings
+    /// Returns the currently configured provider
+    static var currentProvider: OnboardingProvider {
+        let rawValue = UserDefaults.standard.string(forKey: providerKey) ?? "openai"
+        return OnboardingProvider(rawValue: rawValue) ?? .openai
+    }
+
+    /// Returns the currently configured model ID from settings (provider-aware)
     /// Default is registered in SprungApp.init()
     static var currentModelId: String {
-        UserDefaults.standard.string(forKey: userDefaultsKey) ?? "gpt-4o"
+        switch currentProvider {
+        case .openai:
+            return UserDefaults.standard.string(forKey: userDefaultsKey) ?? "gpt-4o"
+        case .anthropic:
+            return UserDefaults.standard.string(forKey: anthropicModelKey) ?? "claude-sonnet-4-20250514"
+        }
     }
 }
 
@@ -241,6 +256,14 @@ extension OnboardingToolName {
         OnboardingToolName.updateTimelineCard,
         OnboardingToolName.deleteTimelineCard,
         OnboardingToolName.reorderTimelineCards
+    ].map(\.rawValue))
+
+    /// Tools that should auto-complete successfully instead of being blocked.
+    /// These are "cleanup" or "dismissal" tools that the LLM may call after UI state
+    /// has already changed. Blocking them causes conversation sync errors.
+    /// Instead of blocking, return success with a friendly message.
+    static let autoCompleteWhenBlockedTools: Set<String> = Set([
+        OnboardingToolName.cancelUserUpload  // UI may already be dismissed
     ].map(\.rawValue))
 }
 

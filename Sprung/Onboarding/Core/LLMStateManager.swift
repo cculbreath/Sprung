@@ -26,6 +26,11 @@ actor LLMStateManager {
     /// Maximum retries for pending tool responses before giving up
     private let maxPendingToolResponseRetries: Int = 3
 
+    /// Completed tool results that need to be included in conversation history
+    /// Each entry is (callId, toolName, output) representing a successful tool execution
+    /// Used by Anthropic backend which requires explicit history (no previous_response_id)
+    private var completedToolResults: [(callId: String, toolName: String, output: String)] = []
+
     // MARK: - Pending UI Tool Call (Codex Paradigm)
     /// UI tools that present cards and await user action before responding.
     /// Based on Codex CLI paradigm: tool outputs must be sent before new LLM turns.
@@ -205,6 +210,29 @@ actor LLMStateManager {
             pendingToolResponseRetryCount = 0
         }
     }
+
+    // MARK: - Completed Tool Results (Anthropic History)
+
+    /// Store a completed tool result for inclusion in conversation history
+    /// Call this after a tool response is successfully sent to Anthropic
+    func addCompletedToolResult(callId: String, toolName: String, output: String) {
+        completedToolResults.append((callId: callId, toolName: toolName, output: output))
+        Logger.debug("📝 Tool result stored for history: \(toolName) (callId: \(callId.prefix(8)))", category: .ai)
+    }
+
+    /// Get all completed tool results for building conversation history
+    func getCompletedToolResults() -> [(callId: String, toolName: String, output: String)] {
+        return completedToolResults
+    }
+
+    /// Clear completed tool results (call on session reset)
+    func clearCompletedToolResults() {
+        if !completedToolResults.isEmpty {
+            Logger.debug("🗑️ Cleared \(completedToolResults.count) completed tool results", category: .ai)
+            completedToolResults = []
+        }
+    }
+
     // MARK: - Reset
     /// Reset all LLM state to initial values
     func reset() {
@@ -217,5 +245,6 @@ actor LLMStateManager {
         pendingToolResponseRetryCount = 0
         pendingUIToolCall = nil
         queuedDeveloperMessages = []
+        completedToolResults = []
     }
 }

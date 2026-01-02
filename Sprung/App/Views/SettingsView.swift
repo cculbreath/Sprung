@@ -7,6 +7,8 @@ struct SettingsView: View {
     @AppStorage("reasoningEffort") private var reasoningEffort: String = "medium"
     @AppStorage("enableResumeCustomizationTools") private var enableResumeCustomizationTools: Bool = true
     @AppStorage("onboardingInterviewDefaultModelId") private var onboardingModelId: String = "gpt-5"
+    @AppStorage("onboardingAnthropicModelId") private var onboardingAnthropicModelId: String = "claude-sonnet-4-20250514"
+    @AppStorage("onboardingProvider") private var onboardingProvider: String = "openai"
     @AppStorage("onboardingPDFExtractionModelId") private var pdfExtractionModelId: String = "gemini-2.5-flash"
     @AppStorage("onboardingGitIngestModelId") private var gitIngestModelId: String = "anthropic/claude-haiku-4.5"
     @AppStorage("onboardingDocSummaryModelId") private var docSummaryModelId: String = "gemini-2.5-flash-lite"
@@ -36,9 +38,18 @@ struct SettingsView: View {
     @State private var interviewModels: [ModelObject] = []
     @State private var isLoadingInterviewModels = false
     @State private var interviewModelError: String?
+    @State private var anthropicModels: [AnthropicModel] = []
+    @State private var isLoadingAnthropicModels = false
+    @State private var anthropicModelError: String?
+    @Environment(LLMFacade.self) private var llmFacade
     private let dataResetService = DataResetService()
     private let pdfExtractionFallbackModelId = "gemini-2.5-flash"
     private let googleAIService = GoogleAIService()
+
+    /// Is Anthropic selected as the onboarding provider?
+    private var isAnthropicProvider: Bool {
+        onboardingProvider == "anthropic"
+    }
 
     /// Filtered interview models: gpt-5*, gpt-6*, gpt-7* (dynamically fetched from OpenAI)
     private var filteredInterviewModels: [ModelObject] {
@@ -48,6 +59,17 @@ struct SettingsView: View {
                 return id.hasPrefix("gpt-5") || id.hasPrefix("gpt-6") || id.hasPrefix("gpt-7")
             }
             .sorted { $0.id < $1.id }
+    }
+
+    /// Filtered Anthropic models: claude-* (excluding deprecated/legacy)
+    private var filteredAnthropicModels: [AnthropicModel] {
+        anthropicModels
+            .filter { model in
+                let id = model.id.lowercased()
+                // Include Claude models, exclude deprecated naming patterns
+                return id.hasPrefix("claude-") && !id.contains("instant")
+            }
+            .sorted { $0.displayName < $1.displayName }
     }
 
     /// Models that support extended prompt cache retention (24h)
@@ -136,12 +158,15 @@ struct SettingsView: View {
 
                 Toggle("Allow web search during interviews", isOn: $onboardingWebSearchAllowed)
 
-                Divider()
-                    .padding(.vertical, 4)
+                // OpenAI-specific settings (hidden when Anthropic selected)
+                if !isAnthropicProvider {
+                    Divider()
+                        .padding(.vertical, 4)
 
-                onboardingReasoningPicker
-                onboardingFlexProcessingToggle
-                onboardingPromptCacheRetentionToggle
+                    onboardingReasoningPicker
+                    onboardingFlexProcessingToggle
+                    onboardingPromptCacheRetentionToggle
+                }
             } header: {
                 SettingsSectionHeader(title: "Onboarding Interview", systemImage: "wand.and.stars")
             }
@@ -356,62 +381,127 @@ private struct SettingsSectionHeader: View {
 private extension SettingsView {
     var onboardingInterviewModelPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if !hasOpenAIKey {
-                Label("Add OpenAI API key above to enable interview model selection.", systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-                    .font(.callout)
-            } else if isLoadingInterviewModels {
-                HStack(spacing: 8) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Loading interview models...")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-            } else if let error = interviewModelError {
-                VStack(alignment: .leading, spacing: 4) {
-                    Label("Failed to load models", systemImage: "exclamationmark.triangle.fill")
+            if isAnthropicProvider {
+                // Anthropic model picker
+                if !hasAnthropicKey {
+                    Label("Add Anthropic API key above to enable interview model selection.", systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
                         .font(.callout)
-                    Text(error)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Button("Retry") {
-                        Task { await loadInterviewModels() }
+                } else if isLoadingAnthropicModels {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Loading Claude models...")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
-            } else if filteredInterviewModels.isEmpty {
-                HStack {
-                    Text("No GPT-5/6/7 models available")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    Button("Load Models") {
-                        Task { await loadInterviewModels() }
+                } else if let error = anthropicModelError {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("Failed to load models", systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                            .font(.callout)
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Button("Retry") {
+                            Task { await loadAnthropicModels() }
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                } else if filteredAnthropicModels.isEmpty {
+                    HStack {
+                        Text("No Claude models available")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                        Button("Load Models") {
+                            Task { await loadAnthropicModels() }
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                } else {
+                    Picker("Interview Model", selection: $onboardingAnthropicModelId) {
+                        ForEach(filteredAnthropicModels) { model in
+                            Text(model.displayName).tag(model.id)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    Text("Claude models support extended thinking and tool use natively.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             } else {
-                Picker("Interview Model", selection: $onboardingModelId) {
-                    ForEach(filteredInterviewModels, id: \.id) { model in
-                        Text(model.id).tag(model.id)
+                // OpenAI model picker
+                if !hasOpenAIKey {
+                    Label("Add OpenAI API key above to enable interview model selection.", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .font(.callout)
+                } else if isLoadingInterviewModels {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Loading interview models...")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
                     }
+                } else if let error = interviewModelError {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("Failed to load models", systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                            .font(.callout)
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Button("Retry") {
+                            Task { await loadInterviewModels() }
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                } else if filteredInterviewModels.isEmpty {
+                    HStack {
+                        Text("No GPT-5/6/7 models available")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                        Button("Load Models") {
+                            Task { await loadInterviewModels() }
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                } else {
+                    Picker("Interview Model", selection: $onboardingModelId) {
+                        ForEach(filteredInterviewModels, id: \.id) { model in
+                            Text(model.id).tag(model.id)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    Text("GPT-5 requires \"Minimal\" reasoning; GPT-5.1+ supports \"None\".")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
-                .pickerStyle(.menu)
-                Text("GPT-5 requires \"Minimal\" reasoning; GPT-5.1+ supports \"None\".")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
             }
         }
         .task {
-            if hasOpenAIKey && interviewModels.isEmpty {
+            if isAnthropicProvider && hasAnthropicKey && anthropicModels.isEmpty {
+                await loadAnthropicModels()
+            } else if !isAnthropicProvider && hasOpenAIKey && interviewModels.isEmpty {
                 await loadInterviewModels()
             }
         }
+        .onChange(of: onboardingProvider) { _, newProvider in
+            // Load appropriate models when provider changes
+            if newProvider == "anthropic" && hasAnthropicKey && anthropicModels.isEmpty {
+                Task { await loadAnthropicModels() }
+            } else if newProvider == "openai" && hasOpenAIKey && interviewModels.isEmpty {
+                Task { await loadInterviewModels() }
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .apiKeysChanged)) { _ in
-            if hasOpenAIKey && interviewModels.isEmpty {
+            if isAnthropicProvider && hasAnthropicKey && anthropicModels.isEmpty {
+                Task { await loadAnthropicModels() }
+            } else if !isAnthropicProvider && hasOpenAIKey && interviewModels.isEmpty {
                 Task { await loadInterviewModels() }
             }
         }
@@ -489,6 +579,10 @@ private extension SettingsView {
         APIKeyManager.get(.openAI) != nil
     }
 
+    private var hasAnthropicKey: Bool {
+        APIKeyManager.get(.anthropic) != nil
+    }
+
     @MainActor
     private func loadInterviewModels() async {
         guard let apiKey = APIKeyManager.get(.openAI), !apiKey.isEmpty else {
@@ -511,6 +605,29 @@ private extension SettingsView {
             interviewModelError = error.localizedDescription
         }
         isLoadingInterviewModels = false
+    }
+
+    @MainActor
+    private func loadAnthropicModels() async {
+        guard hasAnthropicKey else {
+            anthropicModelError = "Anthropic API key not configured"
+            return
+        }
+        isLoadingAnthropicModels = true
+        anthropicModelError = nil
+        do {
+            let response = try await llmFacade.anthropicListModels()
+            anthropicModels = response.data
+            // Validate current selection is still available
+            if !filteredAnthropicModels.contains(where: { $0.id == onboardingAnthropicModelId }) {
+                if let first = filteredAnthropicModels.first {
+                    onboardingAnthropicModelId = first.id
+                }
+            }
+        } catch {
+            anthropicModelError = error.localizedDescription
+        }
+        isLoadingAnthropicModels = false
     }
 
     @MainActor

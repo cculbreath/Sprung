@@ -79,7 +79,8 @@ struct ToolBundlePolicy {
         .p1_welcome: [
             OnboardingToolName.agentReady.rawValue,           // Initial handshake at interview start
             OnboardingToolName.getUserOption.rawValue,        // For structured questions
-            OnboardingToolName.validateApplicantProfile.rawValue  // Profile intake starts here
+            OnboardingToolName.getApplicantProfile.rawValue,  // Profile form (agent_ready directs here)
+            OnboardingToolName.validateApplicantProfile.rawValue  // For URL/document extraction validation
         ],
 
         .p1_writingSamples: [

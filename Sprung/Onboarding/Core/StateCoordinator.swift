@@ -570,6 +570,18 @@ actor StateCoordinator: OnboardingEventEmitter {
         await llmStateManager.clearPendingToolResponses()
     }
 
+    // MARK: - Completed Tool Results (Anthropic History)
+
+    /// Store a completed tool result for inclusion in Anthropic conversation history
+    func addCompletedToolResult(callId: String, toolName: String, output: String) async {
+        await llmStateManager.addCompletedToolResult(callId: callId, toolName: toolName, output: output)
+    }
+
+    /// Get all completed tool results for building Anthropic conversation history
+    func getCompletedToolResults() async -> [(callId: String, toolName: String, output: String)] {
+        await llmStateManager.getCompletedToolResults()
+    }
+
     // MARK: - Pending UI Tool Call (Codex Paradigm)
     // UI tools present cards and await user action before responding.
     // When a UI tool is pending, developer messages are queued behind it.

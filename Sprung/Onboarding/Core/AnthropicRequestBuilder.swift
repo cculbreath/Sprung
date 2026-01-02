@@ -76,8 +76,11 @@ struct AnthropicRequestBuilder {
 
         let toolChoice: AnthropicToolChoice
         if let forcedTool = effectiveForcedToolChoice {
-            toolChoice = .tool(name: forcedTool)
-            Logger.info("🎯 Using forced toolChoice: \(forcedTool)", category: .ai)
+            // Use 'any' instead of forcing specific tool - Anthropic has a bug where
+            // forced tool_choice returns stop_reason=tool_use but no content blocks.
+            // The system prompt guides the model to call the intended tool.
+            toolChoice = .any
+            Logger.info("🎯 Using toolChoice=any (intended: \(forcedTool)) - Anthropic workaround", category: .ai)
         } else if !isSystemGenerated {
             let hasStreamed = await stateCoordinator.getHasStreamedFirstResponse()
             if !hasStreamed {
@@ -190,8 +193,11 @@ struct AnthropicRequestBuilder {
 
         let toolChoice: AnthropicToolChoice
         if let forcedTool = forcedToolChoice {
-            toolChoice = .tool(name: forcedTool)
-            Logger.info("🔗 Forcing toolChoice to: \(forcedTool)", category: .ai)
+            // Use 'any' instead of forcing specific tool - Anthropic has a bug where
+            // forced tool_choice returns stop_reason=tool_use but no content blocks.
+            // The system prompt guides the model to call the intended tool.
+            toolChoice = .any
+            Logger.info("🔗 Using toolChoice=any (intended: \(forcedTool)) - Anthropic workaround", category: .ai)
         } else {
             toolChoice = .auto
         }
@@ -211,12 +217,50 @@ struct AnthropicRequestBuilder {
             temperature: 1.0
         )
 
+        // Log diagnostic info about tool blocks
+        let (toolUseCount, toolResultCount) = countToolBlocks(in: messages)
         Logger.info(
-            "📝 Built Anthropic tool response request: callId=\(callId)",
+            "📝 Built Anthropic tool response request: callId=\(callId), " +
+            "tool_use=\(toolUseCount), tool_result=\(toolResultCount) (should match after this response)",
             category: .ai
         )
 
+        // Log any mismatches
+        if toolUseCount != toolResultCount {
+            Logger.warning(
+                "⚠️ Tool block mismatch: \(toolUseCount) tool_use vs \(toolResultCount) tool_result. " +
+                "Anthropic requires each tool_use to have a corresponding tool_result.",
+                category: .ai
+            )
+        }
+
         return parameters
+    }
+
+    /// Count tool_use and tool_result blocks in messages
+    private func countToolBlocks(in messages: [AnthropicMessage]) -> (toolUse: Int, toolResult: Int) {
+        var toolUseCount = 0
+        var toolResultCount = 0
+
+        for message in messages {
+            switch message.content {
+            case .text:
+                break
+            case .blocks(let blocks):
+                for block in blocks {
+                    switch block {
+                    case .toolUse:
+                        toolUseCount += 1
+                    case .toolResult:
+                        toolResultCount += 1
+                    default:
+                        break
+                    }
+                }
+            }
+        }
+
+        return (toolUseCount, toolResultCount)
     }
 
     // MARK: - Batched Tool Response Request
@@ -234,7 +278,7 @@ struct AnthropicRequestBuilder {
         // Add all tool results in a single user message with multiple tool_result blocks
         var toolResultBlocks: [AnthropicContentBlock] = []
         for payload in payloads {
-            let callId = payload["call_id"].stringValue
+            let callId = payload["callId"].stringValue
             let output = payload["output"]
             let resultContent = output.rawString() ?? "{}"
             toolResultBlocks.append(.toolResult(AnthropicToolResultBlock(
@@ -303,37 +347,226 @@ struct AnthropicRequestBuilder {
         let inputItems = await contextAssembler.buildConversationHistory()
 
         var messages: [AnthropicMessage] = []
+        // Track pending assistant content blocks to merge text + tool_use into single message
+        var pendingAssistantBlocks: [AnthropicContentBlock] = []
+
+        /// Helper to flush pending assistant blocks as a single message
+        func flushAssistantBlocks() {
+            guard !pendingAssistantBlocks.isEmpty else { return }
+            messages.append(AnthropicMessage(role: "assistant", content: .blocks(pendingAssistantBlocks)))
+            pendingAssistantBlocks = []
+        }
 
         for item in inputItems {
             switch item {
             case .message(let inputMessage):
-                // Map roles: developer messages are skipped (go in system prompt)
-                // user and assistant messages are converted directly
                 switch inputMessage.role {
                 case "user":
+                    // User message - flush any pending assistant blocks first
+                    flushAssistantBlocks()
                     if case .text(let text) = inputMessage.content {
+                        // Skip empty user messages - Anthropic requires non-empty content
+                        guard !text.isEmpty else {
+                            Logger.warning("⚠️ Skipping empty user message in Anthropic history", category: .ai)
+                            continue
+                        }
                         messages.append(.user(text))
                     }
                 case "assistant":
                     if case .text(let text) = inputMessage.content {
-                        messages.append(.assistant(text))
+                        // Skip empty assistant text - but don't flush yet, tool_use may follow
+                        guard !text.isEmpty else {
+                            Logger.debug("📝 Skipping empty assistant text block", category: .ai)
+                            continue
+                        }
+                        // Add text as a content block (will be merged with tool_use if any)
+                        pendingAssistantBlocks.append(.text(AnthropicTextBlock(text: text)))
                     }
                 default:
                     // Skip developer messages - they go in system prompt
                     break
                 }
+            case .functionToolCall(let toolCall):
+                // Tool calls are assistant content blocks - add to pending
+                var inputDict: [String: Any] = [:]
+                if let argsData = toolCall.arguments.data(using: .utf8),
+                   let parsed = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any] {
+                    inputDict = parsed
+                }
+                pendingAssistantBlocks.append(.toolUse(AnthropicToolUseBlock(
+                    id: toolCall.callId,
+                    name: toolCall.name,
+                    input: inputDict
+                )))
+                Logger.debug("📝 Added assistant tool_use block: \(toolCall.name)", category: .ai)
             case .functionToolCallOutput(let output):
-                // Tool outputs become tool_result blocks
+                // Tool result is a user message - flush pending assistant blocks first
+                flushAssistantBlocks()
+                // Ensure tool result has content - Anthropic requires non-empty content
+                let resultContent = output.output.isEmpty ? "{\"status\":\"completed\"}" : output.output
+                if output.output.isEmpty {
+                    Logger.warning("⚠️ Empty tool result for callId \(output.callId) - using placeholder", category: .ai)
+                }
                 messages.append(.toolResult(
                     toolUseId: output.callId,
-                    content: output.output
+                    content: resultContent
                 ))
             default:
                 break
             }
         }
 
+        // Flush any remaining assistant blocks
+        flushAssistantBlocks()
+
+        // CRITICAL: Anthropic requires conversations to start with a user message.
+        // If history starts with assistant (e.g., welcome message), prepend a placeholder.
+        if let first = messages.first, first.role == "assistant" {
+            Logger.debug("📝 Anthropic history starts with assistant - prepending user placeholder", category: .ai)
+            messages.insert(.user("[Beginning of conversation]"), at: 0)
+        }
+
+        // CRITICAL: Merge consecutive messages of the same role.
+        // Skipping empty messages can leave adjacent same-role messages which Anthropic rejects.
+        messages = mergeConsecutiveMessages(messages)
+
+        // Validate message structure before returning
+        validateMessageStructure(messages)
+
+        // Log full message dump at DEBUG level for troubleshooting
+        logMessageDump(messages, label: "Anthropic History")
+
         return messages
+    }
+
+    /// Dump full message structure for debugging API errors
+    private func logMessageDump(_ messages: [AnthropicMessage], label: String) {
+        var dump = "📋 \(label) (\(messages.count) messages):\n"
+        for (index, message) in messages.enumerated() {
+            let contentDesc: String
+            switch message.content {
+            case .text(let text):
+                let preview = String(text.prefix(80)).replacingOccurrences(of: "\n", with: "\\n")
+                contentDesc = "text(\(text.count) chars): \"\(preview)...\""
+            case .blocks(let blocks):
+                let blockDescs = blocks.map { block -> String in
+                    switch block {
+                    case .text(let tb):
+                        return "text(\(tb.text.count))"
+                    case .toolUse(let tu):
+                        return "tool_use(\(tu.name), id:\(tu.id.prefix(8)))"
+                    case .toolResult(let tr):
+                        return "tool_result(id:\(tr.toolUseId.prefix(8)), \(tr.content.count) chars)"
+                    case .image:
+                        return "image"
+                    }
+                }
+                contentDesc = "[\(blockDescs.joined(separator: ", "))]"
+            }
+            dump += "  [\(index)] \(message.role): \(contentDesc)\n"
+        }
+        Logger.debug(dump, category: .ai)
+    }
+
+    /// Validates that messages follow Anthropic's requirements:
+    /// 1. Must start with user message
+    /// 2. Must alternate between user and assistant roles
+    /// 3. No consecutive messages of the same role
+    private func validateMessageStructure(_ messages: [AnthropicMessage]) {
+        guard !messages.isEmpty else { return }
+
+        var hasErrors = false
+
+        // Check starts with user
+        if messages.first?.role != "user" {
+            Logger.error("❌ Anthropic validation: First message is not user role, got: \(messages.first?.role ?? "nil")", category: .ai)
+            hasErrors = true
+        }
+
+        // Check alternation
+        var lastRole: String?
+        for (index, message) in messages.enumerated() {
+            if let last = lastRole, last == message.role {
+                Logger.error("❌ Anthropic validation: Consecutive \(message.role) messages at index \(index-1) and \(index)", category: .ai)
+                // Log the content for debugging
+                if let content = getContentSummary(message) {
+                    Logger.warning("   Message \(index) content: \(content)", category: .ai)
+                }
+                hasErrors = true
+            }
+            lastRole = message.role
+        }
+
+        // Always log the final state at INFO level for debugging
+        if let last = messages.last {
+            let summary = getContentSummary(last) ?? "unknown"
+            if hasErrors {
+                Logger.error("📝 Anthropic history ends with \(last.role) message: \(summary)", category: .ai)
+            } else {
+                Logger.info("📝 Anthropic validation passed: \(messages.count) messages, ends with \(last.role)", category: .ai)
+            }
+        }
+    }
+
+    /// Get a summary of message content for debugging
+    private func getContentSummary(_ message: AnthropicMessage) -> String? {
+        switch message.content {
+        case .text(let text):
+            return "text: \(text.prefix(50))..."
+        case .blocks(let blocks):
+            let types = blocks.map { block -> String in
+                switch block {
+                case .text: return "text"
+                case .toolUse(let tu): return "tool_use(\(tu.name))"
+                case .toolResult(let tr): return "tool_result(\(tr.toolUseId.prefix(8)))"
+                case .image: return "image"
+                }
+            }
+            return "blocks: [\(types.joined(separator: ", "))]"
+        }
+    }
+
+    /// Merges consecutive messages of the same role.
+    /// Anthropic requires strict alternation (user → assistant → user → ...).
+    /// When we skip empty messages, we can end up with adjacent same-role messages.
+    /// This method combines them into single messages with merged content blocks.
+    private func mergeConsecutiveMessages(_ messages: [AnthropicMessage]) -> [AnthropicMessage] {
+        guard !messages.isEmpty else { return [] }
+
+        var result: [AnthropicMessage] = []
+
+        for message in messages {
+            if let lastIndex = result.indices.last, result[lastIndex].role == message.role {
+                // Same role as previous - merge content
+                let merged = mergeMessageContent(result[lastIndex], with: message)
+                result[lastIndex] = merged
+                Logger.debug("📝 Merged consecutive \(message.role) messages", category: .ai)
+            } else {
+                // Different role - just append
+                result.append(message)
+            }
+        }
+
+        return result
+    }
+
+    /// Merge content from two messages of the same role into a single message
+    private func mergeMessageContent(_ first: AnthropicMessage, with second: AnthropicMessage) -> AnthropicMessage {
+        let firstBlocks = extractContentBlocks(first)
+        let secondBlocks = extractContentBlocks(second)
+        let mergedBlocks = firstBlocks + secondBlocks
+
+        return AnthropicMessage(role: first.role, content: .blocks(mergedBlocks))
+    }
+
+    /// Extract content blocks from a message (converts .text to a single text block)
+    private func extractContentBlocks(_ message: AnthropicMessage) -> [AnthropicContentBlock] {
+        switch message.content {
+        case .text(let text):
+            return [.text(AnthropicTextBlock(text: text))]
+        case .blocks(let blocks):
+            return blocks
+        }
     }
 
     // MARK: - Tool Conversion

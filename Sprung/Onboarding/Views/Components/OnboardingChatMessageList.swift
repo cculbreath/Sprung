@@ -22,7 +22,7 @@ struct OnboardingChatMessageList: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
-                    ForEach(coordinator.ui.messages.filter { !$0.isSystemGenerated }) { message in
+                    ForEach(coordinator.ui.messages.filter { !$0.isSystemGenerated && !($0.role == .assistant && $0.text.isEmpty) }) { message in
                         MessageBubble(message: message)
                             .id(message.id)
                     }

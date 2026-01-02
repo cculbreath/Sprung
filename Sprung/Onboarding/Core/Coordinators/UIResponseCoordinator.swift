@@ -451,6 +451,16 @@ final class UIResponseCoordinator {
             Logger.info("💬 Chatbox message cleared waiting state: \(previousWaitingState?.rawValue ?? "none")", category: .ai)
         }
 
+        // Auto-complete any pending UI tool call - user sending a message means they're ready to proceed
+        // This prevents conversation sync errors where a tool call is left hanging
+        if let pendingTool = await state.getPendingUIToolCall() {
+            Logger.info("💬 Chatbox message auto-completing pending UI tool: \(pendingTool.toolName) (callId: \(pendingTool.callId.prefix(8)))", category: .ai)
+            var autoCompleteOutput = JSON()
+            autoCompleteOutput["status"].string = "completed"
+            autoCompleteOutput["message"].string = "User proceeded via chatbox message"
+            await completePendingUIToolCall(output: autoCompleteOutput)
+        }
+
         // Also clear document collection mode if active - user is ready to proceed
         if ui.isDocumentCollectionActive {
             ui.isDocumentCollectionActive = false

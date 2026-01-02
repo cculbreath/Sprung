@@ -67,9 +67,15 @@ actor ConversationContextAssembler {
     }
     /// Build full conversation history (all messages from the interview)
     /// Used when restoring from checkpoint or starting fresh without previous_response_id
+    /// For Anthropic: includes tool calls AND their results (tool_use + tool_result pairs)
     func buildConversationHistory() async -> [InputItem] {
         let messages = await state.messages
-        return messages.compactMap { message -> InputItem? in
+        // Get completed tool results for Anthropic history reconstruction
+        let completedResults = await state.getCompletedToolResults()
+        // Build a lookup map: callId -> output
+        let resultsByCallId = Dictionary(uniqueKeysWithValues: completedResults.map { ($0.callId, $0.output) })
+
+        return messages.flatMap { message -> [InputItem] in
             let role: String
             switch message.role {
             case .user:
@@ -78,12 +84,41 @@ actor ConversationContextAssembler {
                 role = "assistant"
             case .system:
                 // Skip system messages - they're included via system prompt
-                return nil
+                return []
             }
-            return .message(InputMessage(
+
+            var items: [InputItem] = []
+
+            // Add the text message
+            items.append(.message(InputMessage(
                 role: role,
                 content: .text(message.text)
-            ))
+            )))
+
+            // For assistant messages, also include any tool calls AND their results
+            // This is critical for Anthropic which requires tool_use before tool_result
+            if role == "assistant", let toolCalls = message.toolCalls {
+                for toolCall in toolCalls {
+                    items.append(.functionToolCall(FunctionToolCall(
+                        arguments: toolCall.arguments,
+                        callId: toolCall.id,
+                        name: toolCall.name
+                    )))
+                    Logger.debug("📝 Including tool call in history: \(toolCall.name) (id: \(toolCall.id))", category: .ai)
+
+                    // Include the corresponding tool result if we have it
+                    if let output = resultsByCallId[toolCall.id] {
+                        items.append(.functionToolCallOutput(FunctionToolCallOutput(
+                            callId: toolCall.id,
+                            output: output,
+                            status: nil
+                        )))
+                        Logger.debug("📝 Including tool result in history: \(toolCall.name) (id: \(toolCall.id))", category: .ai)
+                    }
+                }
+            }
+
+            return items
         }
     }
 

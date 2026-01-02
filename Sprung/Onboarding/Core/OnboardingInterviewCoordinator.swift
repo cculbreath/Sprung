@@ -264,6 +264,44 @@ final class OnboardingInterviewCoordinator {
         await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
     }
 
+    // MARK: - User Action Helpers
+
+    /// Ensures user button actions always succeed by clearing blocking state and auto-completing pending tools.
+    /// Call this at the start of any deliberate user action (button clicks, etc.) to guarantee responsiveness.
+    /// - Parameter actionDescription: A short description for logging (e.g., "Done with Writing Samples")
+    private func ensureUserActionSucceeds(actionDescription: String) async {
+        // Clear any waiting state that blocks tools
+        let previousWaitingState = await container.sessionUIState.getWaitingState()
+        if previousWaitingState != nil {
+            await container.sessionUIState.setWaitingState(nil)
+            Logger.info("🔓 '\(actionDescription)' cleared waiting state: \(previousWaitingState?.rawValue ?? "none")", category: .ai)
+        }
+
+        // Auto-complete any pending UI tool call - user action means they're ready to proceed
+        if let pendingTool = await state.getPendingUIToolCall() {
+            Logger.info("🔓 '\(actionDescription)' auto-completing pending UI tool: \(pendingTool.toolName) (callId: \(pendingTool.callId.prefix(8)))", category: .ai)
+            var autoCompleteOutput = JSON()
+            autoCompleteOutput["status"].string = "completed"
+            autoCompleteOutput["message"].string = "User proceeded via '\(actionDescription)' action"
+
+            // Build and emit the tool response
+            var payload = JSON()
+            payload["callId"].string = pendingTool.callId
+            payload["output"] = autoCompleteOutput
+            await eventBus.publish(.llmToolResponseMessage(payload: payload))
+
+            // Clear the pending tool call
+            await state.clearPendingUIToolCall()
+        }
+
+        // Clear document collection mode if active
+        if ui.isDocumentCollectionActive {
+            ui.isDocumentCollectionActive = false
+            await eventBus.publish(.documentCollectionActiveChanged(false))
+            Logger.info("🔓 '\(actionDescription)' cleared document collection mode", category: .ai)
+        }
+    }
+
     /// Called when user clicks "Done with Writing Samples" button
     /// Behavior differs based on phase:
     /// - Phase 1: Marks `writingSamplesCollected` complete and continues interview
@@ -271,6 +309,9 @@ final class OnboardingInterviewCoordinator {
     func completeWritingSamplesCollection() async {
         let currentPhase = ui.phase
         Logger.info("📝 User marked writing samples collection as complete (phase: \(currentPhase))", category: .ai)
+
+        // Ensure this user action always succeeds - clear blocks and auto-complete pending tools
+        await ensureUserActionSucceeds(actionDescription: "Done with Writing Samples")
 
         if currentPhase == .phase1VoiceContext {
             // Phase 1: Mark the Phase 1 writing samples objective as completed
@@ -282,12 +323,13 @@ final class OnboardingInterviewCoordinator {
                 details: nil
             ))
 
-            // Send a system-generated user message to continue the interview
+            // Send a system-tagged message (not chatbox) to indicate app state change
+            // Using <system> tags tells Claude this is an app notification, not user speech
             var userMessage = SwiftyJSON.JSON()
             userMessage["role"].string = "user"
             userMessage["content"].string = """
-                I've finished uploading my writing samples. \
-                Please continue with the interview.
+                <system>User clicked 'Done with Writing Samples'. \
+                The upload UI has been dismissed. Continue with the interview.</system>
                 """
             await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
         } else {
@@ -300,12 +342,12 @@ final class OnboardingInterviewCoordinator {
                 details: nil
             ))
 
-            // Send a system-generated user message to trigger dossier compilation
+            // Send a system-tagged message to trigger dossier compilation
             var userMessage = SwiftyJSON.JSON()
             userMessage["role"].string = "user"
             userMessage["content"].string = """
-                I'm done uploading writing samples. \
-                Please proceed to compile my candidate dossier.
+                <system>User clicked 'Done with Writing Samples'. \
+                The upload UI has been dismissed. Proceed to compile the candidate dossier.</system>
                 """
             await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
         }
@@ -315,6 +357,9 @@ final class OnboardingInterviewCoordinator {
     /// Marks the writing samples objective complete (even with no samples) and continues flow
     func skipWritingSamplesCollection() async {
         Logger.info("📝 User skipped writing samples collection", category: .ai)
+
+        // Ensure this user action always succeeds - clear blocks and auto-complete pending tools
+        await ensureUserActionSucceeds(actionDescription: "Skip Writing Samples")
 
         // Mark the writing samples objective as completed (skipped is still complete)
         await eventBus.publish(.objectiveStatusUpdateRequested(
@@ -872,6 +917,10 @@ final class OnboardingInterviewCoordinator {
     /// Called when user clicks "Done with Uploads" button.
     func finishUploadsAndMergeCards() async {
         Logger.info("📋 User finished uploads - emitting doneWithUploadsClicked event", category: .ai)
+
+        // Ensure this user action always succeeds - clear blocks and auto-complete pending tools
+        await ensureUserActionSucceeds(actionDescription: "Done with Uploads")
+
         await eventBus.publish(.doneWithUploadsClicked)
     }
 

@@ -193,6 +193,11 @@ final class SwiftDataSessionPersistenceHandler {
 
         case .llmResponseIdUpdated(let responseId):
             sessionStore.updatePreviousResponseId(session, responseId: responseId)
+            if let id = responseId {
+                Logger.info("💾 Persisted previousResponseId: \(id.prefix(20))...", category: .ai)
+            } else {
+                Logger.info("💾 Cleared previousResponseId (thread reset)", category: .ai)
+            }
 
         default:
             break
@@ -435,6 +440,9 @@ final class SwiftDataSessionPersistenceHandler {
         // Restore previousResponseId
         if let responseId = session.previousResponseId {
             await chatStore.setPreviousResponseId(responseId)
+            Logger.info("📥 Restored previousResponseId: \(responseId.prefix(20))...", category: .ai)
+        } else {
+            Logger.warning("⚠️ Session has no previousResponseId - will rebuild conversation context", category: .ai)
         }
 
         Logger.info("Restored session state: \(messages.count) messages", category: .ai)

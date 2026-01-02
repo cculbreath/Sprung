@@ -69,9 +69,19 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             }
 
         case .blocked(let reason):
-            // Tool is blocked - emit error
-            Logger.warning("🚫 Tool call '\(call.name)' blocked: \(reason)", category: .ai)
-            await emitToolError(callId: call.callId, message: reason)
+            // Check if this tool should auto-complete instead of blocking
+            // This prevents conversation sync errors for "cleanup" tools like cancel_user_upload
+            if OnboardingToolName.autoCompleteWhenBlockedTools.contains(call.name) {
+                Logger.info("✅ Tool '\(call.name)' auto-completed (would have been blocked: \(reason))", category: .ai)
+                var autoCompleteOutput = JSON()
+                autoCompleteOutput["status"].string = "completed"
+                autoCompleteOutput["message"].string = "Action already completed by user interaction"
+                await emitToolResponse(callId: call.callId, output: autoCompleteOutput)
+            } else {
+                // Tool is blocked - emit error
+                Logger.warning("🚫 Tool call '\(call.name)' blocked: \(reason)", category: .ai)
+                await emitToolError(callId: call.callId, message: reason)
+            }
         }
     }
     /// Handle tool execution result
