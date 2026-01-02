@@ -3,7 +3,7 @@
 //  Sprung
 //
 //  Routes PDF extraction to optimal method based on LLM judgment.
-//  Integrates with AgentActivityTracker for status display.
+//  Status updates are reported via progress callback to the caller.
 //
 
 import Foundation
@@ -27,18 +27,17 @@ actor PDFExtractionRouter {
     private let visionOCR: VisionOCRService
     private let parallelExtractor: ParallelPageExtractor
     private let llmFacade: LLMFacade
-    private weak var agentTracker: AgentActivityTracker?
 
     // MARK: - State
 
-    private var currentAgentId: String?
     private var workspace: PDFExtractionWorkspace?
+    private var progressCallback: (@Sendable (String) -> Void)?
 
     // MARK: - Init
 
     init(llmFacade: LLMFacade, agentTracker: AgentActivityTracker?) {
         self.llmFacade = llmFacade
-        self.agentTracker = agentTracker
+        // agentTracker is no longer used - status updates go through progress callback
         self.rasterizer = PDFRasterizer()
         self.judge = PDFExtractionJudge(llmFacade: llmFacade)
         self.visionOCR = VisionOCRService()
@@ -47,31 +46,30 @@ actor PDFExtractionRouter {
 
     // MARK: - Main Entry Point
 
-    /// Extract text from PDF using optimal method with full status tracking
+    /// Extract text from PDF using optimal method
+    /// - Parameters:
+    ///   - pdfData: The PDF file data
+    ///   - filename: Display name for status updates
+    ///   - progress: Optional callback for status updates
     func extractText(
         from pdfData: Data,
-        filename: String
+        filename: String,
+        progress: (@Sendable (String) -> Void)? = nil
     ) async throws -> PDFExtractionResult {
 
         // Create workspace for temp files
         let ws = try PDFExtractionWorkspace(documentName: filename)
         self.workspace = ws
+        self.progressCallback = progress
 
         // Write input PDF
         try pdfData.write(to: await ws.inputPDFURL)
-
-        // Register as tracked agent
-        let agentId = UUID().uuidString
-        self.currentAgentId = agentId
-
-        await registerAgent(id: agentId, name: "PDF: \(filename)")
 
         do {
             let result = try await performExtraction(
                 pdfData: pdfData,
                 filename: filename,
-                workspace: ws,
-                agentId: agentId
+                workspace: ws
             )
 
             // Save output for debugging
@@ -80,14 +78,17 @@ actor PDFExtractionRouter {
             // Cleanup workspace on success
             await ws.cleanup()
 
-            await completeAgent(id: agentId)
-
             return result
 
         } catch {
-            await failAgent(id: agentId, error: error.localizedDescription)
             throw error
         }
+    }
+
+    // MARK: - Progress Reporting
+
+    private func reportProgress(_ message: String) {
+        progressCallback?(message)
     }
 
     // MARK: - Extraction Pipeline
@@ -95,34 +96,33 @@ actor PDFExtractionRouter {
     private func performExtraction(
         pdfData: Data,
         filename: String,
-        workspace: PDFExtractionWorkspace,
-        agentId: String
+        workspace: PDFExtractionWorkspace
     ) async throws -> PDFExtractionResult {
 
         // Step 1: Parse PDF
-        await updateStatus(agentId, "Analyzing PDF structure...")
-        await logTranscript(agentId, .system, "Starting extraction for \(filename)")
+        reportProgress("Analyzing PDF structure...")
+        Logger.info("📄 PDFRouter: Starting extraction for \(filename)", category: .ai)
 
         guard let pdfDocument = PDFDocument(data: pdfData) else {
             throw RouterError.invalidPDF
         }
         let pageCount = pdfDocument.pageCount
-        await logTranscript(agentId, .system, "PDF has \(pageCount) pages")
+        Logger.info("📄 PDFRouter: PDF has \(pageCount) pages", category: .ai)
 
         // Step 2: Quick PDFKit extraction
-        await updateStatus(agentId, "Extracting text layer...")
+        reportProgress("Extracting text layer...")
         let pdfKitText = extractWithPDFKit(pdfDocument)
         let hasNullChars = pdfKitText.contains("\u{0000}")
 
         if hasNullChars {
-            await logTranscript(agentId, .system, "⚠️ Null characters detected in text layer")
+            Logger.info("📄 PDFRouter: Null characters detected in text layer", category: .ai)
         }
-        await logTranscript(agentId, .system, "PDFKit extracted \(pdfKitText.count) characters")
+        Logger.info("📄 PDFRouter: PDFKit extracted \(pdfKitText.count) characters", category: .ai)
 
         // Step 3: Rasterize samples for judge
-        await updateStatus(agentId, "Rasterizing sample pages...")
+        reportProgress("Rasterizing sample pages...")
         let samplePages = await rasterizer.selectSamplePages(pageCount: pageCount)
-        await logTranscript(agentId, .system, "Sampling pages: \(samplePages.map { $0 + 1 })")
+        Logger.info("📄 PDFRouter: Sampling pages: \(samplePages.map { $0 + 1 })", category: .ai)
 
         let pageImages = try await rasterizer.rasterizePages(
             pdfDocument: pdfDocument,
@@ -132,16 +132,16 @@ actor PDFExtractionRouter {
         )
 
         // Step 4: Create 4-up composites
-        await updateStatus(agentId, "Creating comparison composites...")
+        reportProgress("Creating comparison composites...")
         let composites = try await rasterizer.createFourUpComposites(
             pageImages: pageImages,
             workspace: workspace
         )
-        await logTranscript(agentId, .system, "Created \(composites.count) composite images (16 pages sampled)")
+        Logger.info("📄 PDFRouter: Created \(composites.count) composite images", category: .ai)
 
         // Step 5: LLM Judge
-        await updateStatus(agentId, "Analyzing extraction quality...")
-        await logTranscript(agentId, .tool, "Calling LLM judge to compare text vs images")
+        reportProgress("Analyzing extraction quality...")
+        Logger.info("📄 PDFRouter: Calling LLM judge to compare text vs images", category: .ai)
 
         let judgment = try await judge.judge(
             compositeImages: composites,
@@ -150,15 +150,15 @@ actor PDFExtractionRouter {
             hasNullCharacters: hasNullChars
         )
 
-        await logTranscript(
-            agentId, .assistant,
-            "Judgment: fidelity=\(judgment.textFidelity)%, " +
+        Logger.info(
+            "📄 PDFRouter: Judgment: fidelity=\(judgment.textFidelity)%, " +
             "layout=\(judgment.layoutComplexity.rawValue), " +
-            "recommended=\(judgment.recommendedMethod.rawValue)"
+            "recommended=\(judgment.recommendedMethod.rawValue)",
+            category: .ai
         )
 
         if !judgment.issuesFound.isEmpty {
-            await logTranscript(agentId, .system, "Issues: \(judgment.issuesFound.joined(separator: ", "))")
+            Logger.info("📄 PDFRouter: Issues: \(judgment.issuesFound.joined(separator: ", "))", category: .ai)
         }
 
         // Step 6: Route to extractor
@@ -167,17 +167,16 @@ actor PDFExtractionRouter {
             pageCount: pageCount,
             pdfKitText: pdfKitText,
             judgment: judgment,
-            workspace: workspace,
-            agentId: agentId
+            workspace: workspace
         )
 
         // Step 7: Sanitize
-        await updateStatus(agentId, "Finalizing extraction...")
+        reportProgress("Extracted via \(method.displayDescription)")
         let sanitizedText = sanitize(text)
 
-        await logTranscript(
-            agentId, .system,
-            "Extraction complete: \(sanitizedText.count) characters via \(method.displayDescription)"
+        Logger.info(
+            "📄 PDFRouter: Extraction complete: \(sanitizedText.count) characters via \(method.displayDescription)",
+            category: .ai
         )
 
         return PDFExtractionResult(
@@ -195,23 +194,22 @@ actor PDFExtractionRouter {
         pageCount: Int,
         pdfKitText: String,
         judgment: ExtractionJudgment,
-        workspace: PDFExtractionWorkspace,
-        agentId: String
+        workspace: PDFExtractionWorkspace
     ) async throws -> (String, PDFExtractionMethod) {
 
         switch judgment.recommendedMethod {
 
         case .pdfkit:
-            await updateStatus(agentId, "Using native text extraction")
-            await logTranscript(agentId, .system, "Route: PDFKit (fidelity \(judgment.textFidelity)% acceptable)")
+            reportProgress("Using native text extraction")
+            Logger.info("📄 PDFRouter: Route: PDFKit (fidelity \(judgment.textFidelity)% acceptable)", category: .ai)
             return (pdfKitText, .pdfkit)
 
         case .visionOCR:
-            await updateStatus(agentId, "Using native Vision OCR...")
-            await logTranscript(agentId, .system, "Route: Vision OCR (free, native)")
+            reportProgress("Using native Vision OCR...")
+            Logger.info("📄 PDFRouter: Route: Vision OCR (free, native)", category: .ai)
 
             // Rasterize all pages for OCR
-            await updateStatus(agentId, "Rasterizing all \(pageCount) pages...")
+            reportProgress("Rasterizing all \(pageCount) pages...")
             let allPages = try await rasterizer.rasterizePages(
                 pdfDocument: pdfDocument,
                 pages: Array(0..<pageCount),
@@ -220,21 +218,21 @@ actor PDFExtractionRouter {
             )
 
             // Run Vision OCR
-            await updateStatus(agentId, "Running OCR on \(pageCount) pages...")
-            let text = try await visionOCR.recognizeImages(allPages) { [weak self] completed, total in
-                await self?.updateStatus(agentId, "OCR: \(completed)/\(total) pages")
+            reportProgress("Running OCR on \(pageCount) pages...")
+            let callback = progressCallback
+            let text = try await visionOCR.recognizeImages(allPages) { completed, total in
+                callback?("OCR: \(completed)/\(total) pages")
             }
 
-            await logTranscript(agentId, .system, "Vision OCR extracted \(text.count) characters")
+            Logger.info("📄 PDFRouter: Vision OCR extracted \(text.count) characters", category: .ai)
             return (text, .visionOCR)
 
         case .llmVision:
-            await logTranscript(agentId, .system, "Route: LLM Vision (complex layout/content)")
+            Logger.info("📄 PDFRouter: Route: LLM Vision (complex layout/content)", category: .ai)
             return try await extractWithLLMVision(
                 pdfDocument: pdfDocument,
                 pageCount: pageCount,
-                workspace: workspace,
-                agentId: agentId
+                workspace: workspace
             )
         }
     }
@@ -244,12 +242,11 @@ actor PDFExtractionRouter {
     private func extractWithLLMVision(
         pdfDocument: PDFDocument,
         pageCount: Int,
-        workspace: PDFExtractionWorkspace,
-        agentId: String
+        workspace: PDFExtractionWorkspace
     ) async throws -> (String, PDFExtractionMethod) {
 
         // Rasterize all pages
-        await updateStatus(agentId, "Rasterizing \(pageCount) pages for vision extraction...")
+        reportProgress("Rasterizing \(pageCount) pages for vision extraction...")
         let allPages = try await rasterizer.rasterizePages(
             pdfDocument: pdfDocument,
             pages: Array(0..<pageCount),
@@ -259,81 +256,20 @@ actor PDFExtractionRouter {
 
         // Extract in parallel
         let maxConcurrent = UserDefaults.standard.integer(forKey: "maxConcurrentPDFExtractions")
-        await logTranscript(agentId, .system, "Starting parallel vision extraction (max \(max(maxConcurrent, 4)) concurrent)")
+        Logger.info("📄 PDFRouter: Starting parallel vision extraction (max \(max(maxConcurrent, 4)) concurrent)", category: .ai)
 
-        let pageTexts = try await parallelExtractor.extractPages(images: allPages) { [weak self] status in
-            await self?.updateStatus(agentId, status)
+        let callback = progressCallback
+        let pageTexts = try await parallelExtractor.extractPages(images: allPages) { status in
+            callback?(status)
         }
 
         let combinedText = pageTexts.enumerated().map { index, text in
             "--- Page \(index + 1) ---\n\(text)"
         }.joined(separator: "\n\n")
 
-        await logTranscript(agentId, .system, "LLM Vision extracted \(combinedText.count) characters from \(pageCount) pages")
+        Logger.info("📄 PDFRouter: LLM Vision extracted \(combinedText.count) characters from \(pageCount) pages", category: .ai)
 
         return (combinedText, .llmVision)
-    }
-
-    // MARK: - Agent Tracking
-
-    @MainActor
-    private func registerAgentOnMain(_ tracker: AgentActivityTracker, id: String, name: String) {
-        _ = tracker.trackAgent(
-            id: id,
-            type: .pdfExtraction,
-            name: name,
-            status: .running,
-            task: nil as Task<Void, Never>?
-        )
-    }
-
-    private func registerAgent(id: String, name: String) async {
-        guard let tracker = agentTracker else { return }
-        await registerAgentOnMain(tracker, id: id, name: name)
-    }
-
-    @MainActor
-    private func updateStatusOnMain(_ tracker: AgentActivityTracker, agentId: String, message: String) {
-        tracker.updateStatusMessage(agentId: agentId, message: message)
-    }
-
-    private func updateStatus(_ agentId: String, _ message: String) async {
-        guard let tracker = agentTracker else { return }
-        await updateStatusOnMain(tracker, agentId: agentId, message: message)
-    }
-
-    @MainActor
-    private func logTranscriptOnMain(_ tracker: AgentActivityTracker, agentId: String, type: AgentTranscriptEntry.EntryType, content: String) {
-        tracker.appendTranscript(
-            agentId: agentId,
-            entryType: type,
-            content: content
-        )
-    }
-
-    private func logTranscript(_ agentId: String, _ type: AgentTranscriptEntry.EntryType, _ content: String) async {
-        guard let tracker = agentTracker else { return }
-        await logTranscriptOnMain(tracker, agentId: agentId, type: type, content: content)
-    }
-
-    @MainActor
-    private func completeAgentOnMain(_ tracker: AgentActivityTracker, id: String) {
-        tracker.markCompleted(agentId: id)
-    }
-
-    private func completeAgent(id: String) async {
-        guard let tracker = agentTracker else { return }
-        await completeAgentOnMain(tracker, id: id)
-    }
-
-    @MainActor
-    private func failAgentOnMain(_ tracker: AgentActivityTracker, id: String, error: String) {
-        tracker.markFailed(agentId: id, error: error)
-    }
-
-    private func failAgent(id: String, error: String) async {
-        guard let tracker = agentTracker else { return }
-        await failAgentOnMain(tracker, id: id, error: error)
     }
 
     // MARK: - Helpers

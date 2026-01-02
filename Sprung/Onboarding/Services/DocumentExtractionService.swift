@@ -426,7 +426,12 @@ actor DocumentExtractionService {
         }
 
         // Use the router for intelligent extraction
-        let result = try await router.extractText(from: fileData, filename: filename)
+        // Progress callback forwards router status to the extraction progress handler
+        let result = try await router.extractText(from: fileData, filename: filename) { message in
+            Task { @MainActor in
+                await notifyProgress(.aiExtraction, .active, detail: message)
+            }
+        }
 
         let durationMs = Int(Date().timeIntervalSince(extractionStart) * 1000)
         Logger.info(
