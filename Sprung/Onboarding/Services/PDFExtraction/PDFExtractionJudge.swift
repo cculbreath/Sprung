@@ -97,7 +97,14 @@ actor PDFExtractionJudge {
 
         **Important**: The sample images are spread throughout the document, not consecutive pages. Each image shows a different page, and each page's content should appear somewhere in the extracted text (but not necessarily adjacent to other sampled pages).
 
-        For each sample image, find the corresponding section in the extracted text and assess whether the extraction accurately captured that page's content.
+        ## Evaluation Process
+
+        Go through each sample image one by one:
+        1. Look at the text visible in the image
+        2. Find the corresponding section in the extracted text below
+        3. Assess: Does the extraction accurately capture that page's content?
+
+        **Critical**: If ANY page fails quality checks, return the decision needed for that worst-case page. Do NOT average quality across pages. A single problematic page means the entire document needs the more thorough extraction method.
 
         <extracted_text>
         \(textSample)
@@ -106,18 +113,18 @@ actor PDFExtractionJudge {
         ## Decision Criteria
 
         Choose **ok** if:
-        - Text matches what you see in the images (minor whitespace differences are acceptable)
-        - No significant missing, garbled, or wrong text
+        - ALL sampled pages match well (minor whitespace differences acceptable)
+        - No significant missing, garbled, or wrong text on ANY page
 
         Choose **ocr** if:
-        - Text has errors (missing words, garbled characters, wrong reading order)
-        - BUT the document layout is simple: single column, standard paragraphs, no complex formatting
+        - ANY page has extraction errors (missing words, garbled characters, wrong reading order)
+        - BUT all pages have simple layout: single column, standard paragraphs, no complex formatting
 
         Choose **llm** if:
-        - Text has errors AND layout is complex: multi-column, tables, forms, math/equations, scientific diagrams
-        - Conventional OCR would likely fail to preserve structure or reading order
+        - ANY page has extraction errors AND complex layout (multi-column, tables, forms, math/equations, scientific diagrams)
+        - Conventional OCR would likely fail to preserve structure or reading order on that page
 
-        Provide your decision and a brief explanation of what you observed.
+        Provide your decision and briefly explain what you observed (mention specific pages if they drove the decision).
         """
     }
 
