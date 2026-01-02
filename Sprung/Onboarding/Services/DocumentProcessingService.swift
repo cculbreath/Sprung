@@ -90,8 +90,12 @@ actor DocumentProcessingService {
         let artifactId = artifact.id
         Logger.info("✅ Text extraction completed: \(artifactId)", category: .ai)
 
-        // Skip summary and card inventory for writing samples - they only need text extraction
+        // Determine which post-processing steps to run based on document type
+        // - Writing samples: skip both summary and inventory (only need text extraction)
+        // - Resumes: skip summary (full text sent to LLM), but do card inventory
+        // - Other documents: do both summary and card inventory
         let isWritingSample = documentType == "writing_sample"
+        let isResume = documentType == "resume"
 
         let documentSummary: DocumentSummary?
         let inventory: DocumentInventory?
@@ -102,10 +106,22 @@ actor DocumentProcessingService {
             Logger.info("📝 Skipping summary/inventory for writing sample: \(filename)", category: .ai)
             documentSummary = nil
             inventory = nil
+        } else if isResume {
+            // Resumes skip summary (full text sent to LLM via interview_context)
+            // but still generate card inventory for timeline population
+            statusCallback?("Generating card inventory for resume...")
+            Logger.info("📝 Resume: skipping summary, generating inventory: \(filename)", category: .ai)
+            documentSummary = nil
+            inventory = await generateInventory(
+                artifactId: artifactId,
+                filename: filename,
+                extractedText: extractedText
+            )
+            let cardCount = inventory?.proposedCards.count ?? 0
+            statusCallback?("Card inventory complete: \(cardCount) cards")
         } else {
             // Steps 3 & 4: Generate summary and card inventory IN PARALLEL
             // Both are independent LLM calls that only need extractedText
-            // (PDF-based inventory is no longer used since we have reliable text from vision fallback)
             statusCallback?("Running summary + card inventory in parallel...")
 
             // Launch both tasks in parallel
