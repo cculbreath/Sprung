@@ -108,12 +108,10 @@ actor ParallelPageExtractor {
         Output only the extracted text, no commentary.
         """
 
-        let text = try await llmFacade.executeTextWithImages(
-            prompt: prompt,
-            modelId: "gemini-2.5-flash",
+        // Use Gemini's native vision API (model configured in Settings)
+        let text = try await llmFacade.analyzeImagesWithGemini(
             images: [imageData],
-            temperature: 0.1,
-            backend: .gemini
+            prompt: prompt
         )
 
         return text

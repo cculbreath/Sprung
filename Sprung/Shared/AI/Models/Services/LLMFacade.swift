@@ -977,6 +977,29 @@ final class LLMFacade {
         )
     }
 
+    /// Analyze images using Gemini's vision capabilities.
+    /// Used for PDF extraction quality judgment and vision-based text extraction.
+    ///
+    /// - Parameters:
+    ///   - images: Array of image data (JPEG, PNG, WebP, HEIC, HEIF supported)
+    ///   - prompt: The analysis prompt
+    ///   - modelId: Gemini model ID (uses PDF extraction model setting if nil)
+    /// - Returns: Text response from the model
+    func analyzeImagesWithGemini(
+        images: [Data],
+        prompt: String,
+        modelId: String? = nil
+    ) async throws -> String {
+        guard let service = googleAIService else {
+            throw LLMError.clientError("Google AI service is not configured. Call registerGoogleAIService first.")
+        }
+        return try await service.analyzeImages(
+            images: images,
+            prompt: prompt,
+            modelId: modelId
+        )
+    }
+
     // MARK: - Text-to-Speech
 
     /// Creates a TTS-capable client using the registered OpenAI service.

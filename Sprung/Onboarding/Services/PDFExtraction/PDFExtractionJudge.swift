@@ -49,15 +49,12 @@ actor PDFExtractionJudge {
             imageCount: compositeImages.count
         )
 
-        // Call Gemini via LLMFacade
-        Logger.info("📊 Judge: Sending \(compositeImages.count) composite images to LLM for analysis", category: .ai)
+        Logger.info("📊 Judge: Sending \(compositeImages.count) composite images to Gemini for analysis", category: .ai)
 
-        let response = try await llmFacade.executeTextWithImages(
-            prompt: prompt,
-            modelId: "gemini-2.5-flash",
+        // Use Gemini's native vision API for image analysis
+        let response = try await llmFacade.analyzeImagesWithGemini(
             images: imageData,
-            temperature: 0.1,
-            backend: .gemini
+            prompt: prompt
         )
 
         // Parse structured response

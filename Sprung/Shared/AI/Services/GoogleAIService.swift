@@ -342,6 +342,123 @@ actor GoogleAIService {
         return (text, tokenUsage)
     }
 
+    // MARK: - Image Analysis
+
+    /// Analyze images using Gemini's vision capabilities with inline base64 data.
+    /// Images are sent directly in the request body (no file upload needed).
+    ///
+    /// - Parameters:
+    ///   - images: Array of image data (JPEG, PNG, WebP, HEIC, HEIF supported)
+    ///   - prompt: The analysis prompt
+    ///   - modelId: Gemini model ID (uses PDF extraction model setting if nil)
+    ///   - temperature: Generation temperature (default 0.1 for consistent analysis)
+    ///   - maxOutputTokens: Maximum output tokens (default 8192)
+    /// - Returns: Text response from the model
+    func analyzeImages(
+        images: [Data],
+        prompt: String,
+        modelId: String? = nil,
+        temperature: Double = 0.1,
+        maxOutputTokens: Int = 8192
+    ) async throws -> String {
+        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId") ?? "gemini-2.5-flash"
+        let apiKey = try getAPIKey()
+        let url = URL(string: "\(baseURL)/v1beta/models/\(effectiveModelId):generateContent?key=\(apiKey)")!
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        // Build parts array: images first, then text prompt (per Gemini best practices)
+        var parts: [[String: Any]] = []
+
+        for imageData in images {
+            let base64String = imageData.base64EncodedString()
+            // Detect MIME type from image data
+            let mimeType = detectImageMimeType(imageData) ?? "image/jpeg"
+            parts.append([
+                "inline_data": [
+                    "mime_type": mimeType,
+                    "data": base64String
+                ]
+            ])
+        }
+
+        // Text prompt comes after images
+        parts.append(["text": prompt])
+
+        let requestBody: [String: Any] = [
+            "contents": [
+                ["parts": parts]
+            ],
+            "generationConfig": [
+                "temperature": temperature,
+                "maxOutputTokens": maxOutputTokens
+            ]
+        ]
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+
+        Logger.info("🖼️ Analyzing \(images.count) image(s) with \(effectiveModelId)...", category: .ai)
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw GoogleAIError.invalidResponse
+        }
+
+        if httpResponse.statusCode != 200 {
+            let errorMsg = String(data: data, encoding: .utf8) ?? "Unknown error"
+            Logger.error("❌ Image analysis failed: \(errorMsg)", category: .ai)
+            throw GoogleAIError.generateFailed(errorMsg)
+        }
+
+        // Parse response
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let candidates = json["candidates"] as? [[String: Any]],
+              let firstCandidate = candidates.first,
+              let content = firstCandidate["content"] as? [String: Any],
+              let responseParts = content["parts"] as? [[String: Any]],
+              let firstPart = responseParts.first,
+              let text = firstPart["text"] as? String else {
+            throw GoogleAIError.invalidResponse
+        }
+
+        Logger.info("✅ Image analysis complete (\(text.count) chars)", category: .ai)
+
+        return text
+    }
+
+    /// Detect image MIME type from data header bytes
+    private func detectImageMimeType(_ data: Data) -> String? {
+        guard data.count >= 12 else { return nil }
+
+        let bytes = [UInt8](data.prefix(12))
+
+        // JPEG: starts with FF D8 FF
+        if bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF {
+            return "image/jpeg"
+        }
+
+        // PNG: starts with 89 50 4E 47
+        if bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47 {
+            return "image/png"
+        }
+
+        // WebP: starts with RIFF....WEBP
+        if bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46 &&
+           bytes[8] == 0x57 && bytes[9] == 0x45 && bytes[10] == 0x42 && bytes[11] == 0x50 {
+            return "image/webp"
+        }
+
+        // HEIC/HEIF: check for ftyp box with heic/heif/mif1 brand
+        if bytes[4] == 0x66 && bytes[5] == 0x74 && bytes[6] == 0x79 && bytes[7] == 0x70 {
+            return "image/heic"
+        }
+
+        return nil
+    }
+
     // MARK: - Summarization API
 
     /// Generate a structured summary from extracted document text.
