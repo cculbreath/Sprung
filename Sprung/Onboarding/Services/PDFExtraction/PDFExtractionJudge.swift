@@ -37,7 +37,7 @@ actor PDFExtractionJudge {
         // If null characters detected, skip straight to OCR recommendation
         if hasNullCharacters {
             Logger.info("📊 Judge: Null characters detected - recommending Vision OCR", category: .ai)
-            return ExtractionJudgment.quickFail(reason: "null_characters_detected")
+            return ExtractionJudgment.quickFail(reason: "Null characters detected in PDFKit extraction - indicates corrupted text layer")
         }
 
         // Load images
@@ -60,10 +60,11 @@ actor PDFExtractionJudge {
         let imageType = isComposite ? "composite" : "page"
         Logger.info("📊 Judge: Sending \(pageImages.count) \(imageType) images to Gemini for analysis", category: .ai)
 
-        // Use Gemini's native vision API for image analysis
-        let response = try await llmFacade.analyzeImagesWithGemini(
+        // Use Gemini's structured output for guaranteed valid JSON
+        let response = try await llmFacade.analyzeImagesWithGeminiStructured(
             images: imageData,
-            prompt: prompt
+            prompt: prompt,
+            jsonSchema: ExtractionJudgment.jsonSchema
         )
 
         // Parse structured response
@@ -78,111 +79,68 @@ actor PDFExtractionJudge {
             : "Each image is a single page from the source PDF."
 
         return """
-        You are evaluating the quality of text extraction/OCR performed by another tool on a PDF document.
+        You are evaluating the quality of text extraction performed by another tool on a PDF document.
 
-        ## Why This Matters
+        ## Context
 
-        Your assessment will determine which extraction method we use:
-        - If the current extraction is high quality, we'll use it as-is (fast, free)
-        - If quality is poor but layout is simple, we'll re-extract using conventional PC-based OCR tools like Apple Vision/Tesseract (fast, free)
-        - If quality is poor AND layout is complex, we'll use page-by-page LLM vision extraction (slowest, most expensive, but highest fidelity)
-
-        Your job is to help us choose the right path.
+        Your decision will determine which extraction method we use:
+        - **ok**: The current extraction is acceptable quality. We'll use it as-is (fast, free).
+        - **ocr**: The extraction has problems, but the document layout is simple enough that conventional OCR tools (like Apple Vision or Tesseract) will produce high-fidelity results (fast, free).
+        - **llm**: The extraction has problems AND the document has complex layout (multi-column, tables, forms, math, scientific notation). Conventional OCR will struggle, so we need page-by-page LLM vision extraction (slowest, most expensive, but highest fidelity).
 
         ## Your Task
 
         I'm providing you with:
-        1. **Sample images**: \(imageCount) images showing pages from the original PDF document. \(imageDescription) These images represent the GROUND TRUTH of what the document actually contains. The sampled pages are: \(samplePages.map { String($0 + 1) }.joined(separator: ", ")).
+        1. **Sample images**: \(imageCount) images showing pages SAMPLED FROM THROUGHOUT the original PDF (not contiguous). \(imageDescription) These are the GROUND TRUTH. Page numbers sampled: \(samplePages.map { String($0 + 1) }.joined(separator: ", ")).
 
-        2. **Extracted text**: The complete text extraction from the ENTIRE document (may be truncated if very long). This is what a text extraction tool produced.
+        2. **Extracted text**: Text extraction from the ENTIRE document (may be truncated). This is what a text extraction tool produced.
 
-        Your job is to:
-        - Look at the text visible in each sample image
-        - Find the corresponding section in the extracted text below
-        - Assess whether that extraction accurately captured the visible text
-        - Only judge extraction quality for content you can see in the images
+        **Important**: The sample images are spread throughout the document, not consecutive pages. Each image shows a different page, and each page's content should appear somewhere in the extracted text (but not necessarily adjacent to other sampled pages).
+
+        For each sample image, find the corresponding section in the extracted text and assess whether the extraction accurately captured that page's content.
 
         <extracted_text>
         \(textSample)
         </extracted_text>
 
-        ## Response Format
+        ## Decision Criteria
 
-        Respond with this JSON structure:
+        Choose **ok** if:
+        - Text matches what you see in the images (minor whitespace differences are acceptable)
+        - No significant missing, garbled, or wrong text
 
-        ```json
-        {
-          "text_fidelity": <0-100>,
-          "layout_complexity": "low" | "medium" | "high",
-          "has_math_or_symbols": true | false,
-          "issues_found": ["issue1", "issue2", ...],
-          "recommended_method": "pdfkit" | "visionOCR" | "llmVision",
-          "confidence": <0-100>
-        }
-        ```
+        Choose **ocr** if:
+        - Text has errors (missing words, garbled characters, wrong reading order)
+        - BUT the document layout is simple: single column, standard paragraphs, no complex formatting
 
-        ## Scoring Guide
+        Choose **llm** if:
+        - Text has errors AND layout is complex: multi-column, tables, forms, math/equations, scientific diagrams
+        - Conventional OCR would likely fail to preserve structure or reading order
 
-        **text_fidelity** (how accurately does extracted text match what you see in the images?):
-        - 95-100: Perfect or near-perfect match
-        - 85-94: Minor whitespace/formatting differences only
-        - 70-84: Some words wrong, garbled, or missing
-        - 50-69: Significant portions wrong (e.g., single letters instead of words)
-        - 0-49: Mostly broken or missing
-
-        **layout_complexity** (based on what you observe in the images):
-        - low: Single column, standard paragraphs, minimal graphics
-        - medium: Multi-column, tables, or moderate graphics
-        - high: Complex layouts, heavy graphics, forms, or scientific notation
-
-        **issues_found** (note any of these problems you observe):
-        - "broken_smallcaps" - Words rendered as single uppercase letters in extraction
-        - "missing_text" - Text visible in image but absent from extracted text
-        - "garbled_text" - Nonsense characters or encoding issues
-        - "missing_tables" - Tables visible but not properly extracted
-        - "missing_equations" - Math/equations not captured
-        - "wrong_reading_order" - Text extracted in wrong sequence
-
-        **recommended_method** (choose based on fidelity AND layout complexity):
-        - "pdfkit": Current extraction is acceptable quality (fidelity >= 90). Use the existing text.
-        - "visionOCR": Extraction quality is poor, but layout is simple/medium. Conventional OCR tools (like Tesseract) will likely produce high-fidelity results.
-        - "llmVision": Extraction quality is poor AND layout is complex (multi-column, tables, math, forms). Conventional OCR will struggle; recommend page-by-page LLM vision extraction for reliable results.
-
-        Respond ONLY with the JSON object, no other text.
+        Provide your decision and a brief explanation of what you observed.
         """
     }
 
     // MARK: - Response Parsing
 
     private func parseJudgment(_ response: String) throws -> ExtractionJudgment {
-        // Clean up response (remove markdown code blocks if present)
-        let cleaned = response
-            .replacingOccurrences(of: "```json", with: "")
-            .replacingOccurrences(of: "```", with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard let data = cleaned.data(using: .utf8) else {
+        guard let data = response.data(using: .utf8) else {
             Logger.warning("📊 Judge: Failed to parse response - using fallback", category: .ai)
             throw JudgeError.invalidResponse
         }
 
         let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
 
         do {
             let judgment = try decoder.decode(ExtractionJudgment.self, from: data)
-            Logger.info("📊 Judge: Fidelity=\(judgment.textFidelity)%, Layout=\(judgment.layoutComplexity.rawValue), Recommended=\(judgment.recommendedMethod.rawValue)", category: .ai)
+            Logger.info("📊 Judge: Decision=\(judgment.decision.rawValue), Reasoning: \(judgment.reasoning.prefix(100))...", category: .ai)
             return judgment
         } catch {
             Logger.warning("📊 Judge: JSON parsing failed (\(error.localizedDescription)) - using fallback", category: .ai)
             // Fallback: assume OCR needed if parsing fails
             return ExtractionJudgment(
-                textFidelity: 50,
-                layoutComplexity: .medium,
-                hasMathOrSymbols: false,
-                issuesFound: ["judge_parse_failed"],
-                recommendedMethod: .visionOCR,
-                confidence: 50
+                decision: .ocr,
+                reasoning: "Judge response parsing failed: \(error.localizedDescription)"
             )
         }
     }

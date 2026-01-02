@@ -7,41 +7,64 @@
 
 import Foundation
 
+/// Decision from LLM judge on which extraction method to use
+enum ExtractionDecision: String, Codable {
+    case ok    // PDFKit extraction is acceptable quality
+    case ocr   // Use conventional OCR (Vision/Tesseract)
+    case llm   // Use page-by-page LLM vision extraction
+    case error // Judge encountered an error
+}
+
 /// Result from LLM judge comparing PDFKit text to rasterized images
 struct ExtractionJudgment: Codable {
-    /// How well PDFKit text matches visible content (0-100)
-    let textFidelity: Int
+    /// The extraction method decision
+    let decision: ExtractionDecision
 
-    /// Document layout complexity
-    let layoutComplexity: LayoutComplexity
-
-    /// Whether document contains math, symbols, or special notation
-    let hasMathOrSymbols: Bool
-
-    /// Specific issues detected
-    let issuesFound: [String]
-
-    /// LLM's recommended extraction method
-    let recommendedMethod: PDFExtractionMethod
-
-    /// Confidence in the recommendation (0-100)
-    let confidence: Int
-
-    enum LayoutComplexity: String, Codable {
-        case low      // Single column, standard paragraphs
-        case medium   // Multi-column, tables, moderate graphics
-        case high     // Complex layouts, forms, heavy graphics
-    }
+    /// Reasoning for the decision
+    let reasoning: String
 
     /// Create a quick judgment for known failure cases (e.g., null characters)
     static func quickFail(reason: String) -> ExtractionJudgment {
         ExtractionJudgment(
-            textFidelity: 0,
-            layoutComplexity: .low,
-            hasMathOrSymbols: false,
-            issuesFound: [reason],
-            recommendedMethod: .visionOCR,
-            confidence: 100
+            decision: .ocr,
+            reasoning: reason
         )
+    }
+
+    /// Create an error judgment
+    static func error(_ message: String) -> ExtractionJudgment {
+        ExtractionJudgment(
+            decision: .error,
+            reasoning: message
+        )
+    }
+
+    /// Map decision to extraction method
+    var recommendedMethod: PDFExtractionMethod {
+        switch decision {
+        case .ok:
+            return .pdfkit
+        case .ocr:
+            return .visionOCR
+        case .llm, .error:
+            return .llmVision
+        }
+    }
+
+    /// JSON Schema for Gemini structured output
+    static var jsonSchema: [String: Any] {
+        [
+            "type": "object",
+            "properties": [
+                "decision": [
+                    "type": "string",
+                    "enum": ["ok", "ocr", "llm"]
+                ],
+                "reasoning": [
+                    "type": "string"
+                ]
+            ],
+            "required": ["decision", "reasoning"]
+        ]
     }
 }

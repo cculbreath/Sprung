@@ -1000,6 +1000,24 @@ final class LLMFacade {
         )
     }
 
+    /// Analyze images with Gemini using structured JSON output
+    func analyzeImagesWithGeminiStructured(
+        images: [Data],
+        prompt: String,
+        jsonSchema: [String: Any],
+        modelId: String? = nil
+    ) async throws -> String {
+        guard let service = googleAIService else {
+            throw LLMError.clientError("Google AI service is not configured. Call registerGoogleAIService first.")
+        }
+        return try await service.analyzeImagesStructured(
+            images: images,
+            prompt: prompt,
+            jsonSchema: jsonSchema,
+            modelId: modelId
+        )
+    }
+
     // MARK: - Text-to-Speech
 
     /// Creates a TTS-capable client using the registered OpenAI service.

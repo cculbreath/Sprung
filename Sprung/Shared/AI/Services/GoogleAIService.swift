@@ -429,6 +429,91 @@ actor GoogleAIService {
         return text
     }
 
+    /// Analyze images using Gemini's vision capabilities with structured JSON output.
+    /// Uses native structured output mode with schema for guaranteed valid JSON.
+    ///
+    /// - Parameters:
+    ///   - images: Array of image data (JPEG, PNG, WebP, HEIC, HEIF supported)
+    ///   - prompt: The analysis prompt
+    ///   - jsonSchema: JSON Schema dictionary for structured output
+    ///   - modelId: Gemini model ID (uses PDF extraction model setting if nil)
+    ///   - temperature: Generation temperature (default 0.1 for consistent analysis)
+    /// - Returns: JSON string response guaranteed to match the schema
+    func analyzeImagesStructured(
+        images: [Data],
+        prompt: String,
+        jsonSchema: [String: Any],
+        modelId: String? = nil,
+        temperature: Double = 0.1
+    ) async throws -> String {
+        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId") ?? "gemini-2.5-flash"
+        let apiKey = try getAPIKey()
+        let url = URL(string: "\(baseURL)/v1beta/models/\(effectiveModelId):generateContent?key=\(apiKey)")!
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        // Build parts array: images first, then text prompt
+        var parts: [[String: Any]] = []
+
+        for imageData in images {
+            let base64String = imageData.base64EncodedString()
+            let mimeType = detectImageMimeType(imageData) ?? "image/jpeg"
+            parts.append([
+                "inline_data": [
+                    "mime_type": mimeType,
+                    "data": base64String
+                ]
+            ])
+        }
+
+        parts.append(["text": prompt])
+
+        let requestBody: [String: Any] = [
+            "contents": [
+                ["parts": parts]
+            ],
+            "generationConfig": [
+                "temperature": temperature,
+                "maxOutputTokens": 1024,
+                "responseMimeType": "application/json",
+                "responseJsonSchema": jsonSchema
+            ]
+        ]
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+
+        Logger.info("🖼️ Analyzing \(images.count) image(s) with \(effectiveModelId) (structured output)...", category: .ai)
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw GoogleAIError.invalidResponse
+        }
+
+        if httpResponse.statusCode != 200 {
+            let errorMsg = String(data: data, encoding: .utf8) ?? "Unknown error"
+            Logger.error("❌ Structured image analysis failed: \(errorMsg)", category: .ai)
+            throw GoogleAIError.generateFailed(errorMsg)
+        }
+
+        // Parse response
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let candidates = json["candidates"] as? [[String: Any]],
+              let firstCandidate = candidates.first,
+              let content = firstCandidate["content"] as? [String: Any],
+              let responseParts = content["parts"] as? [[String: Any]],
+              let firstPart = responseParts.first,
+              let text = firstPart["text"] as? String else {
+            throw GoogleAIError.invalidResponse
+        }
+
+        Logger.info("✅ Structured image analysis complete (\(text.count) chars)", category: .ai)
+
+        return text
+    }
+
     /// Detect image MIME type from data header bytes
     private func detectImageMimeType(_ data: Data) -> String? {
         guard data.count >= 12 else { return nil }

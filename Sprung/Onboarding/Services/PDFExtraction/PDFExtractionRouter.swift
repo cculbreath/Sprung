@@ -149,15 +149,9 @@ actor PDFExtractionRouter {
         )
 
         Logger.info(
-            "📄 PDFRouter: Judgment: fidelity=\(judgment.textFidelity)%, " +
-            "layout=\(judgment.layoutComplexity.rawValue), " +
-            "recommended=\(judgment.recommendedMethod.rawValue)",
+            "📄 PDFRouter: Judgment: decision=\(judgment.decision.rawValue), reasoning=\(judgment.reasoning.prefix(100))...",
             category: .ai
         )
-
-        if !judgment.issuesFound.isEmpty {
-            Logger.info("📄 PDFRouter: Issues: \(judgment.issuesFound.joined(separator: ", "))", category: .ai)
-        }
 
         // Step 6: Route to extractor
         let (text, method) = try await routeExtraction(
@@ -201,7 +195,7 @@ actor PDFExtractionRouter {
 
         case .pdfkit:
             progress?("Using native text extraction")
-            Logger.info("📄 PDFRouter: Route: PDFKit (fidelity \(judgment.textFidelity)% acceptable)", category: .ai)
+            Logger.info("📄 PDFRouter: Route: PDFKit (extraction quality acceptable)", category: .ai)
             return (pdfKitText, .pdfkit)
 
         case .visionOCR:

@@ -413,7 +413,7 @@ actor DocumentExtractionService {
             return createExtractionResult(
                 text: extractedText,
                 method: .pdfkit,
-                textFidelity: 70,
+                decision: .ok,
                 filename: filename,
                 fileURL: fileURL,
                 contentType: contentType,
@@ -442,7 +442,7 @@ actor DocumentExtractionService {
                 "duration_ms": "\(durationMs)",
                 "text_chars": "\(result.text.count)",
                 "method": result.method.rawValue,
-                "fidelity": "\(result.judgment.textFidelity)%",
+                "decision": result.judgment.decision.rawValue,
                 "page_count": "\(result.pageCount)"
             ]
         )
@@ -451,7 +451,6 @@ actor DocumentExtractionService {
 
         // Build issues list based on extraction result
         var issues: [String] = []
-        issues.append(contentsOf: result.judgment.issuesFound)
         if result.method == .visionOCR {
             issues.append("vision_ocr_used")
         } else if result.method == .llmVision {
@@ -461,7 +460,7 @@ actor DocumentExtractionService {
         return createExtractionResult(
             text: result.text,
             method: result.method,
-            textFidelity: result.judgment.textFidelity,
+            decision: result.judgment.decision,
             filename: filename,
             fileURL: fileURL,
             contentType: contentType,
@@ -477,7 +476,7 @@ actor DocumentExtractionService {
     private func createExtractionResult(
         text: String,
         method: PDFExtractionMethod,
-        textFidelity: Int,
+        decision: ExtractionDecision,
         filename: String,
         fileURL: URL,
         contentType: String,
@@ -500,7 +499,7 @@ actor DocumentExtractionService {
             "source_file_url": fileURL.absoluteString,
             "source_filename": filename,
             "extraction_method": method.rawValue,
-            "text_fidelity": textFidelity,
+            "extraction_decision": decision.rawValue,
             "page_count": pageCount
         ]
 
