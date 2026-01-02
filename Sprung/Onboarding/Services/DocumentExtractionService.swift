@@ -555,4 +555,289 @@ actor DocumentExtractionService {
         }
     }
 
+    // MARK: - Vision Text Extraction
+
+    /// Extract text from a PDF using Gemini vision.
+    /// Used when PDFKit text extraction fails (e.g., complex fonts).
+    /// Automatically chooses single-pass or chunked extraction based on page count.
+    ///
+    /// - Parameters:
+    ///   - pdfData: The PDF file data
+    ///   - filename: Display name for the file
+    ///   - pageCount: Number of pages in the PDF
+    ///   - progress: Progress handler for UI updates
+    /// - Returns: Extracted text content
+    func extractWithVision(
+        pdfData: Data,
+        filename: String,
+        pageCount: Int,
+        progress: ExtractionProgressHandler?
+    ) async throws -> String {
+        if pageCount <= ExtractionConfig.singlePassThreshold {
+            return try await extractTextSinglePass(
+                pdfData: pdfData,
+                filename: filename,
+                pageCount: pageCount,
+                progress: progress
+            )
+        } else {
+            return try await extractTextChunked(
+                pdfData: pdfData,
+                filename: filename,
+                pageCount: pageCount,
+                progress: progress
+            )
+        }
+    }
+
+    /// Single-pass vision text extraction for documents ≤30 pages.
+    private func extractTextSinglePass(
+        pdfData: Data,
+        filename: String,
+        pageCount: Int,
+        progress: ExtractionProgressHandler?
+    ) async throws -> String {
+        guard let facade = llmFacade else {
+            throw ExtractionError.llmNotConfigured
+        }
+
+        await progress?(ExtractionProgressUpdate(
+            stage: .aiExtraction,
+            state: .active,
+            detail: "Extracting text from \(pageCount) pages..."
+        ))
+
+        let prompt = DocumentExtractionPrompts.visionTextExtractionPrompt(
+            filename: filename,
+            pageCount: pageCount
+        )
+
+        let startTime = Date()
+
+        let (text, tokenUsage) = try await facade.generateFromPDF(
+            pdfData: pdfData,
+            filename: filename,
+            prompt: prompt,
+            maxOutputTokens: ExtractionConfig.singlePassMaxTokens
+        )
+
+        let duration = Date().timeIntervalSince(startTime)
+
+        Logger.info(
+            "Single-pass vision extraction complete",
+            category: .ai,
+            metadata: [
+                "chars": "\(text.count)",
+                "duration_sec": String(format: "%.1f", duration),
+                "input_tokens": "\(tokenUsage?.promptTokenCount ?? 0)",
+                "output_tokens": "\(tokenUsage?.candidatesTokenCount ?? 0)"
+            ]
+        )
+
+        // Emit token usage
+        if let usage = tokenUsage, let eventBus = eventBus {
+            let modelId = currentModelId()
+            await eventBus.publish(.llmTokenUsageReceived(
+                modelId: modelId,
+                inputTokens: usage.promptTokenCount,
+                outputTokens: usage.candidatesTokenCount,
+                cachedTokens: 0,
+                reasoningTokens: 0,
+                source: .documentExtraction
+            ))
+        }
+
+        await progress?(ExtractionProgressUpdate(
+            stage: .aiExtraction,
+            state: .active,
+            detail: "Extracted \(text.count.formatted()) characters"
+        ))
+
+        return text
+    }
+
+    /// Chunked vision text extraction for documents >30 pages with streaming progress.
+    private func extractTextChunked(
+        pdfData: Data,
+        filename: String,
+        pageCount: Int,
+        progress: ExtractionProgressHandler?
+    ) async throws -> String {
+        guard let document = PDFDocument(data: pdfData) else {
+            throw ExtractionError.unreadableData
+        }
+
+        let chunkSize = ExtractionConfig.chunkSize
+        let totalChunks = (pageCount + chunkSize - 1) / chunkSize
+        var chunks: [String] = []
+        var totalCharsExtracted = 0
+        let overallStart = Date()
+
+        Logger.info(
+            "Starting chunked extraction: \(pageCount) pages in \(totalChunks) chunks",
+            category: .ai
+        )
+
+        for (chunkIndex, chunkStart) in stride(from: 0, to: pageCount, by: chunkSize).enumerated() {
+            let chunkEnd = min(chunkStart + chunkSize, pageCount)
+            let chunkNum = chunkIndex + 1
+            let percentComplete = Int((Double(chunkIndex) / Double(totalChunks)) * 100)
+
+            // Calculate time estimate
+            let elapsed = Date().timeIntervalSince(overallStart)
+            let avgSecsPerChunk = chunkIndex > 0 ? elapsed / Double(chunkIndex) : 5.0
+            let remainingChunks = totalChunks - chunkIndex
+            let estimatedRemaining = Int(avgSecsPerChunk * Double(remainingChunks))
+
+            // Stream progress to UI
+            let progressDetail: String
+            if estimatedRemaining > 60 {
+                progressDetail = "Extracting pages \(chunkStart + 1)-\(chunkEnd) of \(pageCount) " +
+                               "(\(percentComplete)%) - ~\(estimatedRemaining / 60)m remaining"
+            } else if estimatedRemaining > 10 {
+                progressDetail = "Extracting pages \(chunkStart + 1)-\(chunkEnd) of \(pageCount) " +
+                               "(\(percentComplete)%) - ~\(estimatedRemaining)s remaining"
+            } else {
+                progressDetail = "Extracting pages \(chunkStart + 1)-\(chunkEnd) of \(pageCount) (\(percentComplete)%)"
+            }
+
+            await progress?(ExtractionProgressUpdate(
+                stage: .aiExtraction,
+                state: .active,
+                detail: progressDetail
+            ))
+
+            // Create PDF subset for this chunk
+            let chunkDocument = PDFDocument()
+            for pageIndex in chunkStart..<chunkEnd {
+                if let page = document.page(at: pageIndex) {
+                    chunkDocument.insert(page, at: chunkDocument.pageCount)
+                }
+            }
+
+            guard let chunkData = chunkDocument.dataRepresentation() else {
+                Logger.warning("Failed to create chunk PDF for pages \(chunkStart + 1)-\(chunkEnd)", category: .ai)
+                continue
+            }
+
+            // Extract this chunk with retry
+            let chunkText = try await extractChunkWithRetry(
+                pdfData: chunkData,
+                filename: filename,
+                startPage: chunkStart + 1,
+                endPage: chunkEnd,
+                totalPages: pageCount,
+                chunkNumber: chunkNum,
+                totalChunks: totalChunks
+            )
+
+            chunks.append(chunkText)
+            totalCharsExtracted += chunkText.count
+
+            Logger.info(
+                "Chunk \(chunkNum)/\(totalChunks) complete: \(chunkText.count) chars",
+                category: .ai
+            )
+
+            // Rate limit protection between chunks
+            if chunkEnd < pageCount {
+                try await Task.sleep(for: .milliseconds(ExtractionConfig.interChunkDelayMs))
+            }
+        }
+
+        let totalDuration = Date().timeIntervalSince(overallStart)
+
+        Logger.info(
+            "Chunked extraction complete",
+            category: .ai,
+            metadata: [
+                "total_chars": "\(totalCharsExtracted)",
+                "chunks": "\(chunks.count)/\(totalChunks)",
+                "duration_sec": String(format: "%.1f", totalDuration)
+            ]
+        )
+
+        // Final progress update
+        await progress?(ExtractionProgressUpdate(
+            stage: .aiExtraction,
+            state: .active,
+            detail: "Extracted \(totalCharsExtracted.formatted()) characters from \(pageCount) pages"
+        ))
+
+        guard !chunks.isEmpty else {
+            throw ExtractionError.noTextExtracted
+        }
+
+        // Combine chunks with page markers
+        return chunks.enumerated().map { (index, text) in
+            let startPage = index * chunkSize + 1
+            let endPage = min(startPage + chunkSize - 1, pageCount)
+            return "--- PAGES \(startPage)-\(endPage) ---\n\n\(text)"
+        }.joined(separator: "\n\n")
+    }
+
+    /// Extract a single chunk with retry logic.
+    private func extractChunkWithRetry(
+        pdfData: Data,
+        filename: String,
+        startPage: Int,
+        endPage: Int,
+        totalPages: Int,
+        chunkNumber: Int,
+        totalChunks: Int
+    ) async throws -> String {
+        guard let facade = llmFacade else {
+            throw ExtractionError.llmNotConfigured
+        }
+
+        let prompt = DocumentExtractionPrompts.visionTextExtractionPromptForChunk(
+            filename: filename,
+            startPage: startPage,
+            endPage: endPage,
+            totalPages: totalPages,
+            chunkNumber: chunkNumber,
+            totalChunks: totalChunks
+        )
+
+        var lastError: Error?
+        let maxRetries = ExtractionConfig.maxChunkRetries
+
+        for attempt in 1...(maxRetries + 1) {
+            do {
+                let (text, tokenUsage) = try await facade.generateFromPDF(
+                    pdfData: pdfData,
+                    filename: "\(filename)_pages_\(startPage)-\(endPage)",
+                    prompt: prompt,
+                    maxOutputTokens: ExtractionConfig.chunkMaxTokens
+                )
+
+                // Emit token usage
+                if let usage = tokenUsage, let eventBus = eventBus {
+                    let modelId = currentModelId()
+                    await eventBus.publish(.llmTokenUsageReceived(
+                        modelId: modelId,
+                        inputTokens: usage.promptTokenCount,
+                        outputTokens: usage.candidatesTokenCount,
+                        cachedTokens: 0,
+                        reasoningTokens: 0,
+                        source: .documentExtraction
+                    ))
+                }
+
+                return text
+            } catch {
+                lastError = error
+                Logger.warning(
+                    "Chunk \(chunkNumber) attempt \(attempt) failed: \(error.localizedDescription)",
+                    category: .ai
+                )
+                if attempt <= maxRetries {
+                    try await Task.sleep(for: .seconds(Double(attempt) * 2))
+                }
+            }
+        }
+
+        throw lastError ?? ExtractionError.llmFailed("Chunk extraction failed after \(maxRetries + 1) attempts")
+    }
+
 }

@@ -932,6 +932,39 @@ final class LLMFacade {
         )
     }
 
+    /// Generate text from a PDF using Gemini vision.
+    /// Used for vision-based text extraction when PDFKit fails on complex fonts.
+    ///
+    /// - Parameters:
+    ///   - pdfData: The PDF file data
+    ///   - filename: Display name for the file
+    ///   - prompt: The extraction prompt
+    ///   - modelId: Gemini model ID (uses default PDF extraction model if nil)
+    ///   - maxOutputTokens: Maximum output tokens (default 65536)
+    /// - Returns: Tuple of (extracted text, tokenUsage)
+    func generateFromPDF(
+        pdfData: Data,
+        filename: String,
+        prompt: String,
+        modelId: String? = nil,
+        maxOutputTokens: Int = 65536
+    ) async throws -> (text: String, tokenUsage: GoogleAIService.GeminiTokenUsage?) {
+        guard let service = googleAIService else {
+            throw LLMError.clientError("Google AI service is not configured. Call registerGoogleAIService first.")
+        }
+
+        // Use configured model or default
+        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId") ?? "gemini-2.5-flash"
+
+        return try await service.generateFromPDF(
+            pdfData: pdfData,
+            filename: filename,
+            prompt: prompt,
+            modelId: effectiveModelId,
+            maxOutputTokens: maxOutputTokens
+        )
+    }
+
     /// Generate a structured summary from document content using Gemini.
     /// Uses Gemini Flash-Lite for cost efficiency.
     ///

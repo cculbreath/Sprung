@@ -483,6 +483,60 @@ actor GoogleAIService {
         return (result, tokenUsage)
     }
 
+    /// Generate text from a PDF using Gemini vision.
+    /// Uploads the PDF via Files API, sends a prompt, and returns the extracted/generated text.
+    /// Used for vision-based text extraction when PDFKit fails.
+    /// - Parameters:
+    ///   - pdfData: The PDF file data
+    ///   - filename: Display name for logging
+    ///   - prompt: The extraction/generation prompt
+    ///   - modelId: Gemini model to use
+    ///   - maxOutputTokens: Maximum output tokens
+    /// - Returns: Tuple of (text, tokenUsage)
+    func generateFromPDF(
+        pdfData: Data,
+        filename: String,
+        prompt: String,
+        modelId: String? = nil,
+        maxOutputTokens: Int = 65536
+    ) async throws -> (text: String, tokenUsage: GeminiTokenUsage?) {
+        // Use configured model or default
+        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId") ?? "gemini-2.5-flash"
+
+        // Upload file
+        let uploadedFile = try await uploadFile(
+            data: pdfData,
+            mimeType: "application/pdf",
+            displayName: filename
+        )
+
+        // Wait for processing if needed
+        var activeFile = uploadedFile
+        if uploadedFile.state != "ACTIVE" {
+            activeFile = try await waitForFileProcessing(fileName: uploadedFile.name)
+        }
+
+        defer {
+            // Clean up uploaded file
+            Task {
+                try? await self.deleteFile(fileName: activeFile.name)
+            }
+        }
+
+        // Generate content
+        let (text, tokenUsage) = try await extractPDFContent(
+            fileURI: activeFile.uri,
+            mimeType: "application/pdf",
+            modelId: effectiveModelId,
+            prompt: prompt,
+            maxOutputTokens: maxOutputTokens
+        )
+
+        Logger.info("📄 Vision extraction complete for \(filename) (\(text.count) chars)", category: .ai)
+
+        return (text, tokenUsage)
+    }
+
     private func capExtractionContent(_ content: String, maxChars: Int) -> (content: String, originalChars: Int, wasTruncated: Bool) {
         let originalChars = content.count
         guard originalChars > maxChars else {
