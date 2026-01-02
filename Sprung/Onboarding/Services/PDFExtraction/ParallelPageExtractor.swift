@@ -123,11 +123,19 @@ actor ParallelPageExtractor {
         - For tables, use markdown table format
         - Maintain reading order
 
-        ## Graphics Analysis
+        ## Graphics Analysis (for resume building context)
         For each diagram, chart, figure, image, or graphic on the page:
         1. Count the total number of graphics
         2. Describe what each graphic shows (the data, information, or content it conveys)
-        3. Assess the quality/type of each graphic (e.g., "professional vector chart", "scanned photograph", "hand-drawn diagram", "screenshot", "infographic")
+        3. **Skills Assessment**: Evaluate what skills are demonstrated by creating this graphic. Consider:
+           - Data visualization skills (Excel charts, Tableau dashboards, D3.js, matplotlib)
+           - Technical diagramming (architecture diagrams, flowcharts, UML, network diagrams)
+           - Scientific figure creation (publication-quality plots, experimental schematics)
+           - Design skills (infographics, presentations, marketing materials)
+           - CAD/engineering drawings, circuit schematics, mechanical drawings
+           - Geographic/mapping skills (GIS, cartography)
+           - Note the apparent tool/software used and proficiency level if discernible
+           - Flag if the graphic appears to be stock imagery, AI-generated, or third-party content (not a demonstrated skill)
 
         If there are no graphics, return number_of_graphics: 0 with empty arrays.
         """

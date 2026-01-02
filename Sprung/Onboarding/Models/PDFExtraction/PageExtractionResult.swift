@@ -3,19 +3,22 @@
 //  Sprung
 //
 //  Structured result from LLM vision page extraction.
+//  Includes graphics analysis for resume skill extraction.
 //
 
 import Foundation
 
-/// Graphics information extracted from a page
+/// Graphics information extracted from a page, with skills assessment for resume building
 struct PageGraphicsInfo: Codable {
     /// Number of graphics/figures on the page
     let numberOfGraphics: Int
 
-    /// Description of what each graphic shows (content/data)
+    /// Description of what each graphic shows (content/data/information conveyed)
     let graphicsContent: [String]
 
-    /// Quality assessment of each graphic (professional, scanned, hand-drawn, etc.)
+    /// Skills assessment for each graphic - what skills are demonstrated by creating it
+    /// Examples: "Advanced Excel data visualization", "Publication-quality matplotlib figures",
+    /// "Professional UML architecture diagrams", "Stock imagery (no skill demonstrated)"
     let qualitativeAssessment: [String]
 
     /// JSON Schema for Gemini structured output

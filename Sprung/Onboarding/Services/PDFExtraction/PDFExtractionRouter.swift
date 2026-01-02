@@ -274,15 +274,16 @@ actor PDFExtractionRouter {
         for (index, result) in results.enumerated() {
             var pageContent = "--- Page \(index + 1) ---\n\(result.text)"
 
-            // Append graphics descriptions if present
+            // Append graphics descriptions with skills assessment if present
             if result.graphics.numberOfGraphics > 0 {
                 pageContent += "\n\n[Graphics on this page: \(result.graphics.numberOfGraphics)]"
 
                 for (i, content) in result.graphics.graphicsContent.enumerated() {
-                    let quality = i < result.graphics.qualitativeAssessment.count
+                    let skills = i < result.graphics.qualitativeAssessment.count
                         ? result.graphics.qualitativeAssessment[i]
-                        : "unknown quality"
-                    pageContent += "\n• Figure \(i + 1): \(content) (\(quality))"
+                        : "skills assessment unavailable"
+                    pageContent += "\n• Figure \(i + 1): \(content)"
+                    pageContent += "\n  Skills demonstrated: \(skills)"
                 }
             }
 
