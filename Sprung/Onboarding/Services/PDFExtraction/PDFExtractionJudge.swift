@@ -80,6 +80,15 @@ actor PDFExtractionJudge {
         return """
         You are evaluating the quality of text extraction/OCR performed by another tool on a PDF document.
 
+        ## Why This Matters
+
+        Your assessment will determine which extraction method we use:
+        - If the current extraction is high quality, we'll use it as-is (fast, free)
+        - If quality is poor but layout is simple, we'll re-extract using conventional PC-based OCR tools like Apple Vision/Tesseract (fast, free)
+        - If quality is poor AND layout is complex, we'll use page-by-page LLM vision extraction (slowest, most expensive, but highest fidelity)
+
+        Your job is to help us choose the right path.
+
         ## Your Task
 
         I'm providing you with:
@@ -134,10 +143,10 @@ actor PDFExtractionJudge {
         - "missing_equations" - Math/equations not captured
         - "wrong_reading_order" - Text extracted in wrong sequence
 
-        **recommended_method**:
-        - "pdfkit": Current extraction is good (fidelity >= 90, simple layout)
-        - "visionOCR": Need OCR but layout is manageable (fidelity < 90, simple/medium layout)
-        - "llmVision": Need vision AI for complex layout, math, or where OCR would struggle
+        **recommended_method** (choose based on fidelity AND layout complexity):
+        - "pdfkit": Current extraction is acceptable quality (fidelity >= 90). Use the existing text.
+        - "visionOCR": Extraction quality is poor, but layout is simple/medium. Conventional OCR tools (like Tesseract) will likely produce high-fidelity results.
+        - "llmVision": Extraction quality is poor AND layout is complex (multi-column, tables, math, forms). Conventional OCR will struggle; recommend page-by-page LLM vision extraction for reliable results.
 
         Respond ONLY with the JSON object, no other text.
         """
