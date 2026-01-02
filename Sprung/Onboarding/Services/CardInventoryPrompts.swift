@@ -86,13 +86,16 @@ enum CardInventoryPrompts {
         6. **quantified_outcomes**: Capture ALL metrics, percentages, dollar amounts, scale indicators
         7. **cross_references**: Note relationships to other potential cards
 
-        ## Fact Categories
-        Each key_fact must have a category. Use R&D categories for research/academic work:
-        - hypothesis_formation, experimental_design, methodology_innovation
-        - data_analysis, results_interpretation, peer_review, collaboration
+        ## Key Facts Format
+        Each key_fact should be a string in the format: "[CATEGORY] fact statement"
 
-        Use Professional categories for industry/business work:
-        - leadership, achievement, technical, responsibility, impact, collaboration, general
+        Categories for R&D/academic work:
+        - [RESEARCH] for hypothesis, experimental design, methodology, data analysis, results
+
+        Categories for professional/industry work:
+        - [LEADERSHIP], [ACHIEVEMENT], [TECHNICAL], [RESPONSIBILITY], [IMPACT], [COLLABORATION], [GENERAL]
+
+        Example: "[LEADERSHIP] Managed cross-functional team of 12 engineers across 3 time zones"
 
         ## Important
 
@@ -139,26 +142,8 @@ enum CardInventoryPrompts {
                         ],
                         "key_facts": [
                             "type": "array",
-                            "description": "Specific facts with categories",
-                            "items": [
-                                "type": "object",
-                                "properties": [
-                                    "category": [
-                                        "type": "string",
-                                        "enum": [
-                                            "hypothesis_formation", "experimental_design", "methodology_innovation",
-                                            "data_analysis", "results_interpretation", "peer_review", "collaboration",
-                                            "leadership", "achievement", "technical", "responsibility", "impact", "general"
-                                        ],
-                                        "description": "Category of this fact"
-                                    ],
-                                    "statement": [
-                                        "type": "string",
-                                        "description": "The fact statement with specific numbers/names preserved"
-                                    ]
-                                ],
-                                "required": ["category", "statement"]
-                            ]
+                            "description": "Specific facts as strings in format '[CATEGORY] statement' where CATEGORY is one of: leadership, achievement, technical, responsibility, impact, collaboration, research, general",
+                            "items": ["type": "string"]
                         ],
                         "technologies": [
                             "type": "array",

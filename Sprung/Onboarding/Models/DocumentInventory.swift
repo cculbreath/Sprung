@@ -57,6 +57,10 @@ struct CategorizedFact: Codable, Equatable {
     }
 
     /// Fallback decoder that handles both structured and plain string facts
+    /// Supports formats:
+    /// - Object: {"category": "leadership", "statement": "..."}
+    /// - Tagged string: "[LEADERSHIP] Led team of 5 engineers"
+    /// - Plain string: "Led team of 5 engineers" (defaults to general)
     init(from decoder: Decoder) throws {
         // Try decoding as object first
         if let container = try? decoder.container(keyedBy: CodingKeys.self) {
@@ -68,14 +72,32 @@ struct CategorizedFact: Codable, Equatable {
             }
             self.statement = try container.decode(String.self, forKey: .statement)
         } else if let plainString = try? decoder.singleValueContainer().decode(String.self) {
-            // Fallback: treat plain string as general category
-            self.category = .general
-            self.statement = plainString
+            // Try to parse "[CATEGORY] statement" format
+            let parsed = CategorizedFact.parseTaggedString(plainString)
+            self.category = parsed.category
+            self.statement = parsed.statement
         } else {
             throw DecodingError.dataCorrupted(
                 DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Expected object or string")
             )
         }
+    }
+
+    /// Parse a tagged string like "[LEADERSHIP] Led team..." into category and statement
+    private static func parseTaggedString(_ string: String) -> (category: FactCategory, statement: String) {
+        // Match pattern: [CATEGORY] rest of string
+        let pattern = #"^\[([A-Z_]+)\]\s*(.+)$"#
+        if let regex = try? NSRegularExpression(pattern: pattern, options: []),
+           let match = regex.firstMatch(in: string, options: [], range: NSRange(string.startIndex..., in: string)),
+           let categoryRange = Range(match.range(at: 1), in: string),
+           let statementRange = Range(match.range(at: 2), in: string) {
+            let categoryString = String(string[categoryRange]).lowercased()
+            let statement = String(string[statementRange])
+            let category = FactCategory(rawValue: categoryString) ?? .general
+            return (category, statement)
+        }
+        // No tag found - treat as general
+        return (.general, string)
     }
 
     init(category: FactCategory, statement: String) {
