@@ -111,13 +111,15 @@ actor CardInventoryService {
     }
 
     /// Generate card inventory directly from a PDF file.
-    /// Sends the full PDF to Gemini via Files API for maximum content coverage.
-    /// Use this for non-resume documents where full fidelity matters more than text extraction.
+    /// - Note: **DEPRECATED** - Use `inventoryDocument(documentId:filename:content:)` instead.
+    ///   The new PDF extraction pipeline with vision fallback ensures reliable text extraction,
+    ///   making PDF-based inventory unnecessary. This method is retained for backwards compatibility.
     /// - Parameters:
     ///   - documentId: Unique document identifier
     ///   - filename: Original filename
     ///   - pdfData: Raw PDF file data
     /// - Returns: DocumentInventory with proposed cards
+    @available(*, deprecated, message: "Use inventoryDocument(documentId:filename:content:) with extracted text instead")
     func inventoryDocumentFromPDF(
         documentId: String,
         filename: String,

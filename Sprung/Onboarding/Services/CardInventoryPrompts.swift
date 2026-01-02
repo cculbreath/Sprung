@@ -34,11 +34,13 @@ enum CardInventoryPrompts {
     }
 
     /// Build the inventory prompt for direct PDF analysis.
-    /// The PDF is attached separately via Files API, so this prompt focuses on instructions.
+    /// - Note: **DEPRECATED** - Use `inventoryPrompt(documentId:filename:content:)` with extracted text instead.
+    ///   The new PDF extraction pipeline with vision fallback ensures reliable text extraction.
     /// - Parameters:
     ///   - documentId: Unique document identifier
     ///   - filename: Document filename
     /// - Returns: Formatted prompt string for PDF analysis
+    @available(*, deprecated, message: "Use inventoryPrompt with extracted text instead")
     static func inventoryPromptForPDF(
         documentId: String,
         filename: String
