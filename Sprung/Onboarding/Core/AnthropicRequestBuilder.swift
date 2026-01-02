@@ -430,6 +430,11 @@ struct AnthropicRequestBuilder {
         // Skipping empty messages can leave adjacent same-role messages which Anthropic rejects.
         messages = mergeConsecutiveMessages(messages)
 
+        // CRITICAL: Ensure every tool_use has a corresponding tool_result.
+        // Race conditions (e.g., user button clicks) can cause tool_results to be missing.
+        // Anthropic requires tool_result immediately after tool_use.
+        messages = ensureToolResultsPresent(messages)
+
         // Validate message structure before returning
         validateMessageStructure(messages)
 
@@ -567,6 +572,102 @@ struct AnthropicRequestBuilder {
         case .blocks(let blocks):
             return blocks
         }
+    }
+
+    /// Ensures every tool_use block has a corresponding tool_result in the next message.
+    /// Anthropic requires tool_result immediately after tool_use. Race conditions during
+    /// user button clicks can cause tool_results to be missing from the transcript.
+    /// This function inserts synthetic tool_results for any missing ones.
+    private func ensureToolResultsPresent(_ messages: [AnthropicMessage]) -> [AnthropicMessage] {
+        var result: [AnthropicMessage] = []
+
+        for (index, message) in messages.enumerated() {
+            result.append(message)
+
+            // Only check assistant messages for tool_use blocks
+            guard message.role == "assistant" else { continue }
+
+            // Extract tool_use IDs from this assistant message
+            let toolUseIds = extractToolUseIds(from: message)
+            guard !toolUseIds.isEmpty else { continue }
+
+            // Check the next message for corresponding tool_results
+            let nextIndex = index + 1
+            if nextIndex < messages.count {
+                let nextMessage = messages[nextIndex]
+                let existingResultIds = extractToolResultIds(from: nextMessage)
+                let missingIds = toolUseIds.filter { !existingResultIds.contains($0) }
+
+                if !missingIds.isEmpty {
+                    // Insert synthetic tool_results for missing IDs
+                    Logger.warning(
+                        "⚠️ Missing tool_result for \(missingIds.count) tool(s): \(missingIds.joined(separator: ", ").prefix(80)). " +
+                        "Inserting synthetic results.",
+                        category: .ai
+                    )
+
+                    // Create synthetic tool_result blocks
+                    var syntheticBlocks: [AnthropicContentBlock] = []
+                    for missingId in missingIds {
+                        syntheticBlocks.append(.toolResult(AnthropicToolResultBlock(
+                            toolUseId: missingId,
+                            content: "{\"status\":\"completed\",\"message\":\"Action completed by user\"}"
+                        )))
+                    }
+
+                    // If next message is a user message, we'll merge the synthetic results into it later
+                    // But we need to insert them BEFORE the next message
+                    // Since we already appended current message, insert synthetic user message
+                    if nextMessage.role == "user" {
+                        // The merge step will combine these
+                        result.append(AnthropicMessage(role: "user", content: .blocks(syntheticBlocks)))
+                    } else {
+                        // Next message is assistant - insert synthetic user message between
+                        result.append(AnthropicMessage(role: "user", content: .blocks(syntheticBlocks)))
+                    }
+                }
+            } else {
+                // This is the last message and it's an assistant with tool_use - need synthetic result
+                Logger.warning(
+                    "⚠️ Final assistant message has \(toolUseIds.count) unanswered tool_use(s). Inserting synthetic results.",
+                    category: .ai
+                )
+
+                var syntheticBlocks: [AnthropicContentBlock] = []
+                for toolId in toolUseIds {
+                    syntheticBlocks.append(.toolResult(AnthropicToolResultBlock(
+                        toolUseId: toolId,
+                        content: "{\"status\":\"completed\",\"message\":\"Action completed by user\"}"
+                    )))
+                }
+                result.append(AnthropicMessage(role: "user", content: .blocks(syntheticBlocks)))
+            }
+        }
+
+        // After adding synthetic results, we might have consecutive user messages - merge again
+        return mergeConsecutiveMessages(result)
+    }
+
+    /// Extract tool_use IDs from an assistant message
+    private func extractToolUseIds(from message: AnthropicMessage) -> [String] {
+        guard case .blocks(let blocks) = message.content else { return [] }
+        return blocks.compactMap { block in
+            if case .toolUse(let toolUse) = block {
+                return toolUse.id
+            }
+            return nil
+        }
+    }
+
+    /// Extract tool_result IDs from a user message
+    private func extractToolResultIds(from message: AnthropicMessage) -> Set<String> {
+        guard case .blocks(let blocks) = message.content else { return [] }
+        return Set(blocks.compactMap { block in
+            if case .toolResult(let toolResult) = block {
+                return toolResult.toolUseId
+            }
+            return nil
+        })
     }
 
     // MARK: - Tool Conversion
