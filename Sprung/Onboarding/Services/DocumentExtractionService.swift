@@ -400,13 +400,29 @@ actor DocumentExtractionService {
         )
 
         // Wait for both to complete
-        let (plainText, textIssues, _) = await textTask
+        let (plainText, textIssues, extractedPageCount) = await textTask
         let graphicsResult = await graphicsTask
+
+        // Validate PDFKit extraction quality
+        let textQuality = validateTextExtraction(
+            text: plainText ?? "",
+            pageCount: extractedPageCount ?? pageCount ?? 1
+        )
+        Logger.info("PDF extraction quality: \(textQuality.diagnosticSummary)", category: .ai)
 
         // Pass 1 must succeed - we need text content
         guard let plainText, !plainText.isEmpty else {
             await notifyProgress(.aiExtraction, .failed, detail: "No text extracted from PDF")
             throw ExtractionError.noTextExtracted
+        }
+
+        // Log quality assessment for future vision fallback integration
+        if textQuality.isAcceptable {
+            Logger.info("PDFKit text quality acceptable (\(String(format: "%.0f%%", textQuality.score * 100)))", category: .ai)
+        } else if textQuality.requiresVisionFallback {
+            Logger.warning("PDFKit quality too low (\(String(format: "%.0f%%", textQuality.score * 100))) - vision fallback recommended", category: .ai)
+        } else {
+            Logger.warning("PDFKit quality marginal (\(String(format: "%.0f%%", textQuality.score * 100)))", category: .ai)
         }
 
         // Log results

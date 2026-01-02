@@ -99,4 +99,50 @@ enum DocumentExtractionPrompts {
             ]
         )
     }
+
+    // MARK: - Vision Text Extraction Prompts
+
+    /// Prompt for single-pass vision text extraction.
+    /// Used when PDFKit fails and we need Gemini to extract ALL text from the PDF.
+    static func visionTextExtractionPrompt(filename: String, pageCount: Int) -> String {
+        """
+        Extract ALL text content from this PDF document exactly as written.
+
+        CRITICAL REQUIREMENTS:
+        1. Extract EVERY word - headers, body, captions, labels, footnotes
+        2. Include text from ALL fonts - small caps, italics, bold, everything
+        3. Preserve paragraph structure with blank lines
+        4. Format tables as markdown (| col1 | col2 |)
+        5. Include figure/chart captions
+        6. Do NOT summarize or paraphrase
+        7. Do NOT skip any sections
+
+        Document: \(filename)
+        Pages: \(pageCount)
+        """
+    }
+
+    /// Prompt for chunked vision text extraction.
+    /// Used for large documents (>30 pages) where we extract in chunks.
+    static func visionTextExtractionPromptForChunk(
+        filename: String,
+        startPage: Int,
+        endPage: Int,
+        totalPages: Int,
+        chunkNumber: Int,
+        totalChunks: Int
+    ) -> String {
+        """
+        Extract ALL text from pages \(startPage)-\(endPage) of this PDF.
+
+        REQUIREMENTS:
+        - Extract every word including headers, captions, labels
+        - Include ALL fonts (small caps, italics, bold)
+        - Preserve paragraph structure
+        - Format tables as markdown
+        - Do NOT summarize - extract verbatim
+
+        This is chunk \(chunkNumber) of \(totalChunks) for: \(filename)
+        """
+    }
 }
