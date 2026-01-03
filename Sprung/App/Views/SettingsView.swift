@@ -13,6 +13,7 @@ struct SettingsView: View {
     @AppStorage("onboardingGitIngestModelId") private var gitIngestModelId: String = "anthropic/claude-haiku-4.5"
     @AppStorage("onboardingDocSummaryModelId") private var docSummaryModelId: String = "gemini-2.5-flash-lite"
     @AppStorage("onboardingCardMergeModelId") private var cardMergeModelId: String = "openai/gpt-5"
+    @AppStorage("narrativeDedupeModelId") private var narrativeDedupeModelId: String = "openai/gpt-4.1"
     @AppStorage("skillBankModelId") private var skillBankModelId: String = "gemini-2.5-flash"
     @AppStorage("kcExtractionModelId") private var kcExtractionModelId: String = "gemini-2.5-pro"
     @AppStorage("guidanceExtractionModelId") private var guidanceExtractionModelId: String = "gemini-2.5-flash"
@@ -725,6 +726,17 @@ private extension SettingsView {
                 }
                 .pickerStyle(.menu)
                 Text("Merges card inventories across documents. Models with structured output support shown. GPT-5+ recommended for 128K output tokens.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                Picker("Narrative Dedupe Model", selection: $narrativeDedupeModelId) {
+                    ForEach(allOpenRouterModels.filter { $0.supportsStructuredOutput }, id: \.modelId) { model in
+                        Text(model.displayName)
+                            .tag(model.modelId)
+                    }
+                }
+                .pickerStyle(.menu)
+                Text("LLM-powered deduplication of narrative cards. Requires structured output for merge decisions.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

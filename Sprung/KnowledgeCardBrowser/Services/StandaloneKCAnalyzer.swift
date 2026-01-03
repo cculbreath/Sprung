@@ -18,6 +18,7 @@ class StandaloneKCAnalyzer {
     private var skillBankService: SkillBankService?
     private var kcExtractionService: KnowledgeCardExtractionService?
     private var metadataService: MetadataExtractionService?
+    private var deduplicationService: NarrativeDeduplicationService?
     private weak var resRefStore: ResRefStore?
 
     // MARK: - Initialization
@@ -27,6 +28,7 @@ class StandaloneKCAnalyzer {
         self.skillBankService = SkillBankService(llmFacade: llmFacade)
         self.kcExtractionService = KnowledgeCardExtractionService(llmFacade: llmFacade)
         self.metadataService = MetadataExtractionService(llmFacade: llmFacade)
+        self.deduplicationService = NarrativeDeduplicationService(llmFacade: llmFacade)
     }
 
     // MARK: - Analysis Result
@@ -42,9 +44,11 @@ class StandaloneKCAnalyzer {
     /// Analyze artifacts to extract skills and narrative cards.
     /// Uses pre-existing extraction from artifacts when available,
     /// otherwise generates via LLM.
-    /// - Parameter artifacts: Extracted artifact JSON objects
+    /// - Parameters:
+    ///   - artifacts: Extracted artifact JSON objects
+    ///   - deduplicateNarratives: Whether to run LLM-powered deduplication on narrative cards
     /// - Returns: Analysis result with skills and narrative cards
-    func analyzeArtifacts(_ artifacts: [JSON]) async throws -> AnalysisResult {
+    func analyzeArtifacts(_ artifacts: [JSON], deduplicateNarratives: Bool = false) async throws -> AnalysisResult {
         var allSkills: [Skill] = []
         var allNarrativeCards: [KnowledgeCard] = []
 
@@ -95,9 +99,22 @@ class StandaloneKCAnalyzer {
         let mergedSkillBank = await skillBankService?.mergeSkillBank(documentSkills: [allSkills], sourceDocumentIds: sourceDocIds)
             ?? SkillBank(skills: allSkills, generatedAt: Date(), sourceDocumentIds: sourceDocIds)
 
+        // Optionally deduplicate narrative cards
+        var finalNarrativeCards = allNarrativeCards
+        if deduplicateNarratives, allNarrativeCards.count > 1, let service = deduplicationService {
+            do {
+                Logger.info("🔀 StandaloneKCAnalyzer: Running narrative deduplication on \(allNarrativeCards.count) cards", category: .ai)
+                let result = try await service.deduplicateCards(allNarrativeCards)
+                finalNarrativeCards = result.cards
+                Logger.info("✅ StandaloneKCAnalyzer: Deduplication complete - \(result.cards.count) cards, \(result.mergeLog.count) merges", category: .ai)
+            } catch {
+                Logger.warning("⚠️ StandaloneKCAnalyzer: Deduplication failed, using original cards: \(error.localizedDescription)", category: .ai)
+            }
+        }
+
         return AnalysisResult(
             skillBank: mergedSkillBank,
-            narrativeCards: allNarrativeCards
+            narrativeCards: finalNarrativeCards
         )
     }
 

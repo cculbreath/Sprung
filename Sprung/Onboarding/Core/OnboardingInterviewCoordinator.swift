@@ -1031,13 +1031,15 @@ final class OnboardingInterviewCoordinator {
     ///   - regenerateSummary: Whether to regenerate summaries
     ///   - regenerateInventory: Whether to regenerate card inventories
     ///   - runMerge: Whether to run card merge after completion
+    ///   - dedupeNarratives: Whether to run narrative deduplication after merge
     func regenerateSelected(
         artifactIds: Set<String>,
         regenerateSummary: Bool,
         regenerateInventory: Bool,
-        runMerge: Bool
+        runMerge: Bool,
+        dedupeNarratives: Bool = false
     ) async {
-        Logger.info("🔄 Selective regeneration: \(artifactIds.count) artifacts, summary=\(regenerateSummary), inventory=\(regenerateInventory), merge=\(runMerge)", category: .ai)
+        Logger.info("🔄 Selective regeneration: \(artifactIds.count) artifacts, summary=\(regenerateSummary), inventory=\(regenerateInventory), merge=\(runMerge), dedupe=\(dedupeNarratives)", category: .ai)
 
         // Get selected artifacts
         let artifactsToProcess = sessionArtifacts.filter { artifactIds.contains($0.idString) }
@@ -1099,6 +1101,32 @@ final class OnboardingInterviewCoordinator {
         if runMerge {
             Logger.info("🔄 Triggering card merge...", category: .ai)
             await eventBus.publish(.doneWithUploadsClicked)
+        }
+
+        if dedupeNarratives {
+            Logger.info("🔀 Running narrative deduplication...", category: .ai)
+            await deduplicateNarratives()
+        }
+    }
+
+    /// Run narrative card deduplication manually
+    /// Uses LLM to identify and merge duplicate cards across documents
+    func deduplicateNarratives() async {
+        do {
+            let result = try await cardMergeService.getAllNarrativeCardsDeduped()
+            Logger.info("✅ Deduplication complete: \(result.cards.count) cards, \(result.mergeLog.count) merges", category: .ai)
+
+            // Update UI state with deduplicated cards
+            await MainActor.run {
+                ui.aggregatedNarrativeCards = result.cards
+            }
+
+            // Log merge decisions for debugging
+            for entry in result.mergeLog {
+                Logger.debug("🔀 Merged: \(entry.originalTitles.joined(separator: " + ")) → \(entry.mergedTitle)", category: .ai)
+            }
+        } catch {
+            Logger.error("❌ Deduplication failed: \(error.localizedDescription)", category: .ai)
         }
     }
 

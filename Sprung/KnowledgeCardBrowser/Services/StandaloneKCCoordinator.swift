@@ -106,7 +106,11 @@ class StandaloneKCCoordinator {
     // MARK: - Public API: Single Card Generation
 
     /// Generate a knowledge card from URLs and/or pre-loaded archived artifacts.
-    func generateCardWithExisting(from sources: [URL], existingArtifactIds: Set<String>) async throws {
+    /// - Parameters:
+    ///   - sources: URLs to extract content from
+    ///   - existingArtifactIds: IDs of already-extracted artifacts to include
+    ///   - deduplicateNarratives: Whether to run LLM-powered deduplication on narrative cards
+    func generateCardWithExisting(from sources: [URL], existingArtifactIds: Set<String>, deduplicateNarratives: Bool = false) async throws {
         guard !sources.isEmpty || !existingArtifactIds.isEmpty else {
             throw StandaloneKCError.noSources
         }
@@ -149,9 +153,9 @@ class StandaloneKCCoordinator {
             // Track artifact IDs for export
             currentArtifactIds = allArtifactIds
 
-            // Phase 3: Analyze artifacts
+            // Phase 3: Analyze artifacts (with optional deduplication)
             status = .analyzing
-            let analysisResult = try await analyzer.analyzeArtifacts(allArtifacts)
+            let analysisResult = try await analyzer.analyzeArtifacts(allArtifacts, deduplicateNarratives: deduplicateNarratives)
 
             guard let firstCard = analysisResult.narrativeCards.first else {
                 throw StandaloneKCError.noArtifactsExtracted
@@ -192,7 +196,11 @@ class StandaloneKCCoordinator {
     // MARK: - Public API: Multi-Card Analysis & Generation
 
     /// Analyze documents to produce card proposals for user review.
-    func analyzeDocuments(from sources: [URL], existingArtifactIds: Set<String> = []) async throws -> AnalysisResult {
+    /// - Parameters:
+    ///   - sources: URLs to extract content from
+    ///   - existingArtifactIds: IDs of already-extracted artifacts to include
+    ///   - deduplicateNarratives: Whether to run LLM-powered deduplication on narrative cards
+    func analyzeDocuments(from sources: [URL], existingArtifactIds: Set<String> = [], deduplicateNarratives: Bool = false) async throws -> AnalysisResult {
         guard !sources.isEmpty || !existingArtifactIds.isEmpty else {
             throw StandaloneKCError.noSources
         }
@@ -233,9 +241,9 @@ class StandaloneKCCoordinator {
         // Track artifact IDs for later export
         currentArtifactIds = allArtifactIds
 
-        // Phase 3: Analyze artifacts
+        // Phase 3: Analyze artifacts (with optional deduplication)
         status = .analyzing
-        let analysisResult = try await analyzer.analyzeArtifacts(allArtifacts)
+        let analysisResult = try await analyzer.analyzeArtifacts(allArtifacts, deduplicateNarratives: deduplicateNarratives)
 
         // Phase 4: Match against existing
         let (newCards, enhancements) = analyzer.matchAgainstExisting(analysisResult)

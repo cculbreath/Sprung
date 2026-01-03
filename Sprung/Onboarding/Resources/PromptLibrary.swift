@@ -158,6 +158,14 @@ enum PromptLibrary {
         loadPrompt(named: "voice_profile_extraction")
     }()
 
+    // MARK: - Deduplication Prompts
+
+    /// Narrative card deduplication prompt template
+    /// Contains placeholder: {CARDS_JSON}
+    static let narrativeDedupeTemplate: String = {
+        loadPrompt(named: "narrative_dedupe_prompt")
+    }()
+
     // MARK: - Prompt Loading
 
     /// Loads a prompt from a resource file in the Prompts directory.

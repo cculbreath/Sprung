@@ -4,6 +4,7 @@
 //
 //  Service for aggregating skills and narrative cards across documents.
 //  Uses SkillBankService for skill deduplication and merging.
+//  Uses NarrativeDeduplicationService for intelligent narrative card merging.
 //
 //  Note: Reads from SwiftData (ArtifactRecordStore) to ensure data persistence
 //  survives memory pressure during long sessions.
@@ -18,6 +19,7 @@ actor CardMergeService {
     private let artifactRecordStore: ArtifactRecordStore
     private let sessionPersistenceHandler: SwiftDataSessionPersistenceHandler
     private let skillBankService: SkillBankService
+    private let deduplicationService: NarrativeDeduplicationService
 
     init(
         artifactRecordStore: ArtifactRecordStore,
@@ -28,6 +30,7 @@ actor CardMergeService {
         self.sessionPersistenceHandler = sessionPersistenceHandler
         self.llmFacade = llmFacade
         self.skillBankService = SkillBankService(llmFacade: llmFacade)
+        self.deduplicationService = NarrativeDeduplicationService(llmFacade: llmFacade)
         Logger.info("🔄 CardMergeService initialized", category: .ai)
     }
 
@@ -135,6 +138,30 @@ actor CardMergeService {
     func getAllNarrativeCardsFlat() async -> [KnowledgeCard] {
         let collections = await getAllNarrativeCards()
         return collections.flatMap { $0.cards }
+    }
+
+    /// Get all narrative cards, deduplicated across documents
+    /// Uses LLM to make intelligent merge decisions while preserving detail
+    func getAllNarrativeCardsDeduped() async throws -> DeduplicationResult {
+        let allCards = await getAllNarrativeCardsFlat()
+
+        guard allCards.count > 1 else {
+            return DeduplicationResult(cards: allCards, mergeLog: [])
+        }
+
+        Logger.info("🔀 Starting narrative card deduplication: \(allCards.count) cards", category: .ai)
+        return try await deduplicationService.deduplicateCards(allCards)
+    }
+
+    /// Deduplicate an arbitrary list of narrative cards
+    /// Useful for manual deduplication triggers
+    func deduplicateCards(_ cards: [KnowledgeCard]) async throws -> DeduplicationResult {
+        guard cards.count > 1 else {
+            return DeduplicationResult(cards: cards, mergeLog: [])
+        }
+
+        Logger.info("🔀 Manual deduplication requested: \(cards.count) cards", category: .ai)
+        return try await deduplicationService.deduplicateCards(cards)
     }
 
     enum CardMergeError: Error, LocalizedError {

@@ -30,6 +30,8 @@ struct DocumentIngestionSheet: View {
     @State private var analysisResult: StandaloneKCCoordinator.AnalysisResult?
     /// Show the analysis confirmation sheet
     @State private var showAnalysisSheet = false
+    /// Whether to run deduplication on narrative cards
+    @State private var deduplicateNarratives = false
 
     // MARK: - Callbacks
 
@@ -130,12 +132,22 @@ struct DocumentIngestionSheet: View {
             // Sources list
             sourcesListSection
 
+            // Options
+            optionsSection
+
             // Status display
             if let coordinator = coordinator, coordinator.status != .idle {
                 statusSection(coordinator.status)
             }
         }
         .padding()
+    }
+
+    private var optionsSection: some View {
+        GroupBox {
+            Toggle("Deduplicate Narratives", isOn: $deduplicateNarratives)
+                .help("Run LLM-powered deduplication to merge similar narrative cards")
+        }
     }
 
     private var archivedArtifactCount: Int {
@@ -418,7 +430,8 @@ struct DocumentIngestionSheet: View {
                 // Generate card with both new sources and existing artifact IDs
                 try await coordinator.generateCardWithExisting(
                     from: sources,
-                    existingArtifactIds: addedArchivedArtifactIds
+                    existingArtifactIds: addedArchivedArtifactIds,
+                    deduplicateNarratives: deduplicateNarratives
                 )
 
                 if let card = coordinator.generatedCard {
@@ -441,7 +454,8 @@ struct DocumentIngestionSheet: View {
             do {
                 analysisResult = try await coordinator.analyzeDocuments(
                     from: sources,
-                    existingArtifactIds: addedArchivedArtifactIds
+                    existingArtifactIds: addedArchivedArtifactIds,
+                    deduplicateNarratives: deduplicateNarratives
                 )
                 showAnalysisSheet = true
             } catch {

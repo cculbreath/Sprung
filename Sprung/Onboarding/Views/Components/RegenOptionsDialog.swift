@@ -16,6 +16,7 @@ struct RegenOptionsDialog: View {
         var summary: Bool = true
         var knowledgeExtraction: Bool = true
         var remerge: Bool = true
+        var dedupeNarratives: Bool = false
     }
 
     @State private var selectedArtifactIds: Set<String> = []
@@ -72,8 +73,12 @@ struct RegenOptionsDialog: View {
 
             // Global options
             GroupBox("After Completion") {
-                Toggle("Run Card Merge", isOn: $operations.remerge)
-                    .padding(8)
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Run Card Merge", isOn: $operations.remerge)
+                    Toggle("Dedupe Narratives", isOn: $operations.dedupeNarratives)
+                        .help("Run LLM-powered deduplication on narrative cards after merge")
+                }
+                .padding(8)
             }
 
             // Buttons

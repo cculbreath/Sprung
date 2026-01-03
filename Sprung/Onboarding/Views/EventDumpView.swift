@@ -230,6 +230,14 @@ struct EventDumpView: View {
             .help("Regenerate summaries and/or inventories for selected artifacts")
         }
         ToolbarItem(placement: .automatic) {
+            Button("Dedupe Narratives") {
+                Task {
+                    await coordinator.deduplicateNarratives()
+                }
+            }
+            .help("Run LLM-powered deduplication on narrative cards")
+        }
+        ToolbarItem(placement: .automatic) {
             Button("Reset All Data", role: .destructive) {
                 Task {
                     await coordinator.resetAllOnboardingData()
@@ -263,7 +271,8 @@ struct EventDumpView: View {
                         artifactIds: selectedIds,
                         regenerateSummary: operations.summary,
                         regenerateInventory: operations.knowledgeExtraction,
-                        runMerge: operations.remerge
+                        runMerge: operations.remerge,
+                        dedupeNarratives: operations.dedupeNarratives
                     )
                 }
             },
