@@ -14,8 +14,7 @@ struct WritingContextBrowserSheet: View {
     @Binding var isPresented: Bool
 
     var body: some View {
-        CoverRefBrowserOverlay(
-            isPresented: $isPresented,
+        WritingSamplesBrowserTab(
             cards: .init(
                 get: { allCoverRefs },
                 set: { _ in }
@@ -30,7 +29,8 @@ struct WritingContextBrowserSheet: View {
                 coverRefStore.addCoverRef(ref)
             }
         )
-        .frame(minWidth: 940, minHeight: 640)
+        .frame(width: 720, height: 680)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 }
 

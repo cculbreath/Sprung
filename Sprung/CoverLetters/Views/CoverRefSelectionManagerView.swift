@@ -149,8 +149,7 @@ struct CoverRefSelectionManagerView: View {
             )
         }
         .sheet(isPresented: $showBrowser) {
-            CoverRefBrowserOverlay(
-                isPresented: $showBrowser,
+            WritingSamplesBrowserTab(
                 cards: .init(
                     get: { allCoverRefs },
                     set: { _ in }
@@ -165,6 +164,8 @@ struct CoverRefSelectionManagerView: View {
                     coverRefStore.addCoverRef(card)
                 }
             )
+            .frame(width: 720, height: 680)
+            .background(Color(nsColor: .windowBackgroundColor))
         }
     }
     private func deleteRef(_ ref: CoverRef) {

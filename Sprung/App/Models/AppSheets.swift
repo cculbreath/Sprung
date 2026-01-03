@@ -18,10 +18,33 @@ struct AppSheets {
     // UI state that was previously in ResumeButtons
     var showResumeInspector = false
     var showCoverLetterInspector = false
-    // Knowledge cards browser
-    var showKnowledgeCardsBrowser = false
+    // Unified reference browser (replaces separate Knowledge and Writing browsers)
+    var showUnifiedReferenceBrowser = false
+    var unifiedBrowserInitialTab: UnifiedReferenceBrowserOverlay.Tab = .knowledge
+    // Legacy properties (kept for backwards compatibility during transition)
+    var showKnowledgeCardsBrowser: Bool {
+        get { showUnifiedReferenceBrowser && unifiedBrowserInitialTab == .knowledge }
+        set {
+            if newValue {
+                unifiedBrowserInitialTab = .knowledge
+                showUnifiedReferenceBrowser = true
+            } else {
+                showUnifiedReferenceBrowser = false
+            }
+        }
+    }
     // Writing context browser (CoverRefs: dossier + writing samples + background facts)
-    var showWritingContextBrowser = false
+    var showWritingContextBrowser: Bool {
+        get { showUnifiedReferenceBrowser && unifiedBrowserInitialTab == .writing }
+        set {
+            if newValue {
+                unifiedBrowserInitialTab = .writing
+                showUnifiedReferenceBrowser = true
+            } else {
+                showUnifiedReferenceBrowser = false
+            }
+        }
+    }
     // Setup wizard (first-run configuration)
     var showSetupWizard = false
     // Job capture from URL scheme (sprung://capture-job?url=...)
@@ -155,21 +178,22 @@ struct AppSheetsModifier: ViewModifier {
                 ResRefView()
                     .padding()
             }
-            .sheet(isPresented: $sheets.showKnowledgeCardsBrowser) {
-                KnowledgeCardBrowserOverlay(
-                    isPresented: $sheets.showKnowledgeCardsBrowser,
-                    cards: .init(
+            .sheet(isPresented: $sheets.showUnifiedReferenceBrowser) {
+                UnifiedReferenceBrowserOverlay(
+                    isPresented: $sheets.showUnifiedReferenceBrowser,
+                    initialTab: sheets.unifiedBrowserInitialTab,
+                    knowledgeCards: .init(
                         get: { resRefStore.resRefs },
                         set: { _ in }
                     ),
                     resRefStore: resRefStore,
-                    onCardUpdated: { card in
+                    onKnowledgeCardUpdated: { card in
                         resRefStore.updateResRef(card)
                     },
-                    onCardDeleted: { card in
+                    onKnowledgeCardDeleted: { card in
                         resRefStore.deleteResRef(card)
                     },
-                    onCardAdded: { card in
+                    onKnowledgeCardAdded: { card in
                         resRefStore.addResRef(card)
                         // Check if there are active jobs to reprocess
                         let activeStatuses: [Statuses] = [.new, .queued, .inProgress]
@@ -181,7 +205,21 @@ struct AppSheetsModifier: ViewModifier {
                             showReprocessConfirmation = true
                         }
                     },
-                    llmFacade: nil  // Regeneration not available outside onboarding
+                    writingSamples: .init(
+                        get: { coverRefStore.coverRefs },
+                        set: { _ in }
+                    ),
+                    onWritingSampleUpdated: { ref in
+                        // SwiftData auto-updates
+                    },
+                    onWritingSampleDeleted: { ref in
+                        coverRefStore.deleteCoverRef(ref)
+                    },
+                    onWritingSampleAdded: { ref in
+                        coverRefStore.addCoverRef(ref)
+                    },
+                    skillBank: nil,  // Skills bank integration pending
+                    llmFacade: nil   // Regeneration not available outside onboarding
                 )
             }
             .alert("Re-run Job Pre-processing?", isPresented: $showReprocessConfirmation) {
@@ -196,10 +234,6 @@ struct AppSheetsModifier: ViewModifier {
                     !job.jobDescription.isEmpty && activeStatuses.contains(job.status)
                 }.count
                 Text("You added \"\(newlyAddedCardName)\" to your knowledge cards. Would you like to re-run pre-processing for \(activeJobCount) active job\(activeJobCount == 1 ? "" : "s") to match them with relevant cards?")
-            }
-            .sheet(isPresented: $sheets.showWritingContextBrowser) {
-                WritingContextBrowserSheet(isPresented: $sheets.showWritingContextBrowser)
-                    .environment(coverRefStore)
             }
             .sheet(isPresented: $sheets.showSetupWizard) {
                 SetupWizardView {
