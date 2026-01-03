@@ -24,13 +24,6 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .dangerZone: return "exclamationmark.octagon.fill"
         }
     }
-
-    var accentColor: Color {
-        switch self {
-        case .dangerZone: return .red
-        default: return .accentColor
-        }
-    }
 }
 
 struct SettingsView: View {
@@ -57,8 +50,13 @@ struct SettingsView: View {
         List(selection: $selectedCategory) {
             ForEach(SettingsCategory.allCases) { category in
                 NavigationLink(value: category) {
-                    Label(category.rawValue, systemImage: category.systemImage)
-                        .foregroundStyle(category.accentColor)
+                    Label {
+                        Text(category.rawValue)
+                    } icon: {
+                        Image(systemName: category.systemImage)
+                            .foregroundStyle(category == .dangerZone ? .red : .secondary)
+                    }
+                    .foregroundStyle(category == .dangerZone ? .red : .primary)
                 }
             }
         }
@@ -139,9 +137,13 @@ struct SettingsSectionHeader: View {
     let systemImage: String
 
     var body: some View {
-        Label(title, systemImage: systemImage)
-            .font(.headline)
-            .fontWeight(.semibold)
-            .foregroundStyle(.primary)
+        Label {
+            Text(title)
+        } icon: {
+            Image(systemName: systemImage)
+        }
+        .font(.subheadline)
+        .fontWeight(.medium)
+        .foregroundStyle(.secondary)
     }
 }

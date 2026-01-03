@@ -74,6 +74,12 @@ struct OnboardingModelSettingsView: View {
     var body: some View {
         Form {
             Section {
+                providerPicker
+            } header: {
+                SettingsSectionHeader(title: "Provider", systemImage: "server.rack")
+            }
+
+            Section {
                 onboardingInterviewModelPicker
             } header: {
                 SettingsSectionHeader(title: "Interview Model", systemImage: "bubble.left.and.bubble.right")
@@ -223,6 +229,23 @@ struct OnboardingModelSettingsView: View {
 
 // MARK: - Model Pickers
 private extension OnboardingModelSettingsView {
+    var providerPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("Interview Provider", selection: Binding(
+                get: { OnboardingProvider(rawValue: onboardingProvider) ?? .openai },
+                set: { onboardingProvider = $0.rawValue }
+            )) {
+                ForEach(OnboardingProvider.allCases, id: \.self) { provider in
+                    Text(provider.displayName).tag(provider)
+                }
+            }
+            .pickerStyle(.segmented)
+            Text("Choose which AI provider powers the onboarding interview.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+
     var onboardingInterviewModelPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
             if isAnthropicProvider {

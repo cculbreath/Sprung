@@ -13,10 +13,6 @@ struct APIKeysSettingsView: View {
     @State private var geminiApiKey: String = APIKeyManager.get(.gemini) ?? ""
     @State private var anthropicApiKey: String = APIKeyManager.get(.anthropic) ?? ""
     @State private var showModelSelectionSheet = false
-    @State private var selectedOnboardingProvider: OnboardingProvider = {
-        let rawValue = UserDefaults.standard.string(forKey: "onboardingProvider") ?? "openai"
-        return OnboardingProvider(rawValue: rawValue) ?? .openai
-    }()
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Manage credentials used for importing jobs and accessing external AI services. Leave a field blank to remove the saved key.")
@@ -58,25 +54,6 @@ struct APIKeysSettingsView: View {
                 testEndpoint: .anthropic,
                 onSave: handleAnthropicSave
             )
-            Divider()
-            // Onboarding Provider Selection
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Onboarding Interview Provider")
-                    .font(.headline)
-                Picker("Provider", selection: $selectedOnboardingProvider) {
-                    ForEach(OnboardingProvider.allCases, id: \.self) { provider in
-                        Text(provider.displayName).tag(provider)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .onChange(of: selectedOnboardingProvider) { _, newValue in
-                    UserDefaults.standard.set(newValue.rawValue, forKey: "onboardingProvider")
-                }
-                Text("Select which AI provider to use for the onboarding interview.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.vertical, 4)
             Divider()
             HStack(spacing: 12) {
                 Button("Choose OpenRouter Models…") {
