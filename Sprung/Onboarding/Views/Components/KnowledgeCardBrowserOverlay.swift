@@ -570,7 +570,7 @@ struct KnowledgeCardBrowserOverlay: View {
         Logger.info("🔄 Regenerating summary for: \(card.name)", category: .ai)
 
         let modelId = UserDefaults.standard.string(forKey: "onboardingProseSummaryModel")
-            ?? "google/gemini-2.0-flash-001"
+            ?? DefaultModels.openRouterFast
 
         // Build prompt from card data
         let template = PromptLibrary.kcProseSummary

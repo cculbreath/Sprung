@@ -66,7 +66,7 @@ struct SearchPreferences: Codable {
 
 struct DiscoverySettings: Codable {
     // LLM Configuration
-    var llmModelId: String = "gpt-4o"
+    var llmModelId: String = DefaultModels.openAI
     var reasoningEffort: String = "low"  // none, low, medium, high
 
     // Calendar Configuration

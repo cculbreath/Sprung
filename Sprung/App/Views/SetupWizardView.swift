@@ -49,7 +49,7 @@ struct SetupWizardView: View {
 
     var onFinish: (() -> Void)?
 
-    private static let gitIngestDefaultModelId = "anthropic/claude-haiku-4.5"
+    private static let gitIngestDefaultModelId = DefaultModels.openRouter
 
     var body: some View {
         NavigationStack {
@@ -674,7 +674,7 @@ private extension SetupWizardView {
             let (sanitizedPDF, adjustedPDF) = ModelPreferenceValidator.sanitize(
                 requested: pdfExtractionModelId,
                 available: ids,
-                fallback: "gemini-2.5-flash"
+                fallback: DefaultModels.gemini
             )
             if adjustedPDF {
                 pdfExtractionModelId = sanitizedPDF

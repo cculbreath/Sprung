@@ -105,7 +105,7 @@ actor DocumentExtractionService {
 
     // MARK: - Private Properties
     private var llmFacade: LLMFacade?
-    private let defaultModelId = "gemini-2.5-flash"
+    private let defaultModelId = DefaultModels.gemini
     private var eventBus: EventCoordinator?
     private var pdfRouter: PDFExtractionRouter?
     private weak var agentTracker: AgentActivityTracker?

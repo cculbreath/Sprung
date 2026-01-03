@@ -37,7 +37,7 @@ actor MetadataExtractionService {
     init(llmFacade: LLMFacade?, modelId: String? = nil) {
         self.llmFacade = llmFacade
         // Default to a fast, capable model for metadata extraction
-        self.modelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingKCAgentModelId") ?? "anthropic/claude-haiku-4.5"
+        self.modelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingKCAgentModelId") ?? DefaultModels.openRouter
     }
 
     // MARK: - Public API

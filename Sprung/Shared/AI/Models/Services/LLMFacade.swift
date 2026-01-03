@@ -919,7 +919,7 @@ final class LLMFacade {
         }
 
         // Use configured model or default
-        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId") ?? "gemini-2.5-flash"
+        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId") ?? DefaultModels.gemini
 
         return try await service.generateFromPDF(
             pdfData: pdfData,

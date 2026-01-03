@@ -163,7 +163,7 @@ actor VoicePrimerExtractionService {
         let fullPrompt = promptTemplate.replacingOccurrences(of: "{WRITING_SAMPLES}", with: combinedSamples)
 
         // Get model from settings, default to a reasonable model
-        let modelId = UserDefaults.standard.string(forKey: "voicePrimerExtractionModelId") ?? "openai/gpt-4o-mini"
+        let modelId = UserDefaults.standard.string(forKey: "voicePrimerExtractionModelId") ?? DefaultModels.openRouter
 
         // Call LLM for extraction using startConversation (one-shot)
         // LLMFacade is @MainActor - async methods can be called directly from actors

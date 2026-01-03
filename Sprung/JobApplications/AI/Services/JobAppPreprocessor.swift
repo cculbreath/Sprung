@@ -75,7 +75,7 @@ class JobAppPreprocessor {
 
     /// Model for preprocessing (user-configurable via Settings)
     private var preprocessingModel: String {
-        UserDefaults.standard.string(forKey: "backgroundProcessingModelId") ?? "google/gemini-2.0-flash-001"
+        UserDefaults.standard.string(forKey: "backgroundProcessingModelId") ?? DefaultModels.openRouterFast
     }
 
     // MARK: - Initialization

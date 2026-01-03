@@ -28,9 +28,9 @@ enum OnboardingModelConfig {
     static var currentModelId: String {
         switch currentProvider {
         case .openai:
-            return UserDefaults.standard.string(forKey: userDefaultsKey) ?? "gpt-4o"
+            return UserDefaults.standard.string(forKey: userDefaultsKey) ?? DefaultModels.openAI
         case .anthropic:
-            return UserDefaults.standard.string(forKey: anthropicModelKey) ?? "claude-sonnet-4-20250514"
+            return UserDefaults.standard.string(forKey: anthropicModelKey) ?? DefaultModels.anthropic
         }
     }
 }

@@ -13,7 +13,7 @@ actor SkillBankService {
     private var llmFacade: LLMFacade?
 
     private var modelId: String {
-        UserDefaults.standard.string(forKey: "skillBankModelId") ?? "gemini-2.5-flash"
+        UserDefaults.standard.string(forKey: "skillBankModelId") ?? DefaultModels.gemini
     }
 
     init(llmFacade: LLMFacade?) {

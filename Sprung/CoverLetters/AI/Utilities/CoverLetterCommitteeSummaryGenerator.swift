@@ -96,7 +96,7 @@ class CoverLetterCommitteeSummaryGenerator {
         guard let llm = llmFacade else {
             throw CoverLetterCommitteeSummaryError.facadeUnavailable
         }
-        let summaryModelId = preferredModelId ?? modelReasonings.first?.model ?? "gpt-4o-mini"
+        let summaryModelId = preferredModelId ?? modelReasonings.first?.model ?? DefaultModels.openRouter
         let summaryResponse: CommitteeSummaryResponse = try await llm.executeFlexibleJSON(
                 prompt: summaryPrompt,
                 modelId: summaryModelId,

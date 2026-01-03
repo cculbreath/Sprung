@@ -910,7 +910,7 @@ enum OnboardingProvider: String, CaseIterable {
 extension StateCoordinator {
     /// Get the Anthropic model ID from settings
     func getAnthropicModelId() async -> String {
-        return UserDefaults.standard.string(forKey: "onboardingAnthropicModelId") ?? "claude-sonnet-4-20250514"
+        return UserDefaults.standard.string(forKey: "onboardingAnthropicModelId") ?? DefaultModels.anthropic
     }
 
     /// Get the currently selected onboarding provider

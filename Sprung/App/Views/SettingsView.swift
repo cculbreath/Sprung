@@ -13,6 +13,11 @@ struct SettingsView: View {
     @AppStorage("onboardingGitIngestModelId") private var gitIngestModelId: String = "anthropic/claude-haiku-4.5"
     @AppStorage("onboardingDocSummaryModelId") private var docSummaryModelId: String = "gemini-2.5-flash-lite"
     @AppStorage("onboardingCardMergeModelId") private var cardMergeModelId: String = "openai/gpt-5"
+    @AppStorage("skillBankModelId") private var skillBankModelId: String = "gemini-2.5-flash"
+    @AppStorage("kcExtractionModelId") private var kcExtractionModelId: String = "gemini-2.5-pro"
+    @AppStorage("guidanceExtractionModelId") private var guidanceExtractionModelId: String = "gemini-2.5-flash"
+    @AppStorage("voicePrimerExtractionModelId") private var voicePrimerModelId: String = "openai/gpt-4o-mini"
+    @AppStorage("onboardingKCAgentModelId") private var kcAgentModelId: String = "anthropic/claude-haiku-4.5"
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var onboardingWebSearchAllowed: Bool = true
     @AppStorage("onboardingInterviewReasoningEffort") private var onboardingReasoningEffort: String = "none"
     @AppStorage("onboardingInterviewHardTaskReasoningEffort") private var onboardingHardTaskReasoningEffort: String = "medium"
@@ -48,7 +53,7 @@ struct SettingsView: View {
     @State private var anthropicModelError: String?
     @Environment(LLMFacade.self) private var llmFacade
     private let dataResetService = DataResetService()
-    private let pdfExtractionFallbackModelId = "gemini-2.5-flash"
+    private let pdfExtractionFallbackModelId = DefaultModels.gemini
     private let googleAIService = GoogleAIService()
 
     /// Is Anthropic selected as the onboarding provider?
@@ -157,6 +162,8 @@ struct SettingsView: View {
                 onboardingInterviewModelPicker
                 pdfExtractionModelPicker
                 docSummaryModelPicker
+                skillExtractionModelPickers
+                voiceAndMetadataModelPickers
                 gitIngestModelPicker
                 backgroundProcessingModelPicker
                 knowledgeCardTokenLimitPicker
@@ -724,6 +731,92 @@ private extension SettingsView {
         }
     }
 
+    var skillExtractionModelPickers: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if !hasGeminiKey {
+                Label("Add Google Gemini API key above to enable skill/narrative extraction.", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .font(.callout)
+            } else if geminiModels.isEmpty {
+                HStack {
+                    Text("No Gemini models available")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    Button("Load Models") {
+                        Task { await loadGeminiModels() }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            } else {
+                Picker("Skill Bank Model", selection: $skillBankModelId) {
+                    ForEach(geminiModels.filter { $0.outputTokenLimit >= 16000 }) { model in
+                        Text(model.displayName)
+                            .tag(model.id)
+                    }
+                }
+                .pickerStyle(.menu)
+                Text("Extracts comprehensive skill inventories from documents. Flash recommended for speed.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                Picker("Narrative Card Model", selection: $kcExtractionModelId) {
+                    ForEach(geminiModels.filter { $0.outputTokenLimit >= 32000 }) { model in
+                        Text(model.displayName)
+                            .tag(model.id)
+                    }
+                }
+                .pickerStyle(.menu)
+                Text("Generates narrative knowledge cards. Pro recommended for quality.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                Picker("Guidance Extraction Model", selection: $guidanceExtractionModelId) {
+                    ForEach(geminiModels.filter { $0.outputTokenLimit >= 4000 }) { model in
+                        Text(model.displayName)
+                            .tag(model.id)
+                    }
+                }
+                .pickerStyle(.menu)
+                Text("Extracts identity vocabulary and title sets. Flash recommended.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    var voiceAndMetadataModelPickers: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if allOpenRouterModels.isEmpty {
+                Label("Enable OpenRouter models in Options to configure voice/metadata extraction.", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .font(.callout)
+            } else {
+                Picker("Voice Primer Model", selection: $voicePrimerModelId) {
+                    ForEach(allOpenRouterModels, id: \.modelId) { model in
+                        Text(model.displayName.isEmpty ? model.modelId : model.displayName)
+                            .tag(model.modelId)
+                    }
+                }
+                .pickerStyle(.menu)
+                Text("Extracts voice characteristics from writing samples. Fast model recommended.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                Picker("KC Agent Model", selection: $kcAgentModelId) {
+                    ForEach(allOpenRouterModels, id: \.modelId) { model in
+                        Text(model.displayName.isEmpty ? model.modelId : model.displayName)
+                            .tag(model.modelId)
+                    }
+                }
+                .pickerStyle(.menu)
+                Text("Metadata extraction for knowledge cards. Haiku recommended for speed.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
     var backgroundProcessingModelPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
             if allOpenRouterModels.isEmpty {
@@ -836,7 +929,7 @@ private extension SettingsView {
     func sanitizeBackgroundProcessingModelIfNeeded() -> String {
         let ids = allOpenRouterModels.map(\.modelId)
         guard !ids.isEmpty else { return backgroundProcessingModelId }
-        let fallback = "google/gemini-2.0-flash-001"
+        let fallback = DefaultModels.openRouterFast
         let (sanitized, adjusted) = ModelPreferenceValidator.sanitize(
             requested: backgroundProcessingModelId,
             available: ids,
@@ -967,8 +1060,8 @@ private extension SettingsView {
     var allOpenRouterModels: [EnabledLLM] {
         enabledLLMStore.enabledModels
             .sorted { lhs, rhs in
-                if lhs.modelId == "google/gemini-2.0-flash-001" { return true }
-                if rhs.modelId == "google/gemini-2.0-flash-001" { return false }
+                if lhs.modelId == DefaultModels.openRouterFast { return true }
+                if rhs.modelId == DefaultModels.openRouterFast { return false }
                 return (lhs.displayName.isEmpty ? lhs.modelId : lhs.displayName)
                     < (rhs.displayName.isEmpty ? rhs.modelId : rhs.displayName)
             }
@@ -992,7 +1085,7 @@ private extension SettingsView {
     @discardableResult
     func sanitizeGitIngestModelIfNeeded() -> String {
         let ids = allOpenRouterModels.map(\.modelId)
-        let fallback = "anthropic/claude-haiku-4.5"
+        let fallback = DefaultModels.openRouter
         let (sanitized, adjusted) = ModelPreferenceValidator.sanitize(
             requested: gitIngestModelId,
             available: ids,

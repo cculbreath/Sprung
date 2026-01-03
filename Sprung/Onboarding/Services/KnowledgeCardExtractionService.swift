@@ -14,7 +14,7 @@ actor KnowledgeCardExtractionService {
 
     private var modelId: String {
         // Pro for narratives - quality matters
-        UserDefaults.standard.string(forKey: "kcExtractionModelId") ?? "gemini-2.5-pro"
+        UserDefaults.standard.string(forKey: "kcExtractionModelId") ?? DefaultModels.geminiPro
     }
 
     init(llmFacade: LLMFacade?) {

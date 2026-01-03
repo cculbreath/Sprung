@@ -14,7 +14,7 @@ actor GuidanceGenerationService {
 
     private var modelId: String {
         // Flash for speed - good enough for extraction tasks
-        UserDefaults.standard.string(forKey: "guidanceExtractionModelId") ?? "gemini-2.5-flash"
+        UserDefaults.standard.string(forKey: "guidanceExtractionModelId") ?? DefaultModels.gemini
     }
 
     init(llmFacade: LLMFacade?) {

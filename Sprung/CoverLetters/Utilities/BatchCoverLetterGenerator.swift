@@ -125,7 +125,7 @@ class BatchCoverLetterGenerator {
                                 // Handle "same as generating model" option
                                 let modelToUseForRevisions: String
                                 if revisionModel == "SAME_AS_GENERATING" {
-                                    modelToUseForRevisions = baseLetter.generationModel ?? "gpt-4o"
+                                    modelToUseForRevisions = baseLetter.generationModel ?? DefaultModels.openRouter
                                 } else {
                                     modelToUseForRevisions = revisionModel
                                 }

@@ -361,7 +361,7 @@ actor GoogleAIService {
         temperature: Double = 0.1,
         maxOutputTokens: Int = 8192
     ) async throws -> String {
-        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId") ?? "gemini-2.5-flash"
+        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId") ?? DefaultModels.gemini
         let apiKey = try getAPIKey()
         let url = URL(string: "\(baseURL)/v1beta/models/\(effectiveModelId):generateContent?key=\(apiKey)")!
 
@@ -446,7 +446,7 @@ actor GoogleAIService {
         modelId: String? = nil,
         temperature: Double = 0.1
     ) async throws -> String {
-        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId") ?? "gemini-2.5-flash"
+        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId") ?? DefaultModels.gemini
         let apiKey = try getAPIKey()
         let url = URL(string: "\(baseURL)/v1beta/models/\(effectiveModelId):generateContent?key=\(apiKey)")!
 
@@ -563,7 +563,7 @@ actor GoogleAIService {
         modelId: String? = nil
     ) async throws -> DocumentSummary {
         // Use setting-based model or fallback
-        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingDocSummaryModelId") ?? "gemini-2.5-flash-lite"
+        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingDocSummaryModelId") ?? DefaultModels.geminiLite
         let apiKey = try getAPIKey()
         let url = URL(string: "\(baseURL)/v1beta/models/\(effectiveModelId):generateContent?key=\(apiKey)")!
 
@@ -657,7 +657,7 @@ actor GoogleAIService {
         maxOutputTokens: Int = 65536
     ) async throws -> (text: String, tokenUsage: GeminiTokenUsage?) {
         // Use configured model or default
-        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId") ?? "gemini-2.5-flash"
+        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId") ?? DefaultModels.gemini
 
         // Upload file
         let uploadedFile = try await uploadFile(
@@ -737,7 +737,7 @@ actor GoogleAIService {
         maxOutputTokens: Int = 65536,
         jsonSchema: [String: Any]? = nil
     ) async throws -> String {
-        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingDocSummaryModelId") ?? "gemini-2.5-flash-lite"
+        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingDocSummaryModelId") ?? DefaultModels.geminiLite
         let apiKey = try getAPIKey()
         let url = URL(string: "\(baseURL)/v1beta/models/\(effectiveModelId):generateContent?key=\(apiKey)")!
 

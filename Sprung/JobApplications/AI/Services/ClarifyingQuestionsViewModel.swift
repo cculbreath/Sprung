@@ -169,7 +169,7 @@ class ClarifyingQuestionsViewModel {
         guard let conversationId = currentConversationId else {
             throw ClarifyingQuestionsError.noActiveConversation
         }
-        let modelId = currentModelId ?? "gpt-4o" // Use the model from the original workflow
+        let modelId = currentModelId ?? DefaultModels.openRouter
         // Add the user's answers to the conversation
         let answerPrompt = createAnswerPrompt(answers: answers)
         // Check if model supports reasoning for streaming
@@ -256,7 +256,7 @@ class ClarifyingQuestionsViewModel {
             try await resumeReviseViewModel.continueConversationAndGenerateRevisions(
                 conversationId: conversationId,
                 resume: resume,
-                modelId: currentModelId ?? "gpt-4o"
+                modelId: currentModelId ?? DefaultModels.openRouter
             )
             Logger.debug("✅ Conversation handoff complete - ResumeReviseViewModel is managing the workflow")
         } catch {
