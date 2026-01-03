@@ -106,8 +106,8 @@ class StandaloneKCAnalyzer {
         guard let skillsString = artifact["skills"].string,
               let data = skillsString.data(using: .utf8) else { return nil }
 
+        // Note: Skill model has explicit CodingKeys for snake_case - no conversion needed
         let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
         return try? decoder.decode([Skill].self, from: data)
     }
 
@@ -116,8 +116,8 @@ class StandaloneKCAnalyzer {
         guard let cardsString = artifact["narrative_cards"].string,
               let data = cardsString.data(using: .utf8) else { return nil }
 
+        // Note: KnowledgeCard model has explicit CodingKeys for snake_case - no conversion needed
         let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
         return try? decoder.decode([KnowledgeCard].self, from: data)
     }
 

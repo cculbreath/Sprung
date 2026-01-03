@@ -131,7 +131,7 @@ final class InterviewLifecycleController {
         let phase = InterviewPhase(rawValue: session.phase) ?? .phase1VoiceContext
         ui.phase = phase
 
-        // Restore aggregated cards and excluded card IDs
+        // Restore aggregated cards, skill bank, and excluded card IDs
         let restoredExcludedIds = sessionPersistenceHandler.getRestoredExcludedCardIds(session)
         ui.excludedCardIds = restoredExcludedIds
 
@@ -143,6 +143,12 @@ final class InterviewLifecycleController {
             ui.cardAssignmentsReadyForApproval = true
 
             Logger.info("📥 Restored aggregated narrative cards: \(restoredCards.count) cards (excluding \(restoredExcludedIds.count) excluded)", category: .ai)
+        }
+
+        // Restore skill bank
+        if let restoredSkillBank = sessionPersistenceHandler.getRestoredAggregatedSkillBank(session) {
+            ui.aggregatedSkillBank = restoredSkillBank
+            Logger.info("📥 Restored skill bank: \(restoredSkillBank.skills.count) skills", category: .ai)
         }
 
         // Restore phase in state coordinator - registers objectives for ALL phases up to current

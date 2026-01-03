@@ -175,11 +175,8 @@ final class OnboardingDependencyContainer {
             chat: stores.chatTranscriptStore, uiState: stores.sessionUIState
         )
 
-        // 4a. Initialize card pipeline services
-        self.cardMergeService = CardMergeService(
-            artifactRepository: stores.artifactRepository,
-            llmFacade: llmFacade
-        )
+        // 4a. Initialize card pipeline services (deferred - needs sessionPersistenceHandler)
+        // Created below after sessionPersistenceHandler is initialized
         if let facade = llmFacade {
             self.chatInventoryService = ChatInventoryService(
                 llmFacade: facade,
@@ -216,6 +213,13 @@ final class OnboardingDependencyContainer {
             eventBus: core.eventBus,
             sessionStore: sessionStore,
             artifactRecordStore: artifactRecordStore
+        )
+
+        // 7a. Initialize card merge service (deferred from 4a - needs sessionPersistenceHandler)
+        self.cardMergeService = CardMergeService(
+            artifactRecordStore: artifactRecordStore,
+            sessionPersistenceHandler: sessionPersistenceHandler,
+            llmFacade: llmFacade
         )
 
         // 8. Initialize phase transition controller (depends on session persistence handler)

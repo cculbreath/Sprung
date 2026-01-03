@@ -5,6 +5,9 @@
 //  Service for aggregating skills and narrative cards across documents.
 //  Uses SkillBankService for skill deduplication and merging.
 //
+//  Note: Reads from SwiftData (ArtifactRecordStore) to ensure data persistence
+//  survives memory pressure during long sessions.
+//
 
 import Foundation
 import SwiftyJSON
@@ -12,14 +15,31 @@ import SwiftyJSON
 /// Service for aggregating skills and narrative cards across documents
 actor CardMergeService {
     private var llmFacade: LLMFacade?
-    private let artifactRepository: ArtifactRepository
+    private let artifactRecordStore: ArtifactRecordStore
+    private let sessionPersistenceHandler: SwiftDataSessionPersistenceHandler
     private let skillBankService: SkillBankService
 
-    init(artifactRepository: ArtifactRepository, llmFacade: LLMFacade?) {
-        self.artifactRepository = artifactRepository
+    init(
+        artifactRecordStore: ArtifactRecordStore,
+        sessionPersistenceHandler: SwiftDataSessionPersistenceHandler,
+        llmFacade: LLMFacade?
+    ) {
+        self.artifactRecordStore = artifactRecordStore
+        self.sessionPersistenceHandler = sessionPersistenceHandler
         self.llmFacade = llmFacade
         self.skillBankService = SkillBankService(llmFacade: llmFacade)
         Logger.info("🔄 CardMergeService initialized", category: .ai)
+    }
+
+    // MARK: - Private Types
+
+    /// Sendable snapshot of artifact data needed for processing
+    private struct ArtifactSnapshot: Sendable {
+        let id: String
+        let filename: String
+        let sourceType: String
+        let skills: [Skill]?
+        let narrativeCards: [KnowledgeCard]?
     }
 
     // MARK: - Skill Bank + Narrative Cards Methods
@@ -27,32 +47,22 @@ actor CardMergeService {
     /// Get merged skill bank from all artifacts
     /// Uses SkillBankService to deduplicate and merge skills across documents
     func getMergedSkillBank() async -> SkillBank? {
-        let artifacts = await artifactRepository.getArtifacts()
+        // Read directly from SwiftData for persistence across memory pressure
+        let snapshots = await getArtifactSnapshots()
         var documentSkills: [[Skill]] = []
         var sourceDocumentIds: [String] = []
 
-        Logger.info("🔧 CardMergeService: Checking \(artifacts.artifactRecords.count) artifacts for skills", category: .ai)
+        Logger.info("🔧 CardMergeService: Checking \(snapshots.count) artifacts for skills", category: .ai)
 
-        for artifact in artifacts.artifactRecords {
-            let filename = artifact["filename"].stringValue
-            let artifactId = artifact["id"].stringValue
-
-            guard let skillsString = artifact["skills"].string,
-                  let skillsData = skillsString.data(using: .utf8) else {
-                Logger.debug("⏭️ Skipping artifact '\(filename)': no skills data", category: .ai)
+        for artifact in snapshots {
+            guard let skills = artifact.skills, !skills.isEmpty else {
+                Logger.debug("⏭️ Skipping artifact '\(artifact.filename)': no skills data", category: .ai)
                 continue
             }
 
-            do {
-                let decoder = JSONDecoder()
-                decoder.keyDecodingStrategy = .convertFromSnakeCase
-                let skills = try decoder.decode([Skill].self, from: skillsData)
-                documentSkills.append(skills)
-                sourceDocumentIds.append(artifactId)
-                Logger.debug("🔧 Decoded \(skills.count) skills from artifact: \(filename)", category: .ai)
-            } catch {
-                Logger.warning("⚠️ Failed to decode skills for artifact \(artifactId): \(error.localizedDescription)", category: .ai)
-            }
+            documentSkills.append(skills)
+            sourceDocumentIds.append(artifact.id)
+            Logger.debug("🔧 Loaded \(skills.count) skills from artifact: \(artifact.filename)", category: .ai)
         }
 
         guard !documentSkills.isEmpty else {
@@ -73,43 +83,52 @@ actor CardMergeService {
     /// Get all narrative cards from all artifacts
     /// Returns cards grouped by document with document metadata
     func getAllNarrativeCards() async -> [NarrativeCardCollection] {
-        let artifacts = await artifactRepository.getArtifacts()
+        // Read directly from SwiftData for persistence across memory pressure
+        let snapshots = await getArtifactSnapshots()
         var collections: [NarrativeCardCollection] = []
 
-        Logger.info("📖 CardMergeService: Checking \(artifacts.artifactRecords.count) artifacts for narrative cards", category: .ai)
+        Logger.info("📖 CardMergeService: Checking \(snapshots.count) artifacts for narrative cards", category: .ai)
 
-        for artifact in artifacts.artifactRecords {
-            let filename = artifact["filename"].stringValue
-            let artifactId = artifact["id"].stringValue
-            let documentType = artifact["document_type"].stringValue
-
-            guard let cardsString = artifact["narrative_cards"].string,
-                  let cardsData = cardsString.data(using: .utf8) else {
-                Logger.debug("⏭️ Skipping artifact '\(filename)': no narrative_cards data", category: .ai)
+        for artifact in snapshots {
+            guard let cards = artifact.narrativeCards, !cards.isEmpty else {
+                Logger.debug("⏭️ Skipping artifact '\(artifact.filename)': no narrative_cards data", category: .ai)
                 continue
             }
 
-            do {
-                let decoder = JSONDecoder()
-                decoder.keyDecodingStrategy = .convertFromSnakeCase
-                let cards = try decoder.decode([KnowledgeCard].self, from: cardsData)
-
-                let collection = NarrativeCardCollection(
-                    documentId: artifactId,
-                    filename: filename,
-                    documentType: documentType,
-                    cards: cards
-                )
-                collections.append(collection)
-                Logger.debug("📖 Decoded \(cards.count) narrative cards from artifact: \(filename)", category: .ai)
-            } catch {
-                Logger.warning("⚠️ Failed to decode narrative cards for artifact \(artifactId): \(error.localizedDescription)", category: .ai)
-            }
+            let collection = NarrativeCardCollection(
+                documentId: artifact.id,
+                filename: artifact.filename,
+                documentType: artifact.sourceType,
+                cards: cards
+            )
+            collections.append(collection)
+            Logger.debug("📖 Loaded \(cards.count) narrative cards from artifact: \(artifact.filename)", category: .ai)
         }
 
         let totalCards = collections.reduce(0) { $0 + $1.cards.count }
         Logger.info("✅ Found \(totalCards) narrative cards across \(collections.count) documents", category: .ai)
         return collections
+    }
+
+    // MARK: - Private Helpers
+
+    /// Get Sendable snapshots of artifacts from SwiftData for the current session
+    private func getArtifactSnapshots() async -> [ArtifactSnapshot] {
+        await MainActor.run {
+            guard let session = sessionPersistenceHandler.currentSession else {
+                Logger.warning("⚠️ No current session found for artifact retrieval", category: .ai)
+                return []
+            }
+            return artifactRecordStore.artifacts(for: session).map { artifact in
+                ArtifactSnapshot(
+                    id: artifact.id.uuidString,
+                    filename: artifact.filename,
+                    sourceType: artifact.sourceType,
+                    skills: artifact.skills,
+                    narrativeCards: artifact.narrativeCards
+                )
+            }
+        }
     }
 
     /// Get a flat list of all narrative cards across all documents

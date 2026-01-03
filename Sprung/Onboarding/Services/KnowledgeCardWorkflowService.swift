@@ -109,9 +109,11 @@ final class KnowledgeCardWorkflowService {
         // Aggregate skills from all artifacts
         aggregatedSkillBank = await cardMergeService.getMergedSkillBank()
         let skillCount = aggregatedSkillBank?.skills.count ?? 0
+        ui.aggregatedSkillBank = aggregatedSkillBank
 
         // Aggregate narrative cards from all artifacts
         aggregatedNarrativeCards = await cardMergeService.getAllNarrativeCardsFlat()
+        ui.aggregatedNarrativeCards = aggregatedNarrativeCards
 
         // Update transcript with results
         let cardCount = aggregatedNarrativeCards.count
@@ -156,7 +158,10 @@ final class KnowledgeCardWorkflowService {
     func handleGenerateCardsButtonClicked() async {
         Logger.info("🚀 Generate Cards button clicked - converting narrative cards to ResRefs", category: .ai)
 
-        guard !aggregatedNarrativeCards.isEmpty else {
+        // Read from UI state (which may have been restored from SwiftData)
+        let narrativeCards = ui.aggregatedNarrativeCards
+
+        guard !narrativeCards.isEmpty else {
             Logger.error("❌ No narrative cards found - user must click 'Done with Uploads' first", category: .ai)
             await eventBus.publish(.errorOccurred("No cards found. Please upload documents and click 'Done with Uploads' first."))
             return
@@ -164,7 +169,7 @@ final class KnowledgeCardWorkflowService {
 
         // Filter out excluded cards
         let excludedIds = Set(ui.excludedCardIds)
-        let cardsToConvert = aggregatedNarrativeCards.filter { !excludedIds.contains($0.id.uuidString) }
+        let cardsToConvert = narrativeCards.filter { !excludedIds.contains($0.id.uuidString) }
 
         guard !cardsToConvert.isEmpty else {
             Logger.warning("⚠️ All cards have been excluded", category: .ai)

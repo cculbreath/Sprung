@@ -172,8 +172,8 @@ final class ArtifactRecord {
     var skills: [Skill]? {
         guard let jsonString = skillsJSON,
               let data = jsonString.data(using: .utf8) else { return nil }
+        // Note: Skill model has explicit CodingKeys for snake_case - no conversion needed
         let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
         do {
             return try decoder.decode([Skill].self, from: data)
         } catch {
@@ -186,8 +186,8 @@ final class ArtifactRecord {
     var narrativeCards: [KnowledgeCard]? {
         guard let jsonString = narrativeCardsJSON,
               let data = jsonString.data(using: .utf8) else { return nil }
+        // Note: KnowledgeCard model has explicit CodingKeys for snake_case - no conversion needed
         let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
         do {
             return try decoder.decode([KnowledgeCard].self, from: data)
         } catch {

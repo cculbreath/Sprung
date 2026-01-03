@@ -232,7 +232,7 @@ actor DocumentProcessingService {
         // Store skill bank extraction
         if let skillsResult = skills {
             let encoder = JSONEncoder()
-            encoder.keyEncodingStrategy = .convertToSnakeCase
+            // Note: Skill model has explicit CodingKeys for snake_case - no conversion needed
             encoder.dateEncodingStrategy = .iso8601
             if let skillsData = try? encoder.encode(skillsResult),
                let skillsString = String(data: skillsData, encoding: .utf8) {
@@ -253,7 +253,7 @@ actor DocumentProcessingService {
         // Store narrative knowledge cards
         if let cardsResult = narrativeCards {
             let encoder = JSONEncoder()
-            encoder.keyEncodingStrategy = .convertToSnakeCase
+            // Note: KnowledgeCard model has explicit CodingKeys for snake_case - no conversion needed
             encoder.dateEncodingStrategy = .iso8601
             if let cardsData = try? encoder.encode(cardsResult),
                let cardsString = String(data: cardsData, encoding: .utf8) {
@@ -406,8 +406,8 @@ actor DocumentProcessingService {
 
         // Update artifact on MainActor
         await MainActor.run {
+            // Note: Skill/KnowledgeCard models have explicit CodingKeys for snake_case - no conversion needed
             let encoder = JSONEncoder()
-            encoder.keyEncodingStrategy = .convertToSnakeCase
             encoder.dateEncodingStrategy = .iso8601
 
             if let skillsResult = skills,
@@ -467,8 +467,8 @@ actor DocumentProcessingService {
                 Logger.info("Summary regenerated for \(filename): \(summary.summary.count) chars", category: .ai)
             }
 
+            // Note: Skill/KnowledgeCard models have explicit CodingKeys for snake_case - no conversion needed
             let encoder = JSONEncoder()
-            encoder.keyEncodingStrategy = .convertToSnakeCase
             encoder.dateEncodingStrategy = .iso8601
 
             if let skills = skillsResult,

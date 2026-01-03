@@ -489,14 +489,45 @@ final class SwiftDataSessionPersistenceHandler {
         sessionStore.getEnabledSections(session)
     }
 
-    /// Get restored aggregated narrative cards
-    /// Note: Skills and narrative cards are now stored per-document in artifacts, not as merged inventory
+    /// Get restored aggregated narrative cards by aggregating from all session artifacts
+    /// Note: Skills and narrative cards are stored per-document in artifacts
     func getRestoredAggregatedNarrativeCards(_ session: OnboardingSession) -> [KnowledgeCard] {
-        guard let jsonString = sessionStore.getMergedInventory(session),
-              let data = jsonString.data(using: .utf8) else {
-            return []
+        var allCards: [KnowledgeCard] = []
+
+        for artifact in artifactRecordStore.artifacts(for: session) {
+            if let cards = artifact.narrativeCards {
+                allCards.append(contentsOf: cards)
+            }
         }
-        return (try? JSONDecoder().decode([KnowledgeCard].self, from: data)) ?? []
+
+        if !allCards.isEmpty {
+            Logger.info("📥 Restored \(allCards.count) narrative cards from \(artifactRecordStore.artifacts(for: session).count) artifacts", category: .ai)
+        }
+
+        return allCards
+    }
+
+    /// Get restored aggregated skill bank by aggregating skills from all session artifacts
+    func getRestoredAggregatedSkillBank(_ session: OnboardingSession) -> SkillBank? {
+        var allSkills: [Skill] = []
+        var sourceDocumentIds: [String] = []
+
+        for artifact in artifactRecordStore.artifacts(for: session) {
+            if let skills = artifact.skills, !skills.isEmpty {
+                allSkills.append(contentsOf: skills)
+                sourceDocumentIds.append(artifact.id.uuidString)
+            }
+        }
+
+        guard !allSkills.isEmpty else { return nil }
+
+        Logger.info("📥 Restored \(allSkills.count) skills from \(sourceDocumentIds.count) artifacts", category: .ai)
+
+        return SkillBank(
+            skills: allSkills,
+            generatedAt: Date(),
+            sourceDocumentIds: sourceDocumentIds
+        )
     }
 
     /// Get restored excluded card IDs

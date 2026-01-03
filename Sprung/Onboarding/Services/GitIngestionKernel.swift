@@ -144,8 +144,8 @@ actor GitIngestionKernel {
 
             // Step 3: Create artifact record
             // Encode skills and narrative cards separately
+            // Note: Skill/KnowledgeCard models have explicit CodingKeys for snake_case - no conversion needed
             let encoder = JSONEncoder()
-            encoder.keyEncodingStrategy = .convertToSnakeCase
             encoder.dateEncodingStrategy = .iso8601
 
             let skillsData = try encoder.encode(analysis.skills)

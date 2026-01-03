@@ -99,8 +99,8 @@ actor ChatInventoryService {
         let artifactId = "chat-transcript-\(UUID().uuidString.prefix(8))"
 
         // Encode to JSON strings
+        // Note: Skill/KnowledgeCard models have explicit CodingKeys for snake_case - no conversion needed
         let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .convertToSnakeCase
         let skillsJSON = skills.isEmpty ? nil : String(data: try encoder.encode(skills), encoding: .utf8)
         let narrativeCardsJSON = narrativeCards.isEmpty ? nil : String(data: try encoder.encode(narrativeCards), encoding: .utf8)
 
