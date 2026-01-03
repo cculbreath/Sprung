@@ -464,17 +464,3 @@ struct DiscoverySettingsSection: View {
         Logger.info("🔄 Search preferences reset", category: .appLifecycle)
     }
 }
-
-// MARK: - Section Header (reuse from SettingsView if exported, otherwise define here)
-
-private struct SettingsSectionHeader: View {
-    let title: String
-    let systemImage: String
-
-    var body: some View {
-        Label(title, systemImage: systemImage)
-            .font(.headline)
-            .fontWeight(.semibold)
-            .foregroundStyle(.primary)
-    }
-}
