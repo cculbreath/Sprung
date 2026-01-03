@@ -11,6 +11,7 @@ import SwiftUI
 /// Full-width status bar showing background agent operations
 struct BackgroundAgentStatusBar: View {
     let tracker: AgentActivityTracker
+    // Keep parameters for API compatibility but rely on agent tracker for display
     let extractionMessage: String?
     let isExtractionInProgress: Bool
 
@@ -18,7 +19,7 @@ struct BackgroundAgentStatusBar: View {
     private let maxVisibleAgents = 3
 
     private var hasActivity: Bool {
-        tracker.isAnyRunning || isExtractionInProgress
+        tracker.isAnyRunning
     }
 
     /// Running agents to display (limited to maxVisibleAgents)
@@ -42,12 +43,8 @@ struct BackgroundAgentStatusBar: View {
     var body: some View {
         if hasActivity {
             HStack(spacing: 4) {
-                // Show extraction progress if active
-                if isExtractionInProgress, let message = extractionMessage {
-                    AgentStatusItem(message: message)
-                }
-
                 // Show each running agent with its own spinner
+                // Document ingestion agents include their status in the agent tracker
                 ForEach(visibleAgents) { agent in
                     AgentStatusItem(message: statusMessage(for: agent))
                 }

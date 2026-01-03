@@ -1,17 +1,15 @@
 import SwiftUI
 
-/// View that displays the knowledge card collection from merged inventory.
-/// Multi-agent workflow: merge → assignments → Generate Cards button → parallel generation
+/// View that displays the aggregated narrative cards for review before generation.
 struct KnowledgeCardCollectionView: View {
     let coordinator: OnboardingInterviewCoordinator
     let onGenerateCards: () -> Void
     let onAdvanceToNextPhase: () -> Void
 
-    @State private var selectedCardId: String?
-    @State private var showGapsPopover = false
+    @State private var selectedCardId: UUID?
 
-    private var mergedCards: [MergedCardInventory.MergedCard] {
-        coordinator.ui.mergedInventory?.mergedCards ?? []
+    private var narrativeCards: [KnowledgeCard] {
+        coordinator.ui.aggregatedNarrativeCards
     }
 
     private var isReadyForGeneration: Bool {
@@ -27,22 +25,14 @@ struct KnowledgeCardCollectionView: View {
     }
 
     private var includedCardCount: Int {
-        mergedCards.count - coordinator.ui.excludedCardIds.count
-    }
-
-    private var gapCount: Int {
-        coordinator.ui.identifiedGapCount
-    }
-
-    private var mergedInventory: MergedCardInventory? {
-        coordinator.ui.mergedInventory
+        narrativeCards.count - coordinator.ui.excludedCardIds.count
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             headerSection
 
-            if mergedCards.isEmpty {
+            if narrativeCards.isEmpty {
                 emptyState
             } else {
                 cardListSection
@@ -74,8 +64,8 @@ struct KnowledgeCardCollectionView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
                 Spacer()
-                if !mergedCards.isEmpty {
-                    Text("\(mergedCards.count) card\(mergedCards.count == 1 ? "" : "s")")
+                if !narrativeCards.isEmpty {
+                    Text("\(narrativeCards.count) card\(narrativeCards.count == 1 ? "" : "s")")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -103,20 +93,20 @@ struct KnowledgeCardCollectionView: View {
     private var cardListSection: some View {
         ScrollView {
             VStack(spacing: 4) {
-                ForEach(mergedCards, id: \.cardId) { card in
-                    let isExcluded = coordinator.ui.excludedCardIds.contains(card.cardId)
+                ForEach(narrativeCards) { card in
+                    let isExcluded = coordinator.ui.excludedCardIds.contains(card.id.uuidString)
 
-                    MergedCardRow(
+                    NarrativeCardRow(
                         card: card,
                         isGenerating: isGenerating,
                         showAssignments: isReadyForGeneration,
                         isExcluded: isExcluded,
-                        isSelected: selectedCardId == card.cardId,
+                        isSelected: selectedCardId == card.id,
                         onToggleExclude: {
                             if isExcluded {
-                                coordinator.ui.excludedCardIds.remove(card.cardId)
+                                coordinator.ui.excludedCardIds.remove(card.id.uuidString)
                             } else {
-                                coordinator.ui.excludedCardIds.insert(card.cardId)
+                                coordinator.ui.excludedCardIds.insert(card.id.uuidString)
                             }
                             // Persist exclusion changes
                             Task {
@@ -125,7 +115,7 @@ struct KnowledgeCardCollectionView: View {
                         },
                         onSelect: {
                             withAnimation(.easeInOut(duration: 0.2)) {
-                                selectedCardId = selectedCardId == card.cardId ? nil : card.cardId
+                                selectedCardId = selectedCardId == card.id ? nil : card.id
                             }
                         }
                     )
@@ -149,20 +139,6 @@ struct KnowledgeCardCollectionView: View {
             .controlSize(.small)
             .tint(.green)
             .disabled(includedCardCount == 0 || isMerging)
-
-            if gapCount > 0 {
-                Button {
-                    showGapsPopover = true
-                } label: {
-                    Text("\(gapCount) documentation gap\(gapCount == 1 ? "" : "s") identified — upload more docs or proceed")
-                        .font(.caption2)
-                        .foregroundStyle(.orange)
-                }
-                .buttonStyle(.plain)
-                .popover(isPresented: $showGapsPopover) {
-                    GapsPopoverContent(gaps: mergedInventory?.gaps ?? [])
-                }
-            }
 
             Text("Click cards above to review details, use trash to exclude")
                 .font(.caption2)
@@ -190,8 +166,8 @@ struct KnowledgeCardCollectionView: View {
     }
 }
 
-private struct MergedCardRow: View {
-    let card: MergedCardInventory.MergedCard
+private struct NarrativeCardRow: View {
+    let card: KnowledgeCard
     let isGenerating: Bool
     let showAssignments: Bool
     let isExcluded: Bool
@@ -254,7 +230,7 @@ private struct MergedCardRow: View {
 
             // Expanded detail section
             if isSelected {
-                CardDetailSection(card: card)
+                NarrativeCardDetailSection(card: card)
                     .padding(.leading, 28)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
@@ -286,13 +262,11 @@ private struct MergedCardRow: View {
     private var typeTag: some View {
         let typeName: String
         let typeColor: Color
-        switch card.cardType.lowercased() {
-        case "job", "employment": typeName = "Job"; typeColor = .blue
-        case "skill": typeName = "Skill"; typeColor = .purple
-        case "project": typeName = "Project"; typeColor = .orange
-        case "achievement": typeName = "Achievement"; typeColor = .green
-        case "education": typeName = "Education"; typeColor = .cyan
-        default: typeName = card.cardType.capitalized; typeColor = .gray
+        switch card.cardType {
+        case .employment: typeName = "Employment"; typeColor = .blue
+        case .project: typeName = "Project"; typeColor = .green
+        case .achievement: typeName = "Achievement"; typeColor = .yellow
+        case .education: typeName = "Education"; typeColor = .cyan
         }
         return Text(typeName)
             .font(.caption2)
@@ -324,56 +298,60 @@ private struct MergedCardRow: View {
 
 // MARK: - Card Detail Section
 
-private struct CardDetailSection: View {
-    let card: MergedCardInventory.MergedCard
+private struct NarrativeCardDetailSection: View {
+    let card: KnowledgeCard
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            // Evidence quality
-            HStack(spacing: 4) {
-                Text("Evidence:")
+            // Organization
+            if let org = card.organization, !org.isEmpty {
+                HStack(spacing: 4) {
+                    Text("Organization:")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Text(org)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.primary)
+                }
+            }
+
+            // Evidence anchors count
+            if !card.evidenceAnchors.isEmpty {
+                HStack(spacing: 4) {
+                    Image(systemName: "doc.text.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Text("\(card.evidenceAnchors.count) evidence anchor\(card.evidenceAnchors.count == 1 ? "" : "s")")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            // Domains
+            if !card.extractable.domains.isEmpty {
+                DetailList(title: "Domains", items: card.extractable.domains, icon: "cpu.fill", color: .blue)
+            }
+
+            // Scale/outcomes
+            if !card.extractable.scale.isEmpty {
+                DetailList(title: "Scale", items: card.extractable.scale, icon: "chart.line.uptrend.xyaxis", color: .green)
+            }
+
+            // Keywords
+            if !card.extractable.keywords.isEmpty {
+                DetailList(title: "Keywords", items: card.extractable.keywords, icon: "tag.fill", color: .purple)
+            }
+
+            // Narrative preview
+            if !card.narrative.isEmpty {
+                Text(String(card.narrative.prefix(200)) + (card.narrative.count > 200 ? "..." : ""))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                Text(card.evidenceQuality.rawValue.capitalized)
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(evidenceColor)
-            }
-
-            // Key facts
-            if !card.keyFactStatements.isEmpty {
-                DetailList(title: "Key Facts", items: card.keyFactStatements, icon: "lightbulb.fill", color: .yellow)
-            }
-
-            // Technologies
-            if !card.combinedTechnologies.isEmpty {
-                DetailList(title: "Technologies", items: card.combinedTechnologies, icon: "cpu.fill", color: .blue)
-            }
-
-            // Outcomes
-            if !card.combinedOutcomes.isEmpty {
-                DetailList(title: "Outcomes", items: card.combinedOutcomes, icon: "chart.line.uptrend.xyaxis", color: .green)
-            }
-
-            // Sources
-            let sourceCount = 1 + card.supportingSources.count
-            HStack(spacing: 4) {
-                Image(systemName: "doc.text.fill")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                Text("\(sourceCount) source\(sourceCount == 1 ? "" : "s")")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .lineLimit(4)
+                    .padding(.top, 4)
             }
         }
         .padding(.vertical, 4)
-    }
-
-    private var evidenceColor: Color {
-        switch card.evidenceQuality {
-        case .strong: return .green
-        case .moderate: return .orange
-        case .weak: return .red
-        }
     }
 }
 
@@ -406,76 +384,6 @@ private struct DetailList: View {
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
-        }
-    }
-}
-
-// MARK: - Gaps Popover
-
-private struct GapsPopoverContent: View {
-    let gaps: [MergedCardInventory.DocumentationGap]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Documentation Gaps")
-                .font(.headline)
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(gaps, id: \.cardTitle) { gap in
-                        GapRow(gap: gap)
-                    }
-                }
-            }
-            .frame(maxHeight: 300)
-        }
-        .padding()
-        .frame(width: 350)
-    }
-}
-
-private struct GapRow: View {
-    let gap: MergedCardInventory.DocumentationGap
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(gap.cardTitle)
-                .font(.caption.weight(.medium))
-
-            HStack(spacing: 4) {
-                Image(systemName: gapIcon)
-                    .font(.caption2)
-                    .foregroundStyle(.orange)
-                Text(gapDescription)
-                    .font(.caption2)
-                    .foregroundStyle(.orange)
-            }
-
-            if !gap.recommendedDocs.isEmpty {
-                Text("Recommended: \(gap.recommendedDocs.joined(separator: ", "))")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-        }
-        .padding(8)
-        .background(Color.orange.opacity(0.05))
-        .cornerRadius(6)
-    }
-
-    private var gapIcon: String {
-        switch gap.gapType {
-        case .missingPrimarySource: return "doc.questionmark"
-        case .insufficientDetail: return "text.magnifyingglass"
-        case .noQuantifiedOutcomes: return "number"
-        }
-    }
-
-    private var gapDescription: String {
-        switch gap.gapType {
-        case .missingPrimarySource: return "Needs primary documentation"
-        case .insufficientDetail: return "Needs more detail"
-        case .noQuantifiedOutcomes: return "Needs quantified outcomes"
         }
     }
 }

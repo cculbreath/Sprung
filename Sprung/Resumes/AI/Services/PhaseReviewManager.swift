@@ -121,6 +121,7 @@ class PhaseReviewManager {
     private let applicantProfileStore: ApplicantProfileStore
     private let resRefStore: ResRefStore
     private let toolRunner: ToolConversationRunner
+    private let guidanceStore: InferenceGuidanceStore?
     weak var delegate: PhaseReviewDelegate?
 
     // MARK: - Phase Review State
@@ -139,7 +140,8 @@ class PhaseReviewManager {
         streamingService: RevisionStreamingService,
         applicantProfileStore: ApplicantProfileStore,
         resRefStore: ResRefStore,
-        toolRunner: ToolConversationRunner
+        toolRunner: ToolConversationRunner,
+        guidanceStore: InferenceGuidanceStore? = nil
     ) {
         self.llm = llm
         self.openRouterService = openRouterService
@@ -149,6 +151,7 @@ class PhaseReviewManager {
         self.applicantProfileStore = applicantProfileStore
         self.resRefStore = resRefStore
         self.toolRunner = toolRunner
+        self.guidanceStore = guidanceStore
     }
 
     // MARK: - Tool Response Parsing
@@ -429,6 +432,7 @@ class PhaseReviewManager {
                 exportCoordinator: exportCoordinator,
                 applicantProfile: applicantProfileStore.currentProfile(),
                 allResRefs: resRefStore.resRefs,
+                guidanceStore: guidanceStore,
                 saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
             )
 
@@ -641,6 +645,7 @@ class PhaseReviewManager {
                 exportCoordinator: exportCoordinator,
                 applicantProfile: applicantProfileStore.currentProfile(),
                 allResRefs: resRefStore.resRefs,
+                guidanceStore: guidanceStore,
                 saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
             )
 
@@ -871,6 +876,7 @@ class PhaseReviewManager {
                 exportCoordinator: exportCoordinator,
                 applicantProfile: applicantProfileStore.currentProfile(),
                 allResRefs: resRefStore.resRefs,
+                guidanceStore: guidanceStore,
                 saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
             )
 

@@ -31,6 +31,7 @@ final class AppDependencies {
     let reasoningStreamManager: ReasoningStreamManager
     let resumeReviseViewModel: ResumeReviseViewModel
     let searchOpsCoordinator: DiscoveryCoordinator
+    let guidanceStore: InferenceGuidanceStore
     // MARK: - UI State
     let dragInfo: DragInfo
     let debugSettingsStore: DebugSettingsStore
@@ -55,6 +56,8 @@ final class AppDependencies {
         let applicantProfileStore = ApplicantProfileStore(context: modelContext)
         self.applicantProfileStore = applicantProfileStore
         self.onboardingSessionStore = OnboardingSessionStore(context: modelContext)
+        let guidanceStore = InferenceGuidanceStore(context: modelContext)
+        self.guidanceStore = guidanceStore
         // Core export orchestration
         let resumeExportService = ResumeExportService(
             templateStore: templateStore,
@@ -135,7 +138,8 @@ final class AppDependencies {
             reasoningStreamManager: reasoningStreamManager,
             exportCoordinator: resumeExportCoordinator,
             applicantProfileStore: applicantProfileStore,
-            resRefStore: resRefStore
+            resRefStore: resRefStore,
+            guidanceStore: guidanceStore
         )
         self.resumeReviseViewModel = resumeReviseViewModel
         let interviewDataStore = InterviewDataStore()

@@ -1,0 +1,64 @@
+# Knowledge Card Extraction
+
+Extract knowledge cards that capture the STORY, not just facts.
+
+## Document
+- ID: {DOC_ID}
+- Filename: {FILENAME}
+
+## Content
+{EXTRACTED_CONTENT}
+
+---
+
+## Card Types
+
+- **employment**: Role at an organization
+- **project**: Specific initiative or deliverable
+- **achievement**: Award, publication, recognition
+- **education**: Degree or credential
+
+NOTE: Skills are extracted separately into the Skill Bank.
+Do NOT create skill-type cards here.
+
+## Narrative Guidelines
+
+Write 500-2000 words per card capturing:
+
+1. **WHY**: What problem was being solved? What motivated the work?
+2. **JOURNEY**: How did understanding evolve? What was tried?
+3. **LESSONS**: What worked? What didn't? What would be done differently?
+4. **VOICE**: Use the author's own words and phrasing
+5. **THINKING**: Design decisions, tradeoffs, insights
+
+### Good vs Bad
+
+**GOOD** (captures thinking):
+> "The construction was motivated by earlier hand-rotation experiments that suffered from irregularities. It was clear a custom tool would reduce mechanical noise. I spent several weeks on fabrication—over 50 parts machined from raw materials. The design has been successful mechanically, with vibrational noise at ±60nm. But I learned lessons: I failed to include gaskets, and waterproofing under pressure is hard. Research is fluid—the best experiments can be readily extended and reconfigured."
+
+**BAD** (ATS bullets):
+> "Designed precision mechanical system. Achieved ±60nm stability. Used SolidWorks and CNC machining."
+
+## Extractable Metadata
+
+For job matching, extract:
+- **domains**: Fields of expertise (not individual skills)
+- **scale**: Quantified elements (numbers, metrics, scope)
+- **keywords**: High-level terms for job matching
+
+Note: Individual skills go in Skill Bank, not here.
+
+## Evidence Anchors
+
+- Page numbers or section references
+- 1-2 verbatim excerpts capturing voice (20-50 words each)
+
+## Output Quality
+
+For each card:
+- Narrative should be rich, detailed, and capture the person's voice
+- WHY/JOURNEY/LESSONS structure should be clear
+- Include specific details, numbers, and outcomes from the document
+- Preserve the author's own phrasing and perspective
+- Evidence anchors should point to specific locations
+- Extractable metadata should support job matching

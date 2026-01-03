@@ -1,0 +1,60 @@
+# Title Set Generation
+
+Generate 4-title combinations from vocabulary for resume headers.
+
+## Vocabulary
+
+{VOCABULARY_JSON}
+
+---
+
+## Rules
+
+1. **Exactly 4 titles per set** - no more, no less
+2. **Single words only** - use terms from the vocabulary
+3. **Vary rhythm** - mix syllable counts for flow
+4. **Each set has emphasis**: technical, research, leadership, or balanced
+5. **Generate 12-15 sets** - variety for different job types
+
+## Emphasis Types
+
+- **technical**: Focus on hands-on/engineering roles
+- **research**: Focus on R&D/scientific roles
+- **leadership**: Focus on management/direction roles
+- **balanced**: Mix of all aspects
+
+## Good Examples
+
+- "Physicist. Developer. Educator. Machinist." (balanced, varied rhythm)
+- "Engineer. Scientist. Builder. Mentor." (balanced, action-oriented)
+- "Researcher. Analyst. Designer. Communicator." (research-leaning)
+
+## Bad Examples
+
+- "Engineer. Developer. Programmer. Coder." (redundant, no variety)
+- "Leader. Manager. Director. Executive." (too narrow)
+
+## Suggested Job Types
+
+Tag each set with job types it works well for:
+- "R&D", "software", "academic", "startup", "enterprise", "consulting", "management"
+
+## Output
+
+Return JSON with exactly this structure:
+
+```json
+{
+  "sets": [
+    {
+      "id": "uuid-string",
+      "titles": ["Physicist", "Developer", "Educator", "Machinist"],
+      "emphasis": "balanced",
+      "suggested_for": ["R&D", "interdisciplinary"],
+      "is_favorite": false
+    }
+  ]
+}
+```
+
+Generate valid UUID strings for each set's id field.

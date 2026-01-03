@@ -21,7 +21,7 @@ struct SettingsView: View {
     @AppStorage("backgroundProcessingModelId") private var backgroundProcessingModelId: String = "google/gemini-2.0-flash-001"
     @AppStorage("knowledgeCardTokenLimit") private var knowledgeCardTokenLimit: Int = 8000
     @AppStorage("onboardingMaxConcurrentExtractions") private var maxConcurrentExtractions: Int = 5
-    @AppStorage("maxConcurrentPDFExtractions") private var maxConcurrentPDFExtractions: Int = 4
+    @AppStorage("maxConcurrentPDFExtractions") private var maxConcurrentPDFExtractions: Int = 30
     @AppStorage("pdfJudgeUseFourUp") private var pdfJudgeUseFourUp: Bool = false
     @AppStorage("pdfJudgeDPI") private var pdfJudgeDPI: Int = 150
     @AppStorage("onboardingEphemeralTurns") private var ephemeralTurns: Int = 3
@@ -780,7 +780,7 @@ private extension SettingsView {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
 
-            Stepper(value: $maxConcurrentPDFExtractions, in: 1...10) {
+            Stepper(value: $maxConcurrentPDFExtractions, in: 1...50) {
                 HStack {
                     Text("PDF Vision Extraction Concurrency")
                     Spacer()
@@ -789,7 +789,7 @@ private extension SettingsView {
                         .monospacedDigit()
                 }
             }
-            Text("Pages processed in parallel when LLM vision is used for complex PDFs. Higher values use more API quota.")
+            Text("Pages processed in parallel when LLM vision is used for complex PDFs. Default 30, max 50. Higher values use more API quota.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
 

@@ -600,7 +600,7 @@ struct KnowledgeCardBrowserOverlay: View {
             )
 
             // Update the card
-            var updatedCard = card
+            let updatedCard = card
             updatedCard.content = summary.trimmingCharacters(in: .whitespacesAndNewlines)
             onCardUpdated(updatedCard)
 

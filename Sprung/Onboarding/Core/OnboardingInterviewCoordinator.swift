@@ -838,9 +838,9 @@ final class OnboardingInterviewCoordinator {
     }
 
     /// Convert ArtifactRecord to JSON format.
-    /// Uses metadataJSON as base to preserve all fields (card_inventory, summary, etc.)
+    /// Uses metadataJSON as base to preserve all fields (skills, narrative cards, summary, etc.)
     private func artifactRecordToJSON(_ record: ArtifactRecord) -> JSON {
-        // Start with the full persisted record (includes card_inventory, metadata, etc.)
+        // Start with the full persisted record (includes skills, narrative cards, metadata, etc.)
         var json: JSON
         if let metadataJSON = record.metadataJSON,
            let data = metadataJSON.data(using: .utf8),
@@ -863,8 +863,10 @@ final class OnboardingInterviewCoordinator {
         json["title"].string = record.title
         json["content_type"].string = record.contentType
         json["size_bytes"].int = record.sizeInBytes
-        json["has_card_inventory"].bool = record.hasCardInventory
-        json["card_inventory"].string = record.cardInventoryJSON
+        json["has_skills"].bool = record.hasSkills
+        json["has_narrative_cards"].bool = record.hasNarrativeCards
+        json["skills"].string = record.skillsJSON
+        json["narrative_cards"].string = record.narrativeCardsJSON
         return json
     }
 
@@ -960,24 +962,27 @@ final class OnboardingInterviewCoordinator {
         await eventBus.clearHistory()
     }
 
-    /// Clear all card inventories and regenerate them with the new schema, then trigger merge
+    /// Clear all summaries and card inventories and regenerate them, then trigger merge
     func regenerateCardInventoriesAndMerge() async {
-        Logger.info("🔄 Clearing and regenerating ALL card inventories (schema change)...", category: .ai)
+        Logger.info("🔄 Clearing and regenerating ALL summaries + card inventories...", category: .ai)
 
         // Get all non-writing-sample artifacts
         let artifactsToProcess = sessionArtifacts.filter { !$0.isWritingSample }
 
-        Logger.info("📦 Found \(artifactsToProcess.count) artifacts to regenerate inventories for", category: .ai)
+        Logger.info("📦 Found \(artifactsToProcess.count) artifacts to regenerate", category: .ai)
 
         guard !artifactsToProcess.isEmpty else {
             Logger.info("⚠️ No artifacts to process", category: .ai)
             return
         }
 
-        // Clear existing inventories first (schema changed)
+        // Clear existing summaries and knowledge extraction first
         for artifact in artifactsToProcess {
-            artifact.cardInventoryJSON = nil
-            Logger.info("🗑️ Cleared inventory for: \(artifact.filename)", category: .ai)
+            artifact.summary = nil
+            artifact.briefDescription = nil
+            artifact.skillsJSON = nil
+            artifact.narrativeCardsJSON = nil
+            Logger.info("🗑️ Cleared summary + knowledge for: \(artifact.filename)", category: .ai)
         }
 
         // Use same concurrency limit as document extraction
@@ -1002,7 +1007,7 @@ final class OnboardingInterviewCoordinator {
                 }
 
                 group.addTask {
-                    await documentProcessingService.generateInventoryForExistingArtifact(artifact)
+                    await documentProcessingService.generateSummaryAndKnowledgeExtractionForExistingArtifact(artifact)
                 }
                 inFlight += 1
                 index += 1
@@ -1013,11 +1018,88 @@ final class OnboardingInterviewCoordinator {
             for await _ in group { }
         }
 
-        Logger.info("✅ All inventory regeneration complete", category: .ai)
+        Logger.info("✅ All summary + inventory regeneration complete", category: .ai)
 
         // Trigger the merge
         Logger.info("🔄 Triggering card merge...", category: .ai)
         await eventBus.publish(.doneWithUploadsClicked)
+    }
+
+    /// Selective regeneration based on user choices from RegenOptionsDialog
+    /// - Parameters:
+    ///   - artifactIds: Set of artifact IDs to process
+    ///   - regenerateSummary: Whether to regenerate summaries
+    ///   - regenerateInventory: Whether to regenerate card inventories
+    ///   - runMerge: Whether to run card merge after completion
+    func regenerateSelected(
+        artifactIds: Set<String>,
+        regenerateSummary: Bool,
+        regenerateInventory: Bool,
+        runMerge: Bool
+    ) async {
+        Logger.info("🔄 Selective regeneration: \(artifactIds.count) artifacts, summary=\(regenerateSummary), inventory=\(regenerateInventory), merge=\(runMerge)", category: .ai)
+
+        // Get selected artifacts
+        let artifactsToProcess = sessionArtifacts.filter { artifactIds.contains($0.idString) }
+
+        guard !artifactsToProcess.isEmpty else {
+            Logger.info("⚠️ No artifacts selected", category: .ai)
+            return
+        }
+
+        // Clear selected fields first
+        for artifact in artifactsToProcess {
+            if regenerateSummary {
+                artifact.summary = nil
+                artifact.briefDescription = nil
+            }
+            if regenerateInventory {
+                artifact.skillsJSON = nil
+                artifact.narrativeCardsJSON = nil
+            }
+            Logger.info("🗑️ Cleared selected fields for: \(artifact.filename)", category: .ai)
+        }
+
+        // Use same concurrency limit as document extraction
+        let maxConcurrent = UserDefaults.standard.integer(forKey: "onboardingMaxConcurrentExtractions")
+        let concurrencyLimit = maxConcurrent > 0 ? maxConcurrent : 5
+
+        let documentProcessingService = container.documentProcessingService
+
+        // Process with limited concurrency
+        await withTaskGroup(of: Void.self) { group in
+            var inFlight = 0
+            var index = 0
+
+            for artifact in artifactsToProcess {
+                if inFlight >= concurrencyLimit {
+                    await group.next()
+                    inFlight -= 1
+                }
+
+                group.addTask {
+                    if regenerateSummary && regenerateInventory {
+                        await documentProcessingService.generateSummaryAndKnowledgeExtractionForExistingArtifact(artifact)
+                    } else if regenerateInventory {
+                        await documentProcessingService.generateKnowledgeExtractionForExistingArtifact(artifact)
+                    } else if regenerateSummary {
+                        await documentProcessingService.generateSummaryForExistingArtifact(artifact)
+                    }
+                }
+                inFlight += 1
+                index += 1
+                Logger.info("📦 Dispatched \(index)/\(artifactsToProcess.count): \(artifact.filename)", category: .ai)
+            }
+
+            for await _ in group { }
+        }
+
+        Logger.info("✅ Selective regeneration complete", category: .ai)
+
+        if runMerge {
+            Logger.info("🔄 Triggering card merge...", category: .ai)
+            await eventBus.publish(.doneWithUploadsClicked)
+        }
     }
 
     func resetAllOnboardingData() async {

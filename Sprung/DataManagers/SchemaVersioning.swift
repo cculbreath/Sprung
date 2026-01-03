@@ -42,7 +42,9 @@ enum SprungSchema {
         NetworkingInteraction.self,
         EventFeedback.self,
         // Job Search Coach Models
-        CoachingSession.self
+        CoachingSession.self,
+        // Inference Guidance
+        InferenceGuidance.self
     ]
     static var schema: Schema {
         Schema(models)

@@ -50,9 +50,27 @@ enum GitAgentError: LocalizedError {
 
 // MARK: - Analysis Result
 
-/// Git repository analysis now outputs DocumentInventory format for unified card pipeline.
-/// This typealias maintains backward compatibility while using the standard inventory format.
-typealias GitAnalysisResult = DocumentInventory
+/// Git repository analysis result containing skills and narrative cards.
+struct GitAnalysisResult: Codable {
+    let skills: [Skill]
+    let narrativeCards: [KnowledgeCard]
+    let repoName: String
+    let analyzedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case skills
+        case narrativeCards = "narrative_cards"
+        case repoName = "repo_name"
+        case analyzedAt = "analyzed_at"
+    }
+
+    init(skills: [Skill] = [], narrativeCards: [KnowledgeCard] = [], repoName: String, analyzedAt: Date = Date()) {
+        self.skills = skills
+        self.narrativeCards = narrativeCards
+        self.repoName = repoName
+        self.analyzedAt = analyzedAt
+    }
+}
 
 // MARK: - Git Analysis Agent
 
@@ -610,30 +628,87 @@ class GitAnalysisAgent {
 
         do {
             let params = try JSONDecoder().decode(CompleteAnalysisTool.Parameters.self, from: data)
+            let repoName = repoPath.lastPathComponent
+            let docId = repoName
 
-            // Convert to DocumentInventory.ProposedCardEntry format
-            let proposedCards: [DocumentInventory.ProposedCardEntry] = params.cards.map { card in
-                // Convert plain string facts to CategorizedFact with default category
-                let categorizedFacts = card.keyFacts.map { CategorizedFact(category: .general, statement: $0) }
-                return DocumentInventory.ProposedCardEntry(
-                    cardType: DocumentInventory.ProposedCardEntry.CardType(rawValue: card.cardType) ?? .skill,
-                    proposedTitle: card.proposedTitle,
-                    evidenceStrength: DocumentInventory.ProposedCardEntry.EvidenceStrength(rawValue: card.evidenceStrength) ?? .primary,
-                    evidenceLocations: card.evidenceLocations,
-                    keyFacts: categorizedFacts,
-                    technologies: card.technologies,
-                    quantifiedOutcomes: card.quantifiedOutcomes,
-                    dateRange: card.dateRange,
-                    crossReferences: card.crossReferences,
-                    extractionNotes: card.extractionNotes
-                )
+            var skills: [Skill] = []
+            var narrativeCards: [KnowledgeCard] = []
+
+            for card in params.cards {
+                if card.cardType == "skill" {
+                    // Convert skill cards to Skill objects
+                    let evidence = card.evidenceLocations.map { location in
+                        SkillEvidence(
+                            documentId: docId,
+                            location: location,
+                            context: card.extractionNotes ?? "",
+                            strength: EvidenceStrength(rawValue: card.evidenceStrength) ?? .supporting
+                        )
+                    }
+
+                    let skill = Skill(
+                        canonical: card.proposedTitle,
+                        atsVariants: card.technologies,
+                        category: .tools,  // Git analysis primarily finds tools/frameworks
+                        proficiency: .proficient,  // Default to proficient for demonstrated skills
+                        evidence: evidence
+                    )
+                    skills.append(skill)
+                } else {
+                    // Convert other card types to KnowledgeCard
+                    let cardType: CardType = {
+                        switch card.cardType {
+                        case "project": return .project
+                        case "achievement": return .achievement
+                        case "education": return .education
+                        case "employment": return .employment
+                        default: return .project
+                        }
+                    }()
+
+                    // Convert evidence locations to EvidenceAnchor
+                    let evidenceAnchors = card.evidenceLocations.map { location in
+                        EvidenceAnchor(
+                            documentId: docId,
+                            location: location,
+                            verbatimExcerpt: nil
+                        )
+                    }
+
+                    // Build narrative from key facts and outcomes
+                    var narrativeParts: [String] = []
+                    if let notes = card.extractionNotes, !notes.isEmpty {
+                        narrativeParts.append(notes)
+                    }
+                    if !card.keyFacts.isEmpty {
+                        narrativeParts.append("\n## Key Points\n" + card.keyFacts.joined(separator: "\n• "))
+                    }
+                    if !card.quantifiedOutcomes.isEmpty {
+                        narrativeParts.append("\n## Outcomes\n" + card.quantifiedOutcomes.joined(separator: "\n• "))
+                    }
+
+                    let narrativeCard = KnowledgeCard(
+                        cardType: cardType,
+                        title: card.proposedTitle,
+                        narrative: narrativeParts.joined(separator: "\n"),
+                        evidenceAnchors: evidenceAnchors,
+                        extractable: ExtractableMetadata(
+                            domains: card.technologies.prefix(5).map { String($0) },
+                            scale: card.quantifiedOutcomes,
+                            keywords: card.keyFacts.prefix(3).map { String($0) }
+                        ),
+                        dateRange: card.dateRange,
+                        organization: repoName
+                    )
+                    narrativeCards.append(narrativeCard)
+                }
             }
 
-            return DocumentInventory(
-                documentId: repoPath.lastPathComponent,  // Use repo name as document ID
-                documentType: params.documentType,
-                proposedCards: proposedCards,
-                generatedAt: Date()
+            return GitAnalysisResult(
+                skills: skills,
+                narrativeCards: narrativeCards,
+                repoName: repoName,
+                analyzedAt: Date()
             )
         } catch {
             throw GitAgentError.invalidToolCall("Failed to decode complete_analysis: \(error.localizedDescription)")

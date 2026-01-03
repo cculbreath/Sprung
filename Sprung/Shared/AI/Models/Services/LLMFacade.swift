@@ -954,17 +954,19 @@ final class LLMFacade {
     }
 
     /// Generate structured JSON output from a prompt using Gemini's native structured output mode.
-    /// When a schema is provided, uses `responseMimeType: "application/json"` and `responseJsonSchema`
+    /// When a schema is provided, uses `responseMimeType: "application/json"` and `responseSchema`
     /// to guarantee schema-conforming JSON output.
     ///
     /// - Parameters:
     ///   - prompt: The prompt text requesting JSON output
     ///   - modelId: Gemini model ID (uses default if nil)
+    ///   - maxOutputTokens: Maximum output tokens (default 65536, but callers should use lower values for bounded outputs)
     ///   - jsonSchema: Optional JSON Schema dictionary. When provided, enables native structured output.
     /// - Returns: Raw JSON string response guaranteed to match the schema
     func generateStructuredJSON(
         prompt: String,
         modelId: String? = nil,
+        maxOutputTokens: Int = 65536,
         jsonSchema: [String: Any]? = nil
     ) async throws -> String {
         guard let service = googleAIService else {
@@ -973,6 +975,7 @@ final class LLMFacade {
         return try await service.generateStructuredJSON(
             prompt: prompt,
             modelId: modelId,
+            maxOutputTokens: maxOutputTokens,
             jsonSchema: jsonSchema
         )
     }

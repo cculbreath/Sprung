@@ -69,8 +69,10 @@ final class OnboardingUIState {
     var isMergingCards: Bool = false
     /// True when actively generating knowledge cards
     var isGeneratingCards: Bool = false
-    /// Full merged inventory for detail views and gap display
-    var mergedInventory: MergedCardInventory?
+    /// Aggregated skill bank from all documents
+    var aggregatedSkillBank: SkillBank?
+    /// Aggregated narrative cards from all documents
+    var aggregatedNarrativeCards: [KnowledgeCard] = []
     /// Card IDs that user has excluded from generation
     var excludedCardIds: Set<String> = []
 

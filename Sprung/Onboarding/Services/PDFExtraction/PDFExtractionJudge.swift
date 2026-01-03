@@ -34,12 +34,6 @@ actor PDFExtractionJudge {
         isComposite: Bool = false
     ) async throws -> ExtractionJudgment {
 
-        // If null characters detected, skip straight to OCR recommendation
-        if hasNullCharacters {
-            Logger.info("📊 Judge: Null characters detected - recommending Vision OCR", category: .ai)
-            return ExtractionJudgment.quickFail(reason: "Null characters detected in PDFKit extraction - indicates corrupted text layer")
-        }
-
         // Load images
         var imageData: [Data] = []
         for url in pageImages {
@@ -50,11 +44,14 @@ actor PDFExtractionJudge {
         // Prepare text samples (truncate if very long)
         let textSample = String(pdfKitText.prefix(8000))
 
+        // Note: hasNullCharacters means PDFKit text is corrupted, so "ok" is never valid
+        // We still need to evaluate images for graphics/layout complexity to choose OCR vs LLM
         let prompt = buildJudgePrompt(
             textSample: textSample,
             samplePages: samplePages,
             imageCount: pageImages.count,
-            isComposite: isComposite
+            isComposite: isComposite,
+            hasNullCharacters: hasNullCharacters
         )
 
         let imageType = isComposite ? "composite" : "page"
@@ -67,17 +64,65 @@ actor PDFExtractionJudge {
             jsonSchema: ExtractionJudgment.jsonSchema
         )
 
-        // Parse structured response
-        return try parseJudgment(response)
+        // Parse structured response, with override if text layer is corrupted
+        return try parseJudgment(response, hasNullCharacters: hasNullCharacters)
     }
 
     // MARK: - Prompt Building
 
-    private func buildJudgePrompt(textSample: String, samplePages: [Int], imageCount: Int, isComposite: Bool) -> String {
+    private func buildJudgePrompt(
+        textSample: String,
+        samplePages: [Int],
+        imageCount: Int,
+        isComposite: Bool,
+        hasNullCharacters: Bool = false
+    ) -> String {
         let imageDescription = isComposite
             ? "Each image is a 4-page composite (2x2 grid) from the source PDF."
             : "Each image is a single page from the source PDF."
 
+        // When null characters detected, PDFKit text is unusable - focus on layout/graphics evaluation
+        if hasNullCharacters {
+            return """
+            You are evaluating a PDF document to determine the best extraction method.
+
+            ## Context
+
+            **IMPORTANT**: The PDF's text layer is CORRUPTED (contains null characters). The extracted text below is unreliable and cannot be used as-is. Your task is to evaluate the document's layout and content complexity to choose between:
+
+            - **ocr**: Simple layout (single column, standard paragraphs, no complex formatting). Conventional OCR tools (Apple Vision, Tesseract) will work well. Fast and free.
+            - **llm**: Complex layout (multi-column, tables, forms, math/equations, scientific diagrams) OR contains important graphics that need skill assessment. LLM vision extraction is needed. Slower but higher fidelity.
+
+            **Note**: "ok" is NOT a valid choice because the text layer is corrupted.
+
+            ## Your Task
+
+            I'm providing you with \(imageCount) sample images SAMPLED FROM THROUGHOUT the PDF (not contiguous). \(imageDescription)
+            Page numbers sampled: \(samplePages.map { String($0 + 1) }.joined(separator: ", ")).
+
+            Evaluate each page for:
+            1. **Layout complexity**: Single column vs multi-column? Tables? Forms? Math notation?
+            2. **Graphics with important content**: Diagrams, charts, figures, data visualizations that contain information essential to understanding the document
+            3. **Skills demonstration**: Figures that demonstrate professional skills (for resume building context)
+
+            ## Decision Criteria
+
+            Choose **ocr** if:
+            - ALL pages have simple layout: single column, standard paragraphs, no tables or complex formatting
+            - No graphics with essential information that needs interpretation
+
+            Choose **llm** if:
+            - ANY page has complex layout (multi-column, tables, forms, math/equations)
+            - ANY page contains diagrams, charts, figures, or graphics with essential information
+            - The document appears to be a resume, portfolio, or academic work with skill-demonstrating figures
+
+            **Critical**: If ANY page requires LLM extraction, choose llm for the whole document.
+
+            Provide your decision and briefly explain what you observed about the document's layout and content.
+            """
+        }
+
+        // Standard prompt when PDFKit text is available for comparison
         return """
         You are evaluating the quality of text extraction performed by another tool on a PDF document.
 
@@ -131,7 +176,7 @@ actor PDFExtractionJudge {
 
     // MARK: - Response Parsing
 
-    private func parseJudgment(_ response: String) throws -> ExtractionJudgment {
+    private func parseJudgment(_ response: String, hasNullCharacters: Bool = false) throws -> ExtractionJudgment {
         guard let data = response.data(using: .utf8) else {
             Logger.warning("📊 Judge: Failed to parse response - using fallback", category: .ai)
             throw JudgeError.invalidResponse
@@ -140,7 +185,18 @@ actor PDFExtractionJudge {
         let decoder = JSONDecoder()
 
         do {
-            let judgment = try decoder.decode(ExtractionJudgment.self, from: data)
+            var judgment = try decoder.decode(ExtractionJudgment.self, from: data)
+
+            // If text layer is corrupted (null chars), override "ok" to "ocr"
+            // This safeguard catches cases where the model ignores the instruction
+            if hasNullCharacters && judgment.decision == .ok {
+                Logger.info("📊 Judge: Overriding 'ok' to 'ocr' because text layer is corrupted", category: .ai)
+                judgment = ExtractionJudgment(
+                    decision: .ocr,
+                    reasoning: "Text layer corrupted (null characters). Original assessment: \(judgment.reasoning)"
+                )
+            }
+
             Logger.info("📊 Judge: Decision=\(judgment.decision.rawValue), Reasoning: \(judgment.reasoning.prefix(100))...", category: .ai)
             return judgment
         } catch {

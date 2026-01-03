@@ -1,0 +1,58 @@
+# Voice Profile Extraction
+
+Analyze writing samples to extract voice characteristics for objective statement generation.
+
+## Writing Samples
+
+{WRITING_SAMPLES}
+
+---
+
+## Extract These Characteristics
+
+### 1. Enthusiasm Level
+- **measured**: "I'm interested in...", "I find value in...", "I appreciate..."
+- **moderate**: "I'm drawn to...", "What appeals to me...", "I enjoy..."
+- **high**: "I'm excited by...", "I love...", "I'm passionate about..."
+
+### 2. Person
+- Does the writer use first person (I/we) or third person?
+- Note: Most professional writing uses first person
+
+### 3. Connective Style
+How does the writer connect ideas?
+- **causal**: "because", "therefore", "as a result"
+- **sequential**: "then", "next", "after"
+- **contrastive**: "however", "but", "instead"
+
+### 4. Aspirational Phrases
+How do they talk about goals and future?
+- Look for patterns: "What excites me...", "I want to build...", "My goal is..."
+
+### 5. Avoid Phrases
+Corporate buzzwords they never use (or mock):
+- Common avoids: "leverage", "utilize", "synergy", "paradigm shift", "circle back"
+
+### 6. Sample Excerpts
+Pull 2-3 verbatim excerpts (20-50 words) that capture their authentic voice.
+
+## Output
+
+Return JSON with exactly this structure:
+
+```json
+{
+  "enthusiasm": "moderate",
+  "use_first_person": true,
+  "connective_style": "causal",
+  "aspirational_phrases": ["What excites me", "I want to build"],
+  "avoid_phrases": ["leverage", "utilize", "synergy"],
+  "sample_excerpts": ["I've amended my design philosophy over the years..."]
+}
+```
+
+## Notes
+
+- If no clear pattern, default to moderate enthusiasm and causal style
+- When in doubt, be conservative - measured > moderate > high
+- Look for authentic voice, not polished marketing speak

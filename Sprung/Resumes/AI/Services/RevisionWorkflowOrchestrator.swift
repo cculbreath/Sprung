@@ -35,6 +35,7 @@ class RevisionWorkflowOrchestrator {
     private let resRefStore: ResRefStore
     private let toolRunner: ToolConversationRunner
     private let phaseReviewManager: PhaseReviewManager
+    private let guidanceStore: InferenceGuidanceStore?
 
     // MARK: - Delegate
     weak var delegate: RevisionWorkflowOrchestratorDelegate?
@@ -56,6 +57,7 @@ class RevisionWorkflowOrchestrator {
         resRefStore: ResRefStore,
         toolRunner: ToolConversationRunner,
         phaseReviewManager: PhaseReviewManager,
+        guidanceStore: InferenceGuidanceStore? = nil,
         workflowState: RevisionWorkflowState
     ) {
         self.llm = llm
@@ -69,6 +71,7 @@ class RevisionWorkflowOrchestrator {
         self.resRefStore = resRefStore
         self.toolRunner = toolRunner
         self.phaseReviewManager = phaseReviewManager
+        self.guidanceStore = guidanceStore
         self.workflowState = workflowState
     }
 
@@ -101,6 +104,7 @@ class RevisionWorkflowOrchestrator {
                 exportCoordinator: exportCoordinator,
                 applicantProfile: applicantProfileStore.currentProfile(),
                 allResRefs: resRefStore.resRefs,
+                guidanceStore: guidanceStore,
                 saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
             )
 
@@ -217,6 +221,7 @@ class RevisionWorkflowOrchestrator {
                 exportCoordinator: exportCoordinator,
                 applicantProfile: applicantProfileStore.currentProfile(),
                 allResRefs: resRefStore.resRefs,
+                guidanceStore: guidanceStore,
                 saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
             )
 

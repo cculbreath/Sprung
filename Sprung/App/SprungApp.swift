@@ -71,6 +71,7 @@ struct SprungApp: App {
                 .environment(appDependencies.templateStore)
                 .environment(appDependencies.experienceDefaultsStore)
                 .environment(appDependencies.careerKeywordStore)
+                .environment(appDependencies.guidanceStore)
                 .onAppear {
                     // Pass environment and dependencies to AppDelegate for windows
                     appDelegate.appEnvironment = appEnvironment
@@ -340,6 +341,7 @@ private extension SprungApp {
                 ConversationContext.self,
                 ConversationMessage.self,
                 EnabledLLM.self,
+                InferenceGuidance.self,
             configurations: config
         )
     }

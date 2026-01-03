@@ -476,15 +476,21 @@ actor GoogleAIService {
             ],
             "generationConfig": [
                 "temperature": temperature,
-                "maxOutputTokens": 1024,
+                "maxOutputTokens": 16384,
                 "responseMimeType": "application/json",
-                "responseJsonSchema": jsonSchema
+                "responseSchema": jsonSchema
             ]
         ]
 
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
 
-        Logger.info("🖼️ Analyzing \(images.count) image(s) with \(effectiveModelId) (structured output)...", category: .ai)
+        // Debug: log the generationConfig to verify schema is included
+        if let genConfig = requestBody["generationConfig"] as? [String: Any] {
+            let hasSchema = genConfig["responseSchema"] != nil
+            Logger.info("🖼️ Analyzing \(images.count) image(s) with \(effectiveModelId) (structured output, hasSchema=\(hasSchema))...", category: .ai)
+        } else {
+            Logger.info("🖼️ Analyzing \(images.count) image(s) with \(effectiveModelId) (structured output)...", category: .ai)
+        }
 
         let (data, response) = try await session.data(for: request)
 
@@ -568,6 +574,7 @@ actor GoogleAIService {
         let summaryPrompt = DocumentExtractionPrompts.summaryPrompt(filename: filename, content: content)
 
         // Use Gemini's native structured output mode with schema
+        // Use high token limit to avoid truncation on large documents
         let requestBody: [String: Any] = [
             "contents": [
                 [
@@ -578,9 +585,9 @@ actor GoogleAIService {
             ],
             "generationConfig": [
                 "temperature": 0.2,
-                "maxOutputTokens": 4096,
+                "maxOutputTokens": 65536,
                 "responseMimeType": "application/json",
-                "responseJsonSchema": DocumentExtractionPrompts.summaryJsonSchema
+                "responseSchema": DocumentExtractionPrompts.summaryJsonSchema
             ]
         ]
 
@@ -713,7 +720,7 @@ actor GoogleAIService {
     // MARK: - Generic Structured JSON Generation
 
     /// Generate structured JSON output from a prompt using Gemini's native structured output mode.
-    /// When a schema is provided, uses `responseMimeType: "application/json"` and `responseJsonSchema`
+    /// When a schema is provided, uses `responseMimeType: "application/json"` and `responseSchema`
     /// to guarantee schema-conforming JSON output.
     ///
     /// - Parameters:
@@ -747,7 +754,7 @@ actor GoogleAIService {
         // If schema provided, use native structured output mode
         if let schema = jsonSchema {
             generationConfig["responseMimeType"] = "application/json"
-            generationConfig["responseJsonSchema"] = schema
+            generationConfig["responseSchema"] = schema
             Logger.info("📝 Using Gemini native structured output with schema (maxTokens: \(maxOutputTokens))", category: .ai)
         }
 

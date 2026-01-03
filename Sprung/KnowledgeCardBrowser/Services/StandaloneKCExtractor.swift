@@ -95,8 +95,10 @@ class StandaloneKCExtractor {
         artifactJSON["summary"].string = record.summary
         artifactJSON["brief_description"].string = record.briefDescription
         artifactJSON["title"].string = record.title
-        artifactJSON["has_card_inventory"].bool = record.hasCardInventory
-        artifactJSON["card_inventory"].string = record.cardInventoryJSON
+        artifactJSON["has_skills"].bool = record.hasSkills
+        artifactJSON["has_narrative_cards"].bool = record.hasNarrativeCards
+        artifactJSON["skills"].string = record.skillsJSON
+        artifactJSON["narrative_cards"].string = record.narrativeCardsJSON
 
         // Parse metadata JSON
         if let metadataJSONString = record.metadataJSON,

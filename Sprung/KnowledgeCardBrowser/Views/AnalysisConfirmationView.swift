@@ -10,23 +10,23 @@ import SwiftUI
 
 struct AnalysisConfirmationView: View {
     let result: StandaloneKCCoordinator.AnalysisResult
-    let onConfirm: ([MergedCardInventory.MergedCard], [(proposal: MergedCardInventory.MergedCard, existing: ResRef)]) -> Void
+    let onConfirm: ([KnowledgeCard], [(proposal: KnowledgeCard, existing: ResRef)]) -> Void
     let onCancel: () -> Void
 
-    @State private var selectedNewCards: Set<String>
-    @State private var selectedEnhancements: Set<String>
+    @State private var selectedNewCards: Set<UUID>
+    @State private var selectedEnhancements: Set<UUID>
 
     init(
         result: StandaloneKCCoordinator.AnalysisResult,
-        onConfirm: @escaping ([MergedCardInventory.MergedCard], [(proposal: MergedCardInventory.MergedCard, existing: ResRef)]) -> Void,
+        onConfirm: @escaping ([KnowledgeCard], [(proposal: KnowledgeCard, existing: ResRef)]) -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.result = result
         self.onConfirm = onConfirm
         self.onCancel = onCancel
         // Select all by default
-        _selectedNewCards = State(initialValue: Set(result.newCards.map(\.cardId)))
-        _selectedEnhancements = State(initialValue: Set(result.enhancements.map(\.proposal.cardId)))
+        _selectedNewCards = State(initialValue: Set(result.newCards.map(\.id)))
+        _selectedEnhancements = State(initialValue: Set(result.enhancements.map(\.proposal.id)))
     }
 
     var body: some View {
@@ -38,15 +38,15 @@ struct AnalysisConfirmationView: View {
                     List {
                         if !result.newCards.isEmpty {
                             Section("Create New Cards (\(result.newCards.count))") {
-                                ForEach(result.newCards, id: \.cardId) { card in
-                                    Toggle(isOn: binding(for: card.cardId, in: $selectedNewCards)) {
+                                ForEach(result.newCards) { card in
+                                    Toggle(isOn: binding(for: card.id, in: $selectedNewCards)) {
                                         VStack(alignment: .leading, spacing: 4) {
                                             Text(card.title)
                                                 .font(.headline)
                                             HStack {
-                                                cardTypeBadge(card.cardType)
-                                                if !card.combinedKeyFacts.isEmpty {
-                                                    Text("\(card.combinedKeyFacts.count) facts")
+                                                cardTypeBadge(card.cardType.rawValue)
+                                                if !card.extractable.scale.isEmpty {
+                                                    Text("\(card.extractable.scale.count) outcomes")
                                                         .font(.caption)
                                                         .foregroundStyle(.secondary)
                                                 }
@@ -60,12 +60,12 @@ struct AnalysisConfirmationView: View {
 
                         if !result.enhancements.isEmpty {
                             Section("Enhance Existing Cards (\(result.enhancements.count))") {
-                                ForEach(result.enhancements, id: \.proposal.cardId) { item in
-                                    Toggle(isOn: binding(for: item.proposal.cardId, in: $selectedEnhancements)) {
+                                ForEach(result.enhancements, id: \.proposal.id) { item in
+                                    Toggle(isOn: binding(for: item.proposal.id, in: $selectedEnhancements)) {
                                         VStack(alignment: .leading, spacing: 4) {
                                             Text(item.existing.name)
                                                 .font(.headline)
-                                            Text("Add \(item.proposal.combinedKeyFacts.count) facts from new documents")
+                                            Text("Add evidence from new documents")
                                                 .font(.caption)
                                                 .foregroundStyle(.secondary)
                                         }
@@ -133,8 +133,8 @@ struct AnalysisConfirmationView: View {
                 .keyboardShortcut(.cancelAction)
 
             Button("Generate") {
-                let newCards = result.newCards.filter { selectedNewCards.contains($0.cardId) }
-                let enhancements = result.enhancements.filter { selectedEnhancements.contains($0.proposal.cardId) }
+                let newCards = result.newCards.filter { selectedNewCards.contains($0.id) }
+                let enhancements = result.enhancements.filter { selectedEnhancements.contains($0.proposal.id) }
                 onConfirm(newCards, enhancements)
             }
             .buttonStyle(.borderedProminent)
@@ -148,7 +148,7 @@ struct AnalysisConfirmationView: View {
         selectedNewCards.count + selectedEnhancements.count
     }
 
-    private func binding(for cardId: String, in set: Binding<Set<String>>) -> Binding<Bool> {
+    private func binding(for cardId: UUID, in set: Binding<Set<UUID>>) -> Binding<Bool> {
         Binding(
             get: { set.wrappedValue.contains(cardId) },
             set: { isSelected in

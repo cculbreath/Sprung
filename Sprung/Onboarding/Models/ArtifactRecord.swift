@@ -38,14 +38,27 @@ final class ArtifactRecord {
     /// Optional custom title (user-provided or LLM-generated)
     var title: String?
 
-    // MARK: - Knowledge Card Integration
-    /// Raw JSON string of the card inventory (DocumentInventory)
-    var cardInventoryJSON: String?
+    // MARK: - Knowledge Extraction
+    /// Raw JSON string of extracted skills (Skill array)
+    var skillsJSON: String?
+    /// Raw JSON string of narrative knowledge cards (KnowledgeCard array)
+    var narrativeCardsJSON: String?
 
-    /// True if this artifact has a card inventory (computed from cardInventoryJSON)
-    var hasCardInventory: Bool {
-        guard let json = cardInventoryJSON else { return false }
+    /// True if this artifact has skills extracted
+    var hasSkills: Bool {
+        guard let json = skillsJSON else { return false }
         return !json.isEmpty
+    }
+
+    /// True if this artifact has narrative cards extracted
+    var hasNarrativeCards: Bool {
+        guard let json = narrativeCardsJSON else { return false }
+        return !json.isEmpty
+    }
+
+    /// True if this artifact has any knowledge extraction
+    var hasKnowledgeExtraction: Bool {
+        hasSkills || hasNarrativeCards
     }
 
     // MARK: - Interview Context
@@ -155,17 +168,30 @@ final class ArtifactRecord {
         return (try? JSON(data: data)) ?? JSON()
     }
 
-    /// Parsed card inventory (lazily decoded from JSON string)
-    var cardInventory: DocumentInventory? {
-        guard let jsonString = cardInventoryJSON,
+    /// Parsed skills (lazily decoded from JSON string)
+    var skills: [Skill]? {
+        guard let jsonString = skillsJSON,
               let data = jsonString.data(using: .utf8) else { return nil }
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
-        decoder.dateDecodingStrategy = .iso8601
         do {
-            return try decoder.decode(DocumentInventory.self, from: data)
+            return try decoder.decode([Skill].self, from: data)
         } catch {
-            Logger.warning("Failed to decode card inventory for \(filename): \(error.localizedDescription)", category: .ai)
+            Logger.warning("Failed to decode skills for \(filename): \(error.localizedDescription)", category: .ai)
+            return nil
+        }
+    }
+
+    /// Parsed narrative cards (lazily decoded from JSON string)
+    var narrativeCards: [KnowledgeCard]? {
+        guard let jsonString = narrativeCardsJSON,
+              let data = jsonString.data(using: .utf8) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        do {
+            return try decoder.decode([KnowledgeCard].self, from: data)
+        } catch {
+            Logger.warning("Failed to decode narrative cards for \(filename): \(error.localizedDescription)", category: .ai)
             return nil
         }
     }
@@ -219,7 +245,8 @@ final class ArtifactRecord {
         summary: String? = nil,
         briefDescription: String? = nil,
         title: String? = nil,
-        cardInventoryJSON: String? = nil,
+        skillsJSON: String? = nil,
+        narrativeCardsJSON: String? = nil,
         interviewContext: Bool = false,
         metadataJSON: String? = nil,
         rawFileRelativePath: String? = nil,
@@ -236,7 +263,8 @@ final class ArtifactRecord {
         self.summary = summary
         self.briefDescription = briefDescription
         self.title = title
-        self.cardInventoryJSON = cardInventoryJSON
+        self.skillsJSON = skillsJSON
+        self.narrativeCardsJSON = narrativeCardsJSON
         self.interviewContext = interviewContext
         self.metadataJSON = metadataJSON
         self.rawFileRelativePath = rawFileRelativePath

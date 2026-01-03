@@ -65,14 +65,14 @@ struct OpenDocumentCollectionTool: InterviewTool {
 
         // Get artifact count from typed artifacts
         let artifactCount = await MainActor.run { coordinator.sessionArtifacts.count }
-        let mergedCardCount = await MainActor.run { coordinator.ui.mergedInventory?.mergedCards.count ?? 0 }
+        let narrativeCardCount = await MainActor.run { coordinator.ui.aggregatedNarrativeCards.count }
 
         // Build minimal response
         var response = JSON()
         response["status"].string = "completed"
         response["ui_displayed"].bool = true
         response["artifact_count"].int = artifactCount
-        response["merged_card_count"].int = mergedCardCount
+        response["narrative_card_count"].int = narrativeCardCount
         response["await_user_action"].string = "done_with_uploads"
 
         if let message = message {

@@ -143,12 +143,16 @@ actor GitIngestionKernel {
             // Note: extractionStateChanged not emitted - agent tracker handles status
 
             // Step 3: Create artifact record
-            // The analysis is now a DocumentInventory - encode it as card_inventory JSON string
+            // Encode skills and narrative cards separately
             let encoder = JSONEncoder()
             encoder.keyEncodingStrategy = .convertToSnakeCase
             encoder.dateEncodingStrategy = .iso8601
-            let inventoryData = try encoder.encode(analysis)
-            let inventoryString = String(data: inventoryData, encoding: .utf8) ?? "{}"
+
+            let skillsData = try encoder.encode(analysis.skills)
+            let skillsString = String(data: skillsData, encoding: .utf8) ?? "[]"
+
+            let narrativeCardsData = try encoder.encode(analysis.narrativeCards)
+            let narrativeCardsString = String(data: narrativeCardsData, encoding: .utf8) ?? "[]"
 
             var record = JSON()
             record["id"].string = UUID().uuidString
@@ -161,8 +165,9 @@ actor GitIngestionKernel {
                 record["plan_item_id"].string = planItemId
             }
 
-            // Store card_inventory as JSON string (same format as document artifacts)
-            record["card_inventory"].string = inventoryString
+            // Store skills and narrative cards as JSON strings
+            record["skills"].string = skillsString
+            record["narrative_cards"].string = narrativeCardsString
             record["raw_data"] = gitData
 
             // Store git metadata for SwiftData persistence
@@ -170,35 +175,33 @@ actor GitIngestionKernel {
             metadata["git_metadata"] = gitData
             record["metadata"] = metadata
 
-            // Build extracted_text from card inventory for display
+            // Build extracted_text for display
             var extractedParts: [String] = []
             extractedParts.append("## Repository: \(repoName)")
 
             // Find project cards for description
-            let projectCards = analysis.proposedCards.filter { $0.cardType == .project }
+            let projectCards = analysis.narrativeCards.filter { $0.cardType == .project }
             if let mainProject = projectCards.first {
-                let factStatements = mainProject.keyFacts.map { $0.statement }
-                if !factStatements.isEmpty {
-                    extractedParts.append(factStatements.joined(separator: ". "))
+                if !mainProject.narrative.isEmpty {
+                    extractedParts.append(mainProject.narrative)
                 }
             }
 
-            // Add key technologies from skill cards
-            let skillCards = analysis.proposedCards.filter { $0.cardType == .skill }
-            if !skillCards.isEmpty {
-                let skillNames = skillCards.prefix(15).map { $0.proposedTitle }
+            // Add key technologies from skills
+            if !analysis.skills.isEmpty {
+                let skillNames = analysis.skills.prefix(15).map { $0.canonical }
                 extractedParts.append("\n## Key Technologies\n" + skillNames.joined(separator: ", "))
             }
 
             // Add achievements
-            let achievementCards = analysis.proposedCards.filter { $0.cardType == .achievement }
+            let achievementCards = analysis.narrativeCards.filter { $0.cardType == .achievement }
             if !achievementCards.isEmpty {
-                let bullets = achievementCards.prefix(5).map { "• \($0.proposedTitle)" }
+                let bullets = achievementCards.prefix(5).map { "• \($0.title)" }
                 extractedParts.append("\n## Notable Achievements\n" + bullets.joined(separator: "\n"))
             }
 
             record["extracted_text"].string = extractedParts.joined(separator: "\n")
-            Logger.info("✅ Git card inventory: \(analysis.proposedCards.count) cards (\(skillCards.count) skills, \(projectCards.count) projects, \(achievementCards.count) achievements)", category: .ai)
+            Logger.info("✅ Git knowledge extraction: \(analysis.skills.count) skills, \(analysis.narrativeCards.count) narrative cards", category: .ai)
 
             let result = IngestionResult(artifactRecord: record)
 

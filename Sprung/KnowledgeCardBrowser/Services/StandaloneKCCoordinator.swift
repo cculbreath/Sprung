@@ -7,7 +7,7 @@
 //  directly ingest documents and generate knowledge cards without going
 //  through the full onboarding process.
 //
-//  Pipeline: Upload Sources → Extract → Inventory → Merge → Convert → Persist
+//  Pipeline: Upload Sources → Extract → Analyze → Convert → Persist
 //
 
 import Foundation
@@ -24,9 +24,7 @@ class StandaloneKCCoordinator {
     enum Status: Equatable {
         case idle
         case extracting(current: Int, total: Int, filename: String)
-        case inventorying
-        case merging
-        case analyzingMetadata
+        case analyzing
         case generatingCard(current: Int, total: Int)
         case completed(created: Int, enhanced: Int)
         case failed(String)
@@ -35,7 +33,7 @@ class StandaloneKCCoordinator {
             switch self {
             case .idle, .completed, .failed:
                 return false
-            case .extracting, .inventorying, .merging, .analyzingMetadata, .generatingCard:
+            case .extracting, .analyzing, .generatingCard:
                 return true
             }
         }
@@ -46,12 +44,8 @@ class StandaloneKCCoordinator {
                 return "Ready"
             case .extracting(let current, let total, let filename):
                 return "Extracting (\(current)/\(total)): \(filename)"
-            case .inventorying:
-                return "Generating card inventory..."
-            case .merging:
-                return "Merging card proposals..."
-            case .analyzingMetadata:
-                return "Analyzing document metadata..."
+            case .analyzing:
+                return "Analyzing documents..."
             case .generatingCard(let current, let total):
                 return "Generating card (\(current)/\(total))..."
             case .completed(let created, let enhanced):
@@ -74,8 +68,9 @@ class StandaloneKCCoordinator {
 
     /// Result of document analysis for user review before generation
     struct AnalysisResult {
-        let newCards: [MergedCardInventory.MergedCard]
-        let enhancements: [(proposal: MergedCardInventory.MergedCard, existing: ResRef)]
+        let skillBank: SkillBank
+        let newCards: [KnowledgeCard]
+        let enhancements: [(proposal: KnowledgeCard, existing: ResRef)]
         let artifacts: [JSON]
     }
 
@@ -154,17 +149,30 @@ class StandaloneKCCoordinator {
             // Track artifact IDs for export
             currentArtifactIds = allArtifactIds
 
-            // Phase 3: Analyze and inventory (same as onboarding workflow)
-            status = .inventorying
-            let merged = try await analyzer.analyzeArtifacts(allArtifacts)
+            // Phase 3: Analyze artifacts
+            status = .analyzing
+            let analysisResult = try await analyzer.analyzeArtifacts(allArtifacts)
 
-            guard let firstCard = merged.mergedCards.first else {
+            guard let firstCard = analysisResult.narrativeCards.first else {
                 throw StandaloneKCError.noArtifactsExtracted
             }
 
-            // Phase 4: Convert merged card to ResRef
+            // Phase 4: Convert narrative card to ResRef
             status = .generatingCard(current: 1, total: 1)
-            let resRef = try await convertMergedCard(firstCard, artifacts: allArtifacts)
+            let converter = KnowledgeCardToResRefConverter()
+
+            // Build artifact lookup
+            var artifactLookup: [String: String] = [:]
+            for artifact in allArtifacts {
+                let id = artifact["id"].stringValue
+                let filename = artifact["filename"].stringValue
+                if !id.isEmpty && !filename.isEmpty {
+                    artifactLookup[id] = filename
+                }
+            }
+
+            let resRef = converter.convert(card: firstCard, artifactLookup: artifactLookup)
+            resRef.isFromOnboarding = false
             resRefStore?.addResRef(resRef)
 
             self.generatedCard = resRef
@@ -184,7 +192,6 @@ class StandaloneKCCoordinator {
     // MARK: - Public API: Multi-Card Analysis & Generation
 
     /// Analyze documents to produce card proposals for user review.
-    /// This uses the full pipeline: classify → inventory → merge → match existing.
     func analyzeDocuments(from sources: [URL], existingArtifactIds: Set<String> = []) async throws -> AnalysisResult {
         guard !sources.isEmpty || !existingArtifactIds.isEmpty else {
             throw StandaloneKCError.noSources
@@ -226,26 +233,28 @@ class StandaloneKCCoordinator {
         // Track artifact IDs for later export
         currentArtifactIds = allArtifactIds
 
-        // Phase 3: Analyze and inventory
-        status = .inventorying
-        let merged = try await analyzer.analyzeArtifacts(allArtifacts)
+        // Phase 3: Analyze artifacts
+        status = .analyzing
+        let analysisResult = try await analyzer.analyzeArtifacts(allArtifacts)
 
         // Phase 4: Match against existing
-        status = .merging
-        let (newCards, enhancements) = analyzer.matchAgainstExisting(merged)
+        let (newCards, enhancements) = analyzer.matchAgainstExisting(analysisResult)
 
         status = .idle
         Logger.info("📊 StandaloneKCCoordinator: Analysis complete - \(newCards.count) new, \(enhancements.count) enhancements", category: .ai)
 
-        return AnalysisResult(newCards: newCards, enhancements: enhancements, artifacts: allArtifacts)
+        return AnalysisResult(
+            skillBank: analysisResult.skillBank,
+            newCards: newCards,
+            enhancements: enhancements,
+            artifacts: allArtifacts
+        )
     }
 
     /// Generate selected cards and apply enhancements.
-    /// For new cards: runs KC generation agent.
-    /// For enhancements: runs KC expansion agent to expand existing cards with new evidence.
     func generateSelected(
-        newCards: [MergedCardInventory.MergedCard],
-        enhancements: [(proposal: MergedCardInventory.MergedCard, existing: ResRef)],
+        newCards: [KnowledgeCard],
+        enhancements: [(proposal: KnowledgeCard, existing: ResRef)],
         artifacts: [JSON]
     ) async throws -> (created: Int, enhanced: Int) {
         guard llmFacade != nil else {
@@ -256,43 +265,7 @@ class StandaloneKCCoordinator {
         var createdCount = 0
         var enhancedCount = 0
 
-        // Generate new cards
-        for (index, proposal) in newCards.enumerated() {
-            status = .generatingCard(current: index + 1, total: totalOperations)
-
-            do {
-                let card = try await convertMergedCard(proposal, artifacts: artifacts)
-                resRefStore?.addResRef(card)
-                createdCount += 1
-                Logger.info("✅ StandaloneKCCoordinator: Created card - \(card.name)", category: .ai)
-            } catch {
-                Logger.error("❌ StandaloneKCCoordinator: Failed to generate card \(proposal.title): \(error.localizedDescription)", category: .ai)
-            }
-        }
-
-        // Enhance existing cards with new facts from proposals
-        for (index, (proposal, existingCard)) in enhancements.enumerated() {
-            status = .generatingCard(current: newCards.count + index + 1, total: totalOperations)
-
-            // Use simple fact merging to enhance existing card
-            analyzer.enhanceResRef(existingCard, with: proposal)
-            enhancedCount += 1
-            Logger.info("✅ StandaloneKCCoordinator: Enhanced card - \(existingCard.name)", category: .ai)
-        }
-
-        status = .completed(created: createdCount, enhanced: enhancedCount)
-        return (created: createdCount, enhanced: enhancedCount)
-    }
-
-    // MARK: - Private: Card Conversion
-
-    /// Convert a merged card to ResRef using direct conversion (same approach as onboarding)
-    private func convertMergedCard(_ proposal: MergedCardInventory.MergedCard, artifacts: [JSON]) async throws -> ResRef {
-        guard let facade = llmFacade else {
-            throw StandaloneKCError.llmNotConfigured
-        }
-
-        // Build artifact lookup for source attribution
+        // Build artifact lookup
         var artifactLookup: [String: String] = [:]
         for artifact in artifacts {
             let id = artifact["id"].stringValue
@@ -302,14 +275,30 @@ class StandaloneKCCoordinator {
             }
         }
 
-        // Use the same converter as onboarding
-        let converter = MergedCardToResRefConverter(llmFacade: facade, eventBus: nil)
-        let resRef = try await converter.convert(mergedCard: proposal, artifactLookup: artifactLookup)
+        let converter = KnowledgeCardToResRefConverter()
 
-        // Mark as standalone (not from onboarding)
-        resRef.isFromOnboarding = false
+        // Generate new cards
+        for (index, card) in newCards.enumerated() {
+            status = .generatingCard(current: index + 1, total: totalOperations)
 
-        return resRef
+            let resRef = converter.convert(card: card, artifactLookup: artifactLookup)
+            resRef.isFromOnboarding = false
+            resRefStore?.addResRef(resRef)
+            createdCount += 1
+            Logger.info("✅ StandaloneKCCoordinator: Created card - \(resRef.name)", category: .ai)
+        }
+
+        // Enhance existing cards
+        for (index, (proposal, existingCard)) in enhancements.enumerated() {
+            status = .generatingCard(current: newCards.count + index + 1, total: totalOperations)
+
+            analyzer.enhanceResRef(existingCard, with: proposal)
+            enhancedCount += 1
+            Logger.info("✅ StandaloneKCCoordinator: Enhanced card - \(existingCard.name)", category: .ai)
+        }
+
+        status = .completed(created: createdCount, enhanced: enhancedCount)
+        return (created: createdCount, enhanced: enhancedCount)
     }
 }
 

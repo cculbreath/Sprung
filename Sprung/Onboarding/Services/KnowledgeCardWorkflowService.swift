@@ -1,7 +1,7 @@
 import Foundation
 import SwiftyJSON
 
-/// Service responsible for knowledge card workflow: merge and generation.
+/// Service responsible for knowledge card workflow: aggregation and generation.
 /// Handles the full pipeline from "Done with Uploads" through card generation.
 @MainActor
 final class KnowledgeCardWorkflowService {
@@ -17,6 +17,10 @@ final class KnowledgeCardWorkflowService {
 
     // LLM facade for prose generation (set after container init due to circular dependency)
     private var llmFacadeProvider: (() -> LLMFacade?)?
+
+    // Aggregated results from "Done with Uploads"
+    private var aggregatedSkillBank: SkillBank?
+    private var aggregatedNarrativeCards: [KnowledgeCard] = []
 
     init(
         ui: OnboardingUIState,
@@ -47,29 +51,29 @@ final class KnowledgeCardWorkflowService {
 
     // MARK: - Event Handlers
 
-    /// Handle "Done with Uploads" button click - runs the card merge workflow
+    /// Handle "Done with Uploads" button click - aggregates skills and narrative cards
     func handleDoneWithUploadsClicked() async {
-        Logger.info("📋 Processing Done with Uploads - triggering card merge", category: .ai)
+        Logger.info("📋 Processing Done with Uploads - aggregating skills and narrative cards", category: .ai)
 
-        // Deactivate document collection UI and indicate merge is in progress
+        // Deactivate document collection UI and indicate aggregation is in progress
         ui.isDocumentCollectionActive = false
         ui.isMergingCards = true
         await sessionUIState?.setDocumentCollectionActive(false)
 
-        // Track merge in Agents pane
+        // Track aggregation in Agents pane
         let agentId = agentActivityTracker.trackAgent(
             type: .cardMerge,
-            name: "Merging Card Inventories",
+            name: "Aggregating Knowledge",
             task: nil as Task<Void, Never>?
         )
 
         agentActivityTracker.appendTranscript(
             agentId: agentId,
             entryType: .system,
-            content: "Starting card inventory merge"
+            content: "Starting skill and narrative card aggregation"
         )
 
-        // Extract chat inventory before merge (so it's included in the merge)
+        // Extract chat inventory before aggregation (so it's included)
         if let chatInventoryService = chatInventoryService {
             agentActivityTracker.appendTranscript(
                 agentId: agentId,
@@ -99,107 +103,68 @@ final class KnowledgeCardWorkflowService {
                     entryType: .system,
                     content: "Chat extraction skipped: \(error.localizedDescription)"
                 )
-                // Continue with merge - chat extraction is optional
             }
         }
 
-        // Get timeline for context
-        let timeline = await state.artifacts.skeletonTimeline
+        // Aggregate skills from all artifacts
+        aggregatedSkillBank = await cardMergeService.getMergedSkillBank()
+        let skillCount = aggregatedSkillBank?.skills.count ?? 0
 
-        // Run the merge
-        let mergedInventory: MergedCardInventory
-        do {
-            mergedInventory = try await cardMergeService.mergeInventories(timeline: timeline)
-        } catch CardMergeService.CardMergeError.noInventories {
-            agentActivityTracker.markFailed(agentId: agentId, error: "No document inventories available")
-            ui.isMergingCards = false
-            Logger.warning("⚠️ No document inventories available for merge", category: .ai)
-            await sendChatMessage("I'm done uploading documents, but no card inventories were found. Please check the documents.")
-            return
-        } catch {
-            agentActivityTracker.markFailed(agentId: agentId, error: error.localizedDescription)
-            ui.isMergingCards = false
-            Logger.error("❌ Card merge failed: \(error.localizedDescription)", category: .ai)
-            await sendChatMessage("I'm done uploading documents. Card merge failed: \(error.localizedDescription)")
-            return
-        }
+        // Aggregate narrative cards from all artifacts
+        aggregatedNarrativeCards = await cardMergeService.getAllNarrativeCardsFlat()
 
         // Update transcript with results
-        let stats = mergedInventory.stats
-        let typeBreakdown = "employment: \(stats.cardsByType.employment), project: \(stats.cardsByType.project), skill: \(stats.cardsByType.skill), achievement: \(stats.cardsByType.achievement), education: \(stats.cardsByType.education)"
+        let cardCount = aggregatedNarrativeCards.count
         agentActivityTracker.appendTranscript(
             agentId: agentId,
             entryType: .toolResult,
-            content: "Merged \(mergedInventory.mergedCards.count) cards from \(stats.totalInputCards) input cards",
-            details: "Types: \(typeBreakdown)"
+            content: "Aggregated \(skillCount) skills and \(cardCount) narrative cards"
         )
 
-        // Store merged inventory for detail views and gaps
-        ui.mergedInventory = mergedInventory
-
-        // Persist merged inventory to SwiftData (expensive LLM call result)
-        if let inventoryJSON = try? JSONEncoder().encode(mergedInventory),
-           let jsonString = String(data: inventoryJSON, encoding: .utf8) {
-            await eventBus.publish(.mergedInventoryStored(inventoryJSON: jsonString))
+        // Group cards by type for stats
+        var cardsByType: [CardType: Int] = [:]
+        for card in aggregatedNarrativeCards {
+            cardsByType[card.cardType, default: 0] += 1
         }
 
-        // Mark agent complete and emit merge complete event
+        // Build type breakdown string
+        var typeBreakdown: [String] = []
+        if let count = cardsByType[.employment], count > 0 { typeBreakdown.append("\(count) employment") }
+        if let count = cardsByType[.project], count > 0 { typeBreakdown.append("\(count) project") }
+        if let count = cardsByType[.achievement], count > 0 { typeBreakdown.append("\(count) achievement") }
+        if let count = cardsByType[.education], count > 0 { typeBreakdown.append("\(count) education") }
+        let typeSummary = typeBreakdown.joined(separator: ", ")
+
+        // Mark agent complete
         agentActivityTracker.markCompleted(agentId: agentId)
-        await eventBus.publish(.mergeComplete(cardCount: mergedInventory.mergedCards.count, gapCount: mergedInventory.gaps.count))
+        await eventBus.publish(.mergeComplete(cardCount: cardCount, gapCount: 0))
 
-        // Update UI to show card assignments are ready
+        // Update UI
         ui.cardAssignmentsReadyForApproval = true
-        ui.identifiedGapCount = mergedInventory.gaps.count
-
-        // Build user message with card type summary and gaps
-        var typeSummary: String = ""
-        if stats.cardsByType.employment > 0 { typeSummary += "\(stats.cardsByType.employment) employment" }
-        if stats.cardsByType.project > 0 { typeSummary += (typeSummary.isEmpty ? "" : ", ") + "\(stats.cardsByType.project) project" }
-        if stats.cardsByType.skill > 0 { typeSummary += (typeSummary.isEmpty ? "" : ", ") + "\(stats.cardsByType.skill) skill" }
-        if stats.cardsByType.achievement > 0 { typeSummary += (typeSummary.isEmpty ? "" : ", ") + "\(stats.cardsByType.achievement) achievement" }
-        if stats.cardsByType.education > 0 { typeSummary += (typeSummary.isEmpty ? "" : ", ") + "\(stats.cardsByType.education) education" }
-
-        var gapSummary = ""
-        if !mergedInventory.gaps.isEmpty {
-            let gapDescriptions = mergedInventory.gaps.prefix(5).map { gap -> String in
-                let gapTypeDescription: String
-                switch gap.gapType {
-                case .missingPrimarySource: gapTypeDescription = "needs primary documentation"
-                case .insufficientDetail: gapTypeDescription = "needs more detail"
-                case .noQuantifiedOutcomes: gapTypeDescription = "needs quantified outcomes"
-                }
-                return "• \(gap.cardTitle): \(gapTypeDescription)"
-            }
-            gapSummary = "\n\nDocumentation gaps identified (\(mergedInventory.gaps.count) total):\n" + gapDescriptions.joined(separator: "\n")
-            if mergedInventory.gaps.count > 5 {
-                gapSummary += "\n...and \(mergedInventory.gaps.count - 5) more"
-            }
-        }
-
-        // Merge complete - clear flag
+        ui.identifiedGapCount = 0
         ui.isMergingCards = false
 
-        // Notify LLM of results with gaps
+        // Notify LLM of results
+        let skillSummary = skillCount > 0 ? " and \(skillCount) skills" : ""
         await sendChatMessage("""
-            I'm done uploading documents. The system has merged card inventories and found \(mergedInventory.mergedCards.count) potential knowledge cards (\(typeSummary)). \
-            Please review the proposed cards with me. I can exclude any cards that aren't relevant to me.\(gapSummary)
+            I'm done uploading documents. The system has found \(cardCount) potential knowledge cards (\(typeSummary))\(skillSummary). \
+            Please review the proposed cards with me. I can exclude any cards that aren't relevant to me.
             """)
     }
 
-    /// Handle "Generate Cards" button click - converts merged cards directly to ResRefs
+    /// Handle "Generate Cards" button click - converts narrative cards to ResRefs
     func handleGenerateCardsButtonClicked() async {
-        Logger.info("🚀 Generate Cards button clicked - converting merged cards to ResRefs", category: .ai)
+        Logger.info("🚀 Generate Cards button clicked - converting narrative cards to ResRefs", category: .ai)
 
-        // Get merged inventory from UI state (populated by card merge)
-        guard let mergedInventory = ui.mergedInventory else {
-            Logger.error("❌ No merged inventory found - user must click 'Done with Uploads' first", category: .ai)
-            await eventBus.publish(.errorOccurred("No merged cards found. Please upload documents and click 'Done with Uploads' first."))
+        guard !aggregatedNarrativeCards.isEmpty else {
+            Logger.error("❌ No narrative cards found - user must click 'Done with Uploads' first", category: .ai)
+            await eventBus.publish(.errorOccurred("No cards found. Please upload documents and click 'Done with Uploads' first."))
             return
         }
 
         // Filter out excluded cards
         let excludedIds = Set(ui.excludedCardIds)
-        let cardsToConvert = mergedInventory.mergedCards.filter { !excludedIds.contains($0.cardId) }
+        let cardsToConvert = aggregatedNarrativeCards.filter { !excludedIds.contains($0.id.uuidString) }
 
         guard !cardsToConvert.isEmpty else {
             Logger.warning("⚠️ All cards have been excluded", category: .ai)
@@ -207,7 +172,7 @@ final class KnowledgeCardWorkflowService {
             return
         }
 
-        Logger.info("🚀 Converting \(cardsToConvert.count) merged cards to ResRefs (excluded: \(excludedIds.count))", category: .ai)
+        Logger.info("🚀 Converting \(cardsToConvert.count) narrative cards to ResRefs (excluded: \(excludedIds.count))", category: .ai)
 
         // Build artifact ID → filename lookup for source attribution
         let allArtifacts = await state.artifactRecords
@@ -220,45 +185,46 @@ final class KnowledgeCardWorkflowService {
             }
         }
 
-        // Create converter with LLM facade for prose generation
-        let llmFacade = llmFacadeProvider?()
-        let converter = MergedCardToResRefConverter(llmFacade: llmFacade, eventBus: eventBus)
+        // Create converter
+        let converter = KnowledgeCardToResRefConverter()
 
         // Update UI to show progress
         ui.isGeneratingCards = true
         var successCount = 0
-        var failureCount = 0
 
-        do {
-            let resRefs = try await converter.convertAll(
-                mergedCards: cardsToConvert,
-                artifactLookup: artifactLookup
-            ) { completed, total in
-                Logger.debug("📊 Card conversion progress: \(completed)/\(total)", category: .ai)
-            }
-
-            successCount = resRefs.count
-            failureCount = cardsToConvert.count - successCount
-
-            // Persist all ResRefs and update filesystem mirror
-            for resRef in resRefs {
-                resRefStore.addResRef(resRef)
-                // Update filesystem mirror for LLM browsing
-                await phaseTransitionController?.updateResRefInFilesystem(resRef)
-            }
-
-            Logger.info("✅ Card generation complete: \(successCount) cards persisted", category: .ai)
-
-        } catch {
-            Logger.error("🚨 Card generation failed: \(error)", category: .ai)
-            failureCount = cardsToConvert.count
-            await eventBus.publish(.errorOccurred("Card generation failed: \(error.localizedDescription)"))
+        let resRefs = converter.convertAll(
+            cards: cardsToConvert,
+            artifactLookup: artifactLookup
+        ) { completed, total in
+            Logger.debug("📊 Card conversion progress: \(completed)/\(total)", category: .ai)
         }
+
+        successCount = resRefs.count
+
+        // Persist all ResRefs and update filesystem mirror
+        for resRef in resRefs {
+            resRefStore.addResRef(resRef)
+            await phaseTransitionController?.updateResRefInFilesystem(resRef)
+        }
+
+        Logger.info("✅ Card generation complete: \(successCount) cards persisted", category: .ai)
 
         ui.isGeneratingCards = false
 
         // Notify LLM about the results
-        await sendChatMessage("Knowledge card generation complete: \(successCount) cards created, \(failureCount) failed.")
+        await sendChatMessage("Knowledge card generation complete: \(successCount) cards created.")
+    }
+
+    // MARK: - Accessors for UI
+
+    /// Get the current aggregated skill bank
+    func getAggregatedSkillBank() -> SkillBank? {
+        return aggregatedSkillBank
+    }
+
+    /// Get the current aggregated narrative cards
+    func getAggregatedNarrativeCards() -> [KnowledgeCard] {
+        return aggregatedNarrativeCards
     }
 
     // MARK: - Private Helpers

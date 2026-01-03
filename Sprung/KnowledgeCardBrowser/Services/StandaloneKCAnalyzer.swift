@@ -2,7 +2,7 @@
 //  StandaloneKCAnalyzer.swift
 //  Sprung
 //
-//  Handles document analysis, inventory creation, merging, and ResRef matching
+//  Handles document analysis, skill extraction, and ResRef matching
 //  for standalone KC generation. This module determines what cards should be
 //  created vs which existing cards should be enhanced.
 //
@@ -15,7 +15,8 @@ import SwiftyJSON
 class StandaloneKCAnalyzer {
     // MARK: - Dependencies
 
-    private var inventoryService: CardInventoryService?
+    private var skillBankService: SkillBankService?
+    private var kcExtractionService: KnowledgeCardExtractionService?
     private var metadataService: MetadataExtractionService?
     private weak var resRefStore: ResRefStore?
 
@@ -23,139 +24,118 @@ class StandaloneKCAnalyzer {
 
     init(llmFacade: LLMFacade?, resRefStore: ResRefStore?) {
         self.resRefStore = resRefStore
-        self.inventoryService = CardInventoryService(llmFacade: llmFacade)
+        self.skillBankService = SkillBankService(llmFacade: llmFacade)
+        self.kcExtractionService = KnowledgeCardExtractionService(llmFacade: llmFacade)
         self.metadataService = MetadataExtractionService(llmFacade: llmFacade)
+    }
+
+    // MARK: - Analysis Result
+
+    /// Result of analyzing artifacts
+    struct AnalysisResult {
+        let skillBank: SkillBank
+        let narrativeCards: [KnowledgeCard]
     }
 
     // MARK: - Public API
 
-    /// Analyze artifacts to generate card proposals.
-    /// Uses pre-existing card_inventory from artifacts when available,
+    /// Analyze artifacts to extract skills and narrative cards.
+    /// Uses pre-existing extraction from artifacts when available,
     /// otherwise generates via LLM.
     /// - Parameter artifacts: Extracted artifact JSON objects
-    /// - Returns: Merged card inventory with proposals
-    func analyzeArtifacts(_ artifacts: [JSON]) async throws -> MergedCardInventory {
-        var inventories: [DocumentInventory] = []
+    /// - Returns: Analysis result with skills and narrative cards
+    func analyzeArtifacts(_ artifacts: [JSON]) async throws -> AnalysisResult {
+        var allSkills: [Skill] = []
+        var allNarrativeCards: [KnowledgeCard] = []
 
         for artifact in artifacts {
             let docId = artifact["id"].stringValue
             let filename = artifact["filename"].stringValue
             let content = artifact["extracted_text"].stringValue
 
-            // Check if artifact already has a card_inventory
-            if let existingInventory = parseExistingInventory(from: artifact, docId: docId) {
-                Logger.info("📦 StandaloneKCAnalyzer: Using pre-existing card_inventory for \(filename)", category: .ai)
-                inventories.append(existingInventory)
-                continue
-            }
-
-            // Fall back to generating inventory via LLM
-            if let service = inventoryService {
+            // Check for pre-existing skills
+            if let existingSkills = parseExistingSkills(from: artifact) {
+                Logger.info("📦 StandaloneKCAnalyzer: Using pre-existing skills for \(filename)", category: .ai)
+                allSkills.append(contentsOf: existingSkills)
+            } else if let service = skillBankService {
+                // Generate skills via LLM
                 do {
-                    let inventory = try await service.inventoryDocument(
+                    let skills = try await service.extractSkills(
                         documentId: docId,
                         filename: filename,
                         content: content
                     )
-                    inventories.append(inventory)
+                    allSkills.append(contentsOf: skills)
                 } catch {
-                    Logger.warning("⚠️ StandaloneKCAnalyzer: Failed to inventory \(filename): \(error.localizedDescription)", category: .ai)
+                    Logger.warning("⚠️ StandaloneKCAnalyzer: Failed to extract skills from \(filename): \(error.localizedDescription)", category: .ai)
+                }
+            }
+
+            // Check for pre-existing narrative cards
+            if let existingCards = parseExistingNarrativeCards(from: artifact) {
+                Logger.info("📦 StandaloneKCAnalyzer: Using pre-existing narrative cards for \(filename)", category: .ai)
+                allNarrativeCards.append(contentsOf: existingCards)
+            } else if let service = kcExtractionService {
+                // Generate narrative cards via LLM
+                do {
+                    let cards = try await service.extractCards(
+                        documentId: docId,
+                        filename: filename,
+                        content: content
+                    )
+                    allNarrativeCards.append(contentsOf: cards)
+                } catch {
+                    Logger.warning("⚠️ StandaloneKCAnalyzer: Failed to extract narrative cards from \(filename): \(error.localizedDescription)", category: .ai)
                 }
             }
         }
 
-        return mergeInventoriesLocally(inventories)
-    }
+        // Deduplicate skills using SkillBankService
+        let sourceDocIds = artifacts.map { $0["id"].stringValue }
+        let mergedSkillBank = await skillBankService?.mergeSkillBank(documentSkills: [allSkills], sourceDocumentIds: sourceDocIds)
+            ?? SkillBank(skills: allSkills, generatedAt: Date(), sourceDocumentIds: sourceDocIds)
 
-    /// Parse pre-existing card_inventory from artifact JSON
-    private func parseExistingInventory(from artifact: JSON, docId: String) -> DocumentInventory? {
-        // Check for card_inventory at top level
-        let cardInventory = artifact["card_inventory"]
-        guard !cardInventory.isEmpty else { return nil }
-
-        // Parse proposed_cards from inventory
-        let proposedCardsJSON = cardInventory["proposed_cards"].arrayValue
-        guard !proposedCardsJSON.isEmpty else { return nil }
-
-        var proposedCards: [DocumentInventory.ProposedCardEntry] = []
-
-        for cardJSON in proposedCardsJSON {
-            let cardType: DocumentInventory.ProposedCardEntry.CardType
-            switch cardJSON["card_type"].stringValue.lowercased() {
-            case "employment", "job":
-                cardType = .employment
-            case "project":
-                cardType = .project
-            case "skill":
-                cardType = .skill
-            case "achievement":
-                cardType = .achievement
-            case "education":
-                cardType = .education
-            default:
-                cardType = .employment
-            }
-
-            let evidenceStrength: DocumentInventory.ProposedCardEntry.EvidenceStrength
-            switch cardJSON["evidence_strength"].stringValue.lowercased() {
-            case "primary":
-                evidenceStrength = .primary
-            case "supporting":
-                evidenceStrength = .supporting
-            default:
-                evidenceStrength = .primary
-            }
-
-            let proposed = DocumentInventory.ProposedCardEntry(
-                cardType: cardType,
-                proposedTitle: cardJSON["title"].stringValue,
-                evidenceStrength: evidenceStrength,
-                evidenceLocations: cardJSON["evidence_locations"].arrayValue.map { $0.stringValue },
-                keyFacts: cardJSON["key_facts"].arrayValue.map { factJSON -> CategorizedFact in
-                    if factJSON.type == .string {
-                        // Legacy string format
-                        return CategorizedFact(category: .general, statement: factJSON.stringValue)
-                    } else {
-                        // New structured format
-                        let category = FactCategory(rawValue: factJSON["category"].stringValue) ?? .general
-                        return CategorizedFact(category: category, statement: factJSON["statement"].stringValue)
-                    }
-                },
-                technologies: cardJSON["technologies"].arrayValue.map { $0.stringValue },
-                quantifiedOutcomes: cardJSON["quantified_outcomes"].arrayValue.map { $0.stringValue },
-                dateRange: cardJSON["date_range"].string,
-                crossReferences: cardJSON["cross_references"].arrayValue.map { $0.stringValue },
-                extractionNotes: cardJSON["extraction_notes"].string
-            )
-            proposedCards.append(proposed)
-        }
-
-        guard !proposedCards.isEmpty else { return nil }
-
-        let docType = artifact["summary_metadata"]["document_type"].stringValue
-        return DocumentInventory(
-            documentId: docId,
-            documentType: docType.isEmpty ? "unknown" : docType,
-            proposedCards: proposedCards,
-            generatedAt: Date()
+        return AnalysisResult(
+            skillBank: mergedSkillBank,
+            narrativeCards: allNarrativeCards
         )
     }
 
-    /// Match proposals against existing ResRefs to determine new vs enhancement.
-    /// - Parameter merged: Merged card inventory
+    /// Parse pre-existing skills from artifact JSON
+    private func parseExistingSkills(from artifact: JSON) -> [Skill]? {
+        guard let skillsString = artifact["skills"].string,
+              let data = skillsString.data(using: .utf8) else { return nil }
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try? decoder.decode([Skill].self, from: data)
+    }
+
+    /// Parse pre-existing narrative cards from artifact JSON
+    private func parseExistingNarrativeCards(from artifact: JSON) -> [KnowledgeCard]? {
+        guard let cardsString = artifact["narrative_cards"].string,
+              let data = cardsString.data(using: .utf8) else { return nil }
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try? decoder.decode([KnowledgeCard].self, from: data)
+    }
+
+    /// Match narrative cards against existing ResRefs to determine new vs enhancement.
+    /// - Parameter analysisResult: Analysis result with skills and narrative cards
     /// - Returns: Tuple of new cards and enhancement proposals
     func matchAgainstExisting(
-        _ merged: MergedCardInventory
-    ) -> (newCards: [MergedCardInventory.MergedCard], enhancements: [(proposal: MergedCardInventory.MergedCard, existing: ResRef)]) {
+        _ analysisResult: AnalysisResult
+    ) -> (newCards: [KnowledgeCard], enhancements: [(proposal: KnowledgeCard, existing: ResRef)]) {
         let existingCards = resRefStore?.resRefs ?? []
-        var newCards: [MergedCardInventory.MergedCard] = []
-        var enhancements: [(proposal: MergedCardInventory.MergedCard, existing: ResRef)] = []
+        var newCards: [KnowledgeCard] = []
+        var enhancements: [(proposal: KnowledgeCard, existing: ResRef)] = []
 
-        for proposal in merged.mergedCards {
-            if let match = findMatchingResRef(proposal, in: existingCards) {
-                enhancements.append((proposal, match))
+        for card in analysisResult.narrativeCards {
+            if let match = findMatchingResRef(card, in: existingCards) {
+                enhancements.append((card, match))
             } else {
-                newCards.append(proposal)
+                newCards.append(card)
             }
         }
 
@@ -174,10 +154,9 @@ class StandaloneKCAnalyzer {
         return try await service.extract(from: artifacts)
     }
 
-    /// Enhance an existing ResRef with new evidence from a proposal.
-    /// Uses fact-based merging: combines facts, bullets, and technologies.
-    func enhanceResRef(_ resRef: ResRef, with proposal: MergedCardInventory.MergedCard) {
-        // Merge suggested bullets
+    /// Enhance an existing ResRef with new evidence from a narrative card.
+    func enhanceResRef(_ resRef: ResRef, with card: KnowledgeCard) {
+        // Merge suggested bullets from scale (quantified outcomes)
         var existingBullets: [String] = []
         if let bulletsJSON = resRef.suggestedBulletsJSON,
            let data = bulletsJSON.data(using: .utf8),
@@ -185,9 +164,9 @@ class StandaloneKCAnalyzer {
             existingBullets = decoded
         }
 
-        // Add new key facts as bullets if not already present
-        let newBullets = proposal.keyFactStatements.filter { fact in
-            !existingBullets.contains { $0.lowercased().contains(fact.lowercased().prefix(30)) }
+        // Add scale items as bullets if not already present
+        let newBullets = card.extractable.scale.filter { scale in
+            !existingBullets.contains { $0.lowercased().contains(scale.lowercased().prefix(30)) }
         }
         existingBullets.append(contentsOf: newBullets)
 
@@ -196,7 +175,7 @@ class StandaloneKCAnalyzer {
             resRef.suggestedBulletsJSON = jsonString
         }
 
-        // Merge technologies
+        // Merge domains (technologies)
         var existingTech: [String] = []
         if let techJSON = resRef.technologiesJSON,
            let data = techJSON.data(using: .utf8),
@@ -204,8 +183,8 @@ class StandaloneKCAnalyzer {
             existingTech = decoded
         }
 
-        let newTech = proposal.combinedTechnologies.filter { tech in
-            !existingTech.contains { $0.lowercased() == tech.lowercased() }
+        let newTech = card.extractable.domains.filter { domain in
+            !existingTech.contains { $0.lowercased() == domain.lowercased() }
         }
         existingTech.append(contentsOf: newTech)
 
@@ -225,13 +204,12 @@ class StandaloneKCAnalyzer {
             existingSources = decoded
         }
 
-        // Add new sources
+        // Add new sources from evidence anchors
         let existingIds = Set(existingSources.compactMap { $0["artifact_id"] })
-        if !existingIds.contains(proposal.primarySource.documentId) {
-            existingSources.append(["type": "artifact", "artifact_id": proposal.primarySource.documentId])
-        }
-        for source in proposal.supportingSources where !existingIds.contains(source.documentId) {
-            existingSources.append(["type": "artifact", "artifact_id": source.documentId])
+        for anchor in card.evidenceAnchors {
+            if !existingIds.contains(anchor.documentId) {
+                existingSources.append(["type": "artifact", "artifact_id": anchor.documentId])
+            }
         }
 
         if let data = try? JSONSerialization.data(withJSONObject: existingSources),
@@ -240,115 +218,25 @@ class StandaloneKCAnalyzer {
         }
 
         resRefStore?.updateResRef(resRef)
-        Logger.info("✅ StandaloneKCAnalyzer: Enhanced card with \(newBullets.count) new facts, \(newTech.count) new technologies", category: .ai)
-    }
-
-    // MARK: - Private: Inventory Merging
-
-    /// Simple local merge of inventories without LLM (for standalone use)
-    private func mergeInventoriesLocally(_ inventories: [DocumentInventory]) -> MergedCardInventory {
-        var mergedCards: [MergedCardInventory.MergedCard] = []
-        var cardsByKey: [String: MergedCardInventory.MergedCard] = [:]
-
-        for inventory in inventories {
-            for proposed in inventory.proposedCards {
-                // Create a key for grouping similar cards
-                let key = "\(proposed.cardType.rawValue):\(proposed.proposedTitle.lowercased())"
-
-                if var existing = cardsByKey[key] {
-                    // Merge into existing card
-                    var combinedFacts = existing.combinedKeyFacts
-                    combinedFacts.append(contentsOf: proposed.keyFacts.filter { !combinedFacts.contains($0) })
-
-                    var combinedTech = existing.combinedTechnologies
-                    combinedTech.append(contentsOf: proposed.technologies.filter { !combinedTech.contains($0) })
-
-                    var combinedOutcomes = existing.combinedOutcomes
-                    combinedOutcomes.append(contentsOf: proposed.quantifiedOutcomes.filter { !combinedOutcomes.contains($0) })
-
-                    var supportingSources = existing.supportingSources
-                    supportingSources.append(MergedCardInventory.MergedCard.SupportingSource(
-                        documentId: inventory.documentId,
-                        evidenceLocations: proposed.evidenceLocations,
-                        adds: proposed.keyFacts.map { $0.statement }
-                    ))
-
-                    existing = MergedCardInventory.MergedCard(
-                        cardId: existing.cardId,
-                        cardType: existing.cardType,
-                        title: existing.title,
-                        primarySource: existing.primarySource,
-                        supportingSources: supportingSources,
-                        combinedKeyFacts: combinedFacts,
-                        combinedTechnologies: combinedTech,
-                        combinedOutcomes: combinedOutcomes,
-                        dateRange: existing.dateRange ?? proposed.dateRange,
-                        evidenceQuality: .strong,
-                        extractionPriority: .high
-                    )
-                    cardsByKey[key] = existing
-                } else {
-                    // Create new merged card
-                    let merged = MergedCardInventory.MergedCard(
-                        cardId: UUID().uuidString,
-                        cardType: proposed.cardType.rawValue,
-                        title: proposed.proposedTitle,
-                        primarySource: MergedCardInventory.MergedCard.SourceReference(
-                            documentId: inventory.documentId,
-                            evidenceLocations: proposed.evidenceLocations
-                        ),
-                        supportingSources: [],
-                        combinedKeyFacts: proposed.keyFacts,
-                        combinedTechnologies: proposed.technologies,
-                        combinedOutcomes: proposed.quantifiedOutcomes,
-                        dateRange: proposed.dateRange,
-                        evidenceQuality: proposed.evidenceStrength == .primary ? .strong : .moderate,
-                        extractionPriority: .high
-                    )
-                    cardsByKey[key] = merged
-                }
-            }
-        }
-
-        mergedCards = Array(cardsByKey.values)
-
-        let grouped = Dictionary(grouping: mergedCards, by: { $0.cardType })
-        return MergedCardInventory(
-            mergedCards: mergedCards,
-            gaps: [],
-            stats: MergedCardInventory.MergeStats(
-                totalInputCards: inventories.flatMap { $0.proposedCards }.count,
-                mergedOutputCards: mergedCards.count,
-                cardsByType: MergedCardInventory.MergeStats.CardsByType(
-                    employment: grouped["employment"]?.count ?? 0,
-                    project: grouped["project"]?.count ?? 0,
-                    skill: grouped["skill"]?.count ?? 0,
-                    achievement: grouped["achievement"]?.count ?? 0,
-                    education: grouped["education"]?.count ?? 0
-                ),
-                strongEvidence: mergedCards.filter { $0.evidenceQuality == .strong }.count,
-                needsMoreEvidence: mergedCards.filter { $0.evidenceQuality == .weak }.count
-            ),
-            generatedAt: ISO8601DateFormatter().string(from: Date())
-        )
+        Logger.info("✅ StandaloneKCAnalyzer: Enhanced card with \(newBullets.count) new bullets, \(newTech.count) new domains", category: .ai)
     }
 
     // MARK: - Private: ResRef Matching
 
-    /// Match a proposal against existing ResRefs
+    /// Match a narrative card against existing ResRefs
     private func findMatchingResRef(
-        _ proposal: MergedCardInventory.MergedCard,
+        _ card: KnowledgeCard,
         in existing: [ResRef]
     ) -> ResRef? {
-        let titleCore = proposalTitleCore(proposal.title)
+        let titleCore = cardTitleCore(card.title)
         return existing.first { resRef in
-            resRef.cardType == proposal.cardType &&
+            resRef.cardType == card.cardType.rawValue &&
             resRef.name.lowercased().contains(titleCore)
         }
     }
 
     /// Extract core identifier from title (e.g., "Senior Engineer at TechCorp" -> "techcorp")
-    private func proposalTitleCore(_ title: String) -> String {
+    private func cardTitleCore(_ title: String) -> String {
         title.lowercased().split(separator: " ").last.map(String.init) ?? title.lowercased()
     }
 }

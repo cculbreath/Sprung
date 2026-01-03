@@ -94,7 +94,8 @@ final class ArtifactRecordStore: SwiftDataStore {
         summary: String? = nil,
         briefDescription: String? = nil,
         title: String? = nil,
-        cardInventoryJSON: String? = nil,
+        skillsJSON: String? = nil,
+        narrativeCardsJSON: String? = nil,
         metadataJSON: String? = nil,
         rawFileRelativePath: String? = nil,
         planItemId: String? = nil
@@ -109,7 +110,8 @@ final class ArtifactRecordStore: SwiftDataStore {
             summary: summary,
             briefDescription: briefDescription,
             title: title,
-            cardInventoryJSON: cardInventoryJSON,
+            skillsJSON: skillsJSON,
+            narrativeCardsJSON: narrativeCardsJSON,
             metadataJSON: metadataJSON,
             rawFileRelativePath: rawFileRelativePath,
             planItemId: planItemId
@@ -134,7 +136,8 @@ final class ArtifactRecordStore: SwiftDataStore {
         summary: String? = nil,
         briefDescription: String? = nil,
         title: String? = nil,
-        cardInventoryJSON: String? = nil,
+        skillsJSON: String? = nil,
+        narrativeCardsJSON: String? = nil,
         metadataJSON: String? = nil,
         rawFileRelativePath: String? = nil,
         planItemId: String? = nil
@@ -149,7 +152,8 @@ final class ArtifactRecordStore: SwiftDataStore {
             summary: summary,
             briefDescription: briefDescription,
             title: title,
-            cardInventoryJSON: cardInventoryJSON,
+            skillsJSON: skillsJSON,
+            narrativeCardsJSON: narrativeCardsJSON,
             metadataJSON: metadataJSON,
             rawFileRelativePath: rawFileRelativePath,
             planItemId: planItemId
@@ -174,9 +178,15 @@ final class ArtifactRecordStore: SwiftDataStore {
         saveContext()
     }
 
-    /// Update artifact's card inventory
-    func updateCardInventory(_ artifact: ArtifactRecord, cardInventoryJSON: String?) {
-        artifact.cardInventoryJSON = cardInventoryJSON
+    /// Update artifact's skills
+    func updateSkills(_ artifact: ArtifactRecord, skillsJSON: String?) {
+        artifact.skillsJSON = skillsJSON
+        saveContext()
+    }
+
+    /// Update artifact's narrative cards
+    func updateNarrativeCards(_ artifact: ArtifactRecord, narrativeCardsJSON: String?) {
+        artifact.narrativeCardsJSON = narrativeCardsJSON
         saveContext()
     }
 
@@ -266,16 +276,44 @@ final class ArtifactRecordStore: SwiftDataStore {
         }
     }
 
-    /// Get artifacts with card inventory
-    func artifactsWithCardInventory(in session: OnboardingSession? = nil) -> [ArtifactRecord] {
+    /// Get artifacts with knowledge extraction (skills or narrative cards)
+    func artifactsWithKnowledgeExtraction(in session: OnboardingSession? = nil) -> [ArtifactRecord] {
         if let session {
-            return session.artifacts.filter { $0.hasCardInventory }
+            return session.artifacts.filter { $0.hasKnowledgeExtraction }
         } else {
+            // Note: Can't use hasKnowledgeExtraction computed property in predicate,
+            // so we filter after fetch
             let descriptor = FetchDescriptor<ArtifactRecord>(
-                predicate: #Predicate { $0.hasCardInventory },
                 sortBy: [SortDescriptor(\.ingestedAt, order: .reverse)]
             )
-            return (try? modelContext.fetch(descriptor)) ?? []
+            let all = (try? modelContext.fetch(descriptor)) ?? []
+            return all.filter { $0.hasKnowledgeExtraction }
+        }
+    }
+
+    /// Get artifacts with skills
+    func artifactsWithSkills(in session: OnboardingSession? = nil) -> [ArtifactRecord] {
+        if let session {
+            return session.artifacts.filter { $0.hasSkills }
+        } else {
+            let descriptor = FetchDescriptor<ArtifactRecord>(
+                sortBy: [SortDescriptor(\.ingestedAt, order: .reverse)]
+            )
+            let all = (try? modelContext.fetch(descriptor)) ?? []
+            return all.filter { $0.hasSkills }
+        }
+    }
+
+    /// Get artifacts with narrative cards
+    func artifactsWithNarrativeCards(in session: OnboardingSession? = nil) -> [ArtifactRecord] {
+        if let session {
+            return session.artifacts.filter { $0.hasNarrativeCards }
+        } else {
+            let descriptor = FetchDescriptor<ArtifactRecord>(
+                sortBy: [SortDescriptor(\.ingestedAt, order: .reverse)]
+            )
+            let all = (try? modelContext.fetch(descriptor)) ?? []
+            return all.filter { $0.hasNarrativeCards }
         }
     }
 
@@ -341,17 +379,31 @@ final class ArtifactRecordStore: SwiftDataStore {
             try summary.write(to: summaryPath, atomically: true, encoding: .utf8)
         }
 
-        // Write card inventory
-        if let cardInventoryJSON = artifact.cardInventoryJSON, !cardInventoryJSON.isEmpty {
-            let inventoryPath = artifactDir.appendingPathComponent("card_inventory.json")
+        // Write skills
+        if let skillsJSON = artifact.skillsJSON, !skillsJSON.isEmpty {
+            let skillsPath = artifactDir.appendingPathComponent("skills.json")
             // Try to pretty-print
-            if let data = cardInventoryJSON.data(using: .utf8),
+            if let data = skillsJSON.data(using: .utf8),
                let json = try? JSONSerialization.jsonObject(with: data),
                let prettyData = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted),
                let prettyString = String(data: prettyData, encoding: .utf8) {
-                try prettyString.write(to: inventoryPath, atomically: true, encoding: .utf8)
+                try prettyString.write(to: skillsPath, atomically: true, encoding: .utf8)
             } else {
-                try cardInventoryJSON.write(to: inventoryPath, atomically: true, encoding: .utf8)
+                try skillsJSON.write(to: skillsPath, atomically: true, encoding: .utf8)
+            }
+        }
+
+        // Write narrative cards
+        if let narrativeCardsJSON = artifact.narrativeCardsJSON, !narrativeCardsJSON.isEmpty {
+            let cardsPath = artifactDir.appendingPathComponent("narrative_cards.json")
+            // Try to pretty-print
+            if let data = narrativeCardsJSON.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: data),
+               let prettyData = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted),
+               let prettyString = String(data: prettyData, encoding: .utf8) {
+                try prettyString.write(to: cardsPath, atomically: true, encoding: .utf8)
+            } else {
+                try narrativeCardsJSON.write(to: cardsPath, atomically: true, encoding: .utf8)
             }
         }
 
@@ -521,7 +573,9 @@ struct ArtifactSummary: Identifiable {
     let contentType: String?
     let sizeInBytes: Int
     let briefDescription: String?
-    let hasCardInventory: Bool
+    let hasSkills: Bool
+    let hasNarrativeCards: Bool
+    let hasKnowledgeExtraction: Bool
     let ingestedAt: Date
     let isArchived: Bool
 
@@ -533,7 +587,9 @@ struct ArtifactSummary: Identifiable {
         self.contentType = artifact.contentType
         self.sizeInBytes = artifact.sizeInBytes
         self.briefDescription = artifact.briefDescription
-        self.hasCardInventory = artifact.hasCardInventory
+        self.hasSkills = artifact.hasSkills
+        self.hasNarrativeCards = artifact.hasNarrativeCards
+        self.hasKnowledgeExtraction = artifact.hasKnowledgeExtraction
         self.ingestedAt = artifact.ingestedAt
         self.isArchived = artifact.isArchived
     }

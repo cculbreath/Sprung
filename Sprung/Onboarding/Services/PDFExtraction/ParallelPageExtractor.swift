@@ -9,18 +9,20 @@
 import Foundation
 
 /// Extracts text and graphics from PDF pages in parallel using LLM vision.
-actor ParallelPageExtractor {
+final class ParallelPageExtractor: Sendable {
 
     private let llmFacade: LLMFacade
+    private let visionOCR: VisionOCRService
 
-    /// Max concurrent LLM calls - from UserDefaults
+    /// Max concurrent LLM calls - from UserDefaults (default 30, max 50)
     private var maxConcurrency: Int {
         let value = UserDefaults.standard.integer(forKey: "maxConcurrentPDFExtractions")
-        return (value > 0 ? value : 4).clamped(to: 1...10)
+        return (value > 0 ? value : 30).clamped(to: 1...50)
     }
 
-    init(llmFacade: LLMFacade) {
+    init(llmFacade: LLMFacade, visionOCR: VisionOCRService = VisionOCRService()) {
         self.llmFacade = llmFacade
+        self.visionOCR = visionOCR
     }
 
     // MARK: - Extraction
@@ -107,12 +109,82 @@ actor ParallelPageExtractor {
 
     // MARK: - Single Page Extraction
 
+    /// Error for malformed LLM responses that should trigger retry
+    private enum ExtractionError: Error {
+        case jsonDecodeFailed(raw: String)
+    }
+
     private func extractSinglePage(
         imageURL: URL,
         pageNumber: Int,
         totalPages: Int
     ) async throws -> PageExtractionResult {
         let imageData = try Data(contentsOf: imageURL)
+
+        // Try LLM extraction up to 2 times, then fall back to OCR
+        for attempt in 1...2 {
+            do {
+                return try await performExtraction(
+                    imageData: imageData,
+                    pageNumber: pageNumber,
+                    totalPages: totalPages
+                )
+            } catch let error as GoogleAIService.GoogleAIError {
+                // RECITATION = policy block, go straight to OCR
+                if case .extractionBlocked(let finishReason) = error, finishReason == "RECITATION" {
+                    Logger.warning("📄 Page \(pageNumber): RECITATION - falling back to OCR", category: .ai)
+                    return await fallbackToOCR(imageURL: imageURL, pageNumber: pageNumber)
+                }
+                // Other API errors - retry once
+                if attempt == 1 {
+                    Logger.warning("📄 Page \(pageNumber): API error, retrying - \(error.localizedDescription)", category: .ai)
+                    try await Task.sleep(nanoseconds: 500_000_000)  // 0.5s
+                    continue
+                }
+            } catch is ExtractionError {
+                // JSON decode failed - retry once
+                if attempt == 1 {
+                    Logger.warning("📄 Page \(pageNumber): JSON decode failed, retrying", category: .ai)
+                    try await Task.sleep(nanoseconds: 500_000_000)
+                    continue
+                }
+            } catch {
+                // Unknown error - retry once
+                if attempt == 1 {
+                    Logger.warning("📄 Page \(pageNumber): Error, retrying - \(error.localizedDescription)", category: .ai)
+                    try await Task.sleep(nanoseconds: 500_000_000)
+                    continue
+                }
+            }
+        }
+
+        // Both LLM attempts failed - fall back to OCR
+        Logger.warning("📄 Page \(pageNumber): LLM failed twice, falling back to OCR", category: .ai)
+        return await fallbackToOCR(imageURL: imageURL, pageNumber: pageNumber)
+    }
+
+    private func fallbackToOCR(imageURL: URL, pageNumber: Int) async -> PageExtractionResult {
+        do {
+            let ocrText = try await visionOCR.recognizeImage(imageURL)
+            Logger.info("📄 Page \(pageNumber): OCR succeeded (\(ocrText.count) chars)", category: .ai)
+            return PageExtractionResult(
+                text: ocrText,
+                graphics: PageGraphicsInfo(numberOfGraphics: 0, graphicsContent: [], qualitativeAssessment: [])
+            )
+        } catch {
+            Logger.error("📄 Page \(pageNumber): OCR also failed - \(error.localizedDescription)", category: .ai)
+            return PageExtractionResult(
+                text: "[Page \(pageNumber) extraction failed]",
+                graphics: PageGraphicsInfo(numberOfGraphics: 0, graphicsContent: [], qualitativeAssessment: [])
+            )
+        }
+    }
+
+    private func performExtraction(
+        imageData: Data,
+        pageNumber: Int,
+        totalPages: Int
+    ) async throws -> PageExtractionResult {
 
         let prompt = """
         Extract ALL content from this document page (page \(pageNumber) of \(totalPages)).
@@ -176,12 +248,9 @@ actor ParallelPageExtractor {
             }
             return result
         } catch {
-            Logger.warning("📄 ParallelPageExtractor: JSON decode failed for page \(pageNumber): \(error.localizedDescription)", category: .ai)
-            // Fallback: treat response as text
-            return PageExtractionResult(
-                text: response,
-                graphics: PageGraphicsInfo(numberOfGraphics: 0, graphicsContent: [], qualitativeAssessment: [])
-            )
+            // Log and throw for retry
+            Logger.warning("📄 Page \(pageNumber): JSON decode failed (\(response.count) chars)", category: .ai)
+            throw ExtractionError.jsonDecodeFailed(raw: response)
         }
     }
 }

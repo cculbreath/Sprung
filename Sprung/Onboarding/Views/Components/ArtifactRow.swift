@@ -53,24 +53,24 @@ struct ArtifactRow: View {
 
                         // Status indicators
                         if hasContent {
-                            if artifact.hasCardInventory {
-                                // Content extracted AND inventory generated
+                            if artifact.hasKnowledgeExtraction {
+                                // Content extracted AND knowledge extracted
                                 Image(systemName: "checkmark.circle.fill")
                                     .foregroundStyle(.green)
                                     .font(.caption)
-                                    .help("Content extracted, inventory generated")
+                                    .help("Content extracted, knowledge extracted")
                             } else if artifact.isWritingSample {
-                                // Writing samples don't need inventory - show success
+                                // Writing samples don't need knowledge extraction - show success
                                 Image(systemName: "checkmark.circle.fill")
                                     .foregroundStyle(.green)
                                     .font(.caption)
                                     .help("Writing sample extracted")
                             } else {
-                                // Content extracted but NO inventory yet
+                                // Content extracted but NO knowledge extraction yet
                                 Image(systemName: "exclamationmark.triangle.fill")
                                     .foregroundStyle(.orange)
                                     .font(.caption)
-                                    .help("No card inventory generated")
+                                    .help("No skills or narrative cards extracted")
                             }
                         }
 
@@ -170,12 +170,14 @@ struct ArtifactRow: View {
                         }
                     }
 
-                    // Card inventory section (if available)
-                    if let inventory = artifact.cardInventory, !inventory.proposedCards.isEmpty {
-                        cardInventorySection(inventory)
-                    } else if let rawJSON = artifact.cardInventoryJSON, !rawJSON.isEmpty {
-                        // Show raw JSON if decoding failed or cards are empty
-                        rawCardInventorySection(rawJSON)
+                    // Skills section (if available)
+                    if let skills = artifact.skills, !skills.isEmpty {
+                        skillsSection(skills)
+                    }
+
+                    // Narrative cards section (if available)
+                    if let narrativeCards = artifact.narrativeCards, !narrativeCards.isEmpty {
+                        narrativeCardsSection(narrativeCards)
                     }
 
                     if hasContent {
@@ -288,29 +290,81 @@ struct ArtifactRow: View {
     }
 
     @ViewBuilder
-    private func cardInventorySection(_ inventory: DocumentInventory) -> some View {
+    private func skillsSection(_ skills: [Skill]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             // Header
             HStack {
-                Image(systemName: "rectangle.stack.badge.person.crop")
-                    .foregroundStyle(.teal)
-                Text("Card Inventory (\(inventory.proposedCards.count) cards)")
+                Image(systemName: "lightbulb.fill")
+                    .foregroundStyle(.purple)
+                Text("Skills (\(skills.count))")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text(inventory.documentType.capitalized)
+            }
+
+            // Skills grouped by category
+            let grouped = Dictionary(grouping: skills) { $0.category }
+            ForEach(SkillCategory.allCases, id: \.self) { category in
+                if let categorySkills = grouped[category], !categorySkills.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(category.rawValue)
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(.secondary)
+
+                        FlowLayout(spacing: 4) {
+                            ForEach(categorySkills.prefix(10), id: \.canonical) { skill in
+                                skillBadge(skill)
+                            }
+                            if categorySkills.count > 10 {
+                                Text("+\(categorySkills.count - 10)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .padding(8)
+        .background(Color.purple.opacity(0.05))
+        .cornerRadius(6)
+    }
+
+    @ViewBuilder
+    private func skillBadge(_ skill: Skill) -> some View {
+        HStack(spacing: 2) {
+            Text(skill.canonical)
+                .font(.caption2)
+            if let lastUsed = skill.lastUsed {
+                Text("(\(lastUsed))")
                     .font(.caption2)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.teal.opacity(0.15))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(proficiencyColor(skill.proficiency).opacity(0.15))
+        .foregroundStyle(proficiencyColor(skill.proficiency))
+        .cornerRadius(4)
+    }
+
+    @ViewBuilder
+    private func narrativeCardsSection(_ cards: [KnowledgeCard]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Header
+            HStack {
+                Image(systemName: "doc.text.fill")
                     .foregroundStyle(.teal)
-                    .cornerRadius(4)
+                Text("Narrative Cards (\(cards.count))")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
             }
 
             // Cards list
             VStack(alignment: .leading, spacing: 6) {
-                ForEach(Array(inventory.proposedCards.enumerated()), id: \.offset) { _, card in
-                    cardEntryRow(card)
+                ForEach(cards, id: \.id) { card in
+                    narrativeCardRow(card)
                 }
             }
         }
@@ -320,123 +374,67 @@ struct ArtifactRow: View {
     }
 
     @ViewBuilder
-    private func rawCardInventorySection(_ rawJSON: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Header
-            HStack {
-                Image(systemName: "rectangle.stack.badge.person.crop")
-                    .foregroundStyle(.orange)
-                Text("Card Inventory (Raw)")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text("Decoding issue")
-                    .font(.caption2)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.orange.opacity(0.15))
-                    .foregroundStyle(.orange)
-                    .cornerRadius(4)
-            }
-
-            // Pretty-print the JSON
-            let prettyJSON: String = {
-                if let data = rawJSON.data(using: .utf8),
-                   let json = try? JSONSerialization.jsonObject(with: data),
-                   let prettyData = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),
-                   let prettyString = String(data: prettyData, encoding: .utf8) {
-                    return prettyString
-                }
-                return rawJSON
-            }()
-
-            ScrollView {
-                Text(prettyJSON)
-                    .font(.system(.caption2, design: .monospaced))
-                    .foregroundStyle(.primary)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(maxHeight: 200)
-            .padding(6)
-            .background(Color(nsColor: .textBackgroundColor))
-            .cornerRadius(4)
-        }
-        .padding(8)
-        .background(Color.orange.opacity(0.05))
-        .cornerRadius(6)
-    }
-
-    @ViewBuilder
-    private func cardEntryRow(_ card: DocumentInventory.ProposedCardEntry) -> some View {
+    private func narrativeCardRow(_ card: KnowledgeCard) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            // Title row with type icon and evidence strength
+            // Title row with type
             HStack(spacing: 6) {
                 Image(systemName: cardTypeIcon(card.cardType))
                     .foregroundStyle(cardTypeColor(card.cardType))
                     .font(.caption)
 
-                Text(card.proposedTitle)
+                Text(card.title)
                     .font(.caption.weight(.medium))
                     .lineLimit(2)
 
                 Spacer()
 
-                // Evidence strength badge
-                Text(card.evidenceStrength.rawValue.capitalized)
+                Text(card.cardType.rawValue)
                     .font(.caption2)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
-                    .background(evidenceStrengthColor(card.evidenceStrength).opacity(0.15))
-                    .foregroundStyle(evidenceStrengthColor(card.evidenceStrength))
+                    .background(cardTypeColor(card.cardType).opacity(0.15))
+                    .foregroundStyle(cardTypeColor(card.cardType))
                     .cornerRadius(3)
             }
 
-            // Key facts (if any)
-            if !card.keyFactStatements.isEmpty {
-                VStack(alignment: .leading, spacing: 2) {
-                    ForEach(card.keyFactStatements.prefix(3), id: \.self) { fact in
-                        HStack(alignment: .top, spacing: 4) {
-                            Text("•")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            Text(fact)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                        }
-                    }
-                    if card.keyFactStatements.count > 3 {
-                        Text("+\(card.keyFactStatements.count - 3) more facts")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-            }
-
-            // Technologies as badges
-            if !card.technologies.isEmpty {
-                FlowLayout(spacing: 4) {
-                    ForEach(card.technologies.prefix(8), id: \.self) { tech in
-                        badgePill(tech, color: .indigo)
-                    }
-                    if card.technologies.count > 8 {
-                        Text("+\(card.technologies.count - 8)")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-            }
-
-            // Date range if available
-            if let dateRange = card.dateRange, !dateRange.isEmpty {
+            // Organization and date range
+            if let org = card.organization {
                 HStack(spacing: 4) {
-                    Image(systemName: "calendar")
+                    Image(systemName: "building.2")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
-                    Text(dateRange)
+                    Text(org)
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(.secondary)
+                    if let dateRange = card.dateRange {
+                        Text("•")
+                            .foregroundStyle(.tertiary)
+                        Text(dateRange)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+
+            // Narrative preview
+            if !card.narrative.isEmpty {
+                Text(card.narrative.prefix(150) + (card.narrative.count > 150 ? "..." : ""))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+            }
+
+            // Domains as badges
+            if !card.extractable.domains.isEmpty {
+                FlowLayout(spacing: 4) {
+                    ForEach(card.extractable.domains.prefix(6), id: \.self) { domain in
+                        badgePill(domain, color: .indigo)
+                    }
+                    if card.extractable.domains.count > 6 {
+                        Text("+\(card.extractable.domains.count - 6)")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
                 }
             }
         }
@@ -445,31 +443,29 @@ struct ArtifactRow: View {
         .cornerRadius(4)
     }
 
-    private func cardTypeIcon(_ type: DocumentInventory.ProposedCardEntry.CardType) -> String {
+    private func cardTypeIcon(_ type: CardType) -> String {
         switch type {
         case .employment: return "briefcase.fill"
         case .project: return "hammer.fill"
-        case .skill: return "lightbulb.fill"
         case .achievement: return "star.fill"
         case .education: return "graduationcap.fill"
         }
     }
 
-    private func cardTypeColor(_ type: DocumentInventory.ProposedCardEntry.CardType) -> Color {
+    private func cardTypeColor(_ type: CardType) -> Color {
         switch type {
         case .employment: return .blue
         case .project: return .orange
-        case .skill: return .purple
         case .achievement: return .yellow
         case .education: return .green
         }
     }
 
-    private func evidenceStrengthColor(_ strength: DocumentInventory.ProposedCardEntry.EvidenceStrength) -> Color {
-        switch strength {
-        case .primary: return .green
-        case .supporting: return .blue
-        case .mention: return .gray
+    private func proficiencyColor(_ proficiency: Proficiency) -> Color {
+        switch proficiency {
+        case .expert: return .green
+        case .proficient: return .blue
+        case .familiar: return .orange
         }
     }
 

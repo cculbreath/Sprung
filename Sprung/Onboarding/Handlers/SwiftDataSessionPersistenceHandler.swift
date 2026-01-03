@@ -364,7 +364,8 @@ final class SwiftDataSessionPersistenceHandler {
         let summary = record["summary"].string
         let briefDescription = record["brief_description"].string
         let title = record["title"].string ?? record["metadata"]["title"].string
-        let cardInventoryJSON = record["card_inventory"].string
+        let skillsJSON = record["skills"].string
+        let narrativeCardsJSON = record["narrative_cards"].string
         // Persist the full record JSON for metadata
         let metadataJSON = record.rawString()
         let rawFileRelativePath = record["raw_file_path"].string
@@ -396,7 +397,8 @@ final class SwiftDataSessionPersistenceHandler {
             summary: summary,
             briefDescription: briefDescription,
             title: title,
-            cardInventoryJSON: cardInventoryJSON,
+            skillsJSON: skillsJSON,
+            narrativeCardsJSON: narrativeCardsJSON,
             metadataJSON: metadataJSON,
             rawFileRelativePath: rawFileRelativePath,
             planItemId: planItemId
@@ -422,8 +424,11 @@ final class SwiftDataSessionPersistenceHandler {
         if let title = record["title"].string ?? record["metadata"]["title"].string {
             artifact.title = title
         }
-        if let cardInventoryJSON = record["card_inventory"].string {
-            artifact.cardInventoryJSON = cardInventoryJSON
+        if let skillsJSON = record["skills"].string {
+            artifact.skillsJSON = skillsJSON
+        }
+        if let narrativeCardsJSON = record["narrative_cards"].string {
+            artifact.narrativeCardsJSON = narrativeCardsJSON
         }
         // Update full metadata JSON
         artifact.metadataJSON = record.rawString()
@@ -484,13 +489,14 @@ final class SwiftDataSessionPersistenceHandler {
         sessionStore.getEnabledSections(session)
     }
 
-    /// Get restored merged inventory
-    func getRestoredMergedInventory(_ session: OnboardingSession) -> MergedCardInventory? {
+    /// Get restored aggregated narrative cards
+    /// Note: Skills and narrative cards are now stored per-document in artifacts, not as merged inventory
+    func getRestoredAggregatedNarrativeCards(_ session: OnboardingSession) -> [KnowledgeCard] {
         guard let jsonString = sessionStore.getMergedInventory(session),
               let data = jsonString.data(using: .utf8) else {
-            return nil
+            return []
         }
-        return try? JSONDecoder().decode(MergedCardInventory.self, from: data)
+        return (try? JSONDecoder().decode([KnowledgeCard].self, from: data)) ?? []
     }
 
     /// Get restored excluded card IDs
@@ -532,8 +538,10 @@ final class SwiftDataSessionPersistenceHandler {
         json["summary"].string = record.summary
         json["brief_description"].string = record.briefDescription
         json["title"].string = record.title
-        json["has_card_inventory"].bool = record.hasCardInventory
-        json["card_inventory"].string = record.cardInventoryJSON
+        json["has_skills"].bool = record.hasSkills
+        json["has_narrative_cards"].bool = record.hasNarrativeCards
+        json["skills"].string = record.skillsJSON
+        json["narrative_cards"].string = record.narrativeCardsJSON
         if let metadataJSON = record.metadataJSON,
            let data = metadataJSON.data(using: .utf8),
            let metadata = try? JSON(data: data) {

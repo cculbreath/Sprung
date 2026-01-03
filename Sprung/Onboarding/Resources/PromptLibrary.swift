@@ -124,18 +124,38 @@ enum PromptLibrary {
         loadPrompt(named: "pitfalls_analysis_prompt")
     }()
 
-    // MARK: - Card Pipeline Prompts
+    // MARK: - Skill Bank + Narrative KC Prompts
 
-    /// Card inventory prompt template
-    /// Contains placeholders: {DOC_ID}, {FILENAME}, {DOCUMENT_TYPE}, {CLASSIFICATION_JSON}, {EXTRACTED_CONTENT}
-    static let cardInventoryTemplate: String = {
-        loadPrompt(named: "card_inventory_prompt")
+    /// Skill bank extraction prompt template
+    /// Contains placeholders: {DOC_ID}, {FILENAME}, {EXTRACTED_CONTENT}
+    static let skillBankExtractionTemplate: String = {
+        loadPrompt(named: "skill_bank_extraction")
     }()
 
-    /// Cross-document merge prompt template
-    /// Contains placeholders: {INVENTORIES_JSON}, {TIMELINE_JSON}
-    static let crossDocumentMergeTemplate: String = {
-        loadPrompt(named: "cross_document_merge_prompt")
+    /// Narrative knowledge card extraction prompt template
+    /// Contains placeholders: {DOC_ID}, {FILENAME}, {EXTRACTED_CONTENT}
+    static let kcExtractionTemplate: String = {
+        loadPrompt(named: "kc_extraction")
+    }()
+
+    // MARK: - Inference Guidance Prompts
+
+    /// Identity vocabulary extraction prompt template
+    /// Contains placeholder: {NARRATIVE_CARDS}
+    static let identityVocabularyTemplate: String = {
+        loadPrompt(named: "identity_vocabulary_extraction")
+    }()
+
+    /// Title set generation prompt template
+    /// Contains placeholder: {VOCABULARY_JSON}
+    static let titleSetGenerationTemplate: String = {
+        loadPrompt(named: "title_set_generation")
+    }()
+
+    /// Voice profile extraction prompt template
+    /// Contains placeholder: {WRITING_SAMPLES}
+    static let voiceProfileTemplate: String = {
+        loadPrompt(named: "voice_profile_extraction")
     }()
 
     // MARK: - Prompt Loading

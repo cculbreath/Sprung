@@ -243,7 +243,7 @@ final class Logger {
         guard let data = entry.data(using: .utf8) else { return }
         if let handle = try? FileHandle(forWritingTo: url) {
             defer { try? handle.close() }
-            try? handle.seekToEnd()
+            _ = try? handle.seekToEnd()
             handle.write(data)
         }
     }

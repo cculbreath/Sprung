@@ -2,122 +2,144 @@
 //  CardMergeService.swift
 //  Sprung
 //
-//  Service for merging card inventories across documents.
+//  Service for aggregating skills and narrative cards across documents.
+//  Uses SkillBankService for skill deduplication and merging.
 //
 
 import Foundation
 import SwiftyJSON
 
-/// Service for merging card inventories across documents
+/// Service for aggregating skills and narrative cards across documents
 actor CardMergeService {
     private var llmFacade: LLMFacade?
     private let artifactRepository: ArtifactRepository
+    private let skillBankService: SkillBankService
 
     init(artifactRepository: ArtifactRepository, llmFacade: LLMFacade?) {
         self.artifactRepository = artifactRepository
         self.llmFacade = llmFacade
+        self.skillBankService = SkillBankService(llmFacade: llmFacade)
         Logger.info("🔄 CardMergeService initialized", category: .ai)
     }
 
-    /// Merge all document inventories into unified card inventory
-    /// Uses GPT-5 with strict schema enforcement for guaranteed valid output
-    /// - Parameter timeline: Skeleton timeline for employment context
-    /// - Returns: MergedCardInventory
-    func mergeInventories(timeline: JSON?) async throws -> MergedCardInventory {
-        guard let facade = llmFacade else {
-            throw CardMergeError.llmNotConfigured
-        }
+    // MARK: - Skill Bank + Narrative Cards Methods
 
-        // Gather all document inventories from artifact records
+    /// Get merged skill bank from all artifacts
+    /// Uses SkillBankService to deduplicate and merge skills across documents
+    func getMergedSkillBank() async -> SkillBank? {
         let artifacts = await artifactRepository.getArtifacts()
-        var inventories: [DocumentInventory] = []
+        var documentSkills: [[Skill]] = []
+        var sourceDocumentIds: [String] = []
 
-        Logger.info("🔄 CardMergeService: Checking \(artifacts.artifactRecords.count) artifacts for card_inventory", category: .ai)
+        Logger.info("🔧 CardMergeService: Checking \(artifacts.artifactRecords.count) artifacts for skills", category: .ai)
 
         for artifact in artifacts.artifactRecords {
             let filename = artifact["filename"].stringValue
+            let artifactId = artifact["id"].stringValue
 
-            // Check what keys exist on this artifact
-            let hasCardInventory = artifact["card_inventory"].exists()
-            let cardInventoryType = artifact["card_inventory"].type
-            Logger.info("📦 Artifact '\(filename)': card_inventory exists=\(hasCardInventory), type=\(cardInventoryType)", category: .ai)
-
-            guard let inventoryString = artifact["card_inventory"].string,
-                  let inventoryData = inventoryString.data(using: .utf8) else {
-                Logger.info("⏭️ Skipping artifact '\(filename)': no card_inventory string", category: .ai)
+            guard let skillsString = artifact["skills"].string,
+                  let skillsData = skillsString.data(using: .utf8) else {
+                Logger.debug("⏭️ Skipping artifact '\(filename)': no skills data", category: .ai)
                 continue
             }
 
             do {
-                // Don't use .convertFromSnakeCase - DocumentInventory has explicit CodingKeys
                 let decoder = JSONDecoder()
-                decoder.dateDecodingStrategy = .iso8601
-                let decodedInventory = try decoder.decode(DocumentInventory.self, from: inventoryData)
-
-                // IMPORTANT: Use the actual artifact ID, not the stale documentId from the inventory.
-                // Artifacts can be reprocessed/recreated with new UUIDs, but the stored inventory
-                // retains the old documentId. The merge output needs current IDs for agent export.
-                let actualArtifactId = artifact["id"].stringValue
-                let inventory = DocumentInventory(
-                    documentId: actualArtifactId,
-                    documentType: decodedInventory.documentType,
-                    proposedCards: decodedInventory.proposedCards,
-                    generatedAt: decodedInventory.generatedAt
-                )
-                inventories.append(inventory)
-                Logger.debug("📦 Decoded inventory for artifact: \(actualArtifactId) with \(inventory.proposedCards.count) cards", category: .ai)
+                decoder.keyDecodingStrategy = .convertFromSnakeCase
+                let skills = try decoder.decode([Skill].self, from: skillsData)
+                documentSkills.append(skills)
+                sourceDocumentIds.append(artifactId)
+                Logger.debug("🔧 Decoded \(skills.count) skills from artifact: \(filename)", category: .ai)
             } catch {
-                Logger.warning("⚠️ Failed to decode inventory for artifact: \(artifact["id"].stringValue): \(error.localizedDescription)", category: .ai)
+                Logger.warning("⚠️ Failed to decode skills for artifact \(artifactId): \(error.localizedDescription)", category: .ai)
             }
         }
 
-        guard !inventories.isEmpty else {
-            throw CardMergeError.noInventories
+        guard !documentSkills.isEmpty else {
+            Logger.info("🔧 No skills found in any artifacts", category: .ai)
+            return nil
         }
 
-        let prompt = CardMergePrompts.mergePrompt(
-            inventories: inventories,
-            timeline: timeline
+        // Use SkillBankService to merge and deduplicate
+        let mergedBank = await skillBankService.mergeSkillBank(
+            documentSkills: documentSkills,
+            sourceDocumentIds: sourceDocumentIds
         )
 
-        Logger.info("🔄 Merging \(inventories.count) document inventories using OpenRouter", category: .ai)
+        Logger.info("✅ Merged skill bank: \(mergedBank.skills.count) skills from \(documentSkills.count) documents", category: .ai)
+        return mergedBank
+    }
 
-        // Use OpenRouter with strict schema enforcement
-        let mergeModelId = UserDefaults.standard.string(forKey: "onboardingCardMergeModelId") ?? "openai/gpt-5"
+    /// Get all narrative cards from all artifacts
+    /// Returns cards grouped by document with document metadata
+    func getAllNarrativeCards() async -> [NarrativeCardCollection] {
+        let artifacts = await artifactRepository.getArtifacts()
+        var collections: [NarrativeCardCollection] = []
 
-        do {
-            let mergedInventory: MergedCardInventory = try await facade.executeStructuredWithSchema(
-                prompt: prompt,
-                modelId: mergeModelId,
-                as: MergedCardInventory.self,
-                schema: CardMergePrompts.openAISchema,
-                schemaName: "merged_card_inventory",
-                temperature: 0.2,
-                backend: .openRouter
-            )
+        Logger.info("📖 CardMergeService: Checking \(artifacts.artifactRecords.count) artifacts for narrative cards", category: .ai)
 
-            Logger.info("✅ Merged inventory: \(mergedInventory.mergedCards.count) cards from \(inventories.count) documents", category: .ai)
-            return mergedInventory
-        } catch {
-            Logger.error("❌ Card merge failed: \(error.localizedDescription)", category: .ai)
-            throw CardMergeError.invalidResponse
+        for artifact in artifacts.artifactRecords {
+            let filename = artifact["filename"].stringValue
+            let artifactId = artifact["id"].stringValue
+            let documentType = artifact["document_type"].stringValue
+
+            guard let cardsString = artifact["narrative_cards"].string,
+                  let cardsData = cardsString.data(using: .utf8) else {
+                Logger.debug("⏭️ Skipping artifact '\(filename)': no narrative_cards data", category: .ai)
+                continue
+            }
+
+            do {
+                let decoder = JSONDecoder()
+                decoder.keyDecodingStrategy = .convertFromSnakeCase
+                let cards = try decoder.decode([KnowledgeCard].self, from: cardsData)
+
+                let collection = NarrativeCardCollection(
+                    documentId: artifactId,
+                    filename: filename,
+                    documentType: documentType,
+                    cards: cards
+                )
+                collections.append(collection)
+                Logger.debug("📖 Decoded \(cards.count) narrative cards from artifact: \(filename)", category: .ai)
+            } catch {
+                Logger.warning("⚠️ Failed to decode narrative cards for artifact \(artifactId): \(error.localizedDescription)", category: .ai)
+            }
         }
+
+        let totalCards = collections.reduce(0) { $0 + $1.cards.count }
+        Logger.info("✅ Found \(totalCards) narrative cards across \(collections.count) documents", category: .ai)
+        return collections
+    }
+
+    /// Get a flat list of all narrative cards across all documents
+    func getAllNarrativeCardsFlat() async -> [KnowledgeCard] {
+        let collections = await getAllNarrativeCards()
+        return collections.flatMap { $0.cards }
     }
 
     enum CardMergeError: Error, LocalizedError {
         case llmNotConfigured
-        case noInventories
-        case invalidResponse
+        case noSkillsFound
+        case noCardsFound
 
         var errorDescription: String? {
             switch self {
             case .llmNotConfigured:
                 return "LLM facade is not configured"
-            case .noInventories:
-                return "No document inventories found to merge"
-            case .invalidResponse:
-                return "Invalid response from LLM"
+            case .noSkillsFound:
+                return "No skills found in artifacts"
+            case .noCardsFound:
+                return "No narrative cards found in artifacts"
             }
         }
     }
+}
+
+/// Collection of narrative cards from a single document
+struct NarrativeCardCollection {
+    let documentId: String
+    let filename: String
+    let documentType: String
+    let cards: [KnowledgeCard]
 }

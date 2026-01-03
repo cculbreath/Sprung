@@ -140,6 +140,7 @@ class ResumeReviseViewModel {
         exportCoordinator: ResumeExportCoordinator,
         applicantProfileStore: ApplicantProfileStore,
         resRefStore: ResRefStore,
+        guidanceStore: InferenceGuidanceStore? = nil,
         validationService: RevisionValidationService? = nil,
         streamingService: RevisionStreamingService? = nil,
         completionService: RevisionCompletionService? = nil,
@@ -173,7 +174,8 @@ class ResumeReviseViewModel {
             streamingService: streaming,
             applicantProfileStore: applicantProfileStore,
             resRefStore: resRefStore,
-            toolRunner: self.toolRunner
+            toolRunner: self.toolRunner,
+            guidanceStore: guidanceStore
         )
 
         self.workflowOrchestrator = RevisionWorkflowOrchestrator(
@@ -188,6 +190,7 @@ class ResumeReviseViewModel {
             resRefStore: resRefStore,
             toolRunner: self.toolRunner,
             phaseReviewManager: self.phaseReviewManager,
+            guidanceStore: guidanceStore,
             workflowState: self.workflowState
         )
 

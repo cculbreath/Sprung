@@ -131,17 +131,18 @@ final class InterviewLifecycleController {
         let phase = InterviewPhase(rawValue: session.phase) ?? .phase1VoiceContext
         ui.phase = phase
 
-        // Restore merged inventory and excluded card IDs (expensive LLM results)
+        // Restore aggregated cards and excluded card IDs
         let restoredExcludedIds = sessionPersistenceHandler.getRestoredExcludedCardIds(session)
         ui.excludedCardIds = restoredExcludedIds
 
-        if let mergedInventory = sessionPersistenceHandler.getRestoredMergedInventory(session) {
-            ui.mergedInventory = mergedInventory
-            ui.proposedAssignmentCount = mergedInventory.mergedCards.count
-            ui.identifiedGapCount = mergedInventory.gaps.count
+        let restoredCards = sessionPersistenceHandler.getRestoredAggregatedNarrativeCards(session)
+        if !restoredCards.isEmpty {
+            ui.aggregatedNarrativeCards = restoredCards
+            ui.proposedAssignmentCount = restoredCards.count
+            ui.identifiedGapCount = 0  // Gaps are no longer tracked in new model
             ui.cardAssignmentsReadyForApproval = true
 
-            Logger.info("📥 Restored merged inventory: \(mergedInventory.mergedCards.count) cards (excluding \(restoredExcludedIds.count) excluded)", category: .ai)
+            Logger.info("📥 Restored aggregated narrative cards: \(restoredCards.count) cards (excluding \(restoredExcludedIds.count) excluded)", category: .ai)
         }
 
         // Restore phase in state coordinator - registers objectives for ALL phases up to current

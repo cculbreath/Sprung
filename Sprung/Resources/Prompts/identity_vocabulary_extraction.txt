@@ -1,0 +1,57 @@
+# Identity Vocabulary Extraction
+
+Extract single-word identity nouns from career narratives.
+
+## Narratives
+
+{NARRATIVE_CARDS}
+
+---
+
+## Task
+
+Extract 10-20 single-word nouns that capture WHO this person IS.
+
+### Guidelines
+- Single word only: "Physicist", "Developer", "Machinist"
+- Nouns, not adjectives: "Engineer" not "Engineering"
+- Identity, not skill: "Builder" not "Building"
+- Evidence-based: Rate strength 0.0-1.0
+
+### Strong Terms (0.8-1.0)
+- Explicitly claimed roles (job titles, self-descriptions)
+- Roles with substantial evidence across multiple cards
+- Professional identities central to their career
+
+### Moderate Terms (0.5-0.79)
+- Implied through consistent actions
+- Secondary roles with clear evidence
+- Emerging identities with growing evidence
+
+### Weak Terms (below 0.5)
+- Skip these - not worth including
+
+## Output
+
+Return JSON with exactly this structure:
+
+```json
+{
+  "terms": [
+    {
+      "id": "uuid-string",
+      "term": "Physicist",
+      "evidence_strength": 0.95,
+      "source_document_ids": []
+    },
+    {
+      "id": "uuid-string",
+      "term": "Developer",
+      "evidence_strength": 0.85,
+      "source_document_ids": []
+    }
+  ]
+}
+```
+
+Generate valid UUID strings for each term's id field.

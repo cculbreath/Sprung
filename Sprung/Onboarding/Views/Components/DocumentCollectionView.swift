@@ -52,8 +52,8 @@ struct DocumentCollectionView: View {
         artifacts.count
     }
 
-    private var artifactsMissingInventory: Int {
-        artifacts.filter { !$0.extractedContent.isEmpty && !$0.hasCardInventory }.count
+    private var artifactsMissingKnowledge: Int {
+        artifacts.filter { !$0.extractedContent.isEmpty && !$0.hasKnowledgeExtraction }.count
     }
 
     var body: some View {
@@ -261,20 +261,20 @@ struct DocumentCollectionView: View {
                     .foregroundStyle(.secondary)
             }
 
-            // Warning for artifacts missing inventory
-            if artifactsMissingInventory > 0 {
+            // Warning for artifacts missing knowledge extraction
+            if artifactsMissingKnowledge > 0 {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
                         .font(.caption)
-                    Text("\(artifactsMissingInventory) artifact\(artifactsMissingInventory == 1 ? "" : "s") not yet processed for knowledge cards")
+                    Text("\(artifactsMissingKnowledge) artifact\(artifactsMissingKnowledge == 1 ? "" : "s") not yet processed for knowledge extraction")
                         .font(.caption)
                         .foregroundStyle(.orange)
                 }
             }
         }
         .padding(12)
-        .background(artifactsMissingInventory > 0 ? Color.orange.opacity(0.1) : Color.green.opacity(0.1))
+        .background(artifactsMissingKnowledge > 0 ? Color.orange.opacity(0.1) : Color.green.opacity(0.1))
         .cornerRadius(8)
     }
 

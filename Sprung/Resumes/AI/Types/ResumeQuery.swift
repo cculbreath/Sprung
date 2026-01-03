@@ -236,6 +236,7 @@ import SwiftUI
     let res: Resume
     private let exportCoordinator: ResumeExportCoordinator
     private let allResRefs: [ResRef]
+    private let guidanceStore: InferenceGuidanceStore?
     // MARK: - Derived Properties
     var backgroundDocs: String {
         if allResRefs.isEmpty {
@@ -286,12 +287,14 @@ import SwiftUI
         exportCoordinator: ResumeExportCoordinator,
         applicantProfile: ApplicantProfile,
         allResRefs: [ResRef],
+        guidanceStore: InferenceGuidanceStore? = nil,
         saveDebugPrompt: Bool = true
     ) {
         // Optionally let users pass in the debug flag during initialization
         res = resume
         self.exportCoordinator = exportCoordinator
         self.allResRefs = allResRefs
+        self.guidanceStore = guidanceStore
         applicant = Applicant(profile: applicantProfile)
         self.saveDebugPrompt = saveDebugPrompt
     }
@@ -439,15 +442,18 @@ import SwiftUI
                 "isBundled": String(isBundled)
             ])
 
+            // Inject inference guidance if available
+            let finalPrompt = injectGuidance(into: prompt, for: section, fieldPath: fieldPath)
+
             if saveDebugPrompt {
-                savePromptToDownloads(content: prompt, fileName: "phaseReviewPrompt_v2_\(section)_phase\(phaseNumber).txt")
+                savePromptToDownloads(content: finalPrompt, fileName: "phaseReviewPrompt_v2_\(section)_phase\(phaseNumber).txt")
             }
 
-            return prompt
+            return finalPrompt
         }
 
         // Fallback to v1 template
-        let prompt = loadPromptTemplateWithSubstitutions(named: "resume_phase_review", substitutions: [
+        var prompt = loadPromptTemplateWithSubstitutions(named: "resume_phase_review", substitutions: [
             "phaseNumber": String(phaseNumber),
             "sectionUppercase": section.uppercased(),
             "fieldPath": fieldPath,
@@ -463,11 +469,43 @@ import SwiftUI
             "isBundled": String(isBundled)
         ])
 
+        // Inject inference guidance if available
+        prompt = injectGuidance(into: prompt, for: section, fieldPath: fieldPath)
+
         if saveDebugPrompt {
             savePromptToDownloads(content: prompt, fileName: "phaseReviewPrompt_\(section)_phase\(phaseNumber).txt")
         }
 
         return prompt
+    }
+
+    // MARK: - Inference Guidance
+
+    /// Look up and inject inference guidance for the given section/fieldPath
+    @MainActor
+    private func injectGuidance(into prompt: String, for section: String, fieldPath: String) -> String {
+        guard let store = guidanceStore else { return prompt }
+
+        // Try exact match first, then pattern match
+        let nodeKey = "\(section).\(fieldPath)"
+        let guidance = store.guidance(for: nodeKey)
+            ?? store.guidance(for: section)
+            ?? store.guidanceMatching(pattern: nodeKey)
+
+        guard let guidance = guidance else { return prompt }
+
+        Logger.info("📝 Injected guidance for \(nodeKey)", category: .ai)
+
+        return prompt + """
+
+        ================================================================================
+        INFERENCE GUIDANCE
+        ================================================================================
+
+        \(guidance.renderedPrompt())
+
+        ================================================================================
+        """
     }
 
     // MARK: - Knowledge Card Selection
