@@ -319,22 +319,21 @@ actor NarrativeDeduplicationService {
             var usedIds = Set<UUID>()
 
             for group in decision.mergeGroups ?? [] {
-                if let merged = group.mergedCard {
-                    results.append(merged)
-                    let groupCardIds = Set(group.originalCardIds.compactMap { UUID(uuidString: $0) })
-                    usedIds.formUnion(groupCardIds)
+                let merged = group.mergedCard
+                results.append(merged)
+                let groupCardIds = Set(group.originalCardIds.compactMap { UUID(uuidString: $0) })
+                usedIds.formUnion(groupCardIds)
 
-                    let inputTitles = originalCards
-                        .filter { groupCardIds.contains($0.id) }
-                        .map { $0.title }
+                let inputTitles = originalCards
+                    .filter { groupCardIds.contains($0.id) }
+                    .map { $0.title }
 
-                    logEntries.append(MergeLogEntry(
-                        action: .merged,
-                        inputCards: inputTitles,
-                        outputCard: merged.title,
-                        reasoning: decision.reasoning
-                    ))
-                }
+                logEntries.append(MergeLogEntry(
+                    action: .merged,
+                    inputCards: inputTitles,
+                    outputCard: merged.title,
+                    reasoning: decision.reasoning
+                ))
             }
 
             // Add cards not in any merge group
