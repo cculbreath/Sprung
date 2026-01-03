@@ -9,7 +9,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
     case discovery = "Job Discovery"
     case voice = "Voice & Audio"
     case debugging = "Debugging"
-    case dangerZone = "Danger Zone"
+    case reset = "Reset"
 
     var id: String { rawValue }
 
@@ -21,7 +21,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .discovery: return "briefcase.fill"
         case .voice: return "speaker.wave.2.fill"
         case .debugging: return "ladybug.fill"
-        case .dangerZone: return "exclamationmark.octagon.fill"
+        case .reset: return "arrow.counterclockwise"
         }
     }
 }
@@ -54,9 +54,8 @@ struct SettingsView: View {
                         Text(category.rawValue)
                     } icon: {
                         Image(systemName: category.systemImage)
-                            .foregroundStyle(category == .dangerZone ? .red : .secondary)
+                            .foregroundStyle(.secondary)
                     }
-                    .foregroundStyle(category == .dangerZone ? .red : .primary)
                 }
             }
         }
@@ -79,8 +78,8 @@ struct SettingsView: View {
             voiceDetail
         case .debugging:
             debuggingDetail
-        case .dangerZone:
-            DangerZoneSettingsSection()
+        case .reset:
+            ResetSettingsSection()
         case nil:
             ContentUnavailableView("Select a Category", systemImage: "gearshape", description: Text("Choose a settings category from the sidebar."))
         }

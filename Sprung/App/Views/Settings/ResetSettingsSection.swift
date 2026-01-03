@@ -1,12 +1,12 @@
 //
-//  DangerZoneSettingsSection.swift
+//  ResetSettingsSection.swift
 //  Sprung
 //
 //
 import SwiftUI
 import SwiftData
 
-struct DangerZoneSettingsSection: View {
+struct ResetSettingsSection: View {
     @Environment(\.modelContext) private var modelContext
     @State private var showFactoryResetConfirmation = false
     @State private var showFinalResetConfirmation = false
@@ -27,7 +27,7 @@ struct DangerZoneSettingsSection: View {
                     .padding(.vertical, 8)
                 factoryResetSection
             } header: {
-                SettingsSectionHeader(title: "Data Management", systemImage: "exclamationmark.octagon.fill")
+                SettingsSectionHeader(title: "Data Management", systemImage: "arrow.counterclockwise")
             }
         }
         .formStyle(.grouped)
@@ -135,7 +135,7 @@ struct DangerZoneSettingsSection: View {
             Button(role: .destructive) {
                 showFactoryResetConfirmation = true
             } label: {
-                Label("Factory Reset", systemImage: "exclamationmark.triangle.fill")
+                Label("Factory Reset", systemImage: "arrow.counterclockwise")
             }
             .buttonStyle(.bordered)
             .disabled(isResetting)
