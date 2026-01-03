@@ -206,7 +206,7 @@ struct AppSheetsModifier: ViewModifier {
                         }
                     },
                     writingSamples: .init(
-                        get: { coverRefStore.coverRefs },
+                        get: { coverRefStore.storedCoverRefs },
                         set: { _ in }
                     ),
                     onWritingSampleUpdated: { ref in
