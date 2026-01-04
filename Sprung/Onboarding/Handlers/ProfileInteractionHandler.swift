@@ -65,34 +65,37 @@ final class ProfileInteractionHandler {
         return payload
     }
 
-    /// Extracts URLs from validated profile and instructs agent to visit them
+    /// Extracts URLs from validated profile and instructs agent to visit them for context
     private func triggerProfileURLFetch(draft: ApplicantProfileDraft) async {
-        var urlsToVisit: [String] = []
+        var urlsToVisit: [(label: String, url: String)] = []
 
         // Check main website
         if !draft.website.isEmpty {
-            urlsToVisit.append(draft.website)
+            urlsToVisit.append((label: "personal website", url: draft.website))
         }
 
         // Check social profiles (LinkedIn, GitHub, etc.)
         for socialProfile in draft.socialProfiles {
             if !socialProfile.url.isEmpty {
-                urlsToVisit.append(socialProfile.url)
+                let network = socialProfile.network.isEmpty ? "profile" : socialProfile.network
+                urlsToVisit.append((label: network, url: socialProfile.url))
             }
         }
 
         guard !urlsToVisit.isEmpty else { return }
 
-        Logger.info("🌐 Profile contains \(urlsToVisit.count) URL(s) to visit", category: .ai)
+        Logger.info("🌐 Profile contains \(urlsToVisit.count) URL(s) to fetch for context", category: .ai)
 
-        // Build developer message instructing agent to fetch these URLs
-        let urlList = urlsToVisit.joined(separator: ", ")
+        // Build developer message instructing agent to fetch these URLs for interview context
+        let urlDescriptions = urlsToVisit.map { "\($0.label): \($0.url)" }.joined(separator: "\n- ")
         var payload = JSON()
         payload["text"].string = """
-            The user's profile includes the following URLs: \(urlList).
-            Use web_search to visit these sites and gather relevant information about the user's background.
-            If you find valuable content (portfolio projects, LinkedIn achievements, GitHub contributions, etc.),
-            use create_web_artifact to save it for later use in building their resume.
+            The user has provided the following URLs in their profile:
+            - \(urlDescriptions)
+
+            Please retrieve these pages using web_search as a source of context during the interview. \
+            Understanding their background, projects, and accomplishments from these sources will help \
+            you conduct a more informed and personalized interview.
             """
 
         await eventBus.publish(.llmExecuteDeveloperMessage(payload: payload))

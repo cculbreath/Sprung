@@ -3,23 +3,30 @@
 //  Sprung
 //
 //  Service for intelligent deduplication of narrative knowledge cards.
-//  Uses a single LLM call to canonicalize all cards at once.
+//  Uses a multi-turn agentic approach with filesystem tools.
 //
 
 import Foundation
 
 /// Service for intelligent deduplication of narrative knowledge cards.
-/// Uses a single LLM call to identify duplicates and synthesize merged cards.
-actor NarrativeDeduplicationService {
+/// Uses a multi-turn agent to identify duplicates and synthesize merged cards.
+@MainActor
+final class NarrativeDeduplicationService {
     private var llmFacade: LLMFacade?
+    private weak var eventBus: EventCoordinator?
+    private weak var agentActivityTracker: AgentActivityTracker?
 
     private var modelId: String {
-        UserDefaults.standard.string(forKey: "narrativeDedupeModelId")
-            ?? "openai/gpt-4.1"  // Default to high-quality model for merge decisions
+        UserDefaults.standard.string(forKey: "onboardingCardMergeModelId")
+            ?? "openai/gpt-5"  // Default to capable model for merge decisions
     }
 
-    init(llmFacade: LLMFacade?) {
+    private let workspaceService = CardMergeWorkspaceService()
+
+    init(llmFacade: LLMFacade?, eventBus: EventCoordinator? = nil, agentActivityTracker: AgentActivityTracker? = nil) {
         self.llmFacade = llmFacade
+        self.eventBus = eventBus
+        self.agentActivityTracker = agentActivityTracker
         Logger.info("🔀 NarrativeDeduplicationService initialized", category: .ai)
     }
 
@@ -27,10 +34,18 @@ actor NarrativeDeduplicationService {
         self.llmFacade = facade
     }
 
+    func setEventBus(_ eventBus: EventCoordinator) {
+        self.eventBus = eventBus
+    }
+
+    func setAgentActivityTracker(_ tracker: AgentActivityTracker) {
+        self.agentActivityTracker = tracker
+    }
+
     // MARK: - Public API
 
-    /// Canonicalize narrative cards - identify duplicates and merge them.
-    /// Uses a single LLM call with ALL cards for semantic understanding.
+    /// Deduplicate narrative cards using a multi-turn agent.
+    /// Creates a workspace, runs the merge agent, imports results, and cleans up.
     func deduplicateCards(_ cards: [KnowledgeCard]) async throws -> DeduplicationResult {
         guard !cards.isEmpty else {
             return DeduplicationResult(cards: [], mergeLog: [])
@@ -40,206 +55,116 @@ actor NarrativeDeduplicationService {
             throw DeduplicationError.llmNotConfigured
         }
 
-        Logger.info("🔀 Canonicalizing \(cards.count) cards with single LLM call", category: .ai)
-        Logger.info("🔀 Using model: \(modelId) via OpenRouter", category: .ai)
+        Logger.info("🔀 Starting agentic deduplication of \(cards.count) cards", category: .ai)
+        Logger.info("🔀 Using model: \(modelId)", category: .ai)
 
-        let prompt = buildCanonicalizePrompt(cards)
+        // Register agent with tracker
+        let agentId = UUID().uuidString
 
-        let response: CanonicalizationResponse = try await facade.executeStructuredWithDictionarySchema(
-            prompt: prompt,
-            modelId: modelId,
-            as: CanonicalizationResponse.self,
-            schema: Self.canonicalizationSchema,
-            schemaName: "canonicalization",
-            maxOutputTokens: 65536,  // Large output for full narratives
-            backend: .openRouter
-        )
-
-        // Convert response to DeduplicationResult
-        let mergeLog = response.mergeLog.map { entry in
-            MergeLogEntry(
-                action: entry.action == "merged" ? .merged : .kept,
-                inputCards: entry.inputCardIds,
-                outputCard: entry.outputCardId,
-                reasoning: entry.reasoning
+        if let tracker = agentActivityTracker {
+            tracker.trackAgent(
+                id: agentId,
+                type: .cardMerge,
+                name: "Card Merge Agent",
+                task: nil as Task<Void, Never>?
+            )
+            tracker.appendTranscript(
+                agentId: agentId,
+                entryType: .system,
+                content: "Starting deduplication of \(cards.count) cards"
             )
         }
 
-        Logger.info("🔀 Canonicalization complete: \(cards.count) → \(response.cards.count) cards", category: .ai)
-        Logger.info("🔀 Stats: \(response.statistics.cardsMerged) merged in \(response.statistics.mergeGroups) groups", category: .ai)
+        do {
+            // Step 1: Create workspace
+            let workspacePath = try workspaceService.createWorkspace()
+            Logger.info("🔀 Workspace created at \(workspacePath.path)", category: .ai)
 
-        return DeduplicationResult(cards: response.cards, mergeLog: mergeLog)
-    }
+            agentActivityTracker?.appendTranscript(
+                agentId: agentId,
+                entryType: .system,
+                content: "Created workspace",
+                details: workspacePath.path
+            )
 
-    // MARK: - Prompt Building
+            // Step 2: Export cards to workspace
+            try workspaceService.exportCards(cards)
+            Logger.info("🔀 Exported \(cards.count) cards to workspace", category: .ai)
 
-    private func buildCanonicalizePrompt(_ cards: [KnowledgeCard]) -> String {
-        let cardsJSON = formatCardsAsJSON(cards)
-        return PromptLibrary.substitute(
-            template: PromptLibrary.narrativeCanonicalizeTemplate,
-            replacements: ["CARDS_JSON": cardsJSON]
-        )
-    }
+            agentActivityTracker?.appendTranscript(
+                agentId: agentId,
+                entryType: .toolResult,
+                content: "Exported \(cards.count) cards to workspace"
+            )
 
-    private func formatCardsAsJSON(_ cards: [KnowledgeCard]) -> String {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        guard let data = try? encoder.encode(cards),
-              let json = String(data: data, encoding: .utf8) else {
-            return "[]"
+            // Step 3: Run merge agent
+            let agent = CardMergeAgent(
+                workspacePath: workspacePath,
+                modelId: modelId,
+                facade: facade,
+                eventBus: eventBus,
+                agentId: agentId,
+                tracker: agentActivityTracker
+            )
+
+            let agentResult = try await agent.run()
+
+            Logger.info("🔀 Agent completed: \(agentResult.originalCount) → \(agentResult.finalCount) cards (\(agentResult.mergeCount) merged)", category: .ai)
+
+            agentActivityTracker?.appendTranscript(
+                agentId: agentId,
+                entryType: .assistant,
+                content: "Merge complete",
+                details: "\(agentResult.originalCount) → \(agentResult.finalCount) cards"
+            )
+
+            // Step 4: Import results
+            let resultCards = try workspaceService.importCards()
+            Logger.info("🔀 Imported \(resultCards.count) cards from workspace", category: .ai)
+
+            // Step 5: Cleanup workspace
+            try workspaceService.deleteWorkspace()
+            Logger.info("🔀 Workspace cleaned up", category: .ai)
+
+            // Mark agent complete
+            agentActivityTracker?.markCompleted(agentId: agentId)
+
+            return DeduplicationResult(cards: resultCards, mergeLog: agentResult.mergeLog)
+
+        } catch {
+            Logger.error("🔀 Deduplication failed: \(error.localizedDescription)", category: .ai)
+
+            // Cleanup on error
+            try? workspaceService.deleteWorkspace()
+
+            // Mark agent failed
+            agentActivityTracker?.markFailed(agentId: agentId, error: error.localizedDescription)
+
+            throw error
         }
-        return json
     }
 
-    // MARK: - JSON Schema
-    // Reuses KnowledgeCard schema structure from KCExtractionPrompts
-
-    /// Card item schema matching KnowledgeCard structure
-    private static let cardItemSchema: [String: Any] = [
-        "type": "object",
-        "properties": [
-            "id": ["type": "string", "description": "UUID for the card"],
-            "card_type": [
-                "type": "string",
-                "enum": ["employment", "project", "achievement", "education"]
-            ],
-            "title": ["type": "string"],
-            "narrative": ["type": "string", "description": "Full narrative (500-2000 words)"],
-            "organization": ["type": "string", "description": "Organization name, or empty string if N/A"],
-            "date_range": ["type": "string", "description": "Date range like '2018-2021', or empty string if N/A"],
-            "extractable": [
-                "type": "object",
-                "properties": [
-                    "domains": ["type": "array", "items": ["type": "string"]],
-                    "scale": ["type": "array", "items": ["type": "string"]],
-                    "keywords": ["type": "array", "items": ["type": "string"]]
-                ],
-                "required": ["domains", "scale", "keywords"]
-            ],
-            "evidence_anchors": [
-                "type": "array",
-                "items": [
-                    "type": "object",
-                    "properties": [
-                        "document_id": ["type": "string"],
-                        "location": ["type": "string"],
-                        "verbatim_excerpt": ["type": "string"]
-                    ],
-                    "required": ["document_id", "location"]
-                ]
-            ],
-            "related_card_ids": [
-                "type": "array",
-                "items": ["type": "string"]
-            ]
-        ],
-        "required": ["id", "card_type", "title", "narrative", "organization", "date_range", "extractable", "evidence_anchors", "related_card_ids"]
-    ]
-
-    static let canonicalizationSchema: [String: Any] = [
-        "type": "object",
-        "properties": [
-            "cards": [
-                "type": "array",
-                "description": "The canonical set of cards after deduplication",
-                "items": cardItemSchema
-            ],
-            "merge_log": [
-                "type": "array",
-                "description": "Log of all merge decisions",
-                "items": [
-                    "type": "object",
-                    "properties": [
-                        "action": ["type": "string", "enum": ["merged", "kept"]],
-                        "input_card_ids": [
-                            "type": "array",
-                            "items": ["type": "string"],
-                            "description": "IDs of input cards that were processed"
-                        ],
-                        "output_card_id": [
-                            "type": "string",
-                            "description": "ID of the resulting card"
-                        ],
-                        "reasoning": [
-                            "type": "string",
-                            "description": "Explanation for merge, empty for kept cards"
-                        ]
-                    ],
-                    "required": ["action", "input_card_ids", "output_card_id", "reasoning"]
-                ]
-            ],
-            "statistics": [
-                "type": "object",
-                "properties": [
-                    "input_count": ["type": "integer"],
-                    "output_count": ["type": "integer"],
-                    "cards_merged": ["type": "integer"],
-                    "merge_groups": ["type": "integer"]
-                ],
-                "required": ["input_count", "output_count", "cards_merged", "merge_groups"]
-            ]
-        ],
-        "required": ["cards", "merge_log", "statistics"]
-    ]
+    // MARK: - Errors
 
     enum DeduplicationError: Error, LocalizedError {
         case llmNotConfigured
-        case invalidResponse
+        case workspaceError(String)
+        case agentError(String)
 
         var errorDescription: String? {
             switch self {
-            case .llmNotConfigured: return "LLM facade not configured"
-            case .invalidResponse: return "Invalid response from LLM"
+            case .llmNotConfigured:
+                return "LLM facade not configured"
+            case .workspaceError(let msg):
+                return "Workspace error: \(msg)"
+            case .agentError(let msg):
+                return "Agent error: \(msg)"
             }
         }
     }
 }
 
-// MARK: - Response Types
-
-/// Response from LLM canonicalization call
-struct CanonicalizationResponse: Codable {
-    let cards: [KnowledgeCard]
-    let mergeLog: [CanonicalizationLogEntry]
-    let statistics: CanonicalizationStats
-
-    enum CodingKeys: String, CodingKey {
-        case cards
-        case mergeLog = "merge_log"
-        case statistics
-    }
-}
-
-/// Log entry for canonicalization decisions
-struct CanonicalizationLogEntry: Codable {
-    let action: String                   // "merged" or "kept"
-    let inputCardIds: [String]           // Source card IDs
-    let outputCardId: String             // Resulting card ID
-    let reasoning: String                // Empty for kept cards
-
-    enum CodingKeys: String, CodingKey {
-        case action
-        case inputCardIds = "input_card_ids"
-        case outputCardId = "output_card_id"
-        case reasoning
-    }
-}
-
-struct CanonicalizationStats: Codable {
-    let inputCount: Int
-    let outputCount: Int
-    let cardsMerged: Int
-    let mergeGroups: Int
-
-    enum CodingKeys: String, CodingKey {
-        case inputCount = "input_count"
-        case outputCount = "output_count"
-        case cardsMerged = "cards_merged"
-        case mergeGroups = "merge_groups"
-    }
-}
-
-// MARK: - Result Types (kept from original)
+// MARK: - Result Types
 
 struct DeduplicationResult {
     let cards: [KnowledgeCard]
@@ -255,7 +180,22 @@ struct MergeLogEntry {
     }
 
     let action: Action
-    let inputCards: [String]
-    let outputCard: String?
+    let inputCardIds: [String]
+    let outputCardId: String?
     let reasoning: String
+
+    init(action: Action, inputCardIds: [String], outputCardId: String?, reasoning: String) {
+        self.inputCardIds = inputCardIds
+        self.outputCardId = outputCardId
+        self.action = action
+        self.reasoning = reasoning
+    }
+
+    // Convenience init for backward compatibility
+    init(action: Action, inputCards: [String], outputCard: String?, reasoning: String) {
+        self.inputCardIds = inputCards
+        self.outputCardId = outputCard
+        self.action = action
+        self.reasoning = reasoning
+    }
 }

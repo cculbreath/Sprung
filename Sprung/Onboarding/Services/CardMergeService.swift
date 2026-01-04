@@ -19,19 +19,39 @@ actor CardMergeService {
     private let artifactRecordStore: ArtifactRecordStore
     private let sessionPersistenceHandler: SwiftDataSessionPersistenceHandler
     private let skillBankService: SkillBankService
-    private let deduplicationService: NarrativeDeduplicationService
+    private var deduplicationService: NarrativeDeduplicationService?
+    private weak var eventBus: EventCoordinator?
+    private weak var agentActivityTracker: AgentActivityTracker?
 
     init(
         artifactRecordStore: ArtifactRecordStore,
         sessionPersistenceHandler: SwiftDataSessionPersistenceHandler,
-        llmFacade: LLMFacade?
+        llmFacade: LLMFacade?,
+        eventBus: EventCoordinator? = nil,
+        agentActivityTracker: AgentActivityTracker? = nil
     ) {
         self.artifactRecordStore = artifactRecordStore
         self.sessionPersistenceHandler = sessionPersistenceHandler
         self.llmFacade = llmFacade
+        self.eventBus = eventBus
+        self.agentActivityTracker = agentActivityTracker
         self.skillBankService = SkillBankService(llmFacade: llmFacade)
-        self.deduplicationService = NarrativeDeduplicationService(llmFacade: llmFacade)
         Logger.info("🔄 CardMergeService initialized", category: .ai)
+    }
+
+    /// Lazy initialization of deduplication service on MainActor
+    private func getDeduplicationService() async -> NarrativeDeduplicationService {
+        if let service = deduplicationService {
+            return service
+        }
+        let facade = self.llmFacade
+        let bus = self.eventBus
+        let tracker = self.agentActivityTracker
+        let service = await MainActor.run {
+            NarrativeDeduplicationService(llmFacade: facade, eventBus: bus, agentActivityTracker: tracker)
+        }
+        deduplicationService = service
+        return service
     }
 
     // MARK: - Private Types
@@ -150,7 +170,8 @@ actor CardMergeService {
         }
 
         Logger.info("🔀 Starting narrative card deduplication: \(allCards.count) cards", category: .ai)
-        return try await deduplicationService.deduplicateCards(allCards)
+        let service = await getDeduplicationService()
+        return try await service.deduplicateCards(allCards)
     }
 
     /// Deduplicate an arbitrary list of narrative cards
@@ -161,7 +182,8 @@ actor CardMergeService {
         }
 
         Logger.info("🔀 Manual deduplication requested: \(cards.count) cards", category: .ai)
-        return try await deduplicationService.deduplicateCards(cards)
+        let service = await getDeduplicationService()
+        return try await service.deduplicateCards(cards)
     }
 
     enum CardMergeError: Error, LocalizedError {

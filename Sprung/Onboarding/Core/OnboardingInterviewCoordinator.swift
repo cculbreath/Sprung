@@ -1123,7 +1123,7 @@ final class OnboardingInterviewCoordinator {
 
             // Log merge decisions for debugging
             for entry in result.mergeLog {
-                Logger.debug("🔀 \(entry.action.rawValue): \(entry.inputCards.joined(separator: " + ")) → \(entry.outputCard ?? "N/A")", category: .ai)
+                Logger.debug("🔀 \(entry.action.rawValue): \(entry.inputCardIds.joined(separator: " + ")) → \(entry.outputCardId ?? "N/A")", category: .ai)
             }
         } catch {
             Logger.error("❌ Deduplication failed: \(error.localizedDescription)", category: .ai)

@@ -917,6 +917,127 @@ struct GrepSearchTool: AgentTool {
     }
 }
 
+// MARK: - Write File Tool
+
+struct WriteFileTool: AgentTool {
+    static let name = "write_file"
+    static let description = """
+        Write content to a file. Creates the file if it doesn't exist, overwrites if it does.
+        Use for creating merged cards or updating existing files.
+        """
+
+    static let parametersSchema: [String: Any] = [
+        "type": "object",
+        "properties": [
+            "path": [
+                "type": "string",
+                "description": "Path to the file to write (relative to workspace root)"
+            ],
+            "content": [
+                "type": "string",
+                "description": "Content to write to the file"
+            ]
+        ],
+        "required": ["path", "content"],
+        "additionalProperties": false
+    ]
+
+    struct Parameters: Codable {
+        let path: String
+        let content: String
+    }
+
+    struct Result: Codable {
+        let success: Bool
+        let path: String
+        let bytesWritten: Int
+    }
+
+    /// Execute the write_file tool
+    static func execute(
+        parameters: Parameters,
+        repoRoot: URL
+    ) throws -> Result {
+        // Resolve and validate path
+        let filePath = try resolveAndValidatePath(parameters.path, repoRoot: repoRoot)
+        let fileURL = URL(fileURLWithPath: filePath)
+
+        // Create parent directories if needed
+        let parentDir = fileURL.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: parentDir, withIntermediateDirectories: true)
+
+        // Write content
+        let data = parameters.content.data(using: .utf8) ?? Data()
+        try data.write(to: fileURL)
+
+        return Result(
+            success: true,
+            path: parameters.path,
+            bytesWritten: data.count
+        )
+    }
+}
+
+// MARK: - Delete File Tool
+
+struct DeleteFileTool: AgentTool {
+    static let name = "delete_file"
+    static let description = """
+        Delete a file from the workspace. Use to remove source cards after merging.
+        Cannot delete directories - only individual files.
+        """
+
+    static let parametersSchema: [String: Any] = [
+        "type": "object",
+        "properties": [
+            "path": [
+                "type": "string",
+                "description": "Path to the file to delete (relative to workspace root)"
+            ]
+        ],
+        "required": ["path"],
+        "additionalProperties": false
+    ]
+
+    struct Parameters: Codable {
+        let path: String
+    }
+
+    struct Result: Codable {
+        let success: Bool
+        let path: String
+    }
+
+    /// Execute the delete_file tool
+    static func execute(
+        parameters: Parameters,
+        repoRoot: URL
+    ) throws -> Result {
+        // Resolve and validate path
+        let filePath = try resolveAndValidatePath(parameters.path, repoRoot: repoRoot)
+
+        // Check file exists
+        guard FileManager.default.fileExists(atPath: filePath) else {
+            throw GitToolError.fileNotFound(parameters.path)
+        }
+
+        // Ensure it's a file, not a directory
+        var isDirectory: ObjCBool = false
+        FileManager.default.fileExists(atPath: filePath, isDirectory: &isDirectory)
+        if isDirectory.boolValue {
+            throw GitToolError.notADirectory(parameters.path)
+        }
+
+        // Delete the file
+        try FileManager.default.removeItem(atPath: filePath)
+
+        return Result(
+            success: true,
+            path: parameters.path
+        )
+    }
+}
+
 // MARK: - Git Tool Errors
 
 enum GitToolError: LocalizedError {

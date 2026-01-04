@@ -219,7 +219,9 @@ final class OnboardingDependencyContainer {
         self.cardMergeService = CardMergeService(
             artifactRecordStore: artifactRecordStore,
             sessionPersistenceHandler: sessionPersistenceHandler,
-            llmFacade: llmFacade
+            llmFacade: llmFacade,
+            eventBus: core.eventBus,
+            agentActivityTracker: agentActivityTracker
         )
 
         // 8. Initialize phase transition controller (depends on session persistence handler)

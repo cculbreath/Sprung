@@ -87,6 +87,9 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
             return
         }
 
+        // Check if using Anthropic backend (for direct PDF sending)
+        let isAnthropic = UserDefaults.standard.string(forKey: "onboardingProvider") == "anthropic"
+
         // Categorize and queue files by type using centralized policy
         var queuedCount = 0
 
@@ -94,7 +97,13 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
             let ext = file.storageURL.pathExtension.lowercased()
 
             if DocumentTypePolicy.isExtractable(ext) {
-                // Queue extractable documents
+                // Special case: Resume PDFs sent directly to Anthropic (skip extraction pipeline)
+                if requestKind == "resume" && ext == "pdf" && isAnthropic {
+                    await sendPDFDirectlyToLLM(file: file, requestKind: requestKind, callId: callId, metadata: metadata)
+                    continue
+                }
+
+                // Queue extractable documents for normal processing
                 pendingFiles.append(QueuedFile(
                     file: file,
                     requestKind: requestKind,
@@ -313,5 +322,48 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         }
 
         return record
+    }
+
+    // MARK: - Direct PDF Sending (Anthropic)
+
+    /// Send a PDF file directly to the LLM without extraction pipeline.
+    /// Used for resumes when Anthropic is the backend (supports native PDF).
+    private func sendPDFDirectlyToLLM(
+        file: ProcessedUploadInfo,
+        requestKind: String,
+        callId: String?,
+        metadata: JSON
+    ) async {
+        let filename = file.filename
+
+        Logger.info("📄 Sending PDF directly to LLM (Anthropic): \(filename)", category: .ai)
+
+        // Read PDF file as base64
+        guard let pdfData = try? Data(contentsOf: file.storageURL) else {
+            Logger.error("❌ Failed to read PDF file: \(filename)", category: .ai)
+            return
+        }
+
+        let pdfBase64 = pdfData.base64EncodedString()
+        let sizeKB = pdfData.count / 1024
+
+        // Build message text
+        let messageText = """
+            I've uploaded my resume: **\(filename)** (\(sizeKB) KB)
+
+            Please review this document to understand my professional background.
+            """
+
+        // Build payload with PDF data (same pattern as image attachments)
+        var payload = JSON()
+        payload["text"].string = messageText
+        payload["image_data"].string = pdfBase64  // Reusing image_data field for PDF
+        payload["image_filename"].string = filename
+        payload["content_type"].string = "application/pdf"
+
+        // Send to LLM
+        await emit(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
+
+        Logger.info("✅ Resume PDF sent directly to Anthropic: \(filename) (\(sizeKB) KB)", category: .ai)
     }
 }

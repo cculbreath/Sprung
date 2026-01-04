@@ -55,14 +55,25 @@ struct AnthropicRequestBuilder {
         // CRITICAL: If history ends with a user message (e.g., synthetic tool_result from race condition),
         // we must merge the new content with it to maintain Anthropic's role alternation requirement.
         let newUserBlocks: [AnthropicContentBlock]
-        if let imageData = imageBase64 {
+        if let fileData = imageBase64 {
             let mimeType = imageContentType ?? "image/jpeg"
-            let imageSource = AnthropicImageSource(mediaType: mimeType, data: imageData)
-            newUserBlocks = [
-                .text(AnthropicTextBlock(text: text)),
-                .image(AnthropicImageBlock(source: imageSource))
-            ]
-            Logger.info("🖼️ Including image attachment in user message (\(mimeType))", category: .ai)
+
+            // Use document block for PDFs, image block for images
+            if mimeType == "application/pdf" {
+                let docSource = AnthropicDocumentSource(mediaType: mimeType, data: fileData)
+                newUserBlocks = [
+                    .text(AnthropicTextBlock(text: text)),
+                    .document(AnthropicDocumentBlock(source: docSource))
+                ]
+                Logger.info("📄 Including PDF document in user message", category: .ai)
+            } else {
+                let imageSource = AnthropicImageSource(mediaType: mimeType, data: fileData)
+                newUserBlocks = [
+                    .text(AnthropicTextBlock(text: text)),
+                    .image(AnthropicImageBlock(source: imageSource))
+                ]
+                Logger.info("🖼️ Including image attachment in user message (\(mimeType))", category: .ai)
+            }
         } else {
             newUserBlocks = [.text(AnthropicTextBlock(text: text))]
         }
@@ -495,6 +506,8 @@ struct AnthropicRequestBuilder {
                         return "tool_result(id:\(tr.toolUseId.prefix(8)), \(tr.content.count) chars)"
                     case .image:
                         return "image"
+                    case .document:
+                        return "document"
                     }
                 }
                 contentDesc = "[\(blockDescs.joined(separator: ", "))]"
@@ -556,6 +569,7 @@ struct AnthropicRequestBuilder {
                 case .toolUse(let tu): return "tool_use(\(tu.name))"
                 case .toolResult(let tr): return "tool_result(\(tr.toolUseId.prefix(8)))"
                 case .image: return "image"
+                case .document: return "document"
                 }
             }
             return "blocks: [\(types.joined(separator: ", "))]"
