@@ -391,8 +391,21 @@ class CardMergeAgent {
             cardFiles: params.cardFiles,
             mergeReason: params.mergeReason,
             modelId: modelId,
-            facade: facade
+            facade: facade,
+            parentAgentId: agentId,
+            tracker: tracker
         )
+
+        // Log spawn to parent agent transcript with merge reasoning
+        let cardIds = params.cardFiles.map { URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent }
+        if let agentId = agentId {
+            tracker?.appendTranscript(
+                agentId: agentId,
+                entryType: .tool,
+                content: "Spawning background merge for \(cardIds.count) cards",
+                details: "Cards: \(cardIds.joined(separator: ", "))\nReason: \(params.mergeReason)"
+            )
+        }
 
         // Capture cards for cleanup after task completes
         let cardsToRemove = requestedCards
@@ -406,7 +419,6 @@ class CardMergeAgent {
         }
         backgroundMergeTasks.append(task)
 
-        let cardIds = params.cardFiles.map { URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent }
         Logger.info("🔀 Spawned background merge for \(cardIds.count) cards: \(cardIds.joined(separator: ", "))", category: .ai)
 
         return """

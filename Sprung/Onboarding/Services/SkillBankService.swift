@@ -116,7 +116,7 @@ actor SkillBankService {
                     as: SkillExtractionResponse.self,
                     schema: SkillBankPrompts.jsonSchema,
                     schemaName: "skill_extraction",
-                    maxOutputTokens: 16384,
+                    maxOutputTokens: 32768,
                     backend: .gemini
                 )
                 Logger.info("🔧 Extracted \(response.skills.count) skills", category: .ai)

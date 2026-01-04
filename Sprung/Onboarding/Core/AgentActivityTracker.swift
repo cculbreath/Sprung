@@ -18,7 +18,9 @@ enum AgentType: String, Codable, CaseIterable {
     case gitIngestion = "git_ingest"
     case knowledgeCard = "knowledge_card"
     case cardMerge = "card_merge"
+    case backgroundMerge = "bg_merge"
     case pdfExtraction = "pdf_extract"
+    case documentRegen = "doc_regen"
 
     var displayName: String {
         switch self {
@@ -26,7 +28,9 @@ enum AgentType: String, Codable, CaseIterable {
         case .gitIngestion: return "Git Ingest"
         case .knowledgeCard: return "KC Agent"
         case .cardMerge: return "Card Merge"
+        case .backgroundMerge: return "Merge"
         case .pdfExtraction: return "PDF Extract"
+        case .documentRegen: return "Regen"
         }
     }
 
@@ -36,7 +40,9 @@ enum AgentType: String, Codable, CaseIterable {
         case .gitIngestion: return "chevron.left.forwardslash.chevron.right"
         case .knowledgeCard: return "brain.head.profile"
         case .cardMerge: return "arrow.triangle.merge"
+        case .backgroundMerge: return "arrow.triangle.branch"
         case .pdfExtraction: return "doc.viewfinder"
+        case .documentRegen: return "arrow.clockwise"
         }
     }
 }
@@ -117,6 +123,12 @@ struct TrackedAgent: Identifiable, Codable {
     /// Current status message for running agents (e.g., "Analyzing repository structure...")
     var statusMessage: String?
 
+    /// Parent agent ID for nested child agents (nil for top-level agents)
+    var parentAgentId: String?
+
+    /// Child agent IDs (populated by tracker, not persisted directly)
+    var childAgentIds: [String] = []
+
     /// Total tokens processed (input + output only).
     /// Note: cachedTokens are already included in inputTokens by the API,
     /// so we don't add them separately to avoid double-counting.
@@ -134,6 +146,12 @@ struct TrackedAgent: Identifiable, Codable {
         return String(format: "%.1fs", duration)
     }
 
+    /// Whether this is a child agent
+    var isChildAgent: Bool { parentAgentId != nil }
+
+    /// Whether this agent has running children
+    var hasRunningChildren: Bool { false } // Computed by tracker
+
     init(
         id: String = UUID().uuidString,
         agentType: AgentType,
@@ -142,7 +160,8 @@ struct TrackedAgent: Identifiable, Codable {
         startTime: Date = Date(),
         endTime: Date? = nil,
         transcript: [AgentTranscriptEntry] = [],
-        error: String? = nil
+        error: String? = nil,
+        parentAgentId: String? = nil
     ) {
         self.id = id
         self.agentType = agentType
@@ -152,6 +171,7 @@ struct TrackedAgent: Identifiable, Codable {
         self.endTime = endTime
         self.transcript = transcript
         self.error = error
+        self.parentAgentId = parentAgentId
     }
 }
 
@@ -220,6 +240,52 @@ class AgentActivityTracker {
         Logger.info("\(statusEmoji) Agent tracked: [\(type.displayName)] \(name) (id: \(id.prefix(8)), status: \(status.rawValue))", category: .ai)
 
         return id
+    }
+
+    /// Track a child agent nested under a parent
+    /// - Returns: The child agent ID for later reference
+    @discardableResult
+    func trackChildAgent<Success>(
+        id: String = UUID().uuidString,
+        parentAgentId: String,
+        type: AgentType,
+        name: String,
+        status: AgentStatus = .running,
+        task: Task<Success, Never>? = nil
+    ) -> String {
+        let agent = TrackedAgent(
+            id: id,
+            agentType: type,
+            name: name,
+            status: status,
+            startTime: Date(),
+            parentAgentId: parentAgentId
+        )
+
+        agents.insert(agent, at: 0) // Most recent first
+
+        // Link to parent
+        if let parentIndex = agents.firstIndex(where: { $0.id == parentAgentId }) {
+            agents[parentIndex].childAgentIds.append(id)
+        }
+
+        if let task = task {
+            activeTasks[id] = task
+        }
+
+        Logger.info("🔀 Child agent tracked: [\(type.displayName)] \(name) (parent: \(parentAgentId.prefix(8)))", category: .ai)
+
+        return id
+    }
+
+    /// Get child agents for a parent
+    func childAgents(for parentAgentId: String) -> [TrackedAgent] {
+        agents.filter { $0.parentAgentId == parentAgentId }
+    }
+
+    /// Check if a parent agent has any running children
+    func hasRunningChildren(agentId: String) -> Bool {
+        childAgents(for: agentId).contains { $0.status == .running }
     }
 
     /// Mark an agent as running (transitions from pending)

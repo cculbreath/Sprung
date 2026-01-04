@@ -15,8 +15,21 @@ struct OnboardingInterviewView: View {
     #if DEBUG
     @State private var showEventDump = false
     #endif
-    @AppStorage("onboardingInterviewDefaultModelId") private var defaultModelId = "gpt-5"
+    @AppStorage("onboardingProvider") private var providerRawValue = "openai"
+    @AppStorage("onboardingInterviewDefaultModelId") private var openAIModelId = DefaultModels.openAI
+    @AppStorage("onboardingAnthropicModelId") private var anthropicModelId = DefaultModels.anthropic
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var defaultWebSearchAllowed = true
+
+    private var currentProvider: OnboardingProvider {
+        OnboardingProvider(rawValue: providerRawValue) ?? .openai
+    }
+
+    private var currentModelId: String {
+        switch currentProvider {
+        case .openai: return openAIModelId
+        case .anthropic: return anthropicModelId
+        }
+    }
     @Namespace private var wizardTransition
 
     // Window and content entrance animation state
@@ -118,11 +131,11 @@ struct OnboardingInterviewView: View {
             .task {
                 uiState.configureIfNeeded(
                     coordinator: interviewCoordinator,
-                    defaultModelId: defaultModelId,
+                    defaultModelId: currentModelId,
                     defaultWebSearchAllowed: defaultWebSearchAllowed
                 )
             }
-            .onChange(of: defaultModelId) { _, newValue in
+            .onChange(of: currentModelId) { _, newValue in
                 uiState.handleDefaultModelChange(newValue: newValue)
             }
             .onChange(of: defaultWebSearchAllowed) { _, newValue in

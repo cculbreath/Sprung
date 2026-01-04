@@ -9,6 +9,7 @@ struct ToolPaneTabsView<InterviewContent: View>: View {
         case timeline = "Timeline"
         case artifacts = "Artifacts"
         case knowledge = "Knowledge"
+        case skills = "Skills"
         case agents = "Agents"
 
         var icon: String {
@@ -17,6 +18,7 @@ struct ToolPaneTabsView<InterviewContent: View>: View {
             case .timeline: return "calendar.badge.clock"
             case .artifacts: return "doc.text"
             case .knowledge: return "brain.head.profile"
+            case .skills: return "wrench.and.screwdriver"
             case .agents: return "person.2.wave.2"
             }
         }
@@ -123,6 +125,9 @@ struct ToolPaneTabsView<InterviewContent: View>: View {
         case .knowledge:
             // Show total knowledge cards count
             return coordinator.allKnowledgeCards.count
+        case .skills:
+            // Show total skills count from aggregated skill bank
+            return coordinator.ui.aggregatedSkillBank?.skills.count ?? 0
         case .agents:
             // Show active agents count
             return coordinator.agentActivityTracker.agents.filter { $0.status == .running }.count
@@ -155,6 +160,11 @@ struct ToolPaneTabsView<InterviewContent: View>: View {
         case .knowledge:
             ScrollView {
                 KnowledgeTabContent(coordinator: coordinator)
+                    .padding(.horizontal, 4)
+            }
+        case .skills:
+            ScrollView {
+                SkillsTabContent(coordinator: coordinator)
                     .padding(.horizontal, 4)
             }
         case .agents:

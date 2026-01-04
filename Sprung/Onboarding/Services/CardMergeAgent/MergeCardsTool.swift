@@ -58,21 +58,27 @@ class BackgroundMergeAgent {
     private let mergeReason: String
     private let modelId: String
     private weak var facade: LLMFacade?
-    private let mergeId: String
+    private let agentId: String
+    private let parentAgentId: String?
+    private weak var tracker: AgentActivityTracker?
 
     init(
         workspacePath: URL,
         cardFiles: [String],
         mergeReason: String,
         modelId: String,
-        facade: LLMFacade?
+        facade: LLMFacade?,
+        parentAgentId: String? = nil,
+        tracker: AgentActivityTracker? = nil
     ) {
         self.workspacePath = workspacePath
         self.cardFiles = cardFiles
         self.mergeReason = mergeReason
         self.modelId = modelId
         self.facade = facade
-        self.mergeId = UUID().uuidString.prefix(8).lowercased()
+        self.agentId = UUID().uuidString
+        self.parentAgentId = parentAgentId
+        self.tracker = tracker
     }
 
     /// Execute the merge operation
@@ -81,52 +87,112 @@ class BackgroundMergeAgent {
             throw MergeError.noLLMFacade
         }
 
-        Logger.info("🔀 Background merge [\(mergeId)] starting: \(cardFiles.count) cards", category: .ai)
+        // Build a short name from the card files
+        let shortName = cardFiles.count <= 2
+            ? cardFiles.map { URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent.prefix(8) }.joined(separator: "+")
+            : "\(cardFiles.count) cards"
 
-        // Step 1: Read all source cards
-        var cardContents: [String: String] = [:]
-        for cardFile in cardFiles {
-            let filePath = workspacePath.appendingPathComponent(cardFile)
-            guard FileManager.default.fileExists(atPath: filePath.path) else {
-                throw MergeError.cardNotFound(cardFile)
+        // Register as child agent if we have a parent
+        if let parentId = parentAgentId, let tracker = tracker {
+            tracker.trackChildAgent(
+                id: agentId,
+                parentAgentId: parentId,
+                type: .backgroundMerge,
+                name: "Merge: \(shortName)",
+                task: nil as Task<Void, Never>?
+            )
+            tracker.appendTranscript(
+                agentId: agentId,
+                entryType: .system,
+                content: "Starting merge of \(cardFiles.count) cards",
+                details: mergeReason
+            )
+        }
+
+        Logger.info("🔀 Background merge [\(agentId.prefix(8))] starting: \(cardFiles.count) cards", category: .ai)
+
+        do {
+            // Step 1: Read all source cards
+            tracker?.updateStatusMessage(agentId: agentId, message: "Reading cards...")
+            var cardContents: [String: String] = [:]
+            for cardFile in cardFiles {
+                let filePath = workspacePath.appendingPathComponent(cardFile)
+                guard FileManager.default.fileExists(atPath: filePath.path) else {
+                    throw MergeError.cardNotFound(cardFile)
+                }
+                let content = try String(contentsOf: filePath, encoding: .utf8)
+                cardContents[cardFile] = content
             }
-            let content = try String(contentsOf: filePath, encoding: .utf8)
-            cardContents[cardFile] = content
+
+            tracker?.appendTranscript(
+                agentId: agentId,
+                entryType: .toolResult,
+                content: "Read \(cardContents.count) cards"
+            )
+
+            // Step 2: Build merge prompt
+            let prompt = buildMergePrompt(cards: cardContents)
+
+            // Step 3: Call LLM to synthesize merged card
+            tracker?.updateStatusMessage(agentId: agentId, message: "Synthesizing merge...")
+            tracker?.appendTranscript(
+                agentId: agentId,
+                entryType: .turn,
+                content: "Calling LLM to synthesize merged card"
+            )
+
+            let mergedCardJSON = try await callLLMForMerge(facade: facade, prompt: prompt)
+
+            tracker?.appendTranscript(
+                agentId: agentId,
+                entryType: .assistant,
+                content: "Merged card synthesized"
+            )
+
+            // Step 4: Generate new UUID and write merged card
+            tracker?.updateStatusMessage(agentId: agentId, message: "Writing merged card...")
+            let newCardId = UUID().uuidString
+            let mergedCard = try updateCardId(json: mergedCardJSON, newId: newCardId)
+            let newCardPath = workspacePath.appendingPathComponent("cards/\(newCardId).json")
+            try mergedCard.write(to: newCardPath, atomically: true, encoding: .utf8)
+
+            Logger.info("🔀 Background merge [\(agentId.prefix(8))] wrote merged card: \(newCardId)", category: .ai)
+
+            // Step 5: Delete source cards
+            tracker?.updateStatusMessage(agentId: agentId, message: "Deleting source cards...")
+            for cardFile in cardFiles {
+                let filePath = workspacePath.appendingPathComponent(cardFile)
+                try? FileManager.default.removeItem(at: filePath)
+            }
+
+            Logger.info("🔀 Background merge [\(agentId.prefix(8))] deleted \(cardFiles.count) source cards", category: .ai)
+
+            // Step 6: Update index
+            try updateIndex(deletedFiles: cardFiles, newCardId: newCardId, mergedCardJSON: mergedCard)
+
+            Logger.info("🔀 Background merge [\(agentId.prefix(8))] complete", category: .ai)
+
+            // Mark complete
+            tracker?.appendTranscript(
+                agentId: agentId,
+                entryType: .toolResult,
+                content: "Merge complete",
+                details: "Created \(newCardId.prefix(8))..., deleted \(cardFiles.count) source cards"
+            )
+            tracker?.markCompleted(agentId: agentId)
+
+            return BackgroundMergeResult(
+                mergeId: agentId,
+                sourceCardIds: cardFiles.map { extractCardId(from: $0) },
+                newCardId: newCardId,
+                success: true
+            )
+
+        } catch {
+            Logger.error("🔀 Background merge [\(agentId.prefix(8))] failed: \(error.localizedDescription)", category: .ai)
+            tracker?.markFailed(agentId: agentId, error: error.localizedDescription)
+            throw error
         }
-
-        // Step 2: Build merge prompt
-        let prompt = buildMergePrompt(cards: cardContents)
-
-        // Step 3: Call LLM to synthesize merged card
-        let mergedCardJSON = try await callLLMForMerge(facade: facade, prompt: prompt)
-
-        // Step 4: Generate new UUID and write merged card
-        let newCardId = UUID().uuidString
-        let mergedCard = try updateCardId(json: mergedCardJSON, newId: newCardId)
-        let newCardPath = workspacePath.appendingPathComponent("cards/\(newCardId).json")
-        try mergedCard.write(to: newCardPath, atomically: true, encoding: .utf8)
-
-        Logger.info("🔀 Background merge [\(mergeId)] wrote merged card: \(newCardId)", category: .ai)
-
-        // Step 5: Delete source cards
-        for cardFile in cardFiles {
-            let filePath = workspacePath.appendingPathComponent(cardFile)
-            try? FileManager.default.removeItem(at: filePath)
-        }
-
-        Logger.info("🔀 Background merge [\(mergeId)] deleted \(cardFiles.count) source cards", category: .ai)
-
-        // Step 6: Update index
-        try updateIndex(deletedFiles: cardFiles, newCardId: newCardId, mergedCardJSON: mergedCard)
-
-        Logger.info("🔀 Background merge [\(mergeId)] complete", category: .ai)
-
-        return BackgroundMergeResult(
-            mergeId: mergeId,
-            sourceCardIds: cardFiles.map { extractCardId(from: $0) },
-            newCardId: newCardId,
-            success: true
-        )
     }
 
     private func buildMergePrompt(cards: [String: String]) -> String {

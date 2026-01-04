@@ -70,7 +70,7 @@ actor LLMMessenger: OnboardingEventEmitter {
         }
         // Small delay to ensure streams are connected before returning
         try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
-        Logger.info("📡 LLMMessenger subscribed to events", category: .ai)
+        Logger.verbose("📡 LLMMessenger subscribed to events", category: .ai)
     }
     private func handleLLMEvent(_ event: OnboardingEvent) async {
         switch event {
@@ -136,7 +136,7 @@ actor LLMMessenger: OnboardingEventEmitter {
                 var lastError: Error?
                 while retryCount <= maxRetries {
                     do {
-                        Logger.info("🔍 About to call llmFacade.responseCreateStream", category: .ai)
+                        Logger.verbose("🔍 About to call llmFacade.responseCreateStream", category: .ai)
                         Logger.debug("📋 Request model: \(request.model), prevId: \(request.previousResponseId != nil), store: \(String(describing: request.store))", category: .ai)
                         let stream = try await llmFacade.responseCreateStream(parameters: request)
                         for try await streamEvent in stream {
@@ -184,7 +184,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             currentStreamTask = nil
             await stateCoordinator.markStreamCompleted()
         } catch is CancellationError {
-            Logger.info("User message stream cancelled", category: .ai)
+            Logger.verbose("User message stream cancelled", category: .ai)
             await stateCoordinator.markStreamCompleted()
         } catch {
             Logger.error("❌ Failed to send message: \(error)", category: .ai)
@@ -324,11 +324,11 @@ actor LLMMessenger: OnboardingEventEmitter {
             }
             try await currentStreamTask?.value
             currentStreamTask = nil
-            Logger.info("✅ Developer message completed successfully", category: .ai)
+            Logger.verbose("✅ Developer message completed successfully", category: .ai)
             // Notify StateCoordinator that stream completed
             await stateCoordinator.markStreamCompleted()
         } catch is CancellationError {
-            Logger.info("Developer message stream cancelled", category: .ai)
+            Logger.verbose("Developer message stream cancelled", category: .ai)
             // Notify StateCoordinator even on cancellation
             await stateCoordinator.markStreamCompleted()
         } catch {
@@ -365,7 +365,7 @@ actor LLMMessenger: OnboardingEventEmitter {
                 toolChoice = await stateCoordinator.popPendingForcedToolChoice()
             }
             Logger.debug("📤 Tool response payload: callId=\(callId), output=\(output.rawString() ?? "nil")", category: .ai)
-            Logger.info("📤 Sending tool response for callId=\(String(callId.prefix(12)))...", category: .ai)
+            Logger.verbose("📤 Sending tool response for callId=\(String(callId.prefix(12)))...", category: .ai)
             let request = await requestBuilder.buildToolResponseRequest(output: output, callId: callId, reasoningEffort: reasoningEffort, forcedToolChoice: toolChoice)
             Logger.debug("📦 Tool response request: previousResponseId=\(request.previousResponseId ?? "nil")", category: .ai)
             let messageId = UUID().uuidString
@@ -424,7 +424,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             // Notify StateCoordinator that stream completed
             await stateCoordinator.markStreamCompleted()
         } catch is CancellationError {
-            Logger.info("Tool response stream cancelled", category: .ai)
+            Logger.verbose("Tool response stream cancelled", category: .ai)
             // Notify StateCoordinator even on cancellation
             await stateCoordinator.markStreamCompleted()
         } catch {
@@ -502,7 +502,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             currentStreamTask = nil
             await stateCoordinator.markStreamCompleted()
         } catch is CancellationError {
-            Logger.info("Batched tool response stream cancelled", category: .ai)
+            Logger.verbose("Batched tool response stream cancelled", category: .ai)
             await stateCoordinator.markStreamCompleted()
         } catch {
             await emit(.errorOccurred("Failed to send batched tool responses: \(error.localizedDescription)"))
@@ -797,21 +797,21 @@ actor LLMMessenger: OnboardingEventEmitter {
 
                 while retryCount <= maxRetries {
                     do {
-                        Logger.info("🔍 About to call llmFacade.anthropicMessagesStream", category: .ai)
-                        Logger.info("📋 Anthropic request model: \(request.model), messages: \(request.messages.count), tools: \(request.tools?.count ?? 0)", category: .ai)
+                        Logger.verbose("🔍 About to call llmFacade.anthropicMessagesStream", category: .ai)
+                        Logger.info("📋 Anthropic request: model=\(request.model), messages=\(request.messages.count), tools=\(request.tools?.count ?? 0)", category: .ai)
 
                         let stream = try await llmFacade.anthropicMessagesStream(parameters: request)
-                        Logger.info("📡 Anthropic stream created, starting iteration", category: .ai)
+                        Logger.verbose("📡 Anthropic stream created, starting iteration", category: .ai)
                         var adapter = AnthropicStreamAdapter()
                         var eventCount = 0
 
                         for try await event in stream {
                             eventCount += 1
-                            Logger.info("📥 Anthropic stream event #\(eventCount): \(event)", category: .ai)
+                            Logger.debug("📥 Anthropic stream event #\(eventCount): \(event)", category: .ai)
 
                             // Process event through adapter to get domain events
                             let domainEvents = adapter.process(event)
-                            Logger.info("📤 Adapter produced \(domainEvents.count) domain events", category: .ai)
+                            Logger.debug("📤 Adapter produced \(domainEvents.count) domain events", category: .ai)
                             for domainEvent in domainEvents {
                                 await emit(domainEvent)
 
@@ -851,7 +851,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             currentStreamTask = nil
             await stateCoordinator.markStreamCompleted()
         } catch is CancellationError {
-            Logger.info("Anthropic user message stream cancelled", category: .ai)
+            Logger.verbose("Anthropic user message stream cancelled", category: .ai)
             await stateCoordinator.markStreamCompleted()
         } catch {
             logAnthropicError(error, context: "user message (outer)")
@@ -934,10 +934,10 @@ actor LLMMessenger: OnboardingEventEmitter {
 
             try await currentStreamTask?.value
             currentStreamTask = nil
-            Logger.info("✅ Anthropic developer message completed successfully", category: .ai)
+            Logger.verbose("✅ Anthropic developer message completed successfully", category: .ai)
             await stateCoordinator.markStreamCompleted()
         } catch is CancellationError {
-            Logger.info("Anthropic developer message stream cancelled", category: .ai)
+            Logger.verbose("Anthropic developer message stream cancelled", category: .ai)
             await stateCoordinator.markStreamCompleted()
         } catch {
             logAnthropicError(error, context: "developer message (outer)")
@@ -966,7 +966,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             }
 
             Logger.debug("📤 Anthropic tool response: callId=\(callId), output=\(output.rawString() ?? "nil")", category: .ai)
-            Logger.info("📤 Sending Anthropic tool response for callId=\(String(callId.prefix(12)))...", category: .ai)
+            Logger.verbose("📤 Sending Anthropic tool response for callId=\(String(callId.prefix(12)))...", category: .ai)
 
             // Note: Don't store result before building request - buildToolResponseRequest adds it explicitly
             // We pass the callId to exclude from synthetic result insertion since we're about to add it
@@ -980,7 +980,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             // Log request size for debugging 400 errors
             if let requestData = try? JSONEncoder().encode(request) {
                 let requestKB = Double(requestData.count) / 1024.0
-                Logger.info("📤 Anthropic request size: \(String(format: "%.1f", requestKB)) KB (\(requestData.count) bytes)", category: .ai)
+                Logger.verbose("📤 Anthropic request size: \(String(format: "%.1f", requestKB)) KB (\(requestData.count) bytes)", category: .ai)
                 if requestKB > 100 {
                     Logger.warning("⚠️ Large Anthropic request (>\(100)KB) - may hit API limits", category: .ai)
                 }
@@ -1046,7 +1046,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             currentStreamTask = nil
             await stateCoordinator.markStreamCompleted()
         } catch is CancellationError {
-            Logger.info("Anthropic tool response stream cancelled", category: .ai)
+            Logger.verbose("Anthropic tool response stream cancelled", category: .ai)
             await stateCoordinator.markStreamCompleted()
         } catch {
             logAnthropicError(error, context: "tool response (outer)")
@@ -1134,7 +1134,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             currentStreamTask = nil
             await stateCoordinator.markStreamCompleted()
         } catch is CancellationError {
-            Logger.info("Anthropic batched tool response stream cancelled", category: .ai)
+            Logger.verbose("Anthropic batched tool response stream cancelled", category: .ai)
             await stateCoordinator.markStreamCompleted()
         } catch {
             logAnthropicError(error, context: "batched tool response (outer)")

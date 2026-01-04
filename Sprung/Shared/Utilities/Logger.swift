@@ -166,8 +166,7 @@ final class Logger {
         let timestamp = timeFormatter.string(from: Date())
         let formattedMessage = "[\(timestamp)] \(level.emoji) [\(level.label)] [\(category.rawValue)] [\(fileName):\(line)] \(function): \(sanitizedMessage)"
 #if DEBUG
-        // Always print to console in DEBUG builds
-        print(formattedMessage)
+        // Write to consolelog.txt for debugging (os.Logger handles console output)
         appendToConsoleLog(formattedMessage)
 #endif
         let backend = currentBackend()

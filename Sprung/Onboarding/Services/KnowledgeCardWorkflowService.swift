@@ -60,49 +60,14 @@ final class KnowledgeCardWorkflowService {
         ui.isMergingCards = true
         await sessionUIState?.setDocumentCollectionActive(false)
 
-        // Track aggregation in Agents pane
-        let agentId = agentActivityTracker.trackAgent(
-            type: .cardMerge,
-            name: "Aggregating Knowledge",
-            task: nil as Task<Void, Never>?
-        )
-
-        agentActivityTracker.appendTranscript(
-            agentId: agentId,
-            entryType: .system,
-            content: "Starting skill and narrative card aggregation"
-        )
-
         // Extract chat inventory before aggregation (so it's included)
         if let chatInventoryService = chatInventoryService {
-            agentActivityTracker.appendTranscript(
-                agentId: agentId,
-                entryType: .system,
-                content: "Extracting facts from conversation..."
-            )
             do {
                 if let chatArtifactId = try await chatInventoryService.extractAndCreateArtifact() {
-                    agentActivityTracker.appendTranscript(
-                        agentId: agentId,
-                        entryType: .toolResult,
-                        content: "Chat transcript artifact created",
-                        details: "ID: \(chatArtifactId)"
-                    )
-                    Logger.info("💬 Chat inventory extracted and added to artifacts", category: .ai)
-                } else {
-                    agentActivityTracker.appendTranscript(
-                        agentId: agentId,
-                        entryType: .system,
-                        content: "No career facts found in conversation"
-                    )
+                    Logger.info("💬 Chat inventory extracted and added to artifacts: \(chatArtifactId)", category: .ai)
                 }
             } catch {
                 Logger.warning("⚠️ Chat inventory extraction failed: \(error.localizedDescription)", category: .ai)
-                agentActivityTracker.appendTranscript(
-                    agentId: agentId,
-                    entryType: .system,
-                    content: "Chat extraction skipped: \(error.localizedDescription)"
-                )
             }
         }
 
@@ -110,54 +75,27 @@ final class KnowledgeCardWorkflowService {
         aggregatedSkillBank = await cardMergeService.getMergedSkillBank()
         let skillCount = aggregatedSkillBank?.skills.count ?? 0
         ui.aggregatedSkillBank = aggregatedSkillBank
+        Logger.info("🔧 Aggregated \(skillCount) skills", category: .ai)
 
         // Aggregate narrative cards from all artifacts (with deduplication)
         let rawCards = await cardMergeService.getAllNarrativeCardsFlat()
         let rawCardCount = rawCards.count
-
-        agentActivityTracker.appendTranscript(
-            agentId: agentId,
-            entryType: .toolResult,
-            content: "Aggregated \(skillCount) skills and \(rawCardCount) narrative cards"
-        )
+        Logger.info("📖 Found \(rawCardCount) raw narrative cards", category: .ai)
 
         // Run deduplication to merge similar cards across documents
-        agentActivityTracker.appendTranscript(
-            agentId: agentId,
-            entryType: .system,
-            content: "Running intelligent deduplication..."
-        )
-
+        // The Card Merge Agent will appear in the Agents tab during this operation
         do {
             let dedupeResult = try await cardMergeService.getAllNarrativeCardsDeduped()
             aggregatedNarrativeCards = dedupeResult.cards
             ui.aggregatedNarrativeCards = aggregatedNarrativeCards
 
             let mergeCount = dedupeResult.mergeLog.filter { $0.action == .merged }.count
-            if mergeCount > 0 {
-                agentActivityTracker.appendTranscript(
-                    agentId: agentId,
-                    entryType: .toolResult,
-                    content: "Deduplication: \(rawCardCount) → \(dedupeResult.cards.count) cards (\(mergeCount) merges)"
-                )
-                Logger.info("🔀 Deduplication: \(rawCardCount) → \(dedupeResult.cards.count) cards (\(mergeCount) merges)", category: .ai)
-            } else {
-                agentActivityTracker.appendTranscript(
-                    agentId: agentId,
-                    entryType: .toolResult,
-                    content: "Deduplication complete: no duplicates found"
-                )
-            }
+            Logger.info("🔀 Deduplication: \(rawCardCount) → \(dedupeResult.cards.count) cards (\(mergeCount) merges)", category: .ai)
         } catch {
             // Fall back to raw cards if deduplication fails
             Logger.warning("⚠️ Deduplication failed, using raw cards: \(error.localizedDescription)", category: .ai)
             aggregatedNarrativeCards = rawCards
             ui.aggregatedNarrativeCards = aggregatedNarrativeCards
-            agentActivityTracker.appendTranscript(
-                agentId: agentId,
-                entryType: .system,
-                content: "Deduplication skipped: \(error.localizedDescription)"
-            )
         }
 
         let cardCount = aggregatedNarrativeCards.count
@@ -176,8 +114,6 @@ final class KnowledgeCardWorkflowService {
         if let count = cardsByType[.education], count > 0 { typeBreakdown.append("\(count) education") }
         let typeSummary = typeBreakdown.joined(separator: ", ")
 
-        // Mark agent complete
-        agentActivityTracker.markCompleted(agentId: agentId)
         await eventBus.publish(.mergeComplete(cardCount: cardCount, gapCount: 0))
 
         // Update UI

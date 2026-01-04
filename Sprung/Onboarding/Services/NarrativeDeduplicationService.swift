@@ -46,7 +46,10 @@ final class NarrativeDeduplicationService {
 
     /// Deduplicate narrative cards using a multi-turn agent.
     /// Creates a workspace, runs the merge agent, imports results, and cleans up.
-    func deduplicateCards(_ cards: [KnowledgeCard]) async throws -> DeduplicationResult {
+    /// - Parameters:
+    ///   - cards: Cards to deduplicate
+    ///   - parentAgentId: Optional parent agent ID to use for tracking (avoids duplicate agent registration)
+    func deduplicateCards(_ cards: [KnowledgeCard], parentAgentId: String? = nil) async throws -> DeduplicationResult {
         guard !cards.isEmpty else {
             return DeduplicationResult(cards: [], mergeLog: [])
         }
@@ -58,22 +61,36 @@ final class NarrativeDeduplicationService {
         Logger.info("🔀 Starting agentic deduplication of \(cards.count) cards", category: .ai)
         Logger.info("🔀 Using model: \(modelId)", category: .ai)
 
-        // Register agent with tracker
-        let agentId = UUID().uuidString
-
-        if let tracker = agentActivityTracker {
-            tracker.trackAgent(
-                id: agentId,
-                type: .cardMerge,
-                name: "Card Merge Agent",
-                task: nil as Task<Void, Never>?
-            )
-            tracker.appendTranscript(
+        // Use parent agent ID if provided, otherwise create new agent
+        let agentId: String
+        if let parentId = parentAgentId {
+            agentId = parentId
+            // Just log to existing agent, don't create new one
+            agentActivityTracker?.appendTranscript(
                 agentId: agentId,
                 entryType: .system,
-                content: "Starting deduplication of \(cards.count) cards"
+                content: "Starting agentic deduplication of \(cards.count) cards"
             )
+        } else {
+            // Create standalone agent (e.g., when called from EventDumpView)
+            agentId = UUID().uuidString
+            if let tracker = agentActivityTracker {
+                tracker.trackAgent(
+                    id: agentId,
+                    type: .cardMerge,
+                    name: "Card Merge Agent",
+                    task: nil as Task<Void, Never>?
+                )
+                tracker.appendTranscript(
+                    agentId: agentId,
+                    entryType: .system,
+                    content: "Starting deduplication of \(cards.count) cards"
+                )
+            }
         }
+
+        // Track whether we own this agent (for completion marking)
+        let ownsAgent = parentAgentId == nil
 
         do {
             // Step 1: Create workspace
@@ -126,8 +143,10 @@ final class NarrativeDeduplicationService {
             try workspaceService.deleteWorkspace()
             Logger.info("🔀 Workspace cleaned up", category: .ai)
 
-            // Mark agent complete
-            agentActivityTracker?.markCompleted(agentId: agentId)
+            // Mark agent complete (only if we created it)
+            if ownsAgent {
+                agentActivityTracker?.markCompleted(agentId: agentId)
+            }
 
             return DeduplicationResult(cards: resultCards, mergeLog: agentResult.mergeLog)
 
@@ -137,8 +156,10 @@ final class NarrativeDeduplicationService {
             // Cleanup on error
             try? workspaceService.deleteWorkspace()
 
-            // Mark agent failed
-            agentActivityTracker?.markFailed(agentId: agentId, error: error.localizedDescription)
+            // Mark agent failed (only if we created it)
+            if ownsAgent {
+                agentActivityTracker?.markFailed(agentId: agentId, error: error.localizedDescription)
+            }
 
             throw error
         }

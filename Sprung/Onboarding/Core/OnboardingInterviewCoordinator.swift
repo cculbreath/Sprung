@@ -228,7 +228,7 @@ final class OnboardingInterviewCoordinator {
         for coverRef in coverRefStore.storedCoverRefs {
             coverRefStore.deleteCoverRef(coverRef)
         }
-        Logger.info("🗑️ Deleted all CoverRefs", category: .ai)
+        Logger.debug("🗑️ Deleted all CoverRefs", category: .ai)
         // Clear ExperienceDefaults
         let defaults = experienceDefaultsStore.currentDefaults()
         defaults.work.removeAll()
@@ -244,10 +244,10 @@ final class OnboardingInterviewCoordinator {
         defaults.references.removeAll()
         experienceDefaultsStore.save(defaults)
         experienceDefaultsStore.clearCache()
-        Logger.info("🗑️ Cleared ExperienceDefaults", category: .ai)
+        Logger.debug("🗑️ Cleared ExperienceDefaults", category: .ai)
         // Reset ApplicantProfile to defaults (including photo)
         applicantProfileStore.reset()
-        Logger.info("🗑️ Reset ApplicantProfile", category: .ai)
+        Logger.debug("🗑️ Reset ApplicantProfile", category: .ai)
     }
     /// Called when user is done with the interview - triggers finalization flow
     func endInterview() async {
@@ -284,12 +284,12 @@ final class OnboardingInterviewCoordinator {
         let previousWaitingState = await container.sessionUIState.getWaitingState()
         if previousWaitingState != nil {
             await container.sessionUIState.setWaitingState(nil)
-            Logger.info("🔓 '\(actionDescription)' cleared waiting state: \(previousWaitingState?.rawValue ?? "none")", category: .ai)
+            Logger.debug("🔓 '\(actionDescription)' cleared waiting state: \(previousWaitingState?.rawValue ?? "none")", category: .ai)
         }
 
         // Auto-complete any pending UI tool call - user action means they're ready to proceed
         if let pendingTool = await state.getPendingUIToolCall() {
-            Logger.info("🔓 '\(actionDescription)' auto-completing pending UI tool: \(pendingTool.toolName) (callId: \(pendingTool.callId.prefix(8)))", category: .ai)
+            Logger.debug("🔓 '\(actionDescription)' auto-completing pending UI tool: \(pendingTool.toolName) (callId: \(pendingTool.callId.prefix(8)))", category: .ai)
             var autoCompleteOutput = JSON()
             autoCompleteOutput["status"].string = "completed"
             autoCompleteOutput["message"].string = "User proceeded via '\(actionDescription)' action"
@@ -308,7 +308,7 @@ final class OnboardingInterviewCoordinator {
         if ui.isDocumentCollectionActive {
             ui.isDocumentCollectionActive = false
             await eventBus.publish(.documentCollectionActiveChanged(false))
-            Logger.info("🔓 '\(actionDescription)' cleared document collection mode", category: .ai)
+            Logger.debug("🔓 '\(actionDescription)' cleared document collection mode", category: .ai)
         }
     }
 
@@ -430,7 +430,7 @@ final class OnboardingInterviewCoordinator {
             timeline["experiences"] = JSON(experiences)
             ui.skeletonTimeline = timeline
             // Don't increment token here - we don't want to trigger a reload that would fight with the UI
-            Logger.info("🗑️ UI deletion synced: removed card \(id) from coordinator cache", category: .ai)
+            Logger.debug("🗑️ UI deletion synced: removed card \(id) from coordinator cache", category: .ai)
         }
         // Also emit the event so StateCoordinator updates its state
         // Pass fromUI: true so CoordinatorEventRouter doesn't re-increment the UI token
@@ -463,7 +463,7 @@ final class OnboardingInterviewCoordinator {
 
     /// Start git repository analysis using the async ingestion pipeline
     func startGitRepoAnalysis(_ repoURL: URL) async {
-        Logger.info("🔬 Starting git repo analysis via ingestion pipeline: \(repoURL.path)", category: .ai)
+        Logger.info("🔬 Starting git repo analysis: \(repoURL.path)", category: .ai)
         await container.artifactIngestionCoordinator.ingestGitRepository(
             repoURL: repoURL,
             planItemId: nil
@@ -472,7 +472,7 @@ final class OnboardingInterviewCoordinator {
 
     /// Fetch URL content and create artifact via agent web search
     func fetchURLForArtifact(_ urlString: String) async {
-        Logger.info("🌐 Requesting URL fetch for artifact: \(urlString)", category: .ai)
+        Logger.info("🌐 Requesting URL fetch: \(urlString)", category: .ai)
         var payload = JSON()
         payload["text"].string = """
             The user wants to add content from this URL: \(urlString)
@@ -547,8 +547,8 @@ final class OnboardingInterviewCoordinator {
                 ))
                 // UNGATE: Allow next_phase now that timeline is approved
                 await container.sessionUIState.includeTool(OnboardingToolName.nextPhase.rawValue)
-                Logger.info("🔓 Ungated next_phase after timeline approval", category: .ai)
-                Logger.info("✅ skeleton_timeline objective marked complete after validation", category: .ai)
+                Logger.debug("🔓 Ungated next_phase after timeline approval", category: .ai)
+                Logger.debug("✅ skeleton_timeline objective marked complete after validation", category: .ai)
             }
         }
         return result
@@ -747,7 +747,7 @@ final class OnboardingInterviewCoordinator {
             ]
         )
 
-        Logger.info("Artifact deleted and LLM notified: \(filename)", category: .ai)
+        Logger.info("🗑️ Artifact deleted: \(filename)", category: .ai)
     }
 
     // MARK: - Archived Artifacts Management
@@ -789,7 +789,7 @@ final class OnboardingInterviewCoordinator {
         // Emit event to notify LLM and other handlers
         await eventBus.publish(.artifactRecordProduced(record: artifactJSON))
 
-        Logger.info("Promoted archived artifact: \(artifact.filename)", category: .ai)
+        Logger.info("📦 Promoted archived artifact: \(artifact.filename)", category: .ai)
     }
 
     /// Permanently delete an archived artifact.
@@ -805,7 +805,7 @@ final class OnboardingInterviewCoordinator {
         // Delete from SwiftData
         container.artifactRecordStore.deleteArtifact(artifact)
 
-        Logger.info("Permanently deleted archived artifact: \(filename)", category: .ai)
+        Logger.info("🗑️ Permanently deleted archived artifact: \(filename)", category: .ai)
     }
 
     /// Demote an artifact from the current session to archived status.
@@ -890,7 +890,7 @@ final class OnboardingInterviewCoordinator {
     /// Cancel extraction agents and finish the document upload phase.
     /// Called when user chooses to cancel running agents from the alert dialog.
     func cancelExtractionAgentsAndFinishUploads() async {
-        Logger.info("🛑 Cancelling extraction agents and finishing uploads", category: .ai)
+        Logger.debug("🛑 Cancelling extraction agents and finishing uploads", category: .ai)
 
         // Cancel any document/git ingestion in progress
         await container.artifactIngestionCoordinator.cancelAllIngestion()
@@ -913,7 +913,7 @@ final class OnboardingInterviewCoordinator {
         // Send message to LLM
         await sendChatMessage("I'm done uploading documents. (Note: Some document extractions were cancelled.) Please assess the completeness of my evidence.")
 
-        Logger.info("✅ Extraction agents cancelled and document upload phase finished", category: .ai)
+        Logger.debug("✅ Extraction agents cancelled and document upload phase finished", category: .ai)
     }
 
     /// Activate document collection UI and gate all tools until user clicks "Done with Uploads"
@@ -922,13 +922,13 @@ final class OnboardingInterviewCoordinator {
             ui.isDocumentCollectionActive = true
         }
         await container.sessionUIState.setDocumentCollectionActive(true)
-        Logger.info("📂 Document collection activated - tools gated until 'Done with Uploads'", category: .ai)
+        Logger.debug("📂 Document collection activated - tools gated until 'Done with Uploads'", category: .ai)
     }
 
     /// Finish uploads and trigger card merge via event.
     /// Called when user clicks "Done with Uploads" button.
     func finishUploadsAndMergeCards() async {
-        Logger.info("📋 User finished uploads - emitting doneWithUploadsClicked event", category: .ai)
+        Logger.debug("📋 User finished uploads - emitting doneWithUploadsClicked event", category: .ai)
 
         // Ensure this user action always succeeds - clear blocks and auto-complete pending tools
         await ensureUserActionSucceeds(actionDescription: "Done with Uploads")
@@ -964,15 +964,15 @@ final class OnboardingInterviewCoordinator {
 
     /// Clear all summaries and card inventories and regenerate them, then trigger merge
     func regenerateCardInventoriesAndMerge() async {
-        Logger.info("🔄 Clearing and regenerating ALL summaries + card inventories...", category: .ai)
+        Logger.debug("🔄 Clearing and regenerating ALL summaries + card inventories...", category: .ai)
 
         // Get all non-writing-sample artifacts
         let artifactsToProcess = sessionArtifacts.filter { !$0.isWritingSample }
 
-        Logger.info("📦 Found \(artifactsToProcess.count) artifacts to regenerate", category: .ai)
+        Logger.debug("📦 Found \(artifactsToProcess.count) artifacts to regenerate", category: .ai)
 
         guard !artifactsToProcess.isEmpty else {
-            Logger.info("⚠️ No artifacts to process", category: .ai)
+            Logger.debug("⚠️ No artifacts to process", category: .ai)
             return
         }
 
@@ -982,14 +982,14 @@ final class OnboardingInterviewCoordinator {
             artifact.briefDescription = nil
             artifact.skillsJSON = nil
             artifact.narrativeCardsJSON = nil
-            Logger.info("🗑️ Cleared summary + knowledge for: \(artifact.filename)", category: .ai)
+            Logger.verbose("🗑️ Cleared summary + knowledge for: \(artifact.filename)", category: .ai)
         }
 
         // Use same concurrency limit as document extraction
         let maxConcurrent = UserDefaults.standard.integer(forKey: "onboardingMaxConcurrentExtractions")
         let concurrencyLimit = maxConcurrent > 0 ? maxConcurrent : 5
 
-        Logger.info("📦 Processing \(artifactsToProcess.count) artifacts with concurrency limit \(concurrencyLimit)", category: .ai)
+        Logger.debug("📦 Processing \(artifactsToProcess.count) artifacts with concurrency limit \(concurrencyLimit)", category: .ai)
 
         // Capture service reference for use in task group
         let documentProcessingService = container.documentProcessingService
@@ -1011,17 +1011,17 @@ final class OnboardingInterviewCoordinator {
                 }
                 inFlight += 1
                 index += 1
-                Logger.info("📦 Dispatched \(index)/\(artifactsToProcess.count): \(artifact.filename)", category: .ai)
+                Logger.verbose("📦 Dispatched \(index)/\(artifactsToProcess.count): \(artifact.filename)", category: .ai)
             }
 
             // Wait for all remaining tasks
             for await _ in group { }
         }
 
-        Logger.info("✅ All summary + inventory regeneration complete", category: .ai)
+        Logger.debug("✅ All summary + inventory regeneration complete", category: .ai)
 
         // Trigger the merge
-        Logger.info("🔄 Triggering card merge...", category: .ai)
+        Logger.debug("🔄 Triggering card merge...", category: .ai)
         await eventBus.publish(.doneWithUploadsClicked)
     }
 
@@ -1039,15 +1039,35 @@ final class OnboardingInterviewCoordinator {
         runMerge: Bool,
         dedupeNarratives: Bool = false
     ) async {
-        Logger.info("🔄 Selective regeneration: \(artifactIds.count) artifacts, summary=\(regenerateSummary), inventory=\(regenerateInventory), merge=\(runMerge), dedupe=\(dedupeNarratives)", category: .ai)
+        Logger.debug("🔄 Selective regeneration: \(artifactIds.count) artifacts, summary=\(regenerateSummary), inventory=\(regenerateInventory), merge=\(runMerge), dedupe=\(dedupeNarratives)", category: .ai)
 
         // Get selected artifacts
         let artifactsToProcess = sessionArtifacts.filter { artifactIds.contains($0.idString) }
 
         guard !artifactsToProcess.isEmpty else {
-            Logger.info("⚠️ No artifacts selected", category: .ai)
+            Logger.debug("⚠️ No artifacts selected", category: .ai)
             return
         }
+
+        // Build operation description
+        var ops: [String] = []
+        if regenerateSummary { ops.append("summary") }
+        if regenerateInventory { ops.append("knowledge") }
+        let opsDesc = ops.joined(separator: "+")
+
+        // Track the regeneration as an agent
+        let agentId = agentActivityTracker.trackAgent(
+            type: .documentRegen,
+            name: "Regen \(artifactsToProcess.count) docs (\(opsDesc))",
+            task: nil as Task<Void, Never>?
+        )
+
+        agentActivityTracker.appendTranscript(
+            agentId: agentId,
+            entryType: .system,
+            content: "Starting regeneration",
+            details: "Artifacts: \(artifactsToProcess.count), Summary: \(regenerateSummary), Knowledge: \(regenerateInventory), Merge: \(runMerge), Dedupe: \(dedupeNarratives)"
+        )
 
         // Clear selected fields first
         for artifact in artifactsToProcess {
@@ -1059,7 +1079,7 @@ final class OnboardingInterviewCoordinator {
                 artifact.skillsJSON = nil
                 artifact.narrativeCardsJSON = nil
             }
-            Logger.info("🗑️ Cleared selected fields for: \(artifact.filename)", category: .ai)
+            Logger.verbose("🗑️ Cleared selected fields for: \(artifact.filename)", category: .ai)
         }
 
         // Use same concurrency limit as document extraction
@@ -1067,6 +1087,10 @@ final class OnboardingInterviewCoordinator {
         let concurrencyLimit = maxConcurrent > 0 ? maxConcurrent : 5
 
         let documentProcessingService = container.documentProcessingService
+        let tracker = agentActivityTracker
+
+        // Track completed count
+        let completedCount = Counter()
 
         // Process with limited concurrency
         await withTaskGroup(of: Void.self) { group in
@@ -1079,6 +1103,9 @@ final class OnboardingInterviewCoordinator {
                     inFlight -= 1
                 }
 
+                let artifactName = artifact.filename
+                let total = artifactsToProcess.count
+
                 group.addTask {
                     if regenerateSummary && regenerateInventory {
                         await documentProcessingService.generateSummaryAndKnowledgeExtractionForExistingArtifact(artifact)
@@ -1087,25 +1114,65 @@ final class OnboardingInterviewCoordinator {
                     } else if regenerateSummary {
                         await documentProcessingService.generateSummaryForExistingArtifact(artifact)
                     }
+
+                    // Track completion
+                    let completed = await completedCount.increment()
+                    await MainActor.run {
+                        tracker.appendTranscript(
+                            agentId: agentId,
+                            entryType: .toolResult,
+                            content: "Completed \(completed)/\(total): \(artifactName)"
+                        )
+                        tracker.updateStatusMessage(agentId: agentId, message: "Processing \(completed)/\(total)...")
+                    }
                 }
                 inFlight += 1
                 index += 1
-                Logger.info("📦 Dispatched \(index)/\(artifactsToProcess.count): \(artifact.filename)", category: .ai)
+                Logger.verbose("📦 Dispatched \(index)/\(artifactsToProcess.count): \(artifact.filename)", category: .ai)
             }
 
             for await _ in group { }
         }
 
-        Logger.info("✅ Selective regeneration complete", category: .ai)
+        Logger.debug("✅ Selective regeneration complete", category: .ai)
+
+        agentActivityTracker.appendTranscript(
+            agentId: agentId,
+            entryType: .system,
+            content: "Regeneration complete",
+            details: "Processed \(artifactsToProcess.count) artifacts"
+        )
 
         if runMerge {
-            Logger.info("🔄 Triggering card merge...", category: .ai)
+            Logger.debug("🔄 Triggering card merge...", category: .ai)
+            agentActivityTracker.appendTranscript(
+                agentId: agentId,
+                entryType: .system,
+                content: "Triggering card merge..."
+            )
             await eventBus.publish(.doneWithUploadsClicked)
         }
 
         if dedupeNarratives {
-            Logger.info("🔀 Running narrative deduplication...", category: .ai)
+            Logger.debug("🔀 Running narrative deduplication...", category: .ai)
+            agentActivityTracker.appendTranscript(
+                agentId: agentId,
+                entryType: .system,
+                content: "Running narrative deduplication..."
+            )
             await deduplicateNarratives()
+        }
+
+        agentActivityTracker.markCompleted(agentId: agentId)
+    }
+
+    /// Thread-safe counter for tracking completed operations
+    private actor Counter {
+        private var value = 0
+
+        func increment() -> Int {
+            value += 1
+            return value
         }
     }
 
@@ -1134,11 +1201,11 @@ final class OnboardingInterviewCoordinator {
         Logger.info("🗑️ Resetting all onboarding data", category: .ai)
         // Delete SwiftData session
         deleteCurrentSession()
-        Logger.info("✅ SwiftData session deleted", category: .ai)
+        Logger.verbose("✅ SwiftData session deleted", category: .ai)
         await MainActor.run {
             // Delete onboarding knowledge cards (ResRefs with isFromOnboarding=true)
             resRefStore.deleteOnboardingResRefs()
-            Logger.info("✅ Onboarding knowledge cards deleted", category: .ai)
+            Logger.verbose("✅ Onboarding knowledge cards deleted", category: .ai)
 
             let profile = applicantProfileStore.currentProfile()
             profile.name = "John Doe"
