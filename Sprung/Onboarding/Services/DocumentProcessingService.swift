@@ -371,7 +371,8 @@ actor DocumentProcessingService {
         }
 
         if let result = await generateSummary(extractedText: extractedText, filename: filename, facade: facade) {
-            await MainActor.run {
+            // Transfer to MainActor for SwiftData model updates
+            await MainActor.run { [artifact] in
                 artifact.summary = result.summary
                 artifact.briefDescription = result.briefDescription
                 Logger.info("Summary regenerated for \(filename): \(result.summary.count) chars", category: .ai)
@@ -404,8 +405,8 @@ actor DocumentProcessingService {
 
         let (skills, narrativeCards) = await (skillsTask, cardsTask)
 
-        // Update artifact on MainActor
-        await MainActor.run {
+        // Transfer to MainActor for SwiftData model updates
+        await MainActor.run { [artifact] in
             // Note: Skill/KnowledgeCard models have explicit CodingKeys for snake_case - no conversion needed
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
@@ -459,8 +460,8 @@ actor DocumentProcessingService {
 
         let (summaryResult, skillsResult, narrativeCardsResult) = await (summaryTask, skillsTask, cardsTask)
 
-        // Update artifact on MainActor
-        await MainActor.run {
+        // Transfer to MainActor for SwiftData model updates
+        await MainActor.run { [artifact] in
             if let summary = summaryResult {
                 artifact.summary = summary.summary
                 artifact.briefDescription = summary.briefDescription

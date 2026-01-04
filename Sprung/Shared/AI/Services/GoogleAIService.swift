@@ -758,15 +758,12 @@ actor GoogleAIService {
             Logger.info("📝 Using Gemini native structured output with schema (maxTokens: \(maxOutputTokens))", category: .ai)
         }
 
-        // For Gemini 2.5+ models, disable thinking to prevent output truncation
-        // Thinking tokens count against the output budget, causing JSON to be cut off mid-string
-        let needsThinkingDisabled = effectiveModelId.contains("2.5") ||
-                                    effectiveModelId.contains("exp") ||
-                                    effectiveModelId.hasPrefix("gemini-3")
-        if needsThinkingDisabled {
-            generationConfig["thinkingConfig"] = ["thinkingBudget": 0]
-            Logger.info("🧠 Disabled thinking for \(effectiveModelId) to prevent truncation", category: .ai)
+        // Models with "thinking" in the name REQUIRE thinking mode - must set a budget > 0
+        if effectiveModelId.contains("thinking") {
+            generationConfig["thinkingConfig"] = ["thinkingBudget": 8192]
+            Logger.info("🧠 Using thinking mode for \(effectiveModelId) with budget 8192", category: .ai)
         }
+        // Other models: accept server-side defaults
 
         let requestBody: [String: Any] = [
             "contents": [

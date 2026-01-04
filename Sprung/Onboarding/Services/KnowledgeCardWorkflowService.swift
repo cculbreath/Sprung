@@ -111,17 +111,56 @@ final class KnowledgeCardWorkflowService {
         let skillCount = aggregatedSkillBank?.skills.count ?? 0
         ui.aggregatedSkillBank = aggregatedSkillBank
 
-        // Aggregate narrative cards from all artifacts
-        aggregatedNarrativeCards = await cardMergeService.getAllNarrativeCardsFlat()
-        ui.aggregatedNarrativeCards = aggregatedNarrativeCards
+        // Aggregate narrative cards from all artifacts (with deduplication)
+        let rawCards = await cardMergeService.getAllNarrativeCardsFlat()
+        let rawCardCount = rawCards.count
 
-        // Update transcript with results
-        let cardCount = aggregatedNarrativeCards.count
         agentActivityTracker.appendTranscript(
             agentId: agentId,
             entryType: .toolResult,
-            content: "Aggregated \(skillCount) skills and \(cardCount) narrative cards"
+            content: "Aggregated \(skillCount) skills and \(rawCardCount) narrative cards"
         )
+
+        // Run deduplication to merge similar cards across documents
+        agentActivityTracker.appendTranscript(
+            agentId: agentId,
+            entryType: .system,
+            content: "Running intelligent deduplication..."
+        )
+
+        do {
+            let dedupeResult = try await cardMergeService.getAllNarrativeCardsDeduped()
+            aggregatedNarrativeCards = dedupeResult.cards
+            ui.aggregatedNarrativeCards = aggregatedNarrativeCards
+
+            let mergeCount = dedupeResult.mergeLog.filter { $0.action == .merged }.count
+            if mergeCount > 0 {
+                agentActivityTracker.appendTranscript(
+                    agentId: agentId,
+                    entryType: .toolResult,
+                    content: "Deduplication: \(rawCardCount) → \(dedupeResult.cards.count) cards (\(mergeCount) merges)"
+                )
+                Logger.info("🔀 Deduplication: \(rawCardCount) → \(dedupeResult.cards.count) cards (\(mergeCount) merges)", category: .ai)
+            } else {
+                agentActivityTracker.appendTranscript(
+                    agentId: agentId,
+                    entryType: .toolResult,
+                    content: "Deduplication complete: no duplicates found"
+                )
+            }
+        } catch {
+            // Fall back to raw cards if deduplication fails
+            Logger.warning("⚠️ Deduplication failed, using raw cards: \(error.localizedDescription)", category: .ai)
+            aggregatedNarrativeCards = rawCards
+            ui.aggregatedNarrativeCards = aggregatedNarrativeCards
+            agentActivityTracker.appendTranscript(
+                agentId: agentId,
+                entryType: .system,
+                content: "Deduplication skipped: \(error.localizedDescription)"
+            )
+        }
+
+        let cardCount = aggregatedNarrativeCards.count
 
         // Group cards by type for stats
         var cardsByType: [CardType: Int] = [:]
@@ -195,6 +234,15 @@ final class KnowledgeCardWorkflowService {
 
         // Update UI to show progress
         ui.isGeneratingCards = true
+
+        // Clear existing onboarding ResRefs before adding new ones
+        // This prevents duplicate accumulation when re-running card generation
+        let existingOnboardingCount = resRefStore.resRefs.filter { $0.isFromOnboarding }.count
+        if existingOnboardingCount > 0 {
+            Logger.info("🗑️ Clearing \(existingOnboardingCount) existing onboarding cards before adding new ones", category: .ai)
+            resRefStore.deleteOnboardingResRefs()
+        }
+
         var successCount = 0
 
         let resRefs = converter.convertAll(

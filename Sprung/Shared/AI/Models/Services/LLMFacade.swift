@@ -290,6 +290,67 @@ final class LLMFacade {
         return try await altClient.executeStructuredWithSchema(prompt: prompt, modelId: modelId, as: type, schema: schema, schemaName: schemaName, temperature: temperature)
     }
 
+    /// Execute a structured request with a dictionary-based JSON schema.
+    /// This is the **unified entry point** for structured output across all backends.
+    ///
+    /// - Parameters:
+    ///   - prompt: The prompt text
+    ///   - modelId: Model identifier (format depends on backend)
+    ///   - type: The Codable type to decode the response into
+    ///   - schema: JSON Schema as a dictionary (converted internally for each backend)
+    ///   - schemaName: Name for the schema (used by some backends)
+    ///   - temperature: Optional temperature override
+    ///   - maxOutputTokens: Maximum output tokens (used by Gemini backend)
+    ///   - keyDecodingStrategy: JSON key decoding strategy (default: `.useDefaultKeys`)
+    ///   - backend: Which LLM backend to use
+    /// - Returns: Decoded response of type T
+    func executeStructuredWithDictionarySchema<T: Codable & Sendable>(
+        prompt: String,
+        modelId: String,
+        as type: T.Type,
+        schema: [String: Any],
+        schemaName: String,
+        temperature: Double? = nil,
+        maxOutputTokens: Int = 32768,
+        keyDecodingStrategy: JSONDecoder.KeyDecodingStrategy = .useDefaultKeys,
+        backend: Backend = .openRouter
+    ) async throws -> T {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = keyDecodingStrategy
+
+        switch backend {
+        case .gemini:
+            // Use native Gemini API for structured output
+            guard let service = googleAIService else {
+                throw LLMError.clientError("Google AI service is not configured. Call registerGoogleAIService first.")
+            }
+            let jsonString = try await service.generateStructuredJSON(
+                prompt: prompt,
+                modelId: modelId,
+                temperature: temperature ?? 0.2,
+                maxOutputTokens: maxOutputTokens,
+                jsonSchema: schema
+            )
+            guard let data = jsonString.data(using: .utf8) else {
+                throw LLMError.clientError("Failed to convert Gemini response to data")
+            }
+            return try decoder.decode(T.self, from: data)
+
+        case .openRouter, .openAI, .anthropic:
+            // Convert dictionary schema to JSONSchema and use OpenRouter/OpenAI path
+            let jsonSchema = try JSONSchema.from(dictionary: schema)
+            return try await executeStructuredWithSchema(
+                prompt: prompt,
+                modelId: modelId,
+                as: type,
+                schema: jsonSchema,
+                schemaName: schemaName,
+                temperature: temperature,
+                backend: backend
+            )
+        }
+    }
+
     func executeFlexibleJSON<T: Codable & Sendable>(
         prompt: String,
         modelId: String,
@@ -950,33 +1011,6 @@ final class LLMFacade {
             content: content,
             filename: filename,
             modelId: modelId
-        )
-    }
-
-    /// Generate structured JSON output from a prompt using Gemini's native structured output mode.
-    /// When a schema is provided, uses `responseMimeType: "application/json"` and `responseSchema`
-    /// to guarantee schema-conforming JSON output.
-    ///
-    /// - Parameters:
-    ///   - prompt: The prompt text requesting JSON output
-    ///   - modelId: Gemini model ID (uses default if nil)
-    ///   - maxOutputTokens: Maximum output tokens (default 65536, but callers should use lower values for bounded outputs)
-    ///   - jsonSchema: Optional JSON Schema dictionary. When provided, enables native structured output.
-    /// - Returns: Raw JSON string response guaranteed to match the schema
-    func generateStructuredJSON(
-        prompt: String,
-        modelId: String? = nil,
-        maxOutputTokens: Int = 65536,
-        jsonSchema: [String: Any]? = nil
-    ) async throws -> String {
-        guard let service = googleAIService else {
-            throw LLMError.clientError("Google AI service is not configured. Call registerGoogleAIService first.")
-        }
-        return try await service.generateStructuredJSON(
-            prompt: prompt,
-            modelId: modelId,
-            maxOutputTokens: maxOutputTokens,
-            jsonSchema: jsonSchema
         )
     }
 

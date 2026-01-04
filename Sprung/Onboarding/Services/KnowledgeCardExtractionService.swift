@@ -74,39 +74,21 @@ actor KnowledgeCardExtractionService {
         for attempt in 1...maxAttempts {
             Logger.info("📖 Extracting narratives from: \(filename) (attempt \(attempt)/\(maxAttempts))", category: .ai)
 
-            let jsonString: String
             do {
-                jsonString = try await facade.generateStructuredJSON(
+                // Use unified structured output API with Gemini backend
+                let response: KnowledgeCardExtractionResponse = try await facade.executeStructuredWithDictionarySchema(
                     prompt: prompt,
+                    modelId: modelId,
+                    as: KnowledgeCardExtractionResponse.self,
+                    schema: KCExtractionPrompts.jsonSchema,
+                    schemaName: "knowledge_card_extraction",
                     maxOutputTokens: 32768,
-                    jsonSchema: KCExtractionPrompts.jsonSchema
+                    backend: .gemini
                 )
-            } catch {
-                if attempt < maxAttempts {
-                    Logger.warning("📖 API error on attempt \(attempt), retrying: \(error.localizedDescription)", category: .ai)
-                    continue
-                }
-                throw error
-            }
-
-            // Validate response
-            if isGarbageResponse(jsonString) {
-                Logger.warning("📖 Garbage response detected (attempt \(attempt))", category: .ai)
-                if attempt < maxAttempts { continue }
-                throw KCError.garbageResponse
-            }
-
-            // Decode response
-            guard let jsonData = jsonString.data(using: .utf8) else {
-                throw KCError.invalidResponse
-            }
-
-            do {
-                let response = try JSONDecoder().decode(KnowledgeCardExtractionResponse.self, from: jsonData)
                 Logger.info("📖 Extracted \(response.cards.count) narrative cards", category: .ai)
                 return response.cards
             } catch {
-                Logger.error("❌ Failed to decode KC extraction: \(error.localizedDescription)", category: .ai)
+                Logger.warning("📖 Error on attempt \(attempt): \(error.localizedDescription)", category: .ai)
                 if let decodingError = error as? DecodingError {
                     logDecodingError(decodingError)
                 }
@@ -148,26 +130,6 @@ actor KnowledgeCardExtractionService {
 
         Logger.info("📖 Total extracted: \(allCards.count) cards from \(chunks.count) chunks", category: .ai)
         return allCards
-    }
-
-    /// Check for garbage responses
-    private func isGarbageResponse(_ response: String) -> Bool {
-        if response.contains(String(repeating: "\n", count: 20)) {
-            return true
-        }
-
-        let trimmed = response.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty || trimmed == "{}" || trimmed == "[]" {
-            return true
-        }
-
-        let nonWhitespaceCount = response.filter { !$0.isWhitespace }.count
-        let contentRatio = Double(nonWhitespaceCount) / Double(max(1, response.count))
-        if response.count > 1000 && contentRatio < 0.3 {
-            return true
-        }
-
-        return false
     }
 
     /// Log decoding errors for debugging
@@ -223,13 +185,11 @@ actor KnowledgeCardExtractionService {
     enum KCError: Error, LocalizedError {
         case llmNotConfigured
         case invalidResponse
-        case garbageResponse
 
         var errorDescription: String? {
             switch self {
             case .llmNotConfigured: return "LLM not configured"
             case .invalidResponse: return "Invalid response"
-            case .garbageResponse: return "Gemini returned garbage response"
             }
         }
     }

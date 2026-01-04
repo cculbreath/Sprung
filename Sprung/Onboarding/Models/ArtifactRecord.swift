@@ -288,3 +288,11 @@ extension ArtifactRecord: Hashable {
         hasher.combine(id)
     }
 }
+
+// MARK: - Sendable Conformance
+
+// SwiftData @Model classes are MainActor-isolated, making them safe to pass
+// to MainActor.run closures. This explicit conformance satisfies Swift's
+// static Sendable checking for actor boundary crossings.
+extension ArtifactRecord: @unchecked Sendable {}
+

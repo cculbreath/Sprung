@@ -15,6 +15,7 @@ struct EventDumpView: View {
     @State private var conversationEntries: [ConversationLogEntry] = []
     @State private var selectedTab = 0
     @State private var showRegenDialog = false
+    @State private var isDeduping = false
 
     var body: some View {
         NavigationStack {
@@ -230,11 +231,25 @@ struct EventDumpView: View {
             .help("Regenerate summaries and/or inventories for selected artifacts")
         }
         ToolbarItem(placement: .automatic) {
-            Button("Dedupe Narratives") {
+            Button {
                 Task {
+                    isDeduping = true
                     await coordinator.deduplicateNarratives()
+                    isDeduping = false
+                }
+            } label: {
+                if isDeduping {
+                    HStack(spacing: 4) {
+                        ProgressView()
+                            .scaleEffect(0.6)
+                            .frame(width: 12, height: 12)
+                        Text("Deduping...")
+                    }
+                } else {
+                    Text("Dedupe Narratives")
                 }
             }
+            .disabled(isDeduping)
             .help("Run LLM-powered deduplication on narrative cards")
         }
         ToolbarItem(placement: .automatic) {

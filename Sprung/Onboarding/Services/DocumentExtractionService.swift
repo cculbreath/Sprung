@@ -169,7 +169,7 @@ actor DocumentExtractionService {
             ]
         )
 
-        func notifyProgress(_ stage: ExtractionProgressStage, _ state: ExtractionProgressStageState, detail: String? = nil) async {
+        @Sendable func notifyProgress(_ stage: ExtractionProgressStage, _ state: ExtractionProgressStageState, detail: String? = nil) async {
             guard let progress else { return }
             await progress(ExtractionProgressUpdate(stage: stage, state: state, detail: detail))
         }
@@ -372,7 +372,7 @@ actor DocumentExtractionService {
         autoPersist _: Bool,
         progress: ExtractionProgressHandler?
     ) async throws -> ExtractionResult {
-        func notifyProgress(_ stage: ExtractionProgressStage, _ state: ExtractionProgressStageState, detail: String? = nil) async {
+        @Sendable func notifyProgress(_ stage: ExtractionProgressStage, _ state: ExtractionProgressStageState, detail: String? = nil) async {
             guard let progress else { return }
             await progress(ExtractionProgressUpdate(stage: stage, state: state, detail: detail))
         }

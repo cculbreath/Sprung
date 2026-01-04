@@ -160,10 +160,10 @@ actor DiscoveryAgentService {
                 reasoningEffort: reasoningEffort,
                 webSearchLocation: webSearchLocation,
                 onWebSearching: statusCallback.map { callback in
-                    { await callback(.webSearching(context: searchContext)) }
+                    { @Sendable in await callback(.webSearching(context: searchContext)) }
                 },
                 onWebSearchComplete: statusCallback.map { callback in
-                    { await callback(.webSearchComplete) }
+                    { @Sendable in await callback(.webSearchComplete) }
                 },
                 onTextDelta: reasoningCallback
             )

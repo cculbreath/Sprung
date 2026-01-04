@@ -118,25 +118,21 @@ actor GuidanceGenerationService {
 
         Logger.info("📝 Extracting identity vocabulary from \(cards.count) cards", category: .ai)
 
-        let jsonString = try await facade.generateStructuredJSON(
-            prompt: prompt,
-            modelId: modelId,
-            maxOutputTokens: 4096,
-            jsonSchema: GuidanceSchemas.identityVocabularySchema
-        )
-
-        guard let data = jsonString.data(using: .utf8) else {
-            throw GuidanceError.parseError("Failed to convert response to data")
-        }
-
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-
         struct Response: Codable {
             let terms: [IdentityTerm]
         }
 
-        let response = try decoder.decode(Response.self, from: data)
+        let response: Response = try await facade.executeStructuredWithDictionarySchema(
+            prompt: prompt,
+            modelId: modelId,
+            as: Response.self,
+            schema: GuidanceSchemas.identityVocabularySchema,
+            schemaName: "identity_vocabulary",
+            maxOutputTokens: 4096,
+            keyDecodingStrategy: .convertFromSnakeCase,
+            backend: .gemini
+        )
+
         Logger.info("📝 Extracted \(response.terms.count) identity terms", category: .ai)
         return response.terms
     }
@@ -162,25 +158,21 @@ actor GuidanceGenerationService {
 
         Logger.info("📝 Generating title sets from \(strongTerms.count) terms", category: .ai)
 
-        let jsonString = try await facade.generateStructuredJSON(
-            prompt: prompt,
-            modelId: modelId,
-            maxOutputTokens: 8192,
-            jsonSchema: GuidanceSchemas.titleSetSchema
-        )
-
-        guard let data = jsonString.data(using: .utf8) else {
-            throw GuidanceError.parseError("Failed to convert response to data")
-        }
-
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-
         struct Response: Codable {
             let sets: [TitleSet]
         }
 
-        let response = try decoder.decode(Response.self, from: data)
+        let response: Response = try await facade.executeStructuredWithDictionarySchema(
+            prompt: prompt,
+            modelId: modelId,
+            as: Response.self,
+            schema: GuidanceSchemas.titleSetSchema,
+            schemaName: "title_sets",
+            maxOutputTokens: 8192,
+            keyDecodingStrategy: .convertFromSnakeCase,
+            backend: .gemini
+        )
+
         Logger.info("📝 Generated \(response.sets.count) title sets", category: .ai)
         return response.sets
     }
@@ -203,21 +195,17 @@ actor GuidanceGenerationService {
 
         Logger.info("📝 Extracting voice profile from \(samples.count) samples", category: .ai)
 
-        let jsonString = try await facade.generateStructuredJSON(
+        let profile: VoiceProfile = try await facade.executeStructuredWithDictionarySchema(
             prompt: prompt,
             modelId: modelId,
+            as: VoiceProfile.self,
+            schema: GuidanceSchemas.voiceProfileSchema,
+            schemaName: "voice_profile",
             maxOutputTokens: 4096,
-            jsonSchema: GuidanceSchemas.voiceProfileSchema
+            keyDecodingStrategy: .convertFromSnakeCase,
+            backend: .gemini
         )
 
-        guard let data = jsonString.data(using: .utf8) else {
-            throw GuidanceError.parseError("Failed to convert response to data")
-        }
-
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-
-        let profile = try decoder.decode(VoiceProfile.self, from: data)
         Logger.info("📝 Extracted voice profile: \(profile.enthusiasm.displayName), \(profile.connectiveStyle)", category: .ai)
         return profile
     }

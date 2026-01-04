@@ -1,0 +1,234 @@
+# Narrative Knowledge Card Canonicalization
+
+You are canonicalizing a complete set of professional experience cards. Your task is to:
+1. Identify cards that describe THE SAME underlying experience
+2. Synthesize unified cards that preserve ALL meaningful detail
+3. Return the canonical set with no redundancy
+
+## THE CARDINAL RULE: NEVER OVER-COMPRESS
+
+These narrative cards exist because traditional resume systems destroy nuance. Each card captures:
+
+- **WHY** someone did something (motivation, context, the problem being solved)
+- **HOW** they approached it (methodology, decisions, pivots, collaboration)
+- **WHAT** they learned (insights, lessons, what worked, what didn't)
+- **VOICE** (their authentic way of expressing ideas, turns of phrase, personality)
+
+When merging, the result MUST be RICHER than any single input—never shorter or more generic. If you find yourself summarizing, STOP. You are destroying value.
+
+---
+
+## Understanding Duplicate Sources
+
+These cards were extracted from different document types. The SAME experience often appears in multiple documents with different emphasis:
+
+| Document Type | What It Captures |
+|---------------|------------------|
+| Resume | Achievements, scope, technologies, dates |
+| Cover Letter | Motivation, connection to goals, enthusiasm |
+| Dissertation/Thesis | Deep technical detail, methodology, lessons learned |
+| Project Report | Process, challenges overcome, specific outcomes |
+
+When the same job/project/degree appears in multiple documents, MERGE them into a richer unified narrative.
+
+---
+
+## When to KEEP SEPARATE
+
+Keep cards separate when they represent genuinely distinct experiences:
+
+**Different roles at same organization** (career progression)
+- "Junior Developer at Acme (2018-2020)" ≠ "Senior Developer at Acme (2020-2023)"
+- These are distinct career chapters showing growth
+
+**Different projects sharing technologies**
+- "Customer dashboard using React" ≠ "Internal analytics tool using React"
+- Shared tech doesn't make them the same project
+
+**Achievement worth separate highlighting**
+- An award, publication, or recognition within an employment context
+- The achievement card enables targeted resume customization
+
+**Different courses/subjects at same institution**
+- "Teaching Quantum Mechanics" ≠ "Teaching Classical Mechanics"
+- Different subjects = different experiences
+
+**Return engagements at different time periods**
+- "Consultant at Acme (2015-2016)" ≠ "Consultant at Acme (2022-2023)"
+- These are distinct engagements with different context
+
+---
+
+## When to MERGE
+
+Merge cards that describe the SAME experience from different angles:
+
+**Same experience from multiple documents**
+- Resume version + cover letter version of same job = ONE merged card
+- Resume version + dissertation discussion of same project = ONE merged card
+
+**Fragmented course sections**
+- "PHYS 204A Section 05" + "PHYS 204A Section 06" + "PHYS 204A Section 11" = ONE teaching appointment
+- Multiple sections of the same course are ONE teaching experience
+
+**Naming variations of same thing**
+- "ChoreCloud" = "Chore Cloud" = "chores" (same project)
+- "PhD in Chemical Physics" = "Doctor of Philosophy - Chemical Physics" (same degree)
+
+**Same project with phases**
+- "Designing CNC Mill" + "Building CNC Mill" + "Calibrating CNC Mill" = ONE project
+- (Unless phases occurred in distinctly different time periods/contexts)
+
+**Same degree with title variations**
+- "PhD at Kent State" + "Doctor of Philosophy at Liquid Crystal Institute, Kent State" = ONE degree
+
+---
+
+## How to Merge: The Synthesis Process
+
+### Step 1: Identify Unique Content
+For each input card, identify:
+- Facts/details not present in other cards
+- Specific numbers, dates, technologies
+- Distinctive phrasings that capture voice
+- Insights or lessons learned
+
+### Step 2: Choose the Best Base
+Pick the card with the strongest narrative arc as your base. This is usually:
+- The longest narrative, OR
+- The one from a cover letter/dissertation (more "why" and "how")
+
+### Step 3: Weave In Missing Content
+Integrate unique content from other cards:
+- Don't just append—find the natural place in the narrative
+- Use transitions: "This experience also involved...", "A key aspect was..."
+- Preserve specific details: numbers, technologies, outcomes
+
+### Step 4: Preserve Voice
+The merged narrative should sound like the person wrote it, not like an AI summarized it.
+Preserve distinctive phrases, authentic expressions of motivation, unique ways of describing challenges.
+
+### Step 5: Union All Metadata
+- ALL evidence_anchors from all source cards
+- ALL domains (deduplicated)
+- ALL scale items (deduplicated)
+- ALL keywords (deduplicated)
+- Widest possible date_range (earliest start to latest end)
+
+---
+
+## Anti-Patterns: What NOT to Do
+
+**Over-Compression**
+```
+BAD: Input is 500 words about CNC mill with tolerances, motor choices, lessons
+     Output: "Built a three-axis CNC mill for machining."
+```
+The specific details (±60nm precision, 50+ machined parts, the lesson about modularity) are what make this useful.
+
+**Generic Summarization**
+```
+BAD: Rich narrative about automation consulting with insights about flexibility
+     Output: "Provided automation consulting services for manufacturing company."
+```
+This reads like a job posting, not a professional narrative.
+
+**Merging Distinct Experiences**
+```
+BAD: Merging "Junior Developer (2018-2020)" with "Senior Developer (2020-2023)"
+```
+These represent career progression. Keep them separate.
+
+**Merging All Achievements Into Parent**
+```
+BAD: Merging "Pioneered Standards-Based Grading" achievement into "Lecturer at Cal Poly" employment
+```
+The achievement deserves its own card for targeted customization.
+
+**Merging All Courses Into One**
+```
+BAD: Merging "PHYS 101", "PHYS 204", "PHYS 301" into "Teaching at University"
+```
+These are different courses with different content. Only merge sections of the SAME course.
+
+**Discarding Quantitative Details**
+```
+BAD: Input A: "Achieved ±60nm vibrational stability"
+     Input B: "Machined over 50 custom parts"
+     Output: "Built precise mechanical system with custom parts"
+```
+The specific numbers are powerful resume content. Never drop them.
+
+---
+
+## Output Format
+
+Return a JSON object with three fields:
+
+```json
+{
+  "cards": [ ...array of canonical KnowledgeCard objects... ],
+  "merge_log": [
+    {
+      "action": "merged",
+      "input_card_ids": ["uuid-1", "uuid-2"],
+      "output_card_id": "uuid-new",
+      "reasoning": "Same consulting engagement described in resume and cover letter"
+    },
+    {
+      "action": "kept",
+      "input_card_ids": ["uuid-3"],
+      "output_card_id": "uuid-3",
+      "reasoning": ""
+    }
+  ],
+  "statistics": {
+    "input_count": 96,
+    "output_count": 72,
+    "cards_merged": 24,
+    "merge_groups": 12
+  }
+}
+```
+
+### Card Format
+Each card in the `cards` array must have:
+- `id`: New UUID for merged cards, original UUID for kept cards
+- `card_type`: "employment" | "project" | "achievement" | "education"
+- `title`: Specific, descriptive title
+- `narrative`: Full synthesized narrative (500-2000 words)
+- `organization`: Company/institution or empty string
+- `date_range`: Time period or empty string
+- `extractable`: Object with `domains`, `scale`, `keywords` arrays
+- `evidence_anchors`: Array of source links (union from all merged cards)
+- `related_card_ids`: Array of related card UUIDs (can be empty)
+
+### Merge Log Format
+Each entry in `merge_log` describes what happened:
+- `action`: "merged" or "kept"
+- `input_card_ids`: Array of original card IDs that were processed
+- `output_card_id`: The ID of the resulting card
+- `reasoning`: Explanation for merges, empty string for kept cards
+
+---
+
+## Final Checklist
+
+Before returning your response, verify:
+
+[ ] Every card is accounted for in merge_log (either merged or kept)
+[ ] Merged narratives are RICHER than any single input
+[ ] ALL specific numbers, dates, technologies preserved
+[ ] ALL evidence_anchors unioned from source cards
+[ ] ALL domains, scale, keywords deduplicated and unioned
+[ ] Widest date_range used for merged cards
+[ ] Kept-separate cards are genuinely distinct experiences
+[ ] Statistics match the actual counts
+
+---
+
+## Your Task
+
+Canonicalize the following set of knowledge cards:
+
+{CARDS_JSON}

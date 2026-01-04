@@ -160,10 +160,16 @@ enum PromptLibrary {
 
     // MARK: - Deduplication Prompts
 
-    /// Narrative card deduplication prompt template
+    /// Narrative card deduplication prompt template (legacy cluster-based)
     /// Contains placeholder: {CARDS_JSON}
     static let narrativeDedupeTemplate: String = {
         loadPrompt(named: "narrative_dedupe_prompt")
+    }()
+
+    /// Narrative card canonicalization prompt template (single-pass LLM)
+    /// Contains placeholder: {CARDS_JSON}
+    static let narrativeCanonicalizeTemplate: String = {
+        loadPrompt(named: "narrative_canonicalize_prompt")
     }()
 
     // MARK: - Prompt Loading

@@ -108,67 +108,27 @@ actor SkillBankService {
         for attempt in 1...maxAttempts {
             Logger.info("🔧 Extracting skills from: \(filename) (attempt \(attempt)/\(maxAttempts))", category: .ai)
 
-            let jsonString: String
             do {
-                jsonString = try await facade.generateStructuredJSON(
+                // Use unified structured output API with Gemini backend
+                let response: SkillExtractionResponse = try await facade.executeStructuredWithDictionarySchema(
                     prompt: prompt,
+                    modelId: modelId,
+                    as: SkillExtractionResponse.self,
+                    schema: SkillBankPrompts.jsonSchema,
+                    schemaName: "skill_extraction",
                     maxOutputTokens: 16384,
-                    jsonSchema: SkillBankPrompts.jsonSchema
+                    backend: .gemini
                 )
-            } catch {
-                if attempt < maxAttempts {
-                    Logger.warning("🔧 API error on attempt \(attempt), retrying: \(error.localizedDescription)", category: .ai)
-                    continue
-                }
-                throw error
-            }
-
-            // Validate response
-            if isGarbageResponse(jsonString) {
-                Logger.warning("🔧 Garbage response detected (attempt \(attempt))", category: .ai)
-                if attempt < maxAttempts { continue }
-                throw SkillBankError.garbageResponse
-            }
-
-            // Decode response
-            guard let jsonData = jsonString.data(using: .utf8) else {
-                throw SkillBankError.invalidResponse
-            }
-
-            do {
-                let response = try JSONDecoder().decode(SkillExtractionResponse.self, from: jsonData)
                 Logger.info("🔧 Extracted \(response.skills.count) skills", category: .ai)
                 return response.skills
             } catch {
-                Logger.error("❌ Failed to decode skill extraction: \(error.localizedDescription)", category: .ai)
+                Logger.warning("🔧 Error on attempt \(attempt): \(error.localizedDescription)", category: .ai)
                 if attempt < maxAttempts { continue }
                 throw SkillBankError.invalidResponse
             }
         }
 
         throw SkillBankError.invalidResponse
-    }
-
-    /// Check for garbage responses
-    private func isGarbageResponse(_ response: String) -> Bool {
-        // Check for newline spam
-        if response.contains(String(repeating: "\n", count: 20)) {
-            return true
-        }
-
-        let trimmed = response.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty || trimmed == "{}" || trimmed == "[]" {
-            return true
-        }
-
-        // Check for low content ratio
-        let nonWhitespaceCount = response.filter { !$0.isWhitespace }.count
-        let contentRatio = Double(nonWhitespaceCount) / Double(max(1, response.count))
-        if response.count > 1000 && contentRatio < 0.3 {
-            return true
-        }
-
-        return false
     }
 
     /// Split content into chunks at paragraph boundaries
@@ -252,14 +212,11 @@ actor SkillBankService {
     enum SkillBankError: Error, LocalizedError {
         case llmNotConfigured
         case invalidResponse
-        case garbageResponse
 
         var errorDescription: String? {
             switch self {
             case .llmNotConfigured:
                 return "LLM facade is not configured"
-            case .garbageResponse:
-                return "Gemini returned garbage response after 3 attempts"
             case .invalidResponse:
                 return "Invalid response from LLM"
             }
