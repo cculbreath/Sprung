@@ -4,10 +4,14 @@
 //
 //  LLM message orchestration (Spec §4.3)
 //  Uses LLMFacade for all LLM operations while maintaining domain orchestration.
+//  Delegates to extracted components for retry, error handling, and recovery.
+//
+
 import AppKit
 import Foundation
 import SwiftOpenAI
 import SwiftyJSON
+
 /// Orchestrates LLM message sending and status emission
 /// Responsibilities (Spec §4.3):
 /// - Subscribe to message request events
@@ -24,8 +28,15 @@ actor LLMMessenger: OnboardingEventEmitter {
     private let anthropicRequestBuilder: AnthropicRequestBuilder
     private let toolRegistry: ToolRegistry
     private var isActive = false
+
+    // Extracted components
+    private let retryPolicy = LLMRetryPolicy()
+    private let errorHandler = LLMErrorHandler()
+    private let recoveryManager = ToolRecoveryManager()
+
     // Stream cancellation tracking
     private var currentStreamTask: Task<Void, Error>?
+
     init(
         llmFacade: LLMFacade,
         baseDeveloperMessage: String,
@@ -161,11 +172,10 @@ actor LLMMessenger: OnboardingEventEmitter {
                         return // Success - exit retry loop
                     } catch {
                         lastError = error
-                        let isRetriableError = isRetriable(error)
-                        if isRetriableError && retryCount < maxRetries {
+                        if retryPolicy.isRetriable(error) && retryPolicy.shouldRetry(attempt: retryCount) {
                             retryCount += 1
-                            let delay = Double(retryCount) * 2.0 // Exponential backoff: 2s, 4s, 6s
-                            Logger.warning("⚠️ Transient error (attempt \(retryCount)/\(maxRetries)), retrying in \(delay)s: \(error)", category: .ai)
+                            let delay = retryPolicy.retryDelay(for: retryCount)
+                            Logger.warning("⚠️ Transient error (attempt \(retryCount)/\(retryPolicy.maxRetries)), retrying in \(delay)s: \(error)", category: .ai)
                             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                         } else {
                             if let apiError = error as? APIError {
@@ -176,7 +186,7 @@ actor LLMMessenger: OnboardingEventEmitter {
                     }
                 }
                 if let error = lastError {
-                    Logger.error("❌ User message failed after \(maxRetries) retries: \(error)", category: .ai)
+                    Logger.error("❌ User message failed after \(retryPolicy.maxRetries) retries: \(error)", category: .ai)
                     throw error
                 }
             }
@@ -190,10 +200,9 @@ actor LLMMessenger: OnboardingEventEmitter {
             Logger.error("❌ Failed to send message: \(error)", category: .ai)
 
             // Check for "No tool output found" error - conversation state is out of sync
-            let errorDescription = String(describing: error)
-            if errorDescription.contains("No tool output found for function call") {
-                // Extract call_id from error
-                if let callId = extractCallIdFromError(errorDescription) {
+            if recoveryManager.isToolOutputMissingError(error) {
+                let errorDescription = String(describing: error)
+                if let callId = recoveryManager.extractCallIdFromError(errorDescription) {
                     Logger.warning("🔧 Attempting recovery: sending synthetic tool response for \(callId)", category: .ai)
 
                     // Try to recover by sending a synthetic tool response
@@ -216,7 +225,7 @@ actor LLMMessenger: OnboardingEventEmitter {
 
                 // Recovery failed - show alert
                 Logger.error("🔧 Recovery failed for pending tool call", category: .ai)
-                await showConversationSyncErrorAlert(callId: extractCallIdFromError(errorDescription))
+                await errorHandler.showConversationSyncErrorAlert(callId: recoveryManager.extractCallIdFromError(errorDescription))
                 await emit(.errorOccurred("Conversation sync error: Recovery failed. Use 'Reset Conversation' to recover."))
                 await emit(.llmStatus(status: .error))
 
@@ -300,7 +309,7 @@ actor LLMMessenger: OnboardingEventEmitter {
                     } catch {
                         lastError = error
                         // Check if this is a retriable error
-                        let isRetriableError = isRetriable(error)
+                        let isRetriableError = retryPolicy.isRetriable(error)
                         if isRetriableError && retryCount < maxRetries {
                             retryCount += 1
                             let delay = Double(retryCount) * 2.0 // Exponential backoff: 2s, 4s, 6s
@@ -397,7 +406,7 @@ actor LLMMessenger: OnboardingEventEmitter {
                     } catch {
                         lastError = error
                         // Check if this is a retriable error
-                        let isRetriableError = isRetriable(error)
+                        let isRetriableError = retryPolicy.isRetriable(error)
                         if isRetriableError && retryCount < maxRetries {
                             retryCount += 1
                             let delay = Double(retryCount) * 2.0 // Exponential backoff: 2s, 4s, 6s
@@ -478,7 +487,7 @@ actor LLMMessenger: OnboardingEventEmitter {
                         return // Success - exit retry loop
                     } catch {
                         lastError = error
-                        let isRetriableError = isRetriable(error)
+                        let isRetriableError = retryPolicy.isRetriable(error)
                         if isRetriableError && retryCount < maxRetries {
                             retryCount += 1
                             let delay = Double(retryCount) * 2.0
@@ -553,111 +562,23 @@ actor LLMMessenger: OnboardingEventEmitter {
         await emit(.llmStatus(status: .idle))
         Logger.info("✅ LLM stream cancelled and cleaned up", category: .ai)
     }
-    // MARK: - Error Handling
-    private func isRetriable(_ error: Error) -> Bool {
-        if let apiError = error as? APIError {
-            switch apiError {
-            case .responseUnsuccessful(_, let statusCode, _):
-                return statusCode == 503 || statusCode == 502 || statusCode == 504 || statusCode >= 500
-            case .jsonDecodingFailure, .bothDecodingStrategiesFailed:
-                return true
-            case .timeOutError:
-                return true
-            case .requestFailed, .invalidData, .dataCouldNotBeReadMissingData:
-                return false
-            }
-        }
-        let errorDescription = error.localizedDescription.lowercased()
-        if errorDescription.contains("network") ||
-           errorDescription.contains("connection") ||
-           errorDescription.contains("timeout") ||
-           errorDescription.contains("lost connection") {
-            return true
-        }
-        if error is CancellationError {
-            return false
-        }
-        return false
-    }
+    // MARK: - Error Handling (Delegated to LLMErrorHandler)
+
     private func surfaceErrorToUI(error: Error) async {
         // Check for insufficient credits error - show popup alert
-        if let llmError = error as? LLMError {
-            if case .insufficientCredits(let requested, let available) = llmError {
-                await showInsufficientCreditsAlert(requested: requested, available: available)
-                return
-            }
+        if errorHandler.isInsufficientCreditsError(error) {
+            let creditInfo = errorHandler.extractCreditInfo(from: error)
+            await errorHandler.showInsufficientCreditsAlert(
+                requested: creditInfo?.requested ?? 0,
+                available: creditInfo?.available ?? 0
+            )
+            return
         }
 
-        let errorMessage: String
-        let errorDescription = error.localizedDescription
-        if errorDescription.contains("network") || errorDescription.contains("connection") {
-            errorMessage = "I'm having trouble connecting to the AI service. Please check your network connection and try again."
-        } else if errorDescription.contains("401") || errorDescription.contains("403") {
-            errorMessage = "There's an authentication issue with the AI service. Please check your API key and try again."
-        } else if errorDescription.contains("402") || errorDescription.lowercased().contains("insufficient credits") {
-            // Fallback for 402 if not caught as LLMError
-            await showInsufficientCreditsAlert(requested: 0, available: 0)
-            return
-        } else if errorDescription.contains("429") {
-            errorMessage = "The AI service is currently rate-limited. Please wait a moment and try again."
-        } else if errorDescription.contains("500") || errorDescription.contains("503") {
-            errorMessage = "The AI service is temporarily unavailable. Please try again in a few moments."
-        } else {
-            errorMessage = "I encountered an error while processing your request: \(errorDescription). Please try again, or contact support if this persists."
-        }
+        let errorMessage = errorHandler.buildUserFriendlyMessage(from: error)
         let payload = JSON(["text": errorMessage])
         await emit(.llmUserMessageSent(messageId: UUID().uuidString, payload: payload, isSystemGenerated: true))
         Logger.error("📢 Error surfaced to UI: \(errorMessage)", category: .ai)
-    }
-
-    /// Show a popup alert for insufficient OpenRouter credits
-    @MainActor
-    private func showInsufficientCreditsAlert(requested: Int, available: Int) {
-        let alert = NSAlert()
-        alert.alertStyle = .warning
-        alert.messageText = "Insufficient OpenRouter Credits"
-
-        if requested > 0 && available > 0 {
-            alert.informativeText = """
-            This request requires more credits than available.
-
-            Requested: \(requested.formatted()) tokens
-            Available: \(available.formatted()) tokens
-
-            Please add credits at OpenRouter to continue using the AI features.
-            """
-        } else {
-            alert.informativeText = """
-            Your OpenRouter account has insufficient credits to complete this request.
-
-            Please add credits at OpenRouter to continue using the AI features.
-            """
-        }
-
-        alert.addButton(withTitle: "Add Credits")
-        alert.addButton(withTitle: "OK")
-
-        let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
-            // Open OpenRouter credits page
-            if let url = URL(string: "https://openrouter.ai/settings/credits") {
-                NSWorkspace.shared.open(url)
-            }
-        }
-
-        Logger.warning("💳 Insufficient credits alert shown to user (requested: \(requested), available: \(available))", category: .ai)
-    }
-
-    /// Extract call_id from "No tool output found for function call <call_id>" error
-    private func extractCallIdFromError(_ errorDescription: String) -> String? {
-        // Pattern: "No tool output found for function call call_XXXX"
-        guard let range = errorDescription.range(of: "function call ") else { return nil }
-        let afterPrefix = errorDescription[range.upperBound...]
-        // Find end of call_id (next quote, period, or end)
-        if let endRange = afterPrefix.rangeOfCharacter(from: CharacterSet(charactersIn: "\".,} ")) {
-            return String(afterPrefix[..<endRange.lowerBound])
-        }
-        return String(afterPrefix)
     }
 
     /// Attempt to recover from "No tool output found" error by sending a synthetic tool response
@@ -673,13 +594,8 @@ actor LLMMessenger: OnboardingEventEmitter {
     ) async -> Bool {
         Logger.info("🔧 Recovery: Sending synthetic tool response for call_id: \(callId)", category: .ai)
 
-        // Build synthetic tool output - acknowledge the error gracefully
-        // Note: "status" field is extracted by ConversationContextAssembler and sent to API
-        // Valid API statuses are: "in_progress", "completed", "incomplete"
-        var toolOutput = JSON()
-        toolOutput["status"].string = "incomplete"  // API-level status indicating tool didn't complete normally
-        toolOutput["error"].string = "Tool execution was interrupted due to a sync issue. The system has recovered."
-        toolOutput["recovered"].bool = true
+        // Build synthetic tool output using recovery manager
+        let toolOutput = recoveryManager.buildSyntheticToolOutput()
 
         // Build tool response request using the request builder
         let request = await requestBuilder.buildToolResponseRequest(
@@ -733,31 +649,6 @@ actor LLMMessenger: OnboardingEventEmitter {
             Logger.error("🔧 Recovery failed: \(error)", category: .ai)
             return false
         }
-    }
-
-    /// Show alert for conversation sync error when auto-recovery fails
-    @MainActor
-    private func showConversationSyncErrorAlert(callId: String?) {
-        let alert = NSAlert()
-        alert.alertStyle = .critical
-        alert.messageText = "Conversation Recovery Failed"
-        alert.informativeText = """
-        The AI conversation could not be recovered automatically.
-
-        Your interview data (profile, knowledge cards, timeline) is safely saved.
-
-        You may need to restart the interview. Your collected data will be preserved.
-        """
-
-        if let callId = callId {
-            alert.informativeText += "\n\nTechnical: call_id: \(callId)"
-        }
-
-        alert.addButton(withTitle: "OK")
-
-        _ = alert.runModal()
-
-        Logger.error("🔧 Conversation sync error alert shown - auto-recovery failed (callId: \(callId ?? "unknown"))", category: .ai)
     }
 
     // MARK: - Anthropic Execution Methods
@@ -828,14 +719,14 @@ actor LLMMessenger: OnboardingEventEmitter {
                         return // Success - exit retry loop
                     } catch {
                         lastError = error
-                        let isRetriableError = isRetriable(error)
+                        let isRetriableError = retryPolicy.isRetriable(error)
                         if isRetriableError && retryCount < maxRetries {
                             retryCount += 1
                             let delay = Double(retryCount) * 2.0
                             Logger.warning("⚠️ Anthropic transient error (attempt \(retryCount)/\(maxRetries)), retrying in \(delay)s: \(error)", category: .ai)
                             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                         } else {
-                            logAnthropicError(error, context: "user message")
+                            errorHandler.logAnthropicError(error, context: "user message")
                             throw error
                         }
                     }
@@ -854,7 +745,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             Logger.verbose("Anthropic user message stream cancelled", category: .ai)
             await stateCoordinator.markStreamCompleted()
         } catch {
-            logAnthropicError(error, context: "user message (outer)")
+            errorHandler.logAnthropicError(error, context: "user message (outer)")
             Logger.error("❌ Anthropic failed to send message: \(error)", category: .ai)
             await emit(.errorOccurred("Failed to send message: \(error.localizedDescription)"))
             await emit(.llmStatus(status: .error))
@@ -913,14 +804,14 @@ actor LLMMessenger: OnboardingEventEmitter {
                         return
                     } catch {
                         lastError = error
-                        let isRetriableError = isRetriable(error)
+                        let isRetriableError = retryPolicy.isRetriable(error)
                         if isRetriableError && retryCount < maxRetries {
                             retryCount += 1
                             let delay = Double(retryCount) * 2.0
                             Logger.warning("⚠️ Anthropic transient error (attempt \(retryCount)/\(maxRetries)), retrying in \(delay)s: \(error)", category: .ai)
                             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                         } else {
-                            logAnthropicError(error, context: "developer message")
+                            errorHandler.logAnthropicError(error, context: "developer message")
                             throw error
                         }
                     }
@@ -940,7 +831,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             Logger.verbose("Anthropic developer message stream cancelled", category: .ai)
             await stateCoordinator.markStreamCompleted()
         } catch {
-            logAnthropicError(error, context: "developer message (outer)")
+            errorHandler.logAnthropicError(error, context: "developer message (outer)")
             await emit(.errorOccurred("Failed to send developer message: \(error.localizedDescription)"))
             await emit(.llmStatus(status: .error))
             await surfaceErrorToUI(error: error)
@@ -1023,14 +914,14 @@ actor LLMMessenger: OnboardingEventEmitter {
                         return
                     } catch {
                         lastError = error
-                        let isRetriableError = isRetriable(error)
+                        let isRetriableError = retryPolicy.isRetriable(error)
                         if isRetriableError && retryCount < maxRetries {
                             retryCount += 1
                             let delay = Double(retryCount) * 2.0
                             Logger.warning("⚠️ Anthropic transient error (attempt \(retryCount)/\(maxRetries)), retrying in \(delay)s: \(error)", category: .ai)
                             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                         } else {
-                            logAnthropicError(error, context: "tool response")
+                            errorHandler.logAnthropicError(error, context: "tool response")
                             throw error
                         }
                     }
@@ -1049,7 +940,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             Logger.verbose("Anthropic tool response stream cancelled", category: .ai)
             await stateCoordinator.markStreamCompleted()
         } catch {
-            logAnthropicError(error, context: "tool response (outer)")
+            errorHandler.logAnthropicError(error, context: "tool response (outer)")
             await emit(.errorOccurred("Failed to send Anthropic tool response: \(error.localizedDescription)"))
             await emit(.llmStatus(status: .error))
             await stateCoordinator.markStreamCompleted()
@@ -1111,14 +1002,14 @@ actor LLMMessenger: OnboardingEventEmitter {
                         return
                     } catch {
                         lastError = error
-                        let isRetriableError = isRetriable(error)
+                        let isRetriableError = retryPolicy.isRetriable(error)
                         if isRetriableError && retryCount < maxRetries {
                             retryCount += 1
                             let delay = Double(retryCount) * 2.0
                             Logger.warning("⚠️ Anthropic transient error (attempt \(retryCount)/\(maxRetries)), retrying in \(delay)s: \(error)", category: .ai)
                             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                         } else {
-                            logAnthropicError(error, context: "batched tool response")
+                            errorHandler.logAnthropicError(error, context: "batched tool response")
                             throw error
                         }
                     }
@@ -1137,7 +1028,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             Logger.verbose("Anthropic batched tool response stream cancelled", category: .ai)
             await stateCoordinator.markStreamCompleted()
         } catch {
-            logAnthropicError(error, context: "batched tool response (outer)")
+            errorHandler.logAnthropicError(error, context: "batched tool response (outer)")
             await emit(.errorOccurred("Failed to send Anthropic batched tool responses: \(error.localizedDescription)"))
             await emit(.llmStatus(status: .error))
             await stateCoordinator.markStreamCompleted()
@@ -1152,39 +1043,4 @@ actor LLMMessenger: OnboardingEventEmitter {
         Logger.debug("🔧 Anthropic tool call dispatched: \(call.name)", category: .ai)
     }
 
-    // MARK: - Anthropic Error Logging
-
-    /// Log detailed error information for Anthropic API errors
-    private func logAnthropicError(_ error: Error, context: String) {
-        Logger.error("❌ Anthropic API error in \(context)", category: .ai)
-
-        // Try to extract detailed error information
-        if let apiError = error as? APIError {
-            switch apiError {
-            case .responseUnsuccessful(let description, let statusCode, let responseBody):
-                Logger.error("   Status: \(statusCode)", category: .ai)
-                Logger.error("   Description: \(description)", category: .ai)
-                if let body = responseBody, !body.isEmpty {
-                    Logger.error("   Response body: \(body)", category: .ai)
-                } else {
-                    Logger.error("   Response body: (empty)", category: .ai)
-                }
-            case .requestFailed(let description):
-                Logger.error("   Request failed: \(description)", category: .ai)
-            case .jsonDecodingFailure(let description):
-                Logger.error("   JSON decoding failure: \(description)", category: .ai)
-            case .bothDecodingStrategiesFailed:
-                Logger.error("   Both decoding strategies failed", category: .ai)
-            case .invalidData:
-                Logger.error("   Invalid data", category: .ai)
-            case .dataCouldNotBeReadMissingData(let description):
-                Logger.error("   Missing data: \(description)", category: .ai)
-            case .timeOutError:
-                Logger.error("   Timeout", category: .ai)
-            }
-        } else {
-            Logger.error("   Error type: \(type(of: error))", category: .ai)
-            Logger.error("   Full error: \(error)", category: .ai)
-        }
-    }
 }

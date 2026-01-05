@@ -525,3 +525,7 @@ struct VerbatimExcerpt: Codable {
         case preservationReason = "preservation_reason"
     }
 }
+
+// MARK: - Sendable Conformance
+
+extension KnowledgeCard: @unchecked Sendable {}

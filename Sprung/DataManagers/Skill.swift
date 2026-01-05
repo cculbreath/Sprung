@@ -314,3 +314,7 @@ class Skill: Identifiable, Codable {
         return allVariants.contains { $0.lowercased().contains(lowercased) }
     }
 }
+
+// MARK: - Sendable Conformance
+
+extension Skill: @unchecked Sendable {}

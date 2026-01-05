@@ -23,6 +23,11 @@ final class CoachingService {
     private let jobAppStore: JobAppStore
     private let interviewDataStore: InterviewDataStore
 
+    // Extracted component handlers
+    private let toolHandler: CoachingToolHandler
+    private let contextBuilder: CoachingContextBuilder
+    private let taskGenerator: DailyTaskGenerator
+
     /// Reference to agent service for triggering workflows like chooseBestJobs
     /// Set after initialization by coordinator to avoid circular dependency
     var agentService: DiscoveryAgentService?
@@ -67,6 +72,11 @@ final class CoachingService {
         self.preferencesStore = preferencesStore
         self.jobAppStore = jobAppStore
         self.interviewDataStore = interviewDataStore
+
+        // Initialize extracted components
+        self.toolHandler = CoachingToolHandler(modelContext: modelContext, jobAppStore: jobAppStore)
+        self.contextBuilder = CoachingContextBuilder(preferencesStore: preferencesStore, jobAppStore: jobAppStore)
+        self.taskGenerator = DailyTaskGenerator(dailyTaskStore: dailyTaskStore, llmService: llmService)
     }
 
     // MARK: - Public API
@@ -148,12 +158,12 @@ final class CoachingService {
         currentSession = session
 
         // Build system prompt with full context
-        let systemPrompt = buildSystemPrompt(
+        let systemPrompt = contextBuilder.buildSystemPrompt(
             activitySummary: snapshot.textSummary(),
             recentHistory: sessionStore.recentHistorySummary(),
-            dossierContext: buildDossierContext(),
-            knowledgeCardsList: buildKnowledgeCardsList(),
-            activeJobApps: buildActiveJobAppsList()
+            dossierContext: contextBuilder.buildDossierContext(from: dossierEntries),
+            knowledgeCardsList: contextBuilder.buildKnowledgeCardsList(from: knowledgeCards),
+            activeJobApps: contextBuilder.buildActiveJobAppsList()
         )
 
         // Start conversation with coaching tools (use OpenRouter model)
@@ -367,228 +377,24 @@ final class CoachingService {
 
         switch name {
         case CoachingToolSchemas.getKnowledgeCardToolName:
-            return handleGetKnowledgeCard(args)
+            return toolHandler.handleGetKnowledgeCard(args, knowledgeCards: knowledgeCards)
 
         case CoachingToolSchemas.getJobDescriptionToolName:
-            return handleGetJobDescription(args)
+            return toolHandler.handleGetJobDescription(args)
 
         case CoachingToolSchemas.getResumeToolName:
-            return await handleGetResume(args)
+            return await toolHandler.handleGetResume(args)
 
         case CoachingToolSchemas.chooseBestJobsToolName:
-            return await handleChooseBestJobs(args)
+            return await toolHandler.handleChooseBestJobs(
+                args,
+                agentService: agentService,
+                knowledgeCards: knowledgeCards,
+                dossierEntries: dossierEntries
+            )
 
         default:
             return JSON(["error": "Unknown tool: \(name)"]).rawString() ?? "{}"
-        }
-    }
-
-    /// Handle get_knowledge_card tool call
-    private func handleGetKnowledgeCard(_ args: JSON) -> String {
-        let cardId = args["card_id"].stringValue
-        let startLine = args["start_line"].int
-        let endLine = args["end_line"].int
-
-        guard let card = knowledgeCards.first(where: { $0.id.uuidString == cardId }) else {
-            return JSON(["error": "Knowledge card not found: \(cardId)"]).rawString() ?? "{}"
-        }
-
-        var content = card.content
-
-        // Apply line range if specified
-        if let start = startLine, let end = endLine {
-            let lines = content.components(separatedBy: "\n")
-            let safeStart = max(0, start - 1)  // 1-indexed to 0-indexed
-            let safeEnd = min(lines.count, end)
-            if safeStart < safeEnd {
-                content = lines[safeStart..<safeEnd].joined(separator: "\n")
-            }
-        }
-
-        var result = JSON()
-        result["card_id"].string = cardId
-        result["title"].string = card.title
-        result["type"].string = card.cardType
-        result["organization"].string = card.organization
-        result["time_period"].string = card.timePeriod
-        result["content"].string = content
-        result["word_count"].int = card.wordCount
-
-        return result.rawString() ?? "{}"
-    }
-
-    /// Handle get_job_description tool call
-    private func handleGetJobDescription(_ args: JSON) -> String {
-        let jobAppId = args["job_app_id"].stringValue
-
-        guard let uuid = UUID(uuidString: jobAppId),
-              let jobApp = jobAppStore.jobApps.first(where: { $0.id == uuid }) else {
-            return JSON(["error": "Job application not found: \(jobAppId)"]).rawString() ?? "{}"
-        }
-
-        var result = JSON()
-        result["job_app_id"].string = jobAppId
-        result["company"].string = jobApp.companyName
-        result["position"].string = jobApp.jobPosition
-        result["status"].string = jobApp.status.displayName
-        result["job_description"].string = jobApp.jobDescription
-        result["job_url"].string = jobApp.postingURL.isEmpty ? jobApp.jobApplyLink : jobApp.postingURL
-        result["notes"].string = jobApp.notes
-        result["applied_date"].string = jobApp.appliedDate?.ISO8601Format()
-
-        return result.rawString() ?? "{}"
-    }
-
-    /// Handle get_resume tool call
-    private func handleGetResume(_ args: JSON) async -> String {
-        let resumeId = args["resume_id"].stringValue
-        let section = args["section"].string
-
-        let descriptor = FetchDescriptor<Resume>()
-        guard let resumes = try? modelContext.fetch(descriptor),
-              let uuid = UUID(uuidString: resumeId),
-              let resume = resumes.first(where: { $0.id == uuid }) else {
-            return JSON(["error": "Resume not found: \(resumeId)"]).rawString() ?? "{}"
-        }
-
-        var result = JSON()
-        result["resume_id"].string = resumeId
-        result["template"].string = resume.template?.name ?? "Unknown Template"
-
-        // Get resume content from TreeNode
-        if let rootNode = resume.rootNode {
-            if let section = section {
-                // Get specific section
-                if let sectionNode = rootNode.children?.first(where: { $0.label == section }) {
-                    result["section"].string = section
-                    result["content"].string = extractNodeText(sectionNode)
-                }
-            } else {
-                // Get summary of all sections
-                var sections: [String] = []
-                for child in rootNode.children ?? [] {
-                    sections.append(child.label)
-                }
-                result["available_sections"].arrayObject = sections
-                if let summaryNode = resume.rootNode?.children?.first(where: { $0.label == "summary" }) {
-                    result["summary"].string = extractNodeText(summaryNode)
-                }
-            }
-        }
-
-        return result.rawString() ?? "{}"
-    }
-
-    /// Extract text content from a TreeNode and its children
-    private func extractNodeText(_ node: TreeNode) -> String {
-        var text = node.value
-        if let children = node.children {
-            for child in children.sorted(by: { $0.myIndex < $1.myIndex }) {
-                let childText = extractNodeText(child)
-                if !childText.isEmpty {
-                    if !text.isEmpty { text += "\n" }
-                    if !child.name.isEmpty {
-                        text += "\(child.name): "
-                    }
-                    text += childText
-                }
-            }
-        }
-        return text
-    }
-
-    /// Handle choose_best_jobs tool call - triggers the job selection workflow
-    private func handleChooseBestJobs(_ args: JSON) async -> String {
-        guard let agent = agentService else {
-            return JSON(["error": "Agent service not configured"]).rawString() ?? "{}"
-        }
-
-        let count = min(max(args["count"].intValue, 1), 10)
-        let reason = args["reason"].stringValue
-
-        Logger.info("🎯 Coaching: triggering choose best jobs (count: \(count), reason: \(reason))", category: .ai)
-
-        // Get all jobs in new (identified) status
-        let identifiedJobs = jobAppStore.jobApps(forStatus: .new)
-        guard !identifiedJobs.isEmpty else {
-            return JSON([
-                "success": false,
-                "error": "No jobs in Identified status to choose from",
-                "identified_count": 0
-            ]).rawString() ?? "{}"
-        }
-
-        // Build job tuples for agent
-        let jobTuples = identifiedJobs.map { job in
-            (
-                id: job.id,
-                company: job.companyName,
-                role: job.jobPosition,
-                description: job.jobDescription
-            )
-        }
-
-        // Build knowledge context from cached knowledge cards
-        let knowledgeContext = knowledgeCards
-            .map { card in
-                let typeLabel = card.cardType ?? "general"
-                return "[\(typeLabel)] \(card.title):\n\(card.content)"
-            }
-            .joined(separator: "\n\n")
-
-        // Build dossier context from cached dossier entries
-        let dossierContext = dossierEntries
-            .map { entry in
-                let section = entry["section"].stringValue
-                let value = entry["value"].stringValue
-                return "\(section): \(value)"
-            }
-            .joined(separator: "\n")
-
-        do {
-            let result = try await agent.chooseBestJobs(
-                jobs: jobTuples,
-                knowledgeContext: knowledgeContext,
-                dossierContext: dossierContext,
-                count: count
-            )
-
-            // Advance selected jobs to Queued status
-            for selection in result.selections {
-                if let jobApp = jobAppStore.jobApp(byId: selection.jobId) {
-                    jobAppStore.setStatus(jobApp, to: .queued)
-                }
-            }
-
-            // Build response for LLM
-            var response = JSON()
-            response["success"].bool = true
-            response["selected_count"].int = result.selections.count
-            response["identified_count"].int = identifiedJobs.count
-
-            var selections: [JSON] = []
-            for selection in result.selections {
-                var sel = JSON()
-                sel["company"].string = selection.company
-                sel["role"].string = selection.role
-                sel["match_score"].double = selection.matchScore
-                sel["reasoning"].string = selection.reasoning
-                selections.append(sel)
-            }
-            response["selections"].arrayObject = selections.map { $0.object }
-            response["overall_analysis"].string = result.overallAnalysis
-            response["considerations"].arrayObject = result.considerations
-
-            Logger.info("✅ Choose best jobs completed: \(result.selections.count) selected", category: .ai)
-            return response.rawString() ?? "{}"
-
-        } catch {
-            Logger.error("Failed to choose best jobs: \(error)", category: .ai)
-            return JSON([
-                "success": false,
-                "error": error.localizedDescription,
-                "identified_count": identifiedJobs.count
-            ]).rawString() ?? "{}"
         }
     }
 
@@ -656,35 +462,6 @@ final class CoachingService {
 
         // Request a contextual follow-up offer from the model
         await requestFollowUpOffer()
-    }
-
-    /// Map task type string from prompt to DailyTaskType enum
-    private func mapTaskType(_ typeStr: String) -> DailyTaskType? {
-        switch typeStr.lowercased() {
-        case "gather": return .gatherLeads
-        case "customize": return .customizeMaterials
-        case "apply": return .submitApplication
-        case "follow_up", "followup": return .followUp
-        case "networking": return .networking
-        case "event_prep", "eventprep": return .eventPrep
-        case "debrief": return .eventDebrief
-        default: return nil
-        }
-    }
-
-    /// Save parsed daily tasks, clearing any existing LLM-generated tasks for today
-    private func saveDailyTasks(_ tasks: [DailyTask]) {
-        guard !tasks.isEmpty else { return }
-
-        // Clear existing LLM-generated tasks for today
-        for existingTask in dailyTaskStore.todaysTasks where existingTask.isLLMGenerated {
-            dailyTaskStore.delete(existingTask)
-        }
-
-        // Add new tasks
-        dailyTaskStore.addMultiple(tasks)
-
-        Logger.info("Coaching: Saved \(tasks.count) daily tasks", category: .ai)
     }
 
     /// Request the model to offer a contextual follow-up action
@@ -910,7 +687,10 @@ final class CoachingService {
                     let toolCallId = toolCall.id ?? UUID().uuidString
 
                     if toolName == CoachingToolSchemas.updateDailyTasksToolName {
-                        handleUpdateDailyTasksToolCall(arguments: toolCall.function.arguments)
+                        _ = taskGenerator.handleUpdateDailyTasksToolCall(
+                            arguments: toolCall.function.arguments,
+                            session: currentSession
+                        )
                         // Send acknowledgment
                         llmService.addToolResult(
                             conversationId: convId,
@@ -928,141 +708,6 @@ final class CoachingService {
         }
 
         await completeSession()
-    }
-
-    /// Handle the update_daily_tasks tool call and save tasks
-    private func handleUpdateDailyTasksToolCall(arguments: String) {
-        let json = JSON(parseJSON: arguments)
-        let tasksArray = json["tasks"].arrayValue
-
-        var tasks: [DailyTask] = []
-        for taskJSON in tasksArray {
-            let taskTypeStr = taskJSON["task_type"].stringValue
-            guard let taskType = mapTaskType(taskTypeStr) else {
-                Logger.warning("Coaching: Unknown task type '\(taskTypeStr)'", category: .ai)
-                continue
-            }
-
-            let title = taskJSON["title"].stringValue
-            guard !title.isEmpty else { continue }
-
-            let task = DailyTask()
-            task.taskType = taskType
-            task.title = title
-            task.taskDescription = taskJSON["description"].string
-            task.priority = taskJSON["priority"].intValue
-            task.estimatedMinutes = taskJSON["estimated_minutes"].int
-            task.isLLMGenerated = true
-
-            // Handle related_id if present
-            if let relatedIdStr = taskJSON["related_id"].string,
-               let relatedId = UUID(uuidString: relatedIdStr) {
-                switch taskType {
-                case .gatherLeads:
-                    task.relatedJobSourceId = relatedId
-                case .customizeMaterials, .submitApplication, .followUp:
-                    task.relatedJobAppId = relatedId
-                case .networking:
-                    task.relatedContactId = relatedId
-                case .eventPrep, .eventDebrief:
-                    task.relatedEventId = relatedId
-                }
-            }
-
-            tasks.append(task)
-        }
-
-        if !tasks.isEmpty {
-            saveDailyTasks(tasks)
-            currentSession?.generatedTaskCount = tasks.count
-            Logger.info("📋 Saved \(tasks.count) daily tasks from coaching", category: .ai)
-        } else {
-            Logger.warning("No valid tasks found in update_daily_tasks call", category: .ai)
-        }
-    }
-
-    // MARK: - Context Building
-
-    /// Build formatted dossier context from dossier entries
-    private func buildDossierContext() -> String {
-        guard !dossierEntries.isEmpty else {
-            return "No dossier entries available yet."
-        }
-
-        var sections: [String] = []
-        for entry in dossierEntries {
-            let section = entry["section"].stringValue
-            let value = entry["value"].stringValue
-            if !section.isEmpty && !value.isEmpty {
-                sections.append("**\(section)**: \(value)")
-            }
-        }
-
-        return sections.isEmpty ? "No dossier entries available yet." : sections.joined(separator: "\n")
-    }
-
-    /// Build list of available knowledge cards with metadata
-    private func buildKnowledgeCardsList() -> String {
-        guard !knowledgeCards.isEmpty else {
-            return "No knowledge cards available."
-        }
-
-        var lines: [String] = []
-        for card in knowledgeCards {
-            var line = "- ID: `\(card.id.uuidString)` | **\(card.title)**"
-            if let cardType = card.cardType, !cardType.isEmpty {
-                line += " (\(cardType))"
-            }
-            if let organization = card.organization, !organization.isEmpty {
-                line += " @ \(organization)"
-            }
-            if let timePeriod = card.timePeriod, !timePeriod.isEmpty {
-                line += " | \(timePeriod)"
-            }
-            line += " | \(card.wordCount) words"
-            lines.append(line)
-        }
-
-        return lines.joined(separator: "\n")
-    }
-
-    /// Build list of active job applications (identified through applying stages)
-    private func buildActiveJobAppsList() -> String {
-        let activeStatuses: [Statuses] = [.new, .queued, .inProgress, .submitted, .interview, .offer]
-        let activeApps = jobAppStore.jobApps.filter { activeStatuses.contains($0.status) }
-
-        guard !activeApps.isEmpty else {
-            return "No active job applications."
-        }
-
-        var lines: [String] = []
-        for app in activeApps.prefix(20) {  // Limit to 20 to avoid overwhelming context
-            var line = "- ID: `\(app.id.uuidString)` | **\(app.companyName)** - \(app.jobPosition)"
-            line += " | Status: \(app.status.displayName)"
-            if let appliedDate = app.appliedDate {
-                let formatter = DateFormatter()
-                formatter.dateStyle = .short
-                line += " | Applied: \(formatter.string(from: appliedDate))"
-            }
-            lines.append(line)
-        }
-
-        if activeApps.count > 20 {
-            lines.append("... and \(activeApps.count - 20) more active applications")
-        }
-
-        return lines.joined(separator: "\n")
-    }
-
-    // MARK: - Prompt Loading
-
-    private func loadPromptTemplate(named name: String) -> String {
-        guard let url = Bundle.main.url(forResource: name, withExtension: "txt", subdirectory: "Prompts"),
-              let content = try? String(contentsOf: url, encoding: .utf8) else {
-            Logger.error("🚨 Failed to load prompt template: \(name)")
-            return ""
-        }
-        return content
     }
 
     // MARK: - Task Regeneration
@@ -1084,7 +729,7 @@ final class CoachingService {
         Logger.info("🔄 Regenerating \(category.displayName) tasks with feedback", category: .ai)
 
         // Build the prompt with context
-        let prompt = buildRegenerationPrompt(
+        let prompt = taskGenerator.buildRegenerationPrompt(
             category: category,
             feedback: feedback,
             coachingRecommendations: session.recommendations,
@@ -1108,97 +753,8 @@ final class CoachingService {
         )
 
         // Clear existing tasks for this category and add new ones
-        replaceTasksForCategory(category, with: response.tasks)
+        taskGenerator.replaceTasksForCategory(category, with: response.tasks)
 
         Logger.info("✅ Regenerated \(response.tasks.count) \(category.displayName) tasks", category: .ai)
-    }
-
-    private func buildRegenerationPrompt(
-        category: TaskCategory,
-        feedback: String,
-        coachingRecommendations: String,
-        activitySummary: String
-    ) -> String {
-        """
-        # Task Regeneration Request
-
-        ## Category
-        \(category.displayName) tasks
-
-        ## User Feedback
-        The user wants different suggestions because: \(feedback)
-
-        ## Today's Coaching Context
-        \(coachingRecommendations)
-
-        ## Activity Summary
-        \(activitySummary)
-
-        ## Task Types to Generate
-        Only use these task types for \(category.displayName):
-        \(category.taskTypes.map { "- \($0)" }.joined(separator: "\n"))
-
-        ## Instructions
-        Generate 2-5 new tasks for the \(category.displayName) category that address the user's feedback.
-        Be specific and actionable. Consider the coaching context when making suggestions.
-        """
-    }
-
-    private func replaceTasksForCategory(_ category: TaskCategory, with taskJSONs: [TaskJSON]) {
-        // Delete existing tasks for this category (only LLM-generated ones)
-        let today = Calendar.current.startOfDay(for: Date())
-        let existingTasks = dailyTaskStore.allTasks.filter { task in
-            Calendar.current.isDate(task.createdAt, inSameDayAs: today) &&
-            category.dailyTaskTypes.contains(task.taskType) &&
-            task.isLLMGenerated
-        }
-
-        for task in existingTasks {
-            dailyTaskStore.delete(task)
-        }
-
-        // Add new tasks
-        for taskJSON in taskJSONs {
-            guard let taskType = mapTaskType(taskJSON.taskType) else { continue }
-
-            let task = DailyTask(type: taskType, title: taskJSON.title, description: taskJSON.description)
-            task.priority = taskJSON.priority
-            task.estimatedMinutes = taskJSON.estimatedMinutes
-            task.relatedJobAppId = taskJSON.relatedId.flatMap { UUID(uuidString: $0) }
-            task.isLLMGenerated = true
-            dailyTaskStore.add(task)
-        }
-    }
-
-    private func buildSystemPrompt(
-        activitySummary: String,
-        recentHistory: String,
-        dossierContext: String,
-        knowledgeCardsList: String,
-        activeJobApps: String
-    ) -> String {
-        let preferences = preferencesStore.current()
-
-        var template = loadPromptTemplate(named: "discovery_coaching_system")
-
-        let substitutions: [String: String] = [
-            "{{ACTIVITY_SUMMARY}}": activitySummary,
-            "{{RECENT_HISTORY}}": recentHistory,
-            "{{TARGET_SECTORS}}": preferences.targetSectors.joined(separator: ", "),
-            "{{PRIMARY_LOCATION}}": preferences.primaryLocation,
-            "{{REMOTE_ACCEPTABLE}}": preferences.remoteAcceptable ? "Yes" : "No",
-            "{{WEEKLY_APPLICATION_TARGET}}": String(preferences.weeklyApplicationTarget),
-            "{{WEEKLY_NETWORKING_TARGET}}": String(preferences.weeklyNetworkingTarget),
-            "{{COMPANY_SIZE_PREFERENCE}}": preferences.companySizePreference.rawValue,
-            "{{DOSSIER_CONTEXT}}": dossierContext,
-            "{{KNOWLEDGE_CARDS_LIST}}": knowledgeCardsList,
-            "{{ACTIVE_JOB_APPS}}": activeJobApps
-        ]
-
-        for (placeholder, value) in substitutions {
-            template = template.replacingOccurrences(of: placeholder, with: value)
-        }
-
-        return template
     }
 }
