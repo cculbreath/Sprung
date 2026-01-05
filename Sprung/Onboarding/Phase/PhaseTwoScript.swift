@@ -54,7 +54,7 @@ struct PhaseTwoScript: PhaseScript {
                         "objective": OnboardingObjectiveId.skeletonTimelineComplete.rawValue,
                         "upload_type": "resume"
                     ]
-                    return [.developerMessage(title: title, details: details, payload: nil)]
+                    return [.developerMessage(title: title, details: details, payload: nil, toolChoice: OnboardingToolName.getUserUpload.rawValue)]
                 },
                 onComplete: { context in
                     let title = """

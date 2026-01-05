@@ -9,8 +9,8 @@ import Foundation
 // Helper view for creating a resume
 struct CreateResumeView: View {
     @Environment(TemplateStore.self) private var templateStore: TemplateStore
-    @Environment(ResRefStore.self) private var resRefStore: ResRefStore
-    var onCreateResume: (Template, [ResRef]) -> Void
+    @Environment(KnowledgeCardStore.self) private var knowledgeCardStore: KnowledgeCardStore
+    var onCreateResume: (Template, [KnowledgeCard]) -> Void
     @State private var selectedTemplateID: UUID?
     @Environment(\.dismiss) private var dismiss
     var body: some View {
@@ -71,7 +71,7 @@ struct CreateResumeView: View {
                         )
                         return
                     }
-                    onCreateResume(selectedTemplate, resRefStore.resRefs)
+                    onCreateResume(selectedTemplate, knowledgeCardStore.knowledgeCards)
                     dismiss()
                 }) {
                     HStack {

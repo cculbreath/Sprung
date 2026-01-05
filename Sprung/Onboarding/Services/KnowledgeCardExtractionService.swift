@@ -194,3 +194,10 @@ actor KnowledgeCardExtractionService {
         }
     }
 }
+
+// MARK: - Response Types
+
+/// Response type for knowledge card extraction
+struct KnowledgeCardExtractionResponse: Codable {
+    let cards: [KnowledgeCard]
+}

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// View that displays the aggregated narrative cards for review before generation.
+/// View that displays pending knowledge cards for review before approval.
 struct KnowledgeCardCollectionView: View {
     let coordinator: OnboardingInterviewCoordinator
     let onGenerateCards: () -> Void
@@ -8,8 +8,9 @@ struct KnowledgeCardCollectionView: View {
 
     @State private var selectedCardId: UUID?
 
-    private var narrativeCards: [KnowledgeCard] {
-        coordinator.ui.aggregatedNarrativeCards
+    /// Pending cards from SwiftData store (not yet approved)
+    private var pendingCards: [KnowledgeCard] {
+        coordinator.knowledgeCardStore.pendingCards
     }
 
     private var isReadyForGeneration: Bool {
@@ -24,15 +25,15 @@ struct KnowledgeCardCollectionView: View {
         coordinator.ui.isGeneratingCards
     }
 
-    private var includedCardCount: Int {
-        narrativeCards.count - coordinator.ui.excludedCardIds.count
+    private var pendingCardCount: Int {
+        pendingCards.count
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             headerSection
 
-            if narrativeCards.isEmpty {
+            if pendingCards.isEmpty {
                 emptyState
             } else {
                 cardListSection
@@ -64,8 +65,8 @@ struct KnowledgeCardCollectionView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
                 Spacer()
-                if !narrativeCards.isEmpty {
-                    Text("\(narrativeCards.count) card\(narrativeCards.count == 1 ? "" : "s")")
+                if !pendingCards.isEmpty {
+                    Text("\(pendingCards.count) card\(pendingCards.count == 1 ? "" : "s")")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -93,25 +94,14 @@ struct KnowledgeCardCollectionView: View {
     private var cardListSection: some View {
         ScrollView {
             VStack(spacing: 4) {
-                ForEach(narrativeCards) { card in
-                    let isExcluded = coordinator.ui.excludedCardIds.contains(card.id.uuidString)
-
+                ForEach(pendingCards) { card in
                     NarrativeCardRow(
                         card: card,
                         isGenerating: isGenerating,
                         showAssignments: isReadyForGeneration,
-                        isExcluded: isExcluded,
                         isSelected: selectedCardId == card.id,
-                        onToggleExclude: {
-                            if isExcluded {
-                                coordinator.ui.excludedCardIds.remove(card.id.uuidString)
-                            } else {
-                                coordinator.ui.excludedCardIds.insert(card.id.uuidString)
-                            }
-                            // Persist exclusion changes
-                            Task {
-                                await coordinator.eventBus.publish(.excludedCardIdsChanged(excludedIds: coordinator.ui.excludedCardIds))
-                            }
+                        onDelete: {
+                            coordinator.knowledgeCardStore.delete(card)
                         },
                         onSelect: {
                             withAnimation(.easeInOut(duration: 0.2)) {
@@ -130,7 +120,7 @@ struct KnowledgeCardCollectionView: View {
             Button(action: onGenerateCards) {
                 HStack {
                     Image(systemName: "checkmark.circle.fill")
-                    Text("Approve & Create \(includedCardCount) Card\(includedCardCount == 1 ? "" : "s")")
+                    Text("Approve & Create \(pendingCardCount) Card\(pendingCardCount == 1 ? "" : "s")")
                 }
                 .font(.caption.weight(.semibold))
                 .frame(maxWidth: .infinity)
@@ -138,9 +128,9 @@ struct KnowledgeCardCollectionView: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
             .tint(.green)
-            .disabled(includedCardCount == 0 || isMerging)
+            .disabled(pendingCardCount == 0 || isMerging)
 
-            Text("Click cards above to review details, use trash to exclude")
+            Text("Click cards above to review details, use trash to remove")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -170,9 +160,8 @@ private struct NarrativeCardRow: View {
     let card: KnowledgeCard
     let isGenerating: Bool
     let showAssignments: Bool
-    let isExcluded: Bool
     let isSelected: Bool
-    let onToggleExclude: () -> Void
+    let onDelete: () -> Void
     let onSelect: () -> Void
 
     var body: some View {
@@ -189,9 +178,7 @@ private struct NarrativeCardRow: View {
                         HStack {
                             Text(card.title)
                                 .font(.caption.weight(.medium))
-                                .foregroundStyle(isExcluded ? .secondary : .primary)
-                                .strikethrough(isExcluded)
-                                .italic(isExcluded)
+                                .foregroundStyle(.primary)
                                 .lineLimit(1)
 
                             Spacer()
@@ -203,8 +190,6 @@ private struct NarrativeCardRow: View {
                             Text(dateRange)
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
-                                .strikethrough(isExcluded)
-                                .italic(isExcluded)
                                 .lineLimit(1)
                         }
                     }
@@ -216,15 +201,15 @@ private struct NarrativeCardRow: View {
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
 
-                // Exclude/Restore button (only when ready for generation)
+                // Delete button (only when ready for generation)
                 if showAssignments && !isGenerating {
-                    Button(action: onToggleExclude) {
-                        Image(systemName: isExcluded ? "arrow.uturn.backward" : "trash")
+                    Button(action: onDelete) {
+                        Image(systemName: "trash")
                             .font(.caption)
-                            .foregroundColor(isExcluded ? .blue : .red.opacity(0.7))
+                            .foregroundColor(.red.opacity(0.7))
                     }
                     .buttonStyle(.plain)
-                    .help(isExcluded ? "Restore this card" : "Exclude this card")
+                    .help("Remove this card")
                 }
             }
 
@@ -243,7 +228,6 @@ private struct NarrativeCardRow: View {
             RoundedRectangle(cornerRadius: 6)
                 .stroke(borderColor, lineWidth: 1)
         )
-        .opacity(isExcluded ? 0.6 : 1.0)
     }
 
     @ViewBuilder
@@ -267,6 +251,7 @@ private struct NarrativeCardRow: View {
         case .project: typeName = "Project"; typeColor = .green
         case .achievement: typeName = "Achievement"; typeColor = .yellow
         case .education: typeName = "Education"; typeColor = .cyan
+        case nil: typeName = "General"; typeColor = .gray
         }
         return Text(typeName)
             .font(.caption2)

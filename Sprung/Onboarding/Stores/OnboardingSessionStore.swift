@@ -260,22 +260,6 @@ final class OnboardingSessionStore: SwiftDataStore {
         session.mergedInventoryJSON
     }
 
-    /// Update excluded card IDs
-    func updateExcludedCardIds(_ session: OnboardingSession, excludedIds: Set<String>) {
-        session.excludedCardIdsCSV = excludedIds.sorted().joined(separator: ",")
-        session.lastActiveAt = Date()
-        saveContext()
-        Logger.debug("Session excluded card IDs updated: \(excludedIds.count) excluded", category: .ai)
-    }
-
-    /// Get excluded card IDs
-    func getExcludedCardIds(_ session: OnboardingSession) -> Set<String> {
-        guard let csv = session.excludedCardIdsCSV, !csv.isEmpty else {
-            return []
-        }
-        return Set(csv.split(separator: ",").map { String($0) })
-    }
-
     // MARK: - UI State Management
 
     /// Update document collection active state

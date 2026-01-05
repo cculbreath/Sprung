@@ -43,7 +43,7 @@ enum CoverLetterPrompts {
                 if resRefs.isEmpty {
                     resRefString = ""
                 } else {
-                    resRefString = resRefs.map { $0.name + ":\n" + $0.content + "\n\n" }.joined()
+                    resRefString = resRefs.map { $0.title + ":\n" + $0.narrative + "\n\n" }.joined()
                 }
             }
             prompt = """

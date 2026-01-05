@@ -4,19 +4,19 @@ import SwiftUI
 struct KnowledgeTabContent: View {
     let coordinator: OnboardingInterviewCoordinator
     @State private var expandedCardIds: Set<UUID> = []
-    @State private var editingCard: ResRef?
+    @State private var editingCard: KnowledgeCard?
 
-    private var allCards: [ResRef] {
+    private var allCards: [KnowledgeCard] {
         coordinator.allKnowledgeCards
     }
 
-    private var resRefStore: ResRefStore {
-        coordinator.getResRefStore()
+    private var knowledgeCardStore: KnowledgeCardStore {
+        coordinator.getKnowledgeCardStore()
     }
 
     /// Group cards by type for organized display
-    private var cardsByType: [(type: String, cards: [ResRef])] {
-        let grouped = Dictionary(grouping: allCards) { $0.cardType?.lowercased() ?? "other" }
+    private var cardsByType: [(type: String, cards: [KnowledgeCard])] {
+        let grouped = Dictionary(grouping: allCards) { $0.cardType?.rawValue.lowercased() ?? "other" }
         let order = ["employment", "job", "project", "education", "skill", "other"]
         return order.compactMap { type in
             if let cards = grouped[type], !cards.isEmpty {
@@ -42,8 +42,8 @@ struct KnowledgeTabContent: View {
             KnowledgeCardEditSheet(
                 card: card,
                 onSave: { updated in
-                    resRefStore.updateResRef(updated)
-                    Task { await coordinator.syncResRefToFilesystem(updated) }
+                    knowledgeCardStore.update(updated)
+                    Task { await coordinator.syncKnowledgeCardToFilesystem(updated) }
                     editingCard = nil
                 },
                 onCancel: { editingCard = nil }
@@ -80,7 +80,7 @@ struct KnowledgeTabContent: View {
         }
     }
 
-    private func cardGroupSection(type: String, cards: [ResRef]) -> some View {
+    private func cardGroupSection(type: String, cards: [KnowledgeCard]) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             // Group header
             HStack {
@@ -105,7 +105,7 @@ struct KnowledgeTabContent: View {
         }
     }
 
-    private func expandableCardRow(_ card: ResRef) -> some View {
+    private func expandableCardRow(_ card: KnowledgeCard) -> some View {
         let isExpanded = expandedCardIds.contains(card.id)
 
         return VStack(alignment: .leading, spacing: 0) {
@@ -126,7 +126,7 @@ struct KnowledgeTabContent: View {
                         .frame(width: 12)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(card.name)
+                        Text(card.title)
                             .font(.subheadline.weight(.medium))
                             .lineLimit(1)
                             .foregroundStyle(.primary)
@@ -161,19 +161,19 @@ struct KnowledgeTabContent: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(colorFor(card.cardType?.lowercased() ?? "other").opacity(isExpanded ? 0.4 : 0.2), lineWidth: 1)
+                .stroke(colorFor(card.cardType?.rawValue.lowercased() ?? "other").opacity(isExpanded ? 0.4 : 0.2), lineWidth: 1)
         )
     }
 
-    private func expandedCardContent(_ card: ResRef) -> some View {
+    private func expandedCardContent(_ card: KnowledgeCard) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Divider()
                 .padding(.horizontal, 10)
 
             // Metadata row
-            if card.timePeriod != nil || card.location != nil {
+            if card.dateRange != nil || card.location != nil {
                 HStack(spacing: 12) {
-                    if let period = card.timePeriod {
+                    if let period = card.dateRange {
                         Label(period, systemImage: "calendar")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
@@ -215,8 +215,8 @@ struct KnowledgeTabContent: View {
             }
 
             // Content preview
-            if !card.content.isEmpty {
-                Text(card.content)
+            if !card.narrative.isEmpty {
+                Text(card.narrative)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(4)
@@ -236,7 +236,7 @@ struct KnowledgeTabContent: View {
 
                 Spacer()
 
-                let wordCount = card.content.split(separator: " ").count
+                let wordCount = card.narrative.split(separator: " ").count
                 Text("\(wordCount) words")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)

@@ -52,7 +52,7 @@ struct PhaseOneScript: PhaseScript {
                 },
                 onComplete: { context in
                     let title = """
-                        Profile validated. Optionally offer profile photo upload using get_user_upload with \
+                        Profile validated. Now offer profile photo upload. Call get_user_upload with \
                         target_key="basics.image" and upload_type="photo". If user declines or after photo is uploaded, \
                         transition to writing samples. The sidebar shows a writing sample upload panel. \
                         Encourage uploading MULTIPLE writing samples.
@@ -60,10 +60,10 @@ struct PhaseOneScript: PhaseScript {
                     let details = [
                         "next_objective": OnboardingObjectiveId.writingSamplesCollected.rawValue,
                         "status": context.status.rawValue,
-                        "optional_step": "profile_photo",
+                        "step": "profile_photo",
                         "note": "writing_sample_panel_visible_in_sidebar"
                     ]
-                    return [.developerMessage(title: title, details: details, payload: nil)]
+                    return [.developerMessage(title: title, details: details, payload: nil, toolChoice: OnboardingToolName.getUserUpload.rawValue)]
                 }
             ),
 

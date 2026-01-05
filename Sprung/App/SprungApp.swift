@@ -83,7 +83,7 @@ struct SprungApp: App {
                     appDelegate.onboardingCoordinator = appDependencies.onboardingCoordinator
                     appDelegate.searchOpsCoordinator = appDependencies.searchOpsCoordinator
                     appDelegate.coverRefStore = appDependencies.coverRefStore
-                    appDelegate.resRefStore = appDependencies.resRefStore
+                    appDelegate.knowledgeCardStore = appDependencies.knowledgeCardStore
                 }
         }
         .modelContainer(modelContainer)
@@ -332,7 +332,7 @@ private extension SprungApp {
             for:
                 JobApp.self,
                 Resume.self,
-                ResRef.self,
+                KnowledgeCard.self,
                 TreeNode.self,
                 FontSizeNode.self,
                 CoverLetter.self,

@@ -218,7 +218,7 @@ class JobRecommendationService {
         if enabledSources.isEmpty {
             return ""
         } else {
-            return enabledSources.map { $0.name + ":\n" + $0.content + "\n\n" }.joined()
+            return enabledSources.map { $0.title + ":\n" + $0.narrative + "\n\n" }.joined()
         }
     }
     /// Build cover letter background facts from job applications

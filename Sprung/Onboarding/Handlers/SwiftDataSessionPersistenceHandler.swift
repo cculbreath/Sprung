@@ -255,9 +255,6 @@ final class SwiftDataSessionPersistenceHandler {
         case .mergedInventoryStored(let inventoryJSON):
             sessionStore.updateMergedInventory(session, inventoryJSON: inventoryJSON)
 
-        case .excludedCardIdsChanged(let excludedIds):
-            sessionStore.updateExcludedCardIds(session, excludedIds: excludedIds)
-
         default:
             break
         }
@@ -528,11 +525,6 @@ final class SwiftDataSessionPersistenceHandler {
             generatedAt: Date(),
             sourceDocumentIds: sourceDocumentIds
         )
-    }
-
-    /// Get restored excluded card IDs
-    func getRestoredExcludedCardIds(_ session: OnboardingSession) -> Set<String> {
-        sessionStore.getExcludedCardIds(session)
     }
 
     /// Get restored document collection active state

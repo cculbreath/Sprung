@@ -24,7 +24,7 @@ final class ResStore: SwiftDataStore {
         self.experienceDefaultsStore = experienceDefaultsStore
     }
     @discardableResult
-    func create(jobApp: JobApp, sources: [ResRef], template: Template) -> Resume? {
+    func create(jobApp: JobApp, sources: [KnowledgeCard], template: Template) -> Resume? {
         // ModelContext is guaranteed to exist
         let modelContext = self.modelContext
         let resume = Resume(jobApp: jobApp, enabledSources: sources, template: template)

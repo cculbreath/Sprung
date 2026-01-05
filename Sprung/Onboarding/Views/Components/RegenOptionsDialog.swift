@@ -14,8 +14,8 @@ struct RegenOptionsDialog: View {
 
     struct RegenOperations {
         var summary: Bool = true
-        var knowledgeExtraction: Bool = true
-        var remerge: Bool = true
+        var regenerateSkills: Bool = true
+        var regenerateNarrativeCards: Bool = true
         var dedupeNarratives: Bool = false
     }
 
@@ -66,7 +66,8 @@ struct RegenOptionsDialog: View {
             GroupBox("Operations (per selected artifact)") {
                 VStack(alignment: .leading, spacing: 8) {
                     Toggle("Regenerate Summary", isOn: $operations.summary)
-                    Toggle("Regenerate Knowledge Extraction", isOn: $operations.knowledgeExtraction)
+                    Toggle("Regenerate Skills", isOn: $operations.regenerateSkills)
+                    Toggle("Regenerate Knowledge Cards", isOn: $operations.regenerateNarrativeCards)
                 }
                 .padding(8)
             }
@@ -74,9 +75,8 @@ struct RegenOptionsDialog: View {
             // Global options
             GroupBox("After Completion") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Toggle("Run Card Merge", isOn: $operations.remerge)
                     Toggle("Dedupe Narratives", isOn: $operations.dedupeNarratives)
-                        .help("Run LLM-powered deduplication on narrative cards after merge")
+                        .help("Run LLM-powered deduplication on narrative cards after regeneration")
                 }
                 .padding(8)
             }
@@ -93,7 +93,7 @@ struct RegenOptionsDialog: View {
                     onConfirm(selectedArtifactIds, operations)
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(selectedArtifactIds.isEmpty || (!operations.summary && !operations.knowledgeExtraction))
+                .disabled(selectedArtifactIds.isEmpty || (!operations.summary && !operations.regenerateSkills && !operations.regenerateNarrativeCards))
             }
         }
         .padding()

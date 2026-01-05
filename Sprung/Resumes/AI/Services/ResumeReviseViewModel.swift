@@ -139,7 +139,7 @@ class ResumeReviseViewModel {
         reasoningStreamManager: ReasoningStreamManager,
         exportCoordinator: ResumeExportCoordinator,
         applicantProfileStore: ApplicantProfileStore,
-        resRefStore: ResRefStore,
+        knowledgeCardStore: KnowledgeCardStore,
         guidanceStore: InferenceGuidanceStore? = nil,
         validationService: RevisionValidationService? = nil,
         streamingService: RevisionStreamingService? = nil,
@@ -173,7 +173,7 @@ class ResumeReviseViewModel {
             exportCoordinator: exportCoordinator,
             streamingService: streaming,
             applicantProfileStore: applicantProfileStore,
-            resRefStore: resRefStore,
+            knowledgeCardStore: knowledgeCardStore,
             toolRunner: self.toolRunner,
             guidanceStore: guidanceStore
         )
@@ -187,7 +187,7 @@ class ResumeReviseViewModel {
             streamingService: streaming,
             completionService: completionSvc,
             applicantProfileStore: applicantProfileStore,
-            resRefStore: resRefStore,
+            knowledgeCardStore: knowledgeCardStore,
             toolRunner: self.toolRunner,
             phaseReviewManager: self.phaseReviewManager,
             guidanceStore: guidanceStore,

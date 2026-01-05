@@ -35,12 +35,12 @@ struct UnifiedReferenceBrowserOverlay: View {
 
     @State private var selectedTab: Tab = .knowledge
 
-    // Knowledge Cards (ResRef)
-    @Binding var knowledgeCards: [ResRef]
-    let resRefStore: ResRefStore
-    let onKnowledgeCardUpdated: (ResRef) -> Void
-    let onKnowledgeCardDeleted: (ResRef) -> Void
-    let onKnowledgeCardAdded: (ResRef) -> Void
+    // Knowledge Cards
+    @Binding var knowledgeCards: [KnowledgeCard]
+    let knowledgeCardStore: KnowledgeCardStore
+    let onKnowledgeCardUpdated: (KnowledgeCard) -> Void
+    let onKnowledgeCardDeleted: (KnowledgeCard) -> Void
+    let onKnowledgeCardAdded: (KnowledgeCard) -> Void
 
     // Writing Samples (CoverRef)
     @Binding var writingSamples: [CoverRef]
@@ -155,7 +155,7 @@ struct UnifiedReferenceBrowserOverlay: View {
         case .knowledge:
             KnowledgeCardsBrowserTab(
                 cards: $knowledgeCards,
-                resRefStore: resRefStore,
+                knowledgeCardStore: knowledgeCardStore,
                 onCardUpdated: onKnowledgeCardUpdated,
                 onCardDeleted: onKnowledgeCardDeleted,
                 onCardAdded: onKnowledgeCardAdded,
@@ -206,12 +206,12 @@ struct UnifiedReferenceBrowserOverlay: View {
 }
 
 private struct ReferenceBundleExport: Codable {
-    let knowledgeCards: [ResRef]
+    let knowledgeCards: [KnowledgeCard]
     let writingSamples: [CoverRef]
     let skillBank: SkillBank?
     let exportedAt: Date
 
-    init(knowledgeCards: [ResRef], writingSamples: [CoverRef], skillBank: SkillBank?) {
+    init(knowledgeCards: [KnowledgeCard], writingSamples: [CoverRef], skillBank: SkillBank?) {
         self.knowledgeCards = knowledgeCards
         self.writingSamples = writingSamples
         self.skillBank = skillBank

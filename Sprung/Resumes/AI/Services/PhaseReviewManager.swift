@@ -119,7 +119,7 @@ class PhaseReviewManager {
     private let exportCoordinator: ResumeExportCoordinator
     private let streamingService: RevisionStreamingService
     private let applicantProfileStore: ApplicantProfileStore
-    private let resRefStore: ResRefStore
+    private let knowledgeCardStore: KnowledgeCardStore
     private let toolRunner: ToolConversationRunner
     private let guidanceStore: InferenceGuidanceStore?
     weak var delegate: PhaseReviewDelegate?
@@ -139,7 +139,7 @@ class PhaseReviewManager {
         exportCoordinator: ResumeExportCoordinator,
         streamingService: RevisionStreamingService,
         applicantProfileStore: ApplicantProfileStore,
-        resRefStore: ResRefStore,
+        knowledgeCardStore: KnowledgeCardStore,
         toolRunner: ToolConversationRunner,
         guidanceStore: InferenceGuidanceStore? = nil
     ) {
@@ -149,7 +149,7 @@ class PhaseReviewManager {
         self.exportCoordinator = exportCoordinator
         self.streamingService = streamingService
         self.applicantProfileStore = applicantProfileStore
-        self.resRefStore = resRefStore
+        self.knowledgeCardStore = knowledgeCardStore
         self.toolRunner = toolRunner
         self.guidanceStore = guidanceStore
     }
@@ -431,7 +431,7 @@ class PhaseReviewManager {
                 resume: resume,
                 exportCoordinator: exportCoordinator,
                 applicantProfile: applicantProfileStore.currentProfile(),
-                allResRefs: resRefStore.resRefs,
+                allKnowledgeCards: knowledgeCardStore.knowledgeCards,
                 guidanceStore: guidanceStore,
                 saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
             )
@@ -644,7 +644,7 @@ class PhaseReviewManager {
                 resume: resume,
                 exportCoordinator: exportCoordinator,
                 applicantProfile: applicantProfileStore.currentProfile(),
-                allResRefs: resRefStore.resRefs,
+                allKnowledgeCards: knowledgeCardStore.knowledgeCards,
                 guidanceStore: guidanceStore,
                 saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
             )
@@ -875,7 +875,7 @@ class PhaseReviewManager {
                 resume: resume,
                 exportCoordinator: exportCoordinator,
                 applicantProfile: applicantProfileStore.currentProfile(),
-                allResRefs: resRefStore.resRefs,
+                allKnowledgeCards: knowledgeCardStore.knowledgeCards,
                 guidanceStore: guidanceStore,
                 saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
             )

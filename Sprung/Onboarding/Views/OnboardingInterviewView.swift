@@ -111,14 +111,14 @@ struct OnboardingInterviewView: View {
                 .blur(radius: bottomBarAppeared ? 0 : 10)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 4)
         }
         // Uses system window shadow via BorderlessOverlayWindow.hasShadow = true
         // No SwiftUI shadow overlay needed - system shadow has proper hit testing
         let styledContent = contentStack
             .frame(minWidth: 1060)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 2)
+            .padding(.vertical, 10)
             .clipShape(cardShape)
             .background(cardShape.fill(.thickMaterial))
             // Window entrance animation

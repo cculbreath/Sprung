@@ -235,16 +235,16 @@ import SwiftUI
     var queryString: String = ""
     let res: Resume
     private let exportCoordinator: ResumeExportCoordinator
-    private let allResRefs: [ResRef]
+    private let allKnowledgeCards: [KnowledgeCard]
     private let guidanceStore: InferenceGuidanceStore?
     // MARK: - Derived Properties
     var backgroundDocs: String {
-        if allResRefs.isEmpty {
+        if allKnowledgeCards.isEmpty {
             Logger.debug("⚠️ [ResumeQuery] No knowledge cards available")
             return "(No background documents/knowledge cards available)"
         } else {
-            Logger.debug("📚 [ResumeQuery] Including \(allResRefs.count) knowledge cards in prompt")
-            return allResRefs.map { $0.name + ":\n" + $0.content + "\n\n" }.joined()
+            Logger.debug("📚 [ResumeQuery] Including \(allKnowledgeCards.count) knowledge cards in prompt")
+            return allKnowledgeCards.map { $0.title + ":\n" + $0.narrative + "\n\n" }.joined()
         }
     }
     var resumeText: String {
@@ -286,14 +286,14 @@ import SwiftUI
         resume: Resume,
         exportCoordinator: ResumeExportCoordinator,
         applicantProfile: ApplicantProfile,
-        allResRefs: [ResRef],
+        allKnowledgeCards: [KnowledgeCard],
         guidanceStore: InferenceGuidanceStore? = nil,
         saveDebugPrompt: Bool = true
     ) {
         // Optionally let users pass in the debug flag during initialization
         res = resume
         self.exportCoordinator = exportCoordinator
-        self.allResRefs = allResRefs
+        self.allKnowledgeCards = allKnowledgeCards
         self.guidanceStore = guidanceStore
         applicant = Applicant(profile: applicantProfile)
         self.saveDebugPrompt = saveDebugPrompt
@@ -422,7 +422,7 @@ import SwiftUI
                 extractedRequirements,
                 fallbackJobListing: jobListing
             )
-            let cardsToInclude = selectCardsForContext(allCards: allResRefs, jobApp: res.jobApp)
+            let cardsToInclude = selectCardsForContext(allCards: allKnowledgeCards, jobApp: res.jobApp)
             let filteredCards = formatCardsForPrompt(cardsToInclude)
 
             let prompt = loadPromptTemplateWithSubstitutions(named: "resume_phase_review_v2", substitutions: [
@@ -511,7 +511,7 @@ import SwiftUI
     // MARK: - Knowledge Card Selection
 
     /// Select cards based on token limit setting
-    private func selectCardsForContext(allCards: [ResRef], jobApp: JobApp?) -> [ResRef] {
+    private func selectCardsForContext(allCards: [KnowledgeCard], jobApp: JobApp?) -> [KnowledgeCard] {
         let tokenLimit = UserDefaults.standard.integer(forKey: "knowledgeCardTokenLimit")
         guard tokenLimit > 0 else { return allCards }
 
@@ -535,13 +535,13 @@ import SwiftUI
     }
 
     /// Format cards for prompt inclusion
-    private func formatCardsForPrompt(_ cards: [ResRef]) -> String {
+    private func formatCardsForPrompt(_ cards: [KnowledgeCard]) -> String {
         if cards.isEmpty {
             return "(No knowledge cards available)"
         }
 
         return cards.map { card in
-            "### \(card.name)\n\(card.content)"
+            "### \(card.title)\n\(card.narrative)"
         }.joined(separator: "\n\n---\n\n")
     }
 

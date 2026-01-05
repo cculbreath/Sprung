@@ -10,7 +10,7 @@ final class PhaseTransitionController {
     private let phaseRegistry: PhaseScriptRegistry
     private let artifactRecordStore: ArtifactRecordStore
     private weak var sessionPersistenceHandler: SwiftDataSessionPersistenceHandler?
-    private let resRefStore: ResRefStore
+    private let knowledgeCardStore: KnowledgeCardStore
 
     // MARK: - Initialization
     init(
@@ -19,14 +19,14 @@ final class PhaseTransitionController {
         phaseRegistry: PhaseScriptRegistry,
         artifactRecordStore: ArtifactRecordStore,
         sessionPersistenceHandler: SwiftDataSessionPersistenceHandler,
-        resRefStore: ResRefStore
+        knowledgeCardStore: KnowledgeCardStore
     ) {
         self.state = state
         self.eventBus = eventBus
         self.phaseRegistry = phaseRegistry
         self.artifactRecordStore = artifactRecordStore
         self.sessionPersistenceHandler = sessionPersistenceHandler
-        self.resRefStore = resRefStore
+        self.knowledgeCardStore = knowledgeCardStore
     }
     // MARK: - Phase Transition Handling
     func handlePhaseTransition(_ phaseName: String) async {
@@ -137,13 +137,13 @@ final class PhaseTransitionController {
             let exportRoot = try artifactRecordStore.exportArtifactsToFilesystem(session)
 
             // Also export knowledge cards to the same root
-            let resRefs = resRefStore.resRefs
-            if !resRefs.isEmpty {
-                try artifactRecordStore.exportKnowledgeCards(resRefs, to: exportRoot)
+            let knowledgeCards = knowledgeCardStore.knowledgeCards
+            if !knowledgeCards.isEmpty {
+                try artifactRecordStore.exportKnowledgeCards(knowledgeCards, to: exportRoot)
             }
 
             await ArtifactFilesystemContext.shared.setRoot(exportRoot)
-            Logger.info("📁 Artifact filesystem initialized at \(exportRoot.path) (\(resRefs.count) KCs)", category: .ai)
+            Logger.info("📁 Artifact filesystem initialized at \(exportRoot.path) (\(knowledgeCards.count) KCs)", category: .ai)
         } catch {
             Logger.error("📁 Failed to export artifacts for filesystem browsing: \(error)", category: .ai)
         }
@@ -165,17 +165,17 @@ final class PhaseTransitionController {
         }
     }
 
-    /// Export a single ResRef to the filesystem (for incremental updates when cards are created/modified).
+    /// Export a single KnowledgeCard to the filesystem (for incremental updates when cards are created/modified).
     /// Called when knowledge cards are persisted during Phase 3+.
-    func updateResRefInFilesystem(_ resRef: ResRef) async {
+    func updateKnowledgeCardInFilesystem(_ knowledgeCard: KnowledgeCard) async {
         guard let rootURL = await ArtifactFilesystemContext.shared.rootURL else {
             // Filesystem not initialized yet, nothing to update
             return
         }
 
         do {
-            try artifactRecordStore.exportSingleResRef(resRef, to: rootURL)
-            Logger.info("📁 Updated knowledge card in filesystem: \(resRef.name)", category: .ai)
+            try artifactRecordStore.exportSingleKnowledgeCard(knowledgeCard, to: rootURL)
+            Logger.info("📁 Updated knowledge card in filesystem: \(knowledgeCard.title)", category: .ai)
         } catch {
             Logger.error("📁 Failed to update knowledge card in filesystem: \(error)", category: .ai)
         }

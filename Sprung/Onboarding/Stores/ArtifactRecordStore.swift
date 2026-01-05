@@ -483,77 +483,77 @@ final class ArtifactRecordStore: SwiftDataStore {
 
     // MARK: - Knowledge Cards Export
 
-    /// Export all knowledge cards (ResRefs) to a knowledge_cards/ subdirectory.
+    /// Export all knowledge cards to a knowledge_cards/ subdirectory.
     /// Each card is exported as a markdown file with metadata and content.
-    func exportKnowledgeCards(_ resRefs: [ResRef], to directory: URL) throws {
+    func exportKnowledgeCards(_ knowledgeCards: [KnowledgeCard], to directory: URL) throws {
         let kcDir = directory.appendingPathComponent("knowledge_cards")
         try FileManager.default.createDirectory(at: kcDir, withIntermediateDirectories: true)
 
-        for resRef in resRefs {
-            try exportResRef(resRef, to: kcDir)
+        for card in knowledgeCards {
+            try exportKnowledgeCard(card, to: kcDir)
         }
 
-        Logger.info("📚 Exported \(resRefs.count) knowledge cards to filesystem", category: .ai)
+        Logger.info("📚 Exported \(knowledgeCards.count) knowledge cards to filesystem", category: .ai)
     }
 
-    /// Export a single knowledge card (ResRef) to the knowledge_cards directory.
-    func exportSingleResRef(_ resRef: ResRef, to rootDirectory: URL) throws {
+    /// Export a single knowledge card to the knowledge_cards directory.
+    func exportSingleKnowledgeCard(_ knowledgeCard: KnowledgeCard, to rootDirectory: URL) throws {
         let kcDir = rootDirectory.appendingPathComponent("knowledge_cards")
         try FileManager.default.createDirectory(at: kcDir, withIntermediateDirectories: true)
-        try exportResRef(resRef, to: kcDir)
+        try exportKnowledgeCard(knowledgeCard, to: kcDir)
     }
 
-    /// Export a ResRef to a directory as a markdown file
-    private func exportResRef(_ resRef: ResRef, to directory: URL) throws {
-        // Create a safe filename from the card name
-        let safeFilename = resRef.name
+    /// Export a KnowledgeCard to a directory as a markdown file
+    private func exportKnowledgeCard(_ card: KnowledgeCard, to directory: URL) throws {
+        // Create a safe filename from the card title
+        let safeFilename = card.title
             .replacingOccurrences(of: "/", with: "-")
             .replacingOccurrences(of: ":", with: "-")
             .prefix(50)
-        let filename = "\(safeFilename)_\(resRef.id.uuidString.prefix(8)).md"
+        let filename = "\(safeFilename)_\(card.id.uuidString.prefix(8)).md"
         let filePath = directory.appendingPathComponent(String(filename))
 
-        var content = "# \(resRef.name)\n\n"
+        var content = "# \(card.title)\n\n"
 
         // Metadata section
         content += "## Metadata\n"
-        if let cardType = resRef.cardType { content += "- **Type**: \(cardType)\n" }
-        if let org = resRef.organization, !org.isEmpty { content += "- **Organization**: \(org)\n" }
-        if let period = resRef.timePeriod, !period.isEmpty { content += "- **Time Period**: \(period)\n" }
-        if let location = resRef.location, !location.isEmpty { content += "- **Location**: \(location)\n" }
+        content += "- **Type**: \(card.cardType?.rawValue ?? "other")\n"
+        if let org = card.organization, !org.isEmpty { content += "- **Organization**: \(org)\n" }
+        if let dateRange = card.dateRange, !dateRange.isEmpty { content += "- **Date Range**: \(dateRange)\n" }
         content += "\n"
 
-        // Technologies/Skills
-        if !resRef.technologies.isEmpty {
-            content += "## Skills & Technologies\n"
-            content += resRef.technologies.joined(separator: ", ")
-            content += "\n\n"
-        }
-
-        // Summary/Content
-        if !resRef.content.isEmpty {
+        // Narrative/Summary
+        if !card.narrative.isEmpty {
             content += "## Summary\n"
-            content += resRef.content
+            content += card.narrative
             content += "\n\n"
         }
 
         // Facts
-        if !resRef.facts.isEmpty {
+        let facts = card.facts
+        if !facts.isEmpty {
             content += "## Key Facts\n"
-            for (category, facts) in resRef.factsByCategory {
+            // Group by category
+            let factsByCategory = Dictionary(grouping: facts, by: { $0.category })
+            for (category, categoryFacts) in factsByCategory.sorted(by: { $0.key < $1.key }) {
                 content += "### \(category.capitalized)\n"
-                for fact in facts {
+                for fact in categoryFacts {
                     content += "- \(fact.statement)\n"
                 }
             }
             content += "\n"
         }
 
-        // Suggested bullets
-        if !resRef.suggestedBullets.isEmpty {
-            content += "## Resume Bullets\n"
-            for bullet in resRef.suggestedBullets {
-                content += "- \(bullet)\n"
+        // Evidence anchors (source documents)
+        let anchors = card.evidenceAnchors
+        if !anchors.isEmpty {
+            content += "## Source Documents\n"
+            for anchor in anchors {
+                content += "- \(anchor.documentId)"
+                if let excerpt = anchor.verbatimExcerpt, !excerpt.isEmpty {
+                    content += ": \"\(excerpt.prefix(100))...\""
+                }
+                content += "\n"
             }
             content += "\n"
         }

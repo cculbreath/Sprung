@@ -154,9 +154,9 @@ final class PhaseScriptRegistry {
     ) async -> PhaseTransitionValidation {
         // VALIDATION: Require knowledge cards OR explicit user approval
         // Having uploaded artifacts is NOT sufficient - KC generation must succeed
-        // Query ResRefStore (SwiftData) for onboarding knowledge cards - this is the authoritative source
+        // Query KnowledgeCardStore (SwiftData) for onboarding knowledge cards - this is the authoritative source
         let knowledgeCards = await MainActor.run {
-            coordinator.getResRefStore().resRefs.filter { $0.isFromOnboarding }
+            coordinator.getKnowledgeCardStore().onboardingCards
         }
 
         if knowledgeCards.isEmpty {

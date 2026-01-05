@@ -126,8 +126,8 @@ struct ToolPaneTabsView<InterviewContent: View>: View {
             // Show total knowledge cards count
             return coordinator.allKnowledgeCards.count
         case .skills:
-            // Show total skills count from aggregated skill bank
-            return coordinator.ui.aggregatedSkillBank?.skills.count ?? 0
+            // Show approved skills count from SwiftData store
+            return coordinator.skillStore.approvedSkills.count
         case .agents:
             // Show active agents count
             return coordinator.agentActivityTracker.agents.filter { $0.status == .running }.count

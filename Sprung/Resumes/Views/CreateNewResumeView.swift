@@ -8,7 +8,7 @@ import SwiftUI
 struct CreateNewResumeView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(TemplateStore.self) private var templateStore: TemplateStore
-    @Environment(ResRefStore.self) private var resRefStore: ResRefStore
+    @Environment(KnowledgeCardStore.self) private var knowledgeCardStore: KnowledgeCardStore
     @Environment(ResStore.self) private var resStore: ResStore
     @Binding var refresh: Bool
     // State variables
@@ -108,7 +108,7 @@ struct CreateNewResumeView: View {
         }
         if resStore.create(
             jobApp: jobApp,
-            sources: resRefStore.defaultSources,
+            sources: knowledgeCardStore.defaultCards,
             template: template
         ) != nil {
             // Update UI

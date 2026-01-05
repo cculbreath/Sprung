@@ -70,14 +70,14 @@ class StandaloneKCCoordinator {
     struct AnalysisResult {
         let skillBank: SkillBank
         let newCards: [KnowledgeCard]
-        let enhancements: [(proposal: KnowledgeCard, existing: ResRef)]
+        let enhancements: [(proposal: KnowledgeCard, existing: KnowledgeCard)]
         let artifacts: [JSON]
     }
 
     // MARK: - Published State
 
     var status: Status = .idle
-    var generatedCard: ResRef?
+    var generatedCard: KnowledgeCard?
     var errorMessage: String?
 
     // MARK: - Dependencies
@@ -85,7 +85,7 @@ class StandaloneKCCoordinator {
     private let extractor: StandaloneKCExtractor
     private let analyzer: StandaloneKCAnalyzer
     private weak var llmFacade: LLMFacade?
-    private weak var resRefStore: ResRefStore?
+    private weak var knowledgeCardStore: KnowledgeCardStore?
     private weak var artifactRecordStore: ArtifactRecordStore?
 
     /// Tracks artifact IDs created during current operation (for export)
@@ -93,14 +93,14 @@ class StandaloneKCCoordinator {
 
     // MARK: - Initialization
 
-    init(llmFacade: LLMFacade?, resRefStore: ResRefStore?, artifactRecordStore: ArtifactRecordStore?) {
+    init(llmFacade: LLMFacade?, knowledgeCardStore: KnowledgeCardStore?, artifactRecordStore: ArtifactRecordStore?) {
         self.llmFacade = llmFacade
-        self.resRefStore = resRefStore
+        self.knowledgeCardStore = knowledgeCardStore
         self.artifactRecordStore = artifactRecordStore
 
         // Initialize sub-modules
         self.extractor = StandaloneKCExtractor(llmFacade: llmFacade, artifactRecordStore: artifactRecordStore)
-        self.analyzer = StandaloneKCAnalyzer(llmFacade: llmFacade, resRefStore: resRefStore)
+        self.analyzer = StandaloneKCAnalyzer(llmFacade: llmFacade, knowledgeCardStore: knowledgeCardStore)
     }
 
     // MARK: - Public API: Single Card Generation
@@ -161,28 +161,15 @@ class StandaloneKCCoordinator {
                 throw StandaloneKCError.noArtifactsExtracted
             }
 
-            // Phase 4: Convert narrative card to ResRef
+            // Phase 4: Persist knowledge card directly
             status = .generatingCard(current: 1, total: 1)
-            let converter = KnowledgeCardToResRefConverter()
+            firstCard.isFromOnboarding = false
+            knowledgeCardStore?.add(firstCard)
 
-            // Build artifact lookup
-            var artifactLookup: [String: String] = [:]
-            for artifact in allArtifacts {
-                let id = artifact["id"].stringValue
-                let filename = artifact["filename"].stringValue
-                if !id.isEmpty && !filename.isEmpty {
-                    artifactLookup[id] = filename
-                }
-            }
-
-            let resRef = converter.convert(card: firstCard, artifactLookup: artifactLookup)
-            resRef.isFromOnboarding = false
-            resRefStore?.addResRef(resRef)
-
-            self.generatedCard = resRef
+            self.generatedCard = firstCard
             status = .completed(created: 1, enhanced: 0)
 
-            Logger.info("✅ StandaloneKCCoordinator: Knowledge card created - \(resRef.name)", category: .ai)
+            Logger.info("✅ StandaloneKCCoordinator: Knowledge card created - \(firstCard.title)", category: .ai)
 
         } catch {
             let message = error.localizedDescription
@@ -262,7 +249,7 @@ class StandaloneKCCoordinator {
     /// Generate selected cards and apply enhancements.
     func generateSelected(
         newCards: [KnowledgeCard],
-        enhancements: [(proposal: KnowledgeCard, existing: ResRef)],
+        enhancements: [(proposal: KnowledgeCard, existing: KnowledgeCard)],
         artifacts: [JSON]
     ) async throws -> (created: Int, enhanced: Int) {
         guard llmFacade != nil else {
@@ -273,36 +260,23 @@ class StandaloneKCCoordinator {
         var createdCount = 0
         var enhancedCount = 0
 
-        // Build artifact lookup
-        var artifactLookup: [String: String] = [:]
-        for artifact in artifacts {
-            let id = artifact["id"].stringValue
-            let filename = artifact["filename"].stringValue
-            if !id.isEmpty && !filename.isEmpty {
-                artifactLookup[id] = filename
-            }
-        }
-
-        let converter = KnowledgeCardToResRefConverter()
-
-        // Generate new cards
+        // Generate new cards - persist directly
         for (index, card) in newCards.enumerated() {
             status = .generatingCard(current: index + 1, total: totalOperations)
 
-            let resRef = converter.convert(card: card, artifactLookup: artifactLookup)
-            resRef.isFromOnboarding = false
-            resRefStore?.addResRef(resRef)
+            card.isFromOnboarding = false
+            knowledgeCardStore?.add(card)
             createdCount += 1
-            Logger.info("✅ StandaloneKCCoordinator: Created card - \(resRef.name)", category: .ai)
+            Logger.info("✅ StandaloneKCCoordinator: Created card - \(card.title)", category: .ai)
         }
 
         // Enhance existing cards
         for (index, (proposal, existingCard)) in enhancements.enumerated() {
             status = .generatingCard(current: newCards.count + index + 1, total: totalOperations)
 
-            analyzer.enhanceResRef(existingCard, with: proposal)
+            analyzer.enhanceKnowledgeCard(existingCard, with: proposal)
             enhancedCount += 1
-            Logger.info("✅ StandaloneKCCoordinator: Enhanced card - \(existingCard.name)", category: .ai)
+            Logger.info("✅ StandaloneKCCoordinator: Enhanced card - \(existingCard.title)", category: .ai)
         }
 
         status = .completed(created: createdCount, enhanced: enhancedCount)

@@ -13,7 +13,8 @@ enum SprungSchema {
     static let models: [any PersistentModel.Type] = [
         JobApp.self,
         Resume.self,
-        ResRef.self,
+        KnowledgeCard.self,
+        Skill.self,
         TreeNode.self,
         FontSizeNode.self,
         CoverLetter.self,

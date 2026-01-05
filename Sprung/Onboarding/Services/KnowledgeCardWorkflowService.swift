@@ -2,12 +2,18 @@ import Foundation
 import SwiftyJSON
 
 /// Service responsible for knowledge card workflow: aggregation and generation.
-/// Handles the full pipeline from "Done with Uploads" through card generation.
+/// Handles the full pipeline from "Done with Uploads" through card approval.
+///
+/// Workflow:
+/// 1. User clicks "Done with Uploads" → aggregates cards/skills with isPending=true
+/// 2. User reviews pending cards, deletes unwanted ones
+/// 3. User clicks "Approve" → sets isPending=false on remaining cards
 @MainActor
 final class KnowledgeCardWorkflowService {
     private let ui: OnboardingUIState
     private let state: StateCoordinator
-    private let resRefStore: ResRefStore
+    private let knowledgeCardStore: KnowledgeCardStore
+    private let skillStore: SkillStore
     private let eventBus: EventCoordinator
     private let cardMergeService: CardMergeService
     private let chatInventoryService: ChatInventoryService?
@@ -18,14 +24,11 @@ final class KnowledgeCardWorkflowService {
     // LLM facade for prose generation (set after container init due to circular dependency)
     private var llmFacadeProvider: (() -> LLMFacade?)?
 
-    // Aggregated results from "Done with Uploads"
-    private var aggregatedSkillBank: SkillBank?
-    private var aggregatedNarrativeCards: [KnowledgeCard] = []
-
     init(
         ui: OnboardingUIState,
         state: StateCoordinator,
-        resRefStore: ResRefStore,
+        knowledgeCardStore: KnowledgeCardStore,
+        skillStore: SkillStore,
         eventBus: EventCoordinator,
         cardMergeService: CardMergeService,
         chatInventoryService: ChatInventoryService?,
@@ -35,7 +38,8 @@ final class KnowledgeCardWorkflowService {
     ) {
         self.ui = ui
         self.state = state
-        self.resRefStore = resRefStore
+        self.knowledgeCardStore = knowledgeCardStore
+        self.skillStore = skillStore
         self.eventBus = eventBus
         self.cardMergeService = cardMergeService
         self.chatInventoryService = chatInventoryService
@@ -52,6 +56,7 @@ final class KnowledgeCardWorkflowService {
     // MARK: - Event Handlers
 
     /// Handle "Done with Uploads" button click - aggregates skills and narrative cards
+    /// Cards are persisted to stores with isPending=true for user review
     func handleDoneWithUploadsClicked() async {
         Logger.info("📋 Processing Done with Uploads - aggregating skills and narrative cards", category: .ai)
 
@@ -59,6 +64,10 @@ final class KnowledgeCardWorkflowService {
         ui.isDocumentCollectionActive = false
         ui.isMergingCards = true
         await sessionUIState?.setDocumentCollectionActive(false)
+
+        // Clear any existing pending cards before adding new ones
+        knowledgeCardStore.deletePendingCards()
+        skillStore.deletePendingSkills()
 
         // Extract chat inventory before aggregation (so it's included)
         if let chatInventoryService = chatInventoryService {
@@ -71,39 +80,61 @@ final class KnowledgeCardWorkflowService {
             }
         }
 
-        // Aggregate skills from all artifacts
-        aggregatedSkillBank = await cardMergeService.getMergedSkillBank()
-        let skillCount = aggregatedSkillBank?.skills.count ?? 0
-        ui.aggregatedSkillBank = aggregatedSkillBank
-        Logger.info("🔧 Aggregated \(skillCount) skills", category: .ai)
+        // Aggregate skills from all artifacts and persist with isPending=true
+        if let mergedSkillBank = await cardMergeService.getMergedSkillBank() {
+            let skillsToAdd = mergedSkillBank.skills.map { skill -> Skill in
+                // Create new Skill with isPending=true and isFromOnboarding=true
+                Skill(
+                    canonical: skill.canonical,
+                    atsVariants: skill.atsVariants,
+                    category: skill.category,
+                    proficiency: skill.proficiency,
+                    evidence: skill.evidence,
+                    relatedSkills: skill.relatedSkills,
+                    lastUsed: skill.lastUsed,
+                    isFromOnboarding: true,
+                    isPending: true
+                )
+            }
+            skillStore.addAll(skillsToAdd)
+            Logger.info("🔧 Aggregated and persisted \(skillsToAdd.count) skills as pending", category: .ai)
+        }
 
         // Aggregate narrative cards from all artifacts (with deduplication)
         let rawCards = await cardMergeService.getAllNarrativeCardsFlat()
         let rawCardCount = rawCards.count
         Logger.info("📖 Found \(rawCardCount) raw narrative cards", category: .ai)
 
+        var cardsToAdd: [KnowledgeCard]
+
         // Run deduplication to merge similar cards across documents
-        // The Card Merge Agent will appear in the Agents tab during this operation
         do {
             let dedupeResult = try await cardMergeService.getAllNarrativeCardsDeduped()
-            aggregatedNarrativeCards = dedupeResult.cards
-            ui.aggregatedNarrativeCards = aggregatedNarrativeCards
-
+            cardsToAdd = dedupeResult.cards
             let mergeCount = dedupeResult.mergeLog.filter { $0.action == .merged }.count
             Logger.info("🔀 Deduplication: \(rawCardCount) → \(dedupeResult.cards.count) cards (\(mergeCount) merges)", category: .ai)
         } catch {
             // Fall back to raw cards if deduplication fails
             Logger.warning("⚠️ Deduplication failed, using raw cards: \(error.localizedDescription)", category: .ai)
-            aggregatedNarrativeCards = rawCards
-            ui.aggregatedNarrativeCards = aggregatedNarrativeCards
+            cardsToAdd = rawCards
         }
 
-        let cardCount = aggregatedNarrativeCards.count
+        // Mark all cards as pending and from onboarding, then persist
+        for card in cardsToAdd {
+            card.isFromOnboarding = true
+            card.isPending = true
+        }
+        knowledgeCardStore.addAll(cardsToAdd)
+
+        let cardCount = cardsToAdd.count
+        let skillCount = skillStore.pendingSkills.count
 
         // Group cards by type for stats
         var cardsByType: [CardType: Int] = [:]
-        for card in aggregatedNarrativeCards {
-            cardsByType[card.cardType, default: 0] += 1
+        for card in cardsToAdd {
+            if let cardType = card.cardType {
+                cardsByType[cardType, default: 0] += 1
+            }
         }
 
         // Build type breakdown string
@@ -125,95 +156,52 @@ final class KnowledgeCardWorkflowService {
         let skillSummary = skillCount > 0 ? " and \(skillCount) skills" : ""
         await sendChatMessage("""
             I'm done uploading documents. The system has found \(cardCount) potential knowledge cards (\(typeSummary))\(skillSummary). \
-            Please review the proposed cards with me. I can exclude any cards that aren't relevant to me.
+            Please review the proposed cards with me. I can delete any cards that aren't relevant.
             """)
     }
 
-    /// Handle "Generate Cards" button click - converts narrative cards to ResRefs
-    func handleGenerateCardsButtonClicked() async {
-        Logger.info("🚀 Generate Cards button clicked - converting narrative cards to ResRefs", category: .ai)
+    /// Handle "Approve Cards" button click - approves pending knowledge cards and skills
+    /// This sets isPending=false on all remaining pending cards/skills
+    func handleApproveCardsButtonClicked() async {
+        Logger.info("✅ Approve Cards button clicked - approving pending cards and skills", category: .ai)
 
-        // Read from UI state (which may have been restored from SwiftData)
-        let narrativeCards = ui.aggregatedNarrativeCards
+        let pendingCards = knowledgeCardStore.pendingCards
+        let pendingSkills = skillStore.pendingSkills
 
-        guard !narrativeCards.isEmpty else {
-            Logger.error("❌ No narrative cards found - user must click 'Done with Uploads' first", category: .ai)
+        guard !pendingCards.isEmpty else {
+            Logger.error("❌ No pending cards found - user must click 'Done with Uploads' first", category: .ai)
             await eventBus.publish(.errorOccurred("No cards found. Please upload documents and click 'Done with Uploads' first."))
             return
         }
 
-        // Filter out excluded cards
-        let excludedIds = Set(ui.excludedCardIds)
-        let cardsToConvert = narrativeCards.filter { !excludedIds.contains($0.id.uuidString) }
-
-        guard !cardsToConvert.isEmpty else {
-            Logger.warning("⚠️ All cards have been excluded", category: .ai)
-            await eventBus.publish(.errorOccurred("All cards have been excluded. Please include at least one card."))
-            return
-        }
-
-        Logger.info("🚀 Converting \(cardsToConvert.count) narrative cards to ResRefs (excluded: \(excludedIds.count))", category: .ai)
-
-        // Build artifact ID → filename lookup for source attribution
-        let allArtifacts = await state.artifactRecords
-        var artifactLookup: [String: String] = [:]
-        for artifact in allArtifacts {
-            let id = artifact["artifact_id"].stringValue
-            let filename = artifact["filename"].stringValue
-            if !id.isEmpty && !filename.isEmpty {
-                artifactLookup[id] = filename
-            }
-        }
-
-        // Create converter
-        let converter = KnowledgeCardToResRefConverter()
-
         // Update UI to show progress
         ui.isGeneratingCards = true
 
-        // Clear existing onboarding ResRefs before adding new ones
-        // This prevents duplicate accumulation when re-running card generation
-        let existingOnboardingCount = resRefStore.resRefs.filter { $0.isFromOnboarding }.count
-        if existingOnboardingCount > 0 {
-            Logger.info("🗑️ Clearing \(existingOnboardingCount) existing onboarding cards before adding new ones", category: .ai)
-            resRefStore.deleteOnboardingResRefs()
+        // Approve all pending cards and skills
+        knowledgeCardStore.approveCards()
+        skillStore.approveSkills()
+
+        // Update filesystem mirror for each approved card
+        let approvedCards = pendingCards  // These were pending, now approved
+        for card in approvedCards {
+            await phaseTransitionController?.updateKnowledgeCardInFilesystem(card)
         }
 
-        var successCount = 0
-
-        let resRefs = converter.convertAll(
-            cards: cardsToConvert,
-            artifactLookup: artifactLookup
-        ) { completed, total in
-            Logger.debug("📊 Card conversion progress: \(completed)/\(total)", category: .ai)
-        }
-
-        successCount = resRefs.count
-
-        // Persist all ResRefs and update filesystem mirror
-        for resRef in resRefs {
-            resRefStore.addResRef(resRef)
-            await phaseTransitionController?.updateResRefInFilesystem(resRef)
-        }
-
-        Logger.info("✅ Card generation complete: \(successCount) cards persisted", category: .ai)
+        let cardCount = approvedCards.count
+        let skillCount = pendingSkills.count
+        Logger.info("✅ Approval complete: \(cardCount) cards, \(skillCount) skills approved", category: .ai)
 
         ui.isGeneratingCards = false
+        ui.cardAssignmentsReadyForApproval = false
 
         // Notify LLM about the results
-        await sendChatMessage("Knowledge card generation complete: \(successCount) cards created.")
+        let skillSummary = skillCount > 0 ? " and \(skillCount) skills" : ""
+        await sendChatMessage("Knowledge cards approved: \(cardCount) cards\(skillSummary) are now available for resume generation.")
     }
 
-    // MARK: - Accessors for UI
-
-    /// Get the current aggregated skill bank
-    func getAggregatedSkillBank() -> SkillBank? {
-        return aggregatedSkillBank
-    }
-
-    /// Get the current aggregated narrative cards
-    func getAggregatedNarrativeCards() -> [KnowledgeCard] {
-        return aggregatedNarrativeCards
+    /// Legacy alias for handleApproveCardsButtonClicked
+    func handleGenerateCardsButtonClicked() async {
+        await handleApproveCardsButtonClicked()
     }
 
     // MARK: - Private Helpers

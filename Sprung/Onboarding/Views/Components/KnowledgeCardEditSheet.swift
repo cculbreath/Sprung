@@ -3,15 +3,15 @@ import SwiftUI
 /// Full editing sheet for knowledge cards.
 /// Supports editing all fields including title, content, metadata, and card type.
 struct KnowledgeCardEditSheet: View {
-    let card: ResRef?
-    let onSave: (ResRef) -> Void
+    let card: KnowledgeCard?
+    let onSave: (KnowledgeCard) -> Void
     let onCancel: () -> Void
 
-    @State private var name: String = ""
-    @State private var content: String = ""
-    @State private var cardType: String = "job"
+    @State private var title: String = ""
+    @State private var narrative: String = ""
+    @State private var cardType: CardType = .employment
     @State private var organization: String = ""
-    @State private var timePeriod: String = ""
+    @State private var dateRange: String = ""
     @State private var location: String = ""
     @State private var enabledByDefault: Bool = true
 
@@ -23,30 +23,30 @@ struct KnowledgeCardEditSheet: View {
     private var isNewCard: Bool { card == nil }
 
     private var isValid: Bool {
-        !name.trimmingCharacters(in: .whitespaces).isEmpty &&
-        !content.trimmingCharacters(in: .whitespaces).isEmpty
+        !title.trimmingCharacters(in: .whitespaces).isEmpty &&
+        !narrative.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     private var wordCount: Int {
-        content.split(separator: " ").count
+        narrative.split(separator: " ").count
     }
 
     enum Field {
-        case name, content, organization, timePeriod, location
+        case title, narrative, organization, dateRange, location
     }
 
-    init(card: ResRef?, onSave: @escaping (ResRef) -> Void, onCancel: @escaping () -> Void) {
+    init(card: KnowledgeCard?, onSave: @escaping (KnowledgeCard) -> Void, onCancel: @escaping () -> Void) {
         self.card = card
         self.onSave = onSave
         self.onCancel = onCancel
 
         // Initialize state from card if editing
         if let card = card {
-            _name = State(initialValue: card.name)
-            _content = State(initialValue: card.content)
-            _cardType = State(initialValue: card.cardType ?? "job")
+            _title = State(initialValue: card.title)
+            _narrative = State(initialValue: card.narrative)
+            _cardType = State(initialValue: card.cardType ?? .employment)
             _organization = State(initialValue: card.organization ?? "")
-            _timePeriod = State(initialValue: card.timePeriod ?? "")
+            _dateRange = State(initialValue: card.dateRange ?? "")
             _location = State(initialValue: card.location ?? "")
             _enabledByDefault = State(initialValue: card.enabledByDefault)
         }
@@ -77,11 +77,11 @@ struct KnowledgeCardEditSheet: View {
         }
         .frame(width: 600, height: 700)
         .background(Color(nsColor: .windowBackgroundColor))
-        .onChange(of: name) { _, _ in hasUnsavedChanges = true }
-        .onChange(of: content) { _, _ in hasUnsavedChanges = true }
+        .onChange(of: title) { _, _ in hasUnsavedChanges = true }
+        .onChange(of: narrative) { _, _ in hasUnsavedChanges = true }
         .onChange(of: cardType) { _, _ in hasUnsavedChanges = true }
         .onChange(of: organization) { _, _ in hasUnsavedChanges = true }
-        .onChange(of: timePeriod) { _, _ in hasUnsavedChanges = true }
+        .onChange(of: dateRange) { _, _ in hasUnsavedChanges = true }
         .onChange(of: location) { _, _ in hasUnsavedChanges = true }
         .onChange(of: enabledByDefault) { _, _ in hasUnsavedChanges = true }
         .alert("Discard Changes?", isPresented: $showDiscardAlert) {
@@ -136,10 +136,10 @@ struct KnowledgeCardEditSheet: View {
                     .foregroundStyle(.secondary)
 
                 Picker("Type", selection: $cardType) {
-                    Label("Job", systemImage: "briefcase.fill").tag("job")
-                    Label("Skill", systemImage: "star.fill").tag("skill")
-                    Label("Education", systemImage: "graduationcap.fill").tag("education")
-                    Label("Project", systemImage: "folder.fill").tag("project")
+                    Label("Employment", systemImage: "briefcase.fill").tag(CardType.employment)
+                    Label("Project", systemImage: "folder.fill").tag(CardType.project)
+                    Label("Achievement", systemImage: "trophy.fill").tag(CardType.achievement)
+                    Label("Education", systemImage: "graduationcap.fill").tag(CardType.education)
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
@@ -151,9 +151,9 @@ struct KnowledgeCardEditSheet: View {
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
 
-                TextField("e.g., Senior Software Engineer at Acme Corp", text: $name)
+                TextField("e.g., Senior Software Engineer at Acme Corp", text: $title)
                     .textFieldStyle(.roundedBorder)
-                    .focused($focusedField, equals: .name)
+                    .focused($focusedField, equals: .title)
             }
         }
         .padding(16)
@@ -197,9 +197,9 @@ struct KnowledgeCardEditSheet: View {
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
 
-                TextField("e.g., 2020-01 to 2024-06, or 2020-Present", text: $timePeriod)
+                TextField("e.g., 2020-01 to 2024-06, or 2020-Present", text: $dateRange)
                     .textFieldStyle(.roundedBorder)
-                    .focused($focusedField, equals: .timePeriod)
+                    .focused($focusedField, equals: .dateRange)
             }
         }
         .padding(16)
@@ -227,7 +227,7 @@ struct KnowledgeCardEditSheet: View {
                 .font(.caption)
             }
 
-            TextEditor(text: $content)
+            TextEditor(text: $narrative)
                 .font(.body)
                 .frame(minHeight: 200, maxHeight: 300)
                 .scrollContentBackground(.hidden)
@@ -238,7 +238,7 @@ struct KnowledgeCardEditSheet: View {
                     RoundedRectangle(cornerRadius: 8)
                         .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
                 )
-                .focused($focusedField, equals: .content)
+                .focused($focusedField, equals: .narrative)
 
             if wordCount < 100 {
                 Text("Tip: More detailed content helps generate better resumes. Aim for 500+ words.")
@@ -278,7 +278,7 @@ struct KnowledgeCardEditSheet: View {
             // Validation status
             if !isValid {
                 Label(
-                    name.trimmingCharacters(in: .whitespaces).isEmpty ? "Title required" : "Content required",
+                    title.trimmingCharacters(in: .whitespaces).isEmpty ? "Title required" : "Content required",
                     systemImage: "exclamationmark.triangle"
                 )
                 .font(.caption)
@@ -312,25 +312,24 @@ struct KnowledgeCardEditSheet: View {
 
         if let existingCard = card {
             // Update existing card
-            existingCard.name = name.trimmingCharacters(in: .whitespaces)
-            existingCard.content = content.trimmingCharacters(in: .whitespaces)
+            existingCard.title = title.trimmingCharacters(in: .whitespaces)
+            existingCard.narrative = narrative.trimmingCharacters(in: .whitespaces)
             existingCard.cardType = cardType
             existingCard.organization = organization.isEmpty ? nil : organization.trimmingCharacters(in: .whitespaces)
-            existingCard.timePeriod = timePeriod.isEmpty ? nil : timePeriod.trimmingCharacters(in: .whitespaces)
+            existingCard.dateRange = dateRange.isEmpty ? nil : dateRange.trimmingCharacters(in: .whitespaces)
             existingCard.location = location.isEmpty ? nil : location.trimmingCharacters(in: .whitespaces)
             existingCard.enabledByDefault = enabledByDefault
             onSave(existingCard)
         } else {
             // Create new card
-            let newCard = ResRef(
-                name: name.trimmingCharacters(in: .whitespaces),
-                content: content.trimmingCharacters(in: .whitespaces),
-                enabledByDefault: enabledByDefault,
+            let newCard = KnowledgeCard(
+                title: title.trimmingCharacters(in: .whitespaces),
+                narrative: narrative.trimmingCharacters(in: .whitespaces),
                 cardType: cardType,
-                timePeriod: timePeriod.isEmpty ? nil : timePeriod.trimmingCharacters(in: .whitespaces),
+                dateRange: dateRange.isEmpty ? nil : dateRange.trimmingCharacters(in: .whitespaces),
                 organization: organization.isEmpty ? nil : organization.trimmingCharacters(in: .whitespaces),
                 location: location.isEmpty ? nil : location.trimmingCharacters(in: .whitespaces),
-                sourcesJSON: nil,
+                enabledByDefault: enabledByDefault,
                 isFromOnboarding: false
             )
             onSave(newCard)

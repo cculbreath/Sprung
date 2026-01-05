@@ -106,9 +106,11 @@ struct ArtifactsTabContent: View {
                     .padding(.horizontal, 4)
 
                 ForEach(artifacts) { artifact in
+                    let pendingSkillsForArtifact = coordinator.skillStore.pendingSkills(forArtifactId: artifact.id.uuidString)
                     ArtifactRow(
                         artifact: artifact,
                         isExpanded: expandedArtifactIds.contains(artifact.id),
+                        pendingSkills: pendingSkillsForArtifact,
                         onToggleExpand: {
                             withAnimation(.easeInOut(duration: 0.2)) {
                                 if expandedArtifactIds.contains(artifact.id) {
@@ -123,6 +125,29 @@ struct ArtifactsTabContent: View {
                         },
                         onDelete: {
                             artifactToDelete = artifact
+                        },
+                        onDeleteSkill: { skill in
+                            coordinator.skillStore.delete(skill)
+                        },
+                        onRegenSkills: {
+                            Task {
+                                await coordinator.regenerateSelected(
+                                    artifactIds: [artifact.idString],
+                                    regenerateSummary: false,
+                                    regenerateSkills: true,
+                                    regenerateNarrativeCards: false
+                                )
+                            }
+                        },
+                        onRegenNarrativeCards: {
+                            Task {
+                                await coordinator.regenerateSelected(
+                                    artifactIds: [artifact.idString],
+                                    regenerateSummary: false,
+                                    regenerateSkills: false,
+                                    regenerateNarrativeCards: true
+                                )
+                            }
                         }
                     )
                 }

@@ -11,7 +11,7 @@ import SwiftUI
 struct PipelineView: View {
     let coordinator: DiscoveryCoordinator
 
-    @Environment(ResRefStore.self) private var resRefStore
+    @Environment(KnowledgeCardStore.self) private var knowledgeCardStore
     @Environment(CoverRefStore.self) private var coverRefStore
 
     @State private var showingAddLead = false
@@ -92,11 +92,11 @@ struct PipelineView: View {
         selectionError = nil
 
         // TODO: Context source choice - may revisit (currently using knowledge cards + dossier)
-        // Build knowledge context from ResRefs
-        let knowledgeContext = resRefStore.resRefs
-            .map { ref in
-                let typeLabel = ref.cardType.map { "[\($0)]" } ?? "[general]"
-                return "\(typeLabel) \(ref.name):\n\(ref.content)"
+        // Build knowledge context from KnowledgeCards
+        let knowledgeContext = knowledgeCardStore.knowledgeCards
+            .map { card in
+                let typeLabel = "[\(card.cardType?.rawValue ?? "general")]"
+                return "\(typeLabel) \(card.title):\n\(card.narrative)"
             }
             .joined(separator: "\n\n")
 

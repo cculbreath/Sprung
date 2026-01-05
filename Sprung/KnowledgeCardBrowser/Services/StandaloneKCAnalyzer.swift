@@ -2,7 +2,7 @@
 //  StandaloneKCAnalyzer.swift
 //  Sprung
 //
-//  Handles document analysis, skill extraction, and ResRef matching
+//  Handles document analysis, skill extraction, and KnowledgeCard matching
 //  for standalone KC generation. This module determines what cards should be
 //  created vs which existing cards should be enhanced.
 //
@@ -19,12 +19,12 @@ class StandaloneKCAnalyzer {
     private var kcExtractionService: KnowledgeCardExtractionService?
     private var metadataService: MetadataExtractionService?
     private var deduplicationService: NarrativeDeduplicationService?
-    private weak var resRefStore: ResRefStore?
+    private weak var knowledgeCardStore: KnowledgeCardStore?
 
     // MARK: - Initialization
 
-    init(llmFacade: LLMFacade?, resRefStore: ResRefStore?) {
-        self.resRefStore = resRefStore
+    init(llmFacade: LLMFacade?, knowledgeCardStore: KnowledgeCardStore?) {
+        self.knowledgeCardStore = knowledgeCardStore
         self.skillBankService = SkillBankService(llmFacade: llmFacade)
         self.kcExtractionService = KnowledgeCardExtractionService(llmFacade: llmFacade)
         self.metadataService = MetadataExtractionService(llmFacade: llmFacade)
@@ -138,18 +138,18 @@ class StandaloneKCAnalyzer {
         return try? decoder.decode([KnowledgeCard].self, from: data)
     }
 
-    /// Match narrative cards against existing ResRefs to determine new vs enhancement.
+    /// Match narrative cards against existing KnowledgeCards to determine new vs enhancement.
     /// - Parameter analysisResult: Analysis result with skills and narrative cards
     /// - Returns: Tuple of new cards and enhancement proposals
     func matchAgainstExisting(
         _ analysisResult: AnalysisResult
-    ) -> (newCards: [KnowledgeCard], enhancements: [(proposal: KnowledgeCard, existing: ResRef)]) {
-        let existingCards = resRefStore?.resRefs ?? []
+    ) -> (newCards: [KnowledgeCard], enhancements: [(proposal: KnowledgeCard, existing: KnowledgeCard)]) {
+        let existingCards = knowledgeCardStore?.knowledgeCards ?? []
         var newCards: [KnowledgeCard] = []
-        var enhancements: [(proposal: KnowledgeCard, existing: ResRef)] = []
+        var enhancements: [(proposal: KnowledgeCard, existing: KnowledgeCard)] = []
 
         for card in analysisResult.narrativeCards {
-            if let match = findMatchingResRef(card, in: existingCards) {
+            if let match = findMatchingKnowledgeCard(card, in: existingCards) {
                 enhancements.append((card, match))
             } else {
                 newCards.append(card)
@@ -171,84 +171,73 @@ class StandaloneKCAnalyzer {
         return try await service.extract(from: artifacts)
     }
 
-    /// Enhance an existing ResRef with new evidence from a narrative card.
-    func enhanceResRef(_ resRef: ResRef, with card: KnowledgeCard) {
-        // Merge suggested bullets from scale (quantified outcomes)
-        var existingBullets: [String] = []
-        if let bulletsJSON = resRef.suggestedBulletsJSON,
-           let data = bulletsJSON.data(using: .utf8),
-           let decoded = try? JSONSerialization.jsonObject(with: data) as? [String] {
-            existingBullets = decoded
+    /// Enhance an existing KnowledgeCard with new evidence from a proposal card.
+    func enhanceKnowledgeCard(_ existingCard: KnowledgeCard, with proposal: KnowledgeCard) {
+        // Merge facts from proposal
+        var existingFacts = existingCard.facts
+        let existingStatements = Set(existingFacts.map { $0.statement.lowercased() })
+
+        let newFacts = proposal.facts.filter { fact in
+            !existingStatements.contains(fact.statement.lowercased())
         }
+        existingFacts.append(contentsOf: newFacts)
+        existingCard.factsJSON = {
+            guard let data = try? JSONEncoder().encode(existingFacts),
+                  let json = String(data: data, encoding: .utf8) else { return nil }
+            return json
+        }()
 
-        // Add scale items as bullets if not already present
-        let newBullets = card.extractable.scale.filter { scale in
-            !existingBullets.contains { $0.lowercased().contains(scale.lowercased().prefix(30)) }
+        // Merge evidence anchors
+        var existingAnchors = existingCard.evidenceAnchors
+        let existingDocIds = Set(existingAnchors.map { $0.documentId })
+
+        let newAnchors = proposal.evidenceAnchors.filter { anchor in
+            !existingDocIds.contains(anchor.documentId)
         }
-        existingBullets.append(contentsOf: newBullets)
+        existingAnchors.append(contentsOf: newAnchors)
+        existingCard.evidenceAnchorsJSON = {
+            guard let data = try? JSONEncoder().encode(existingAnchors),
+                  let json = String(data: data, encoding: .utf8) else { return nil }
+            return json
+        }()
 
-        if let data = try? JSONSerialization.data(withJSONObject: existingBullets),
-           let jsonString = String(data: data, encoding: .utf8) {
-            resRef.suggestedBulletsJSON = jsonString
-        }
+        // Merge extractable metadata
+        let proposalExtractable = proposal.extractable
+        let existingExtractable = existingCard.extractable
 
-        // Merge domains (technologies)
-        var existingTech: [String] = []
-        if let techJSON = resRef.technologiesJSON,
-           let data = techJSON.data(using: .utf8),
-           let decoded = try? JSONSerialization.jsonObject(with: data) as? [String] {
-            existingTech = decoded
-        }
+        // Merge domains
+        let existingDomains = Set(existingExtractable.domains.map { $0.lowercased() })
+        let newDomains = proposalExtractable.domains.filter { !existingDomains.contains($0.lowercased()) }
+        let mergedDomains = existingExtractable.domains + newDomains
 
-        let newTech = card.extractable.domains.filter { domain in
-            !existingTech.contains { $0.lowercased() == domain.lowercased() }
-        }
-        existingTech.append(contentsOf: newTech)
+        // Merge scale items
+        let existingScale = Set(existingExtractable.scale.map { $0.lowercased() })
+        let newScale = proposalExtractable.scale.filter { !existingScale.contains($0.lowercased()) }
+        let mergedScale = existingExtractable.scale + newScale
 
-        if let data = try? JSONSerialization.data(withJSONObject: existingTech),
-           let jsonString = String(data: data, encoding: .utf8) {
-            resRef.technologiesJSON = jsonString
-        }
+        // Create new extractable with merged values
+        let mergedExtractable = ExtractableMetadata(
+            domains: mergedDomains,
+            scale: mergedScale,
+            keywords: existingExtractable.keywords
+        )
+        existingCard.extractable = mergedExtractable
 
-        // Update content to reflect new bullets
-        resRef.content = existingBullets.map { "• \($0)" }.joined(separator: "\n")
-
-        // Update sources JSON
-        var existingSources: [[String: String]] = []
-        if let sourcesJSON = resRef.sourcesJSON,
-           let data = sourcesJSON.data(using: .utf8),
-           let decoded = try? JSONSerialization.jsonObject(with: data) as? [[String: String]] {
-            existingSources = decoded
-        }
-
-        // Add new sources from evidence anchors
-        let existingIds = Set(existingSources.compactMap { $0["artifact_id"] })
-        for anchor in card.evidenceAnchors {
-            if !existingIds.contains(anchor.documentId) {
-                existingSources.append(["type": "artifact", "artifact_id": anchor.documentId])
-            }
-        }
-
-        if let data = try? JSONSerialization.data(withJSONObject: existingSources),
-           let jsonString = String(data: data, encoding: .utf8) {
-            resRef.sourcesJSON = jsonString
-        }
-
-        resRefStore?.updateResRef(resRef)
-        Logger.info("✅ StandaloneKCAnalyzer: Enhanced card with \(newBullets.count) new bullets, \(newTech.count) new domains", category: .ai)
+        knowledgeCardStore?.update(existingCard)
+        Logger.info("✅ StandaloneKCAnalyzer: Enhanced card with \(newFacts.count) new facts, \(newAnchors.count) new anchors", category: .ai)
     }
 
-    // MARK: - Private: ResRef Matching
+    // MARK: - Private: KnowledgeCard Matching
 
-    /// Match a narrative card against existing ResRefs
-    private func findMatchingResRef(
+    /// Match a narrative card against existing KnowledgeCards
+    private func findMatchingKnowledgeCard(
         _ card: KnowledgeCard,
-        in existing: [ResRef]
-    ) -> ResRef? {
+        in existing: [KnowledgeCard]
+    ) -> KnowledgeCard? {
         let titleCore = cardTitleCore(card.title)
-        return existing.first { resRef in
-            resRef.cardType == card.cardType.rawValue &&
-            resRef.name.lowercased().contains(titleCore)
+        return existing.first { existingCard in
+            existingCard.cardType == card.cardType &&
+            existingCard.title.lowercased().contains(titleCore)
         }
     }
 

@@ -7,7 +7,7 @@ import SwiftData
 import SwiftUI
 // A hover wrapper for each résumé reference row
 struct HoverableResRefRowView: View {
-    var sourceNode: ResRef
+    var sourceNode: KnowledgeCard
     @State private var isHovering: Bool = false
     var body: some View {
         ResRefRowView(sourceNode: sourceNode)
@@ -27,9 +27,9 @@ struct HoverableResRefRowView: View {
 }
 struct ResRefView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
-    @Environment(ResRefStore.self) private var resRefStore: ResRefStore
+    @Environment(KnowledgeCardStore.self) private var knowledgeCardStore: KnowledgeCardStore
     // Live SwiftData list of references
-    @Query(sort: \ResRef.name) private var resRefs: [ResRef]
+    @Query(sort: \KnowledgeCard.title) private var knowledgeCards: [KnowledgeCard]
     @State var isRefSheetPresented: Bool = false
     @State private var isHovering: Bool = false
     var body: some View {
@@ -45,13 +45,13 @@ struct ResRefView: View {
             .padding(.top, 10)
             .contentShape(Rectangle())
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(resRefs) { child in
+                ForEach(knowledgeCards) { child in
                     Divider()
                     HoverableResRefRowView(sourceNode: child)
                         .transition(.move(edge: .top))
                         .contextMenu {
                             Button(role: .destructive) {
-                                resRefStore.deleteResRef(child)
+                                knowledgeCardStore.delete(child)
                             } label: {
                                 Label("Delete", systemImage: "trash")
                             }

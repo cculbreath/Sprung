@@ -90,8 +90,8 @@ class Resume: Identifiable, Hashable {
     }
     var dateCreated: Date = Date()
     weak var jobApp: JobApp?
-    @Relationship(deleteRule: .nullify, inverse: \ResRef.enabledResumes)
-    var enabledSources: [ResRef]
+    @Relationship(deleteRule: .nullify, inverse: \KnowledgeCard.enabledResumes)
+    var enabledSources: [KnowledgeCard]
     var createdDateString: String {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "hh:mm a 'on' MM/dd/yy"
@@ -127,7 +127,7 @@ class Resume: Identifiable, Hashable {
     var meta: String = "\"format\": \"FRESH@0.6.0\", \"version\": \"0.1.0\""
     init(
         jobApp: JobApp,
-        enabledSources: [ResRef],
+        enabledSources: [KnowledgeCard],
         template: Template? = nil
     ) {
         self.template = template

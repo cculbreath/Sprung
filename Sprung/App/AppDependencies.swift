@@ -15,7 +15,8 @@ import SwiftUI
 final class AppDependencies {
     // MARK: - Stores
     let resStore: ResStore
-    let resRefStore: ResRefStore
+    let knowledgeCardStore: KnowledgeCardStore
+    let skillStore: SkillStore
     let coverRefStore: CoverRefStore
     let coverLetterStore: CoverLetterStore
     let jobAppStore: JobAppStore
@@ -72,7 +73,8 @@ final class AppDependencies {
             exportCoordinator: resumeExportCoordinator,
             experienceDefaultsStore: experienceDefaultsStore
         )
-        self.resRefStore = ResRefStore(context: modelContext)
+        self.knowledgeCardStore = KnowledgeCardStore(context: modelContext)
+        self.skillStore = SkillStore(context: modelContext)
         self.coverRefStore = CoverRefStore(context: modelContext)
         self.reasoningStreamManager = ReasoningStreamManager()
         // Dependent stores
@@ -138,7 +140,7 @@ final class AppDependencies {
             reasoningStreamManager: reasoningStreamManager,
             exportCoordinator: resumeExportCoordinator,
             applicantProfileStore: applicantProfileStore,
-            resRefStore: resRefStore,
+            knowledgeCardStore: knowledgeCardStore,
             guidanceStore: guidanceStore
         )
         self.resumeReviseViewModel = resumeReviseViewModel
@@ -148,7 +150,8 @@ final class AppDependencies {
             llmFacade: llmFacade,
             documentExtractionService: documentExtractionService,
             applicantProfileStore: applicantProfileStore,
-            resRefStore: resRefStore,
+            knowledgeCardStore: knowledgeCardStore,
+            skillStore: skillStore,
             coverRefStore: coverRefStore,
             experienceDefaultsStore: experienceDefaultsStore,
             sessionStore: onboardingSessionStore,
@@ -168,7 +171,7 @@ final class AppDependencies {
 
         // Job App Preprocessor (background processing for job requirements and card selection)
         let jobAppPreprocessor = JobAppPreprocessor(llmFacade: llmFacade)
-        jobAppStore.setPreprocessor(jobAppPreprocessor, resRefStore: resRefStore)
+        jobAppStore.setPreprocessor(jobAppPreprocessor, knowledgeCardStore: knowledgeCardStore)
 
         self.appEnvironment = AppEnvironment(
             appState: appState,

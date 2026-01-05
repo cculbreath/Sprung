@@ -14,7 +14,7 @@ struct DocumentIngestionSheet: View {
     // MARK: - Environment
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(ResRefStore.self) private var resRefStore
+    @Environment(KnowledgeCardStore.self) private var knowledgeCardStore
     @Environment(LLMFacade.self) private var llmFacade
     @Environment(ArtifactRecordStore.self) private var artifactRecordStore
 
@@ -35,7 +35,7 @@ struct DocumentIngestionSheet: View {
 
     // MARK: - Callbacks
 
-    var onCardGenerated: ((ResRef) -> Void)?
+    var onCardGenerated: ((KnowledgeCard) -> Void)?
 
     // MARK: - Body
 
@@ -51,7 +51,7 @@ struct DocumentIngestionSheet: View {
         .onAppear {
             coordinator = StandaloneKCCoordinator(
                 llmFacade: llmFacade,
-                resRefStore: resRefStore,
+                knowledgeCardStore: knowledgeCardStore,
                 artifactRecordStore: artifactRecordStore
             )
         }

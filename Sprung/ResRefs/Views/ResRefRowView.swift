@@ -9,13 +9,13 @@
 import SwiftUI
 
 struct ResRefRowView: View {
-    @Environment(ResRefStore.self) private var resRefStore: ResRefStore
-    @State var sourceNode: ResRef
+    @Environment(KnowledgeCardStore.self) private var knowledgeCardStore: KnowledgeCardStore
+    @State var sourceNode: KnowledgeCard
     @State private var isButtonHovering = false
     @State private var isEditSheetPresented: Bool = false
 
     var body: some View {
-        @Bindable var resRefStore = resRefStore
+        @Bindable var knowledgeCardStore = knowledgeCardStore
         HStack(spacing: 12) {
             // Toggle
             Toggle("", isOn: $sourceNode.enabledByDefault)
@@ -32,7 +32,7 @@ struct ResRefRowView: View {
 
             // Card info
             VStack(alignment: .leading, spacing: 2) {
-                Text(sourceNode.name)
+                Text(sourceNode.title)
                     .foregroundColor(sourceNode.enabledByDefault ? .primary : .secondary)
                     .lineLimit(1)
 
@@ -45,7 +45,7 @@ struct ResRefRowView: View {
                                 .foregroundStyle(.secondary)
                         }
 
-                        if let period = sourceNode.timePeriod, !period.isEmpty {
+                        if let period = sourceNode.dateRange, !period.isEmpty {
                             Text(period)
                                 .font(.caption)
                                 .foregroundStyle(.tertiary)
@@ -84,7 +84,7 @@ struct ResRefRowView: View {
             .sheet(isPresented: $isEditSheetPresented) {
                 ResRefFormView(
                     isSheetPresented: $isEditSheetPresented,
-                    existingResRef: sourceNode
+                    existingCard: sourceNode
                 )
             }
 
@@ -92,7 +92,7 @@ struct ResRefRowView: View {
 
             // Delete button
             Button(action: {
-                resRefStore.deleteResRef(sourceNode)
+                knowledgeCardStore.delete(sourceNode)
             }) {
                 Image(systemName: "trash.fill")
                     .foregroundColor(isButtonHovering ? .red : .gray)
@@ -111,18 +111,16 @@ struct ResRefRowView: View {
     }
 
     private var cardTypeColor: Color {
-        switch sourceNode.cardType?.lowercased() {
-        case "employment", "job":
+        switch sourceNode.cardType {
+        case .employment:
             return .blue
-        case "project":
+        case .project:
             return .orange
-        case "skill":
-            return .purple
-        case "education":
+        case .education:
             return .green
-        case "achievement":
+        case .achievement:
             return .yellow
-        default:
+        case nil:
             return .secondary
         }
     }

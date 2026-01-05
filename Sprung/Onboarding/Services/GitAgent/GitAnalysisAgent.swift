@@ -688,17 +688,17 @@ class GitAnalysisAgent {
                     }
 
                     let narrativeCard = KnowledgeCard(
-                        cardType: cardType,
                         title: card.proposedTitle,
                         narrative: narrativeParts.joined(separator: "\n"),
+                        cardType: cardType,
+                        dateRange: card.dateRange,
+                        organization: repoName,
                         evidenceAnchors: evidenceAnchors,
                         extractable: ExtractableMetadata(
                             domains: card.technologies.prefix(5).map { String($0) },
                             scale: card.quantifiedOutcomes,
                             keywords: card.keyFacts.prefix(3).map { String($0) }
-                        ),
-                        dateRange: card.dateRange,
-                        organization: repoName
+                        )
                     )
                     narrativeCards.append(narrativeCard)
                 }

@@ -61,7 +61,7 @@ struct AppSheetsModifier: ViewModifier {
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(AppState.self) private var appState
     @Environment(ResumeReviseViewModel.self) private var resumeReviseViewModel
-    @Environment(ResRefStore.self) private var resRefStore
+    @Environment(KnowledgeCardStore.self) private var knowledgeCardStore
     @Environment(CoverRefStore.self) private var coverRefStore
     @State private var showReprocessConfirmation = false
     @State private var newlyAddedCardName: String = ""
@@ -183,25 +183,25 @@ struct AppSheetsModifier: ViewModifier {
                     isPresented: $sheets.showUnifiedReferenceBrowser,
                     initialTab: sheets.unifiedBrowserInitialTab,
                     knowledgeCards: .init(
-                        get: { resRefStore.resRefs },
+                        get: { knowledgeCardStore.knowledgeCards },
                         set: { _ in }
                     ),
-                    resRefStore: resRefStore,
+                    knowledgeCardStore: knowledgeCardStore,
                     onKnowledgeCardUpdated: { card in
-                        resRefStore.updateResRef(card)
+                        knowledgeCardStore.update(card)
                     },
                     onKnowledgeCardDeleted: { card in
-                        resRefStore.deleteResRef(card)
+                        knowledgeCardStore.delete(card)
                     },
                     onKnowledgeCardAdded: { card in
-                        resRefStore.addResRef(card)
+                        knowledgeCardStore.add(card)
                         // Check if there are active jobs to reprocess
                         let activeStatuses: [Statuses] = [.new, .queued, .inProgress]
                         let activeJobCount = jobAppStore.jobApps.filter { job in
                             !job.jobDescription.isEmpty && activeStatuses.contains(job.status)
                         }.count
                         if activeJobCount > 0 {
-                            newlyAddedCardName = card.name
+                            newlyAddedCardName = card.title
                             showReprocessConfirmation = true
                         }
                     },

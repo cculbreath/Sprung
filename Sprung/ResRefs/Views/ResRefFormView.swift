@@ -28,21 +28,21 @@ struct ResRefFormView: View {
 
     @State private var dropErrorMessage: String?
     @Binding var isSheetPresented: Bool
-    @Environment(ResRefStore.self) private var resRefStore: ResRefStore
+    @Environment(KnowledgeCardStore.self) private var knowledgeCardStore: KnowledgeCardStore
 
-    var existingResRef: ResRef?
+    var existingCard: KnowledgeCard?
 
-    init(isSheetPresented: Binding<Bool>, existingResRef: ResRef? = nil) {
+    init(isSheetPresented: Binding<Bool>, existingCard: KnowledgeCard? = nil) {
         _isSheetPresented = isSheetPresented
-        self.existingResRef = existingResRef
+        self.existingCard = existingCard
     }
 
     private var isFactBased: Bool {
-        existingResRef?.isFactBasedCard == true
+        existingCard?.isFactBasedCard == true
     }
 
     var body: some View {
-        @Bindable var resRefStore = resRefStore
+        @Bindable var knowledgeCardStore = knowledgeCardStore
         VStack(spacing: 0) {
             // Header
             headerSection
@@ -95,8 +95,8 @@ struct ResRefFormView: View {
 
     private var headerSection: some View {
         HStack {
-            if isFactBased, let resRef = existingResRef {
-                let typeInfo = resRef.cardTypeDisplay
+            if isFactBased, let card = existingCard {
+                let typeInfo = card.cardTypeDisplay
                 Image(systemName: typeInfo.icon)
                     .foregroundStyle(.secondary)
                 Text(typeInfo.name)
@@ -108,7 +108,7 @@ struct ResRefFormView: View {
                     .clipShape(Capsule())
             }
 
-            Text(existingResRef == nil ? "Add Knowledge Card" : "Edit Knowledge Card")
+            Text(existingCard == nil ? "Add Knowledge Card" : "Edit Knowledge Card")
                 .font(.headline)
 
             Spacer()
@@ -296,21 +296,21 @@ struct ResRefFormView: View {
 
     @ViewBuilder
     private var factsSection: some View {
-        if let resRef = existingResRef, !resRef.facts.isEmpty {
+        if let card = existingCard, !card.facts.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text("Extracted Facts")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Text("\(resRef.facts.count) facts")
+                    Text("\(card.facts.count) facts")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
 
                 // Group by category
-                ForEach(Array(resRef.factsByCategory.keys.sorted()), id: \.self) { category in
-                    if let facts = resRef.factsByCategory[category] {
+                ForEach(Array(card.factsByCategory.keys.sorted()), id: \.self) { category in
+                    if let facts = card.factsByCategory[category] {
                         DisclosureGroup(
                             isExpanded: Binding(
                                 get: { expandedFacts.contains(category) },
@@ -345,7 +345,7 @@ struct ResRefFormView: View {
         }
     }
 
-    private func factRow(_ fact: ResRefFact) -> some View {
+    private func factRow(_ fact: KnowledgeCardFact) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(fact.statement)
                 .font(.callout)
@@ -450,48 +450,48 @@ struct ResRefFormView: View {
     // MARK: - Data Loading
 
     private func loadExistingData() {
-        guard let resRef = existingResRef else { return }
+        guard let card = existingCard else { return }
 
-        sourceName = resRef.name
-        sourceContent = resRef.content
-        enabledByDefault = resRef.enabledByDefault
+        sourceName = card.title
+        sourceContent = card.narrative
+        enabledByDefault = card.enabledByDefault
 
         // Load fact-based fields
-        cardType = resRef.cardType ?? ""
-        timePeriod = resRef.timePeriod ?? ""
-        organization = resRef.organization ?? ""
-        location = resRef.location ?? ""
-        technologies = resRef.technologies
-        suggestedBullets = resRef.suggestedBullets
+        cardType = card.cardType?.rawValue ?? ""
+        timePeriod = card.dateRange ?? ""
+        organization = card.organization ?? ""
+        location = card.location ?? ""
+        technologies = card.technologies
+        suggestedBullets = card.suggestedBullets
     }
 
     // MARK: - Save
 
     private func saveRefForm() {
-        if let resRef = existingResRef {
+        if let card = existingCard {
             // Update existing
-            resRef.name = sourceName
-            resRef.enabledByDefault = enabledByDefault
+            card.title = sourceName
+            card.enabledByDefault = enabledByDefault
 
             if isFactBased {
-                resRef.timePeriod = timePeriod.isEmpty ? nil : timePeriod
-                resRef.organization = organization.isEmpty ? nil : organization
-                resRef.location = location.isEmpty ? nil : location
-                resRef.technologies = technologies
-                resRef.suggestedBullets = suggestedBullets
+                card.dateRange = timePeriod.isEmpty ? nil : timePeriod
+                card.organization = organization.isEmpty ? nil : organization
+                card.location = location.isEmpty ? nil : location
+                card.technologies = technologies
+                card.suggestedBullets = suggestedBullets
             } else {
-                resRef.content = sourceContent
+                card.narrative = sourceContent
             }
 
-            resRefStore.updateResRef(resRef)
+            knowledgeCardStore.update(card)
         } else {
             // Create new (legacy format)
-            let newSource = ResRef(
-                name: sourceName,
-                content: sourceContent,
+            let newCard = KnowledgeCard(
+                title: sourceName,
+                narrative: sourceContent,
                 enabledByDefault: enabledByDefault
             )
-            resRefStore.addResRef(newSource)
+            knowledgeCardStore.add(newCard)
         }
     }
 

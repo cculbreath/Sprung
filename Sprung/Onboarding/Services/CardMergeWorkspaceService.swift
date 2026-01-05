@@ -83,7 +83,7 @@ final class CardMergeWorkspaceService {
             // Add summary to index
             let summary: [String: Any] = [
                 "id": card.id.uuidString,
-                "card_type": card.cardType.rawValue,
+                "card_type": card.cardType?.rawValue ?? "other",
                 "title": card.title,
                 "organization": card.organization ?? "",
                 "date_range": card.dateRange ?? "",

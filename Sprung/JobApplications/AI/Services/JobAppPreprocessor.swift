@@ -69,7 +69,7 @@ class JobAppPreprocessor {
     /// Semaphore to limit concurrent preprocessing jobs
     private let concurrencyLimit = 5
     private var activeJobCount = 0
-    private var pendingJobs: [(jobApp: JobApp, cards: [ResRef], context: ModelContext)] = []
+    private var pendingJobs: [(jobApp: JobApp, cards: [KnowledgeCard], context: ModelContext)] = []
 
     // MARK: - Configuration
 
@@ -94,7 +94,7 @@ class JobAppPreprocessor {
     ///   - modelContext: SwiftData context for saving
     func preprocessInBackground(
         for jobApp: JobApp,
-        allCards: [ResRef],
+        allCards: [KnowledgeCard],
         modelContext: ModelContext
     ) {
         // Queue the job
@@ -141,14 +141,14 @@ class JobAppPreprocessor {
 
     private func preprocess(
         jobDescription: String,
-        cards: [ResRef]
+        cards: [KnowledgeCard]
     ) async throws -> PreprocessingResult {
         guard let facade = llmFacade else {
             throw PreprocessingError.llmNotAvailable
         }
 
         // Build card summaries for the LLM
-        let cardSummaries = cards.map { "- \($0.id.uuidString): \($0.name)" }.joined(separator: "\n")
+        let cardSummaries = cards.map { "- \($0.id.uuidString): \($0.title)" }.joined(separator: "\n")
 
         let prompt = """
         Analyze this job posting and identify:

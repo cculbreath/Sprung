@@ -1,20 +1,22 @@
 import SwiftUI
 
-/// Tab content showing skills extracted from uploaded documents, grouped by category.
+/// Tab content showing approved skills grouped by category.
+/// Pending skills are reviewed in the Interview tab; approved skills appear here.
 struct SkillsTabContent: View {
     let coordinator: OnboardingInterviewCoordinator
 
     @State private var expandedSkillIds: Set<UUID> = []
     @State private var expandedCategories: Set<SkillCategory> = Set(SkillCategory.allCases)
 
-    private var skillBank: SkillBank? {
-        coordinator.ui.aggregatedSkillBank
+    /// Approved skills (from SwiftData store)
+    private var approvedSkills: [Skill] {
+        coordinator.skillStore.approvedSkills
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let bank = skillBank, !bank.skills.isEmpty {
-                skillsListView(bank: bank)
+            if !approvedSkills.isEmpty {
+                skillsListView(skills: approvedSkills)
             } else {
                 emptyState
             }
@@ -22,19 +24,14 @@ struct SkillsTabContent: View {
     }
 
     @ViewBuilder
-    private func skillsListView(bank: SkillBank) -> some View {
-        let grouped = bank.groupedByCategory()
+    private func skillsListView(skills: [Skill]) -> some View {
+        let grouped = Dictionary(grouping: skills, by: { $0.category })
         let sortedCategories = SkillCategory.allCases.filter { grouped[$0] != nil }
 
         ForEach(sortedCategories, id: \.self) { category in
-            if let skills = grouped[category] {
-                categorySection(category: category, skills: skills)
+            if let categorySkills = grouped[category] {
+                categorySection(category: category, skills: categorySkills)
             }
-        }
-
-        // Source documents footer
-        if !bank.sourceDocumentIds.isEmpty {
-            sourceFooter(documentIds: bank.sourceDocumentIds, generatedAt: bank.generatedAt)
         }
     }
 
@@ -77,6 +74,7 @@ struct SkillsTabContent: View {
                     SkillRow(
                         skill: skill,
                         isExpanded: expandedSkillIds.contains(skill.id),
+                        showDeleteButton: true,
                         onToggleExpand: {
                             withAnimation(.easeInOut(duration: 0.2)) {
                                 if expandedSkillIds.contains(skill.id) {
@@ -85,36 +83,15 @@ struct SkillsTabContent: View {
                                     expandedSkillIds.insert(skill.id)
                                 }
                             }
+                        },
+                        onDelete: {
+                            coordinator.skillStore.delete(skill)
                         }
                     )
                 }
             }
         }
         .padding(.bottom, 8)
-    }
-
-    private func sourceFooter(documentIds: [String], generatedAt: Date) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Divider()
-                .padding(.vertical, 4)
-
-            HStack {
-                Image(systemName: "doc.text.magnifyingglass")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-
-                Text("Extracted from \(documentIds.count) source\(documentIds.count == 1 ? "" : "s")")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-
-                Spacer()
-
-                Text(generatedAt, style: .relative)
-                    .font(.caption2)
-                    .foregroundStyle(.quaternary)
-            }
-            .padding(.horizontal, 4)
-        }
     }
 
     private var emptyState: some View {
@@ -131,46 +108,62 @@ struct SkillsTabContent: View {
 private struct SkillRow: View {
     let skill: Skill
     let isExpanded: Bool
+    let showDeleteButton: Bool
     let onToggleExpand: () -> Void
+    let onDelete: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Main row
-            Button(action: onToggleExpand) {
-                HStack(spacing: 8) {
-                    // Expand/collapse indicator
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .frame(width: 10)
+            HStack(spacing: 8) {
+                // Clickable expand area
+                Button(action: onToggleExpand) {
+                    HStack(spacing: 8) {
+                        // Expand/collapse indicator
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .frame(width: 10)
 
-                    // Skill name
-                    Text(skill.canonical)
-                        .font(.callout.weight(.medium))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
+                        // Skill name
+                        Text(skill.canonical)
+                            .font(.callout.weight(.medium))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
 
-                    Spacer()
+                        Spacer()
 
-                    // Proficiency badge
-                    proficiencyBadge
+                        // Proficiency badge
+                        proficiencyBadge
 
-                    // Evidence count
-                    if !skill.evidence.isEmpty {
-                        HStack(spacing: 2) {
-                            Image(systemName: "doc.text")
-                                .font(.caption2)
-                            Text("\(skill.evidence.count)")
-                                .font(.caption2.monospacedDigit())
+                        // Evidence count
+                        if !skill.evidence.isEmpty {
+                            HStack(spacing: 2) {
+                                Image(systemName: "doc.text")
+                                    .font(.caption2)
+                                Text("\(skill.evidence.count)")
+                                    .font(.caption2.monospacedDigit())
+                            }
+                            .foregroundStyle(.secondary)
                         }
-                        .foregroundStyle(.secondary)
                     }
+                    .contentShape(Rectangle())
                 }
-                .padding(.vertical, 6)
-                .padding(.horizontal, 8)
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+
+                // Delete button (only when ready for approval)
+                if showDeleteButton {
+                    Button(action: onDelete) {
+                        Image(systemName: "trash")
+                            .font(.caption)
+                            .foregroundColor(.red.opacity(0.7))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Remove this skill")
+                }
             }
-            .buttonStyle(.plain)
+            .padding(.vertical, 6)
+            .padding(.horizontal, 8)
 
             // Expanded details
             if isExpanded {

@@ -527,14 +527,14 @@ private extension OnboardingModelSettingsView {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
 
-                Picker("Guidance Extraction Model", selection: $guidanceExtractionModelId) {
+                Picker("Inference Guidance Generation Model", selection: $guidanceExtractionModelId) {
                     ForEach(geminiModels.filter { $0.outputTokenLimit >= 4000 }) { model in
                         Text(model.displayName)
                             .tag(model.id)
                     }
                 }
                 .pickerStyle(.menu)
-                Text("Extracts identity vocabulary and title sets. Flash recommended.")
+                Text("Generates identity vocabulary, title sets, and voice profiles. Flash recommended.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

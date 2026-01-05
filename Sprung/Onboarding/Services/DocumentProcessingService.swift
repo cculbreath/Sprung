@@ -265,7 +265,7 @@ actor DocumentProcessingService {
             kcStats["total"].int = cardsResult.count
             var byType: [String: Int] = [:]
             for card in cardsResult {
-                byType[card.cardType.rawValue, default: 0] += 1
+                byType[card.cardType?.rawValue ?? "other", default: 0] += 1
             }
             kcStats["by_type"].dictionaryObject = byType as [String: Any]
             artifactRecord["narrative_cards_stats"] = kcStats
@@ -427,6 +427,66 @@ actor DocumentProcessingService {
         }
 
         Logger.info("✅ Knowledge extraction regeneration complete for: \(filename)", category: .ai)
+    }
+
+    /// Regenerate skills only for an existing artifact.
+    /// Updates the artifact's skillsJSON directly.
+    func generateSkillsOnlyForExistingArtifact(_ artifact: ArtifactRecord) async {
+        let artifactId = artifact.idString
+        let filename = artifact.filename
+        let extractedText = artifact.extractedContent
+
+        Logger.info("Regenerating skills only for: \(filename)", category: .ai)
+
+        let skills = await generateSkills(
+            artifactId: artifactId,
+            filename: filename,
+            extractedText: extractedText
+        )
+
+        await MainActor.run { [artifact] in
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+
+            if let skillsResult = skills,
+               let skillsData = try? encoder.encode(skillsResult),
+               let skillsString = String(data: skillsData, encoding: .utf8) {
+                artifact.skillsJSON = skillsString
+                Logger.info("Skills regenerated for \(filename): \(skillsResult.count) skills", category: .ai)
+            }
+        }
+
+        Logger.info("✅ Skills regeneration complete for: \(filename)", category: .ai)
+    }
+
+    /// Regenerate narrative cards only for an existing artifact.
+    /// Updates the artifact's narrativeCardsJSON directly.
+    func generateNarrativeCardsOnlyForExistingArtifact(_ artifact: ArtifactRecord) async {
+        let artifactId = artifact.idString
+        let filename = artifact.filename
+        let extractedText = artifact.extractedContent
+
+        Logger.info("Regenerating narrative cards only for: \(filename)", category: .ai)
+
+        let narrativeCards = await generateNarrativeCards(
+            artifactId: artifactId,
+            filename: filename,
+            extractedText: extractedText
+        )
+
+        await MainActor.run { [artifact] in
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+
+            if let cardsResult = narrativeCards,
+               let cardsData = try? encoder.encode(cardsResult),
+               let cardsString = String(data: cardsData, encoding: .utf8) {
+                artifact.narrativeCardsJSON = cardsString
+                Logger.info("Narrative cards regenerated for \(filename): \(cardsResult.count) cards", category: .ai)
+            }
+        }
+
+        Logger.info("✅ Narrative cards regeneration complete for: \(filename)", category: .ai)
     }
 
     /// Regenerate both summary and knowledge extraction for an existing artifact.

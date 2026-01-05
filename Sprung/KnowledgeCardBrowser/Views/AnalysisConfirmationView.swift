@@ -10,7 +10,7 @@ import SwiftUI
 
 struct AnalysisConfirmationView: View {
     let result: StandaloneKCCoordinator.AnalysisResult
-    let onConfirm: ([KnowledgeCard], [(proposal: KnowledgeCard, existing: ResRef)]) -> Void
+    let onConfirm: ([KnowledgeCard], [(proposal: KnowledgeCard, existing: KnowledgeCard)]) -> Void
     let onCancel: () -> Void
 
     @State private var selectedNewCards: Set<UUID>
@@ -18,7 +18,7 @@ struct AnalysisConfirmationView: View {
 
     init(
         result: StandaloneKCCoordinator.AnalysisResult,
-        onConfirm: @escaping ([KnowledgeCard], [(proposal: KnowledgeCard, existing: ResRef)]) -> Void,
+        onConfirm: @escaping ([KnowledgeCard], [(proposal: KnowledgeCard, existing: KnowledgeCard)]) -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.result = result
@@ -44,7 +44,7 @@ struct AnalysisConfirmationView: View {
                                             Text(card.title)
                                                 .font(.headline)
                                             HStack {
-                                                cardTypeBadge(card.cardType.rawValue)
+                                                cardTypeBadge(card.cardType?.rawValue ?? "other")
                                                 if !card.extractable.scale.isEmpty {
                                                     Text("\(card.extractable.scale.count) outcomes")
                                                         .font(.caption)
@@ -63,7 +63,7 @@ struct AnalysisConfirmationView: View {
                                 ForEach(result.enhancements, id: \.proposal.id) { item in
                                     Toggle(isOn: binding(for: item.proposal.id, in: $selectedEnhancements)) {
                                         VStack(alignment: .leading, spacing: 4) {
-                                            Text(item.existing.name)
+                                            Text(item.existing.title)
                                                 .font(.headline)
                                             Text("Add evidence from new documents")
                                                 .font(.caption)

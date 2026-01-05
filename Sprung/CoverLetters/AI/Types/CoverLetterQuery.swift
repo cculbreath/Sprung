@@ -156,7 +156,7 @@ struct BestCoverLetterResponse: Codable {
         if bgrefs.isEmpty {
             return ""
         } else {
-            return bgrefs.map { $0.name + ":\n" + $0.content + "\n\n" }.joined()
+            return bgrefs.map { $0.title + ":\n" + $0.narrative + "\n\n" }.joined()
         }
     }
     var writingSamples: String {

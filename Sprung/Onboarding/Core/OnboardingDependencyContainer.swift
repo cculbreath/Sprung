@@ -96,7 +96,8 @@ final class OnboardingDependencyContainer {
     let artifactRecordStore: ArtifactRecordStore
     // MARK: - External Dependencies (Passed In)
     private let applicantProfileStore: ApplicantProfileStore
-    private let resRefStore: ResRefStore
+    private let knowledgeCardStore: KnowledgeCardStore
+    private let skillStore: SkillStore
     private let coverRefStore: CoverRefStore
     private let experienceDefaultsStore: ExperienceDefaultsStore
     let sessionStore: OnboardingSessionStore
@@ -128,7 +129,8 @@ final class OnboardingDependencyContainer {
         llmFacade: LLMFacade?,
         documentExtractionService: DocumentExtractionService,
         applicantProfileStore: ApplicantProfileStore,
-        resRefStore: ResRefStore,
+        knowledgeCardStore: KnowledgeCardStore,
+        skillStore: SkillStore,
         coverRefStore: CoverRefStore,
         experienceDefaultsStore: ExperienceDefaultsStore,
         sessionStore: OnboardingSessionStore,
@@ -139,7 +141,8 @@ final class OnboardingDependencyContainer {
         self.llmFacade = llmFacade
         self.documentExtractionService = documentExtractionService
         self.applicantProfileStore = applicantProfileStore
-        self.resRefStore = resRefStore
+        self.knowledgeCardStore = knowledgeCardStore
+        self.skillStore = skillStore
         self.coverRefStore = coverRefStore
         self.experienceDefaultsStore = experienceDefaultsStore
         self.sessionStore = sessionStore
@@ -228,7 +231,7 @@ final class OnboardingDependencyContainer {
         self.phaseTransitionController = PhaseTransitionController(
             state: state, eventBus: core.eventBus, phaseRegistry: core.phaseRegistry,
             artifactRecordStore: artifactRecordStore, sessionPersistenceHandler: sessionPersistenceHandler,
-            resRefStore: resRefStore
+            knowledgeCardStore: knowledgeCardStore
         )
 
         // 9. Initialize services
@@ -258,7 +261,9 @@ final class OnboardingDependencyContainer {
             documentArtifactMessenger: docs.documentArtifactMessenger,
             ui: ui,
             sessionPersistenceHandler: sessionPersistenceHandler,
-            chatTranscriptStore: stores.chatTranscriptStore
+            chatTranscriptStore: stores.chatTranscriptStore,
+            knowledgeCardStore: knowledgeCardStore,
+            skillStore: skillStore
         )
         self.uiStateUpdateHandler = UIStateUpdateHandler(ui: ui, state: state, wizardTracker: wizardTracker)
 
@@ -289,7 +294,8 @@ final class OnboardingDependencyContainer {
         let kcWorkflow = KnowledgeCardWorkflowService(
             ui: ui,
             state: state,
-            resRefStore: resRefStore,
+            knowledgeCardStore: knowledgeCardStore,
+            skillStore: skillStore,
             eventBus: core.eventBus,
             cardMergeService: cardMergeService,
             chatInventoryService: chatInventoryService,
@@ -482,8 +488,11 @@ final class OnboardingDependencyContainer {
     func getApplicantProfileStore() -> ApplicantProfileStore {
         applicantProfileStore
     }
-    func getResRefStore() -> ResRefStore {
-        resRefStore
+    func getKnowledgeCardStore() -> KnowledgeCardStore {
+        knowledgeCardStore
+    }
+    func getSkillStore() -> SkillStore {
+        skillStore
     }
     func getCoverRefStore() -> CoverRefStore {
         coverRefStore

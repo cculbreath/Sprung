@@ -24,6 +24,8 @@ final class InterviewLifecycleController {
     private let ui: OnboardingUIState
     private let sessionPersistenceHandler: SwiftDataSessionPersistenceHandler
     private let chatTranscriptStore: ChatTranscriptStore
+    private let knowledgeCardStore: KnowledgeCardStore
+    private let skillStore: SkillStore
 
     // MARK: - Lifecycle State
     private(set) var orchestrator: InterviewOrchestrator?
@@ -54,7 +56,9 @@ final class InterviewLifecycleController {
         documentArtifactMessenger: DocumentArtifactMessenger,
         ui: OnboardingUIState,
         sessionPersistenceHandler: SwiftDataSessionPersistenceHandler,
-        chatTranscriptStore: ChatTranscriptStore
+        chatTranscriptStore: ChatTranscriptStore,
+        knowledgeCardStore: KnowledgeCardStore,
+        skillStore: SkillStore
     ) {
         self.state = state
         self.eventBus = eventBus
@@ -72,6 +76,8 @@ final class InterviewLifecycleController {
         self.ui = ui
         self.sessionPersistenceHandler = sessionPersistenceHandler
         self.chatTranscriptStore = chatTranscriptStore
+        self.knowledgeCardStore = knowledgeCardStore
+        self.skillStore = skillStore
     }
 
     // MARK: - Configuration
@@ -131,24 +137,16 @@ final class InterviewLifecycleController {
         let phase = InterviewPhase(rawValue: session.phase) ?? .phase1VoiceContext
         ui.phase = phase
 
-        // Restore aggregated cards, skill bank, and excluded card IDs
-        let restoredExcludedIds = sessionPersistenceHandler.getRestoredExcludedCardIds(session)
-        ui.excludedCardIds = restoredExcludedIds
+        // Check for pending cards/skills in SwiftData stores (persisted via isPending=true)
+        // No need to restore from session - data lives in SwiftData
+        let pendingCardCount = knowledgeCardStore.pendingCards.count
+        let pendingSkillCount = skillStore.pendingSkills.count
 
-        let restoredCards = sessionPersistenceHandler.getRestoredAggregatedNarrativeCards(session)
-        if !restoredCards.isEmpty {
-            ui.aggregatedNarrativeCards = restoredCards
-            ui.proposedAssignmentCount = restoredCards.count
-            ui.identifiedGapCount = 0  // Gaps are no longer tracked in new model
+        if pendingCardCount > 0 {
+            ui.proposedAssignmentCount = pendingCardCount
+            ui.identifiedGapCount = 0
             ui.cardAssignmentsReadyForApproval = true
-
-            Logger.info("📥 Restored aggregated narrative cards: \(restoredCards.count) cards (excluding \(restoredExcludedIds.count) excluded)", category: .ai)
-        }
-
-        // Restore skill bank
-        if let restoredSkillBank = sessionPersistenceHandler.getRestoredAggregatedSkillBank(session) {
-            ui.aggregatedSkillBank = restoredSkillBank
-            Logger.info("📥 Restored skill bank: \(restoredSkillBank.skills.count) skills", category: .ai)
+            Logger.info("📥 Found \(pendingCardCount) pending cards, \(pendingSkillCount) pending skills in stores", category: .ai)
         }
 
         // Restore phase in state coordinator - registers objectives for ALL phases up to current

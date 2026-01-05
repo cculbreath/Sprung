@@ -6,9 +6,35 @@ import SwiftyJSON
 struct ArtifactRow: View {
     let artifact: ArtifactRecord
     let isExpanded: Bool
+    let pendingSkills: [Skill]
     let onToggleExpand: () -> Void
     let onDemote: () -> Void
     let onDelete: () -> Void
+    let onDeleteSkill: ((Skill) -> Void)?
+    let onRegenSkills: (() -> Void)?
+    let onRegenNarrativeCards: (() -> Void)?
+
+    init(
+        artifact: ArtifactRecord,
+        isExpanded: Bool,
+        pendingSkills: [Skill] = [],
+        onToggleExpand: @escaping () -> Void,
+        onDemote: @escaping () -> Void,
+        onDelete: @escaping () -> Void,
+        onDeleteSkill: ((Skill) -> Void)? = nil,
+        onRegenSkills: (() -> Void)? = nil,
+        onRegenNarrativeCards: (() -> Void)? = nil
+    ) {
+        self.artifact = artifact
+        self.isExpanded = isExpanded
+        self.pendingSkills = pendingSkills
+        self.onToggleExpand = onToggleExpand
+        self.onDemote = onDemote
+        self.onDelete = onDelete
+        self.onDeleteSkill = onDeleteSkill
+        self.onRegenSkills = onRegenSkills
+        self.onRegenNarrativeCards = onRegenNarrativeCards
+    }
 
     private var hasContent: Bool {
         !artifact.extractedContent.isEmpty
@@ -170,8 +196,13 @@ struct ArtifactRow: View {
                         }
                     }
 
-                    // Skills section (if available)
-                    if let skills = artifact.skills, !skills.isEmpty {
+                    // Pending skills section (from SkillStore, with delete buttons)
+                    if !pendingSkills.isEmpty {
+                        pendingSkillsSection
+                    }
+
+                    // Extracted skills section (from artifact JSON, read-only)
+                    if let skills = artifact.skills, !skills.isEmpty, pendingSkills.isEmpty {
                         skillsSection(skills)
                     }
 
@@ -290,6 +321,74 @@ struct ArtifactRow: View {
     }
 
     @ViewBuilder
+    private var pendingSkillsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Header
+            HStack {
+                Image(systemName: "lightbulb.fill")
+                    .foregroundStyle(.orange)
+                Text("Pending Skills (\(pendingSkills.count))")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("Review before approval")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
+            // Skills grouped by category
+            let grouped = Dictionary(grouping: pendingSkills) { $0.category }
+            ForEach(SkillCategory.allCases, id: \.self) { category in
+                if let categorySkills = grouped[category], !categorySkills.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(category.rawValue)
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(.secondary)
+
+                        ForEach(categorySkills, id: \.id) { skill in
+                            HStack(spacing: 6) {
+                                Text(skill.canonical)
+                                    .font(.caption)
+                                    .lineLimit(1)
+
+                                Spacer()
+
+                                Text(skill.proficiency.rawValue.capitalized)
+                                    .font(.caption2)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(proficiencyColor(skill.proficiency).opacity(0.15))
+                                    .foregroundStyle(proficiencyColor(skill.proficiency))
+                                    .cornerRadius(3)
+
+                                if let deleteAction = onDeleteSkill {
+                                    Button {
+                                        deleteAction(skill)
+                                    } label: {
+                                        Image(systemName: "trash")
+                                            .font(.caption2)
+                                            .foregroundColor(.red.opacity(0.7))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .help("Remove this skill")
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(8)
+        .background(Color.orange.opacity(0.08))
+        .cornerRadius(6)
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+        )
+    }
+
+    @ViewBuilder
     private func skillsSection(_ skills: [Skill]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             // Header
@@ -300,6 +399,17 @@ struct ArtifactRow: View {
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
                 Spacer()
+                if let regenAction = onRegenSkills {
+                    Button {
+                        regenAction()
+                    } label: {
+                        Image(systemName: "arrow.trianglehead.clockwise")
+                            .font(.caption2)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("Regenerate skills for this artifact")
+                }
             }
 
             // Skills grouped by category
@@ -359,6 +469,17 @@ struct ArtifactRow: View {
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
                 Spacer()
+                if let regenAction = onRegenNarrativeCards {
+                    Button {
+                        regenAction()
+                    } label: {
+                        Image(systemName: "arrow.trianglehead.clockwise")
+                            .font(.caption2)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("Regenerate knowledge cards for this artifact")
+                }
             }
 
             // Cards list
@@ -388,7 +509,7 @@ struct ArtifactRow: View {
 
                 Spacer()
 
-                Text(card.cardType.rawValue)
+                Text(card.cardType?.rawValue ?? "general")
                     .font(.caption2)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
@@ -443,21 +564,23 @@ struct ArtifactRow: View {
         .cornerRadius(4)
     }
 
-    private func cardTypeIcon(_ type: CardType) -> String {
+    private func cardTypeIcon(_ type: CardType?) -> String {
         switch type {
         case .employment: return "briefcase.fill"
         case .project: return "hammer.fill"
         case .achievement: return "star.fill"
         case .education: return "graduationcap.fill"
+        case nil: return "doc.fill"
         }
     }
 
-    private func cardTypeColor(_ type: CardType) -> Color {
+    private func cardTypeColor(_ type: CardType?) -> Color {
         switch type {
         case .employment: return .blue
         case .project: return .orange
         case .achievement: return .yellow
         case .education: return .green
+        case nil: return .gray
         }
     }
 

@@ -99,8 +99,6 @@ enum OnboardingEvent {
     case mergeComplete(cardCount: Int, gapCount: Int)
     /// Emitted when merged inventory is produced (for persistence)
     case mergedInventoryStored(inventoryJSON: String)
-    /// Emitted when user changes excluded card IDs
-    case excludedCardIdsChanged(excludedIds: Set<String>)
     // MARK: - Evidence Requirements
     case evidenceRequirementAdded(EvidenceRequirement)
     case evidenceRequirementUpdated(EvidenceRequirement)
@@ -241,6 +239,9 @@ enum OnboardingEvent {
             return "writingSamplePersisted"
         case .candidateDossierPersisted:
             return "candidateDossierPersisted"
+        case .toolResultPairedWithMessage(let messageId, let toolCallsJSON):
+            let preview = String(toolCallsJSON.prefix(100))
+            return "toolResultPairedWithMessage(messageId: \(messageId), json: \(preview)...)"
         // Events with minimal payloads - use default description
         default:
             return String(describing: self)
@@ -451,7 +452,7 @@ actor EventCoordinator {
             return .objective
         // Tool events
         case .toolCallRequested, .toolCallCompleted,
-             .mergedInventoryStored, .excludedCardIdsChanged:
+             .mergedInventoryStored:
             return .tool
         // Artifact events
         case .uploadCompleted,
@@ -740,8 +741,6 @@ actor EventCoordinator {
             description = "🛑 Token budget exceeded: \(inputTokens) > \(threshold) - triggering PRI reset"
         case .mergedInventoryStored(let inventoryJSON):
             description = "Merged inventory stored: \(inventoryJSON.count) chars"
-        case .excludedCardIdsChanged(let excludedIds):
-            description = "Excluded card IDs changed: \(excludedIds.count) excluded"
         }
         Logger.debug("[Event] \(description)", category: .ai)
     }

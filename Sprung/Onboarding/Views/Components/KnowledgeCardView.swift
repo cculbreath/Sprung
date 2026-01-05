@@ -3,7 +3,7 @@ import SwiftUI
 /// Individual knowledge card display for the deck browser.
 /// Shows card metadata, type badge, and content preview.
 struct KnowledgeCardView: View {
-    let resRef: ResRef
+    let card: KnowledgeCard
     let isTopCard: Bool
     let onEdit: () -> Void
     let onDelete: () -> Void
@@ -13,27 +13,27 @@ struct KnowledgeCardView: View {
     @State private var isRegenerating = false
 
     private var cardTypeColor: Color {
-        switch resRef.cardType?.lowercased() {
-        case "job": return .blue
-        case "skill": return .purple
-        case "education": return .orange
-        case "project": return .green
-        default: return .gray
+        switch card.cardType {
+        case .employment: return .blue
+        case .project: return .green
+        case .education: return .orange
+        case .achievement: return .yellow
+        case nil: return .gray
         }
     }
 
     private var cardTypeIcon: String {
-        switch resRef.cardType?.lowercased() {
-        case "job": return "briefcase.fill"
-        case "skill": return "star.fill"
-        case "education": return "graduationcap.fill"
-        case "project": return "folder.fill"
-        default: return "doc.fill"
+        switch card.cardType {
+        case .employment: return "briefcase.fill"
+        case .project: return "folder.fill"
+        case .education: return "graduationcap.fill"
+        case .achievement: return "trophy.fill"
+        case nil: return "doc.fill"
         }
     }
 
     private var wordCount: Int {
-        resRef.content.split(separator: " ").count
+        card.narrative.split(separator: " ").count
     }
 
     var body: some View {
@@ -74,7 +74,7 @@ struct KnowledgeCardView: View {
                 isHovering = hovering
             }
         }
-        .onChange(of: resRef.content) { _, _ in
+        .onChange(of: card.narrative) { _, _ in
             // Reset regenerating state when content updates
             isRegenerating = false
         }
@@ -113,7 +113,7 @@ struct KnowledgeCardView: View {
         VStack(alignment: .leading, spacing: 8) {
             // Type badge row
             HStack {
-                Label(resRef.cardType?.capitalized ?? "Card", systemImage: cardTypeIcon)
+                Label(card.cardType?.displayName ?? "Card", systemImage: cardTypeIcon)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(cardTypeColor)
                     .padding(.horizontal, 10)
@@ -123,7 +123,7 @@ struct KnowledgeCardView: View {
 
                 Spacer()
 
-                if resRef.isFromOnboarding {
+                if card.isFromOnboarding {
                     Image(systemName: "sparkles")
                         .font(.caption)
                         .foregroundStyle(.orange)
@@ -132,7 +132,7 @@ struct KnowledgeCardView: View {
             }
 
             // Title
-            Text(resRef.name)
+            Text(card.title)
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(.primary)
                 .lineLimit(2)
@@ -140,21 +140,21 @@ struct KnowledgeCardView: View {
 
             // Metadata row
             HStack(spacing: 12) {
-                if let org = resRef.organization, !org.isEmpty {
+                if let org = card.organization, !org.isEmpty {
                     Label(org, systemImage: "building.2")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
 
-                if let period = resRef.timePeriod, !period.isEmpty {
+                if let period = card.dateRange, !period.isEmpty {
                     Label(period, systemImage: "calendar")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
 
-                if let location = resRef.location, !location.isEmpty {
+                if let location = card.location, !location.isEmpty {
                     Label(location, systemImage: "location")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -170,22 +170,22 @@ struct KnowledgeCardView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     // Technologies/Skills section
-                    if !resRef.technologies.isEmpty {
+                    if !card.technologies.isEmpty {
                         technologiesSection
                     }
 
                     // Facts section (grouped by category)
-                    if !resRef.facts.isEmpty {
+                    if !card.facts.isEmpty {
                         factsSection
                     }
 
                     // Suggested bullets section
-                    if !resRef.suggestedBullets.isEmpty {
+                    if !card.suggestedBullets.isEmpty {
                         suggestedBulletsSection
                     }
 
                     // Content/Summary section - always show if present
-                    if !resRef.content.isEmpty {
+                    if !card.narrative.isEmpty {
                         summarySection
                     }
                 }
@@ -234,7 +234,7 @@ struct KnowledgeCardView: View {
                 }
             }
 
-            Text(resRef.content)
+            Text(card.narrative)
                 .font(.caption)
                 .foregroundStyle(.primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -252,7 +252,7 @@ struct KnowledgeCardView: View {
                 .foregroundStyle(.blue)
 
             FlowLayout(spacing: 4) {
-                ForEach(resRef.technologies, id: \.self) { tech in
+                ForEach(card.technologies, id: \.self) { tech in
                     Text(tech)
                         .font(.caption2)
                         .padding(.horizontal, 8)
@@ -274,8 +274,8 @@ struct KnowledgeCardView: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.yellow)
 
-            ForEach(Array(resRef.factsByCategory.keys.sorted()), id: \.self) { category in
-                if let facts = resRef.factsByCategory[category] {
+            ForEach(Array(card.factsByCategory.keys.sorted()), id: \.self) { category in
+                if let facts = card.factsByCategory[category] {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(category.capitalized)
                             .font(.caption2.weight(.medium))
@@ -306,7 +306,7 @@ struct KnowledgeCardView: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.green)
 
-            ForEach(resRef.suggestedBullets, id: \.self) { bullet in
+            ForEach(card.suggestedBullets, id: \.self) { bullet in
                 HStack(alignment: .top, spacing: 4) {
                     Text("•")
                         .font(.caption)
@@ -341,12 +341,9 @@ struct KnowledgeCardView: View {
 
             Spacer()
 
-            // Sources indicator
-            if let sourcesJSON = resRef.sourcesJSON,
-               let data = sourcesJSON.data(using: .utf8),
-               let count = try? JSONDecoder().decode([SourcePlaceholder].self, from: data).count,
-               count > 0 {
-                Label("\(count) source\(count == 1 ? "" : "s")", systemImage: "link")
+            // Evidence anchors indicator
+            if !card.evidenceAnchors.isEmpty {
+                Label("\(card.evidenceAnchors.count) source\(card.evidenceAnchors.count == 1 ? "" : "s")", systemImage: "link")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -354,9 +351,6 @@ struct KnowledgeCardView: View {
         .padding(16)
     }
 }
-
-// Simple placeholder for counting sources
-private struct SourcePlaceholder: Codable {}
 
 // MARK: - Flow Layout for Tags
 

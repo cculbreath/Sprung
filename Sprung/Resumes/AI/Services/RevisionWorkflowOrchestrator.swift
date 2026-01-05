@@ -32,7 +32,7 @@ class RevisionWorkflowOrchestrator {
     private let streamingService: RevisionStreamingService
     private let completionService: RevisionCompletionService
     private let applicantProfileStore: ApplicantProfileStore
-    private let resRefStore: ResRefStore
+    private let knowledgeCardStore: KnowledgeCardStore
     private let toolRunner: ToolConversationRunner
     private let phaseReviewManager: PhaseReviewManager
     private let guidanceStore: InferenceGuidanceStore?
@@ -54,7 +54,7 @@ class RevisionWorkflowOrchestrator {
         streamingService: RevisionStreamingService,
         completionService: RevisionCompletionService,
         applicantProfileStore: ApplicantProfileStore,
-        resRefStore: ResRefStore,
+        knowledgeCardStore: KnowledgeCardStore,
         toolRunner: ToolConversationRunner,
         phaseReviewManager: PhaseReviewManager,
         guidanceStore: InferenceGuidanceStore? = nil,
@@ -68,7 +68,7 @@ class RevisionWorkflowOrchestrator {
         self.streamingService = streamingService
         self.completionService = completionService
         self.applicantProfileStore = applicantProfileStore
-        self.resRefStore = resRefStore
+        self.knowledgeCardStore = knowledgeCardStore
         self.toolRunner = toolRunner
         self.phaseReviewManager = phaseReviewManager
         self.guidanceStore = guidanceStore
@@ -103,7 +103,7 @@ class RevisionWorkflowOrchestrator {
                 resume: resume,
                 exportCoordinator: exportCoordinator,
                 applicantProfile: applicantProfileStore.currentProfile(),
-                allResRefs: resRefStore.resRefs,
+                allKnowledgeCards: knowledgeCardStore.knowledgeCards,
                 guidanceStore: guidanceStore,
                 saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
             )
@@ -220,7 +220,7 @@ class RevisionWorkflowOrchestrator {
                 resume: resume,
                 exportCoordinator: exportCoordinator,
                 applicantProfile: applicantProfileStore.currentProfile(),
-                allResRefs: resRefStore.resRefs,
+                allKnowledgeCards: knowledgeCardStore.knowledgeCards,
                 guidanceStore: guidanceStore,
                 saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
             )

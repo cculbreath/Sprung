@@ -8,7 +8,7 @@ struct ClarifyingQuestionsButton: View {
     @Environment(ReasoningStreamManager.self) private var reasoningStreamManager: ReasoningStreamManager
     @Environment(ResumeReviseViewModel.self) private var resumeReviseViewModel: ResumeReviseViewModel
     @Environment(ApplicantProfileStore.self) private var applicantProfileStore: ApplicantProfileStore
-    @Environment(ResRefStore.self) private var resRefStore: ResRefStore
+    @Environment(KnowledgeCardStore.self) private var knowledgeCardStore: KnowledgeCardStore
     @Binding var selectedTab: TabList
     @Binding var clarifyingQuestions: [ClarifyingQuestion]
     @Binding var sheets: AppSheets
@@ -96,7 +96,7 @@ struct ClarifyingQuestionsButton: View {
                 defaultResumeReviseViewModel: resumeReviseViewModel,
                 exportCoordinator: appEnvironment.resumeExportCoordinator,
                 applicantProfileStore: applicantProfileStore,
-                resRefStore: resRefStore
+                knowledgeCardStore: knowledgeCardStore
             )
             clarifyingQuestionsViewModel = clarifyingViewModel
             try await clarifyingViewModel.startClarifyingQuestionsWorkflow(

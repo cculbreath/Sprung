@@ -65,7 +65,7 @@ struct OpenDocumentCollectionTool: InterviewTool {
 
         // Get artifact count from typed artifacts
         let artifactCount = await MainActor.run { coordinator.sessionArtifacts.count }
-        let narrativeCardCount = await MainActor.run { coordinator.ui.aggregatedNarrativeCards.count }
+        let narrativeCardCount = await MainActor.run { coordinator.knowledgeCardStore.pendingCards.count }
 
         // Build minimal response
         var response = JSON()

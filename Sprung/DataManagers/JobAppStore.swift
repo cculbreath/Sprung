@@ -25,7 +25,7 @@ final class JobAppStore: SwiftDataStore {
 
     // MARK: - Preprocessing
     private var preprocessor: JobAppPreprocessor?
-    private weak var resRefStore: ResRefStore?
+    private weak var knowledgeCardStore: KnowledgeCardStore?
 
     // MARK: - Initialiser
     init(context: ModelContext, resStore: ResStore, coverLetterStore: CoverLetterStore) {
@@ -34,16 +34,16 @@ final class JobAppStore: SwiftDataStore {
         self.coverLetterStore = coverLetterStore
     }
 
-    /// Set the preprocessor and ResRefStore for background job processing
-    func setPreprocessor(_ preprocessor: JobAppPreprocessor, resRefStore: ResRefStore) {
+    /// Set the preprocessor and KnowledgeCardStore for background job processing
+    func setPreprocessor(_ preprocessor: JobAppPreprocessor, knowledgeCardStore: KnowledgeCardStore) {
         self.preprocessor = preprocessor
-        self.resRefStore = resRefStore
+        self.knowledgeCardStore = knowledgeCardStore
     }
 
     /// Re-run preprocessing for a job (use when preprocessing failed or needs refresh)
     func rerunPreprocessing(for jobApp: JobApp) {
         guard let preprocessor = preprocessor,
-              let resRefStore = resRefStore,
+              let knowledgeCardStore = knowledgeCardStore,
               !jobApp.jobDescription.isEmpty else {
             Logger.warning("⚠️ [JobAppStore] Cannot re-run preprocessing: missing dependencies or empty job description", category: .ai)
             return
@@ -56,7 +56,7 @@ final class JobAppStore: SwiftDataStore {
 
         preprocessor.preprocessInBackground(
             for: jobApp,
-            allCards: resRefStore.resRefs,
+            allCards: knowledgeCardStore.knowledgeCards,
             modelContext: modelContext
         )
         Logger.info("🔄 [JobAppStore] Re-running preprocessing for: \(jobApp.jobPosition)", category: .ai)
@@ -67,7 +67,7 @@ final class JobAppStore: SwiftDataStore {
     @discardableResult
     func preprocessAllPendingJobs() -> Int {
         guard let preprocessor = preprocessor,
-              let resRefStore = resRefStore else {
+              let knowledgeCardStore = knowledgeCardStore else {
             Logger.warning("⚠️ [JobAppStore] Cannot preprocess jobs: preprocessor not configured", category: .ai)
             return 0
         }
@@ -81,7 +81,7 @@ final class JobAppStore: SwiftDataStore {
             return 0
         }
 
-        let cards = resRefStore.resRefs
+        let cards = knowledgeCardStore.knowledgeCards
         for jobApp in jobsNeedingPreprocessing {
             preprocessor.preprocessInBackground(
                 for: jobApp,
@@ -100,7 +100,7 @@ final class JobAppStore: SwiftDataStore {
     @discardableResult
     func rerunPreprocessingForActiveJobs() -> Int {
         guard let preprocessor = preprocessor,
-              let resRefStore = resRefStore else {
+              let knowledgeCardStore = knowledgeCardStore else {
             Logger.warning("⚠️ [JobAppStore] Cannot rerun preprocessing: preprocessor not configured", category: .ai)
             return 0
         }
@@ -117,7 +117,7 @@ final class JobAppStore: SwiftDataStore {
             return 0
         }
 
-        let cards = resRefStore.resRefs
+        let cards = knowledgeCardStore.knowledgeCards
         for jobApp in activeJobs {
             // Clear existing preprocessing to force re-run
             jobApp.extractedRequirements = nil
@@ -147,11 +147,11 @@ final class JobAppStore: SwiftDataStore {
 
         // Trigger background preprocessing (requirements + relevant cards)
         if let preprocessor = preprocessor,
-           let resRefStore = resRefStore,
+           let knowledgeCardStore = knowledgeCardStore,
            !jobApp.jobDescription.isEmpty {
             preprocessor.preprocessInBackground(
                 for: jobApp,
-                allCards: resRefStore.resRefs,
+                allCards: knowledgeCardStore.knowledgeCards,
                 modelContext: modelContext
             )
         }

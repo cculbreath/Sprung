@@ -2,18 +2,18 @@ import SwiftUI
 
 /// Knowledge Cards tab using generic CoverflowBrowser with KnowledgeCardView.
 struct KnowledgeCardsBrowserTab: View {
-    @Binding var cards: [ResRef]
-    let resRefStore: ResRefStore
-    let onCardUpdated: (ResRef) -> Void
-    let onCardDeleted: (ResRef) -> Void
-    let onCardAdded: (ResRef) -> Void
+    @Binding var cards: [KnowledgeCard]
+    let knowledgeCardStore: KnowledgeCardStore
+    let onCardUpdated: (KnowledgeCard) -> Void
+    let onCardDeleted: (KnowledgeCard) -> Void
+    let onCardAdded: (KnowledgeCard) -> Void
     let llmFacade: LLMFacade?
 
     @State private var selectedFilter: CardTypeFilter = .all
     @State private var searchText = ""
-    @State private var editingCard: ResRef?
+    @State private var editingCard: KnowledgeCard?
     @State private var showDeleteConfirmation = false
-    @State private var cardToDelete: ResRef?
+    @State private var cardToDelete: KnowledgeCard?
     @State private var showAddSheet = false
     @State private var showIngestionSheet = false
 
@@ -37,23 +37,23 @@ struct KnowledgeCardsBrowserTab: View {
         }
     }
 
-    private var filteredCards: [ResRef] {
+    private var filteredCards: [KnowledgeCard] {
         var result = cards
         if selectedFilter != .all {
             if selectedFilter == .other {
                 result = result.filter {
-                    $0.cardType == nil ||
-                    !["job", "skill", "education", "project"].contains($0.cardType?.lowercased() ?? "")
+                    guard let type = $0.cardType else { return true }
+                    return !["employment", "project", "education", "achievement"].contains(type.rawValue.lowercased())
                 }
             } else if let filterType = selectedFilter.cardType {
-                result = result.filter { $0.cardType?.lowercased() == filterType }
+                result = result.filter { $0.cardType?.rawValue.lowercased() == filterType }
             }
         }
         if !searchText.isEmpty {
             let search = searchText.lowercased()
             result = result.filter {
-                $0.name.lowercased().contains(search) ||
-                $0.content.lowercased().contains(search) ||
+                $0.title.lowercased().contains(search) ||
+                $0.narrative.lowercased().contains(search) ||
                 ($0.organization?.lowercased().contains(search) ?? false)
             }
         }
@@ -72,7 +72,7 @@ struct KnowledgeCardsBrowserTab: View {
         ) { card, isTopCard in
             // Card content
             KnowledgeCardView(
-                resRef: card,
+                card: card,
                 isTopCard: isTopCard,
                 onEdit: { editingCard = card },
                 onDelete: { cardToDelete = card; showDeleteConfirmation = true }
@@ -105,13 +105,13 @@ struct KnowledgeCardsBrowserTab: View {
             DocumentIngestionSheet { newCard in
                 onCardAdded(newCard)
             }
-            .environment(resRefStore)
+            .environment(knowledgeCardStore)
         }
         .alert("Delete Card?", isPresented: $showDeleteConfirmation, presenting: cardToDelete) { card in
             Button("Delete", role: .destructive) { onCardDeleted(card) }
             Button("Cancel", role: .cancel) {}
         } message: { card in
-            Text("Delete \"\(card.name)\"? This cannot be undone.")
+            Text("Delete \"\(card.title)\"? This cannot be undone.")
         }
         .onChange(of: selectedFilter) { _, _ in }  // Index reset handled by CoverflowBrowser
         .onChange(of: searchText) { _, _ in }
@@ -196,12 +196,12 @@ struct KnowledgeCardsBrowserTab: View {
             return cards.count
         case .other:
             return cards.filter {
-                $0.cardType == nil ||
-                !["job", "skill", "education", "project"].contains($0.cardType?.lowercased() ?? "")
+                guard let type = $0.cardType else { return true }
+                return !["employment", "project", "education", "achievement"].contains(type.rawValue.lowercased())
             }.count
         default:
             guard let filterType = filter.cardType else { return 0 }
-            return cards.filter { $0.cardType?.lowercased() == filterType }.count
+            return cards.filter { $0.cardType?.rawValue.lowercased() == filterType }.count
         }
     }
 }
