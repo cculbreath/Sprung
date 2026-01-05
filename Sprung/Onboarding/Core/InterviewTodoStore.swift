@@ -40,9 +40,24 @@ struct InterviewTodoItem: Codable, Identifiable {
 /// Provides methods for the LLM to manipulate the list via tool calls.
 actor InterviewTodoStore {
 
+    // MARK: - Dependencies
+
+    private weak var eventBus: EventCoordinator?
+
     // MARK: - State
 
     private(set) var items: [InterviewTodoItem] = []
+
+    // MARK: - Initialization
+
+    init(eventBus: EventCoordinator? = nil) {
+        self.eventBus = eventBus
+    }
+
+    /// Set the event bus after initialization (for dependency injection)
+    func setEventBus(_ eventBus: EventCoordinator) {
+        self.eventBus = eventBus
+    }
 
     // MARK: - Public API (for tool)
 
@@ -52,6 +67,7 @@ actor InterviewTodoStore {
         items = newItems
         Logger.info("📋 Todo list updated: \(items.count) item(s)", category: .ai)
         logCurrentState()
+        emitUpdateEvent()
     }
 
     /// Add a single item to the list
@@ -150,6 +166,18 @@ actor InterviewTodoStore {
         for (index, item) in items.enumerated() {
             let icon = item.status == .completed ? "✓" : (item.status == .inProgress ? "→" : "○")
             Logger.debug("   \(icon) \(index + 1). \(item.content) [\(item.status.rawValue)]", category: .ai)
+        }
+    }
+
+    /// Emit event for persistence
+    private func emitUpdateEvent() {
+        guard let eventBus else { return }
+        // Serialize items to JSON
+        if let data = try? JSONEncoder().encode(items),
+           let jsonString = String(data: data, encoding: .utf8) {
+            Task {
+                await eventBus.publish(.todoListUpdated(todoListJSON: jsonString))
+            }
         }
     }
 }

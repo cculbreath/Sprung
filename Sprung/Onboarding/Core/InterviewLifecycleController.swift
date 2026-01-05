@@ -176,6 +176,9 @@ final class InterviewLifecycleController {
         // Restore UI states (document collection, timeline editor)
         await restoreUIStates(from: session)
 
+        // Restore todo list
+        await restoreTodoList(from: session)
+
         // Mark session as resumed
         _ = sessionPersistenceHandler.startSession(resumeExisting: true)
 
@@ -252,6 +255,18 @@ final class InterviewLifecycleController {
             ui.isTimelineEditorActive = true
             Logger.info("📥 Restored timeline editor active state", category: .ai)
         }
+    }
+
+    /// Restore todo list from persisted session
+    private func restoreTodoList(from session: OnboardingSession) async {
+        guard let todoListJSON = sessionPersistenceHandler.getRestoredTodoList(session),
+              let data = todoListJSON.data(using: .utf8),
+              let items = try? JSONDecoder().decode([InterviewTodoItem].self, from: data) else {
+            return
+        }
+
+        await todoStore.restoreItems(items)
+        Logger.info("📥 Restored \(items.count) todo item(s)", category: .ai)
     }
 
     /// Internal method to start the LLM orchestrator and related infrastructure

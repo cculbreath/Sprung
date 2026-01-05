@@ -99,6 +99,8 @@ enum OnboardingEvent {
     case mergeComplete(cardCount: Int, gapCount: Int)
     /// Emitted when merged inventory is produced (for persistence)
     case mergedInventoryStored(inventoryJSON: String)
+    /// Emitted when todo list is updated (for persistence)
+    case todoListUpdated(todoListJSON: String)
     // MARK: - Evidence Requirements
     case evidenceRequirementAdded(EvidenceRequirement)
     case evidenceRequirementUpdated(EvidenceRequirement)
@@ -451,7 +453,7 @@ actor EventCoordinator {
         case .objectiveStatusRequested, .objectiveStatusUpdateRequested, .objectiveStatusChanged:
             return .objective
         // Tool events
-        case .toolCallRequested, .toolCallCompleted, .mergedInventoryStored:
+        case .toolCallRequested, .toolCallCompleted, .mergedInventoryStored, .todoListUpdated:
             return .tool
         // Artifact events
         case .uploadCompleted,
@@ -740,6 +742,8 @@ actor EventCoordinator {
             description = "🛑 Token budget exceeded: \(inputTokens) > \(threshold) - triggering PRI reset"
         case .mergedInventoryStored(let inventoryJSON):
             description = "Merged inventory stored: \(inventoryJSON.count) chars"
+        case .todoListUpdated(let todoListJSON):
+            description = "Todo list updated: \(todoListJSON.count) chars"
         }
         Logger.debug("[Event] \(description)", category: .ai)
     }

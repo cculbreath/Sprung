@@ -166,7 +166,7 @@ final class OnboardingDependencyContainer {
         self.conversationLogStore = ConversationLogStore()
         self.agentActivityTracker = AgentActivityTracker()
         self.tokenUsageTracker = TokenUsageTracker()
-        self.todoStore = InterviewTodoStore()
+        self.todoStore = InterviewTodoStore(eventBus: core.eventBus)
 
         // 3. Initialize state stores
         let stores = Self.createStateStores(eventBus: core.eventBus, phasePolicy: core.phasePolicy)

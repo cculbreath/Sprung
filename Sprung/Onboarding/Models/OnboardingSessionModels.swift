@@ -37,6 +37,8 @@ class OnboardingSession {
     var isDocumentCollectionActive: Bool?
     /// Whether timeline editor was active (for session restore)
     var isTimelineEditorActive: Bool?
+    /// Todo list JSON (for restoring LLM task tracking state)
+    var todoListJSON: String?
 
     // MARK: - Relationships
     @Relationship(deleteRule: .cascade, inverse: \OnboardingObjectiveRecord.session)
@@ -64,7 +66,8 @@ class OnboardingSession {
         enabledSectionsCSV: String? = nil,
         mergedInventoryJSON: String? = nil,
         isDocumentCollectionActive: Bool? = nil,
-        isTimelineEditorActive: Bool? = nil
+        isTimelineEditorActive: Bool? = nil,
+        todoListJSON: String? = nil
     ) {
         self.id = id
         self.previousResponseId = previousResponseId
@@ -78,6 +81,7 @@ class OnboardingSession {
         self.mergedInventoryJSON = mergedInventoryJSON
         self.isDocumentCollectionActive = isDocumentCollectionActive
         self.isTimelineEditorActive = isTimelineEditorActive
+        self.todoListJSON = todoListJSON
     }
 }
 

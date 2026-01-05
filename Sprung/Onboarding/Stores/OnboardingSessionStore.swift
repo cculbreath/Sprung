@@ -260,6 +260,21 @@ final class OnboardingSessionStore: SwiftDataStore {
         session.mergedInventoryJSON
     }
 
+    // MARK: - Todo List Management
+
+    /// Update todo list JSON (LLM task tracking)
+    func updateTodoList(_ session: OnboardingSession, todoListJSON: String?) {
+        session.todoListJSON = todoListJSON
+        session.lastActiveAt = Date()
+        saveContext()
+        Logger.debug("Persisted todo list (\(todoListJSON?.count ?? 0) chars)", category: .ai)
+    }
+
+    /// Get todo list JSON
+    func getTodoList(_ session: OnboardingSession) -> String? {
+        session.todoListJSON
+    }
+
     // MARK: - UI State Management
 
     /// Update document collection active state

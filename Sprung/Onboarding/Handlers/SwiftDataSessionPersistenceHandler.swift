@@ -255,6 +255,10 @@ final class SwiftDataSessionPersistenceHandler {
         case .mergedInventoryStored(let inventoryJSON):
             sessionStore.updateMergedInventory(session, inventoryJSON: inventoryJSON)
 
+        case .todoListUpdated(let todoListJSON):
+            sessionStore.updateTodoList(session, todoListJSON: todoListJSON)
+            Logger.debug("💾 Persisted todo list: \(todoListJSON.count) chars", category: .ai)
+
         default:
             break
         }
@@ -535,6 +539,11 @@ final class SwiftDataSessionPersistenceHandler {
     /// Get restored timeline editor active state
     func getRestoredTimelineEditorActive(_ session: OnboardingSession) -> Bool {
         sessionStore.getTimelineEditorActive(session)
+    }
+
+    /// Get restored todo list JSON
+    func getRestoredTodoList(_ session: OnboardingSession) -> String? {
+        sessionStore.getTodoList(session)
     }
 
     // MARK: - Archived Artifacts
