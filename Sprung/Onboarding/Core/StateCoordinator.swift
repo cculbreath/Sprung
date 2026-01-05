@@ -759,6 +759,16 @@ actor StateCoordinator: OnboardingEventEmitter {
         await artifactRepository.getEnabledSections()
     }
 
+    /// Store custom field definitions
+    func storeCustomFieldDefinitions(_ definitions: [CustomFieldDefinition]) async {
+        await artifactRepository.setCustomFieldDefinitions(definitions)
+    }
+
+    /// Get custom field definitions configured by user in Phase 2
+    func getCustomFieldDefinitions() async -> [CustomFieldDefinition] {
+        await artifactRepository.getCustomFieldDefinitions()
+    }
+
     /// Direct access to artifact records for UI sync
     var artifactRecords: [JSON] {
         get async {

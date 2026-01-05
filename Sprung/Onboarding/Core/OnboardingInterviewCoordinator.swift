@@ -35,9 +35,10 @@ final class OnboardingInterviewCoordinator {
     private var coordinatorEventRouter: CoordinatorEventRouter { container.coordinatorEventRouter }
     // Profile Persistence
     private var profilePersistenceHandler: ProfilePersistenceHandler { container.profilePersistenceHandler }
-    // Data Stores (used for data existence checks and reset)
+    // Data Stores (used for data existence checks, reset, and view access)
     private var applicantProfileStore: ApplicantProfileStore { container.getApplicantProfileStore() }
-    private var resRefStore: ResRefStore { container.getResRefStore() }
+    var knowledgeCardStore: KnowledgeCardStore { container.getKnowledgeCardStore() }
+    var skillStore: SkillStore { container.getSkillStore() }
     private var coverRefStore: CoverRefStore { container.getCoverRefStore() }
     private var experienceDefaultsStore: ExperienceDefaultsStore { container.getExperienceDefaultsStore() }
     private var artifactRecordStore: ArtifactRecordStore { container.artifactRecordStore }
@@ -64,19 +65,19 @@ final class OnboardingInterviewCoordinator {
         sessionArtifacts.filter { $0.isWritingSample }
     }
 
-    /// All knowledge cards (ResRefs) including both onboarding and manually created
-    var allKnowledgeCards: [ResRef] {
-        resRefStore.resRefs
+    /// All knowledge cards including both onboarding and manually created
+    var allKnowledgeCards: [KnowledgeCard] {
+        knowledgeCardStore.knowledgeCards
     }
 
-    /// Access to ResRefStore for CRUD operations on knowledge cards
-    func getResRefStore() -> ResRefStore {
-        resRefStore
+    /// Access to KnowledgeCardStore for CRUD operations on knowledge cards
+    func getKnowledgeCardStore() -> KnowledgeCardStore {
+        knowledgeCardStore
     }
 
     /// Sync a knowledge card to the filesystem mirror (for LLM browsing)
-    func syncResRefToFilesystem(_ resRef: ResRef) async {
-        await container.phaseTransitionController.updateResRefInFilesystem(resRef)
+    func syncKnowledgeCardToFilesystem(_ card: KnowledgeCard) async {
+        await container.phaseTransitionController.updateKnowledgeCardInFilesystem(card)
     }
 
     // MARK: - Multi-Agent Infrastructure
@@ -128,7 +129,8 @@ final class OnboardingInterviewCoordinator {
         llmFacade: LLMFacade?,
         documentExtractionService: DocumentExtractionService,
         applicantProfileStore: ApplicantProfileStore,
-        resRefStore: ResRefStore,
+        knowledgeCardStore: KnowledgeCardStore,
+        skillStore: SkillStore,
         coverRefStore: CoverRefStore,
         experienceDefaultsStore: ExperienceDefaultsStore,
         sessionStore: OnboardingSessionStore,
@@ -140,7 +142,8 @@ final class OnboardingInterviewCoordinator {
             llmFacade: llmFacade,
             documentExtractionService: documentExtractionService,
             applicantProfileStore: applicantProfileStore,
-            resRefStore: resRefStore,
+            knowledgeCardStore: knowledgeCardStore,
+            skillStore: skillStore,
             coverRefStore: coverRefStore,
             experienceDefaultsStore: experienceDefaultsStore,
             sessionStore: sessionStore,
@@ -188,9 +191,9 @@ final class OnboardingInterviewCoordinator {
         if hasActiveSession() {
             return true
         }
-        // Check for onboarding ResRefs (knowledge cards)
-        let onboardingResRefs = resRefStore.resRefs.filter { $0.isFromOnboarding }
-        if !onboardingResRefs.isEmpty {
+        // Check for onboarding knowledge cards
+        let onboardingCards = knowledgeCardStore.knowledgeCards.filter { $0.isFromOnboarding }
+        if !onboardingCards.isEmpty {
             return true
         }
         // Check for CoverRefs
@@ -216,14 +219,14 @@ final class OnboardingInterviewCoordinator {
         }
     }
 
-    /// Clear all onboarding data: session, ResRefs, CoverRefs, ExperienceDefaults, and ApplicantProfile
+    /// Clear all onboarding data: session, knowledge cards, CoverRefs, ExperienceDefaults, and ApplicantProfile
     /// Used when user chooses "Start Over" to begin fresh
     func clearAllOnboardingData() {
         Logger.info("🗑️ Clearing all onboarding data", category: .ai)
         // Delete session
         deleteCurrentSession()
-        // Delete onboarding ResRefs (knowledge cards)
-        resRefStore.deleteOnboardingResRefs()
+        // Delete onboarding knowledge cards
+        knowledgeCardStore.deleteOnboardingCards()
         // Delete all CoverRefs
         for coverRef in coverRefStore.storedCoverRefs {
             coverRefStore.deleteCoverRef(coverRef)
@@ -539,16 +542,24 @@ final class OnboardingInterviewCoordinator {
                validation.dataType == "skeleton_timeline",
                ["confirmed", "confirmed_with_changes", "approved", "modified"].contains(status.lowercased()) {
                 await eventBus.publish(.objectiveStatusUpdateRequested(
-                    id: "skeleton_timeline",
+                    id: OnboardingObjectiveId.skeletonTimelineComplete.rawValue,
                     status: "completed",
                     source: "ui_timeline_validated",
                     notes: "Timeline validated by user",
                     details: nil
                 ))
-                // UNGATE: Allow next_phase now that timeline is approved
-                await container.sessionUIState.includeTool(OnboardingToolName.nextPhase.rawValue)
-                Logger.debug("🔓 Ungated next_phase after timeline approval", category: .ai)
-                Logger.debug("✅ skeleton_timeline objective marked complete after validation", category: .ai)
+                Logger.debug("✅ skeleton_timeline_complete objective marked complete after validation", category: .ai)
+
+                // Force configure_enabled_sections as next step (instead of directly ungating next_phase)
+                // next_phase will be ungated when enabledSections objective completes
+                var payload = JSON()
+                payload["text"].string = """
+                    Timeline approved. Now configure which resume sections to include. \
+                    Call configure_enabled_sections with recommendations based on user's background.
+                    """
+                payload["toolChoice"].string = OnboardingToolName.configureEnabledSections.rawValue
+                await eventBus.publish(.llmSendDeveloperMessage(payload: payload))
+                Logger.info("🎯 Forcing configure_enabled_sections after timeline validation", category: .ai)
             }
         }
         return result
@@ -674,8 +685,8 @@ final class OnboardingInterviewCoordinator {
     func rejectApplicantProfile(reason: String) async {
         await uiResponseCoordinator.rejectApplicantProfile(reason: reason)
     }
-    func confirmSectionToggle(enabled: [String]) async {
-        await uiResponseCoordinator.confirmSectionToggle(enabled: enabled)
+    func confirmSectionToggle(enabled: [String], customFields: [CustomFieldDefinition] = []) async {
+        await uiResponseCoordinator.confirmSectionToggle(enabled: enabled, customFields: customFields)
     }
     func rejectSectionToggle(reason: String) async {
         await uiResponseCoordinator.rejectSectionToggle(reason: reason)
@@ -1029,17 +1040,17 @@ final class OnboardingInterviewCoordinator {
     /// - Parameters:
     ///   - artifactIds: Set of artifact IDs to process
     ///   - regenerateSummary: Whether to regenerate summaries
-    ///   - regenerateInventory: Whether to regenerate card inventories
-    ///   - runMerge: Whether to run card merge after completion
-    ///   - dedupeNarratives: Whether to run narrative deduplication after merge
+    ///   - regenerateSkills: Whether to regenerate skills
+    ///   - regenerateNarrativeCards: Whether to regenerate narrative cards
+    ///   - dedupeNarratives: Whether to run narrative deduplication after regeneration
     func regenerateSelected(
         artifactIds: Set<String>,
         regenerateSummary: Bool,
-        regenerateInventory: Bool,
-        runMerge: Bool,
+        regenerateSkills: Bool,
+        regenerateNarrativeCards: Bool,
         dedupeNarratives: Bool = false
     ) async {
-        Logger.debug("🔄 Selective regeneration: \(artifactIds.count) artifacts, summary=\(regenerateSummary), inventory=\(regenerateInventory), merge=\(runMerge), dedupe=\(dedupeNarratives)", category: .ai)
+        Logger.debug("🔄 Selective regeneration: \(artifactIds.count) artifacts, summary=\(regenerateSummary), skills=\(regenerateSkills), cards=\(regenerateNarrativeCards), dedupe=\(dedupeNarratives)", category: .ai)
 
         // Get selected artifacts
         let artifactsToProcess = sessionArtifacts.filter { artifactIds.contains($0.idString) }
@@ -1052,7 +1063,8 @@ final class OnboardingInterviewCoordinator {
         // Build operation description
         var ops: [String] = []
         if regenerateSummary { ops.append("summary") }
-        if regenerateInventory { ops.append("knowledge") }
+        if regenerateSkills { ops.append("skills") }
+        if regenerateNarrativeCards { ops.append("cards") }
         let opsDesc = ops.joined(separator: "+")
 
         // Track the regeneration as an agent
@@ -1066,7 +1078,7 @@ final class OnboardingInterviewCoordinator {
             agentId: agentId,
             entryType: .system,
             content: "Starting regeneration",
-            details: "Artifacts: \(artifactsToProcess.count), Summary: \(regenerateSummary), Knowledge: \(regenerateInventory), Merge: \(runMerge), Dedupe: \(dedupeNarratives)"
+            details: "Artifacts: \(artifactsToProcess.count), Summary: \(regenerateSummary), Skills: \(regenerateSkills), Cards: \(regenerateNarrativeCards), Dedupe: \(dedupeNarratives)"
         )
 
         // Clear selected fields first
@@ -1075,8 +1087,10 @@ final class OnboardingInterviewCoordinator {
                 artifact.summary = nil
                 artifact.briefDescription = nil
             }
-            if regenerateInventory {
+            if regenerateSkills {
                 artifact.skillsJSON = nil
+            }
+            if regenerateNarrativeCards {
                 artifact.narrativeCardsJSON = nil
             }
             Logger.verbose("🗑️ Cleared selected fields for: \(artifact.filename)", category: .ai)
@@ -1107,12 +1121,19 @@ final class OnboardingInterviewCoordinator {
                 let total = artifactsToProcess.count
 
                 group.addTask {
-                    if regenerateSummary && regenerateInventory {
-                        await documentProcessingService.generateSummaryAndKnowledgeExtractionForExistingArtifact(artifact)
-                    } else if regenerateInventory {
-                        await documentProcessingService.generateKnowledgeExtractionForExistingArtifact(artifact)
-                    } else if regenerateSummary {
+                    // Handle summary
+                    if regenerateSummary {
                         await documentProcessingService.generateSummaryForExistingArtifact(artifact)
+                    }
+
+                    // Handle skills and narrative cards
+                    if regenerateSkills && regenerateNarrativeCards {
+                        // Both - use the combined method for efficiency
+                        await documentProcessingService.generateKnowledgeExtractionForExistingArtifact(artifact)
+                    } else if regenerateSkills {
+                        await documentProcessingService.generateSkillsOnlyForExistingArtifact(artifact)
+                    } else if regenerateNarrativeCards {
+                        await documentProcessingService.generateNarrativeCardsOnlyForExistingArtifact(artifact)
                     }
 
                     // Track completion
@@ -1142,16 +1163,6 @@ final class OnboardingInterviewCoordinator {
             content: "Regeneration complete",
             details: "Processed \(artifactsToProcess.count) artifacts"
         )
-
-        if runMerge {
-            Logger.debug("🔄 Triggering card merge...", category: .ai)
-            agentActivityTracker.appendTranscript(
-                agentId: agentId,
-                entryType: .system,
-                content: "Triggering card merge..."
-            )
-            await eventBus.publish(.doneWithUploadsClicked)
-        }
 
         if dedupeNarratives {
             Logger.debug("🔀 Running narrative deduplication...", category: .ai)
@@ -1183,9 +1194,14 @@ final class OnboardingInterviewCoordinator {
             let result = try await cardMergeService.getAllNarrativeCardsDeduped()
             Logger.info("✅ Deduplication complete: \(result.cards.count) cards, \(result.mergeLog.count) merges", category: .ai)
 
-            // Update UI state with deduplicated cards
+            // Clear existing pending cards and add deduplicated ones
             await MainActor.run {
-                ui.aggregatedNarrativeCards = result.cards
+                knowledgeCardStore.deletePendingCards()
+                for card in result.cards {
+                    card.isFromOnboarding = true
+                    card.isPending = true
+                }
+                knowledgeCardStore.addAll(result.cards)
             }
 
             // Log merge decisions for debugging
@@ -1203,8 +1219,8 @@ final class OnboardingInterviewCoordinator {
         deleteCurrentSession()
         Logger.verbose("✅ SwiftData session deleted", category: .ai)
         await MainActor.run {
-            // Delete onboarding knowledge cards (ResRefs with isFromOnboarding=true)
-            resRefStore.deleteOnboardingResRefs()
+            // Delete onboarding knowledge cards
+            knowledgeCardStore.deleteOnboardingCards()
             Logger.verbose("✅ Onboarding knowledge cards deleted", category: .ai)
 
             let profile = applicantProfileStore.currentProfile()

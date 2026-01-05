@@ -10,7 +10,7 @@ import SwiftyJSON
 import SwiftOpenAI
 
 struct SubmitExperienceDefaultsTool: InterviewTool {
-    private static let schema: JSONSchema = {
+    private static let baseSchema: JSONSchema = {
         let properties: [String: JSONSchema] = [
             "professional_summary": MiscSchemas.professionalSummary,
             "work": MiscSchemas.workArray,
@@ -34,10 +34,15 @@ struct SubmitExperienceDefaultsTool: InterviewTool {
 
                 Base entries on the skeleton timeline from Phase 1, enriched with details from Phase 2 knowledge cards.
                 Include quantified achievements and specific technologies where available.
+
+                Custom fields: If the user defined custom fields during section configuration, include them as
+                additional properties with keys matching the field key (e.g., "custom.objective"). Generate content
+                based on the field's description. Custom field descriptions will be provided in the tool response
+                after the first call attempt, or check enabled sections configuration.
                 """,
             properties: properties,
             required: [],  // All sections optional - tool validates against enabled sections
-            additionalProperties: false
+            additionalProperties: true  // Allow custom.* fields
         )
     }()
 
@@ -50,10 +55,11 @@ struct SubmitExperienceDefaultsTool: InterviewTool {
         """
         Submit resume defaults for the Experience Editor. Only include sections enabled in Phase 1.
         The tool validates against user's section choices and filters accordingly.
+        Custom fields (e.g., custom.objective) can be included if defined during section configuration.
         Required BEFORE calling next_phase to complete the interview.
         """
     }
-    var parameters: JSONSchema { Self.schema }
+    var parameters: JSONSchema { Self.baseSchema }
 
     init(coordinator: OnboardingInterviewCoordinator, eventBus: EventCoordinator, dataStore: InterviewDataStore) {
         self.coordinator = coordinator
@@ -64,6 +70,8 @@ struct SubmitExperienceDefaultsTool: InterviewTool {
     func execute(_ params: JSON) async throws -> ToolResult {
         // Get user's enabled sections from Phase 1
         let enabledSections = await coordinator.state.getEnabledSections()
+        // Get custom field definitions
+        let customFieldDefinitions = await coordinator.state.getCustomFieldDefinitions()
 
         if enabledSections.isEmpty {
             Logger.warning("⚠️ No enabled sections found - using all submitted sections", category: .ai)
@@ -108,8 +116,33 @@ struct SubmitExperienceDefaultsTool: InterviewTool {
             Logger.info("📝 Professional summary included in experience defaults", category: .ai)
         }
 
+        // Handle custom fields (keys starting with "custom.")
+        var customFieldsSaved: [String] = []
+        var missingCustomFields: [CustomFieldDefinition] = []
+
+        for definition in customFieldDefinitions {
+            if let value = params[definition.key].string, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                filteredPayload[definition.key].string = value
+                customFieldsSaved.append(definition.key)
+                Logger.info("📝 Custom field '\(definition.key)' included in experience defaults", category: .ai)
+            } else {
+                missingCustomFields.append(definition)
+            }
+        }
+
         // Check if we have any data to persist
-        guard !includedSections.isEmpty || summarySaved else {
+        guard !includedSections.isEmpty || summarySaved || !customFieldsSaved.isEmpty else {
+            // If custom fields are defined but missing, guide the LLM to include them
+            if !customFieldDefinitions.isEmpty {
+                var response = JSON()
+                response["status"].string = "incomplete"
+                response["error"].string = "No section data provided and custom fields are missing"
+                response["required_custom_fields"] = JSON(customFieldDefinitions.map { definition in
+                    ["key": definition.key, "description": definition.description]
+                })
+                response["hint"].string = "Include the required custom fields with content based on their descriptions"
+                return .immediate(response)
+            }
             return .error(.executionFailed(
                 "No valid section data provided. Include at least one enabled section: \(enabledSections.sorted().joined(separator: ", "))"
             ))
@@ -129,6 +162,15 @@ struct SubmitExperienceDefaultsTool: InterviewTool {
         do {
             let persistedId = try await dataStore.persist(dataType: "experience_defaults", payload: filteredPayload)
             Logger.info("💾 Persisted experience_defaults for phase completion (\(persistedId))", category: .ai)
+
+            // Mark objective as completed so subphase can advance to p4_completion
+            await eventBus.publish(.objectiveStatusUpdateRequested(
+                id: OnboardingObjectiveId.experienceDefaultsSet.rawValue,
+                status: "completed",
+                source: "tool_execution",
+                notes: "Experience defaults persisted",
+                details: nil
+            ))
         } catch {
             Logger.error("❌ Failed to persist experience_defaults: \(error.localizedDescription)", category: .ai)
             return .error(.executionFailed("Failed to persist experience_defaults required for completion: \(error.localizedDescription)"))
@@ -157,6 +199,17 @@ struct SubmitExperienceDefaultsTool: InterviewTool {
         if !skippedSections.isEmpty {
             response["sections_skipped"].arrayObject = skippedSections
             response["skipped_reason"].string = "Not in user's enabled sections from Phase 1"
+        }
+
+        // Include custom field status
+        if !customFieldsSaved.isEmpty {
+            response["custom_fields_saved"].arrayObject = customFieldsSaved
+        }
+        if !missingCustomFields.isEmpty {
+            response["custom_fields_missing"] = JSON(missingCustomFields.map { definition in
+                ["key": definition.key, "description": definition.description]
+            })
+            response["custom_fields_hint"].string = "Consider re-submitting with the missing custom fields included"
         }
 
         return .immediate(response)

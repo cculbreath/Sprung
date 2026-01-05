@@ -214,9 +214,9 @@ struct OnboardingInterviewToolPane: View {
             ResumeSectionsToggleCard(
                 request: sectionToggle,
                 existingDraft: experienceDefaultsStore.loadDraft(),
-                onConfirm: { enabled in
+                onConfirm: { enabled, customFields in
                     Task {
-                        await coordinator.confirmSectionToggle(enabled: enabled)
+                        await coordinator.confirmSectionToggle(enabled: enabled, customFields: customFields)
                     }
                 },
                 onCancel: {
@@ -306,20 +306,26 @@ struct OnboardingInterviewToolPane: View {
                     }
                 )
             } else if coordinator.ui.isMergingCards || coordinator.ui.cardAssignmentsReadyForApproval || coordinator.ui.isGeneratingCards {
-                // Card workflow in progress - show knowledge card collection view
-                KnowledgeCardCollectionView(
-                    coordinator: coordinator,
-                    onGenerateCards: {
-                        Task {
-                            await coordinator.eventBus.publish(.generateCardsButtonClicked)
-                        }
-                    },
-                    onAdvanceToNextPhase: {
-                        Task {
-                            await coordinator.requestPhaseAdvanceFromUI()
-                        }
+                // Card workflow in progress - show knowledge cards and skills for review
+                ScrollView {
+                    VStack(spacing: 12) {
+                        KnowledgeCardCollectionView(
+                            coordinator: coordinator,
+                            onGenerateCards: {
+                                Task {
+                                    await coordinator.eventBus.publish(.generateCardsButtonClicked)
+                                }
+                            },
+                            onAdvanceToNextPhase: {
+                                Task {
+                                    await coordinator.requestPhaseAdvanceFromUI()
+                                }
+                            }
+                        )
+
+                        PendingSkillsCollectionView(coordinator: coordinator)
                     }
-                )
+                }
             } else {
                 // Default: empty state - timeline is in Timeline tab
                 InterviewTabEmptyState(phase: .phase2CareerStory)
@@ -352,19 +358,26 @@ struct OnboardingInterviewToolPane: View {
                     }
                 )
             } else if coordinator.ui.isMergingCards || coordinator.ui.cardAssignmentsReadyForApproval || coordinator.ui.isGeneratingCards {
-                KnowledgeCardCollectionView(
-                    coordinator: coordinator,
-                    onGenerateCards: {
-                        Task {
-                            await coordinator.eventBus.publish(.generateCardsButtonClicked)
-                        }
-                    },
-                    onAdvanceToNextPhase: {
-                        Task {
-                            await coordinator.requestPhaseAdvanceFromUI()
-                        }
+                // Card workflow in progress - show knowledge cards and skills for review
+                ScrollView {
+                    VStack(spacing: 12) {
+                        KnowledgeCardCollectionView(
+                            coordinator: coordinator,
+                            onGenerateCards: {
+                                Task {
+                                    await coordinator.eventBus.publish(.generateCardsButtonClicked)
+                                }
+                            },
+                            onAdvanceToNextPhase: {
+                                Task {
+                                    await coordinator.requestPhaseAdvanceFromUI()
+                                }
+                            }
+                        )
+
+                        PendingSkillsCollectionView(coordinator: coordinator)
                     }
-                )
+                }
             } else {
                 // Default: empty state - document collection UI hidden after Done with Uploads
                 InterviewTabEmptyState(phase: .phase3EvidenceCollection)

@@ -342,6 +342,36 @@ final class OnboardingPersistenceService {
             Logger.info("📋 Added professional summary", category: .ai)
         }
 
+        // Process custom fields (keys starting with "custom.")
+        // LLM can send either scalar strings or arrays of strings
+        var customFields: [CustomFieldValue] = []
+        if let dict = defaults.dictionary {
+            for (key, value) in dict where key.hasPrefix("custom.") {
+                // Extract the field key (keep the full key including "custom." prefix for clarity)
+                let fieldKey = key
+
+                var values: [String] = []
+                if let stringValue = value.string {
+                    // Scalar value - wrap in array
+                    values = [stringValue]
+                } else if let arrayValue = value.array {
+                    // Array value - extract string values
+                    values = arrayValue.compactMap { $0.string }
+                }
+
+                if !values.isEmpty {
+                    let customField = CustomFieldValue(key: fieldKey, values: values)
+                    customFields.append(customField)
+                    Logger.info("📋 Added custom field '\(fieldKey)' with \(values.count) value(s)", category: .ai)
+                }
+            }
+        }
+
+        if !customFields.isEmpty {
+            draft.customFields = customFields
+            draft.isCustomEnabled = true
+        }
+
         // Save the draft
         experienceDefaultsStore.save(draft: draft)
         Logger.info("✅ Saved LLM-generated experience defaults to store", category: .ai)

@@ -134,6 +134,17 @@ final class ArtifactRecord {
         return false
     }
 
+    /// True if this is a git repository artifact
+    var isGitRepo: Bool {
+        sourceType == "git" || sourceType == "git_repository"
+    }
+
+    /// True if this is a document artifact (not a writing sample or git repo)
+    /// Used for filtering regeneration options
+    var isDocumentArtifact: Bool {
+        !isWritingSample && !isGitRepo
+    }
+
     /// ID as string for compatibility with existing code
     var idString: String {
         id.uuidString

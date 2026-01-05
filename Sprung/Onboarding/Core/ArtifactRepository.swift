@@ -61,6 +61,18 @@ actor ArtifactRepository: OnboardingEventEmitter {
     func getEnabledSections() -> Set<String> {
         artifacts.enabledSections
     }
+
+    /// Set custom field definitions
+    func setCustomFieldDefinitions(_ definitions: [CustomFieldDefinition]) async {
+        artifacts.customFieldDefinitions = definitions
+        Logger.info("📋 Custom field definitions updated: \(definitions.count) fields", category: .ai)
+    }
+
+    /// Get custom field definitions
+    func getCustomFieldDefinitions() -> [CustomFieldDefinition] {
+        artifacts.customFieldDefinitions
+    }
+
     // MARK: - Artifact Records
     /// Set artifact records (bulk restore)
     func setArtifactRecords(_ records: [JSON]) {

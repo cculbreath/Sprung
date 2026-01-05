@@ -1,13 +1,16 @@
 import SwiftUI
 struct ResumeSectionsToggleCard: View {
     let request: OnboardingSectionToggleRequest
-    let onConfirm: ([String]) -> Void
+    let onConfirm: ([String], [CustomFieldDefinition]) -> Void
     let onCancel: () -> Void
     @State private var draft: ExperienceDefaultsDraft
+    @State private var customFields: [CustomFieldDefinition] = []
+    @State private var showAddCustomField = false
+
     init(
         request: OnboardingSectionToggleRequest,
         existingDraft: ExperienceDefaultsDraft,
-        onConfirm: @escaping ([String]) -> Void,
+        onConfirm: @escaping ([String], [CustomFieldDefinition]) -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.request = request
@@ -44,17 +47,27 @@ struct ResumeSectionsToggleCard: View {
                     .foregroundStyle(.secondary)
             }
             ScrollView(.vertical, showsIndicators: true) {
-                ResumeSectionToggleGrid(draft: $draft, recommended: recommendedSections)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 8)
+                VStack(alignment: .leading, spacing: 16) {
+                    ResumeSectionToggleGrid(draft: $draft, recommended: recommendedSections)
+
+                    Divider()
+
+                    // Custom Fields Section
+                    CustomFieldsSection(
+                        customFields: $customFields,
+                        showAddCustomField: $showAddCustomField
+                    )
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 8)
             }
-            .frame(maxHeight: 240)
+            .frame(maxHeight: 320)
             HStack {
                 Button("Cancel", action: onCancel)
                 Spacer()
                 Button("Confirm Sections", action: {
                     let enabled = draft.enabledSectionKeys().map(\.rawValue)
-                    onConfirm(enabled)
+                    onConfirm(enabled, customFields)
                 })
                 .buttonStyle(.borderedProminent)
             }
@@ -64,6 +77,145 @@ struct ResumeSectionsToggleCard: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color(nsColor: .controlBackgroundColor))
         )
+    }
+}
+
+// MARK: - Custom Fields Section
+
+private struct CustomFieldsSection: View {
+    @Binding var customFields: [CustomFieldDefinition]
+    @Binding var showAddCustomField: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Custom Fields")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Spacer()
+                Button {
+                    showAddCustomField = true
+                } label: {
+                    Label("Add", systemImage: "plus.circle")
+                        .font(.caption)
+                }
+                .buttonStyle(.link)
+            }
+
+            Text("Define custom fields to generate (e.g., objective statement, target roles)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if customFields.isEmpty {
+                Text("No custom fields defined")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .padding(.vertical, 4)
+            } else {
+                ForEach(customFields) { field in
+                    CustomFieldRow(field: field) {
+                        customFields.removeAll { $0.id == field.id }
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showAddCustomField) {
+            AddCustomFieldSheet { newField in
+                customFields.append(newField)
+                showAddCustomField = false
+            } onCancel: {
+                showAddCustomField = false
+            }
+        }
+    }
+}
+
+private struct CustomFieldRow: View {
+    let field: CustomFieldDefinition
+    let onDelete: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(field.key)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.primary)
+                Text(field.description)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            Spacer()
+            Button {
+                onDelete()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(8)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+        .cornerRadius(6)
+    }
+}
+
+private struct AddCustomFieldSheet: View {
+    @State private var key: String = "custom."
+    @State private var description: String = ""
+    let onAdd: (CustomFieldDefinition) -> Void
+    let onCancel: () -> Void
+
+    private var isValid: Bool {
+        key.hasPrefix("custom.") && key.count > 7 && !description.isEmpty
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Add Custom Field")
+                .font(.headline)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Field Key")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextField("custom.objective", text: $key)
+                    .textFieldStyle(.roundedBorder)
+                Text("Must start with \"custom.\" (e.g., custom.objective, custom.targetRoles)")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Description (guides content generation)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextEditor(text: $description)
+                    .frame(height: 80)
+                    .font(.body)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                    )
+                Text("e.g., \"3-5 sentence summary of candidate's positions, goals and interest in position\"")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
+            HStack {
+                Button("Cancel", action: onCancel)
+                Spacer()
+                Button("Add Field") {
+                    let field = CustomFieldDefinition(key: key, description: description)
+                    onAdd(field)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!isValid)
+            }
+        }
+        .padding()
+        .frame(width: 400)
     }
 }
 private struct ResumeSectionToggleGrid: View {

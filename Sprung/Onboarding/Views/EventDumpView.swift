@@ -278,15 +278,15 @@ struct EventDumpView: View {
 
     private var regenSheet: some View {
         RegenOptionsDialog(
-            artifacts: coordinator.sessionArtifacts.filter { !$0.isWritingSample },
+            artifacts: coordinator.sessionArtifacts.filter { $0.isDocumentArtifact },
             onConfirm: { selectedIds, operations in
                 showRegenDialog = false
                 Task {
                     await coordinator.regenerateSelected(
                         artifactIds: selectedIds,
                         regenerateSummary: operations.summary,
-                        regenerateInventory: operations.knowledgeExtraction,
-                        runMerge: operations.remerge,
+                        regenerateSkills: operations.regenerateSkills,
+                        regenerateNarrativeCards: operations.regenerateNarrativeCards,
                         dedupeNarratives: operations.dedupeNarratives
                     )
                 }

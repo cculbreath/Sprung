@@ -409,24 +409,42 @@ final class UIResponseCoordinator {
         Logger.info("✅ Profile URL submitted and user message sent to LLM", category: .ai)
     }
     // MARK: - Section Toggle Handling
-    func confirmSectionToggle(enabled: [String]) async {
+    func confirmSectionToggle(enabled: [String], customFields: [CustomFieldDefinition] = []) async {
         guard toolRouter.resolveSectionToggle(enabled: enabled) != nil else { return }
 
         // Complete pending UI tool call (Codex paradigm)
         // No separate user message needed - tool response contains the completion info
         var output = JSON()
-        output["message"].string = "Section toggle confirmed. Enabled sections: \(enabled.joined(separator: ", "))"
+        var message = "Section toggle confirmed. Enabled sections: \(enabled.joined(separator: ", "))"
+        if !customFields.isEmpty {
+            let customFieldsSummary = customFields.map { "\($0.key): \($0.description)" }.joined(separator: "; ")
+            message += ". Custom fields: \(customFieldsSummary)"
+        }
+        output["message"].string = message
         output["status"].string = "completed"
         await completePendingUIToolCall(output: output)
 
+        // Store enabled sections in artifact repository
+        await state.restoreEnabledSections(Set(enabled))
+
+        // Store custom field definitions
+        if !customFields.isEmpty {
+            await state.storeCustomFieldDefinitions(customFields)
+            Logger.info("📋 Stored \(customFields.count) custom field definitions", category: .ai)
+        }
+
         // Mark enabled_sections objective as complete
         await eventBus.publish(.objectiveStatusUpdateRequested(
-            id: "enabled_sections",
+            id: OnboardingObjectiveId.enabledSections.rawValue,
             status: "completed",
             source: "ui_section_toggle_confirmed",
             notes: "Section toggle confirmed by user",
             details: ["sections": enabled.joined(separator: ", ")]
         ))
+
+        // UNGATE: Allow next_phase now that sections are configured
+        await sessionUIState.includeTool(OnboardingToolName.nextPhase.rawValue)
+        Logger.debug("🔓 Ungated next_phase after section toggle confirmation", category: .ai)
 
         Logger.info("✅ Section toggle confirmed - info included in tool response", category: .ai)
     }
