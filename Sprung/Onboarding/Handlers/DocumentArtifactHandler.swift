@@ -13,6 +13,7 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
     let eventBus: EventCoordinator
     private let documentProcessingService: DocumentProcessingService
     private let agentTracker: AgentActivityTracker
+    private let stateCoordinator: StateCoordinator
 
     // MARK: - Configuration
 
@@ -45,11 +46,13 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
     init(
         eventBus: EventCoordinator,
         documentProcessingService: DocumentProcessingService,
-        agentTracker: AgentActivityTracker
+        agentTracker: AgentActivityTracker,
+        stateCoordinator: StateCoordinator
     ) {
         self.eventBus = eventBus
         self.documentProcessingService = documentProcessingService
         self.agentTracker = agentTracker
+        self.stateCoordinator = stateCoordinator
         Logger.info("📄 DocumentArtifactHandler initialized", category: .ai)
     }
     // MARK: - Lifecycle
@@ -87,9 +90,6 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
             return
         }
 
-        // Check if using Anthropic backend (for direct PDF sending)
-        let isAnthropic = UserDefaults.standard.string(forKey: "onboardingProvider") == "anthropic"
-
         // Categorize and queue files by type using centralized policy
         var queuedCount = 0
 
@@ -97,8 +97,9 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
             let ext = file.storageURL.pathExtension.lowercased()
 
             if DocumentTypePolicy.isExtractable(ext) {
-                // Special case: Resume PDFs sent directly to Anthropic (skip extraction pipeline)
-                if requestKind == "resume" && ext == "pdf" && isAnthropic {
+                // Special case: Resume PDFs sent directly to LLM (skip extraction pipeline)
+                // This allows the LLM to read the PDF natively without skills extraction
+                if requestKind == "resume" && ext == "pdf" {
                     await sendPDFDirectlyToLLM(file: file, requestKind: requestKind, callId: callId, metadata: metadata)
                     continue
                 }
@@ -324,10 +325,14 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         return record
     }
 
-    // MARK: - Direct PDF Sending (Anthropic)
+    // MARK: - Direct PDF Sending
 
     /// Send a PDF file directly to the LLM without extraction pipeline.
-    /// Used for resumes when Anthropic is the backend (supports native PDF).
+    /// Used for resume uploads to allow the LLM to read the document natively
+    /// without skills extraction or knowledge card generation.
+    ///
+    /// If there's a pending tool call (from get_user_upload), completes it first,
+    /// then sends the PDF as a user message attachment.
     private func sendPDFDirectlyToLLM(
         file: ProcessedUploadInfo,
         requestKind: String,
@@ -336,7 +341,7 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
     ) async {
         let filename = file.filename
 
-        Logger.info("📄 Sending PDF directly to LLM (Anthropic): \(filename)", category: .ai)
+        Logger.info("📄 Sending resume PDF directly to LLM: \(filename)", category: .ai)
 
         // Read PDF file as base64
         guard let pdfData = try? Data(contentsOf: file.storageURL) else {
@@ -347,7 +352,7 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         let pdfBase64 = pdfData.base64EncodedString()
         let sizeKB = pdfData.count / 1024
 
-        // Build message text
+        // Build message text for the PDF
         let messageText = """
             I've uploaded my resume: **\(filename)** (\(sizeKB) KB)
 
@@ -355,15 +360,39 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
             """
 
         // Build payload with PDF data (same pattern as image attachments)
-        var payload = JSON()
-        payload["text"].string = messageText
-        payload["image_data"].string = pdfBase64  // Reusing image_data field for PDF
-        payload["image_filename"].string = filename
-        payload["content_type"].string = "application/pdf"
+        var pdfPayload = JSON()
+        pdfPayload["text"].string = messageText
+        pdfPayload["image_data"].string = pdfBase64  // Reusing image_data field for PDF
+        pdfPayload["image_filename"].string = filename
+        pdfPayload["content_type"].string = "application/pdf"
 
-        // Send to LLM
-        await emit(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
+        // Check if there's a pending UI tool call (from get_user_upload)
+        // If so, complete it first, then send the PDF as a user message
+        if let pendingCall = await stateCoordinator.getPendingUIToolCall() {
+            Logger.info("📤 Completing pending tool call before sending PDF (call: \(pendingCall.callId.prefix(8))...)", category: .ai)
 
-        Logger.info("✅ Resume PDF sent directly to Anthropic: \(filename) (\(sizeKB) KB)", category: .ai)
+            // Build tool output indicating upload completed
+            var output = JSON()
+            output["status"].string = "completed"
+            output["message"].string = "Resume PDF received: \(filename) (\(sizeKB) KB). The document will be sent as an attachment for review."
+
+            // Build tool response payload
+            var toolPayload = JSON()
+            toolPayload["callId"].string = pendingCall.callId
+            toolPayload["output"] = output
+
+            // Emit tool response (this completes the pending tool call)
+            await emit(.llmToolResponseMessage(payload: toolPayload))
+
+            // Clear the pending tool call
+            await stateCoordinator.clearPendingUIToolCall()
+
+            Logger.info("✅ Tool call completed, now sending PDF attachment", category: .ai)
+        }
+
+        // Send the PDF as a user message with attachment
+        // This works for both OpenAI (via ContentItem) and Anthropic (native PDF support)
+        await emit(.llmSendUserMessage(payload: pdfPayload, isSystemGenerated: true))
+        Logger.info("✅ Resume PDF sent to LLM: \(filename) (\(sizeKB) KB)", category: .ai)
     }
 }

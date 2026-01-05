@@ -382,7 +382,8 @@ final class OnboardingDependencyContainer {
             uploadStorage: uploadStorage, documentProcessingService: documentProcessingService,
             documentArtifactHandler: DocumentArtifactHandler(eventBus: eventBus,
                                                              documentProcessingService: documentProcessingService,
-                                                             agentTracker: agentTracker),
+                                                             agentTracker: agentTracker,
+                                                             stateCoordinator: stateCoordinator),
             documentArtifactMessenger: DocumentArtifactMessenger(eventBus: eventBus, stateCoordinator: stateCoordinator)
         )
     }
