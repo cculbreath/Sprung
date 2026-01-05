@@ -272,8 +272,10 @@ struct ToolBundlePolicy {
             return .p1_profileIntake
         case .validationPrompt:
             return .p1_profileValidation
-        case .choicePrompt:
-            return .p1_jobSearchContext
+        // NOTE: .choicePrompt intentionally NOT mapped here.
+        // Choice prompts can appear during various Phase 1 activities. We rely on
+        // objective-based inference below to determine the correct subphase,
+        // ensuring tools like next_phase are available when the phase is ready to advance.
         default:
             break
         }
@@ -322,8 +324,11 @@ struct ToolBundlePolicy {
             // User clicked "Done with Timeline" - need to validate before advancing
             // This enables submit_for_validation tool
             return .p2_timelineValidation
-        case .choicePrompt:
-            return .p2_workPreferences
+        // NOTE: .choicePrompt intentionally NOT mapped here.
+        // Choice prompts can appear during various Phase 2 activities (work preferences,
+        // section config follow-ups, etc.). We rely on objective-based inference below
+        // to determine the correct subphase, ensuring tools like next_phase are available
+        // when the interview is ready to advance.
         case .sectionToggle:
             return .p2_sectionConfig
         default:
@@ -365,12 +370,14 @@ struct ToolBundlePolicy {
         toolPaneCard: OnboardingToolPaneCard,
         objectives: [String: String]
     ) -> InterviewSubphase {
-        // UI state takes precedence
+        // UI state takes precedence for specific card types
         switch toolPaneCard {
         case .uploadRequest:
             return .p3_documentCollection
-        case .choicePrompt:
-            return .p3_gitCollection
+        // NOTE: .choicePrompt intentionally NOT mapped here.
+        // Choice prompts can appear during various Phase 3 activities (git collection,
+        // card review, etc.). We rely on objective-based inference below to determine
+        // the correct subphase, ensuring tools like next_phase are available when ready.
         case .validationPrompt:
             return .p3_cardReview
         default:
@@ -412,12 +419,14 @@ struct ToolBundlePolicy {
         toolPaneCard: OnboardingToolPaneCard,
         objectives: [String: String]
     ) -> InterviewSubphase {
-        // UI state takes precedence
+        // UI state takes precedence for specific card types
         switch toolPaneCard {
         case .validationPrompt:
             return .p4_experienceDefaults
-        case .choicePrompt:
-            return .p4_dossierCompletion
+        // NOTE: .choicePrompt intentionally NOT mapped here.
+        // Choice prompts can appear during various Phase 4 activities. We rely on
+        // objective-based inference below to determine the correct subphase,
+        // ensuring tools like next_phase are available when ready.
         default:
             break
         }

@@ -143,7 +143,22 @@ final class PhaseScriptRegistry {
             )
         }
 
-        Logger.info("✅ Phase 2→3 validated: \(experiences.count) timeline entries exist and validated", category: .ai)
+        // VALIDATION 3: enabled_sections MUST be configured before Phase 3
+        let sectionsStatus = coordinator.ui.objectiveStatuses[OnboardingObjectiveId.enabledSections.rawValue]
+        if sectionsStatus != "completed" {
+            Logger.warning("⚠️ next_phase blocked: enabled_sections not configured", category: .ai)
+            return .blocked(
+                reason: "sections_not_configured",
+                message: """
+                    Cannot advance to Phase 3: Resume sections have not been configured. \
+                    Call configure_enabled_sections to let the user choose which resume sections to include \
+                    (e.g., work, education, skills, projects). Base your recommendations on their timeline. \
+                    After user confirms, you can call next_phase to proceed to evidence collection.
+                    """
+            )
+        }
+
+        Logger.info("✅ Phase 2→3 validated: \(experiences.count) timeline entries, sections configured", category: .ai)
         return .allowed
     }
 

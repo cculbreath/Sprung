@@ -76,23 +76,14 @@ struct PhaseTwoScript: PhaseScript {
             ),
 
             // MARK: - Timeline Enrichment (Active Interviewing)
+            // NOTE: No onComplete handler here. configure_enabled_sections is triggered by
+            // next_phase validation blocking (in PhaseScriptRegistry.validatePhaseTwoToThree).
+            // This avoids the race condition where timelineEnriched.onComplete fired before
+            // the user actually validated the timeline in the popup.
             OnboardingObjectiveId.timelineEnriched.rawValue: ObjectiveWorkflow(
                 id: OnboardingObjectiveId.timelineEnriched.rawValue,
                 dependsOn: [OnboardingObjectiveId.skeletonTimelineComplete.rawValue],
-                autoStartWhenReady: true,
-                onComplete: { context in
-                    let title = """
-                        Timeline enriched with context. Now configure enabled sections. \
-                        Call configure_enabled_sections with recommendations based on the user's background. \
-                        "Based on your experience, I'd suggest including these sections: [list]. Does that sound right?"
-                        """
-                    let details = [
-                        "next_objective": OnboardingObjectiveId.enabledSections.rawValue,
-                        "status": context.status.rawValue,
-                        "action": "call_configure_enabled_sections"
-                    ]
-                    return [.developerMessage(title: title, details: details, payload: nil, toolChoice: OnboardingToolName.configureEnabledSections.rawValue)]
-                }
+                autoStartWhenReady: true
             ),
 
             // MARK: - Work Preferences (Dossier Weaving)
