@@ -45,8 +45,8 @@ struct UpdateTodoListTool: InterviewTool {
                             ),
                             "status": JSONSchema(
                                 type: .string,
-                                enumValues: ["pending", "in_progress", "completed"],
-                                description: "Current status: pending (not started), in_progress (working on it), completed (done)"
+                                description: "Current status: pending (not started), in_progress (working on it), completed (done)",
+                                enum: ["pending", "in_progress", "completed"]
                             ),
                             "activeForm": JSONSchema(
                                 type: .string,
