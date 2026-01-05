@@ -331,8 +331,8 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
     /// Used for resume uploads to allow the LLM to read the document natively
     /// without skills extraction or knowledge card generation.
     ///
-    /// If there's a pending tool call (from get_user_upload), completes it first,
-    /// then sends the PDF as a user message attachment.
+    /// The PDF is included IN the tool response message (alongside the tool_result block)
+    /// so the LLM sees it in the same turn, not as a separate follow-up message.
     private func sendPDFDirectlyToLLM(
         file: ProcessedUploadInfo,
         requestKind: String,
@@ -352,47 +352,35 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         let pdfBase64 = pdfData.base64EncodedString()
         let sizeKB = pdfData.count / 1024
 
-        // Build message text for the PDF
-        let messageText = """
-            I've uploaded my resume: **\(filename)** (\(sizeKB) KB)
-
-            Please review this document to understand my professional background.
-            """
-
-        // Build payload with PDF data (same pattern as image attachments)
-        var pdfPayload = JSON()
-        pdfPayload["text"].string = messageText
-        pdfPayload["image_data"].string = pdfBase64  // Reusing image_data field for PDF
-        pdfPayload["image_filename"].string = filename
-        pdfPayload["content_type"].string = "application/pdf"
-
         // Check if there's a pending UI tool call (from get_user_upload)
-        // If so, complete it first, then send the PDF as a user message
-        if let pendingCall = await stateCoordinator.getPendingUIToolCall() {
-            Logger.info("📤 Completing pending tool call before sending PDF (call: \(pendingCall.callId.prefix(8))...)", category: .ai)
-
-            // Build tool output indicating upload completed
-            var output = JSON()
-            output["status"].string = "completed"
-            output["message"].string = "Resume PDF received: \(filename) (\(sizeKB) KB). The document will be sent as an attachment for review."
-
-            // Build tool response payload
-            var toolPayload = JSON()
-            toolPayload["callId"].string = pendingCall.callId
-            toolPayload["output"] = output
-
-            // Emit tool response (this completes the pending tool call)
-            await emit(.llmToolResponseMessage(payload: toolPayload))
-
-            // Clear the pending tool call
-            await stateCoordinator.clearPendingUIToolCall()
-
-            Logger.info("✅ Tool call completed, now sending PDF attachment", category: .ai)
+        guard let pendingCall = await stateCoordinator.getPendingUIToolCall() else {
+            Logger.warning("⚠️ No pending tool call for resume PDF - cannot attach to response", category: .ai)
+            return
         }
 
-        // Send the PDF as a user message with attachment
-        // This works for both OpenAI (via ContentItem) and Anthropic (native PDF support)
-        await emit(.llmSendUserMessage(payload: pdfPayload, isSystemGenerated: true))
-        Logger.info("✅ Resume PDF sent to LLM: \(filename) (\(sizeKB) KB)", category: .ai)
+        Logger.info("📤 Completing tool call with PDF attachment (call: \(pendingCall.callId.prefix(8))...)", category: .ai)
+
+        // Build tool output with PDF attachment info
+        var output = JSON()
+        output["status"].string = "completed"
+        output["message"].string = "Resume PDF attached below. Please review to understand the user's professional background."
+
+        // Build tool response payload WITH PDF data
+        // The PDF will be included as a document block alongside the tool_result
+        var toolPayload = JSON()
+        toolPayload["callId"].string = pendingCall.callId
+        toolPayload["output"] = output
+        // Include PDF data in the tool response payload
+        toolPayload["pdf_data"].string = pdfBase64
+        toolPayload["pdf_filename"].string = filename
+        toolPayload["pdf_size_kb"].int = sizeKB
+
+        // Emit tool response with PDF attachment
+        await emit(.llmToolResponseMessage(payload: toolPayload))
+
+        // Clear the pending tool call
+        await stateCoordinator.clearPendingUIToolCall()
+
+        Logger.info("✅ Resume PDF sent with tool response: \(filename) (\(sizeKB) KB)", category: .ai)
     }
 }

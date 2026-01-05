@@ -850,6 +850,10 @@ actor LLMMessenger: OnboardingEventEmitter {
             let toolName = payload["toolName"].stringValue
             let instruction = payload["instruction"].string  // Anthropic-native guidance
 
+            // Extract PDF attachment if present (for resume uploads)
+            let pdfBase64 = payload["pdf_data"].string
+            let pdfFilename = payload["pdf_filename"].string
+
             let toolChoice: String?
             if let payloadToolChoice = payload["toolChoice"].string {
                 toolChoice = payloadToolChoice
@@ -861,6 +865,9 @@ actor LLMMessenger: OnboardingEventEmitter {
             if let instruction = instruction {
                 Logger.debug("📋 Instruction attached: \(instruction.prefix(50))...", category: .ai)
             }
+            if pdfBase64 != nil {
+                Logger.info("📄 PDF attachment included: \(pdfFilename ?? "unknown")", category: .ai)
+            }
             Logger.verbose("📤 Sending Anthropic tool response for callId=\(String(callId.prefix(12)))...", category: .ai)
 
             // Note: Don't store result before building request - buildToolResponseRequest adds it explicitly
@@ -870,7 +877,9 @@ actor LLMMessenger: OnboardingEventEmitter {
                 callId: callId,
                 toolName: toolName,
                 instruction: instruction,
-                forcedToolChoice: toolChoice
+                forcedToolChoice: toolChoice,
+                pdfBase64: pdfBase64,
+                pdfFilename: pdfFilename
             )
 
             // Log request size for debugging 400 errors

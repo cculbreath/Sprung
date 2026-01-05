@@ -233,12 +233,16 @@ struct AnthropicRequestBuilder {
     ///   - instruction: Optional instruction text to include after the tool_result.
     ///     This travels WITH the tool result for immediate guidance.
     ///   - forcedToolChoice: Optional tool to force (deprecated - prefer instruction text)
+    ///   - pdfBase64: Optional base64-encoded PDF to include as a document block
+    ///   - pdfFilename: Optional filename for the PDF attachment
     func buildToolResponseRequest(
         output: JSON,
         callId: String,
         toolName: String,
         instruction: String? = nil,
-        forcedToolChoice: String? = nil
+        forcedToolChoice: String? = nil,
+        pdfBase64: String? = nil,
+        pdfFilename: String? = nil
     ) async -> AnthropicMessageParameter {
         var messages: [AnthropicMessage] = []
 
@@ -247,11 +251,19 @@ struct AnthropicRequestBuilder {
         messages.append(contentsOf: history)
 
         // Build tool result message with interview context and optional instruction
-        // Per Anthropic docs: tool_result blocks FIRST, then text AFTER
+        // Per Anthropic docs: tool_result blocks FIRST, then other content AFTER
         let resultContent = output.rawString() ?? "{}"
         var contentBlocks: [AnthropicContentBlock] = [
             .toolResult(AnthropicToolResultBlock(toolUseId: callId, content: resultContent))
         ]
+
+        // If PDF data is provided, include it as a document block
+        // This allows resumes to be sent directly to the LLM alongside the tool result
+        if let pdfData = pdfBase64 {
+            let docSource = AnthropicDocumentSource(mediaType: "application/pdf", data: pdfData)
+            contentBlocks.append(.document(AnthropicDocumentBlock(source: docSource)))
+            Logger.info("📄 Including PDF document block with tool result: \(pdfFilename ?? "unknown")", category: .ai)
+        }
 
         // Build text content: interview_context + optional coordinator instruction
         var textParts: [String] = []
