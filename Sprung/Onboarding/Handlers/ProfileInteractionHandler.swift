@@ -98,7 +98,7 @@ final class ProfileInteractionHandler {
             you conduct a more informed and personalized interview.
             """
 
-        await eventBus.publish(.llmExecuteDeveloperMessage(payload: payload))
+        await eventBus.publish(.llmExecuteCoordinatorMessage(payload: payload))
     }
     /// Rejects an applicant profile validation.
     func rejectProfile(reason: String) -> JSON? {

@@ -49,7 +49,8 @@ struct ToolBundlePolicy {
     static let safeEscapeTools: Set<String> = [
         OnboardingToolName.updateDossierNotes.rawValue,       // Scratchpad always available
         OnboardingToolName.askUserSkipToNextPhase.rawValue,   // Escape hatch - FORCES advance on user agreement
-        OnboardingToolName.getUserOption.rawValue             // Always allow structured questions
+        OnboardingToolName.getUserOption.rawValue,            // Always allow structured questions
+        OnboardingToolName.updateTodoList.rawValue            // Task tracking always available
     ]
 
     // MARK: - Artifact Access Tools

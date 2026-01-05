@@ -131,10 +131,10 @@ enum OnboardingEvent {
     case chatboxUserMessageAdded(messageId: String)  // Emitted when chatbox adds message to transcript immediately
     case llmUserMessageFailed(messageId: String, originalText: String, error: String)  // Emitted when user message fails (timeout, network error)
     case llmUserMessageSent(messageId: String, payload: JSON, isSystemGenerated: Bool = false)
-    case llmDeveloperMessageSent(messageId: String, payload: JSON)
+    case llmCoordinatorMessageSent(messageId: String, payload: JSON)
     case llmSentToolResponseMessage(messageId: String, payload: JSON)
     case llmSendUserMessage(payload: JSON, isSystemGenerated: Bool = false, chatboxMessageId: String? = nil, originalText: String? = nil, toolChoice: String? = nil)
-    case llmSendDeveloperMessage(payload: JSON)
+    case llmSendCoordinatorMessage(payload: JSON)
     case llmToolResponseMessage(payload: JSON)
     case llmStatus(status: LLMStatus)
     // Stream request events (for enqueueing via StateCoordinator)
@@ -144,9 +144,9 @@ enum OnboardingEvent {
     case llmToolCallBatchStarted(expectedCount: Int, callIds: [String])
     case llmExecuteBatchedToolResponses(payloads: [JSON])
     // Stream execution events (for serial processing via StateCoordinator)
-    case llmExecuteUserMessage(payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String? = nil, originalText: String? = nil, bundledDeveloperMessages: [JSON] = [], toolChoice: String? = nil)
+    case llmExecuteUserMessage(payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String? = nil, originalText: String? = nil, bundledCoordinatorMessages: [JSON] = [], toolChoice: String? = nil)
     case llmExecuteToolResponse(payload: JSON)
-    case llmExecuteDeveloperMessage(payload: JSON)
+    case llmExecuteCoordinatorMessage(payload: JSON)
     case llmStreamCompleted  // Signal that a stream finished and queue can process next item
     // Sidebar reasoning (ChatGPT-style, not attached to messages)
     case llmReasoningSummaryDelta(delta: String)  // Incremental reasoning text for sidebar
@@ -182,16 +182,16 @@ enum OnboardingEvent {
             return "llmEnqueueToolResponse"
         case .llmExecuteToolResponse:
             return "llmExecuteToolResponse"
-        case .llmSendDeveloperMessage:
-            return "llmSendDeveloperMessage"
-        case .llmExecuteDeveloperMessage:
-            return "llmExecuteDeveloperMessage"
+        case .llmSendCoordinatorMessage:
+            return "llmSendCoordinatorMessage"
+        case .llmExecuteCoordinatorMessage:
+            return "llmExecuteCoordinatorMessage"
         case .llmSentToolResponseMessage(let messageId, _):
             return "llmSentToolResponseMessage(messageId: \(messageId.prefix(8))...)"
         case .llmUserMessageSent(let messageId, _, let isSystemGenerated):
             return "llmUserMessageSent(messageId: \(messageId.prefix(8))..., isSystemGenerated: \(isSystemGenerated))"
-        case .llmDeveloperMessageSent(let messageId, _):
-            return "llmDeveloperMessageSent(messageId: \(messageId.prefix(8))...)"
+        case .llmCoordinatorMessageSent(let messageId, _):
+            return "llmCoordinatorMessageSent(messageId: \(messageId.prefix(8))...)"
         case .llmExecuteBatchedToolResponses(let payloads):
             return "llmExecuteBatchedToolResponses(count: \(payloads.count))"
         case .streamingMessageFinalized(let id, let finalText, let toolCalls, _):
@@ -430,11 +430,11 @@ actor EventCoordinator {
     private func extractTopic(from event: OnboardingEvent) -> EventTopic {
         switch event {
         // LLM events
-        case .chatboxUserMessageAdded, .llmUserMessageFailed, .llmUserMessageSent, .llmDeveloperMessageSent, .llmSentToolResponseMessage,
-             .llmSendUserMessage, .llmSendDeveloperMessage, .llmToolResponseMessage, .llmStatus,
+        case .chatboxUserMessageAdded, .llmUserMessageFailed, .llmUserMessageSent, .llmCoordinatorMessageSent, .llmSentToolResponseMessage,
+             .llmSendUserMessage, .llmSendCoordinatorMessage, .llmToolResponseMessage, .llmStatus,
              .llmEnqueueUserMessage, .llmEnqueueToolResponse,
              .llmToolCallBatchStarted, .llmExecuteBatchedToolResponses,
-             .llmExecuteUserMessage, .llmExecuteToolResponse, .llmExecuteDeveloperMessage, .llmStreamCompleted,
+             .llmExecuteUserMessage, .llmExecuteToolResponse, .llmExecuteCoordinatorMessage, .llmStreamCompleted,
              .llmReasoningSummaryDelta, .llmReasoningSummaryComplete, .llmReasoningItemsForToolCalls, .llmCancelRequested,
              .llmResponseIdUpdated, .llmTokenUsageReceived, .llmBudgetExceeded, .toolResultPairedWithMessage,
              .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized:
@@ -450,10 +450,8 @@ actor EventCoordinator {
         // Objective events
         case .objectiveStatusRequested, .objectiveStatusUpdateRequested, .objectiveStatusChanged:
             return .objective
-        // Tool events (non-UI status updates go to processing for overlay display)
-        case .toolCallRequested, .toolCallCompleted:
-            return .processing
-        case .mergedInventoryStored:
+        // Tool events
+        case .toolCallRequested, .toolCallCompleted, .mergedInventoryStored:
             return .tool
         // Artifact events
         case .uploadCompleted,
@@ -672,14 +670,14 @@ actor EventCoordinator {
             description = "LLM user message failed: \(messageId.prefix(8))... - \(error.prefix(50))"
         case .llmUserMessageSent:
             description = "LLM user message sent"
-        case .llmDeveloperMessageSent:
-            description = "LLM developer message sent"
+        case .llmCoordinatorMessageSent:
+            description = "LLM coordinator message sent"
         case .llmSentToolResponseMessage:
             description = "LLM tool response sent"
         case .llmSendUserMessage:
             description = "LLM send user message requested"
-        case .llmSendDeveloperMessage:
-            description = "LLM send developer message requested"
+        case .llmSendCoordinatorMessage:
+            description = "LLM send coordinator message requested"
         case .llmToolResponseMessage:
             description = "LLM tool response requested"
         case .llmEnqueueUserMessage(_, let isSystemGenerated, let chatboxMessageId, _, let toolChoice):
@@ -692,15 +690,15 @@ actor EventCoordinator {
             description = "LLM tool call batch started (expecting \(expectedCount) responses)"
         case .llmExecuteBatchedToolResponses(let payloads):
             description = "LLM execute batched tool responses (\(payloads.count) responses)"
-        case .llmExecuteUserMessage(_, let isSystemGenerated, let chatboxMessageId, _, let bundledDevMessages, let toolChoice):
+        case .llmExecuteUserMessage(_, let isSystemGenerated, let chatboxMessageId, _, let bundledCoordMsgs, let toolChoice):
             let chatboxInfo = chatboxMessageId.map { " chatbox:\($0.prefix(8))..." } ?? ""
-            let bundledInfo = bundledDevMessages.isEmpty ? "" : " +\(bundledDevMessages.count) dev msgs"
+            let bundledInfo = bundledCoordMsgs.isEmpty ? "" : " +\(bundledCoordMsgs.count) coord msgs"
             let toolInfo = toolChoice.map { " toolChoice:\($0)" } ?? ""
             description = "LLM execute user message (system: \(isSystemGenerated)\(chatboxInfo)\(bundledInfo)\(toolInfo))"
         case .llmExecuteToolResponse:
             description = "LLM execute tool response"
-        case .llmExecuteDeveloperMessage:
-            description = "LLM execute developer message"
+        case .llmExecuteCoordinatorMessage:
+            description = "LLM execute coordinator message"
         case .llmStreamCompleted:
             description = "LLM stream completed"
         case .llmStatus(let status):

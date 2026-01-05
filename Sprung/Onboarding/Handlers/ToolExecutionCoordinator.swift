@@ -65,23 +65,13 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
                 await handleToolResult(result, callId: call.callId, toolName: call.name)
             } catch {
                 Logger.error("Tool execution failed: \(error)", category: .ai)
-                await emitToolError(callId: call.callId, message: "Tool execution failed: \(error.localizedDescription)")
+                await emitToolError(callId: call.callId, toolName: call.name, message: "Tool execution failed: \(error.localizedDescription)")
             }
 
         case .blocked(let reason):
-            // Check if this tool should auto-complete instead of blocking
-            // This prevents conversation sync errors for "cleanup" tools like cancel_user_upload
-            if OnboardingToolName.autoCompleteWhenBlockedTools.contains(call.name) {
-                Logger.info("✅ Tool '\(call.name)' auto-completed (would have been blocked: \(reason))", category: .ai)
-                var autoCompleteOutput = JSON()
-                autoCompleteOutput["status"].string = "completed"
-                autoCompleteOutput["message"].string = "Action already completed by user interaction"
-                await emitToolResponse(callId: call.callId, output: autoCompleteOutput)
-            } else {
-                // Tool is blocked - emit error
-                Logger.warning("🚫 Tool call '\(call.name)' blocked: \(reason)", category: .ai)
-                await emitToolError(callId: call.callId, message: reason)
-            }
+            // Tool is blocked - emit error telling LLM to wait for user
+            Logger.warning("🚫 Tool call '\(call.name)' blocked: \(reason)", category: .ai)
+            await emitToolError(callId: call.callId, toolName: call.name, message: reason)
         }
     }
     /// Handle tool execution result
@@ -112,7 +102,7 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             let nextRequiredTool = output["next_required_tool"].string
 
             // Tool completed - send response to LLM
-            await emitToolResponse(callId: callId, output: output, reasoningEffort: reasoningEffort, nextRequiredTool: nextRequiredTool)
+            await emitToolResponse(callId: callId, toolName: toolName, output: output, reasoningEffort: reasoningEffort, nextRequiredTool: nextRequiredTool)
 
             // Special handling for bootstrap tools - remove from allowed tools after use
             if output["disable_after_use"].bool == true {
@@ -126,7 +116,7 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             var errorOutput = JSON()
             errorOutput["error"].string = error.localizedDescription
             errorOutput["status"].string = "incomplete"
-            await emitToolResponse(callId: callId, output: errorOutput)
+            await emitToolResponse(callId: callId, toolName: toolName, output: errorOutput)
 
         case .pendingUserAction:
             // Codex paradigm: UI tool presented, awaiting user action.
@@ -135,17 +125,17 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             let pendingToolName = toolName ?? "unknown"
 
             // Check if there's already a pending UI tool call
-            // If so, auto-complete this duplicate to prevent conversation sync errors
+            // If so, return incomplete status - don't lie about completion
             // (The LLM sometimes issues parallel identical UI tool calls in a batch)
             if let existingPending = await stateCoordinator.getPendingUIToolCall() {
                 Logger.warning("⚠️ Duplicate UI tool call detected: \(pendingToolName) (callId: \(callId.prefix(8))) while \(existingPending.toolName) (callId: \(existingPending.callId.prefix(8))) is already pending", category: .ai)
 
-                // Auto-complete the duplicate with a success message
-                var autoCompleteOutput = JSON()
-                autoCompleteOutput["status"].string = "completed"
-                autoCompleteOutput["message"].string = "Request already in progress - user is responding to the active prompt"
-                await emitToolResponse(callId: callId, output: autoCompleteOutput)
-                Logger.info("✅ Auto-completed duplicate UI tool call: \(pendingToolName) (callId: \(callId.prefix(8)))", category: .ai)
+                // Return incomplete - be honest that this duplicate wasn't processed
+                var output = JSON()
+                output["status"].string = "incomplete"
+                output["error"].string = "Duplicate request - \(existingPending.toolName) is already awaiting user response. Wait for user to complete the active prompt."
+                await emitToolResponse(callId: callId, toolName: pendingToolName, output: output)
+                Logger.info("⚠️ Duplicate UI tool call returned incomplete: \(pendingToolName)", category: .ai)
                 return
             }
 
@@ -157,12 +147,16 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
     /// Emit tool response to LLM
     /// - Parameters:
     ///   - callId: The tool call ID
+    ///   - toolName: The tool name (for result storage)
     ///   - output: The tool output JSON
     ///   - reasoningEffort: Optional reasoning effort level
     ///   - nextRequiredTool: Optional tool name to force as toolChoice (for chaining)
-    private func emitToolResponse(callId: String, output: JSON, reasoningEffort: String? = nil, nextRequiredTool: String? = nil) async {
+    private func emitToolResponse(callId: String, toolName: String? = nil, output: JSON, reasoningEffort: String? = nil, nextRequiredTool: String? = nil) async {
         var payload = JSON()
         payload["callId"].string = callId
+        if let name = toolName {
+            payload["toolName"].string = name
+        }
         payload["output"] = output
         if let effort = reasoningEffort {
             payload["reasoningEffort"].string = effort
@@ -176,10 +170,10 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
         Logger.debug("📤 Full tool response payload: callId=\(callId), output=\(output)", category: .ai)
     }
     /// Emit tool error
-    private func emitToolError(callId: String, message: String) async {
+    private func emitToolError(callId: String, toolName: String, message: String) async {
         var errorOutput = JSON()
         errorOutput["error"].string = message
         errorOutput["status"].string = "incomplete"
-        await emitToolResponse(callId: callId, output: errorOutput)
+        await emitToolResponse(callId: callId, toolName: toolName, output: errorOutput)
     }
 }

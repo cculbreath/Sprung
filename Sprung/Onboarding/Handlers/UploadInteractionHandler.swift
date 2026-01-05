@@ -332,7 +332,7 @@ final class UploadInteractionHandler {
             details["content_type"].string = first.contentType
             details["note"].string = "Photo stored in ApplicantProfile; binary image data is not sent to the LLM."
             devPayload["details"] = details
-            await eventBus.publish(.llmSendDeveloperMessage(payload: devPayload))
+            await eventBus.publish(.llmSendCoordinatorMessage(payload: devPayload))
 
             // Mark contact_photo_collected objective as complete
             await eventBus.publish(.objectiveStatusUpdateRequested(

@@ -26,6 +26,7 @@ final class InterviewLifecycleController {
     private let chatTranscriptStore: ChatTranscriptStore
     private let knowledgeCardStore: KnowledgeCardStore
     private let skillStore: SkillStore
+    private let todoStore: InterviewTodoStore
 
     // MARK: - Lifecycle State
     private(set) var orchestrator: InterviewOrchestrator?
@@ -58,7 +59,8 @@ final class InterviewLifecycleController {
         sessionPersistenceHandler: SwiftDataSessionPersistenceHandler,
         chatTranscriptStore: ChatTranscriptStore,
         knowledgeCardStore: KnowledgeCardStore,
-        skillStore: SkillStore
+        skillStore: SkillStore,
+        todoStore: InterviewTodoStore
     ) {
         self.state = state
         self.eventBus = eventBus
@@ -78,6 +80,7 @@ final class InterviewLifecycleController {
         self.chatTranscriptStore = chatTranscriptStore
         self.knowledgeCardStore = knowledgeCardStore
         self.skillStore = skillStore
+        self.todoStore = todoStore
     }
 
     // MARK: - Configuration
@@ -283,8 +286,8 @@ final class InterviewLifecycleController {
 
         // Build orchestrator
         let phase = await state.phase
-        let baseDeveloperMessage = phaseRegistry.buildSystemPrompt(for: phase)
-        let orchestrator = makeOrchestrator(llmFacade: facade, baseDeveloperMessage: baseDeveloperMessage)
+        let baseSystemPrompt = phaseRegistry.buildSystemPrompt(for: phase)
+        let orchestrator = makeOrchestrator(llmFacade: facade, baseSystemPrompt: baseSystemPrompt)
         self.orchestrator = orchestrator
 
         // Publish phase transition BEFORE orchestrator sends initial message
@@ -420,14 +423,15 @@ final class InterviewLifecycleController {
     // MARK: - Factory Methods
     private func makeOrchestrator(
         llmFacade: LLMFacade,
-        baseDeveloperMessage: String
+        baseSystemPrompt: String
     ) -> InterviewOrchestrator {
         return InterviewOrchestrator(
             llmFacade: llmFacade,
-            baseDeveloperMessage: baseDeveloperMessage,
+            baseSystemPrompt: baseSystemPrompt,
             eventBus: eventBus,
             toolRegistry: toolRegistry,
-            state: state
+            state: state,
+            todoStore: todoStore
         )
     }
 }

@@ -174,7 +174,7 @@ actor ArtifactIngestionCoordinator {
         }
         payload["error"].string = error
 
-        await eventBus.publish(.llmSendDeveloperMessage(payload: payload))
+        await eventBus.publish(.llmSendCoordinatorMessage(payload: payload))
         await eventBus.publish(.processingStateChanged(false))
     }
 }

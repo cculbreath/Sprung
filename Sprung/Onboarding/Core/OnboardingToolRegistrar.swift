@@ -7,19 +7,22 @@ final class OnboardingToolRegistrar {
     private let dataStore: InterviewDataStore
     private let eventBus: EventCoordinator
     private let phaseRegistry: PhaseScriptRegistry
+    private let todoStore: InterviewTodoStore
 
     init(
         coordinator: OnboardingInterviewCoordinator,
         toolRegistry: ToolRegistry,
         dataStore: InterviewDataStore,
         eventBus: EventCoordinator,
-        phaseRegistry: PhaseScriptRegistry
+        phaseRegistry: PhaseScriptRegistry,
+        todoStore: InterviewTodoStore
     ) {
         self.coordinator = coordinator
         self.toolRegistry = toolRegistry
         self.dataStore = dataStore
         self.eventBus = eventBus
         self.phaseRegistry = phaseRegistry
+        self.todoStore = todoStore
     }
     func registerTools(
         documentExtractionService: DocumentExtractionService,
@@ -69,6 +72,9 @@ final class OnboardingToolRegistrar {
         toolRegistry.register(ListArtifactDirectoryTool())
         toolRegistry.register(GlobArtifactSearchTool())
         toolRegistry.register(GrepArtifactSearchTool())
+
+        // Meta tools (interview process management)
+        toolRegistry.register(UpdateTodoListTool(todoStore: todoStore))
 
         Logger.info("✅ Registered \(toolRegistry.allTools().count) tools", category: .ai)
     }

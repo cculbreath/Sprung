@@ -1,0 +1,6 @@
+# Ignore common build artifacts
+DerivedData/
+.build/
+.swiftpm/
+Carthage/
+Pods/

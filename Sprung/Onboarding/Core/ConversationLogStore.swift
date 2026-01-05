@@ -121,7 +121,7 @@ final class ConversationLogStore {
             addEntry(type: .user, content: truncated, metadata: ["source": source, "messageId": String(messageId.prefix(8))])
 
         // Developer messages
-        case .llmDeveloperMessageSent(let messageId, let payload):
+        case .llmCoordinatorMessageSent(let messageId, let payload):
             let text = payload["text"].stringValue
             let truncated = text.count > 300 ? String(text.prefix(300)) + "..." : text
             addEntry(type: .developer, content: truncated, metadata: ["messageId": String(messageId.prefix(8))])

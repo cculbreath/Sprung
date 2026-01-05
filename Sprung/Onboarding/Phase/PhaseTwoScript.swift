@@ -55,7 +55,7 @@ struct PhaseTwoScript: PhaseScript {
                         "upload_type": "resume"
                     ]
                     // LLM decides when to call get_user_upload based on context (no forced toolChoice)
-                    return [.developerMessage(title: title, details: details, payload: nil)]
+                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
                 },
                 onComplete: { context in
                     let title = """
@@ -72,7 +72,7 @@ struct PhaseTwoScript: PhaseScript {
                         "status": context.status.rawValue,
                         "interview_approach": "active_probing"
                     ]
-                    return [.developerMessage(title: title, details: details, payload: nil)]
+                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
                 }
             ),
 
@@ -94,7 +94,7 @@ struct PhaseTwoScript: PhaseScript {
                 onComplete: { context in
                     let title = "Work preferences captured (remote/location/arrangement)."
                     let details = ["status": context.status.rawValue]
-                    return [.developerMessage(title: title, details: details, payload: nil)]
+                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
                 }
             ),
 
@@ -105,7 +105,7 @@ struct PhaseTwoScript: PhaseScript {
                 onComplete: { context in
                     let title = "Unique circumstances documented (gaps, pivots, constraints)."
                     let details = ["status": context.status.rawValue]
-                    return [.developerMessage(title: title, details: details, payload: nil)]
+                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
                 }
             ),
 

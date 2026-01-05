@@ -122,7 +122,7 @@ struct RequestTelemetry {
 
     enum RequestType: String {
         case userMessage = "user_message"
-        case developerMessage = "developer_message"
+        case coordinatorMessage = "coordinator_message"
         case toolResponse = "tool_response"
         case batchedToolResponse = "batched_tool_response"
     }

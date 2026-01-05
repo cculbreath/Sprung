@@ -8,30 +8,15 @@
 import Foundation
 
 // MARK: - Model Configuration
-/// Default model configuration for onboarding interview
+/// Default model configuration for onboarding interview (Anthropic-only)
 enum OnboardingModelConfig {
-    /// UserDefaults key for the selected OpenAI interview model
-    static let userDefaultsKey = "onboardingInterviewDefaultModelId"
     /// UserDefaults key for the selected Anthropic interview model
     static let anthropicModelKey = "onboardingAnthropicModelId"
-    /// UserDefaults key for the selected provider
-    static let providerKey = "onboardingProvider"
 
-    /// Returns the currently configured provider
-    static var currentProvider: OnboardingProvider {
-        let rawValue = UserDefaults.standard.string(forKey: providerKey) ?? "openai"
-        return OnboardingProvider(rawValue: rawValue) ?? .openai
-    }
-
-    /// Returns the currently configured model ID from settings (provider-aware)
+    /// Returns the currently configured model ID from settings
     /// Default is registered in SprungApp.init()
     static var currentModelId: String {
-        switch currentProvider {
-        case .openai:
-            return UserDefaults.standard.string(forKey: userDefaultsKey) ?? DefaultModels.openAI
-        case .anthropic:
-            return UserDefaults.standard.string(forKey: anthropicModelKey) ?? DefaultModels.anthropic
-        }
+        UserDefaults.standard.string(forKey: anthropicModelKey) ?? DefaultModels.anthropic
     }
 }
 
@@ -77,6 +62,9 @@ enum OnboardingToolName: String, CaseIterable {
     case listDirectory = "list_directory"
     case globSearch = "glob_search"
     case grepSearch = "grep_search"
+
+    // Meta Tools (interview process management)
+    case updateTodoList = "update_todo_list"
 }
 // MARK: - Objective IDs
 /// All objective IDs used in the onboarding interview flow.
@@ -265,13 +253,6 @@ extension OnboardingToolName {
         OnboardingToolName.reorderTimelineCards
     ].map(\.rawValue))
 
-    /// Tools that should auto-complete successfully instead of being blocked.
-    /// These are "cleanup" or "dismissal" tools that the LLM may call after UI state
-    /// has already changed. Blocking them causes conversation sync errors.
-    /// Instead of blocking, return success with a friendly message.
-    static let autoCompleteWhenBlockedTools: Set<String> = Set([
-        OnboardingToolName.cancelUserUpload  // UI may already be dismissed
-    ].map(\.rawValue))
 }
 
 // MARK: - Convenience Extensions

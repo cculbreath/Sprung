@@ -34,15 +34,15 @@ actor LLMStateManager {
     // MARK: - Pending UI Tool Call (Codex Paradigm)
     /// UI tools that present cards and await user action before responding.
     /// Based on Codex CLI paradigm: tool outputs must be sent before new LLM turns.
-    /// When a UI tool is pending, developer messages are queued behind it.
+    /// When a UI tool is pending, coordinator messages are queued behind it.
     private var pendingUIToolCall: (callId: String, toolName: String)?
 
-    /// Queued developer messages waiting for pending UI tool to complete
-    private var queuedDeveloperMessages: [JSON] = []
+    /// Queued coordinator messages waiting for pending UI tool to complete
+    private var queuedCoordinatorMessages: [JSON] = []
 
     // MARK: - Pending Forced Tool Choice (Tool Chaining)
     /// One-shot override used to force the next LLM request to call a specific tool.
-    /// This exists because developer messages may be queued behind pending UI tools; we still
+    /// This exists because coordinator messages may be queued behind pending UI tools; we still
     /// need the toolChoice to apply to the very next continuation request (often a tool output).
     private var pendingForcedToolChoice: String?
 
@@ -133,19 +133,19 @@ actor LLMStateManager {
         pendingUIToolCall = nil
     }
 
-    /// Queue a developer message while a UI tool is pending
-    func queueDeveloperMessage(_ payload: JSON) {
-        queuedDeveloperMessages.append(payload)
+    /// Queue a coordinator message while a UI tool is pending
+    func queueCoordinatorMessage(_ payload: JSON) {
+        queuedCoordinatorMessages.append(payload)
         let title = payload["title"].stringValue
-        Logger.debug("📥 Developer message queued (pending UI tool): \(title)", category: .ai)
+        Logger.debug("📥 Coordinator message queued (pending UI tool): \(title)", category: .ai)
     }
 
-    /// Drain queued developer messages (call after UI tool output is sent)
-    func drainQueuedDeveloperMessages() -> [JSON] {
-        let messages = queuedDeveloperMessages
-        queuedDeveloperMessages = []
+    /// Drain queued coordinator messages (call after UI tool output is sent)
+    func drainQueuedCoordinatorMessages() -> [JSON] {
+        let messages = queuedCoordinatorMessages
+        queuedCoordinatorMessages = []
         if !messages.isEmpty {
-            Logger.info("📤 Flushing \(messages.count) queued developer message(s)", category: .ai)
+            Logger.info("📤 Flushing \(messages.count) queued coordinator message(s)", category: .ai)
         }
         return messages
     }
@@ -162,15 +162,15 @@ actor LLMStateManager {
         return pendingForcedToolChoice
     }
 
-    /// Remove queued developer messages for a specific objective (call when objective completes)
+    /// Remove queued coordinator messages for a specific objective (call when objective completes)
     func clearQueuedMessagesForObjective(_ objectiveId: String) {
-        let before = queuedDeveloperMessages.count
-        queuedDeveloperMessages.removeAll { payload in
+        let before = queuedCoordinatorMessages.count
+        queuedCoordinatorMessages.removeAll { payload in
             payload["details"]["objective"].stringValue == objectiveId
         }
-        let removed = before - queuedDeveloperMessages.count
+        let removed = before - queuedCoordinatorMessages.count
         if removed > 0 {
-            Logger.info("🗑️ Cleared \(removed) queued developer message(s) for completed objective: \(objectiveId)", category: .ai)
+            Logger.info("🗑️ Cleared \(removed) queued coordinator message(s) for completed objective: \(objectiveId)", category: .ai)
         }
     }
 
@@ -244,7 +244,7 @@ actor LLMStateManager {
         pendingToolResponsePayloads = []
         pendingToolResponseRetryCount = 0
         pendingUIToolCall = nil
-        queuedDeveloperMessages = []
+        queuedCoordinatorMessages = []
         completedToolResults = []
     }
 }

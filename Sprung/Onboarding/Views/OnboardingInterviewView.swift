@@ -15,20 +15,11 @@ struct OnboardingInterviewView: View {
     #if DEBUG
     @State private var showEventDump = false
     #endif
-    @AppStorage("onboardingProvider") private var providerRawValue = "openai"
-    @AppStorage("onboardingInterviewDefaultModelId") private var openAIModelId = DefaultModels.openAI
     @AppStorage("onboardingAnthropicModelId") private var anthropicModelId = DefaultModels.anthropic
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var defaultWebSearchAllowed = true
 
-    private var currentProvider: OnboardingProvider {
-        OnboardingProvider(rawValue: providerRawValue) ?? .openai
-    }
-
     private var currentModelId: String {
-        switch currentProvider {
-        case .openai: return openAIModelId
-        case .anthropic: return anthropicModelId
-        }
+        anthropicModelId
     }
     @Namespace private var wizardTransition
 

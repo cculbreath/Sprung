@@ -48,7 +48,7 @@ struct PhaseOneScript: PhaseScript {
                         "objective": OnboardingObjectiveId.applicantProfileComplete.rawValue,
                         "priority": "first"
                     ]
-                    return [.developerMessage(title: title, details: details, payload: nil)]
+                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
                 },
                 onComplete: { context in
                     let title = """
@@ -64,7 +64,7 @@ struct PhaseOneScript: PhaseScript {
                         "note": "writing_sample_panel_visible_in_sidebar"
                     ]
                     // LLM decides when to call get_user_upload based on context (no forced toolChoice)
-                    return [.developerMessage(title: title, details: details, payload: nil)]
+                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
                 }
             ),
 
@@ -84,7 +84,7 @@ struct PhaseOneScript: PhaseScript {
                         "next_objective": OnboardingObjectiveId.jobSearchContextCaptured.rawValue,
                         "status": context.status.rawValue
                     ]
-                    return [.developerMessage(title: title, details: details, payload: nil)]
+                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
                 }
             ),
 
@@ -100,7 +100,7 @@ struct PhaseOneScript: PhaseScript {
                         Continue with current workflow without interruption.
                         """
                     let details = ["status": context.status.rawValue, "background": "true"]
-                    return [.developerMessage(title: title, details: details, payload: nil)]
+                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
                 }
             ),
 
@@ -122,7 +122,7 @@ struct PhaseOneScript: PhaseScript {
                         "action": "call_next_phase"
                     ]
                     // LLM decides when to call next_phase based on context (no forced toolChoice)
-                    return [.developerMessage(title: title, details: details, payload: nil)]
+                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
                 }
             )
         ]

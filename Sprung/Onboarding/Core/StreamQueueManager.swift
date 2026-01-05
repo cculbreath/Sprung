@@ -1,15 +1,15 @@
 import Foundation
 import SwiftyJSON
 /// Manages serial streaming queue for LLM requests.
-/// Ensures tool responses are processed before developer messages when tool calls are pending.
+/// Ensures tool responses are processed before coordinator messages when tool calls are pending.
 /// Extracted from StateCoordinator to improve testability and separation of concerns.
 actor StreamQueueManager {
     // MARK: - Types
     enum StreamRequestType {
-        case userMessage(payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String?, originalText: String?, bundledDeveloperMessages: [JSON], toolChoice: String?)
+        case userMessage(payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String?, originalText: String?, bundledCoordinatorMessages: [JSON], toolChoice: String?)
         case toolResponse(payload: JSON)
         case batchedToolResponses(payloads: [JSON])
-        case developerMessage(payload: JSON)
+        case coordinatorMessage(payload: JSON)
     }
     // MARK: - Dependencies
     private let eventBus: EventCoordinator
@@ -140,6 +140,18 @@ actor StreamQueueManager {
         // Resetting here would cause race conditions where tool responses are lost.
 
         Logger.debug("✅ Stream completed (queue size: \(streamQueue.count), pending tools: \(expectedToolResponseCount), collected: \(collectedToolResponses.count))", category: .ai)
+
+        // Flush any collected tool responses that were held while streaming
+        // This happens when responses arrive before we know the batch count
+        // and no batch was started (expectedToolResponseCount stayed at 0)
+        if expectedToolResponseCount == 0 && !collectedToolResponses.isEmpty {
+            Logger.info("📦 Flushing \(collectedToolResponses.count) held tool response(s) to queue", category: .ai)
+            for payload in collectedToolResponses {
+                streamQueue.append(.toolResponse(payload: payload))
+            }
+            collectedToolResponses = []
+        }
+
         // Process next item in queue if any
         if !streamQueue.isEmpty {
             Task {
@@ -248,21 +260,21 @@ actor StreamQueueManager {
     /// Emit the appropriate stream request event for LLMMessenger to handle
     private func emitStreamRequest(_ requestType: StreamRequestType) async {
         switch requestType {
-        case .userMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText, let bundledDeveloperMessages, let toolChoice):
+        case .userMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText, let bundledCoordinatorMessages, let toolChoice):
             await eventBus.publish(.llmExecuteUserMessage(
                 payload: payload,
                 isSystemGenerated: isSystemGenerated,
                 chatboxMessageId: chatboxMessageId,
                 originalText: originalText,
-                bundledDeveloperMessages: bundledDeveloperMessages,
+                bundledCoordinatorMessages: bundledCoordinatorMessages,
                 toolChoice: toolChoice
             ))
         case .toolResponse(let payload):
             await eventBus.publish(.llmExecuteToolResponse(payload: payload))
         case .batchedToolResponses(let payloads):
             await eventBus.publish(.llmExecuteBatchedToolResponses(payloads: payloads))
-        case .developerMessage(let payload):
-            await eventBus.publish(.llmExecuteDeveloperMessage(payload: payload))
+        case .coordinatorMessage(let payload):
+            await eventBus.publish(.llmExecuteCoordinatorMessage(payload: payload))
         }
     }
 }

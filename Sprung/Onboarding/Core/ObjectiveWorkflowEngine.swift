@@ -157,14 +157,14 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
     // MARK: - Workflow Output Processing
     private func processWorkflowOutput(_ output: ObjectiveWorkflowOutput) async {
         switch output {
-        case .developerMessage(let title, let details, let payload, let toolChoice):
-            await sendDeveloperMessage(title: title, details: details, payload: payload, toolChoice: toolChoice)
+        case .coordinatorMessage(let title, let details, let payload, let toolChoice):
+            await sendCoordinatorMessage(title: title, details: details, payload: payload, toolChoice: toolChoice)
         case .triggerPhotoFollowUp(let extraDetails):
             await triggerPhotoFollowUp(extraDetails: extraDetails)
         }
     }
-    /// Send a developer message to the LLM
-    private func sendDeveloperMessage(title: String, details: [String: String], payload: JSON?, toolChoice: String? = nil) async {
+    /// Send a coordinator message to the LLM
+    private func sendCoordinatorMessage(title: String, details: [String: String], payload: JSON?, toolChoice: String? = nil) async {
         var messagePayload = JSON()
         messagePayload["text"].string = "Developer status: \(title)"
         if !details.isEmpty {
@@ -183,7 +183,7 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
             Logger.info("🎯 Forcing toolChoice: \(toolChoice)", category: .ai)
         }
         Logger.info("📤 Workflow sending developer message: \(title)", category: .ai)
-        await emit(.llmSendDeveloperMessage(payload: messagePayload))
+        await emit(.llmSendCoordinatorMessage(payload: messagePayload))
     }
     /// Trigger the photo follow-up workflow
     private func triggerPhotoFollowUp(extraDetails: [String: String]) async {
@@ -192,6 +192,6 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
         var details = extraDetails
         details["next_objective"] = OnboardingObjectiveId.contactPhotoCollected.rawValue
         details["instruction"] = "Call get_user_upload tool to request photo"
-        await sendDeveloperMessage(title: title, details: details, payload: nil)
+        await sendCoordinatorMessage(title: title, details: details, payload: nil)
     }
 }

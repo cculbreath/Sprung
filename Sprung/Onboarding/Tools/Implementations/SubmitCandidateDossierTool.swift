@@ -119,7 +119,7 @@ struct SubmitCandidateDossierTool: InterviewTool {
                 If the user rejects or requests changes, revise and re-run submit_candidate_dossier before proceeding.
                 """
             devPayload["details"] = details
-            await eventBus.publish(.llmSendDeveloperMessage(payload: devPayload))
+            await eventBus.publish(.llmSendCoordinatorMessage(payload: devPayload))
 
             // Build response
             var response = JSON()

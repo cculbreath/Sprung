@@ -7,9 +7,7 @@ import SwiftUI
 import SwiftOpenAI
 
 struct OnboardingModelSettingsView: View {
-    @AppStorage("onboardingInterviewDefaultModelId") private var onboardingModelId: String = "gpt-5"
     @AppStorage("onboardingAnthropicModelId") private var onboardingAnthropicModelId: String = "claude-sonnet-4-20250514"
-    @AppStorage("onboardingProvider") private var onboardingProvider: String = "openai"
     @AppStorage("onboardingPDFExtractionModelId") private var pdfExtractionModelId: String = "gemini-2.5-flash"
     @AppStorage("onboardingGitIngestModelId") private var gitIngestModelId: String = "anthropic/claude-haiku-4.5"
     @AppStorage("onboardingDocSummaryModelId") private var docSummaryModelId: String = "gemini-2.5-flash-lite"
@@ -20,10 +18,6 @@ struct OnboardingModelSettingsView: View {
     @AppStorage("voicePrimerExtractionModelId") private var voicePrimerModelId: String = "openai/gpt-4o-mini"
     @AppStorage("onboardingKCAgentModelId") private var kcAgentModelId: String = "anthropic/claude-haiku-4.5"
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var onboardingWebSearchAllowed: Bool = true
-    @AppStorage("onboardingInterviewReasoningEffort") private var onboardingReasoningEffort: String = "none"
-    @AppStorage("onboardingInterviewHardTaskReasoningEffort") private var onboardingHardTaskReasoningEffort: String = "medium"
-    @AppStorage("onboardingInterviewFlexProcessing") private var onboardingFlexProcessing: Bool = true
-    @AppStorage("onboardingInterviewPromptCacheRetention") private var onboardingPromptCacheRetention: Bool = true
     @AppStorage("backgroundProcessingModelId") private var backgroundProcessingModelId: String = "google/gemini-2.0-flash-001"
     @AppStorage("knowledgeCardTokenLimit") private var knowledgeCardTokenLimit: Int = 8000
     @AppStorage("onboardingMaxConcurrentExtractions") private var maxConcurrentExtractions: Int = 5
@@ -38,9 +32,6 @@ struct OnboardingModelSettingsView: View {
     @State private var geminiModels: [GoogleAIService.GeminiModel] = []
     @State private var isLoadingGeminiModels = false
     @State private var geminiModelError: String?
-    @State private var interviewModels: [ModelObject] = []
-    @State private var isLoadingInterviewModels = false
-    @State private var interviewModelError: String?
     @State private var anthropicModels: [AnthropicModel] = []
     @State private var isLoadingAnthropicModels = false
     @State private var anthropicModelError: String?
@@ -48,38 +39,10 @@ struct OnboardingModelSettingsView: View {
     private let googleAIService = GoogleAIService()
     private let pdfExtractionFallbackModelId = DefaultModels.gemini
 
-    /// Models that support extended prompt cache retention (24h)
-    private let promptCacheRetentionCompatibleModels: Set<String> = [
-        "gpt-5.2",
-        "gpt-5.1-codex-max", "gpt-5.1", "gpt-5.1-codex", "gpt-5.1-codex-mini", "gpt-5.1-chat-latest",
-        "gpt-5", "gpt-5-codex",
-        "gpt-4.1"
-    ]
-
-    /// Models that support flex processing (50% cost savings, variable latency)
-    private let flexProcessingCompatibleModels: Set<String> = [
-        "gpt-5.2", "gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-5-nano",
-        "o3", "o4-mini"
-    ]
-
-    private let reasoningOptions: [(value: String, label: String, detail: String)] = [
-        ("none", "None", "GPT-5.1 only; fastest responses, no reasoning tokens"),
-        ("minimal", "Minimal", "GPT-5 only; lightweight reasoning"),
-        ("low", "Low", "Light reasoning for moderately complex tasks"),
-        ("medium", "Medium", "Balanced speed and reasoning depth"),
-        ("high", "High", "Maximum reasoning; best for complex tasks")
-    ]
-
     var body: some View {
         Form {
             Section {
-                providerPicker
-            } header: {
-                SettingsSectionHeader(title: "Provider", systemImage: "server.rack")
-            }
-
-            Section {
-                onboardingInterviewModelPicker
+                anthropicModelPickerContent
             } header: {
                 SettingsSectionHeader(title: "Interview Model", systemImage: "bubble.left.and.bubble.right")
             }
@@ -113,20 +76,12 @@ struct OnboardingModelSettingsView: View {
             } header: {
                 SettingsSectionHeader(title: "Processing Limits", systemImage: "slider.horizontal.3")
             }
-
-            // OpenAI-specific settings (hidden when Anthropic selected)
-            if !isAnthropicProvider {
-                Section {
-                    onboardingReasoningPicker
-                    onboardingFlexProcessingToggle
-                    onboardingPromptCacheRetentionToggle
-                } header: {
-                    SettingsSectionHeader(title: "OpenAI Options", systemImage: "gearshape.2")
-                }
-            }
         }
         .formStyle(.grouped)
         .task {
+            if hasAnthropicKey && anthropicModels.isEmpty {
+                await loadAnthropicModels()
+            }
             sanitizePDFExtractionModelIfNeeded()
             sanitizeGitIngestModelIfNeeded()
             sanitizeBackgroundProcessingModelIfNeeded()
@@ -140,19 +95,6 @@ struct OnboardingModelSettingsView: View {
 
     // MARK: - Computed Properties
 
-    private var isAnthropicProvider: Bool {
-        onboardingProvider == "anthropic"
-    }
-
-    private var filteredInterviewModels: [ModelObject] {
-        interviewModels
-            .filter { model in
-                let id = model.id.lowercased()
-                return id.hasPrefix("gpt-5") || id.hasPrefix("gpt-6") || id.hasPrefix("gpt-7")
-            }
-            .sorted { $0.id < $1.id }
-    }
-
     private var filteredAnthropicModels: [AnthropicModel] {
         anthropicModels
             .filter { model in
@@ -164,10 +106,6 @@ struct OnboardingModelSettingsView: View {
 
     private var hasGeminiKey: Bool {
         APIKeyManager.get(.gemini) != nil
-    }
-
-    private var hasOpenAIKey: Bool {
-        APIKeyManager.get(.openAI) != nil
     }
 
     private var hasAnthropicKey: Bool {
@@ -183,99 +121,10 @@ struct OnboardingModelSettingsView: View {
                     < (rhs.displayName.isEmpty ? rhs.modelId : rhs.displayName)
             }
     }
-
-    private var isGPT5BaseModel: Bool {
-        let id = onboardingModelId.lowercased()
-        guard id.hasPrefix("gpt-5") else { return false }
-        let afterPrefix = id.dropFirst(5)
-        if afterPrefix.isEmpty { return true }
-        if afterPrefix.first == "." { return false }
-        if afterPrefix.first == "-" { return true }
-        return false
-    }
-
-    private var supportsNoneReasoning: Bool {
-        let id = onboardingModelId.lowercased()
-        if id.hasPrefix("gpt-6") || id.hasPrefix("gpt-7") { return true }
-        if id.hasPrefix("gpt-5.") { return true }
-        return false
-    }
-
-    private var availableReasoningOptions: [(value: String, label: String, detail: String)] {
-        if isGPT5BaseModel {
-            return reasoningOptions.filter { $0.value != "none" }
-        } else {
-            return reasoningOptions.filter { $0.value != "minimal" }
-        }
-    }
-
-    private var availableHardTaskReasoningOptions: [(value: String, label: String, detail: String)] {
-        if isGPT5BaseModel {
-            return reasoningOptions.filter { $0.value != "none" }
-        } else {
-            return reasoningOptions.filter { $0.value != "minimal" }
-        }
-    }
-
-    private var isFlexProcessingCompatible: Bool {
-        flexProcessingCompatibleModels.contains(onboardingModelId)
-    }
-
-    private var isPromptCacheRetentionCompatible: Bool {
-        promptCacheRetentionCompatibleModels.contains(onboardingModelId)
-    }
 }
 
 // MARK: - Model Pickers
 private extension OnboardingModelSettingsView {
-    var providerPicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Picker("Interview Provider", selection: Binding(
-                get: { OnboardingProvider(rawValue: onboardingProvider) ?? .openai },
-                set: { onboardingProvider = $0.rawValue }
-            )) {
-                ForEach(OnboardingProvider.allCases, id: \.self) { provider in
-                    Text(provider.displayName).tag(provider)
-                }
-            }
-            .pickerStyle(.segmented)
-            Text("Choose which AI provider powers the onboarding interview.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    var onboardingInterviewModelPicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if isAnthropicProvider {
-                anthropicModelPickerContent
-            } else {
-                openAIModelPickerContent
-            }
-        }
-        .task {
-            if isAnthropicProvider && hasAnthropicKey && anthropicModels.isEmpty {
-                await loadAnthropicModels()
-            } else if !isAnthropicProvider && hasOpenAIKey && interviewModels.isEmpty {
-                await loadInterviewModels()
-            }
-        }
-        .onChange(of: onboardingProvider) { _, newProvider in
-            if newProvider == "anthropic" && hasAnthropicKey && anthropicModels.isEmpty {
-                Task { await loadAnthropicModels() }
-            } else if newProvider == "openai" && hasOpenAIKey && interviewModels.isEmpty {
-                Task { await loadInterviewModels() }
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .apiKeysChanged)) { _ in
-            if isAnthropicProvider && hasAnthropicKey && anthropicModels.isEmpty {
-                Task { await loadAnthropicModels() }
-            } else if !isAnthropicProvider && hasOpenAIKey && interviewModels.isEmpty {
-                Task { await loadInterviewModels() }
-            }
-        }
-    }
-
     @ViewBuilder
     var anthropicModelPickerContent: some View {
         if !hasAnthropicKey {
@@ -323,58 +172,6 @@ private extension OnboardingModelSettingsView {
             }
             .pickerStyle(.menu)
             Text("Claude models support extended thinking and tool use natively.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    @ViewBuilder
-    var openAIModelPickerContent: some View {
-        if !hasOpenAIKey {
-            Label("Add OpenAI API key to enable interview model selection.", systemImage: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-                .font(.callout)
-        } else if isLoadingInterviewModels {
-            HStack(spacing: 8) {
-                ProgressView()
-                    .controlSize(.small)
-                Text("Loading interview models...")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-        } else if let error = interviewModelError {
-            VStack(alignment: .leading, spacing: 4) {
-                Label("Failed to load models", systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-                    .font(.callout)
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Button("Retry") {
-                    Task { await loadInterviewModels() }
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            }
-        } else if filteredInterviewModels.isEmpty {
-            HStack {
-                Text("No GPT-5/6/7 models available")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                Button("Load Models") {
-                    Task { await loadInterviewModels() }
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            }
-        } else {
-            Picker("Interview Model", selection: $onboardingModelId) {
-                ForEach(filteredInterviewModels, id: \.id) { model in
-                    Text(model.id).tag(model.id)
-                }
-            }
-            .pickerStyle(.menu)
-            Text("GPT-5 requires \"Minimal\" reasoning; GPT-5.1+ supports \"None\".")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -711,102 +508,8 @@ private extension OnboardingModelSettingsView {
     }
 }
 
-// MARK: - OpenAI Options
-private extension OnboardingModelSettingsView {
-    var onboardingReasoningPicker: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Picker("Default Reasoning", selection: $onboardingReasoningEffort) {
-                ForEach(availableReasoningOptions, id: \.value) { option in
-                    Text(option.label).tag(option.value)
-                }
-            }
-            .pickerStyle(.menu)
-            .onChange(of: onboardingModelId) { _, _ in
-                if isGPT5BaseModel && onboardingReasoningEffort == "none" {
-                    onboardingReasoningEffort = "minimal"
-                } else if supportsNoneReasoning && onboardingReasoningEffort == "minimal" {
-                    onboardingReasoningEffort = "none"
-                }
-            }
-            Text("Controls reasoning depth for standard interview tasks.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-
-            Picker("Hard Task Reasoning", selection: $onboardingHardTaskReasoningEffort) {
-                ForEach(availableHardTaskReasoningOptions, id: \.value) { option in
-                    Text(option.label).tag(option.value)
-                }
-            }
-            .pickerStyle(.menu)
-            .onChange(of: onboardingModelId) { _, _ in
-                if isGPT5BaseModel && onboardingHardTaskReasoningEffort == "none" {
-                    onboardingHardTaskReasoningEffort = "minimal"
-                } else if supportsNoneReasoning && onboardingHardTaskReasoningEffort == "minimal" {
-                    onboardingHardTaskReasoningEffort = "none"
-                }
-            }
-            Text("Used for knowledge card generation and profile validation.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    var onboardingFlexProcessingToggle: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Toggle("Flex Processing (50% cost savings)", isOn: $onboardingFlexProcessing)
-            if onboardingFlexProcessing && !isFlexProcessingCompatible {
-                Label("Not supported by \(onboardingModelId)", systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-                    .font(.footnote)
-            } else {
-                Text("Variable latency for non-time-critical tasks like document ingestion.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    var onboardingPromptCacheRetentionToggle: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Toggle("Extended Prompt Cache (24h)", isOn: $onboardingPromptCacheRetention)
-            if onboardingPromptCacheRetention && !isPromptCacheRetentionCompatible {
-                Label("Not supported by \(onboardingModelId)", systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-                    .font(.footnote)
-            } else {
-                Text("Extends cache lifetime for longer interview sessions.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-}
-
 // MARK: - Model Loading
 private extension OnboardingModelSettingsView {
-    @MainActor
-    func loadInterviewModels() async {
-        guard let apiKey = APIKeyManager.get(.openAI), !apiKey.isEmpty else {
-            interviewModelError = "OpenAI API key not configured"
-            return
-        }
-        isLoadingInterviewModels = true
-        interviewModelError = nil
-        do {
-            let service = OpenAIServiceFactory.service(apiKey: apiKey)
-            let response = try await service.listModels()
-            interviewModels = response.data
-            if !filteredInterviewModels.contains(where: { $0.id == onboardingModelId }) {
-                if let first = filteredInterviewModels.first {
-                    onboardingModelId = first.id
-                }
-            }
-        } catch {
-            interviewModelError = error.localizedDescription
-        }
-        isLoadingInterviewModels = false
-    }
-
     @MainActor
     func loadAnthropicModels() async {
         guard hasAnthropicKey else {

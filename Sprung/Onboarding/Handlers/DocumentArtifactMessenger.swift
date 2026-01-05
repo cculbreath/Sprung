@@ -476,7 +476,7 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
             """
         var payload = JSON()
         payload["text"].string = message
-        await emit(.llmSendDeveloperMessage(payload: payload))
+        await emit(.llmSendCoordinatorMessage(payload: payload))
         Logger.info("📤 Background processing started notification sent to LLM", category: .ai)
     }
 
@@ -490,7 +490,7 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
             """
         var payload = JSON()
         payload["text"].string = message
-        await emit(.llmSendDeveloperMessage(payload: payload))
+        await emit(.llmSendCoordinatorMessage(payload: payload))
         Logger.info("📤 Background processing completed notification sent to LLM", category: .ai)
     }
 

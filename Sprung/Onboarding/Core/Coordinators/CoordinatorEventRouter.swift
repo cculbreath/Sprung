@@ -188,7 +188,7 @@ final class CoordinatorEventRouter {
         // This prevents the LLM from directly acknowledging the instruction text
         var payload = JSON()
         payload["text"].string = prompt
-        await eventBus.publish(.llmExecuteDeveloperMessage(payload: payload))
+        await eventBus.publish(.llmExecuteCoordinatorMessage(payload: payload))
         Logger.info("📋 Triggered dossier collection during extraction", category: .ai)
     }
 }

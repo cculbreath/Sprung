@@ -55,7 +55,7 @@ struct PhaseThreeScript: PhaseScript {
                         "objective": OnboardingObjectiveId.evidenceDocumentsCollected.rawValue,
                         "approach": "strategic_requests"
                     ]
-                    return [.developerMessage(title: title, details: details, payload: nil)]
+                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
                 },
                 onComplete: { context in
                     let title = """
@@ -68,7 +68,7 @@ struct PhaseThreeScript: PhaseScript {
                         "next_objective": OnboardingObjectiveId.gitReposAnalyzed.rawValue,
                         "status": context.status.rawValue
                     ]
-                    return [.developerMessage(title: title, details: details, payload: nil)]
+                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
                 }
             ),
 
@@ -88,7 +88,7 @@ struct PhaseThreeScript: PhaseScript {
                         "status": context.status.rawValue,
                         "interview_during_wait": "true"
                     ]
-                    return [.developerMessage(title: title, details: details, payload: nil)]
+                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
                 }
             ),
 
@@ -111,7 +111,7 @@ struct PhaseThreeScript: PhaseScript {
                         "batch_processing": "true",
                         "interview_during_wait": "true"
                     ]
-                    return [.developerMessage(title: title, details: details, payload: nil)]
+                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
                 }
             ),
 
@@ -132,7 +132,7 @@ struct PhaseThreeScript: PhaseScript {
                         "action": "review_cards_then_next_phase"
                     ]
                     // LLM decides when to call next_phase based on context (no forced toolChoice)
-                    return [.developerMessage(title: title, details: details, payload: nil)]
+                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
                 }
             )
         ]

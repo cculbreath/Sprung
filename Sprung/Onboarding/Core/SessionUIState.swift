@@ -31,7 +31,9 @@ struct ToolGating {
 
         // Check if tool is allowed in current phase
         guard phaseAllowedTools.contains(toolName) else {
-            return .blocked(reason: "Tool '\(toolName)' is not available in the current phase")
+            // Build helpful error message with available tools
+            let availableToolsList = phaseAllowedTools.sorted().joined(separator: ", ")
+            return .blocked(reason: "Tool '\(toolName)' is not available in the current phase. Available tools: [\(availableToolsList)]. Use one of these tools or continue the conversation without calling tools.")
         }
 
         // Handle waiting states

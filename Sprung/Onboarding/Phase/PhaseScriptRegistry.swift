@@ -36,10 +36,10 @@ final class PhaseScriptRegistry {
         scripts[phase]
     }
 
-    /// Returns the base developer message text (sent once on first request, persists via previous_response_id).
-    /// Phase introductory prompts are sent as additional developer messages at phase start.
+    /// Returns the base system prompt text for the interview.
+    /// Phase-specific instructions are sent as user messages with <coordinator> tags.
     func buildSystemPrompt(for phase: InterviewPhase) -> String {
-        Self.baseDeveloperMessage()
+        Self.baseSystemPrompt()
     }
 
     // MARK: - Phase Transitions
@@ -231,8 +231,8 @@ final class PhaseScriptRegistry {
         Logger.info("✅ Phase 4→Complete validated: experience_defaults persisted", category: .ai)
         return .allowed
     }
-    // MARK: - Base Developer Message
-    private static func baseDeveloperMessage() -> String {
+    // MARK: - Base System Prompt
+    private static func baseSystemPrompt() -> String {
         """
         You are the Sprung onboarding interviewer—a concise, friendly guide helping users build career profiles for resume generation.
 
@@ -276,6 +276,14 @@ final class PhaseScriptRegistry {
         - Don't re-validate data the user has already approved
         - Use submit_for_validation for final confirmations
         - Call next_phase when ready to advance (coordinator will guide you)
+
+        ## Task Tracking (Todo List)
+        Use update_todo_list to plan and track your work:
+        - At phase start: Create todos for required objectives
+        - Before starting a task: Mark it "in_progress"
+        - After completing: Mark it "completed"
+        - Your current todo list appears in <todo-list> tags (if present)
+        - Keep only ONE item in_progress at a time
 
         ## Tool Constraints
         - set_objective_status is ATOMIC: call it alone with NO assistant message

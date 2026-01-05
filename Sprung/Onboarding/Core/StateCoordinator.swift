@@ -314,22 +314,22 @@ actor StateCoordinator: OnboardingEventEmitter {
         case .llmReasoningSummaryComplete(let text):
             await chatStore.completeReasoningSummary(finalText: text)
         case .llmEnqueueUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText, let toolChoice):
-            // Bundle any queued developer messages WITH the user message
+            // Bundle any queued coordinator messages WITH the user message
             // They'll be included as input items in the same API request
-            let bundledDevMessages = await llmStateManager.drainQueuedDeveloperMessages()
+            let bundledDevMessages = await llmStateManager.drainQueuedCoordinatorMessages()
             if !bundledDevMessages.isEmpty {
-                Logger.info("📦 Bundling \(bundledDevMessages.count) developer message(s) with user message", category: .ai)
+                Logger.info("📦 Bundling \(bundledDevMessages.count) coordinator message(s) with user message", category: .ai)
             }
             await streamQueueManager.enqueue(.userMessage(
                 payload: payload,
                 isSystemGenerated: isSystemGenerated,
                 chatboxMessageId: chatboxMessageId,
                 originalText: originalText,
-                bundledDeveloperMessages: bundledDevMessages,
+                bundledCoordinatorMessages: bundledDevMessages,
                 toolChoice: toolChoice
             ))
-        case .llmSendDeveloperMessage(let payload):
-            // Codex paradigm: Always queue developer messages until user action
+        case .llmSendCoordinatorMessage(let payload):
+            // Codex paradigm: Always queue coordinator messages until user action
             // Developer messages are batched and flushed when:
             // 1. User sends a chatbox message
             // 2. An artifact completion arrives (sent as user message)
@@ -337,7 +337,7 @@ actor StateCoordinator: OnboardingEventEmitter {
             if let forcedTool = payload["toolChoice"].string {
                 await llmStateManager.setPendingForcedToolChoice(forcedTool)
             }
-            await llmStateManager.queueDeveloperMessage(payload)
+            await llmStateManager.queueCoordinatorMessage(payload)
             Logger.debug("📥 Developer message queued (awaiting user action)", category: .ai)
         case .llmToolCallBatchStarted(let expectedCount, let callIds):
             await streamQueueManager.startToolCallBatch(expectedCount: expectedCount, callIds: callIds)
@@ -364,7 +364,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         case .objectiveStatusChanged(let id, _, let newStatus, _, _, _, _):
             // Update wizard progress
             await updateWizardProgress()
-            // Clear any queued developer messages for this objective when it completes
+            // Clear any queued coordinator messages for this objective when it completes
             if newStatus == "completed" {
                 await llmStateManager.clearQueuedMessagesForObjective(id)
             }
@@ -625,7 +625,7 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     // MARK: - Pending UI Tool Call (Codex Paradigm)
     // UI tools present cards and await user action before responding.
-    // When a UI tool is pending, developer messages are queued behind it.
+    // When a UI tool is pending, coordinator messages are queued behind it.
 
     /// Set a UI tool as pending (awaiting user action)
     func setPendingUIToolCall(callId: String, toolName: String) async {

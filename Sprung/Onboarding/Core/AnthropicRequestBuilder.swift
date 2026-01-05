@@ -13,23 +13,26 @@ import SwiftyJSON
 /// Builds AnthropicMessageParameter requests for the Onboarding Interview's Anthropic Messages API calls.
 /// Extracted to separate request construction from stream handling.
 struct AnthropicRequestBuilder {
-    private let baseDeveloperMessage: String
+    private let baseSystemPrompt: String
     private let stateCoordinator: StateCoordinator
     private let historyBuilder: AnthropicHistoryBuilder
     private let toolConverter: AnthropicToolConverter
     private let workingMemoryBuilder: WorkingMemoryBuilder
+    private let todoStore: InterviewTodoStore
 
     init(
-        baseDeveloperMessage: String,
+        baseSystemPrompt: String,
         toolRegistry: ToolRegistry,
         contextAssembler: ConversationContextAssembler,
-        stateCoordinator: StateCoordinator
+        stateCoordinator: StateCoordinator,
+        todoStore: InterviewTodoStore
     ) {
-        self.baseDeveloperMessage = baseDeveloperMessage
+        self.baseSystemPrompt = baseSystemPrompt
         self.stateCoordinator = stateCoordinator
         self.historyBuilder = AnthropicHistoryBuilder(contextAssembler: contextAssembler)
         self.toolConverter = AnthropicToolConverter(toolRegistry: toolRegistry, stateCoordinator: stateCoordinator)
         self.workingMemoryBuilder = WorkingMemoryBuilder(stateCoordinator: stateCoordinator)
+        self.todoStore = todoStore
     }
 
     // MARK: - User Message Request
@@ -37,7 +40,7 @@ struct AnthropicRequestBuilder {
     func buildUserMessageRequest(
         text: String,
         isSystemGenerated: Bool,
-        bundledDeveloperMessages: [JSON] = [],
+        bundledCoordinatorMessages: [JSON] = [],
         forcedToolChoice: String? = nil,
         imageBase64: String? = nil,
         imageContentType: String? = nil
@@ -60,8 +63,8 @@ struct AnthropicRequestBuilder {
             fullMessageParts.append(interviewContext)
         }
 
-        // 2. Coordinator instructions (replaces developer messages)
-        for devPayload in bundledDeveloperMessages {
+        // 2. Coordinator instructions (app-generated guidance for the model)
+        for devPayload in bundledCoordinatorMessages {
             let devText = devPayload["text"].stringValue
             if !devText.isEmpty {
                 fullMessageParts.append("<coordinator>\(devText)</coordinator>")
@@ -159,7 +162,7 @@ struct AnthropicRequestBuilder {
     /// Build a request with coordinator instructions.
     /// Per Anthropic best practices, coordinator instructions are sent as user messages
     /// with <coordinator> XML tags, not stuffed into system prompt.
-    func buildDeveloperMessageRequest(
+    func buildCoordinatorMessageRequest(
         text: String,
         toolChoice toolChoiceName: String? = nil
     ) async -> AnthropicMessageParameter {
@@ -177,7 +180,7 @@ struct AnthropicRequestBuilder {
             messageParts.append(interviewContext)
         }
 
-        // 2. Coordinator instruction (the "developer message")
+        // 2. Coordinator instruction (app-generated guidance)
         messageParts.append("<coordinator>\(text)</coordinator>")
 
         let fullMessageText = messageParts.joined(separator: "\n\n")
@@ -284,7 +287,28 @@ struct AnthropicRequestBuilder {
             contentBlocks.append(.text(AnthropicTextBlock(text: textParts.joined(separator: "\n\n"))))
         }
 
-        messages.append(AnthropicMessage(role: "user", content: .blocks(contentBlocks)))
+        // CRITICAL: Anthropic requires ALL tool_results from a single assistant turn to be in
+        // the IMMEDIATELY FOLLOWING user message. If history ends with a user message (containing
+        // synthetic tool_results for other calls from the same turn), we MUST merge our tool_result
+        // into that message, not append a new one.
+        if let lastIndex = messages.indices.last, messages[lastIndex].role == "user" {
+            // Merge tool_result into existing user message
+            let existingBlocks = historyBuilder.extractContentBlocks(messages[lastIndex])
+            // Put tool_results first (Anthropic convention), then existing content, then new text
+            let toolResultBlocks = contentBlocks.filter { block in
+                if case .toolResult = block { return true }
+                return false
+            }
+            let otherBlocks = contentBlocks.filter { block in
+                if case .toolResult = block { return false }
+                return true
+            }
+            let mergedBlocks = toolResultBlocks + existingBlocks + otherBlocks
+            messages[lastIndex] = AnthropicMessage(role: "user", content: .blocks(mergedBlocks))
+            Logger.info("📝 Merged tool_result with trailing user message (multi-tool-call handling)", category: .ai)
+        } else {
+            messages.append(AnthropicMessage(role: "user", content: .blocks(contentBlocks)))
+        }
 
         let toolChoice: AnthropicToolChoice
         if let forcedTool = forcedToolChoice {
@@ -406,7 +430,24 @@ struct AnthropicRequestBuilder {
             contentBlocks.append(.text(AnthropicTextBlock(text: textParts.joined(separator: "\n\n"))))
         }
 
-        messages.append(AnthropicMessage(role: "user", content: .blocks(contentBlocks)))
+        // CRITICAL: Same merging logic as buildToolResponseRequest - if history ends with a user
+        // message (from synthetic tool_results), merge our batch into it.
+        if let lastIndex = messages.indices.last, messages[lastIndex].role == "user" {
+            let existingBlocks = historyBuilder.extractContentBlocks(messages[lastIndex])
+            let toolResultBlocks = contentBlocks.filter { block in
+                if case .toolResult = block { return true }
+                return false
+            }
+            let otherBlocks = contentBlocks.filter { block in
+                if case .toolResult = block { return false }
+                return true
+            }
+            let mergedBlocks = toolResultBlocks + existingBlocks + otherBlocks
+            messages[lastIndex] = AnthropicMessage(role: "user", content: .blocks(mergedBlocks))
+            Logger.info("📝 Merged batched tool_results with trailing user message", category: .ai)
+        } else {
+            messages.append(AnthropicMessage(role: "user", content: .blocks(contentBlocks)))
+        }
 
         let tools = await toolConverter.getAnthropicTools()
         let systemPrompt = await buildSystemPrompt()
@@ -433,28 +474,23 @@ struct AnthropicRequestBuilder {
 
     // MARK: - System Prompt
 
-    /// Build system prompt - base personality only.
+    /// Build system prompt - base personality plus todo list.
     /// Per Anthropic best practices, working memory and coordinator instructions
     /// are now included in user messages with XML tags (<interview_context>, <coordinator>).
+    /// The todo list is included in system prompt since it's rebuilt each request and
+    /// provides persistent visibility without polluting conversation history.
     private func buildSystemPrompt() async -> String {
-        // System prompt is stable - just base personality
-        // Dynamic context (interview state, coordinator instructions) goes in user messages
-        return baseDeveloperMessage
-    }
-}
+        var parts: [String] = [baseSystemPrompt]
 
-// MARK: - OnboardingProvider Enum
-
-/// Available LLM providers for the onboarding interview
-enum OnboardingProvider: String, CaseIterable {
-    case openai = "openai"
-    case anthropic = "anthropic"
-
-    var displayName: String {
-        switch self {
-        case .openai: return "OpenAI"
-        case .anthropic: return "Anthropic"
+        // Include todo list if present
+        if let todoList = await todoStore.renderForSystemPrompt() {
+            parts.append("")
+            parts.append(todoList)
+            parts.append("")
+            parts.append("Use the update_todo_list tool to manage your task list. Mark items in_progress before starting work, and completed when done.")
         }
+
+        return parts.joined(separator: "\n")
     }
 }
 
@@ -464,16 +500,5 @@ extension StateCoordinator {
     /// Get the Anthropic model ID from settings
     func getAnthropicModelId() async -> String {
         return UserDefaults.standard.string(forKey: "onboardingAnthropicModelId") ?? DefaultModels.anthropic
-    }
-
-    /// Get the currently selected onboarding provider
-    func getOnboardingProvider() async -> OnboardingProvider {
-        let rawValue = UserDefaults.standard.string(forKey: "onboardingProvider") ?? "openai"
-        return OnboardingProvider(rawValue: rawValue) ?? .openai
-    }
-
-    /// Set the onboarding provider
-    func setOnboardingProvider(_ provider: OnboardingProvider) async {
-        UserDefaults.standard.set(provider.rawValue, forKey: "onboardingProvider")
     }
 }

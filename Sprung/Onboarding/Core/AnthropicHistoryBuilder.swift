@@ -65,7 +65,7 @@ struct AnthropicHistoryBuilder {
                         pendingAssistantBlocks.append(.text(AnthropicTextBlock(text: text)))
                     }
                 default:
-                    // Skip developer messages - they go in system prompt
+                    // Skip non-user/assistant roles - system instructions go in system prompt
                     break
                 }
             case .functionToolCall(let toolCall):

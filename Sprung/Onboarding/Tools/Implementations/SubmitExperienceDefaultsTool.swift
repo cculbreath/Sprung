@@ -189,7 +189,7 @@ struct SubmitExperienceDefaultsTool: InterviewTool {
             If the user rejects or requests changes, revise and re-run submit_experience_defaults before proceeding.
             """
         devPayload["details"] = details
-        await coordinator.eventBus.publish(.llmSendDeveloperMessage(payload: devPayload))
+        await coordinator.eventBus.publish(.llmSendCoordinatorMessage(payload: devPayload))
 
         // Build response
         var response = JSON()

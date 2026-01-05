@@ -482,7 +482,7 @@ final class OnboardingInterviewCoordinator {
             Use web_search to fetch the content, then use create_web_artifact
             to save it as an artifact for document collection.
             """
-        await container.eventBus.publish(.llmExecuteDeveloperMessage(payload: payload))
+        await container.eventBus.publish(.llmExecuteCoordinatorMessage(payload: payload))
     }
 
     // MARK: - Tool Management
@@ -558,7 +558,7 @@ final class OnboardingInterviewCoordinator {
                     Call configure_enabled_sections with recommendations based on user's background.
                     """
                 payload["toolChoice"].string = OnboardingToolName.configureEnabledSections.rawValue
-                await eventBus.publish(.llmSendDeveloperMessage(payload: payload))
+                await eventBus.publish(.llmSendCoordinatorMessage(payload: payload))
                 Logger.info("🎯 Forcing configure_enabled_sections after timeline validation", category: .ai)
             }
         }
@@ -715,7 +715,7 @@ final class OnboardingInterviewCoordinator {
     func sendChatMessage(_ text: String) async {
         await uiResponseCoordinator.sendChatMessage(text)
     }
-    func sendDeveloperMessage(title: String, details: [String: String] = [:], toolChoice: String? = nil) async {
+    func sendCoordinatorMessage(title: String, details: [String: String] = [:], toolChoice: String? = nil) async {
         var payload = JSON()
         payload["title"].string = title
         var detailsJSON = JSON()
@@ -726,7 +726,7 @@ final class OnboardingInterviewCoordinator {
         if let toolChoice = toolChoice {
             payload["toolChoice"].string = toolChoice
         }
-        await eventBus.publish(.llmSendDeveloperMessage(payload: payload))
+        await eventBus.publish(.llmSendCoordinatorMessage(payload: payload))
     }
 
     /// Delete an artifact record and notify the LLM via developer message.
@@ -748,7 +748,7 @@ final class OnboardingInterviewCoordinator {
         _ = await state.deleteArtifactRecord(id: id)
 
         // Send developer message to notify LLM
-        await sendDeveloperMessage(
+        await sendCoordinatorMessage(
             title: "Artifact Deleted by User",
             details: [
                 "artifact_id": id,
@@ -836,7 +836,7 @@ final class OnboardingInterviewCoordinator {
         _ = await container.artifactRepository.deleteArtifactRecord(id: id)
 
         // Notify LLM that artifact was removed from current interview
-        await sendDeveloperMessage(
+        await sendCoordinatorMessage(
             title: "Artifact Removed from Interview",
             details: [
                 "artifact_id": id,

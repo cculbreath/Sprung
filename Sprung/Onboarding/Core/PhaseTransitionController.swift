@@ -56,7 +56,7 @@ final class PhaseTransitionController {
         // Don't force toolChoice - let the model output preamble text naturally before calling tools
         // The initial user message includes explicit instructions to output the welcome message
 
-        await eventBus.publish(.llmSendDeveloperMessage(
+        await eventBus.publish(.llmSendCoordinatorMessage(
             payload: introPayload
         ))
         // Query and surface artifacts targeted for this phase's objectives
@@ -98,7 +98,7 @@ final class PhaseTransitionController {
             """
             var artifactPayload = JSON()
             artifactPayload["text"].string = artifactMessage
-            await eventBus.publish(.llmSendDeveloperMessage(
+            await eventBus.publish(.llmSendCoordinatorMessage(
                 payload: artifactPayload
             ))
             Logger.info("📦 Surfaced \(targetedArtifacts.count) targeted artifacts for phase: \(phaseName)", category: .ai)

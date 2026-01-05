@@ -21,21 +21,23 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
     // MARK: - Initialization
     init(
         llmFacade: LLMFacade,
-        baseDeveloperMessage: String,
+        baseSystemPrompt: String,
         eventBus: EventCoordinator,
         toolRegistry: ToolRegistry,
-        state: StateCoordinator
+        state: StateCoordinator,
+        todoStore: InterviewTodoStore
     ) {
         self.eventBus = eventBus
         self.state = state
         self.networkRouter = NetworkRouter(eventBus: eventBus)
         self.llmMessenger = LLMMessenger(
             llmFacade: llmFacade,
-            baseDeveloperMessage: baseDeveloperMessage,
+            baseSystemPrompt: baseSystemPrompt,
             eventBus: eventBus,
             networkRouter: networkRouter,
             toolRegistry: toolRegistry,
-            state: state
+            state: state,
+            todoStore: todoStore
         )
         Logger.info("🎯 InterviewOrchestrator initialized (using LLMFacade)", category: .ai)
     }

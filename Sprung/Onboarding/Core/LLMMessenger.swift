@@ -23,8 +23,6 @@ actor LLMMessenger: OnboardingEventEmitter {
     private let networkRouter: NetworkRouter
     private let llmFacade: LLMFacade
     private let stateCoordinator: StateCoordinator
-    private let contextAssembler: ConversationContextAssembler
-    private let requestBuilder: OnboardingRequestBuilder
     private let anthropicRequestBuilder: AnthropicRequestBuilder
     private let toolRegistry: ToolRegistry
     private var isActive = false
@@ -32,46 +30,38 @@ actor LLMMessenger: OnboardingEventEmitter {
     // Extracted components
     private let retryPolicy = LLMRetryPolicy()
     private let errorHandler = LLMErrorHandler()
-    private let recoveryManager = ToolRecoveryManager()
 
     // Stream cancellation tracking
     private var currentStreamTask: Task<Void, Error>?
 
     init(
         llmFacade: LLMFacade,
-        baseDeveloperMessage: String,
+        baseSystemPrompt: String,
         eventBus: EventCoordinator,
         networkRouter: NetworkRouter,
         toolRegistry: ToolRegistry,
-        state: StateCoordinator
+        state: StateCoordinator,
+        todoStore: InterviewTodoStore
     ) {
         self.llmFacade = llmFacade
         self.eventBus = eventBus
         self.networkRouter = networkRouter
         self.stateCoordinator = state
         self.toolRegistry = toolRegistry
-        self.contextAssembler = ConversationContextAssembler(state: state)
-        self.requestBuilder = OnboardingRequestBuilder(
-            baseDeveloperMessage: baseDeveloperMessage,
-            toolRegistry: toolRegistry,
-            contextAssembler: contextAssembler,
-            stateCoordinator: state
-        )
         self.anthropicRequestBuilder = AnthropicRequestBuilder(
-            baseDeveloperMessage: baseDeveloperMessage,
+            baseSystemPrompt: baseSystemPrompt,
             toolRegistry: toolRegistry,
-            contextAssembler: contextAssembler,
-            stateCoordinator: state
+            contextAssembler: ConversationContextAssembler(state: state),
+            stateCoordinator: state,
+            todoStore: todoStore
         )
-        Logger.info("📬 LLMMessenger initialized (using LLMFacade)", category: .ai)
+        Logger.info("📬 LLMMessenger initialized (Anthropic-only)", category: .ai)
     }
 
-    // MARK: - Backend Selection
+    // MARK: - Backend (Anthropic-only)
 
-    /// Check if the onboarding interview should use Anthropic backend
-    private func isUsingAnthropic() async -> Bool {
-        return await stateCoordinator.getOnboardingProvider() == .anthropic
-    }
+    // Onboarding interview uses Anthropic Messages API exclusively.
+    // OpenAI Responses API support has been removed.
     /// Start listening to message request events
     func startEventSubscriptions() async {
         Task {
@@ -99,14 +89,14 @@ actor LLMMessenger: OnboardingEventEmitter {
             ))
         case .llmToolResponseMessage(let payload):
             await emit(.llmEnqueueToolResponse(payload: payload))
-        case .llmExecuteUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText, let bundledDeveloperMessages, let toolChoice):
-            await executeUserMessage(payload, isSystemGenerated: isSystemGenerated, chatboxMessageId: chatboxMessageId, originalText: originalText, bundledDeveloperMessages: bundledDeveloperMessages, toolChoice: toolChoice)
+        case .llmExecuteUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText, let bundledCoordinatorMessages, let toolChoice):
+            await executeUserMessage(payload, isSystemGenerated: isSystemGenerated, chatboxMessageId: chatboxMessageId, originalText: originalText, bundledCoordinatorMessages: bundledCoordinatorMessages, toolChoice: toolChoice)
         case .llmExecuteToolResponse(let payload):
             await executeToolResponse(payload)
         case .llmExecuteBatchedToolResponses(let payloads):
             await executeBatchedToolResponses(payloads)
-        case .llmExecuteDeveloperMessage(let payload):
-            await executeDeveloperMessage(payload)
+        case .llmExecuteCoordinatorMessage(let payload):
+            await executeCoordinatorMessage(payload)
         case .llmCancelRequested:
             await cancelCurrentStream()
         case .llmBudgetExceeded(let inputTokens, let threshold):
@@ -116,408 +106,31 @@ actor LLMMessenger: OnboardingEventEmitter {
         }
     }
 
-    private func executeUserMessage(_ payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String? = nil, originalText: String? = nil, bundledDeveloperMessages: [JSON] = [], toolChoice: String? = nil) async {
-        // Route to Anthropic if selected
-        if await isUsingAnthropic() {
-            await executeUserMessageViaAnthropic(
-                payload,
-                isSystemGenerated: isSystemGenerated,
-                chatboxMessageId: chatboxMessageId,
-                originalText: originalText,
-                bundledDeveloperMessages: bundledDeveloperMessages,
-                toolChoice: toolChoice
-            )
-            return
-        }
-
-        await emit(.llmStatus(status: .busy))
-        let text = payload["content"].string ?? payload["text"].stringValue
-
-        // Extract image data if present
-        let imageData = payload["image_data"].string
-        let imageContentType = payload["content_type"].string
-
-        do {
-            let request = await requestBuilder.buildUserMessageRequest(text: text, isSystemGenerated: isSystemGenerated, bundledDeveloperMessages: bundledDeveloperMessages, forcedToolChoice: toolChoice, imageBase64: imageData, imageContentType: imageContentType)
-            let messageId = UUID().uuidString
-            await emit(.llmUserMessageSent(messageId: messageId, payload: payload, isSystemGenerated: isSystemGenerated))
-            currentStreamTask = Task {
-                var retryCount = 0
-                let maxRetries = 3
-                var lastError: Error?
-                while retryCount <= maxRetries {
-                    do {
-                        Logger.verbose("🔍 About to call llmFacade.responseCreateStream", category: .ai)
-                        Logger.debug("📋 Request model: \(request.model), prevId: \(request.previousResponseId != nil), store: \(String(describing: request.store))", category: .ai)
-                        let stream = try await llmFacade.responseCreateStream(parameters: request)
-                        for try await streamEvent in stream {
-                            await networkRouter.handleResponseEvent(streamEvent)
-                            // Track conversation state
-                            if case .responseCompleted(let completed) = streamEvent {
-                                // Check if response had tool calls (affects checkpoint safety)
-                                let hadToolCalls = completed.response.output.contains { item in
-                                    if case .functionCall = item { return true }
-                                    return false
-                                }
-                                // Update StateCoordinator (single source of truth)
-                                await stateCoordinator.updateConversationState(
-                                    responseId: completed.response.id,
-                                    hadToolCalls: hadToolCalls
-                                )
-                                // Store in conversation context for next request
-                                await contextAssembler.storePreviousResponseId(completed.response.id)
-                            }
-                        }
-                        await emit(.llmStatus(status: .idle))
-                        return // Success - exit retry loop
-                    } catch {
-                        lastError = error
-                        if retryPolicy.isRetriable(error) && retryPolicy.shouldRetry(attempt: retryCount) {
-                            retryCount += 1
-                            let delay = retryPolicy.retryDelay(for: retryCount)
-                            Logger.warning("⚠️ Transient error (attempt \(retryCount)/\(retryPolicy.maxRetries)), retrying in \(delay)s: \(error)", category: .ai)
-                            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                        } else {
-                            if let apiError = error as? APIError {
-                                Logger.error("❌ API Error details: \(apiError)", category: .ai)
-                            }
-                            throw error
-                        }
-                    }
-                }
-                if let error = lastError {
-                    Logger.error("❌ User message failed after \(retryPolicy.maxRetries) retries: \(error)", category: .ai)
-                    throw error
-                }
-            }
-            try await currentStreamTask?.value
-            currentStreamTask = nil
-            await stateCoordinator.markStreamCompleted()
-        } catch is CancellationError {
-            Logger.verbose("User message stream cancelled", category: .ai)
-            await stateCoordinator.markStreamCompleted()
-        } catch {
-            Logger.error("❌ Failed to send message: \(error)", category: .ai)
-
-            // Check for "No tool output found" error - conversation state is out of sync
-            if recoveryManager.isToolOutputMissingError(error) {
-                let errorDescription = String(describing: error)
-                if let callId = recoveryManager.extractCallIdFromError(errorDescription) {
-                    Logger.warning("🔧 Attempting recovery: sending synthetic tool response for \(callId)", category: .ai)
-
-                    // Try to recover by sending a synthetic tool response
-                    let recovered = await attemptToolOutputRecovery(
-                        callId: callId,
-                        originalPayload: payload,
-                        isSystemGenerated: isSystemGenerated,
-                        chatboxMessageId: chatboxMessageId,
-                        originalText: originalText,
-                        bundledDeveloperMessages: bundledDeveloperMessages,
-                        toolChoice: toolChoice
-                    )
-
-                    if recovered {
-                        Logger.info("✅ Recovery successful - conversation unblocked", category: .ai)
-                        await stateCoordinator.markStreamCompleted()
-                        return
-                    }
-                }
-
-                // Recovery failed - show alert
-                Logger.error("🔧 Recovery failed for pending tool call", category: .ai)
-                await errorHandler.showConversationSyncErrorAlert(callId: recoveryManager.extractCallIdFromError(errorDescription))
-                await emit(.errorOccurred("Conversation sync error: Recovery failed. Use 'Reset Conversation' to recover."))
-                await emit(.llmStatus(status: .error))
-
-                if let chatboxMessageId = chatboxMessageId, let originalText = originalText {
-                    await emit(.llmUserMessageFailed(
-                        messageId: chatboxMessageId,
-                        originalText: originalText,
-                        error: "Conversation sync error - recovery failed"
-                    ))
-                }
-                await stateCoordinator.markStreamCompleted()
-                return
-            }
-
-            await emit(.errorOccurred("Failed to send message: \(error.localizedDescription)"))
-            await emit(.llmStatus(status: .error))
-            // For chatbox messages, emit failure event so UI can restore the message to input box
-            if let chatboxMessageId = chatboxMessageId, let originalText = originalText {
-                await emit(.llmUserMessageFailed(
-                    messageId: chatboxMessageId,
-                    originalText: originalText,
-                    error: error.localizedDescription
-                ))
-            } else {
-                // Fallback: show error in chat for system-generated messages
-                await surfaceErrorToUI(error: error)
-            }
-            await stateCoordinator.markStreamCompleted()
-        }
+    private func executeUserMessage(_ payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String? = nil, originalText: String? = nil, bundledCoordinatorMessages: [JSON] = [], toolChoice: String? = nil) async {
+        // Anthropic-only: directly call Anthropic implementation
+        await executeUserMessageViaAnthropic(
+            payload,
+            isSystemGenerated: isSystemGenerated,
+            chatboxMessageId: chatboxMessageId,
+            originalText: originalText,
+            bundledCoordinatorMessages: bundledCoordinatorMessages,
+            toolChoice: toolChoice
+        )
     }
-    private func executeDeveloperMessage(_ payload: JSON) async {
+    private func executeCoordinatorMessage(_ payload: JSON) async {
         guard isActive else {
-            Logger.warning("LLMMessenger not active, ignoring developer message", category: .ai)
+            Logger.warning("LLMMessenger not active, ignoring coordinator message", category: .ai)
             return
         }
-
-        // Route to Anthropic if selected
-        if await isUsingAnthropic() {
-            await executeDeveloperMessageViaAnthropic(payload)
-            return
-        }
-
-        await emit(.llmStatus(status: .busy))
-        let text = payload["text"].stringValue
-        let toolChoiceName = payload["toolChoice"].string
-        let reasoningEffort = payload["reasoningEffort"].string
-        Logger.info("📨 Sending developer message (\(text.prefix(100))...)", category: .ai)
-        do {
-            let request = await requestBuilder.buildDeveloperMessageRequest(text: text, toolChoice: toolChoiceName, reasoningEffort: reasoningEffort)
-            let messageId = UUID().uuidString
-            // Emit message sent event
-            await emit(.llmDeveloperMessageSent(messageId: messageId, payload: payload))
-            // Process stream via NetworkRouter with retry logic
-            currentStreamTask = Task {
-                var retryCount = 0
-                let maxRetries = 3
-                var lastError: Error?
-                while retryCount <= maxRetries {
-                    do {
-                        let stream = try await llmFacade.responseCreateStream(parameters: request)
-                        for try await streamEvent in stream {
-                            await networkRouter.handleResponseEvent(streamEvent)
-                            // Track conversation state
-                            if case .responseCompleted(let completed) = streamEvent {
-                                // Check if response had tool calls (affects checkpoint safety)
-                                let hadToolCalls = completed.response.output.contains { item in
-                                    if case .functionCall = item { return true }
-                                    return false
-                                }
-                                // Update StateCoordinator (single source of truth)
-                                await stateCoordinator.updateConversationState(
-                                    responseId: completed.response.id,
-                                    hadToolCalls: hadToolCalls
-                                )
-                                // Store in conversation context for next request
-                                await contextAssembler.storePreviousResponseId(completed.response.id)
-                            }
-                        }
-                        await emit(.llmStatus(status: .idle))
-                        return // Success - exit retry loop
-                    } catch {
-                        lastError = error
-                        // Check if this is a retriable error
-                        let isRetriableError = retryPolicy.isRetriable(error)
-                        if isRetriableError && retryCount < maxRetries {
-                            retryCount += 1
-                            let delay = Double(retryCount) * 2.0 // Exponential backoff: 2s, 4s, 6s
-                            Logger.warning("⚠️ Transient error (attempt \(retryCount)/\(maxRetries)), retrying in \(delay)s: \(error)", category: .ai)
-                            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                        } else {
-                            // Non-retriable error or max retries reached
-                            Logger.error("❌ Developer message stream failed: \(error)", category: .ai)
-                            if let apiError = error as? APIError {
-                                Logger.error("❌ API Error details: \(apiError)", category: .ai)
-                            }
-                            throw error
-                        }
-                    }
-                }
-                // If we get here, we've exhausted all retries
-                if let error = lastError {
-                    Logger.error("❌ Developer message failed after \(maxRetries) retries: \(error)", category: .ai)
-                    throw error
-                }
-            }
-            try await currentStreamTask?.value
-            currentStreamTask = nil
-            Logger.verbose("✅ Developer message completed successfully", category: .ai)
-            // Notify StateCoordinator that stream completed
-            await stateCoordinator.markStreamCompleted()
-        } catch is CancellationError {
-            Logger.verbose("Developer message stream cancelled", category: .ai)
-            // Notify StateCoordinator even on cancellation
-            await stateCoordinator.markStreamCompleted()
-        } catch {
-            Logger.error("❌ Failed to send developer message: \(error)", category: .ai)
-            await emit(.errorOccurred("Failed to send developer message: \(error.localizedDescription)"))
-            await emit(.llmStatus(status: .error))
-            // Surface error as visible assistant message
-            await surfaceErrorToUI(error: error)
-            // Notify StateCoordinator even on error
-            await stateCoordinator.markStreamCompleted()
-        }
+        await executeCoordinatorMessageViaAnthropic(payload)
     }
 
     private func executeToolResponse(_ payload: JSON) async {
-        // Route to Anthropic if selected
-        if await isUsingAnthropic() {
-            await executeToolResponseViaAnthropic(payload)
-            return
-        }
-
-        await emit(.llmStatus(status: .busy))
-        // Track pending tool response for retry on stream error
-        await stateCoordinator.setPendingToolResponses([payload])
-        do {
-            let callId = payload["callId"].stringValue
-            let output = payload["output"]
-            let reasoningEffort = payload["reasoningEffort"].string
-            // For tool chaining: allow the UI/tool layer to force the next tool call, even when
-            // the forcing signal arrived via a queued developer message.
-            let toolChoice: String?
-            if let payloadToolChoice = payload["toolChoice"].string {
-                toolChoice = payloadToolChoice
-            } else {
-                toolChoice = await stateCoordinator.popPendingForcedToolChoice()
-            }
-            Logger.debug("📤 Tool response payload: callId=\(callId), output=\(output.rawString() ?? "nil")", category: .ai)
-            Logger.verbose("📤 Sending tool response for callId=\(String(callId.prefix(12)))...", category: .ai)
-            let request = await requestBuilder.buildToolResponseRequest(output: output, callId: callId, reasoningEffort: reasoningEffort, forcedToolChoice: toolChoice)
-            Logger.debug("📦 Tool response request: previousResponseId=\(request.previousResponseId ?? "nil")", category: .ai)
-            let messageId = UUID().uuidString
-            // Emit message sent event
-            await emit(.llmSentToolResponseMessage(messageId: messageId, payload: payload))
-            // Process stream via NetworkRouter with retry logic
-            currentStreamTask = Task {
-                var retryCount = 0
-                let maxRetries = 3
-                var lastError: Error?
-                while retryCount <= maxRetries {
-                    do {
-                        let stream = try await llmFacade.responseCreateStream(parameters: request)
-                        for try await streamEvent in stream {
-                            await networkRouter.handleResponseEvent(streamEvent)
-                            if case .responseCompleted(let completed) = streamEvent {
-                                // Tool response acknowledged - clear pending state
-                                await stateCoordinator.clearPendingToolResponses()
-                                // Update StateCoordinator (single source of truth)
-                                await stateCoordinator.updateConversationState(
-                                    responseId: completed.response.id
-                                )
-                                // Store in conversation context for next request
-                                await contextAssembler.storePreviousResponseId(completed.response.id)
-                            }
-                        }
-                        await emit(.llmStatus(status: .idle))
-                        return // Success - exit retry loop
-                    } catch {
-                        lastError = error
-                        // Check if this is a retriable error
-                        let isRetriableError = retryPolicy.isRetriable(error)
-                        if isRetriableError && retryCount < maxRetries {
-                            retryCount += 1
-                            let delay = Double(retryCount) * 2.0 // Exponential backoff: 2s, 4s, 6s
-                            Logger.warning("⚠️ Transient error (attempt \(retryCount)/\(maxRetries)), retrying in \(delay)s: \(error)", category: .ai)
-                            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                        } else {
-                            // Non-retriable error or max retries reached
-                            Logger.error("❌ Tool response stream failed: \(error)", category: .ai)
-                            if let apiError = error as? APIError {
-                                Logger.error("❌ API Error details: \(apiError)", category: .ai)
-                            }
-                            throw error
-                        }
-                    }
-                }
-                // If we get here, we've exhausted all retries
-                if let error = lastError {
-                    Logger.error("❌ Tool response failed after \(maxRetries) retries: \(error)", category: .ai)
-                    throw error
-                }
-            }
-            try await currentStreamTask?.value
-            currentStreamTask = nil
-            // Notify StateCoordinator that stream completed
-            await stateCoordinator.markStreamCompleted()
-        } catch is CancellationError {
-            Logger.verbose("Tool response stream cancelled", category: .ai)
-            // Notify StateCoordinator even on cancellation
-            await stateCoordinator.markStreamCompleted()
-        } catch {
-            await emit(.errorOccurred("Failed to send tool response: \(error.localizedDescription)"))
-            await emit(.llmStatus(status: .error))
-            // Notify StateCoordinator even on error
-            await stateCoordinator.markStreamCompleted()
-        }
+        await executeToolResponseViaAnthropic(payload)
     }
     /// Execute batched tool responses (for parallel tool calls)
-    /// OpenAI API requires all tool outputs from parallel calls to be sent together in one request
     private func executeBatchedToolResponses(_ payloads: [JSON]) async {
-        // Route to Anthropic if selected
-        if await isUsingAnthropic() {
-            await executeBatchedToolResponsesViaAnthropic(payloads)
-            return
-        }
-
-        await emit(.llmStatus(status: .busy))
-        // Track pending tool responses for retry on stream error
-        await stateCoordinator.setPendingToolResponses(payloads)
-        do {
-            Logger.info("📤 Sending batched tool responses (\(payloads.count) responses)", category: .ai)
-            let request = await requestBuilder.buildBatchedToolResponseRequest(payloads: payloads)
-            Logger.debug("📦 Batched tool response request: previousResponseId=\(request.previousResponseId ?? "nil")", category: .ai)
-            let messageId = UUID().uuidString
-            // Emit message sent event for each response in the batch
-            for payload in payloads {
-                await emit(.llmSentToolResponseMessage(messageId: messageId, payload: payload))
-            }
-            // Process stream via NetworkRouter with retry logic
-            currentStreamTask = Task {
-                var retryCount = 0
-                let maxRetries = 3
-                var lastError: Error?
-                while retryCount <= maxRetries {
-                    do {
-                        let stream = try await llmFacade.responseCreateStream(parameters: request)
-                        for try await streamEvent in stream {
-                            await networkRouter.handleResponseEvent(streamEvent)
-                            if case .responseCompleted(let completed) = streamEvent {
-                                // Tool responses acknowledged - clear pending state
-                                await stateCoordinator.clearPendingToolResponses()
-                                await stateCoordinator.updateConversationState(
-                                    responseId: completed.response.id
-                                )
-                                await contextAssembler.storePreviousResponseId(completed.response.id)
-                            }
-                        }
-                        await emit(.llmStatus(status: .idle))
-                        return // Success - exit retry loop
-                    } catch {
-                        lastError = error
-                        let isRetriableError = retryPolicy.isRetriable(error)
-                        if isRetriableError && retryCount < maxRetries {
-                            retryCount += 1
-                            let delay = Double(retryCount) * 2.0
-                            Logger.warning("⚠️ Transient error (attempt \(retryCount)/\(maxRetries)), retrying in \(delay)s: \(error)", category: .ai)
-                            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                        } else {
-                            Logger.error("❌ Batched tool response stream failed: \(error)", category: .ai)
-                            if let apiError = error as? APIError {
-                                Logger.error("❌ API Error details: \(apiError)", category: .ai)
-                            }
-                            throw error
-                        }
-                    }
-                }
-                if let error = lastError {
-                    Logger.error("❌ Batched tool response failed after \(maxRetries) retries: \(error)", category: .ai)
-                    throw error
-                }
-            }
-            try await currentStreamTask?.value
-            currentStreamTask = nil
-            await stateCoordinator.markStreamCompleted()
-        } catch is CancellationError {
-            Logger.verbose("Batched tool response stream cancelled", category: .ai)
-            await stateCoordinator.markStreamCompleted()
-        } catch {
-            await emit(.errorOccurred("Failed to send batched tool responses: \(error.localizedDescription)"))
-            await emit(.llmStatus(status: .error))
-            await stateCoordinator.markStreamCompleted()
-        }
+        await executeBatchedToolResponsesViaAnthropic(payloads)
     }
 
     func activate() {
@@ -581,76 +194,6 @@ actor LLMMessenger: OnboardingEventEmitter {
         Logger.error("📢 Error surfaced to UI: \(errorMessage)", category: .ai)
     }
 
-    /// Attempt to recover from "No tool output found" error by sending a synthetic tool response
-    /// Returns true if recovery was successful
-    private func attemptToolOutputRecovery(
-        callId: String,
-        originalPayload: JSON,
-        isSystemGenerated: Bool,
-        chatboxMessageId: String?,
-        originalText: String?,
-        bundledDeveloperMessages: [JSON],
-        toolChoice: String?
-    ) async -> Bool {
-        Logger.info("🔧 Recovery: Sending synthetic tool response for call_id: \(callId)", category: .ai)
-
-        // Build synthetic tool output using recovery manager
-        let toolOutput = recoveryManager.buildSyntheticToolOutput()
-
-        // Build tool response request using the request builder
-        let request = await requestBuilder.buildToolResponseRequest(
-            output: toolOutput,
-            callId: callId,
-            reasoningEffort: nil,
-            forcedToolChoice: nil
-        )
-
-        do {
-            // Send the synthetic tool response
-            let stream = try await llmFacade.responseCreateStream(parameters: request)
-            for try await streamEvent in stream {
-                await networkRouter.handleResponseEvent(streamEvent)
-
-                // Update conversation state when response completes
-                if case .responseCompleted(let completed) = streamEvent {
-                    let hadToolCalls = completed.response.output.contains { item in
-                        if case .functionCall = item { return true }
-                        return false
-                    }
-                    await stateCoordinator.updateConversationState(
-                        responseId: completed.response.id,
-                        hadToolCalls: hadToolCalls
-                    )
-                    // Store in conversation context for next request
-                    await contextAssembler.storePreviousResponseId(completed.response.id)
-                }
-            }
-
-            Logger.info("🔧 Recovery: Synthetic tool response sent successfully", category: .ai)
-
-            // Now retry the original user message
-            Logger.info("🔧 Recovery: Retrying original user message", category: .ai)
-
-            // Small delay to ensure state is updated
-            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
-
-            // Re-execute the original message
-            await executeUserMessage(
-                originalPayload,
-                isSystemGenerated: isSystemGenerated,
-                chatboxMessageId: chatboxMessageId,
-                originalText: originalText,
-                bundledDeveloperMessages: bundledDeveloperMessages,
-                toolChoice: toolChoice
-            )
-
-            return true
-        } catch {
-            Logger.error("🔧 Recovery failed: \(error)", category: .ai)
-            return false
-        }
-    }
-
     // MARK: - Anthropic Execution Methods
 
     /// Execute user message via Anthropic Messages API
@@ -659,7 +202,7 @@ actor LLMMessenger: OnboardingEventEmitter {
         isSystemGenerated: Bool,
         chatboxMessageId: String? = nil,
         originalText: String? = nil,
-        bundledDeveloperMessages: [JSON] = [],
+        bundledCoordinatorMessages: [JSON] = [],
         toolChoice: String? = nil
     ) async {
         await emit(.llmStatus(status: .busy))
@@ -673,7 +216,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             let request = await anthropicRequestBuilder.buildUserMessageRequest(
                 text: text,
                 isSystemGenerated: isSystemGenerated,
-                bundledDeveloperMessages: bundledDeveloperMessages,
+                bundledCoordinatorMessages: bundledCoordinatorMessages,
                 forcedToolChoice: toolChoice,
                 imageBase64: imageData,
                 imageContentType: imageContentType
@@ -715,7 +258,8 @@ actor LLMMessenger: OnboardingEventEmitter {
                         Logger.info("📡 Anthropic stream completed: \(eventCount) events processed", category: .ai)
 
                         await emit(.llmStatus(status: .idle))
-                        await emit(.llmStreamCompleted)
+                        // NOTE: Don't emit .llmStreamCompleted here - markStreamCompleted() handles it
+                        // to avoid duplicate emissions that cause "isStreaming=false" warnings
                         return // Success - exit retry loop
                     } catch {
                         lastError = error
@@ -764,19 +308,19 @@ actor LLMMessenger: OnboardingEventEmitter {
     }
 
     /// Execute developer message via Anthropic Messages API
-    private func executeDeveloperMessageViaAnthropic(_ payload: JSON) async {
+    private func executeCoordinatorMessageViaAnthropic(_ payload: JSON) async {
         await emit(.llmStatus(status: .busy))
         let text = payload["text"].stringValue
         let toolChoiceName = payload["toolChoice"].string
         Logger.info("📨 Sending Anthropic developer message (\(text.prefix(100))...)", category: .ai)
 
         do {
-            let request = await anthropicRequestBuilder.buildDeveloperMessageRequest(
+            let request = await anthropicRequestBuilder.buildCoordinatorMessageRequest(
                 text: text,
                 toolChoice: toolChoiceName
             )
             let messageId = UUID().uuidString
-            await emit(.llmDeveloperMessageSent(messageId: messageId, payload: payload))
+            await emit(.llmCoordinatorMessageSent(messageId: messageId, payload: payload))
 
             currentStreamTask = Task {
                 var retryCount = 0
@@ -800,7 +344,7 @@ actor LLMMessenger: OnboardingEventEmitter {
                         }
 
                         await emit(.llmStatus(status: .idle))
-                        await emit(.llmStreamCompleted)
+                        // NOTE: Don't emit .llmStreamCompleted here - markStreamCompleted() handles it
                         return
                     } catch {
                         lastError = error
@@ -924,7 +468,7 @@ actor LLMMessenger: OnboardingEventEmitter {
                             output: outputString
                         )
                         await emit(.llmStatus(status: .idle))
-                        await emit(.llmStreamCompleted)
+                        // NOTE: Don't emit .llmStreamCompleted here - markStreamCompleted() handles it
                         return
                     } catch {
                         lastError = error
@@ -1012,7 +556,7 @@ actor LLMMessenger: OnboardingEventEmitter {
                             )
                         }
                         await emit(.llmStatus(status: .idle))
-                        await emit(.llmStreamCompleted)
+                        // NOTE: Don't emit .llmStreamCompleted here - markStreamCompleted() handles it
                         return
                     } catch {
                         lastError = error

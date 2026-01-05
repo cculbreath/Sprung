@@ -15,8 +15,8 @@ struct ObjectiveWorkflowContext {
 }
 /// Actions a workflow may request when an objective transitions.
 enum ObjectiveWorkflowOutput {
-    /// Send a developer message to the LLM. Optional toolChoice forces a specific tool call.
-    case developerMessage(title: String, details: [String: String], payload: JSON?, toolChoice: String? = nil)
+    /// Send a coordinator message to the LLM. Optional toolChoice forces a specific tool call.
+    case coordinatorMessage(title: String, details: [String: String], payload: JSON?, toolChoice: String? = nil)
     case triggerPhotoFollowUp(extraDetails: [String: String])
 }
 /// Declarative workflow metadata for a specific objective.

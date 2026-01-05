@@ -120,6 +120,9 @@ final class OnboardingDependencyContainer {
     // MARK: - Usage Tracking
     let tokenUsageTracker: TokenUsageTracker
 
+    // MARK: - Interview Todo List
+    let todoStore: InterviewTodoStore
+
     // MARK: - Early-Initialized Coordinators (No Coordinator Reference Needed)
     let coordinatorEventRouter: CoordinatorEventRouter
     // MARK: - Late-Initialized Components (Require Coordinator Reference)
@@ -163,6 +166,7 @@ final class OnboardingDependencyContainer {
         self.conversationLogStore = ConversationLogStore()
         self.agentActivityTracker = AgentActivityTracker()
         self.tokenUsageTracker = TokenUsageTracker()
+        self.todoStore = InterviewTodoStore()
 
         // 3. Initialize state stores
         let stores = Self.createStateStores(eventBus: core.eventBus, phasePolicy: core.phasePolicy)
@@ -263,7 +267,8 @@ final class OnboardingDependencyContainer {
             sessionPersistenceHandler: sessionPersistenceHandler,
             chatTranscriptStore: stores.chatTranscriptStore,
             knowledgeCardStore: knowledgeCardStore,
-            skillStore: skillStore
+            skillStore: skillStore,
+            todoStore: todoStore
         )
         self.uiStateUpdateHandler = UIStateUpdateHandler(ui: ui, state: state, wizardTracker: wizardTracker)
 
@@ -465,7 +470,8 @@ final class OnboardingDependencyContainer {
             toolRegistry: toolRegistry,
             dataStore: dataStore,
             eventBus: eventBus,
-            phaseRegistry: phaseRegistry
+            phaseRegistry: phaseRegistry,
+            todoStore: todoStore
         )
         // Register tools
         toolRegistrar.registerTools(
