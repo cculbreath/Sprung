@@ -36,7 +36,7 @@ final class UIResponseCoordinator {
             // This bypasses the LLM to prevent dead-end stalls where the LLM
             // acknowledges but fails to call next_phase
             if approved {
-                await forcePhaseTransition()
+                await forcePhaseTransition(reason: "User approved skip to next phase")
                 Logger.info("⚡ Forced phase transition executed after user approval", category: .ai)
             }
         }
@@ -65,8 +65,9 @@ final class UIResponseCoordinator {
     // MARK: - Forced Phase Transition
 
     /// Force an immediate phase transition without waiting for LLM to call next_phase.
-    /// Used when user approves a phase skip to prevent dead-end stalls.
-    private func forcePhaseTransition() async {
+    /// Used when user action should directly advance the phase (section toggle, skip approval, etc.)
+    /// This is more reliable than forced toolChoice and eliminates LLM round trips.
+    private func forcePhaseTransition(reason: String = "User action triggered phase advance") async {
         let currentPhase = await state.phase
         guard let nextPhase = currentPhase.next() else {
             Logger.warning("⚠️ Cannot force phase transition: already at final phase", category: .ai)
@@ -80,7 +81,7 @@ final class UIResponseCoordinator {
         await eventBus.publish(.phaseTransitionRequested(
             from: currentPhase.rawValue,
             to: nextPhase.rawValue,
-            reason: "User approved skip to next phase"
+            reason: reason
         ))
     }
     // MARK: - Upload Handling
@@ -152,7 +153,27 @@ final class UIResponseCoordinator {
         var output = JSON()
         output["message"].string = message
         output["status"].string = "completed"
-        await completePendingUIToolCall(output: output)
+
+        // Determine instruction based on validation type and status
+        // Per Anthropic best practices, instruction text travels WITH the tool result
+        let instruction: String?
+        if statusDescription == "confirmed" {
+            // Check if this is a timeline validation by looking at pending tool call
+            let pendingTool = await state.getPendingUIToolCall()
+            if pendingTool?.toolName == OnboardingToolName.submitForValidation.rawValue {
+                // Timeline validated - guide to next step
+                instruction = """
+                    Timeline validation confirmed. Now call configure_enabled_sections \
+                    to let the user choose which resume sections to include based on their timeline.
+                    """
+            } else {
+                instruction = nil
+            }
+        } else {
+            instruction = nil
+        }
+
+        await completePendingUIToolCall(output: output, instruction: instruction)
 
         Logger.info("✅ Validation response - info included in tool response", category: .ai)
     }
@@ -412,18 +433,6 @@ final class UIResponseCoordinator {
     func confirmSectionToggle(enabled: [String], customFields: [CustomFieldDefinition] = []) async {
         guard toolRouter.resolveSectionToggle(enabled: enabled) != nil else { return }
 
-        // Complete pending UI tool call (Codex paradigm)
-        // No separate user message needed - tool response contains the completion info
-        var output = JSON()
-        var message = "Section toggle confirmed. Enabled sections: \(enabled.joined(separator: ", "))"
-        if !customFields.isEmpty {
-            let customFieldsSummary = customFields.map { "\($0.key): \($0.description)" }.joined(separator: "; ")
-            message += ". Custom fields: \(customFieldsSummary)"
-        }
-        output["message"].string = message
-        output["status"].string = "completed"
-        await completePendingUIToolCall(output: output)
-
         // Store enabled sections in artifact repository
         await state.restoreEnabledSections(Set(enabled))
 
@@ -442,11 +451,25 @@ final class UIResponseCoordinator {
             details: ["sections": enabled.joined(separator: ", ")]
         ))
 
-        // UNGATE: Allow next_phase now that sections are configured
-        await sessionUIState.includeTool(OnboardingToolName.nextPhase.rawValue)
-        Logger.debug("🔓 Ungated next_phase after section toggle confirmation", category: .ai)
+        // Execute phase transition directly - no need to ask LLM to call next_phase
+        // This is more reliable than forced toolChoice and eliminates a round trip
+        await forcePhaseTransition(reason: "Section configuration confirmed by user")
 
-        Logger.info("✅ Section toggle confirmed - info included in tool response", category: .ai)
+        // Build tool output informing LLM that phase has advanced
+        var output = JSON()
+        var message = "Section toggle confirmed. Enabled sections: \(enabled.joined(separator: ", "))"
+        if !customFields.isEmpty {
+            let customFieldsSummary = customFields.map { "\($0.key): \($0.description)" }.joined(separator: "; ")
+            message += ". Custom fields: \(customFieldsSummary)"
+        }
+        message += ". Phase has been advanced to Phase 3 (Evidence Collection)."
+        output["message"].string = message
+        output["status"].string = "phase_advanced"
+
+        // Complete pending UI tool call - LLM receives confirmation that phase changed
+        await completePendingUIToolCall(output: output)
+
+        Logger.info("✅ Section toggle confirmed - phase advanced directly to Phase 3", category: .ai)
     }
     func rejectSectionToggle(reason: String) async {
         guard toolRouter.rejectSectionToggle(reason: reason) != nil else { return }
@@ -646,8 +669,13 @@ final class UIResponseCoordinator {
 
     /// Complete a pending UI tool call by sending the tool output.
     /// This implements the Codex CLI paradigm where UI tools defer their response until user action.
-    /// Note: Queued developer messages are automatically flushed when the subsequent user message is enqueued.
-    private func completePendingUIToolCall(output: JSON) async {
+    ///
+    /// - Parameters:
+    ///   - output: The tool output JSON
+    ///   - instruction: Optional instruction text to include after the tool_result.
+    ///     Per Anthropic best practices, this text travels WITH the tool result
+    ///     to provide immediate guidance for the next action.
+    private func completePendingUIToolCall(output: JSON, instruction: String? = nil) async {
         guard let pending = await state.getPendingUIToolCall() else {
             Logger.debug("⚠️ No pending UI tool call to complete", category: .ai)
             return
@@ -657,13 +685,16 @@ final class UIResponseCoordinator {
         var payload = JSON()
         payload["callId"].string = pending.callId
         payload["output"] = output
+        if let instruction = instruction {
+            payload["instruction"].string = instruction
+        }
         await eventBus.publish(.llmToolResponseMessage(payload: payload))
-        Logger.info("📤 Pending tool output sent: \(pending.toolName) (callId: \(pending.callId.prefix(8)))", category: .ai)
+
+        let instructionInfo = instruction != nil ? " + instruction" : ""
+        Logger.info("📤 Pending tool output sent: \(pending.toolName) (callId: \(pending.callId.prefix(8)))\(instructionInfo)", category: .ai)
 
         // Clear the pending tool call
         await state.clearPendingUIToolCall()
-        // Note: Queued developer messages will be flushed by StateCoordinator
-        // when the subsequent user message (llmEnqueueUserMessage) is processed
     }
 
     /// Build a standard "UI presented, awaiting input" output for pending tools

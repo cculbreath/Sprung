@@ -63,7 +63,8 @@ struct PhaseOneScript: PhaseScript {
                         "step": "profile_photo",
                         "note": "writing_sample_panel_visible_in_sidebar"
                     ]
-                    return [.developerMessage(title: title, details: details, payload: nil, toolChoice: OnboardingToolName.getUserUpload.rawValue)]
+                    // LLM decides when to call get_user_upload based on context (no forced toolChoice)
+                    return [.developerMessage(title: title, details: details, payload: nil)]
                 }
             ),
 
@@ -113,15 +114,15 @@ struct PhaseOneScript: PhaseScript {
                         Job search context captured. All Phase 1 objectives are satisfied. \
                         Transition to Phase 2 to build the career timeline. \
                         Brief the user: "Perfect. I have your contact info, writing samples, and understand your priorities. \
-                        Next, let's build out your career timeline."
+                        Next, let's build out your career timeline." \
+                        Call next_phase to proceed.
                         """
                     let details = [
                         "status": context.status.rawValue,
-                        "action": "call_next_phase",
-                        "immediate": "true"
+                        "action": "call_next_phase"
                     ]
-                    // Force next_phase tool call
-                    return [.developerMessage(title: title, details: details, payload: nil, toolChoice: OnboardingToolName.nextPhase.rawValue)]
+                    // LLM decides when to call next_phase based on context (no forced toolChoice)
+                    return [.developerMessage(title: title, details: details, payload: nil)]
                 }
             )
         ]

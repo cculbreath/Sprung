@@ -54,7 +54,8 @@ struct PhaseTwoScript: PhaseScript {
                         "objective": OnboardingObjectiveId.skeletonTimelineComplete.rawValue,
                         "upload_type": "resume"
                     ]
-                    return [.developerMessage(title: title, details: details, payload: nil, toolChoice: OnboardingToolName.getUserUpload.rawValue)]
+                    // LLM decides when to call get_user_upload based on context (no forced toolChoice)
+                    return [.developerMessage(title: title, details: details, payload: nil)]
                 },
                 onComplete: { context in
                     let title = """
@@ -109,26 +110,13 @@ struct PhaseTwoScript: PhaseScript {
             ),
 
             // MARK: - Section Configuration
+            // NOTE: No onComplete handler needed here. The instruction text in the tool response
+            // (from confirmSectionToggle in UIResponseCoordinator) guides Claude to call next_phase.
+            // This follows Anthropic's recommended pattern of including guidance WITH tool results
+            // rather than using forced toolChoice or developer messages.
             OnboardingObjectiveId.enabledSections.rawValue: ObjectiveWorkflow(
                 id: OnboardingObjectiveId.enabledSections.rawValue,
-                dependsOn: [OnboardingObjectiveId.timelineEnriched.rawValue],
-                onComplete: { context in
-                    let title = """
-                        Enabled sections confirmed. Before transitioning to Phase 3, suggest specific documents: \
-                        "To really bring your experience to life, here's what would help: \
-                        - For [Position]: Technical reports, design docs \
-                        - For [Position]: Performance reviews, teaching evaluations \
-                        - Code from your projects \
-                        What do you have access to? We'll collect these in the next phase." \
-                        Then call next_phase to proceed.
-                        """
-                    let details = [
-                        "status": context.status.rawValue,
-                        "action": "suggest_documents_then_next_phase"
-                    ]
-                    // Force next_phase tool call
-                    return [.developerMessage(title: title, details: details, payload: nil, toolChoice: OnboardingToolName.nextPhase.rawValue)]
-                }
+                dependsOn: [OnboardingObjectiveId.timelineEnriched.rawValue]
             )
         ]
     }

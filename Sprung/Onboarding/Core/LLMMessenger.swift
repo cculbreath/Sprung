@@ -848,6 +848,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             let callId = payload["callId"].stringValue
             let output = payload["output"]
             let toolName = payload["toolName"].stringValue
+            let instruction = payload["instruction"].string  // Anthropic-native guidance
 
             let toolChoice: String?
             if let payloadToolChoice = payload["toolChoice"].string {
@@ -857,6 +858,9 @@ actor LLMMessenger: OnboardingEventEmitter {
             }
 
             Logger.debug("📤 Anthropic tool response: callId=\(callId), output=\(output.rawString() ?? "nil")", category: .ai)
+            if let instruction = instruction {
+                Logger.debug("📋 Instruction attached: \(instruction.prefix(50))...", category: .ai)
+            }
             Logger.verbose("📤 Sending Anthropic tool response for callId=\(String(callId.prefix(12)))...", category: .ai)
 
             // Note: Don't store result before building request - buildToolResponseRequest adds it explicitly
@@ -865,6 +869,7 @@ actor LLMMessenger: OnboardingEventEmitter {
                 output: output,
                 callId: callId,
                 toolName: toolName,
+                instruction: instruction,
                 forcedToolChoice: toolChoice
             )
 

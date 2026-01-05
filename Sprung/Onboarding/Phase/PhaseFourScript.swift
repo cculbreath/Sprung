@@ -111,11 +111,10 @@ struct PhaseFourScript: PhaseScript {
                         """
                     let details = [
                         "status": context.status.rawValue,
-                        "action": "call_next_phase",
-                        "immediate": "true"
+                        "action": "call_next_phase"
                     ]
-                    // Force next_phase tool call
-                    return [.developerMessage(title: title, details: details, payload: nil, toolChoice: OnboardingToolName.nextPhase.rawValue)]
+                    // LLM decides when to call next_phase based on context (no forced toolChoice)
+                    return [.developerMessage(title: title, details: details, payload: nil)]
                 }
             )
         ]

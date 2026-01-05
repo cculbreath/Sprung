@@ -179,7 +179,8 @@ struct AnthropicStreamAdapter {
                 arguments: argsJSON,
                 callId: toolCallInfo.id  // Anthropic tool_use.id serves as callId
             )
-            events.append(.toolCallRequested(call, statusMessage: nil))
+            // Display tool name as code symbol
+            events.append(.toolCallRequested(call, statusMessage: "\(toolCallInfo.name)()"))
         }
 
         // If we have multiple tool calls, emit batch started event

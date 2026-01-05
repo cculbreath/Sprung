@@ -2,14 +2,15 @@
 //  WorkingMemoryBuilder.swift
 //  Sprung
 //
-//  Builds working memory context for LLM system prompts.
-//  Extracted from AnthropicRequestBuilder for single responsibility.
+//  Builds interview context as XML for inclusion in user messages.
+//  Per Anthropic best practices, uses XML tags to delineate app context
+//  rather than stuffing into system prompt.
 //
 
 import Foundation
 import SwiftyJSON
 
-/// Builds working memory context from StateCoordinator for LLM system prompts
+/// Builds interview context XML from StateCoordinator for user messages
 struct WorkingMemoryBuilder {
     private let stateCoordinator: StateCoordinator
 
@@ -17,72 +18,95 @@ struct WorkingMemoryBuilder {
         self.stateCoordinator = stateCoordinator
     }
 
-    // MARK: - Working Memory
+    // MARK: - Interview Context (XML for user messages)
 
-    /// Build working memory string for system prompt
-    func buildWorkingMemory() async -> String? {
+    /// Build interview context as XML for inclusion in user messages.
+    /// This replaces the old system prompt approach with Anthropic-native XML tags.
+    func buildInterviewContext() async -> String? {
         let phase = await stateCoordinator.phase
 
-        var parts: [String] = []
-        parts.append("## Working Memory (Phase: \(phase.shortName))")
+        var xml: [String] = []
+        xml.append("<interview_context>")
+        xml.append("  <phase>\(phase.rawValue)</phase>")
 
+        // Current UI state
         let currentPanel = await stateCoordinator.getCurrentToolPaneCard()
-        if currentPanel != .none {
-            parts.append("Visible UI: \(currentPanel.rawValue)")
-        } else {
-            parts.append("Visible UI: none (call upload/prompt tools to show UI)")
-        }
+        xml.append("  <visible_ui>\(currentPanel == .none ? "none" : currentPanel.rawValue)</visible_ui>")
 
+        // Objectives
         let objectives = await stateCoordinator.getObjectivesForPhase(phase)
         if !objectives.isEmpty {
-            let statusList = objectives.map { "\($0.id): \($0.status.rawValue)" }
-            parts.append("Objectives: \(statusList.joined(separator: ", "))")
+            xml.append("  <objectives>")
+            for obj in objectives {
+                xml.append("    <objective id=\"\(obj.id)\" status=\"\(obj.status.rawValue)\"/>")
+            }
+            xml.append("  </objectives>")
         }
 
+        // Timeline summary
         let artifacts = await stateCoordinator.artifacts
         if let entries = artifacts.skeletonTimeline?["experiences"].array, !entries.isEmpty {
-            let timelineSummary = entries.prefix(6).compactMap { entry -> String? in
-                guard let org = entry["organization"].string,
-                      let title = entry["title"].string else { return nil }
-                let dates = [entry["start"].string, entry["end"].string]
-                    .compactMap { $0 }
-                    .joined(separator: "-")
-                return "\(title) @ \(org)" + (dates.isEmpty ? "" : " (\(dates))")
+            xml.append("  <timeline count=\"\(entries.count)\">")
+            for entry in entries.prefix(6) {
+                let org = entry["organization"].stringValue
+                let title = entry["title"].stringValue
+                let start = entry["start"].stringValue
+                let end = entry["end"].stringValue.isEmpty ? "present" : entry["end"].stringValue
+                xml.append("    <entry>\(escapeXML(title)) @ \(escapeXML(org)) (\(start)-\(end))</entry>")
             }
-            if !timelineSummary.isEmpty {
-                parts.append("Timeline (\(entries.count) entries): \(timelineSummary.joined(separator: "; "))")
+            if entries.count > 6 {
+                xml.append("    <entry>... and \(entries.count - 6) more</entry>")
             }
+            xml.append("  </timeline>")
         }
 
+        // Artifacts summary
         let artifactSummaries = await stateCoordinator.listArtifactSummaries()
         if !artifactSummaries.isEmpty {
-            let artifactSummary = artifactSummaries.prefix(6).compactMap { record -> String? in
-                guard let filename = record["filename"].string else { return nil }
+            xml.append("  <artifacts count=\"\(artifactSummaries.count)\">")
+            for record in artifactSummaries.prefix(6) {
+                let filename = record["filename"].stringValue
                 let desc = record["brief_description"].string ?? record["summary"].string ?? ""
-                let shortDesc = desc.isEmpty ? "" : " - \(String(desc.prefix(40)))"
-                return filename + shortDesc
+                let shortDesc = desc.isEmpty ? "" : ": \(String(desc.prefix(40)))"
+                xml.append("    <artifact>\(escapeXML(filename))\(escapeXML(shortDesc))</artifact>")
             }
-            if !artifactSummary.isEmpty {
-                parts.append("Artifacts (\(artifactSummaries.count)): \(artifactSummary.joined(separator: "; "))")
+            if artifactSummaries.count > 6 {
+                xml.append("    <artifact>... and \(artifactSummaries.count - 6) more</artifact>")
             }
+            xml.append("  </artifacts>")
         }
 
+        // Dossier notes (if any)
         let dossierNotes = await stateCoordinator.getDossierNotes()
         if !dossierNotes.isEmpty {
-            let truncatedNotes = String(dossierNotes.prefix(800))
-            parts.append("Dossier Notes:\n\(truncatedNotes)")
+            let truncatedNotes = String(dossierNotes.prefix(600))
+            xml.append("  <dossier_notes>\(escapeXML(truncatedNotes))</dossier_notes>")
         }
 
-        guard parts.count > 1 else { return nil }
+        xml.append("</interview_context>")
 
-        let memory = parts.joined(separator: "\n")
+        let context = xml.joined(separator: "\n")
         let maxChars = 2500
-        if memory.count > maxChars {
-            Logger.warning("⚠️ WorkingMemory exceeds target (\(memory.count) chars)", category: .ai)
-            return String(memory.prefix(maxChars))
+        if context.count > maxChars {
+            Logger.warning("⚠️ InterviewContext exceeds target (\(context.count) chars)", category: .ai)
         }
 
-        Logger.debug("📋 WorkingMemory: \(memory.count) chars", category: .ai)
-        return memory
+        Logger.debug("📋 InterviewContext: \(context.count) chars", category: .ai)
+        return context
+    }
+
+    /// Legacy method - now delegates to buildInterviewContext for backwards compatibility
+    func buildWorkingMemory() async -> String? {
+        await buildInterviewContext()
+    }
+
+    // MARK: - XML Helpers
+
+    private func escapeXML(_ string: String) -> String {
+        string
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
     }
 }

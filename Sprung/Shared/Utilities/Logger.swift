@@ -125,6 +125,10 @@ final class Logger {
         // Verbose is enabled if minimum level is verbose (1) or debug (0)
         minimumLevel.rawValue <= Level.verbose.rawValue
     }
+    static var isDebugEnabled: Bool {
+        // Debug is enabled only if minimum level is debug (0)
+        minimumLevel == .debug
+    }
     static var shouldSaveDebugFiles: Bool {
 #if DEBUG
         return configurationQueue.sync { configuration.enableFileLogging }

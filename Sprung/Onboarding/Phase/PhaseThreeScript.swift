@@ -125,14 +125,14 @@ struct PhaseThreeScript: PhaseScript {
                         Knowledge cards generated. Review the cards and ask clarifying questions \
                         if any seem thin or generic. Example: "The 'Industrial Automation' skill card \
                         seems generic. Can you tell me more about what makes your automation work distinctive?" \
-                        Then transition to Phase 4 for strategic synthesis.
+                        Then call next_phase to transition to Phase 4 for strategic synthesis.
                         """
                     let details = [
                         "status": context.status.rawValue,
                         "action": "review_cards_then_next_phase"
                     ]
-                    // Force next_phase tool call
-                    return [.developerMessage(title: title, details: details, payload: nil, toolChoice: OnboardingToolName.nextPhase.rawValue)]
+                    // LLM decides when to call next_phase based on context (no forced toolChoice)
+                    return [.developerMessage(title: title, details: details, payload: nil)]
                 }
             )
         ]

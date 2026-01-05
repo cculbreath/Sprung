@@ -142,7 +142,8 @@ struct ToolBundlePolicy {
             OnboardingToolName.createTimelineCard.rawValue,
             OnboardingToolName.reorderTimelineCards.rawValue,
             OnboardingToolName.getTimelineEntries.rawValue,
-            OnboardingToolName.displayTimelineEntriesForReview.rawValue
+            OnboardingToolName.displayTimelineEntriesForReview.rawValue,
+            OnboardingToolName.configureEnabledSections.rawValue  // Available for instruction-based guidance
         ],
 
         .p2_workPreferences: [       // Dossier weaving
@@ -161,7 +162,9 @@ struct ToolBundlePolicy {
 
         .p2_timelineValidation: [    // After user clicks "Done with Timeline"
             OnboardingToolName.submitForValidation.rawValue,
-            OnboardingToolName.getTimelineEntries.rawValue
+            OnboardingToolName.getTimelineEntries.rawValue,
+            OnboardingToolName.configureEnabledSections.rawValue,  // Available after validation confirms
+            OnboardingToolName.nextPhase.rawValue                  // Available for instruction-based phase advance
         ],
 
         .p2_phaseTransition: [

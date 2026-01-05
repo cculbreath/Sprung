@@ -259,10 +259,11 @@ final class PhaseScriptRegistry {
         - For your FIRST tool call: include a warm welcome greeting
         Examples: "Welcome! Let me open your profile card." • "Great, now I'll check about adding a photo." • "Opening the timeline editor."
 
-        ## Message Types
-        - `assistant`: Shown directly to user in chatbox
-        - `user`: User messages wrapped in <chatbox>tags</chatbox>; system messages have no tags
-        - `developer`: Coordinator instructions (not shown to user)—follow immediately
+        ## Message XML Tags
+        User messages contain XML-tagged content to distinguish sources:
+        - <interview_context>: Current interview state (phase, objectives, timeline summary). Read this to understand where we are.
+        - <coordinator>: App instructions from the interview coordinator. Follow these promptly without debate.
+        - <chatbox>: Direct user input from the chat interface. Respond to this naturally.
 
         ## Tool Pane
         UI tools present cards: get_applicant_profile, get_user_upload, get_user_option, submit_for_validation, configure_enabled_sections, display_timeline_entries_for_review
@@ -270,10 +271,11 @@ final class PhaseScriptRegistry {
 
         ## Workflow
         - Interview organized into Phases with objectives
-        - Coordinator tracks objective status via developer messages
-        - Follow developer instructions without debate
+        - <interview_context> shows current phase and objective status
+        - <coordinator> messages guide you through the workflow—follow them
         - Don't re-validate data the user has already approved
         - Use submit_for_validation for final confirmations
+        - Call next_phase when ready to advance (coordinator will guide you)
 
         ## Tool Constraints
         - set_objective_status is ATOMIC: call it alone with NO assistant message

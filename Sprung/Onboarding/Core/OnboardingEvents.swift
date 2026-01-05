@@ -450,9 +450,10 @@ actor EventCoordinator {
         // Objective events
         case .objectiveStatusRequested, .objectiveStatusUpdateRequested, .objectiveStatusChanged:
             return .objective
-        // Tool events
-        case .toolCallRequested, .toolCallCompleted,
-             .mergedInventoryStored:
+        // Tool events (non-UI status updates go to processing for overlay display)
+        case .toolCallRequested, .toolCallCompleted:
+            return .processing
+        case .mergedInventoryStored:
             return .tool
         // Artifact events
         case .uploadCompleted,

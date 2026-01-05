@@ -122,7 +122,7 @@ final class AppDependencies {
             _ = LLMFacadeFactory.registerAnthropic(
                 facade: llmFacade,
                 apiKey: anthropicKey,
-                debugEnabled: Logger.isVerboseEnabled
+                debugEnabled: Logger.isDebugEnabled
             )
         }
 
