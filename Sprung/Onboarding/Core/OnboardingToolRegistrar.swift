@@ -59,7 +59,7 @@ final class OnboardingToolRegistrar {
         toolRegistry.register(ValidateApplicantProfileTool(coordinator: coordinator))
         toolRegistry.register(ConfigureEnabledSectionsTool(coordinator: coordinator))
         toolRegistry.register(UpdateDossierNotesTool(coordinator: coordinator))
-        toolRegistry.register(AgentReadyTool())
+        toolRegistry.register(AgentReadyTool(todoStore: todoStore))
         toolRegistry.register(GetTimelineEntriesTool(coordinator: coordinator))
         // KC workflow: Document merge UI → Approve & Create button → Direct ResRef conversion
         toolRegistry.register(OpenDocumentCollectionTool(coordinator: coordinator))
