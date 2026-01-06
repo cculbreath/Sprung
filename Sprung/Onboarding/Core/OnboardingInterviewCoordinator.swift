@@ -92,6 +92,11 @@ final class OnboardingInterviewCoordinator {
         container.tokenUsageTracker
     }
 
+    /// Todo store for LLM task tracking (debug access)
+    var todoStore: InterviewTodoStore {
+        container.todoStore
+    }
+
     /// Returns the card merge service for merging document inventories
     var cardMergeService: CardMergeService {
         container.cardMergeService

@@ -13,6 +13,7 @@ struct EventDumpView: View {
     @State private var events: [String] = []
     @State private var metricsText: String = ""
     @State private var conversationEntries: [ConversationLogEntry] = []
+    @State private var todoItems: [InterviewTodoItem] = []
     @State private var selectedTab = 0
     @State private var showRegenDialog = false
     @State private var isDeduping = false
@@ -27,12 +28,17 @@ struct EventDumpView: View {
                 conversationTabContent
                     .tabItem { Label("Conversation", systemImage: "bubble.left.and.bubble.right") }
                     .tag(1)
+
+                todoListTabContent
+                    .tabItem { Label("Todo List", systemImage: "checklist") }
+                    .tag(2)
             }
             .navigationTitle("Debug Logs")
             .toolbar { toolbarContent }
             .task {
                 loadEvents()
                 loadConversationLog()
+                await loadTodoItems()
             }
             .sheet(isPresented: $showRegenDialog) {
                 regenSheet
@@ -128,6 +134,101 @@ struct EventDumpView: View {
             }
         }
         .listStyle(.plain)
+    }
+
+    // MARK: - Todo List Tab
+
+    @ViewBuilder
+    private var todoListTabContent: some View {
+        VStack(spacing: 0) {
+            GroupBox {
+                HStack {
+                    Text("LLM-visible todo list for tracking interview progress")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Refresh") {
+                        Task { await loadTodoItems() }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            } label: {
+                HStack {
+                    Text("Interview Todo List")
+                        .font(.headline)
+                    Spacer()
+                    Text("\(todoItems.count) items")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding()
+
+            if todoItems.isEmpty {
+                ContentUnavailableView {
+                    Label("No Todo Items", systemImage: "checklist")
+                } description: {
+                    Text("Todo list is empty. Items appear when agent_ready is called.")
+                }
+            } else {
+                todoListView
+            }
+        }
+    }
+
+    private var todoListView: some View {
+        List {
+            ForEach(Array(todoItems.enumerated()), id: \.element.id) { index, item in
+                HStack(spacing: 12) {
+                    // Status icon
+                    Image(systemName: statusIcon(for: item.status))
+                        .foregroundStyle(statusColor(for: item.status))
+                        .font(.title3)
+
+                    // Content
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.status == .inProgress ? (item.activeForm ?? item.content) : item.content)
+                            .font(.system(.body, design: .default))
+                            .fontWeight(item.status == .inProgress ? .medium : .regular)
+
+                        Text(item.status.rawValue)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Text("#\(index + 1)")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .monospacedDigit()
+                }
+                .padding(.vertical, 4)
+                .listRowSeparator(.visible)
+            }
+        }
+        .listStyle(.plain)
+    }
+
+    private func statusIcon(for status: InterviewTodoStatus) -> String {
+        switch status {
+        case .pending: return "circle"
+        case .inProgress: return "circle.dotted"
+        case .completed: return "checkmark.circle.fill"
+        }
+    }
+
+    private func statusColor(for status: InterviewTodoStatus) -> Color {
+        switch status {
+        case .pending: return .secondary
+        case .inProgress: return .blue
+        case .completed: return .green
+        }
+    }
+
+    private func loadTodoItems() async {
+        todoItems = await coordinator.todoStore.getItemsForPersistence()
     }
 
     private func conversationEntryRow(_ entry: ConversationLogEntry) -> some View {
