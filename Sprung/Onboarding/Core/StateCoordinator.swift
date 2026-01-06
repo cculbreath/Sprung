@@ -18,6 +18,7 @@ actor StateCoordinator: OnboardingEventEmitter {
     private let uiState: SessionUIState
     private let streamQueueManager: StreamQueueManager
     private let llmStateManager: LLMStateManager
+    private let todoStore: InterviewTodoStore
     // MARK: - Phase Policy
     private let phasePolicy: PhasePolicy
     // Runtime tool exclusions (e.g., one-time bootstrap tools)
@@ -62,7 +63,8 @@ actor StateCoordinator: OnboardingEventEmitter {
         objectives: ObjectiveStore,
         artifacts: ArtifactRepository,
         chat: ChatTranscriptStore,
-        uiState: SessionUIState
+        uiState: SessionUIState,
+        todoStore: InterviewTodoStore
     ) {
         self.eventBus = eventBus
         self.phasePolicy = phasePolicy
@@ -70,6 +72,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         self.artifactRepository = artifacts
         self.chatStore = chat
         self.uiState = uiState
+        self.todoStore = todoStore
         self.streamQueueManager = StreamQueueManager(eventBus: eventBus)
         self.llmStateManager = LLMStateManager()
         Logger.info("🎯 StateCoordinator initialized (orchestrator mode with injected services)", category: .ai)
@@ -104,6 +107,64 @@ actor StateCoordinator: OnboardingEventEmitter {
         await uiState.setPhase(phase)
         await updateWizardProgress()
         Logger.info("📋 Registered objectives for phases up to \(phase)", category: .ai)
+    }
+
+    /// Pre-populate the todo list with items for the given phase.
+    /// Called during phase transitions to ensure LLM sees the correct checklist.
+    private func populateTodoList(for phase: InterviewPhase) async {
+        let items: [InterviewTodoItem]
+
+        switch phase {
+        case .phase1VoiceContext:
+            items = [
+                InterviewTodoItem(content: "Collect applicant profile (contact info)", status: .pending),
+                InterviewTodoItem(content: "Offer profile photo upload", status: .pending),
+                InterviewTodoItem(content: "Collect writing samples", status: .pending),
+                InterviewTodoItem(content: "Capture job search context", status: .pending),
+                InterviewTodoItem(content: "Extract voice primers", status: .pending)
+            ]
+
+        case .phase2CareerStory:
+            items = [
+                InterviewTodoItem(content: "Offer resume/LinkedIn upload or conversational timeline", status: .pending),
+                InterviewTodoItem(content: "Generate timeline cards from input", status: .pending),
+                InterviewTodoItem(content: "Tune timeline cards based on user feedback", status: .pending),
+                InterviewTodoItem(content: "Wait for user to click Done with timeline", status: .pending),
+                InterviewTodoItem(content: "Submit timeline for validation (submit_for_validation)", status: .pending),
+                InterviewTodoItem(content: "Propose enabled sections (configure_enabled_sections)", status: .pending),
+                InterviewTodoItem(content: "Advance to Phase 3 (next_phase)", status: .pending)
+            ]
+
+        case .phase3EvidenceCollection:
+            items = [
+                InterviewTodoItem(content: "Surface document collection UI (open_document_collection)", status: .pending),
+                InterviewTodoItem(content: "Suggest documents to upload", status: .pending),
+                InterviewTodoItem(content: "Actively interview about each role (while uploads process)", status: .pending),
+                InterviewTodoItem(content: "Capture work preferences via get_user_option (while uploads process)", status: .pending),
+                InterviewTodoItem(content: "Document unique circumstances via update_dossier_notes (while uploads process)", status: .pending),
+                InterviewTodoItem(content: "Wait for user to click Done with uploads", status: .pending),
+                InterviewTodoItem(content: "Await card merge - ask remaining dossier questions", status: .pending),
+                InterviewTodoItem(content: "Wait for user to approve merged cards and skills", status: .pending)
+            ]
+
+        case .phase4StrategicSynthesis:
+            items = [
+                InterviewTodoItem(content: "Synthesize strategic strengths with evidence", status: .pending),
+                InterviewTodoItem(content: "Document pitfalls with mitigation strategies", status: .pending),
+                InterviewTodoItem(content: "Complete remaining dossier gaps (get_user_option)", status: .pending),
+                InterviewTodoItem(content: "Submit dossier for validation (submit_candidate_dossier)", status: .pending),
+                InterviewTodoItem(content: "Configure experience defaults (submit_experience_defaults)", status: .pending),
+                InterviewTodoItem(content: "Summarize interview accomplishments", status: .pending),
+                InterviewTodoItem(content: "Present end of interview sheet", status: .pending),
+                InterviewTodoItem(content: "End interview", status: .pending)
+            ]
+
+        case .complete:
+            items = []
+        }
+
+        await todoStore.setItems(items)
+        Logger.info("📋 Pre-populated todo list for \(phase.rawValue): \(items.count) items", category: .ai)
     }
 
     /// Set user approval for skipping KC generation.
@@ -377,6 +438,9 @@ actor StateCoordinator: OnboardingEventEmitter {
         case .phaseTransitionRequested(let from, let to, _):
             if from == phase.rawValue {
                 if let newPhase = InterviewPhase(rawValue: to) {
+                    // Pre-populate todo list BEFORE phase change
+                    // This ensures LLM sees updated list on next turn
+                    await populateTodoList(for: newPhase)
                     await setPhase(newPhase)
                     await emit(.phaseTransitionApplied(phase: newPhase.rawValue, timestamp: Date()))
                 }

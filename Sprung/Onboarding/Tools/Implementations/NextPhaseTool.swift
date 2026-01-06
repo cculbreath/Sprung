@@ -78,6 +78,7 @@ struct NextPhaseTool: InterviewTool {
             }
 
             // Transition immediately, regardless of objectives
+            // Note: Todo list is populated by StateCoordinator when handling phaseTransitionRequested
             let reason = missingObjectives.isEmpty ? "All objectives completed" : "User requested advancement"
             await coordinator.timeline.requestPhaseTransition(
                 from: currentPhase.rawValue,

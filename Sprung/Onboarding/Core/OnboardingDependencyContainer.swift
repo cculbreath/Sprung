@@ -179,7 +179,8 @@ final class OnboardingDependencyContainer {
         self.state = StateCoordinator(
             eventBus: core.eventBus, phasePolicy: core.phasePolicy,
             objectives: stores.objectiveStore, artifacts: stores.artifactRepository,
-            chat: stores.chatTranscriptStore, uiState: stores.sessionUIState
+            chat: stores.chatTranscriptStore, uiState: stores.sessionUIState,
+            todoStore: todoStore
         )
 
         // 4a. Initialize card pipeline services (deferred - needs sessionPersistenceHandler)
