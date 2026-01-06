@@ -45,11 +45,14 @@ struct ToolGating {
                 return .available
 
             case .upload:
-                // During upload, block tools that would interrupt the upload flow
-                // (e.g., presenting another upload form) but allow background tools
-                let uploadBlockedTools: Set<String> = ["get_user_upload", "get_user_option"]
-                if uploadBlockedTools.contains(toolName) {
-                    return .blocked(reason: "Cannot present UI prompts while upload is in progress - wait for upload to complete")
+                // During upload, user controls the session - block tools that would steal focus
+                // Allow background tools (dossier updates, todo list, etc.)
+                let userControlBlockedTools: Set<String> = [
+                    "get_user_upload", "get_user_option", "next_phase",
+                    "submit_for_validation", "ask_user_skip_to_next_phase"
+                ]
+                if userControlBlockedTools.contains(toolName) {
+                    return .blocked(reason: "Session is under user control. Tell the user to click 'Done' on the upload card when they are finished to resume the interview.")
                 }
                 return .available
 
@@ -93,9 +96,12 @@ struct ToolGating {
             return phaseAllowedTools.subtracting(excludedTools)
 
         case .upload:
-            // During upload, block UI prompt tools but allow background tools
-            let uploadBlockedTools: Set<String> = ["get_user_upload", "get_user_option"]
-            return phaseAllowedTools.subtracting(excludedTools).subtracting(uploadBlockedTools)
+            // During upload, user controls session - block focus-stealing tools
+            let userControlBlockedTools: Set<String> = [
+                "get_user_upload", "get_user_option", "next_phase",
+                "submit_for_validation", "ask_user_skip_to_next_phase"
+            ]
+            return phaseAllowedTools.subtracting(excludedTools).subtracting(userControlBlockedTools)
 
         case .validation:
             // During validation, only timeline tools are available
