@@ -39,6 +39,14 @@ struct EventDumpView: View {
                 loadConversationLog()
                 await loadTodoItems()
             }
+            .task {
+                // Live update todo list when events fire
+                for await event in coordinator.eventBus.streamAll() {
+                    if case .todoListUpdated = event {
+                        await loadTodoItems()
+                    }
+                }
+            }
             .sheet(isPresented: $showRegenDialog) {
                 regenSheet
             }
