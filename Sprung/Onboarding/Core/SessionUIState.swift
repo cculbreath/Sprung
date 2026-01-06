@@ -39,9 +39,9 @@ struct ToolGating {
         // Handle waiting states
         if let waitingState = waitingState {
             switch waitingState {
-            case .extraction:
-                // During extraction, ALL phase-allowed tools remain enabled
-                // This allows dossier question collection during PDF processing
+            case .extraction, .upload:
+                // During extraction and upload, ALL phase-allowed tools remain enabled
+                // This allows dossier updates, todo list updates during background processing
                 return .available
 
             case .validation:
@@ -52,7 +52,7 @@ struct ToolGating {
                     return .blocked(reason: "Cannot execute non-timeline tools while waiting for validation (state: \(waitingState.rawValue))")
                 }
 
-            case .selection, .upload, .processing, .documentCollection:
+            case .selection, .processing, .documentCollection:
                 // All tools blocked during these waiting states
                 return .blocked(reason: "Cannot execute tools while waiting for user input (state: \(waitingState.rawValue))")
             }
@@ -79,15 +79,15 @@ struct ToolGating {
         }
 
         switch waitingState {
-        case .extraction:
-            // During extraction, all phase-allowed tools remain enabled (minus exclusions)
+        case .extraction, .upload:
+            // During extraction and upload, all phase-allowed tools remain enabled (minus exclusions)
             return phaseAllowedTools.subtracting(excludedTools)
 
         case .validation:
             // During validation, only timeline tools are available
             return OnboardingToolName.timelineTools.intersection(phaseAllowedTools).subtracting(excludedTools)
 
-        case .selection, .upload, .processing, .documentCollection:
+        case .selection, .processing, .documentCollection:
             // All tools blocked during these waiting states
             return []
         }
