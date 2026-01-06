@@ -47,9 +47,9 @@ struct ToolGating {
             case .upload:
                 // During upload, user controls the session - block tools that would steal focus
                 // Allow background tools (dossier updates, todo list, etc.)
+                // Note: ask_user_skip_to_next_phase is never blocked - it's the emergency escape hatch
                 let userControlBlockedTools: Set<String> = [
-                    "get_user_upload", "get_user_option", "next_phase",
-                    "submit_for_validation", "ask_user_skip_to_next_phase"
+                    "get_user_upload", "get_user_option", "next_phase", "submit_for_validation"
                 ]
                 if userControlBlockedTools.contains(toolName) {
                     return .blocked(reason: "Session is under user control. Tell the user to click 'Done' on the upload card when they are finished to resume the interview.")
@@ -97,9 +97,9 @@ struct ToolGating {
 
         case .upload:
             // During upload, user controls session - block focus-stealing tools
+            // Note: ask_user_skip_to_next_phase never blocked - emergency escape hatch
             let userControlBlockedTools: Set<String> = [
-                "get_user_upload", "get_user_option", "next_phase",
-                "submit_for_validation", "ask_user_skip_to_next_phase"
+                "get_user_upload", "get_user_option", "next_phase", "submit_for_validation"
             ]
             return phaseAllowedTools.subtracting(excludedTools).subtracting(userControlBlockedTools)
 
