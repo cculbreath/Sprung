@@ -14,9 +14,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var onboardingInterviewWindow: NSWindow?
     var experienceEditorWindow: NSWindow?
     var searchOpsWindow: NSWindow?
-    #if DEBUG
     var debugLogsWindow: NSWindow?
-    #endif
     var appEnvironment: AppEnvironment?
     var modelContainer: ModelContainer?
     var enabledLLMStore: EnabledLLMStore?
@@ -33,6 +31,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self.setupAppMenu()
         }
         // We no longer add a separate Profile main menu to avoid duplication
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleShowDebugLogs(_:)),
+            name: .showDebugLogs,
+            object: nil
+        )
     }
     private func setupAppMenu() {
         guard let mainMenu = NSApp.mainMenu else {
@@ -525,19 +530,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    #if DEBUG
-    @MainActor func showDebugLogsWindow() {
-        Logger.debug("🐞 showDebugLogsWindow called", category: .ui)
+    @objc private func handleShowDebugLogs(_ notification: Notification) {
+        Logger.info("🐞 Debug logs notification received", category: .ui)
+        guard let coordinator = notification.object as? OnboardingInterviewCoordinator else {
+            Logger.warning("⚠️ Debug logs notification missing coordinator", category: .ui)
+            return
+        }
+        Task { @MainActor in
+            self.showDebugLogsWindow(coordinator: coordinator)
+        }
+    }
+
+    @MainActor func showDebugLogsWindow(coordinator: OnboardingInterviewCoordinator) {
+        Logger.info("🐞 showDebugLogsWindow called", category: .ui)
         if let window = debugLogsWindow, !window.isVisible {
             debugLogsWindow = nil
         }
         if debugLogsWindow == nil {
-            guard let onboardingCoordinator else {
-                Logger.warning("⚠️ Debug logs window requested before onboarding coordinator available", category: .ui)
-                return
-            }
-            Logger.debug("🐞 Creating debug logs window with coordinator", category: .ui)
-            let debugView = EventDumpView(coordinator: onboardingCoordinator)
+            Logger.info("🐞 Creating debug logs window", category: .ui)
+            let debugView = EventDumpView(coordinator: coordinator)
             let hostingView = NSHostingView(rootView: debugView)
 
             debugLogsWindow = NSWindow(
@@ -554,7 +565,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         debugLogsWindow?.makeKeyAndOrderFront(nil)
     }
-    #endif
 
     // MARK: - URL Scheme Handling
 
@@ -597,4 +607,5 @@ extension Notification.Name {
     static let captureJobFromURL = Notification.Name("captureJobFromURL")
     // Relay notification sent after sheet is shown, so the view can receive it
     static let captureJobURLReady = Notification.Name("captureJobURLReady")
+    static let showDebugLogs = Notification.Name("showDebugLogs")
 }

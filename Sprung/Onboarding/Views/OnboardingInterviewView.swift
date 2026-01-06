@@ -208,20 +208,16 @@ struct OnboardingInterviewView: View {
                 cardAppeared = false
                 bottomBarAppeared = false
             }
-            #if DEBUG
             .overlay(alignment: .bottomTrailing) {
                 if debugSettings.showOnboardingDebugButton {
                     debugButton
                 }
             }
-            #endif
     }
-    #if DEBUG
+
     private var debugButton: some View {
         Button(action: {
-            Task { @MainActor in
-                (NSApp.delegate as? AppDelegate)?.showDebugLogsWindow()
-            }
+            NotificationCenter.default.post(name: .showDebugLogs, object: interviewCoordinator)
         }, label: {
             Image(systemName: "ladybug.fill")
                 .font(.title2)
@@ -233,7 +229,6 @@ struct OnboardingInterviewView: View {
         .buttonStyle(.plain)
         .padding(24)
     }
-    #endif
 }
 // MARK: - Layout
 private extension OnboardingInterviewView {

@@ -6,7 +6,7 @@
 //
 import SwiftUI
 import AppKit
-#if DEBUG
+
 struct EventDumpView: View {
     let coordinator: OnboardingInterviewCoordinator
     @State private var events: [String] = []
@@ -538,4 +538,3 @@ struct EventDumpView: View {
         }
     }
 }
-#endif
