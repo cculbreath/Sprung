@@ -9,7 +9,6 @@ import AppKit
 #if DEBUG
 struct EventDumpView: View {
     let coordinator: OnboardingInterviewCoordinator
-    @Environment(\.dismiss) private var dismiss
     @State private var events: [String] = []
     @State private var metricsText: String = ""
     @State private var conversationEntries: [ConversationLogEntry] = []
@@ -301,11 +300,6 @@ struct EventDumpView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .cancellationAction) {
-            Button("Done") {
-                dismiss()
-            }
-        }
         ToolbarItem(placement: .automatic) {
             Menu {
                 Button("Export Events") {

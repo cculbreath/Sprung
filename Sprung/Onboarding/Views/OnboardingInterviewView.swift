@@ -12,9 +12,6 @@ struct OnboardingInterviewView: View {
     )
     @State private var showResumePrompt = false
     @State private var showSetupWizard = false
-    #if DEBUG
-    @State private var showEventDump = false
-    #endif
     @AppStorage("onboardingAnthropicModelId") private var anthropicModelId = DefaultModels.anthropic
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var defaultWebSearchAllowed = true
 
@@ -217,15 +214,12 @@ struct OnboardingInterviewView: View {
                     debugButton
                 }
             }
-            .sheet(isPresented: $showEventDump) {
-                EventDumpView(coordinator: coordinator)
-            }
             #endif
     }
     #if DEBUG
     private var debugButton: some View {
         Button(action: {
-            showEventDump.toggle()
+            (NSApp.delegate as? AppDelegate)?.showDebugLogsWindow()
         }, label: {
             Image(systemName: "ladybug.fill")
                 .font(.title2)

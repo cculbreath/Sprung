@@ -14,6 +14,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var onboardingInterviewWindow: NSWindow?
     var experienceEditorWindow: NSWindow?
     var searchOpsWindow: NSWindow?
+    #if DEBUG
+    var debugLogsWindow: NSWindow?
+    #endif
     var appEnvironment: AppEnvironment?
     var modelContainer: ModelContainer?
     var enabledLLMStore: EnabledLLMStore?
@@ -521,6 +524,35 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         experienceEditorWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
+
+    #if DEBUG
+    @MainActor @objc func showDebugLogsWindow() {
+        if let window = debugLogsWindow, !window.isVisible {
+            debugLogsWindow = nil
+        }
+        if debugLogsWindow == nil {
+            guard let onboardingCoordinator else {
+                Logger.warning("⚠️ Debug logs window requested before onboarding coordinator available", category: .ui)
+                return
+            }
+            let debugView = EventDumpView(coordinator: onboardingCoordinator)
+            let hostingView = NSHostingView(rootView: debugView)
+
+            debugLogsWindow = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                backing: .buffered,
+                defer: false
+            )
+            debugLogsWindow?.title = "Debug Logs"
+            debugLogsWindow?.contentView = hostingView
+            debugLogsWindow?.isReleasedWhenClosed = false
+            debugLogsWindow?.center()
+            debugLogsWindow?.minSize = NSSize(width: 600, height: 400)
+        }
+        debugLogsWindow?.makeKeyAndOrderFront(nil)
+    }
+    #endif
 
     // MARK: - URL Scheme Handling
 
