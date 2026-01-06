@@ -139,82 +139,55 @@ struct EventDumpView: View {
 
     @ViewBuilder
     private var todoListTabContent: some View {
-        VStack(spacing: 0) {
-            GroupBox {
-                HStack {
-                    Text("LLM-visible todo list for tracking interview progress")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Refresh") {
-                        Task { await loadTodoItems() }
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
-            } label: {
-                HStack {
-                    Text("Interview Todo List")
-                        .font(.headline)
-                    Spacer()
-                    Text("\(todoItems.count) items")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("\(todoItems.count) items")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Refresh") { Task { await loadTodoItems() } }
+                    .buttonStyle(.borderless)
+                    .font(.caption)
             }
-            .padding()
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
 
             if todoItems.isEmpty {
-                ContentUnavailableView {
-                    Label("No Todo Items", systemImage: "checklist")
-                } description: {
-                    Text("Todo list is empty. Items appear when agent_ready is called.")
-                }
+                Text("Empty").font(.caption).foregroundStyle(.secondary).padding(8)
             } else {
-                todoListView
-            }
-        }
-    }
-
-    private var todoListView: some View {
-        List {
-            ForEach(Array(todoItems.enumerated()), id: \.element.id) { index, item in
-                HStack(spacing: 12) {
-                    // Status icon
-                    Image(systemName: statusIcon(for: item.status))
-                        .foregroundStyle(statusColor(for: item.status))
-                        .font(.title3)
-
-                    // Content
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(item.status == .inProgress ? (item.activeForm ?? item.content) : item.content)
-                            .font(.system(.body, design: .default))
-                            .fontWeight(item.status == .inProgress ? .medium : .regular)
-
-                        Text(item.status.rawValue)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 1) {
+                        ForEach(Array(todoItems.enumerated()), id: \.element.id) { index, item in
+                            HStack(spacing: 4) {
+                                Text(statusChar(for: item.status))
+                                    .font(.system(.caption, design: .monospaced))
+                                    .foregroundStyle(statusColor(for: item.status))
+                                Text("\(index + 1).")
+                                    .font(.system(.caption, design: .monospaced))
+                                    .foregroundStyle(.tertiary)
+                                Text(item.content)
+                                    .font(.system(.caption, design: .monospaced))
+                                    .lineLimit(1)
+                                Spacer()
+                                Text(item.status.rawValue)
+                                    .font(.system(.caption2, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 1)
+                            .background(item.status == .inProgress ? Color.blue.opacity(0.1) : Color.clear)
+                        }
                     }
-
-                    Spacer()
-
-                    Text("#\(index + 1)")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .monospacedDigit()
                 }
-                .padding(.vertical, 4)
-                .listRowSeparator(.visible)
             }
         }
-        .listStyle(.plain)
     }
 
-    private func statusIcon(for status: InterviewTodoStatus) -> String {
+    private func statusChar(for status: InterviewTodoStatus) -> String {
         switch status {
-        case .pending: return "circle"
-        case .inProgress: return "circle.dotted"
-        case .completed: return "checkmark.circle.fill"
+        case .pending: return "○"
+        case .inProgress: return "◐"
+        case .completed: return "●"
         }
     }
 
