@@ -43,7 +43,7 @@ struct EventDumpView: View {
                 regenSheet
             }
         }
-        .frame(width: 800, height: 600)
+        .frame(minWidth: 600, minHeight: 400)
     }
 
     // MARK: - Tab Content Views
