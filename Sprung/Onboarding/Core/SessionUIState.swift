@@ -39,9 +39,18 @@ struct ToolGating {
         // Handle waiting states
         if let waitingState = waitingState {
             switch waitingState {
-            case .extraction, .upload:
-                // During extraction and upload, ALL phase-allowed tools remain enabled
-                // This allows dossier updates, todo list updates during background processing
+            case .extraction:
+                // During extraction, ALL phase-allowed tools remain enabled
+                // This allows dossier question collection during PDF processing
+                return .available
+
+            case .upload:
+                // During upload, block tools that would interrupt the upload flow
+                // (e.g., presenting another upload form) but allow background tools
+                let uploadBlockedTools: Set<String> = ["get_user_upload", "get_user_option"]
+                if uploadBlockedTools.contains(toolName) {
+                    return .blocked(reason: "Cannot present UI prompts while upload is in progress - wait for upload to complete")
+                }
                 return .available
 
             case .validation:
@@ -79,9 +88,14 @@ struct ToolGating {
         }
 
         switch waitingState {
-        case .extraction, .upload:
-            // During extraction and upload, all phase-allowed tools remain enabled (minus exclusions)
+        case .extraction:
+            // During extraction, all phase-allowed tools remain enabled (minus exclusions)
             return phaseAllowedTools.subtracting(excludedTools)
+
+        case .upload:
+            // During upload, block UI prompt tools but allow background tools
+            let uploadBlockedTools: Set<String> = ["get_user_upload", "get_user_option"]
+            return phaseAllowedTools.subtracting(excludedTools).subtracting(uploadBlockedTools)
 
         case .validation:
             // During validation, only timeline tools are available
