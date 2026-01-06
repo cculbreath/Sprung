@@ -219,7 +219,9 @@ struct OnboardingInterviewView: View {
     #if DEBUG
     private var debugButton: some View {
         Button(action: {
-            (NSApp.delegate as? AppDelegate)?.showDebugLogsWindow()
+            Task { @MainActor in
+                (NSApp.delegate as? AppDelegate)?.showDebugLogsWindow()
+            }
         }, label: {
             Image(systemName: "ladybug.fill")
                 .font(.title2)

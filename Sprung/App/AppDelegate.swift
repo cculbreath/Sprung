@@ -526,7 +526,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     #if DEBUG
-    @MainActor @objc func showDebugLogsWindow() {
+    @MainActor func showDebugLogsWindow() {
+        Logger.debug("🐞 showDebugLogsWindow called", category: .ui)
         if let window = debugLogsWindow, !window.isVisible {
             debugLogsWindow = nil
         }
@@ -535,6 +536,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 Logger.warning("⚠️ Debug logs window requested before onboarding coordinator available", category: .ui)
                 return
             }
+            Logger.debug("🐞 Creating debug logs window with coordinator", category: .ui)
             let debugView = EventDumpView(coordinator: onboardingCoordinator)
             let hostingView = NSHostingView(rootView: debugView)
 
