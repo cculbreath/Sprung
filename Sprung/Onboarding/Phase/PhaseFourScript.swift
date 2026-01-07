@@ -84,14 +84,15 @@ struct PhaseFourScript: PhaseScript {
                 autoStartWhenReady: true,
                 onComplete: { context in
                     let title = """
-                        Dossier complete. Now configure experience defaults for resume generation. \
-                        Call submit_experience_defaults with structured data based on the skeleton timeline \
-                        enriched with knowledge cards. Include work, education, skills, and projects sections.
+                        Dossier complete. Now generate experience defaults for resume generation. \
+                        Call generate_experience_defaults to launch the Experience Defaults agent. \
+                        The agent has access to all knowledge cards, skills, and timeline data, \
+                        and will generate high-quality, resume-ready content automatically.
                         """
                     let details = [
                         "next_objective": OnboardingObjectiveId.experienceDefaultsSet.rawValue,
                         "status": context.status.rawValue,
-                        "action": "call_submit_experience_defaults"
+                        "action": "call_generate_experience_defaults"
                     ]
                     return [.coordinatorMessage(title: title, details: details, payload: nil)]
                 }

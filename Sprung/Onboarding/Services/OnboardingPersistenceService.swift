@@ -372,9 +372,26 @@ final class OnboardingPersistenceService {
             draft.isCustomEnabled = true
         }
 
-        // Save the draft
+        // Save the draft to ExperienceDefaultsStore
         experienceDefaultsStore.save(draft: draft)
         Logger.info("✅ Saved LLM-generated experience defaults to store", category: .ai)
+
+        // Persist to InterviewDataStore for phase completion gating
+        do {
+            let persistedId = try await dataStore.persist(dataType: "experience_defaults", payload: defaults)
+            Logger.info("💾 Persisted experience_defaults for phase completion (\(persistedId))", category: .ai)
+        } catch {
+            Logger.error("❌ Failed to persist experience_defaults to data store: \(error.localizedDescription)", category: .ai)
+        }
+
+        // Mark objective as completed so subphase can advance to p4_completion
+        await eventBus.publish(.objectiveStatusUpdateRequested(
+            id: OnboardingObjectiveId.experienceDefaultsSet.rawValue,
+            status: "completed",
+            source: "persistence_service",
+            notes: "Experience defaults generated and persisted",
+            details: nil
+        ))
     }
 
     // MARK: - LLM JSON to Draft Converters

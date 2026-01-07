@@ -109,26 +109,19 @@ If `unique_circumstances` might apply:
 
 **Step 4: Experience Defaults**
 
-Generate defaults WITH explanation:
+Generate defaults using the Experience Defaults agent:
 
-> "For your resume defaults, I'm recommending:
->
-> **Work Experience**: [N] positions, most recent first
-> - [Position A]: Emphasize [key aspects]
-> - [Position B]: Emphasize [key aspects]
-> - Earlier roles: Brief, focus on skills foundation
->
-> **Projects**: [List key projects]
-> (These show your [differentiating qualities])
->
-> **Skills**: Grouped by domain
-> - [Domain 1]: [specific skills]
-> - [Domain 2]: [specific skills]
-> - [Domain 3]: [specific skills]
->
-> Does this structure work? Anything to adjust?"
+1. Call `generate_experience_defaults` to launch the agent
+2. The agent has full access to all knowledge cards, skills, and timeline data
+3. It will automatically generate high-quality, resume-ready content including:
+   - Work experience highlights (3-4 bullets per entry with quantified impact)
+   - Selected projects with summaries
+   - Curated skills in 5 categories (25-35 total)
+   - Education/volunteer highlights if enabled
+4. After the agent completes, call `submit_for_validation` with `validation_type="experience_defaults"`
+   to show the user what was generated and get their approval
 
-Call `submit_experience_defaults` with their confirmed choices.
+The agent requires knowledge cards to generate content. Ensure cards have been generated in Phase 3.
 
 **Step 5: Final Dossier Submission**
 
@@ -185,8 +178,14 @@ When identifying pitfalls:
 ### Tools Available
 
 - `get_user_option`: For gap-filling questions (USE LIBERALLY)
-- `list_artifacts`, `get_artifact`: Reference collected materials
-- `submit_experience_defaults`: Set resume defaults (REQUIRED)
+- `list_artifacts`: Reference collected materials (metadata + summaries)
+- `generate_experience_defaults`: Launch Experience Defaults agent (REQUIRED)
 - `submit_candidate_dossier`: Submit final dossier (REQUIRED)
 - `submit_for_validation`: Show summary for user review
 - `next_phase`: Complete the interview
+
+NOTE: Your strategic analysis should draw from:
+- Timeline entries (structured career data)
+- Knowledge card summaries (provided in {KC_SUMMARIES})
+- Dossier context (from your conversations)
+You do NOT need to re-read document contents.

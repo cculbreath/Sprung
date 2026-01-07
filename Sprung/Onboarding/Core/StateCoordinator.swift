@@ -153,7 +153,7 @@ actor StateCoordinator: OnboardingEventEmitter {
                 InterviewTodoItem(content: "Document pitfalls with mitigation strategies", status: .pending),
                 InterviewTodoItem(content: "Complete remaining dossier gaps (get_user_option)", status: .pending),
                 InterviewTodoItem(content: "Submit dossier for validation (submit_candidate_dossier)", status: .pending),
-                InterviewTodoItem(content: "Configure experience defaults (submit_experience_defaults)", status: .pending),
+                InterviewTodoItem(content: "Generate experience defaults (generate_experience_defaults)", status: .pending),
                 InterviewTodoItem(content: "Summarize interview accomplishments", status: .pending),
                 InterviewTodoItem(content: "Present end of interview sheet", status: .pending),
                 InterviewTodoItem(content: "End interview", status: .pending)

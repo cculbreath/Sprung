@@ -55,11 +55,13 @@ struct ToolBundlePolicy {
 
     // MARK: - Artifact Access Tools
 
-    /// Artifact access tools - ALWAYS included in Phase 2-3 subphases
+    /// Artifact access tools - included in Phase 2-4 subphases
+    /// NOTE: get_artifact REMOVED from orchestrator access.
+    /// Orchestrator works from artifact summaries (list_artifacts) and conversation.
+    /// Full document content is processed by subagents (extraction, KC generation).
     static let artifactAccessTools: Set<String> = [
-        OnboardingToolName.listArtifacts.rawValue,
-        OnboardingToolName.getArtifact.rawValue,
-        OnboardingToolName.requestRawFile.rawValue,
+        OnboardingToolName.listArtifacts.rawValue,     // Metadata only - summaries for orchestration
+        OnboardingToolName.requestRawFile.rawValue,    // For user download requests
         OnboardingToolName.createWebArtifact.rawValue  // For saving web_search content
     ]
 
@@ -133,8 +135,7 @@ struct ToolBundlePolicy {
             OnboardingToolName.reorderTimelineCards.rawValue,
             OnboardingToolName.getTimelineEntries.rawValue,
             OnboardingToolName.displayTimelineEntriesForReview.rawValue,
-            OnboardingToolName.listArtifacts.rawValue,
-            OnboardingToolName.getArtifact.rawValue
+            OnboardingToolName.listArtifacts.rawValue         // Metadata only - subagents handle extraction
         ],
 
         .p2_timelineEnrichment: [    // Active interviewing about each role
@@ -173,31 +174,28 @@ struct ToolBundlePolicy {
         ],
 
         // MARK: Phase 3: Evidence Collection
+        // NOTE: get_artifact REMOVED - orchestrator works from summaries, subagents handle extraction
         .p3_documentCollection: [
             OnboardingToolName.openDocumentCollection.rawValue,
             OnboardingToolName.getUserUpload.rawValue,
             OnboardingToolName.cancelUserUpload.rawValue,
-            OnboardingToolName.listArtifacts.rawValue,
-            OnboardingToolName.getArtifact.rawValue,
+            OnboardingToolName.listArtifacts.rawValue,        // Summaries only
             OnboardingToolName.createWebArtifact.rawValue,
-            OnboardingToolName.getUserOption.rawValue         // For questions during agent waits
+            OnboardingToolName.getUserOption.rawValue         // For dossier questions during waits
         ],
 
         .p3_gitCollection: [
-            OnboardingToolName.listArtifacts.rawValue,
-            OnboardingToolName.getArtifact.rawValue,
-            OnboardingToolName.getUserOption.rawValue         // For questions during agent waits
+            OnboardingToolName.listArtifacts.rawValue,        // Summaries only
+            OnboardingToolName.getUserOption.rawValue         // For dossier questions during waits
         ],
 
         .p3_cardGeneration: [
-            OnboardingToolName.listArtifacts.rawValue,
-            OnboardingToolName.getArtifact.rawValue,
+            OnboardingToolName.listArtifacts.rawValue,        // Summaries only
             OnboardingToolName.getUserOption.rawValue         // INTERVIEW WHILE KC GENERATION RUNS
         ],
 
-        .p3_cardReview: [            // LLM reviews generated cards
-            OnboardingToolName.listArtifacts.rawValue,
-            OnboardingToolName.getArtifact.rawValue,
+        .p3_cardReview: [            // LLM reviews generated cards from KC summaries
+            OnboardingToolName.listArtifacts.rawValue,        // Summaries only
             OnboardingToolName.getUserOption.rawValue,        // For clarifying questions
             OnboardingToolName.nextPhase.rawValue
         ],
@@ -207,10 +205,10 @@ struct ToolBundlePolicy {
         ],
 
         // MARK: Phase 4: Strategic Synthesis
+        // NOTE: get_artifact REMOVED - synthesis uses timeline, KC summaries, and conversation
         .p4_strengthsSynthesis: [
             OnboardingToolName.getUserOption.rawValue,
-            OnboardingToolName.listArtifacts.rawValue,
-            OnboardingToolName.getArtifact.rawValue
+            OnboardingToolName.listArtifacts.rawValue         // Summaries only for reference
         ],
 
         .p4_pitfallsAnalysis: [
@@ -223,7 +221,7 @@ struct ToolBundlePolicy {
         ],
 
         .p4_experienceDefaults: [
-            OnboardingToolName.submitExperienceDefaults.rawValue,
+            OnboardingToolName.generateExperienceDefaults.rawValue,
             OnboardingToolName.submitForValidation.rawValue,
             OnboardingToolName.getUserOption.rawValue
         ],

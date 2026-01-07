@@ -201,6 +201,10 @@ final class OnboardingInterviewCoordinator {
         if !onboardingCards.isEmpty {
             return true
         }
+        // Check for onboarding skills
+        if !skillStore.onboardingSkills.isEmpty {
+            return true
+        }
         // Check for CoverRefs
         if !coverRefStore.storedCoverRefs.isEmpty {
             return true
@@ -224,7 +228,7 @@ final class OnboardingInterviewCoordinator {
         }
     }
 
-    /// Clear all onboarding data: session, knowledge cards, CoverRefs, ExperienceDefaults, and ApplicantProfile
+    /// Clear all onboarding data: session, knowledge cards, skills, CoverRefs, ExperienceDefaults, and ApplicantProfile
     /// Used when user chooses "Start Over" to begin fresh
     func clearAllOnboardingData() {
         Logger.info("🗑️ Clearing all onboarding data", category: .ai)
@@ -232,6 +236,8 @@ final class OnboardingInterviewCoordinator {
         deleteCurrentSession()
         // Delete onboarding knowledge cards
         knowledgeCardStore.deleteOnboardingCards()
+        // Delete onboarding skills
+        skillStore.deleteOnboardingSkills()
         // Delete all CoverRefs
         for coverRef in coverRefStore.storedCoverRefs {
             coverRefStore.deleteCoverRef(coverRef)

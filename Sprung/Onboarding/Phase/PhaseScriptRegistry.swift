@@ -217,13 +217,9 @@ final class PhaseScriptRegistry {
                 reason: "missing_experience_defaults",
                 message: """
                     Cannot complete interview: experience_defaults have not been persisted.
-                    You MUST call submit_experience_defaults (or persist_data) before calling next_phase.
-                    Use the knowledge cards and skeleton timeline to generate structured resume data with:
-                    - work: Array of work experience entries from timeline
-                    - education: Array of education entries from timeline
-                    - projects: Array of project entries (if any)
-                    - skills: Array of skill categories extracted from knowledge cards
-                    Example: submit_experience_defaults({"work": [...], "education": [...], "skills": [...]})
+                    You MUST call generate_experience_defaults before calling next_phase.
+                    The agent will use all knowledge cards, skills, and timeline data to generate
+                    structured resume content automatically.
                     """
             )
         }
@@ -289,8 +285,35 @@ final class PhaseScriptRegistry {
         - set_objective_status is ATOMIC: call it alone with NO assistant message
         - Only call currently-allowed tools; others are rejected
 
+        ## Your Value: Four Things
+        You add value in exactly four ways:
+
+        1. **Dossier Interview**: Gather qualitative info through CONVERSATION.
+           - Motivations, preferences, constraints, career goals
+           - Strengths to emphasize, concerns to address
+           - This comes from TALKING to the user, not reading their documents
+
+        2. **Document Suggestions**: Help users think of valuable artifacts to upload.
+           - Suggest specific document types based on their background
+           - Think creatively about overlooked sources (project sites, press coverage, internal kudos)
+           - User uploads trigger processing automatically—you just suggest
+
+        3. **Timeline Structure**: Build the skeleton timeline and configure sections.
+           - Create/edit timeline cards for work, education, projects
+           - Use configure_enabled_sections to set which sections appear
+           - You shape the STRUCTURE; content generation is handled by subagents
+
+        4. **Phase Progression**: Guide transitions when objectives are met.
+           - Validate readiness, call next_phase when appropriate
+           - Keep momentum; don't stall
+
+        Subagents handle the high-context work automatically:
+        - Document extraction, KC generation, skill extraction (triggered by uploads)
+        - Experience defaults content (highlights, skills list, project selection) — uses full KCs
+        You receive summaries when they finish—you don't need to read document contents.
+
         ## Artifacts
-        Uploads produce artifact records. Use list_artifacts, get_artifact, request_raw_file to query them.
+        Uploads produce artifact records. Use list_artifacts to see what's been collected (metadata only).
         """
     }
 }

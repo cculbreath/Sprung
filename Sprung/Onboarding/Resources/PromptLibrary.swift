@@ -158,12 +158,19 @@ enum PromptLibrary {
         loadPrompt(named: "voice_profile_extraction")
     }()
 
+    // MARK: - Experience Defaults Agent Prompts
+
+    /// System prompt for the ExperienceDefaults agent
+    static let experienceDefaultsAgentSystem: String = {
+        loadPrompt(named: "experience_defaults_agent_system")
+    }()
+
     // MARK: - Prompt Loading
 
     /// Loads a prompt from a resource file in the Prompts directory.
     /// - Parameter name: The filename without extension (supports .txt and .md)
     /// - Returns: The prompt content as a string
-    private static func loadPrompt(named name: String) -> String {
+    static func loadPrompt(named name: String) -> String {
         // Try .txt first, then .md
         // Prompts are in Resources/Prompts (consolidated location for all prompts)
         for ext in ["txt", "md"] {

@@ -64,7 +64,11 @@ final class OnboardingToolRegistrar {
         // KC workflow: Document merge UI → Approve & Create button → Direct ResRef conversion
         toolRegistry.register(OpenDocumentCollectionTool(coordinator: coordinator))
         toolRegistry.register(IngestWritingSampleTool(coordinator: coordinator, eventBus: eventBus))
-        toolRegistry.register(SubmitExperienceDefaultsTool(coordinator: coordinator, eventBus: eventBus, dataStore: dataStore))
+        toolRegistry.register(GenerateExperienceDefaultsTool(
+            coordinator: coordinator,
+            eventBus: eventBus,
+            agentActivityTracker: coordinator.agentActivityTracker
+        ))
         toolRegistry.register(SubmitCandidateDossierTool(eventBus: eventBus, dataStore: dataStore))
 
         // Filesystem tools for browsing exported artifacts (ephemeral responses, pruned after N turns)
