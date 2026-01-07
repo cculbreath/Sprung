@@ -7,7 +7,7 @@ struct TitleSetCurationView: View {
 
     @State private var titleSets: [TitleSet] = []
     @State private var vocabulary: [IdentityTerm] = []
-    @State private var selectedSetIds: Set<UUID> = []
+    @State private var selectedSetIds: Set<String> = []
     @State private var isGenerating = false
     @State private var isGeneratingMore = false
 

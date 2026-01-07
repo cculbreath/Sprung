@@ -121,7 +121,7 @@ final class InferenceGuidanceStore: SwiftDataStore {
     }
 
     /// Toggle favorite status on a title set
-    func toggleTitleSetFavorite(_ setId: UUID) {
+    func toggleTitleSetFavorite(_ setId: String) {
         var sets = titleSets()
         guard let idx = sets.firstIndex(where: { $0.id == setId }) else { return }
         sets[idx].isFavorite.toggle()

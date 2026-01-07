@@ -77,15 +77,15 @@ final class TitleSetService {
         ```json
         {
           "vocabulary": [
-            {"id": "uuid", "term": "Physicist", "evidence_strength": 0.9, "source_document_ids": []}
+            {"id": "uuid", "term": "Physicist", "evidenceStrength": 0.9, "sourceDocumentIds": []}
           ],
-          "title_sets": [
+          "titleSets": [
             {
               "id": "uuid",
               "titles": ["Physicist", "Developer", "Educator", "Machinist"],
               "emphasis": "balanced",
-              "suggested_for": ["R&D", "interdisciplinary"],
-              "is_favorite": false
+              "suggestedFor": ["R&D", "interdisciplinary"],
+              "isFavorite": false
             }
           ]
         }
@@ -104,7 +104,6 @@ final class TitleSetService {
             schema: TitleSetSchemas.generationSchema,
             schemaName: "title_set_generation",
             maxOutputTokens: 8192,
-            keyDecodingStrategy: .convertFromSnakeCase,
             backend: .gemini
         )
 
@@ -157,7 +156,6 @@ final class TitleSetService {
             schema: TitleSetSchemas.moreSetsSchema,
             schemaName: "more_title_sets",
             maxOutputTokens: 4096,
-            keyDecodingStrategy: .convertFromSnakeCase,
             backend: .gemini
         )
 
@@ -213,11 +211,6 @@ final class TitleSetService {
 struct TitleSetGenerationResult: Codable {
     let vocabulary: [IdentityTerm]
     let titleSets: [TitleSet]
-
-    enum CodingKeys: String, CodingKey {
-        case vocabulary
-        case titleSets = "title_sets"
-    }
 }
 
 // MARK: - Schemas
@@ -233,13 +226,13 @@ enum TitleSetSchemas {
                     "properties": [
                         "id": ["type": "string"],
                         "term": ["type": "string"],
-                        "evidence_strength": ["type": "number"],
-                        "source_document_ids": ["type": "array", "items": ["type": "string"]]
+                        "evidenceStrength": ["type": "number"],
+                        "sourceDocumentIds": ["type": "array", "items": ["type": "string"]]
                     ],
-                    "required": ["id", "term", "evidence_strength"]
+                    "required": ["id", "term", "evidenceStrength"]
                 ]
             ],
-            "title_sets": [
+            "titleSets": [
                 "type": "array",
                 "items": [
                     "type": "object",
@@ -247,14 +240,14 @@ enum TitleSetSchemas {
                         "id": ["type": "string"],
                         "titles": ["type": "array", "items": ["type": "string"]],
                         "emphasis": ["type": "string", "enum": ["technical", "research", "leadership", "balanced"]],
-                        "suggested_for": ["type": "array", "items": ["type": "string"]],
-                        "is_favorite": ["type": "boolean"]
+                        "suggestedFor": ["type": "array", "items": ["type": "string"]],
+                        "isFavorite": ["type": "boolean"]
                     ],
                     "required": ["id", "titles", "emphasis"]
                 ]
             ]
         ],
-        "required": ["vocabulary", "title_sets"]
+        "required": ["vocabulary", "titleSets"]
     ]
 
     static let moreSetsSchema: [String: Any] = [
@@ -268,8 +261,8 @@ enum TitleSetSchemas {
                         "id": ["type": "string"],
                         "titles": ["type": "array", "items": ["type": "string"]],
                         "emphasis": ["type": "string", "enum": ["technical", "research", "leadership", "balanced"]],
-                        "suggested_for": ["type": "array", "items": ["type": "string"]],
-                        "is_favorite": ["type": "boolean"]
+                        "suggestedFor": ["type": "array", "items": ["type": "string"]],
+                        "isFavorite": ["type": "boolean"]
                     ],
                     "required": ["id", "titles", "emphasis"]
                 ]

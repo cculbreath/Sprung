@@ -12,14 +12,14 @@ import Foundation
 
 /// Pre-validated 4-title combination
 struct TitleSet: Codable, Identifiable, Equatable {
-    let id: UUID
+    let id: String
     var titles: [String]          // Exactly 4
     var emphasis: TitleEmphasis
     var suggestedFor: [String]    // Job types: ["R&D", "software", "academic"]
     var isFavorite: Bool
 
     init(
-        id: UUID = UUID(),
+        id: String = UUID().uuidString,
         titles: [String],
         emphasis: TitleEmphasis = .balanced,
         suggestedFor: [String] = [],
@@ -37,10 +37,14 @@ struct TitleSet: Codable, Identifiable, Equatable {
         titles.joined(separator: ". ") + "."
     }
 
-    enum CodingKeys: String, CodingKey {
-        case id, titles, emphasis
-        case suggestedFor = "suggested_for"
-        case isFavorite = "is_favorite"
+    // Custom decoder to handle optional fields with defaults
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        titles = try container.decode([String].self, forKey: .titles)
+        emphasis = try container.decode(TitleEmphasis.self, forKey: .emphasis)
+        suggestedFor = try container.decodeIfPresent([String].self, forKey: .suggestedFor) ?? []
+        isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
     }
 }
 
@@ -59,13 +63,13 @@ enum TitleEmphasis: String, Codable, CaseIterable {
 
 /// Identity vocabulary term extracted from documents
 struct IdentityTerm: Codable, Identifiable, Equatable {
-    let id: UUID
+    let id: String
     var term: String              // "Physicist", "Developer"
     var evidenceStrength: Double  // 0-1
     var sourceDocumentIds: [String]
 
     init(
-        id: UUID = UUID(),
+        id: String = UUID().uuidString,
         term: String,
         evidenceStrength: Double = 0.5,
         sourceDocumentIds: [String] = []
@@ -76,10 +80,13 @@ struct IdentityTerm: Codable, Identifiable, Equatable {
         self.sourceDocumentIds = sourceDocumentIds
     }
 
-    enum CodingKeys: String, CodingKey {
-        case id, term
-        case evidenceStrength = "evidence_strength"
-        case sourceDocumentIds = "source_document_ids"
+    // Custom decoder to handle optional fields with defaults
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        term = try container.decode(String.self, forKey: .term)
+        evidenceStrength = try container.decode(Double.self, forKey: .evidenceStrength)
+        sourceDocumentIds = try container.decodeIfPresent([String].self, forKey: .sourceDocumentIds) ?? []
     }
 }
 
