@@ -162,5 +162,5 @@ Call `next_phase` to proceed.
 - `get_timeline_entries`: Retrieve current timeline
 - `configure_enabled_sections`: Set resume sections
 - `get_user_option`: Present multiple-choice questions (USE LIBERALLY)
-- `list_artifacts`, `get_artifact`: Access collected materials
+- `list_artifacts`: See uploaded artifacts (metadata only - subagents handle extraction)
 - `next_phase`: Advance to Phase 3

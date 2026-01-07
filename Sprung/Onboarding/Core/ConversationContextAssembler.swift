@@ -183,6 +183,7 @@ actor ConversationContextAssembler {
         placeholder["reason"].string = "ephemeral content expired - file contents removed from context"
 
         // Preserve useful metadata without the large content
+        // Filesystem tool fields
         if let path = json["path"].string {
             placeholder["path"].string = path
         }
@@ -194,6 +195,16 @@ actor ConversationContextAssembler {
         }
         if let fileCount = json["file_count"].int {
             placeholder["file_count"].int = fileCount
+        }
+        // Artifact tool fields - preserve so LLM can re-fetch if needed
+        if let artifactId = json["artifact_id"].string {
+            placeholder["artifact_id"].string = artifactId
+        }
+        if let filename = json["filename"].string {
+            placeholder["filename"].string = filename
+        }
+        if let documentType = json["document_type"].string {
+            placeholder["document_type"].string = documentType
         }
 
         return placeholder.rawString() ?? "{\"status\":\"pruned\"}"

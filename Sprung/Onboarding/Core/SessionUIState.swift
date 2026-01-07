@@ -64,7 +64,19 @@ struct ToolGating {
                     return .blocked(reason: "Cannot execute non-timeline tools while waiting for validation (state: \(waitingState.rawValue))")
                 }
 
-            case .selection, .processing, .documentCollection:
+            case .documentCollection:
+                // During document collection, user controls the session - block tools that would steal focus
+                // Allow background/utility tools (dossier updates, todo list, etc.)
+                let documentCollectionBlockedTools: Set<String> = [
+                    "get_user_upload", "get_user_option", "next_phase", "submit_for_validation",
+                    "open_document_collection"  // Can't open another doc collection while one is active
+                ]
+                if documentCollectionBlockedTools.contains(toolName) {
+                    return .blocked(reason: "Session is under user control. User must click 'Done with Uploads' to resume the interview.")
+                }
+                return .available
+
+            case .selection, .processing:
                 // All tools blocked during these waiting states
                 return .blocked(reason: "Cannot execute tools while waiting for user input (state: \(waitingState.rawValue))")
             }
@@ -107,7 +119,16 @@ struct ToolGating {
             // During validation, only timeline tools are available
             return OnboardingToolName.timelineTools.intersection(phaseAllowedTools).subtracting(excludedTools)
 
-        case .selection, .processing, .documentCollection:
+        case .documentCollection:
+            // During document collection, user controls session - block focus-stealing tools
+            // Allow background/utility tools (dossier updates, todo list, etc.)
+            let documentCollectionBlockedTools: Set<String> = [
+                "get_user_upload", "get_user_option", "next_phase", "submit_for_validation",
+                "open_document_collection"
+            ]
+            return phaseAllowedTools.subtracting(excludedTools).subtracting(documentCollectionBlockedTools)
+
+        case .selection, .processing:
             // All tools blocked during these waiting states
             return []
         }
@@ -154,6 +175,17 @@ actor SessionUIState: OnboardingEventEmitter {
     /// Update current phase (for tool permission calculation)
     func setPhase(_ phase: InterviewPhase) async {
         currentPhase = phase
+
+        // CRITICAL: Clear any waiting state when phase changes
+        // This ensures user control blocks (documentCollection, upload, etc.)
+        // are released during forced phase advances (UI button or ask_user_skip_to_next_phase)
+        if waitingState != nil {
+            Logger.info("🔓 Clearing waiting state '\(waitingState!.rawValue)' on phase transition to \(phase.rawValue)", category: .ai)
+            waitingState = nil
+            // Emit the waiting state change event
+            await emit(.waitingStateChanged(nil))
+        }
+
         // Apply phase-specific initial exclusions
         applyPhaseExclusions(phase)
         // Re-publish tool permissions when phase changes

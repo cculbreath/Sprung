@@ -41,7 +41,7 @@ struct EventDumpView: View {
             }
             .task {
                 // Live update todo list when events fire
-                for await event in coordinator.eventBus.streamAll() {
+                for await event in await coordinator.eventBus.streamAll() {
                     if case .todoListUpdated = event {
                         await loadTodoItems()
                     }

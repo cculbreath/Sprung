@@ -84,6 +84,7 @@ struct SprungApp: App {
                     appDelegate.searchOpsCoordinator = appDependencies.searchOpsCoordinator
                     appDelegate.coverRefStore = appDependencies.coverRefStore
                     appDelegate.knowledgeCardStore = appDependencies.knowledgeCardStore
+                    appDelegate.skillStore = appDependencies.skillStore
                 }
         }
         .modelContainer(modelContainer)

@@ -1,17 +1,37 @@
 import SwiftUI
 
 /// Skills Bank browser showing skills grouped by category in an expandable list view.
+/// Includes LLM-powered tools for deduplication and ATS synonym expansion.
 struct SkillsBankBrowser: View {
-    let skillBank: SkillBank?
+    let skillStore: SkillStore?
+    var llmFacade: LLMFacade?
 
     @State private var expandedCategories: Set<SkillCategory> = Set(SkillCategory.allCases)
     @State private var searchText = ""
     @State private var selectedProficiency: Proficiency?
 
-    private var groupedSkills: [SkillCategory: [Skill]] {
-        guard let bank = skillBank else { return [:] }
+    // Processing state
+    @State private var processingService: SkillsProcessingService?
+    @State private var isProcessing = false
+    @State private var currentOperation: ProcessingOperation?
+    @State private var processingMessage = ""
+    @State private var processingProgress: Double = 0
+    @State private var lastResult: SkillsProcessingResult?
+    @State private var showResultAlert = false
+    @State private var errorMessage: String?
 
-        var skills = bank.skills
+    private enum ProcessingOperation {
+        case deduplication
+        case atsExpansion
+    }
+
+    /// All skills from the store
+    private var allSkills: [Skill] {
+        skillStore?.skills ?? []
+    }
+
+    private var groupedSkills: [SkillCategory: [Skill]] {
+        var skills = allSkills
 
         // Apply search filter
         if !searchText.isEmpty {
@@ -35,47 +55,73 @@ struct SkillsBankBrowser: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Filter bar
-            filterBar
+        ZStack {
+            VStack(spacing: 0) {
+                // Filter bar with action buttons
+                filterBar
 
-            if skillBank == nil {
-                emptyState
-            } else if groupedSkills.isEmpty {
-                noMatchesState
-            } else {
-                // Skills list
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(sortedCategories, id: \.self) { category in
-                            categorySection(category)
+                if skillStore == nil || allSkills.isEmpty {
+                    emptyState
+                } else if groupedSkills.isEmpty {
+                    noMatchesState
+                } else {
+                    // Skills list
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            ForEach(sortedCategories, id: \.self) { category in
+                                categorySection(category)
+                            }
                         }
+                        .padding(20)
                     }
-                    .padding(20)
                 }
+            }
+            .disabled(isProcessing)
+            .blur(radius: isProcessing ? 2 : 0)
+
+            // Processing overlay
+            if isProcessing {
+                processingOverlay
+            }
+        }
+        .alert("Processing Complete", isPresented: $showResultAlert) {
+            Button("OK") { }
+        } message: {
+            if let result = lastResult {
+                Text("\(result.details)")
+            } else if let error = errorMessage {
+                Text("Error: \(error)")
             }
         }
     }
 
     private var filterBar: some View {
         VStack(spacing: 10) {
-            // Search field
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                TextField("Search skills...", text: $searchText)
-                    .textFieldStyle(.plain)
-                if !searchText.isEmpty {
-                    Button(action: { searchText = "" }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
+            // Search field with action buttons
+            HStack(spacing: 12) {
+                // Search field
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                    TextField("Search skills...", text: $searchText)
+                        .textFieldStyle(.plain)
+                    if !searchText.isEmpty {
+                        Button(action: { searchText = "" }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
+                }
+                .padding(8)
+                .background(Color(nsColor: .controlBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                // Action buttons (only show if we have skills and facade)
+                if !allSkills.isEmpty && llmFacade != nil {
+                    actionButtons
                 }
             }
-            .padding(8)
-            .background(Color(nsColor: .controlBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
 
             // Proficiency filter chips
             ScrollView(.horizontal, showsIndicators: false) {
@@ -92,17 +138,167 @@ struct SkillsBankBrowser: View {
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
     }
 
+    private var actionButtons: some View {
+        HStack(spacing: 8) {
+            // Consolidate duplicates button
+            Button(action: consolidateDuplicates) {
+                HStack(spacing: 6) {
+                    if currentOperation == .deduplication {
+                        ProgressView()
+                            .scaleEffect(0.6)
+                            .frame(width: 12, height: 12)
+                    } else {
+                        Image(systemName: "arrow.triangle.merge")
+                    }
+                    Text("Dedupe")
+                }
+                .font(.caption.weight(.medium))
+            }
+            .buttonStyle(.bordered)
+            .disabled(isProcessing)
+            .help("Use AI to identify and merge duplicate skills")
+
+            // Add ATS variants button
+            Button(action: expandATSVariants) {
+                HStack(spacing: 6) {
+                    if currentOperation == .atsExpansion {
+                        ProgressView()
+                            .scaleEffect(0.6)
+                            .frame(width: 12, height: 12)
+                    } else {
+                        Image(systemName: "text.badge.plus")
+                    }
+                    Text("ATS Expand")
+                }
+                .font(.caption.weight(.medium))
+            }
+            .buttonStyle(.bordered)
+            .disabled(isProcessing)
+            .help("Use AI to add ATS-friendly synonym variants to all skills")
+        }
+    }
+
+    private var processingOverlay: some View {
+        VStack(spacing: 16) {
+            ProgressView()
+                .scaleEffect(1.5)
+
+            Text(processingMessage)
+                .font(.headline)
+
+            if processingProgress > 0 {
+                ProgressView(value: processingProgress)
+                    .frame(width: 200)
+            }
+        }
+        .padding(32)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+
+    // MARK: - Processing Actions
+
+    private func consolidateDuplicates() {
+        guard let skillStore = skillStore, let facade = llmFacade else { return }
+
+        isProcessing = true
+        currentOperation = .deduplication
+        processingMessage = "Analyzing skills for duplicates..."
+        processingProgress = 0
+
+        Task {
+            do {
+                let service = SkillsProcessingService(skillStore: skillStore, facade: facade)
+                processingService = service
+
+                // Monitor progress
+                let progressTask = Task {
+                    while !Task.isCancelled {
+                        await MainActor.run {
+                            if case .processing(let msg) = service.status {
+                                processingMessage = msg
+                            }
+                            processingProgress = service.progress
+                        }
+                        try? await Task.sleep(for: .milliseconds(100))
+                    }
+                }
+
+                let result = try await service.consolidateDuplicates()
+                progressTask.cancel()
+
+                await MainActor.run {
+                    lastResult = result
+                    isProcessing = false
+                    currentOperation = nil
+                    showResultAlert = true
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                    isProcessing = false
+                    currentOperation = nil
+                    showResultAlert = true
+                }
+            }
+        }
+    }
+
+    private func expandATSVariants() {
+        guard let skillStore = skillStore, let facade = llmFacade else { return }
+
+        isProcessing = true
+        currentOperation = .atsExpansion
+        processingMessage = "Generating ATS synonyms..."
+        processingProgress = 0
+
+        Task {
+            do {
+                let service = SkillsProcessingService(skillStore: skillStore, facade: facade)
+                processingService = service
+
+                // Monitor progress
+                let progressTask = Task {
+                    while !Task.isCancelled {
+                        await MainActor.run {
+                            if case .processing(let msg) = service.status {
+                                processingMessage = msg
+                            }
+                            processingProgress = service.progress
+                        }
+                        try? await Task.sleep(for: .milliseconds(100))
+                    }
+                }
+
+                let result = try await service.expandATSSynonyms()
+                progressTask.cancel()
+
+                await MainActor.run {
+                    lastResult = result
+                    isProcessing = false
+                    currentOperation = nil
+                    showResultAlert = true
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                    isProcessing = false
+                    currentOperation = nil
+                    showResultAlert = true
+                }
+            }
+        }
+    }
+
+    // MARK: - Existing UI Components
+
     private func proficiencyChip(_ proficiency: Proficiency?, label: String) -> some View {
         let isSelected = selectedProficiency == proficiency
         let count: Int
-        if let bank = skillBank {
-            if let proficiency = proficiency {
-                count = bank.skills.filter { $0.proficiency == proficiency }.count
-            } else {
-                count = bank.skills.count
-            }
+        if let proficiency = proficiency {
+            count = allSkills.filter { $0.proficiency == proficiency }.count
         } else {
-            count = 0
+            count = allSkills.count
         }
 
         return Button(action: { selectedProficiency = proficiency }) {
@@ -189,10 +385,10 @@ struct SkillsBankBrowser: View {
 
                 // ATS variants (if any)
                 if !skill.atsVariants.isEmpty {
-                    Text(skill.atsVariants.prefix(3).joined(separator: " • "))
+                    Text(skill.atsVariants.prefix(5).joined(separator: " • "))
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .lineLimit(2)
                 }
 
                 // Evidence count

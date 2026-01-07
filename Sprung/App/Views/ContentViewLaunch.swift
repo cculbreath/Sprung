@@ -38,6 +38,7 @@ struct ContentViewLaunch: View {
             .environment(deps.debugSettingsStore)
             .environment(deps.jobAppStore)
             .environment(deps.knowledgeCardStore)
+            .environment(deps.skillStore)
             .environment(deps.resStore)
             .environment(deps.coverRefStore)
             .environment(deps.coverLetterStore)

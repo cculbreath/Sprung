@@ -361,9 +361,16 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         Logger.info("📤 Completing tool call with PDF attachment (call: \(pendingCall.callId.prefix(8))...)", category: .ai)
 
         // Build tool output with PDF attachment info
+        // IMPORTANT: Include storage URL so the PDF can be re-included when rebuilding conversation history
         var output = JSON()
         output["status"].string = "completed"
         output["message"].string = "Resume PDF attached below. Please review to understand the user's professional background."
+        var pdfAttachment = JSON()
+        pdfAttachment["storage_url"].string = file.storageURL.path
+        pdfAttachment["filename"].string = filename
+        pdfAttachment["size_kb"].int = sizeKB
+        output["pdf_attachment"] = pdfAttachment
+        Logger.info("📄 Tool output with pdf_attachment: \(output.rawString()?.prefix(200) ?? "nil")", category: .ai)
 
         // Build tool response payload WITH PDF data
         // The PDF will be included as a document block alongside the tool_result

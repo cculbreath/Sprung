@@ -74,9 +74,32 @@ private struct SectionTogglePayload {
     let proposedSections: [String]
     let rationale: String?
     init(json: JSON) throws {
-        guard let proposedObj = json["proposed_sections"].dictionary else {
-            throw ToolError.invalidParameters("proposed_sections must be an object mapping section keys to boolean values")
+        // Try to get proposed_sections as an object
+        var proposedObj: [String: JSON]?
+
+        if let dict = json["proposed_sections"].dictionary {
+            // Normal case: already an object
+            proposedObj = dict
+        } else if let jsonString = json["proposed_sections"].string {
+            // Handle double-encoding: LLM passed a JSON string instead of an object
+            // Try to parse the string as JSON
+            if let data = jsonString.data(using: .utf8) {
+                let parsed = JSON(data)
+                if let dict = parsed.dictionary {
+                    proposedObj = dict
+                    Logger.warning("⚠️ configure_enabled_sections: proposed_sections was double-encoded as string, parsed successfully", category: .ai)
+                }
+            }
         }
+
+        guard let proposedObj = proposedObj else {
+            throw ToolError.invalidParameters(
+                "proposed_sections must be an object, not a string. " +
+                "CORRECT: {\"proposed_sections\": {\"work\": true, \"education\": true}} " +
+                "WRONG: {\"proposed_sections\": \"{\\\"work\\\": true}\"}"
+            )
+        }
+
         // Extract keys where value is true (enabled sections)
         var enabled: [String] = []
         for (key, value) in proposedObj where value.bool == true {

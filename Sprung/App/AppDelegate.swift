@@ -25,6 +25,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var searchOpsCoordinator: DiscoveryCoordinator?
     var coverRefStore: CoverRefStore?
     var knowledgeCardStore: KnowledgeCardStore?
+    var skillStore: SkillStore?
     func applicationDidFinishLaunching(_: Notification) {
         // Wait until the app is fully loaded before modifying the menu
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
@@ -119,7 +120,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                let applicantProfileStore = self.applicantProfileStore,
                let experienceDefaultsStore = self.experienceDefaultsStore,
                let careerKeywordStore = self.careerKeywordStore,
-               let searchOpsCoordinator = self.searchOpsCoordinator {
+               let searchOpsCoordinator = self.searchOpsCoordinator,
+               let skillStore = self.skillStore {
                 let appState = appEnvironment.appState
                 let debugSettingsStore = appState.debugSettingsStore ?? appEnvironment.debugSettingsStore
                 let root = settingsView
@@ -135,6 +137,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(appEnvironment.openRouterService)
                     .environment(debugSettingsStore)
                     .environment(searchOpsCoordinator)
+                    .environment(skillStore)
                     .modelContainer(container)
                 hostingView = NSHostingView(rootView: AnyView(root))
             } else {
@@ -286,7 +289,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let hostingView: NSHostingView<AnyView>
             if let modelContainer,
                let appEnvironment,
-               let enabledLLMStore {
+               let enabledLLMStore,
+               let coverRefStore {
                 let onboardingService = onboardingCoordinator ?? appEnvironment.onboardingCoordinator
                 let debugSettingsStore = appEnvironment.appState.debugSettingsStore ?? appEnvironment.debugSettingsStore
                 let root = interviewView
@@ -295,6 +299,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(appEnvironment.appState)
                     .environment(appEnvironment.navigationState)
                     .environment(enabledLLMStore)
+                    .environment(coverRefStore)
                     .environment(appEnvironment.applicantProfileStore)
                     .environment(appEnvironment.experienceDefaultsStore)
                     .environment(onboardingService)

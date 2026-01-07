@@ -462,6 +462,7 @@ actor LLMMessenger: OnboardingEventEmitter {
                         await stateCoordinator.clearPendingToolResponses()
                         // Store completed tool result for future requests
                         let outputString = output.rawString() ?? "{}"
+                        Logger.info("📝 Storing tool result for \(toolName): \(outputString.prefix(300))", category: .ai)
                         await stateCoordinator.addCompletedToolResult(
                             callId: callId,
                             toolName: toolName,

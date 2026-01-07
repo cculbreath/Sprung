@@ -5,10 +5,13 @@ import UniformTypeIdentifiers
 struct OnboardingInterviewToolPane: View {
     @Environment(ApplicantProfileStore.self) private var applicantProfileStore
     @Environment(ExperienceDefaultsStore.self) private var experienceDefaultsStore
+    @Environment(CoverRefStore.self) private var coverRefStore
     @Bindable var coordinator: OnboardingInterviewCoordinator
     @Binding var isOccupied: Bool
     @State private var selectedTab: ToolPaneTabsView<AnyView>.Tab = .interview
     @State private var isPaneDropTargetHighlighted = false
+    @State private var showSkipToCompleteWarning = false
+    @State private var missingGoalItems: [String] = []
 
     var body: some View {
         let paneOccupied = isPaneOccupied(coordinator: coordinator)
@@ -92,6 +95,17 @@ struct OnboardingInterviewToolPane: View {
             handlePaneDrop(providers: providers)
             return true
         }
+        // Warning alert when skipping to complete with unpersisted goals
+        .alert("Complete Interview with Missing Data?", isPresented: $showSkipToCompleteWarning) {
+            Button("Complete Anyway", role: .destructive) {
+                Task {
+                    await coordinator.advanceToNextPhaseFromUI()
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The following interview goals have no persisted data:\n\n• \(missingGoalItems.joined(separator: "\n• "))\n\nThis data helps generate better resumes and cover letters. Consider continuing the interview to collect more information.")
+        }
     }
 
     // MARK: - Pane Drop Handling
@@ -161,6 +175,15 @@ struct OnboardingInterviewToolPane: View {
                 SkipToNextPhaseCard(
                     currentPhase: coordinator.ui.phase,
                     onSkip: {
+                        // In phase 4, check for unpersisted goals before completing
+                        if coordinator.ui.phase == .phase4StrategicSynthesis {
+                            let missing = checkForMissingGoals()
+                            if !missing.isEmpty {
+                                missingGoalItems = missing
+                                showSkipToCompleteWarning = true
+                                return
+                            }
+                        }
                         Task {
                             await coordinator.advanceToNextPhaseFromUI()
                         }
@@ -606,6 +629,43 @@ struct OnboardingInterviewToolPane: View {
 
         // If we have a stored profile summary, show it
         return coordinator.ui.lastApplicantProfileSummary != nil
+    }
+
+    // MARK: - Skip-to-Complete Safety Check
+
+    /// Checks for unpersisted interview goals and returns a list of missing items
+    private func checkForMissingGoals() -> [String] {
+        var missing: [String] = []
+
+        // Check Knowledge Cards
+        let kcCount = coordinator.knowledgeCardStore.knowledgeCards.count
+        if kcCount == 0 {
+            missing.append("Knowledge Cards (0 persisted)")
+        }
+
+        // Check Skills
+        let skillCount = coordinator.skillStore.skills.count
+        if skillCount == 0 {
+            missing.append("Skills Bank (0 persisted)")
+        }
+
+        // Check Writing Samples (CoverRefs)
+        let writingSampleCount = coverRefStore.storedCoverRefs.count
+        if writingSampleCount == 0 {
+            missing.append("Writing Samples (0 persisted)")
+        }
+
+        // Check Experience Defaults - verify meaningful content exists
+        let expDraft = experienceDefaultsStore.loadDraft()
+        let hasExperienceContent = !expDraft.work.isEmpty ||
+            !expDraft.education.isEmpty ||
+            !expDraft.projects.isEmpty ||
+            !expDraft.volunteer.isEmpty
+        if !hasExperienceContent {
+            missing.append("Experience Defaults (no work/education/projects)")
+        }
+
+        return missing
     }
 }
 private struct ExtractionProgressOverlay: View {

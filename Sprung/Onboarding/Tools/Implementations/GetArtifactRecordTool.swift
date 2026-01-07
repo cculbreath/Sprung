@@ -67,6 +67,10 @@ struct GetArtifactRecordTool: InterviewTool {
             }
         }
 
+        // Mark as ephemeral - full content will be pruned after N turns (default 3)
+        // LLM can always call get_artifact again if needed
+        response["ephemeral"].bool = true
+
         return .immediate(response)
     }
 }

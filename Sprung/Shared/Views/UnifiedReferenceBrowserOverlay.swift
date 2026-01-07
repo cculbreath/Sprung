@@ -7,9 +7,10 @@ struct UnifiedReferenceBrowserOverlay: View {
     @Binding var isPresented: Bool
 
     enum Tab: String, CaseIterable, Identifiable {
-        case knowledge = "Knowledge"
-        case writing = "Writing"
+        case knowledge = "Knowledge Cards"
+        case writing = "Writing Samples"
         case skills = "Skills"
+        case dossier = "Dossier"
 
         var id: String { rawValue }
 
@@ -18,6 +19,7 @@ struct UnifiedReferenceBrowserOverlay: View {
             case .knowledge: return "brain.head.profile"
             case .writing: return "doc.text"
             case .skills: return "star.fill"
+            case .dossier: return "person.text.rectangle"
             }
         }
 
@@ -26,6 +28,17 @@ struct UnifiedReferenceBrowserOverlay: View {
             case .knowledge: return .purple
             case .writing: return .blue
             case .skills: return .orange
+            case .dossier: return .green
+            }
+        }
+
+        /// Short label for segmented picker
+        var shortLabel: String {
+            switch self {
+            case .knowledge: return "Knowledge"
+            case .writing: return "Writing"
+            case .skills: return "Skills"
+            case .dossier: return "Dossier"
             }
         }
     }
@@ -48,8 +61,11 @@ struct UnifiedReferenceBrowserOverlay: View {
     let onWritingSampleDeleted: (CoverRef) -> Void
     let onWritingSampleAdded: (CoverRef) -> Void
 
-    // Skills Bank
-    let skillBank: SkillBank?
+    // Skills Store (SwiftData-backed)
+    let skillStore: SkillStore?
+
+    // Dossier notes
+    let dossierNotes: String?
 
     // Optional LLM for analysis
     let llmFacade: LLMFacade?
@@ -98,19 +114,15 @@ struct UnifiedReferenceBrowserOverlay: View {
                 .buttonStyle(.plain)
             }
 
-            // Tab picker
-            Picker("Tab", selection: $selectedTab) {
+            // Tab picker - use simple text labels for segmented style
+            Picker("", selection: $selectedTab) {
                 ForEach(Tab.allCases) { tab in
-                    HStack(spacing: 4) {
-                        Image(systemName: tab.icon)
-                        Text(tab.rawValue)
-                        Text("(\(countFor(tab)))")
-                            .foregroundStyle(.secondary)
-                    }
-                    .tag(tab)
+                    Text("\(tab.shortLabel) (\(countFor(tab)))")
+                        .tag(tab)
                 }
             }
             .pickerStyle(.segmented)
+            .labelsHidden()
         }
         .padding(20)
     }
@@ -119,7 +131,8 @@ struct UnifiedReferenceBrowserOverlay: View {
         switch tab {
         case .knowledge: return knowledgeCards.count
         case .writing: return writingSamples.count
-        case .skills: return skillBank?.skills.count ?? 0
+        case .skills: return skillStore?.skills.count ?? 0
+        case .dossier: return dossierNotes?.isEmpty == false ? 1 : 0
         }
     }
 
@@ -131,9 +144,9 @@ struct UnifiedReferenceBrowserOverlay: View {
             Button(action: { exportToJSON(writingSamples, filename: "writing-samples.json") }) {
                 Label("Export Writing Samples", systemImage: "doc.text")
             }
-            if let bank = skillBank {
-                Button(action: { exportToJSON(bank, filename: "skills-bank.json") }) {
-                    Label("Export Skills Bank", systemImage: "star.fill")
+            if let store = skillStore {
+                Button(action: { exportToJSON(store.skills, filename: "skills.json") }) {
+                    Label("Export Skills", systemImage: "star.fill")
                 }
             }
             Divider()
@@ -169,7 +182,9 @@ struct UnifiedReferenceBrowserOverlay: View {
                 onCardAdded: onWritingSampleAdded
             )
         case .skills:
-            SkillsBankBrowser(skillBank: skillBank)
+            SkillsBankBrowser(skillStore: skillStore, llmFacade: llmFacade)
+        case .dossier:
+            DossierBrowserTab(notes: dossierNotes)
         }
     }
 
@@ -199,22 +214,77 @@ struct UnifiedReferenceBrowserOverlay: View {
         let bundle = ReferenceBundleExport(
             knowledgeCards: knowledgeCards,
             writingSamples: writingSamples,
-            skillBank: skillBank
+            skills: skillStore?.skills ?? [],
+            dossierNotes: dossierNotes
         )
         exportToJSON(bundle, filename: "all-references.json")
     }
 }
 
+// MARK: - Dossier Browser Tab
+
+/// Simple browser for dossier notes
+private struct DossierBrowserTab: View {
+    let notes: String?
+
+    var body: some View {
+        ScrollView {
+            if let notes = notes, !notes.isEmpty {
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        Image(systemName: "person.text.rectangle")
+                            .font(.title2)
+                            .foregroundStyle(.green)
+                        Text("Dossier Notes")
+                            .font(.title3.weight(.semibold))
+                        Spacer()
+                    }
+
+                    Text(notes)
+                        .font(.body)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                        .background(Color(nsColor: .controlBackgroundColor))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .padding(20)
+            } else {
+                emptyState
+            }
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "person.text.rectangle")
+                .font(.system(size: 48))
+                .foregroundStyle(.tertiary)
+            Text("No Dossier Notes")
+                .font(.title3.weight(.medium))
+            Text("Complete an onboarding interview to capture dossier notes")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Export Bundle
+
 private struct ReferenceBundleExport: Codable {
     let knowledgeCards: [KnowledgeCard]
     let writingSamples: [CoverRef]
-    let skillBank: SkillBank?
+    let skills: [Skill]
+    let dossierNotes: String?
     let exportedAt: Date
 
-    init(knowledgeCards: [KnowledgeCard], writingSamples: [CoverRef], skillBank: SkillBank?) {
+    init(knowledgeCards: [KnowledgeCard], writingSamples: [CoverRef], skills: [Skill], dossierNotes: String?) {
         self.knowledgeCards = knowledgeCards
         self.writingSamples = writingSamples
-        self.skillBank = skillBank
+        self.skills = skills
+        self.dossierNotes = dossierNotes
         self.exportedAt = Date()
     }
 }

@@ -63,6 +63,7 @@ struct AppSheetsModifier: ViewModifier {
     @Environment(ResumeReviseViewModel.self) private var resumeReviseViewModel
     @Environment(KnowledgeCardStore.self) private var knowledgeCardStore
     @Environment(CoverRefStore.self) private var coverRefStore
+    @Environment(SkillStore.self) private var skillStore
     @State private var showReprocessConfirmation = false
     @State private var newlyAddedCardName: String = ""
     private var revisionSheetBinding: Binding<Bool> {
@@ -218,7 +219,8 @@ struct AppSheetsModifier: ViewModifier {
                     onWritingSampleAdded: { ref in
                         coverRefStore.addCoverRef(ref)
                     },
-                    skillBank: nil,  // Skills bank integration pending
+                    skillStore: skillStore,
+                    dossierNotes: nil,  // TODO: Load from OnboardingSession when available
                     llmFacade: nil   // Regeneration not available outside onboarding
                 )
             }

@@ -89,10 +89,35 @@ struct AnthropicHistoryBuilder {
                 if output.output.isEmpty {
                     Logger.warning("⚠️ Empty tool result for callId \(output.callId) - using placeholder", category: .ai)
                 }
-                messages.append(.toolResult(
-                    toolUseId: output.callId,
-                    content: resultContent
-                ))
+
+                // Check if this tool result has a PDF attachment that needs to be re-included
+                var contentBlocks: [AnthropicContentBlock] = [
+                    .toolResult(AnthropicToolResultBlock(toolUseId: output.callId, content: resultContent))
+                ]
+
+                // Parse output to check for PDF attachment metadata
+                if let outputData = output.output.data(using: .utf8) {
+                    let json = JSON(outputData)
+                    if json["pdf_attachment"].exists() {
+                        Logger.info("📄 Found pdf_attachment in tool result for callId \(output.callId.prefix(12))", category: .ai)
+                        if let storagePath = json["pdf_attachment"]["storage_url"].string {
+                            Logger.info("📄 PDF storage path: \(storagePath)", category: .ai)
+                            if let pdfData = try? Data(contentsOf: URL(fileURLWithPath: storagePath)) {
+                                let pdfBase64 = pdfData.base64EncodedString()
+                                let docSource = AnthropicDocumentSource(mediaType: "application/pdf", data: pdfBase64)
+                                contentBlocks.append(.document(AnthropicDocumentBlock(source: docSource)))
+                                let filename = json["pdf_attachment"]["filename"].string ?? "resume.pdf"
+                                Logger.info("📄 Re-including PDF in history: \(filename) (\(pdfData.count / 1024) KB)", category: .ai)
+                            } else {
+                                Logger.warning("⚠️ Failed to read PDF file at: \(storagePath)", category: .ai)
+                            }
+                        } else {
+                            Logger.warning("⚠️ pdf_attachment exists but storage_url is nil", category: .ai)
+                        }
+                    }
+                }
+
+                messages.append(AnthropicMessage(role: "user", content: .blocks(contentBlocks)))
             default:
                 break
             }
