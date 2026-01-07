@@ -138,6 +138,11 @@ struct AnthropicHistoryBuilder {
         // Skipping empty messages can leave adjacent same-role messages which Anthropic rejects.
         messages = mergeConsecutiveMessages(messages)
 
+        // CRITICAL: Strip orphaned tool_use blocks from the end of conversation.
+        // If the app crashed/closed while a tool was executing, the history will have
+        // tool_use without tool_result. Remove these rather than adding fake results.
+        messages = stripTrailingOrphanedToolUse(messages)
+
         // CRITICAL: Ensure every tool_use has a corresponding tool_result.
         // Race conditions (e.g., user button clicks) can cause tool_results to be missing.
         // Anthropic requires tool_result immediately after tool_use.
@@ -214,6 +219,66 @@ struct AnthropicHistoryBuilder {
     }
 
     // MARK: - Tool Result Validation
+
+    /// Strips orphaned tool_use blocks from the end of conversation history.
+    /// When resuming an interview after a crash/close during tool execution,
+    /// the last assistant message may have tool_use blocks without corresponding
+    /// tool_results. Rather than adding synthetic results, we remove these
+    /// orphaned tool calls entirely.
+    func stripTrailingOrphanedToolUse(_ messages: [AnthropicMessage]) -> [AnthropicMessage] {
+        guard !messages.isEmpty else { return [] }
+
+        var result = messages
+
+        // Build set of all tool_result IDs in the conversation
+        var allToolResultIds = Set<String>()
+        for message in messages {
+            allToolResultIds.formUnion(extractToolResultIds(from: message))
+        }
+
+        // Check if last message is assistant with orphaned tool_use blocks
+        while let lastMessage = result.last, lastMessage.role == "assistant" {
+            let toolUseIds = extractToolUseIds(from: lastMessage)
+
+            // Find which tool_use IDs have no corresponding tool_result
+            let orphanedIds = Set(toolUseIds).subtracting(allToolResultIds)
+
+            guard !orphanedIds.isEmpty else { break }
+
+            Logger.warning(
+                "⚠️ Stripping \(orphanedIds.count) orphaned tool_use from end of history: " +
+                "\(orphanedIds.joined(separator: ", ").prefix(80))",
+                category: .ai
+            )
+
+            // Remove orphaned tool_use blocks from the message
+            if case .blocks(let blocks) = lastMessage.content {
+                let filteredBlocks = blocks.filter { block in
+                    if case .toolUse(let toolUse) = block {
+                        return !orphanedIds.contains(toolUse.id)
+                    }
+                    return true
+                }
+
+                if filteredBlocks.isEmpty {
+                    // Entire message was orphaned tool_use - remove the message
+                    result.removeLast()
+                    Logger.info("📝 Removed empty assistant message after stripping orphaned tool_use", category: .ai)
+                } else {
+                    // Replace with filtered message
+                    result[result.count - 1] = AnthropicMessage(
+                        role: "assistant",
+                        content: .blocks(filteredBlocks)
+                    )
+                    break // Message still has content, we're done
+                }
+            } else {
+                break // Not a blocks message, nothing to strip
+            }
+        }
+
+        return result
+    }
 
     /// Ensures every tool_use block has a corresponding tool_result.
     /// Anthropic requires tool_result immediately after tool_use. Race conditions during

@@ -94,7 +94,7 @@ struct OnboardingInterviewView: View {
         // No SwiftUI shadow overlay needed - system shadow has proper hit testing
         let styledContent = contentStack
             .frame(minWidth: 1060)
-            .padding(.vertical, 6)
+            .padding(.vertical, 12)
             .clipShape(cardShape)
             .background(cardShape.fill(.thickMaterial))
             // Window entrance animation

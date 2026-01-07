@@ -256,6 +256,17 @@ final class InterviewLifecycleController {
             ui.isTimelineEditorActive = true
             Logger.info("📥 Restored timeline editor active state", category: .ai)
         }
+
+        // Restore title set curation flag for Phase 4
+        let phase = InterviewPhase(rawValue: session.phase) ?? .phase1VoiceContext
+        if phase == .phase4StrategicSynthesis {
+            let customFields = await state.getCustomFieldDefinitions()
+            ui.shouldGenerateTitleSets = customFields.contains { $0.key.lowercased() == "custom.jobtitles" }
+            Logger.info(
+                "📥 Restored title set curation: \(ui.shouldGenerateTitleSets ? "enabled" : "disabled")",
+                category: .ai
+            )
+        }
     }
 
     /// Restore todo list from persisted session
