@@ -36,17 +36,6 @@ struct OnboardingInterviewView: View {
         let corner: CGFloat = 44
         let cardShape = RoundedRectangle(cornerRadius: corner, style: .continuous)
         let contentStack = VStack(spacing: 0) {
-            // Window drag handle - allows moving window without conflicting with list reordering
-            WindowDragHandle()
-                .frame(height: 28)
-                .frame(maxWidth: .infinity)
-                .overlay {
-                    // Visual indicator for draggable area
-                    Capsule()
-                        .fill(Color.secondary.opacity(0.3))
-                        .frame(width: 40, height: 5)
-                }
-                .contentShape(Rectangle())
             // Progress bar anchored close to top
             OnboardingInterviewStepProgressView(coordinator: coordinator)
                 .padding(.top, 8)
@@ -99,14 +88,13 @@ struct OnboardingInterviewView: View {
                 .blur(radius: bottomBarAppeared ? 0 : 10)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.horizontal, 4)
+            .padding(.horizontal, 2)
         }
         // Uses system window shadow via BorderlessOverlayWindow.hasShadow = true
         // No SwiftUI shadow overlay needed - system shadow has proper hit testing
         let styledContent = contentStack
             .frame(minWidth: 1060)
-            .padding(.horizontal, 2)
-            .padding(.vertical, 10)
+            .padding(.vertical, 6)
             .clipShape(cardShape)
             .background(cardShape.fill(.thickMaterial))
             // Window entrance animation
@@ -261,7 +249,6 @@ private extension OnboardingInterviewView {
                 ))
             }
         }
-        .padding(.horizontal, 4)
         .padding(.top, 8)
     }
     func continueButtonTitle(for step: OnboardingWizardStep) -> String {

@@ -36,7 +36,7 @@ struct ToolPaneTabsView<InterviewContent: View>: View {
                     tabButton(for: tab)
                 }
             }
-            .padding(.horizontal, 1)
+            .padding(.horizontal, 2)
             .padding(.vertical, 2)
             .background(Color(nsColor: .controlBackgroundColor))
             .cornerRadius(8)

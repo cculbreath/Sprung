@@ -48,14 +48,13 @@ struct OnboardingInterviewInteractiveCard: View {
             )
         }
         .padding(.vertical, 8)
-        .padding(.horizontal, 2)
+        .padding(.horizontal, 8)
         .frame(minHeight: 560)
         .background(
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(Color(nsColor: .controlBackgroundColor).opacity(0.65))
                 .shadow(color: Color.black.opacity(0.16), radius: 24, y: 18)
         )
-        .padding(.horizontal, 2)
         .opacity(animateIn ? 1 : 0)
         .scaleEffect(animateIn ? 1 : 0.94)
         .rotationEffect(.degrees(animateIn ? 0 : -1.6))
