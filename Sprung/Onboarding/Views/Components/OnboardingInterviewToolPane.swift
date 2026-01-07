@@ -24,7 +24,7 @@ struct OnboardingInterviewToolPane: View {
             selectedTab: $selectedTab
         )
         .padding(.vertical, 8)
-        .padding(.horizontal, 4)
+        .padding(.horizontal, 2)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .overlay {
             ZStack {
@@ -212,7 +212,16 @@ struct OnboardingInterviewToolPane: View {
                         await coordinator.submitChoiceSelection(selection)
                     }
                 },
-                onCancel: { }
+                onSubmitOther: { otherText in
+                    Task {
+                        await coordinator.submitChoiceSelectionWithOther(otherText)
+                    }
+                },
+                onCancel: {
+                    Task {
+                        await coordinator.cancelChoiceSelection()
+                    }
+                }
             )
         } else if let validation = coordinator.pendingValidationPrompt, validation.mode == .editor {
             // Only show editor mode validations in tool pane
@@ -418,6 +427,15 @@ struct OnboardingInterviewToolPane: View {
                     Task { await coordinator.skipWritingSamplesCollection() }
                 }
             )
+        case .phase4StrategicSynthesis:
+            if coordinator.ui.shouldGenerateTitleSets {
+                TitleSetCurationView(
+                    coordinator: coordinator,
+                    titleSetService: coordinator.titleSetService
+                )
+            } else {
+                InterviewTabEmptyState(phase: coordinator.ui.phase)
+            }
         default:
             // Other phases: show empty state with guidance
             InterviewTabEmptyState(phase: coordinator.ui.phase)
@@ -512,8 +530,9 @@ struct OnboardingInterviewToolPane: View {
                 filtered.append(request)
             }
         case .evidence:
-            // Phase 3: Writing samples and other evidence
-            filtered = coordinator.pendingUploadRequests.filter { $0.kind == .writingSample }
+            // Phase 3: Evidence documents (artifacts, generic uploads, resumes)
+            // Excludes writing samples since those are Phase 1 only
+            filtered = coordinator.pendingUploadRequests.filter { $0.kind != .writingSample }
         case .strategy:
             // Phase 4: All remaining uploads
             filtered = coordinator.pendingUploadRequests

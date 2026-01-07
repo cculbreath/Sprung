@@ -60,8 +60,9 @@ struct ResumeSectionsToggleCard: View {
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 8)
+                .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(maxHeight: 320)
+            .frame(maxHeight: 400)
             HStack {
                 Button("Cancel", action: onCancel)
                 Spacer()
@@ -85,6 +86,25 @@ struct ResumeSectionsToggleCard: View {
 private struct CustomFieldsSection: View {
     @Binding var customFields: [CustomFieldDefinition]
     @Binding var showAddCustomField: Bool
+    private let jobTitlesKey = "custom.jobTitles"
+    private let jobTitlesDescription = "Four single-word identity titles shown at the top of your resume."
+
+    private var hasJobTitles: Bool {
+        customFields.contains { $0.key.lowercased() == jobTitlesKey.lowercased() }
+    }
+
+    private var jobTitlesBinding: Binding<Bool> {
+        Binding(
+            get: { hasJobTitles },
+            set: { include in
+                if include {
+                    addJobTitlesField()
+                } else {
+                    removeJobTitlesField()
+                }
+            }
+        )
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -105,6 +125,18 @@ private struct CustomFieldsSection: View {
             Text("Define custom fields to generate (e.g., objective statement, target roles)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+            Toggle(isOn: jobTitlesBinding) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Include identity title set")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                    Text("Adds custom.jobTitles for Phase 4 title curation.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .toggleStyle(.checkbox)
 
             if customFields.isEmpty {
                 Text("No custom fields defined")
@@ -127,6 +159,15 @@ private struct CustomFieldsSection: View {
                 showAddCustomField = false
             }
         }
+    }
+
+    private func addJobTitlesField() {
+        guard !hasJobTitles else { return }
+        customFields.append(CustomFieldDefinition(key: jobTitlesKey, description: jobTitlesDescription))
+    }
+
+    private func removeJobTitlesField() {
+        customFields.removeAll { $0.key.lowercased() == jobTitlesKey.lowercased() }
     }
 }
 

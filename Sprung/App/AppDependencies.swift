@@ -154,6 +154,7 @@ final class AppDependencies {
             skillStore: skillStore,
             coverRefStore: coverRefStore,
             experienceDefaultsStore: experienceDefaultsStore,
+            guidanceStore: guidanceStore,
             sessionStore: onboardingSessionStore,
             dataStore: interviewDataStore,
             preferences: preferences

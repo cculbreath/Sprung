@@ -31,6 +31,31 @@ struct PhaseOneScript: PhaseScript {
         // voicePrimersExtracted is NOT required - it runs in background and may complete after phase advance
     ])
 
+    var initialTodoItems: [InterviewTodoItem] {
+        [
+            InterviewTodoItem(
+                content: "Validate applicant profile (name, email, location)",
+                status: .pending,
+                activeForm: "Validating applicant profile"
+            ),
+            InterviewTodoItem(
+                content: "Offer profile photo upload",
+                status: .pending,
+                activeForm: "Offering profile photo"
+            ),
+            InterviewTodoItem(
+                content: "Collect writing samples (cover letters, proposals, emails)",
+                status: .pending,
+                activeForm: "Collecting writing samples"
+            ),
+            InterviewTodoItem(
+                content: "Capture job search context (motivation, priorities)",
+                status: .pending,
+                activeForm: "Capturing job search context"
+            )
+        ]
+    }
+
     var objectiveWorkflows: [String: ObjectiveWorkflow] {
         [
             // MARK: - Applicant Profile (START HERE)
@@ -45,7 +70,6 @@ struct PhaseOneScript: PhaseScript {
                         """
                     let details = [
                         "action": "call_validate_applicant_profile",
-                        "objective": OnboardingObjectiveId.applicantProfileComplete.rawValue,
                         "priority": "first"
                     ]
                     return [.coordinatorMessage(title: title, details: details, payload: nil)]
@@ -58,12 +82,9 @@ struct PhaseOneScript: PhaseScript {
                         Encourage uploading MULTIPLE writing samples.
                         """
                     let details = [
-                        "next_objective": OnboardingObjectiveId.writingSamplesCollected.rawValue,
-                        "status": context.status.rawValue,
                         "step": "profile_photo",
                         "note": "writing_sample_panel_visible_in_sidebar"
                     ]
-                    // LLM decides when to call get_user_upload based on context (no forced toolChoice)
                     return [.coordinatorMessage(title: title, details: details, payload: nil)]
                 }
             ),
@@ -73,18 +94,14 @@ struct PhaseOneScript: PhaseScript {
                 id: OnboardingObjectiveId.writingSamplesCollected.rawValue,
                 dependsOn: [OnboardingObjectiveId.applicantProfileComplete.rawValue],
                 autoStartWhenReady: true,
-                onComplete: { context in
+                onComplete: { _ in
                     let title = """
                         Writing samples captured. Voice primer extraction is running in background. \
                         Now gather job search context using get_user_option for structured questions. \
                         Ask about: what's driving their search, what matters most in their next role. \
                         Follow up conversationally based on their answers.
                         """
-                    let details = [
-                        "next_objective": OnboardingObjectiveId.jobSearchContextCaptured.rawValue,
-                        "status": context.status.rawValue
-                    ]
-                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
+                    return [.coordinatorMessage(title: title, details: [:], payload: nil)]
                 }
             ),
 
@@ -93,14 +110,13 @@ struct PhaseOneScript: PhaseScript {
                 id: OnboardingObjectiveId.voicePrimersExtracted.rawValue,
                 dependsOn: [OnboardingObjectiveId.writingSamplesCollected.rawValue],
                 autoStartWhenReady: true,
-                onComplete: { context in
+                onComplete: { _ in
                     // Voice primers complete in background - no interruption needed
                     let title = """
                         Voice primer extraction complete. Voice patterns have been analyzed and stored. \
                         Continue with current workflow without interruption.
                         """
-                    let details = ["status": context.status.rawValue, "background": "true"]
-                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
+                    return [.coordinatorMessage(title: title, details: ["background": "true"], payload: nil)]
                 }
             ),
 
@@ -109,20 +125,15 @@ struct PhaseOneScript: PhaseScript {
                 id: OnboardingObjectiveId.jobSearchContextCaptured.rawValue,
                 dependsOn: [OnboardingObjectiveId.writingSamplesCollected.rawValue],
                 autoStartWhenReady: true,
-                onComplete: { context in
+                onComplete: { _ in
                     let title = """
-                        Job search context captured. All Phase 1 objectives are satisfied. \
+                        Job search context captured. Phase 1 is complete. \
                         Transition to Phase 2 to build the career timeline. \
                         Brief the user: "Perfect. I have your contact info, writing samples, and understand your priorities. \
                         Next, let's build out your career timeline." \
                         Call next_phase to proceed.
                         """
-                    let details = [
-                        "status": context.status.rawValue,
-                        "action": "call_next_phase"
-                    ]
-                    // LLM decides when to call next_phase based on context (no forced toolChoice)
-                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
+                    return [.coordinatorMessage(title: title, details: ["action": "call_next_phase"], payload: nil)]
                 }
             )
         ]

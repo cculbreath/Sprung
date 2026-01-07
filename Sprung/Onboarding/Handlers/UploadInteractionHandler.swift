@@ -349,6 +349,15 @@ final class UploadInteractionHandler {
     private func removeUploadRequest(id: UUID) {
         pendingUploadRequests.removeAll { $0.id == id }
     }
+
+    /// Clears all pending upload requests (for chatbox dismissal).
+    /// Unlike reset(), this only clears requests, not uploaded items.
+    func clearPendingUploadRequests() {
+        guard !pendingUploadRequests.isEmpty else { return }
+        Logger.info("📤 Clearing \(pendingUploadRequests.count) pending upload request(s)", category: .ai)
+        pendingUploadRequests.removeAll()
+    }
+
     // MARK: - Lifecycle
     /// Clears all pending uploads (for interview reset).
     func reset() {

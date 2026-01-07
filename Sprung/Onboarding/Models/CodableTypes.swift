@@ -18,16 +18,6 @@ struct CreateTimelineCardInput: Codable {
     var start: String
     var end: String?
     var url: String?
-
-    enum CodingKeys: String, CodingKey {
-        case experienceType = "experience_type"
-        case title
-        case organization
-        case location
-        case start
-        case end
-        case url
-    }
 }
 
 /// Input parameters for updating a timeline card
@@ -39,14 +29,4 @@ struct UpdateTimelineCardInput: Codable {
     var start: String?
     var end: String?
     var url: String?
-
-    enum CodingKeys: String, CodingKey {
-        case experienceType = "experience_type"
-        case title
-        case organization
-        case location
-        case start
-        case end
-        case url
-    }
 }

@@ -22,6 +22,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var onboardingCoordinator: OnboardingInterviewCoordinator?
     var experienceDefaultsStore: ExperienceDefaultsStore?
     var careerKeywordStore: CareerKeywordStore?
+    var guidanceStore: InferenceGuidanceStore?
     var searchOpsCoordinator: DiscoveryCoordinator?
     var coverRefStore: CoverRefStore?
     var knowledgeCardStore: KnowledgeCardStore?
@@ -120,6 +121,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                let applicantProfileStore = self.applicantProfileStore,
                let experienceDefaultsStore = self.experienceDefaultsStore,
                let careerKeywordStore = self.careerKeywordStore,
+               let guidanceStore = self.guidanceStore,
                let searchOpsCoordinator = self.searchOpsCoordinator,
                let skillStore = self.skillStore {
                 let appState = appEnvironment.appState
@@ -134,6 +136,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(applicantProfileStore)
                     .environment(experienceDefaultsStore)
                     .environment(careerKeywordStore)
+                    .environment(guidanceStore)
                     .environment(appEnvironment.openRouterService)
                     .environment(debugSettingsStore)
                     .environment(searchOpsCoordinator)
@@ -183,13 +186,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let hostingView: NSHostingView<AnyView>
             if let appEnvironment,
                let container = modelContainer,
-               let applicantProfileStore {
+               let applicantProfileStore,
+               let guidanceStore {
                 let root = profileView
                     .environment(appEnvironment)
                     .environment(appEnvironment.appState)
                     .environment(applicantProfileStore)
                     .environment(appEnvironment.experienceDefaultsStore)
                     .environment(appEnvironment.careerKeywordStore)
+                    .environment(guidanceStore)
                     .modelContainer(container)
                 hostingView = NSHostingView(rootView: AnyView(root))
             } else if let container = modelContainer {
@@ -240,7 +245,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let editorView = TemplateEditorView()
             let hostingView: NSHostingView<AnyView>
             if let modelContainer = self.modelContainer,
-               let appEnvironment = self.appEnvironment {
+               let appEnvironment = self.appEnvironment,
+               let guidanceStore = self.guidanceStore {
                 hostingView = NSHostingView(rootView: AnyView(
                     editorView
                         .modelContainer(modelContainer)
@@ -250,6 +256,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         .environment(appEnvironment.experienceDefaultsStore)
                         .environment(appEnvironment.careerKeywordStore)
                         .environment(appEnvironment.applicantProfileStore)
+                        .environment(guidanceStore)
                 ))
             } else if let modelContainer = self.modelContainer {
                 hostingView = NSHostingView(rootView: AnyView(editorView.modelContainer(modelContainer)))
@@ -290,7 +297,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if let modelContainer,
                let appEnvironment,
                let enabledLLMStore,
-               let coverRefStore {
+               let coverRefStore,
+               let guidanceStore {
                 let onboardingService = onboardingCoordinator ?? appEnvironment.onboardingCoordinator
                 let debugSettingsStore = appEnvironment.appState.debugSettingsStore ?? appEnvironment.debugSettingsStore
                 let root = interviewView
@@ -302,6 +310,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(coverRefStore)
                     .environment(appEnvironment.applicantProfileStore)
                     .environment(appEnvironment.experienceDefaultsStore)
+                    .environment(guidanceStore)
                     .environment(onboardingService)
                     .environment(onboardingService.toolRouter)
                     .environment(debugSettingsStore)
@@ -416,7 +425,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                let searchOpsCoordinator,
                let coverRefStore,
                let knowledgeCardStore,
-               let applicantProfileStore {
+               let applicantProfileStore,
+               let guidanceStore {
                 let root = searchOpsView
                     .modelContainer(modelContainer)
                     .environment(appEnvironment)
@@ -425,6 +435,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(coverRefStore)
                     .environment(knowledgeCardStore)
                     .environment(applicantProfileStore)
+                    .environment(guidanceStore)
                 hostingView = NSHostingView(rootView: AnyView(root))
             } else if let modelContainer {
                 hostingView = NSHostingView(rootView: AnyView(searchOpsView.modelContainer(modelContainer)))
@@ -484,7 +495,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let hostingView: NSHostingView<AnyView>
             if let modelContainer,
                let appEnvironment,
-               let experienceDefaultsStore {
+               let experienceDefaultsStore,
+               let guidanceStore {
                 hostingView = NSHostingView(rootView: AnyView(
                     editorView
                         .modelContainer(modelContainer)
@@ -492,6 +504,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         .environment(appEnvironment.appState)
                         .environment(experienceDefaultsStore)
                         .environment(appEnvironment.careerKeywordStore)
+                        .environment(guidanceStore)
                 ))
             } else if let modelContainer,
                       let experienceDefaultsStore,

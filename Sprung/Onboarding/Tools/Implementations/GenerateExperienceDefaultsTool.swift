@@ -57,7 +57,14 @@ struct GenerateExperienceDefaultsTool: InterviewTool {
 
     func execute(_ params: JSON) async throws -> ToolResult {
         // Check prerequisites
-        let knowledgeCards = coordinator.getKnowledgeCardStore().onboardingCards
+        let (knowledgeCards, shouldGenerateTitleSets, titleSets, state) = await MainActor.run {
+            (
+                coordinator.getKnowledgeCardStore().onboardingCards,
+                coordinator.ui.shouldGenerateTitleSets,
+                coordinator.guidanceStore.titleSets(),
+                coordinator.state
+            )
+        }
 
         if knowledgeCards.isEmpty {
             return .error(.executionFailed(
@@ -66,7 +73,16 @@ struct GenerateExperienceDefaultsTool: InterviewTool {
             ))
         }
 
-        let enabledSections = await coordinator.state.getEnabledSections()
+        if shouldGenerateTitleSets {
+            if titleSets.isEmpty {
+                return .error(.executionFailed(
+                    "Identity title sets have not been curated yet. " +
+                    "Ask the user to select and save title sets before generating experience defaults."
+                ))
+            }
+        }
+
+        let enabledSections = await state.getEnabledSections()
         if enabledSections.isEmpty {
             return .error(.executionFailed(
                 "No sections enabled. Call configure_enabled_sections first to specify which " +
@@ -76,10 +92,12 @@ struct GenerateExperienceDefaultsTool: InterviewTool {
 
         // Create and run the agent service
         // Note: Status tracking is handled by AgentActivityTracker
-        let service = ExperienceDefaultsAgentService(
-            coordinator: coordinator,
-            tracker: agentActivityTracker
-        )
+        let service = await MainActor.run {
+            ExperienceDefaultsAgentService(
+                coordinator: coordinator,
+                tracker: agentActivityTracker
+            )
+        }
 
         // Run agent (this may take a while)
         Logger.info("🗂️ Starting ExperienceDefaults agent", category: .ai)

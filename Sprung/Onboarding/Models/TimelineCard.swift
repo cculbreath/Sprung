@@ -55,7 +55,7 @@ struct TimelineCard: Identifiable, Equatable {
             return nil
         }
         id = resolvedId
-        experienceType = ExperienceType(rawValue: json["experience_type"].stringValue) ?? .work
+        experienceType = ExperienceType(rawValue: json["experienceType"].stringValue) ?? .work
         title = json["title"].stringValue
         organization = json["organization"].stringValue
         location = json["location"].stringValue
@@ -69,7 +69,7 @@ struct TimelineCard: Identifiable, Equatable {
     }
     init(id: String = UUID().uuidString, fields: JSON) {
         self.id = id
-        experienceType = ExperienceType(rawValue: fields["experience_type"].stringValue) ?? .work
+        experienceType = ExperienceType(rawValue: fields["experienceType"].stringValue) ?? .work
         title = fields["title"].stringValue
         organization = fields["organization"].stringValue
         location = fields["location"].stringValue
@@ -83,7 +83,7 @@ struct TimelineCard: Identifiable, Equatable {
     }
     func applying(fields: JSON) -> TimelineCard {
         let newType: ExperienceType
-        if let typeString = fields["experience_type"].string {
+        if let typeString = fields["experienceType"].string {
             newType = ExperienceType(rawValue: typeString) ?? experienceType
         } else {
             newType = experienceType
@@ -108,7 +108,7 @@ struct TimelineCard: Identifiable, Equatable {
     var json: JSON {
         var payload = JSON()
         payload["id"].string = id
-        payload["experience_type"].string = experienceType.rawValue
+        payload["experienceType"].string = experienceType.rawValue
         payload["title"].string = title
         payload["organization"].string = organization
         payload["location"].string = location

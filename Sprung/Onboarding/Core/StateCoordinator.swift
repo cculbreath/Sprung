@@ -19,6 +19,7 @@ actor StateCoordinator: OnboardingEventEmitter {
     private let streamQueueManager: StreamQueueManager
     private let llmStateManager: LLMStateManager
     private let todoStore: InterviewTodoStore
+    private let phaseRegistry: PhaseScriptRegistry
     // MARK: - Phase Policy
     private let phasePolicy: PhasePolicy
     // Runtime tool exclusions (e.g., one-time bootstrap tools)
@@ -60,6 +61,7 @@ actor StateCoordinator: OnboardingEventEmitter {
     init(
         eventBus: EventCoordinator,
         phasePolicy: PhasePolicy,
+        phaseRegistry: PhaseScriptRegistry,
         objectives: ObjectiveStore,
         artifacts: ArtifactRepository,
         chat: ChatTranscriptStore,
@@ -68,6 +70,7 @@ actor StateCoordinator: OnboardingEventEmitter {
     ) {
         self.eventBus = eventBus
         self.phasePolicy = phasePolicy
+        self.phaseRegistry = phaseRegistry
         self.objectiveStore = objectives
         self.artifactRepository = artifacts
         self.chatStore = chat
@@ -107,64 +110,6 @@ actor StateCoordinator: OnboardingEventEmitter {
         await uiState.setPhase(phase)
         await updateWizardProgress()
         Logger.info("📋 Registered objectives for phases up to \(phase)", category: .ai)
-    }
-
-    /// Pre-populate the todo list with items for the given phase.
-    /// Called during phase transitions to ensure LLM sees the correct checklist.
-    private func populateTodoList(for phase: InterviewPhase) async {
-        let items: [InterviewTodoItem]
-
-        switch phase {
-        case .phase1VoiceContext:
-            items = [
-                InterviewTodoItem(content: "Collect applicant profile (contact info)", status: .pending),
-                InterviewTodoItem(content: "Offer profile photo upload", status: .pending),
-                InterviewTodoItem(content: "Collect writing samples", status: .pending),
-                InterviewTodoItem(content: "Capture job search context", status: .pending),
-                InterviewTodoItem(content: "Extract voice primers", status: .pending)
-            ]
-
-        case .phase2CareerStory:
-            items = [
-                InterviewTodoItem(content: "Offer resume/LinkedIn upload or conversational timeline", status: .pending),
-                InterviewTodoItem(content: "Generate timeline cards from input", status: .pending),
-                InterviewTodoItem(content: "Tune timeline cards based on user feedback", status: .pending),
-                InterviewTodoItem(content: "Wait for user to click Done with timeline", status: .pending),
-                InterviewTodoItem(content: "Submit timeline for validation (submit_for_validation)", status: .pending),
-                InterviewTodoItem(content: "Propose enabled sections (configure_enabled_sections)", status: .pending),
-                InterviewTodoItem(content: "Advance to Phase 3 (next_phase)", status: .pending)
-            ]
-
-        case .phase3EvidenceCollection:
-            items = [
-                InterviewTodoItem(content: "Surface document collection UI (open_document_collection)", status: .pending),
-                InterviewTodoItem(content: "Suggest documents to upload", status: .pending),
-                InterviewTodoItem(content: "Actively interview about each role (while uploads process)", status: .pending),
-                InterviewTodoItem(content: "Capture work preferences via get_user_option (while uploads process)", status: .pending),
-                InterviewTodoItem(content: "Document unique circumstances via update_dossier_notes (while uploads process)", status: .pending),
-                InterviewTodoItem(content: "Wait for user to click Done with uploads", status: .pending),
-                InterviewTodoItem(content: "Await card merge - ask remaining dossier questions", status: .pending),
-                InterviewTodoItem(content: "Wait for user to approve merged cards and skills", status: .pending)
-            ]
-
-        case .phase4StrategicSynthesis:
-            items = [
-                InterviewTodoItem(content: "Synthesize strategic strengths with evidence", status: .pending),
-                InterviewTodoItem(content: "Document pitfalls with mitigation strategies", status: .pending),
-                InterviewTodoItem(content: "Complete remaining dossier gaps (get_user_option)", status: .pending),
-                InterviewTodoItem(content: "Submit dossier for validation (submit_candidate_dossier)", status: .pending),
-                InterviewTodoItem(content: "Generate experience defaults (generate_experience_defaults)", status: .pending),
-                InterviewTodoItem(content: "Summarize interview accomplishments", status: .pending),
-                InterviewTodoItem(content: "Present end of interview sheet", status: .pending),
-                InterviewTodoItem(content: "End interview", status: .pending)
-            ]
-
-        case .complete:
-            items = []
-        }
-
-        await todoStore.setItems(items)
-        Logger.info("📋 Pre-populated todo list for \(phase.rawValue): \(items.count) items", category: .ai)
     }
 
     /// Set user approval for skipping KC generation.
@@ -440,7 +385,11 @@ actor StateCoordinator: OnboardingEventEmitter {
                 if let newPhase = InterviewPhase(rawValue: to) {
                     // Pre-populate todo list BEFORE phase change
                     // This ensures LLM sees updated list on next turn
-                    await populateTodoList(for: newPhase)
+                    // Use setItemsFromScript to mark items as locked (LLM can't remove them)
+                    if let script = await MainActor.run(body: { phaseRegistry.script(for: newPhase) }) {
+                        await todoStore.setItemsFromScript(script.initialTodoItems)
+                        Logger.info("📋 Pre-populated todo list for \(newPhase.rawValue): \(script.initialTodoItems.count) items (locked)", category: .ai)
+                    }
                     await setPhase(newPhase)
                     await emit(.phaseTransitionApplied(phase: newPhase.rawValue, timestamp: Date()))
                 }
@@ -694,6 +643,8 @@ actor StateCoordinator: OnboardingEventEmitter {
     /// Set a UI tool as pending (awaiting user action)
     func setPendingUIToolCall(callId: String, toolName: String) async {
         await llmStateManager.setPendingUIToolCall(callId: callId, toolName: toolName)
+        // Notify StreamQueueManager to hold batch until this UI tool completes
+        await streamQueueManager.markUIToolPending(callId: callId)
     }
 
     /// Get the pending UI tool call info
@@ -703,7 +654,13 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     /// Clear the pending UI tool call (after user action sends tool output)
     func clearPendingUIToolCall() async {
+        // Get the callId before clearing so we can notify StreamQueueManager
+        let pending = await llmStateManager.getPendingUIToolCall()
         await llmStateManager.clearPendingUIToolCall()
+        // Notify StreamQueueManager that UI tool is complete - may release held batch
+        if let callId = pending?.callId {
+            await streamQueueManager.markUIToolComplete(callId: callId)
+        }
     }
 
     /// Pop any pending forced tool choice override (one-shot).

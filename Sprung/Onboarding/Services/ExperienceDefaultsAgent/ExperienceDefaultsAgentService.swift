@@ -31,7 +31,7 @@ enum ExperienceDefaultsServiceStatus: Equatable {
 final class ExperienceDefaultsAgentService {
     // Dependencies
     private weak var coordinator: OnboardingInterviewCoordinator?
-    private let workspaceService = ExperienceDefaultsWorkspaceService()
+    private let workspaceService: ExperienceDefaultsWorkspaceService
 
     // Tracking
     private let tracker: AgentActivityTracker?
@@ -50,6 +50,7 @@ final class ExperienceDefaultsAgentService {
     init(coordinator: OnboardingInterviewCoordinator, tracker: AgentActivityTracker? = nil) {
         self.coordinator = coordinator
         self.tracker = tracker
+        self.workspaceService = ExperienceDefaultsWorkspaceService(guidanceStore: coordinator.guidanceStore)
         Logger.info("🗂️ ExperienceDefaultsAgentService initialized", category: .ai)
     }
 
@@ -67,10 +68,19 @@ final class ExperienceDefaultsAgentService {
 
         // Register with tracker
         if let tracker = tracker {
-            agentId = tracker.registerAgent(
+            agentId = tracker.trackAgent(
+                type: .experienceDefaults,
                 name: "Experience Defaults",
-                description: "Generating resume content from knowledge cards"
+                task: nil as Task<Void, Never>?
             )
+            if let agentId = agentId {
+                tracker.appendTranscript(
+                    agentId: agentId,
+                    entryType: .system,
+                    content: "Starting experience defaults agent",
+                    details: "Generating resume content from knowledge cards"
+                )
+            }
         }
 
         do {
@@ -83,7 +93,7 @@ final class ExperienceDefaultsAgentService {
 
             // Gather data
             let knowledgeCards = coordinator.getKnowledgeCardStore().onboardingCards
-            let skills = coordinator.skillStore?.skills ?? []
+            let skills = coordinator.skillStore.skills
             let timelineEntries = getTimelineEntries()
             let enabledSections = await coordinator.state.getEnabledSections()
             let customFields = await coordinator.state.getCustomFieldDefinitions()
@@ -93,7 +103,7 @@ final class ExperienceDefaultsAgentService {
                 knowledgeCards: knowledgeCards,
                 skills: skills,
                 timelineEntries: timelineEntries,
-                enabledSections: enabledSections,
+                enabledSections: enabledSections.sorted(),
                 customFields: customFields
             )
 
@@ -134,7 +144,13 @@ final class ExperienceDefaultsAgentService {
             updateTrackerStatus("Complete")
 
             if let agentId = agentId {
-                tracker?.markAgentComplete(agentId: agentId, summary: result.summary)
+                tracker?.appendTranscript(
+                    agentId: agentId,
+                    entryType: .assistant,
+                    content: "Complete",
+                    details: result.summary
+                )
+                tracker?.markCompleted(agentId: agentId)
             }
 
             Logger.info("🗂️ ExperienceDefaults generation complete: \(result.sectionsGenerated.joined(separator: ", "))", category: .ai)
@@ -146,7 +162,7 @@ final class ExperienceDefaultsAgentService {
             currentMessage = "Failed: \(error.localizedDescription)"
 
             if let agentId = agentId {
-                tracker?.markAgentFailed(agentId: agentId, error: error.localizedDescription)
+                tracker?.markFailed(agentId: agentId, error: error.localizedDescription)
             }
 
             // Cleanup on failure

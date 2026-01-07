@@ -12,6 +12,7 @@ import SwiftyJSON
 
 @MainActor
 final class ExperienceDefaultsWorkspaceService {
+    private let guidanceStore: InferenceGuidanceStore
 
     private let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
@@ -20,6 +21,10 @@ final class ExperienceDefaultsWorkspaceService {
     }()
 
     private let decoder = JSONDecoder()
+
+    init(guidanceStore: InferenceGuidanceStore) {
+        self.guidanceStore = guidanceStore
+    }
 
     /// Workspace directory path
     private var workspacePath: URL?
@@ -42,6 +47,10 @@ final class ExperienceDefaultsWorkspaceService {
         workspacePath?.appendingPathComponent("config")
     }
 
+    private var guidancePath: URL? {
+        workspacePath?.appendingPathComponent("guidance")
+    }
+
     private var outputPath: URL? {
         workspacePath?.appendingPathComponent("output")
     }
@@ -61,7 +70,7 @@ final class ExperienceDefaultsWorkspaceService {
         }
 
         // Create workspace and subdirectories
-        let subdirs = ["knowledge_cards", "skills", "timeline", "config", "output"]
+        let subdirs = ["knowledge_cards", "skills", "timeline", "config", "guidance", "output"]
         for subdir in subdirs {
             let path = workspace.appendingPathComponent(subdir)
             try FileManager.default.createDirectory(at: path, withIntermediateDirectories: true)
@@ -103,11 +112,14 @@ final class ExperienceDefaultsWorkspaceService {
         try exportSkills(skills)
         try exportTimeline(timelineEntries)
         try exportConfig(enabledSections: enabledSections, customFields: customFields)
+        let includeTitleSets = customFields.contains { $0.key.lowercased() == "custom.jobtitles" }
+        try exportGuidance(includeTitleSets: includeTitleSets)
         try writeOverviewDocument(
             kcCount: knowledgeCards.count,
             skillCount: skills.count,
             timelineCount: timelineEntries.count,
-            enabledSections: enabledSections
+            enabledSections: enabledSections,
+            includeTitleSets: includeTitleSets
         )
     }
 
@@ -221,20 +233,92 @@ final class ExperienceDefaultsWorkspaceService {
         Logger.info("📤 Exported config to workspace", category: .ai)
     }
 
+    /// Exports guidance (voice profile + title sets)
+    private func exportGuidance(includeTitleSets: Bool) throws {
+        guard let guidanceDir = guidancePath else { throw WorkspaceError.workspaceNotCreated }
+
+        let voiceProfile = guidanceStore.voiceProfile() ?? VoiceProfile()
+        let voiceData = try encoder.encode(voiceProfile)
+        try voiceData.write(to: guidanceDir.appendingPathComponent("voice_profile.json"))
+
+        if includeTitleSets {
+            let titleSets = guidanceStore.titleSets()
+            let vocabulary = guidanceStore.identityVocabulary()
+            struct TitleGuidanceExport: Codable {
+                let titleSets: [TitleSet]
+                let vocabulary: [IdentityTerm]
+
+                enum CodingKeys: String, CodingKey {
+                    case titleSets = "title_sets"
+                    case vocabulary
+                }
+            }
+            let titlePayload = TitleGuidanceExport(titleSets: titleSets, vocabulary: vocabulary)
+            let titleData = try encoder.encode(titlePayload)
+            try titleData.write(to: guidanceDir.appendingPathComponent("title_sets.json"))
+        }
+
+        let guidanceIndex = guidanceStore.allGuidance
+            .filter { includeTitleSets || $0.nodeKey.lowercased() != "custom.jobtitles" }
+            .map { guidance in
+                [
+                    "node_key": guidance.nodeKey,
+                    "display_name": guidance.displayName,
+                    "prompt": guidance.prompt
+                ]
+            }
+        let indexData = try JSONSerialization.data(
+            withJSONObject: ["guidance": guidanceIndex],
+            options: [.prettyPrinted, .sortedKeys]
+        )
+        try indexData.write(to: guidanceDir.appendingPathComponent("index.json"))
+
+        Logger.info("📤 Exported guidance to workspace", category: .ai)
+    }
+
     /// Writes an overview document the agent can read first
     private func writeOverviewDocument(
         kcCount: Int,
         skillCount: Int,
         timelineCount: Int,
-        enabledSections: [String]
+        enabledSections: [String],
+        includeTitleSets: Bool
     ) throws {
         guard let workspace = workspacePath else { throw WorkspaceError.workspaceNotCreated }
+
+        let voiceProfile = guidanceStore.voiceProfile() ?? VoiceProfile()
+        let guidanceIntro = includeTitleSets
+            ? "Voice profile and title sets have been pre-generated. Read these FIRST:"
+            : "Voice profile has been pre-generated. Read this FIRST:"
+
+        let titleSetsSection = includeTitleSets ? """
+        ### Title Sets (`guidance/title_sets.json`)
+        User has curated identity title options. SELECT the best-fit set based on:
+        - Job type match (suggested_for field)
+        - User favorites (is_favorite: true)
+        """ : ""
 
         let overview = """
         # Experience Defaults Workspace
 
         ## Your Task
         Generate resume-ready content for the Experience Editor based on the collected evidence.
+
+        ## Guidance (REQUIRED READING)
+
+        \(guidanceIntro)
+
+        ### Voice Profile (`guidance/voice_profile.json`)
+        - Enthusiasm level: \(voiceProfile.enthusiasm.displayName)
+        - First person: \(voiceProfile.useFirstPerson)
+        - Connective style: \(voiceProfile.connectiveStyle)
+        - Aspirational phrases: \(voiceProfile.aspirationalPhrases.joined(separator: ", "))
+        - AVOID these phrases: \(voiceProfile.avoidPhrases.joined(separator: ", "))
+
+        \(titleSetsSection)
+
+        \(includeTitleSets ? "custom.jobTitles is enabled: select titles from guidance/title_sets.json." :
+        "custom.jobTitles is NOT enabled: do not output identity titles.")
 
         ## Available Data
 

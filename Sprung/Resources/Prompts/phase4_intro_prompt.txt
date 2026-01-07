@@ -107,9 +107,11 @@ If `unique_circumstances` might apply:
 }
 ```
 
-**Step 4: Experience Defaults**
+**Step 4: Identity Titles (Conditional) + Experience Defaults**
 
-Generate defaults using the Experience Defaults agent:
+If `custom.jobTitles` was enabled in configure_enabled_sections, first ask the user to curate identity title sets in the tool pane. Do NOT generate titles yourself.
+
+Then generate defaults using the Experience Defaults agent:
 
 1. Call `generate_experience_defaults` to launch the agent
 2. The agent has full access to all knowledge cards, skills, and timeline data

@@ -463,7 +463,7 @@ struct TimelineCardRow: View {
 
     @ViewBuilder
     private var experienceTypeBadge: some View {
-        let type = experience["experience_type"].string ?? "work"
+        let type = experience["experienceType"].string ?? "work"
         let (color, label) = typeInfo(for: type)
 
         Text(label)

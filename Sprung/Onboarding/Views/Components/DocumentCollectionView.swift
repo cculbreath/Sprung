@@ -376,6 +376,7 @@ struct ArchivedArtifactsPickerSheet: View {
     private var archivedArtifacts: [ArtifactRecord]
 
     @State private var selectedIds: Set<UUID> = []
+    @State private var isImporting = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -432,16 +433,27 @@ struct ArchivedArtifactsPickerSheet: View {
 
                 Spacer()
 
-                Button("Add to Interview") {
+                Button {
+                    isImporting = true
                     Task {
                         // Use batch promotion for proper LLM notification batching
                         let ids = selectedIds.map { $0.uuidString }
                         await coordinator.promoteArchivedArtifacts(ids: ids)
                         onDismiss()
                     }
+                } label: {
+                    if isImporting {
+                        HStack(spacing: 6) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Importing...")
+                        }
+                    } else {
+                        Text("Add to Interview")
+                    }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(selectedIds.isEmpty)
+                .disabled(selectedIds.isEmpty || isImporting)
             }
             .padding()
         }

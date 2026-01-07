@@ -25,6 +25,39 @@ final class UIResponseCoordinator {
     // MARK: - Choice Selection
     func submitChoiceSelection(_ selectionIds: [String]) async {
         guard let result = toolRouter.resolveChoice(selectionIds: selectionIds) else { return }
+        await submitChoiceSelectionInternal(selectionIds: selectionIds, result: result)
+    }
+
+    /// Submit a choice selection with custom free-form text (for "Other" option)
+    func submitChoiceSelectionWithOther(_ otherText: String) async {
+        // Clear the choice prompt
+        toolRouter.clearChoicePrompt()
+        await eventBus.publish(.choicePromptCleared)
+
+        // Complete pending UI tool call with the free-form response
+        var output = JSON()
+        output["message"].string = "User selected 'Other' and provided: \(otherText)"
+        output["status"].string = "completed"
+        output["other_response"].string = otherText
+        await completePendingUIToolCall(output: output)
+        Logger.info("✅ Choice selection (Other) - free-form response included in tool response", category: .ai)
+    }
+
+    /// Cancel a choice selection - dismisses UI and sends cancellation to LLM
+    func cancelChoiceSelection() async {
+        // Clear the choice prompt UI
+        toolRouter.clearChoicePrompt()
+        await eventBus.publish(.choicePromptCleared)
+
+        // Complete pending UI tool call with cancelled status
+        var output = JSON()
+        output["message"].string = "User cancelled the selection prompt"
+        output["status"].string = "cancelled"
+        await completePendingUIToolCall(output: output)
+        Logger.info("✅ Choice selection cancelled - info included in tool response", category: .ai)
+    }
+
+    private func submitChoiceSelectionInternal(selectionIds: [String], result: (payload: JSON, source: String?)) async {
 
         // Handle special skip phase approval
         if result.source == "skip_phase_approval" {
@@ -436,11 +469,14 @@ final class UIResponseCoordinator {
         // Store enabled sections in artifact repository
         await state.restoreEnabledSections(Set(enabled))
 
-        // Store custom field definitions
-        if !customFields.isEmpty {
-            await state.storeCustomFieldDefinitions(customFields)
-            Logger.info("📋 Stored \(customFields.count) custom field definitions", category: .ai)
-        }
+        // Store custom field definitions (including empty to clear prior state)
+        await state.storeCustomFieldDefinitions(customFields)
+        Logger.info("📋 Stored \(customFields.count) custom field definitions", category: .ai)
+
+        // Flag whether title set curation is required in Phase 4
+        let hasJobTitles = customFields.contains { $0.key.lowercased() == "custom.jobtitles" }
+        ui.shouldGenerateTitleSets = hasJobTitles
+        Logger.info("🏷️ Title set curation \(hasJobTitles ? "enabled" : "disabled") via custom.jobTitles", category: .ai)
 
         // Mark enabled_sections objective as complete
         await eventBus.publish(.objectiveStatusUpdateRequested(
@@ -496,18 +532,18 @@ final class UIResponseCoordinator {
         // This prevents conversation sync errors where a tool call is left hanging
         if let pendingTool = await state.getPendingUIToolCall() {
             Logger.info("💬 Chatbox message auto-completing pending UI tool: \(pendingTool.toolName) (callId: \(pendingTool.callId.prefix(8)))", category: .ai)
+
+            // Dismiss any visible UI associated with the pending tool
+            await dismissPendingUIPrompts()
+
             var autoCompleteOutput = JSON()
             autoCompleteOutput["status"].string = "completed"
             autoCompleteOutput["message"].string = "User proceeded via chatbox message"
             await completePendingUIToolCall(output: autoCompleteOutput)
         }
 
-        // Also clear document collection mode if active - user is ready to proceed
-        if ui.isDocumentCollectionActive {
-            ui.isDocumentCollectionActive = false
-            await eventBus.publish(.documentCollectionActiveChanged(false))
-            Logger.info("💬 Chatbox message cleared document collection mode", category: .ai)
-        }
+        // NOTE: Document collection mode is NOT cleared by chatbox messages.
+        // It should only be dismissed by "Done with Uploads" button or phase transitions.
 
         // Add the message to chat transcript IMMEDIATELY so user sees it in the UI
         let messageId = await state.appendUserMessage(text, isSystemGenerated: false)
@@ -703,5 +739,36 @@ final class UIResponseCoordinator {
         output["message"].string = message ?? "UI presented. Awaiting user input."
         output["status"].string = "completed"
         return output
+    }
+
+    /// Dismiss any visible UI prompts (choice, validation, etc.)
+    /// Called when auto-completing a pending tool via chatbox message
+    private func dismissPendingUIPrompts() async {
+        // Clear choice prompt if visible
+        if toolRouter.pendingChoicePrompt != nil {
+            toolRouter.clearChoicePrompt()
+            await eventBus.publish(.choicePromptCleared)
+            Logger.info("💬 Dismissed choice prompt via chatbox message", category: .ai)
+        }
+
+        // Clear validation prompt if visible
+        if toolRouter.pendingValidationPrompt != nil {
+            toolRouter.clearValidationPrompt()
+            await eventBus.publish(.validationPromptCleared)
+            Logger.info("💬 Dismissed validation prompt via chatbox message", category: .ai)
+        }
+
+        // Clear pending upload requests if visible
+        if !toolRouter.pendingUploadRequests.isEmpty {
+            toolRouter.clearPendingUploadRequests()
+            Logger.info("💬 Dismissed upload request(s) via chatbox message", category: .ai)
+        }
+
+        // Clear section toggle request if visible
+        if toolRouter.pendingSectionToggleRequest != nil {
+            toolRouter.clearSectionToggle()
+            await eventBus.publish(.sectionToggleCleared)
+            Logger.info("💬 Dismissed section toggle via chatbox message", category: .ai)
+        }
     }
 }

@@ -167,7 +167,53 @@ final class PhaseScriptRegistry {
         coordinator: OnboardingInterviewCoordinator,
         userApprovedSkip: Bool
     ) async -> PhaseTransitionValidation {
-        // VALIDATION: Require knowledge cards OR explicit user approval
+        // VALIDATION 1: Block if card merge is still in progress
+        let isMerging = await MainActor.run { coordinator.ui.isMergingCards }
+        if isMerging {
+            Logger.warning("⚠️ next_phase blocked: card merge still in progress", category: .ai)
+            return .blocked(
+                reason: "card_merge_in_progress",
+                message: """
+                    Cannot advance to Phase 4: Knowledge card merging is still in progress. \
+                    Please wait for the merge operation to complete before calling next_phase. \
+                    The system will notify you when cards are ready for review.
+                    """
+            )
+        }
+
+        // VALIDATION 2: Block if skills processing or ATS expansion agents are still running
+        let runningAgentTypes: Set<AgentType> = [.skillsProcessing, .atsExpansion, .cardMerge, .backgroundMerge]
+        let runningAgents = await MainActor.run {
+            coordinator.agentActivityTracker.runningAgents.filter { runningAgentTypes.contains($0.agentType) }
+        }
+        if !runningAgents.isEmpty {
+            let agentNames = runningAgents.map { $0.agentType.displayName }.joined(separator: ", ")
+            Logger.warning("⚠️ next_phase blocked: agents still running (\(agentNames))", category: .ai)
+            return .blocked(
+                reason: "agents_still_running",
+                message: """
+                    Cannot advance to Phase 4: Background agents are still processing. \
+                    Running agents: \(agentNames). \
+                    Please wait for all card merge and skills processing to complete before calling next_phase.
+                    """
+            )
+        }
+
+        // VALIDATION 3: Block if cards are awaiting user approval
+        let awaitingApproval = await MainActor.run { coordinator.ui.cardAssignmentsReadyForApproval }
+        if awaitingApproval {
+            Logger.warning("⚠️ next_phase blocked: cards awaiting user approval", category: .ai)
+            return .blocked(
+                reason: "awaiting_card_approval",
+                message: """
+                    Cannot advance to Phase 4: Knowledge cards are ready but awaiting user approval. \
+                    The user must review the proposed cards and click "Approve & Create Cards" before proceeding. \
+                    Tell the user to review the cards in the tool pane and approve them when ready.
+                    """
+            )
+        }
+
+        // VALIDATION 4: Require knowledge cards OR explicit user approval
         // Having uploaded artifacts is NOT sufficient - KC generation must succeed
         // Query KnowledgeCardStore (SwiftData) for onboarding knowledge cards - this is the authoritative source
         let knowledgeCards = await MainActor.run {
@@ -266,8 +312,8 @@ final class PhaseScriptRegistry {
         Cards dismiss when user completes action.
 
         ## Workflow
-        - Interview organized into Phases with objectives
-        - <interview_context> shows current phase and objective status
+        - Interview organized into Phases with milestones
+        - <interview_context> shows current phase and progress
         - <coordinator> messages guide you through the workflow—follow them
         - Don't re-validate data the user has already approved
         - Use submit_for_validation for final confirmations
@@ -275,15 +321,15 @@ final class PhaseScriptRegistry {
 
         ## Task Tracking (Todo List)
         Use update_todo_list to plan and track your work:
-        - At phase start: Create todos for required objectives
+        - At phase start: Create todos for phase milestones
         - Before starting a task: Mark it "in_progress"
         - After completing: Mark it "completed"
         - Your current todo list appears in <todo-list> tags (if present)
         - Keep only ONE item in_progress at a time
 
         ## Tool Constraints
-        - set_objective_status is ATOMIC: call it alone with NO assistant message
-        - Only call currently-allowed tools; others are rejected
+        - Only call currently-allowed tools; unknown tools are rejected
+        - The system tracks phase progress automatically—focus on the conversation
 
         ## Your Value: Four Things
         You add value in exactly four ways:

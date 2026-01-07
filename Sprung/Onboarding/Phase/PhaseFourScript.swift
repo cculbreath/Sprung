@@ -23,6 +23,46 @@ struct PhaseFourScript: PhaseScript {
         .experienceDefaultsSet
     ])
 
+    var initialTodoItems: [InterviewTodoItem] {
+        [
+            InterviewTodoItem(
+                content: "Synthesize strategic strengths with evidence",
+                status: .pending,
+                activeForm: "Synthesizing strengths"
+            ),
+            InterviewTodoItem(
+                content: "Document pitfalls with mitigation strategies",
+                status: .pending,
+                activeForm: "Documenting pitfalls"
+            ),
+            InterviewTodoItem(
+                content: "Fill remaining dossier gaps",
+                status: .pending,
+                activeForm: "Completing dossier"
+            ),
+            InterviewTodoItem(
+                content: "Generate and curate identity title sets (if enabled)",
+                status: .pending,
+                activeForm: "Generating title sets"
+            ),
+            InterviewTodoItem(
+                content: "Generate experience defaults",
+                status: .pending,
+                activeForm: "Generating experience defaults"
+            ),
+            InterviewTodoItem(
+                content: "Submit dossier for validation",
+                status: .pending,
+                activeForm: "Submitting dossier"
+            ),
+            InterviewTodoItem(
+                content: "Summarize interview and complete onboarding",
+                status: .pending,
+                activeForm: "Completing interview"
+            )
+        ]
+    }
+
     var objectiveWorkflows: [String: ObjectiveWorkflow] {
         [
             // MARK: - Strengths Synthesis
@@ -37,22 +77,17 @@ struct PhaseFourScript: PhaseScript {
                         """
                     let details = [
                         "action": "synthesize_strengths",
-                        "objective": OnboardingObjectiveId.strengthsIdentified.rawValue,
                         "approach": "evidence_based_analysis"
                     ]
                     return [.coordinatorMessage(title: title, details: details, payload: nil)]
                 },
-                onComplete: { context in
+                onComplete: { _ in
                     let title = """
                         Strengths identified. Now analyze potential concerns and pitfalls. \
                         Look for gaps in employment, transitions that need framing, or areas \
                         where the candidate might face skepticism. For each pitfall, suggest a mitigation strategy.
                         """
-                    let details = [
-                        "next_objective": OnboardingObjectiveId.pitfallsDocumented.rawValue,
-                        "status": context.status.rawValue
-                    ]
-                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
+                    return [.coordinatorMessage(title: title, details: [:], payload: nil)]
                 }
             ),
 
@@ -61,19 +96,14 @@ struct PhaseFourScript: PhaseScript {
                 id: OnboardingObjectiveId.pitfallsDocumented.rawValue,
                 dependsOn: [OnboardingObjectiveId.strengthsIdentified.rawValue],
                 autoStartWhenReady: true,
-                onComplete: { context in
+                onComplete: { _ in
                     let title = """
                         Pitfalls documented with mitigation strategies. Now fill any remaining dossier gaps. \
                         Check for: availability, work arrangement preferences, unique circumstances, \
                         and any other context needed for job applications. \
                         Use get_user_option for rapid structured questions to fill gaps.
                         """
-                    let details = [
-                        "next_objective": OnboardingObjectiveId.dossierComplete.rawValue,
-                        "status": context.status.rawValue,
-                        "action": "fill_dossier_gaps"
-                    ]
-                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
+                    return [.coordinatorMessage(title: title, details: ["action": "fill_dossier_gaps"], payload: nil)]
                 }
             ),
 
@@ -82,19 +112,16 @@ struct PhaseFourScript: PhaseScript {
                 id: OnboardingObjectiveId.dossierComplete.rawValue,
                 dependsOn: [OnboardingObjectiveId.pitfallsDocumented.rawValue],
                 autoStartWhenReady: true,
-                onComplete: { context in
+                onComplete: { _ in
                     let title = """
-                        Dossier complete. Now generate experience defaults for resume generation. \
-                        Call generate_experience_defaults to launch the Experience Defaults agent. \
+                        Dossier complete. Next is experience defaults generation. \
+                        If custom.jobTitles was enabled in configure_enabled_sections, \
+                        have the user curate identity title sets in the tool pane before calling generate_experience_defaults. \
+                        Otherwise, call generate_experience_defaults to launch the Experience Defaults agent. \
                         The agent has access to all knowledge cards, skills, and timeline data, \
                         and will generate high-quality, resume-ready content automatically.
                         """
-                    let details = [
-                        "next_objective": OnboardingObjectiveId.experienceDefaultsSet.rawValue,
-                        "status": context.status.rawValue,
-                        "action": "call_generate_experience_defaults"
-                    ]
-                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
+                    return [.coordinatorMessage(title: title, details: ["action": "call_generate_experience_defaults"], payload: nil)]
                 }
             ),
 
@@ -103,19 +130,23 @@ struct PhaseFourScript: PhaseScript {
                 id: OnboardingObjectiveId.experienceDefaultsSet.rawValue,
                 dependsOn: [OnboardingObjectiveId.dossierComplete.rawValue],
                 autoStartWhenReady: true,
-                onComplete: { context in
+                onBegin: { _ in
+                    let title = """
+                        Starting experience defaults generation. \
+                        If custom.jobTitles was enabled, first guide the user to curate identity title sets \
+                        in the tool pane, then proceed with generate_experience_defaults. \
+                        If custom.jobTitles is not enabled, proceed directly to generate_experience_defaults.
+                        """
+                    return [.coordinatorMessage(title: title, details: ["action": "prepare_experience_defaults"], payload: nil)]
+                },
+                onComplete: { _ in
                     let title = """
                         Experience defaults configured. Interview complete! \
                         Summarize what was accomplished: voice primers, knowledge cards, strategic dossier, \
                         and resume defaults. Explain next steps (resume customization, cover letter generation). \
                         Then call next_phase to complete the interview.
                         """
-                    let details = [
-                        "status": context.status.rawValue,
-                        "action": "call_next_phase"
-                    ]
-                    // LLM decides when to call next_phase based on context (no forced toolChoice)
-                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
+                    return [.coordinatorMessage(title: title, details: ["action": "call_next_phase"], payload: nil)]
                 }
             )
         ]

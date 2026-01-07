@@ -109,15 +109,6 @@ struct VoiceProfile: Codable, Equatable {
         self.avoidPhrases = avoidPhrases
         self.sampleExcerpts = sampleExcerpts
     }
-
-    enum CodingKeys: String, CodingKey {
-        case enthusiasm
-        case useFirstPerson = "use_first_person"
-        case connectiveStyle = "connective_style"
-        case aspirationalPhrases = "aspirational_phrases"
-        case avoidPhrases = "avoid_phrases"
-        case sampleExcerpts = "sample_excerpts"
-    }
 }
 
 enum EnthusiasmLevel: String, Codable, CaseIterable {

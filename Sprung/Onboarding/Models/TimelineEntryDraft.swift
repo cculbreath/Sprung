@@ -13,18 +13,6 @@ struct TimelineEntryDraft: Identifiable, Equatable, Codable {
     var summary: String
     var highlights: [String]
 
-    enum CodingKeys: String, CodingKey {
-        case id
-        case experienceType = "experience_type"
-        case title
-        case organization
-        case location
-        case start
-        case end
-        case summary
-        case highlights
-    }
-
     init(
         id: String = UUID().uuidString,
         experienceType: ExperienceType = .work,

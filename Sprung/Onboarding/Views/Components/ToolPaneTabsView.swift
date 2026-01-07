@@ -36,7 +36,7 @@ struct ToolPaneTabsView<InterviewContent: View>: View {
                     tabButton(for: tab)
                 }
             }
-            .padding(.horizontal, 2)
+            .padding(.horizontal, 1)
             .padding(.vertical, 2)
             .background(Color(nsColor: .controlBackgroundColor))
             .cornerRadius(8)
@@ -78,7 +78,7 @@ struct ToolPaneTabsView<InterviewContent: View>: View {
                 }
                 badgeView(for: tab)
             }
-            .padding(.horizontal, 6)
+            .padding(.horizontal, 4)
             .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)

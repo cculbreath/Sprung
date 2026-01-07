@@ -53,6 +53,20 @@ struct GetUserUploadTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {
         let requestPayload = try UploadRequestPayload(json: params)
+
+        // Phase 1 has a dedicated writing samples UI - don't use get_user_upload for writing samples
+        let phase = await coordinator.currentPhase
+        if requestPayload.kind == .writingSample && phase == .phase1VoiceContext {
+            return ToolResultHelpers.executionFailed("""
+                Writing samples in Phase 1 should NOT use get_user_upload. \
+                The Phase 1 tool pane already displays a dedicated writing samples collection UI \
+                (visible in the <current_ui> section of coordinator messages). \
+                Users can drag/drop files or paste text directly in chat. \
+                The UI shows 'Done with Writing Samples' and 'Skip' buttons. \
+                Continue the conversation naturally - the writing samples UI is already visible to the user.
+                """)
+        }
+
         let requestId = UUID()
         let uploadRequest = OnboardingUploadRequest(
             id: requestId,

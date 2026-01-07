@@ -37,6 +37,41 @@ struct PhaseTwoScript: PhaseScript {
         // workPreferencesCaptured and uniqueCircumstancesDocumented are gathered throughout, not required
     ])
 
+    var initialTodoItems: [InterviewTodoItem] {
+        [
+            InterviewTodoItem(
+                content: "Offer resume/LinkedIn upload or conversational timeline",
+                status: .pending,
+                activeForm: "Offering timeline input options"
+            ),
+            InterviewTodoItem(
+                content: "Generate timeline cards from input",
+                status: .pending,
+                activeForm: "Generating timeline cards"
+            ),
+            InterviewTodoItem(
+                content: "Tune timeline cards based on user feedback",
+                status: .pending,
+                activeForm: "Tuning timeline cards"
+            ),
+            InterviewTodoItem(
+                content: "Submit timeline for validation",
+                status: .pending,
+                activeForm: "Submitting timeline for validation"
+            ),
+            InterviewTodoItem(
+                content: "Configure enabled resume sections",
+                status: .pending,
+                activeForm: "Configuring resume sections"
+            ),
+            InterviewTodoItem(
+                content: "Advance to Phase 3",
+                status: .pending,
+                activeForm: "Advancing to Phase 3"
+            )
+        ]
+    }
+
     var objectiveWorkflows: [String: ObjectiveWorkflow] {
         [
             // MARK: - Timeline Collection
@@ -51,13 +86,11 @@ struct PhaseTwoScript: PhaseScript {
                         """
                     let details = [
                         "action": "call_get_user_upload",
-                        "objective": OnboardingObjectiveId.skeletonTimelineComplete.rawValue,
                         "upload_type": "resume"
                     ]
-                    // LLM decides when to call get_user_upload based on context (no forced toolChoice)
                     return [.coordinatorMessage(title: title, details: details, payload: nil)]
                 },
-                onComplete: { context in
+                onComplete: { _ in
                     let title = """
                         Skeleton timeline captured. Now ACTIVELY INTERVIEW about each position. \
                         For each role, ask at least one probing question: \
@@ -67,12 +100,7 @@ struct PhaseTwoScript: PhaseScript {
                         - Gaps: "I notice about [duration] between roles. What were you focused on?" \
                         Use get_user_option for structured dossier questions when topics arise naturally.
                         """
-                    let details = [
-                        "next_objective": OnboardingObjectiveId.timelineEnriched.rawValue,
-                        "status": context.status.rawValue,
-                        "interview_approach": "active_probing"
-                    ]
-                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
+                    return [.coordinatorMessage(title: title, details: ["interview_approach": "active_probing"], payload: nil)]
                 }
             ),
 
@@ -91,10 +119,9 @@ struct PhaseTwoScript: PhaseScript {
             OnboardingObjectiveId.workPreferencesCaptured.rawValue: ObjectiveWorkflow(
                 id: OnboardingObjectiveId.workPreferencesCaptured.rawValue,
                 // Not required, captured opportunistically during timeline enrichment
-                onComplete: { context in
+                onComplete: { _ in
                     let title = "Work preferences captured (remote/location/arrangement)."
-                    let details = ["status": context.status.rawValue]
-                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
+                    return [.coordinatorMessage(title: title, details: [:], payload: nil)]
                 }
             ),
 
@@ -102,10 +129,9 @@ struct PhaseTwoScript: PhaseScript {
             OnboardingObjectiveId.uniqueCircumstancesDocumented.rawValue: ObjectiveWorkflow(
                 id: OnboardingObjectiveId.uniqueCircumstancesDocumented.rawValue,
                 // Not required, captured opportunistically when gaps/pivots arise
-                onComplete: { context in
+                onComplete: { _ in
                     let title = "Unique circumstances documented (gaps, pivots, constraints)."
-                    let details = ["status": context.status.rawValue]
-                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
+                    return [.coordinatorMessage(title: title, details: [:], payload: nil)]
                 }
             ),
 

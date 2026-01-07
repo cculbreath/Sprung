@@ -17,16 +17,17 @@ struct UpdateTodoListTool: InterviewTool {
             type: .object,
             description: """
                 Update your todo list to track interview progress. The todo list is pre-populated \
-                at phase start. Use this tool to mark items in progress, check off completed work, \
-                and add new tasks. The current todo list is shown in <todo-list> tags in your context.
+                at phase start. Use this tool to mark items in progress and check off completed work. \
+                The current todo list is shown in <todo-list> tags in your context.
 
                 USAGE:
                 - Before starting work: Mark the relevant item as "in_progress"
                 - After completing work: Mark the item as "completed"
-                - Add new items as you discover additional tasks
+                - You may add new items if you discover additional tasks
 
                 IMPORTANT:
                 - Provide the COMPLETE updated list each time (this replaces the current list)
+                - NEVER remove pre-populated items - only change their status
                 - Each item needs: content (what to do), status (pending/in_progress/completed)
                 - Only ONE item should be "in_progress" at a time
                 - Complete items in order - do not skip pre-populated items

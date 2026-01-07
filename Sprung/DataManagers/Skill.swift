@@ -316,5 +316,7 @@ class Skill: Identifiable, Codable {
 }
 
 // MARK: - Sendable Conformance
-
+// SwiftData @Model generates unavailable Sendable conformance.
+// We need explicit @unchecked Sendable for cross-actor usage patterns.
+// This will need refactoring for full Swift 6 compliance.
 extension Skill: @unchecked Sendable {}

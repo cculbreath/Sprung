@@ -57,6 +57,9 @@ protocol PhaseScript {
     var phase: InterviewPhase { get }
     /// Introductory prompt sent as a developer message when this phase begins, describing this phase's goals and tools.
     var introductoryPrompt: String { get }
+    /// Initial todo items pre-populated when this phase starts.
+    /// The LLM sees these in <todo-list> tags and tracks progress.
+    var initialTodoItems: [InterviewTodoItem] { get }
     /// Required objectives that must be completed before advancing.
     var requiredObjectives: [String] { get }
     /// Declarative workflows for objectives in this phase.
@@ -70,6 +73,7 @@ protocol PhaseScript {
 }
 // MARK: - Default Implementations
 extension PhaseScript {
+    var initialTodoItems: [InterviewTodoItem] { [] }
     var objectiveWorkflows: [String: ObjectiveWorkflow] { [:] }
     func workflow(for objectiveId: String) -> ObjectiveWorkflow? {
         objectiveWorkflows[objectiveId]

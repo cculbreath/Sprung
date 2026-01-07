@@ -70,7 +70,9 @@ actor ConversationContextAssembler {
     /// For Anthropic: includes tool calls AND their results (tool_use + tool_result pairs)
     /// Implements ephemeral pruning: tool results with `expiry_turn` are replaced with
     /// placeholders after that turn is reached.
-    func buildConversationHistory() async -> [InputItem] {
+    /// - Parameter excludeToolCallIds: Tool call IDs to exclude from "missing result" warnings
+    ///   (used when building tool response requests where the result will be added explicitly)
+    func buildConversationHistory(excludeToolCallIds: Set<String> = []) async -> [InputItem] {
         let messages = await state.messages
 
         // Fallback: Get completed tool results from legacy storage (for backwards compatibility)
@@ -138,7 +140,8 @@ actor ConversationContextAssembler {
                             status: nil
                         )))
                         Logger.debug("📝 Including tool result: \(toolCall.name) (id: \(toolCall.id))", category: .ai)
-                    } else {
+                    } else if !excludeToolCallIds.contains(toolCall.id) {
+                        // Only warn if this isn't a call ID being explicitly added by the caller
                         Logger.warning("⚠️ No result found for tool call: \(toolCall.name) (id: \(toolCall.id))", category: .ai)
                     }
                 }

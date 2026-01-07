@@ -58,9 +58,9 @@ struct CreateTimelineCardTool: InterviewTool {
             throw ToolError.invalidParameters("Start date is required for new timeline cards (e.g., 'January 2020', 'March 2019', '2018')")
         }
 
-        // Build normalized fields JSON for backward compatibility with existing service layer
+        // Build normalized fields JSON for service layer
         var normalizedFields = JSON()
-        normalizedFields["experience_type"].string = input.experienceType?.rawValue ?? "work"
+        normalizedFields["experienceType"].string = input.experienceType?.rawValue ?? "work"
         normalizedFields["title"].string = input.title
         normalizedFields["organization"].string = input.organization
         if let location = input.location {

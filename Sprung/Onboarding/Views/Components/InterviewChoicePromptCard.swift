@@ -2,12 +2,39 @@ import SwiftUI
 struct InterviewChoicePromptCard: View {
     let prompt: OnboardingChoicePrompt
     let onSubmit: ([String]) -> Void
+    let onSubmitOther: (String) -> Void
     let onCancel: () -> Void
+
     @State private var singleSelection: String?
     @State private var multiSelection: Set<String> = []
+    @State private var otherText: String = ""
+    @FocusState private var isOtherFieldFocused: Bool
+
+    private let otherOptionId = "__other__"
+
     private var isSingleSelection: Bool {
         prompt.selectionStyle == .single
     }
+
+    private var isOtherSelected: Bool {
+        if isSingleSelection {
+            return singleSelection == otherOptionId
+        } else {
+            return multiSelection.contains(otherOptionId)
+        }
+    }
+
+    private var canSubmit: Bool {
+        if isOtherSelected {
+            return !otherText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        if isSingleSelection {
+            return singleSelection != nil
+        } else {
+            return !multiSelection.isEmpty
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(prompt.prompt)
@@ -17,18 +44,28 @@ struct InterviewChoicePromptCard: View {
                 ForEach(prompt.options) { option in
                     choiceRow(for: option)
                 }
+                // "Other" option
+                otherOptionRow
             }
+
+            // Show text field when "Other" is selected
+            if isOtherSelected {
+                TextField("Please specify...", text: $otherText, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(1...4)
+                    .focused($isOtherFieldFocused)
+                    .onAppear { isOtherFieldFocused = true }
+            }
+
             HStack {
                 Button("Cancel", action: onCancel)
                     .buttonStyle(.bordered)
                 Spacer()
                 Button("Continue") {
-                    let selections = isSingleSelection ? [singleSelection].compactMap { $0 } : Array(multiSelection)
-                    guard !selections.isEmpty else { return }
-                    onSubmit(selections)
+                    submitSelection()
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(isSingleSelection ? singleSelection == nil : multiSelection.isEmpty)
+                .disabled(!canSubmit)
             }
         }
         .padding(18)
@@ -47,6 +84,45 @@ struct InterviewChoicePromptCard: View {
                 singleSelection = prompt.options.first?.id
             }
         }
+    }
+
+    private func submitSelection() {
+        if isOtherSelected {
+            let trimmed = otherText.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+            onSubmitOther(trimmed)
+        } else {
+            let selections = isSingleSelection ? [singleSelection].compactMap { $0 } : Array(multiSelection)
+            guard !selections.isEmpty else { return }
+            onSubmit(selections)
+        }
+    }
+
+    @ViewBuilder
+    private var otherOptionRow: some View {
+        let isSelected = isOtherSelected
+        Button {
+            toggleSelection(for: otherOptionId)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: iconName(isSelected: isSelected))
+                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+                    .imageScale(.large)
+                Text("Other")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 10)
+            .padding(.horizontal, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(nsColor: .controlBackgroundColor))
+            )
+        }
+        .buttonStyle(.plain)
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .accessibilityAddTraits(.isButton)
     }
     @ViewBuilder
     private func choiceRow(for option: OnboardingChoiceOption) -> some View {

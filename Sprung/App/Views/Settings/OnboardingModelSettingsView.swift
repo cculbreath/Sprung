@@ -15,6 +15,8 @@ struct OnboardingModelSettingsView: View {
     @AppStorage("skillBankModelId") private var skillBankModelId: String = "gemini-2.5-flash"
     @AppStorage("kcExtractionModelId") private var kcExtractionModelId: String = "gemini-2.5-pro"
     @AppStorage("guidanceExtractionModelId") private var guidanceExtractionModelId: String = "gemini-2.5-flash"
+    @AppStorage("skillsProcessingModelId") private var skillsProcessingModelId: String = "gemini-2.5-flash"
+    @AppStorage("skillsProcessingParallelAgents") private var skillsProcessingParallelAgents: Int = 12
     @AppStorage("voicePrimerExtractionModelId") private var voicePrimerModelId: String = "openai/gpt-4o-mini"
     @AppStorage("onboardingKCAgentModelId") private var kcAgentModelId: String = "anthropic/claude-haiku-4.5"
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var onboardingWebSearchAllowed: Bool = true
@@ -332,6 +334,33 @@ private extension OnboardingModelSettingsView {
                 }
                 .pickerStyle(.menu)
                 Text("Generates identity vocabulary, title sets, and voice profiles. Flash recommended.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                Divider()
+                    .padding(.vertical, 4)
+
+                Picker("Skills Processing Model", selection: $skillsProcessingModelId) {
+                    ForEach(geminiModels.filter { $0.outputTokenLimit >= 64000 }) { model in
+                        Text(model.displayName)
+                            .tag(model.id)
+                    }
+                }
+                .pickerStyle(.menu)
+                Text("Deduplicates skills and generates ATS synonym variants. Flash recommended.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                Stepper(value: $skillsProcessingParallelAgents, in: 1...24) {
+                    HStack {
+                        Text("Parallel ATS Agents")
+                        Spacer()
+                        Text("\(skillsProcessingParallelAgents)")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                }
+                Text("Number of parallel agents for ATS synonym expansion. Higher values process faster.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

@@ -110,6 +110,7 @@ final class InterviewLifecycleController {
         _ = sessionPersistenceHandler.startSession(resumeExisting: false)
         await state.setPhase(.phase1VoiceContext)
         await phaseTransitionController.registerObjectivesForCurrentPhase()
+        // Note: Todo list for Phase 1 is populated by AgentReadyTool.execute()
         subscribeToStateUpdates?()
         await documentArtifactHandler.start()
         await documentArtifactMessenger.start()

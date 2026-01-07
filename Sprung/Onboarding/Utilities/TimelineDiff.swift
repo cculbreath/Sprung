@@ -56,7 +56,7 @@ enum TimelineDiffBuilder {
     }
     private static func collectFieldChanges(old: TimelineCard, new: TimelineCard) -> [TimelineDiff.FieldChange] {
         var changes: [TimelineDiff.FieldChange] = []
-        compareField("experience_type", old: old.experienceType.rawValue, new: new.experienceType.rawValue, changes: &changes)
+        compareField("experienceType", old: old.experienceType.rawValue, new: new.experienceType.rawValue, changes: &changes)
         compareField("title", old: old.title, new: new.title, changes: &changes)
         compareField("organization", old: old.organization, new: new.organization, changes: &changes)
         compareField("location", old: old.location, new: new.location, changes: &changes)

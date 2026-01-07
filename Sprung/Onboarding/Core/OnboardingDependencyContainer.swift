@@ -71,6 +71,8 @@ final class OnboardingDependencyContainer {
     let extractionManagementService: ExtractionManagementService
     let timelineManagementService: TimelineManagementService
     let dataPersistenceService: DataPersistenceService
+    let voiceProfileService: VoiceProfileService
+    let titleSetService: TitleSetService
 
     // MARK: - Artifact Ingestion Infrastructure
     let documentIngestionKernel: DocumentIngestionKernel
@@ -83,6 +85,7 @@ final class OnboardingDependencyContainer {
     let documentArtifactMessenger: DocumentArtifactMessenger
     let profilePersistenceHandler: ProfilePersistenceHandler
     let uiResponseCoordinator: UIResponseCoordinator
+    let voiceProfileExtractionHandler: VoiceProfileExtractionHandler
     // MARK: - Stores
     let objectiveStore: ObjectiveStore
     let artifactRepository: ArtifactRepository
@@ -100,6 +103,7 @@ final class OnboardingDependencyContainer {
     private let skillStore: SkillStore
     private let coverRefStore: CoverRefStore
     private let experienceDefaultsStore: ExperienceDefaultsStore
+    private let guidanceStore: InferenceGuidanceStore
     let sessionStore: OnboardingSessionStore
     private let dataStore: InterviewDataStore
     let documentExtractionService: DocumentExtractionService
@@ -136,6 +140,7 @@ final class OnboardingDependencyContainer {
         skillStore: SkillStore,
         coverRefStore: CoverRefStore,
         experienceDefaultsStore: ExperienceDefaultsStore,
+        guidanceStore: InferenceGuidanceStore,
         sessionStore: OnboardingSessionStore,
         dataStore: InterviewDataStore,
         preferences: OnboardingPreferences
@@ -148,6 +153,7 @@ final class OnboardingDependencyContainer {
         self.skillStore = skillStore
         self.coverRefStore = coverRefStore
         self.experienceDefaultsStore = experienceDefaultsStore
+        self.guidanceStore = guidanceStore
         self.sessionStore = sessionStore
         self.dataStore = dataStore
 
@@ -177,7 +183,7 @@ final class OnboardingDependencyContainer {
 
         // 4. Initialize state coordinator
         self.state = StateCoordinator(
-            eventBus: core.eventBus, phasePolicy: core.phasePolicy,
+            eventBus: core.eventBus, phasePolicy: core.phasePolicy, phaseRegistry: core.phaseRegistry,
             objectives: stores.objectiveStore, artifacts: stores.artifactRepository,
             chat: stores.chatTranscriptStore, uiState: stores.sessionUIState,
             todoStore: todoStore
@@ -222,6 +228,10 @@ final class OnboardingDependencyContainer {
             sessionStore: sessionStore,
             artifactRecordStore: artifactRecordStore
         )
+
+        // 7b. Initialize guidance services
+        self.voiceProfileService = VoiceProfileService(llmFacade: llmFacade)
+        self.titleSetService = TitleSetService(llmFacade: llmFacade)
 
         // 7a. Initialize card merge service (deferred from 4a - needs sessionPersistenceHandler)
         self.cardMergeService = CardMergeService(
@@ -294,6 +304,16 @@ final class OnboardingDependencyContainer {
         self.uiResponseCoordinator = UIResponseCoordinator(
             eventBus: core.eventBus, toolRouter: tools.toolRouter, state: state, ui: ui,
             sessionUIState: sessionUIState
+        )
+
+        // 12a. Initialize voice profile extraction handler
+        self.voiceProfileExtractionHandler = VoiceProfileExtractionHandler(
+            eventBus: core.eventBus,
+            voiceProfileService: voiceProfileService,
+            guidanceStore: guidanceStore,
+            artifactRecordStore: artifactRecordStore,
+            sessionPersistenceHandler: sessionPersistenceHandler,
+            agentActivityTracker: agentActivityTracker
         )
         // 11. Initialize early coordinators (don't need coordinator reference)
         // Create extracted services first
@@ -507,5 +527,8 @@ final class OnboardingDependencyContainer {
     }
     func getExperienceDefaultsStore() -> ExperienceDefaultsStore {
         experienceDefaultsStore
+    }
+    func getGuidanceStore() -> InferenceGuidanceStore {
+        guidanceStore
     }
 }

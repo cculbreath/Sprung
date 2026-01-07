@@ -39,6 +39,7 @@ final class OnboardingInterviewCoordinator {
     private var applicantProfileStore: ApplicantProfileStore { container.getApplicantProfileStore() }
     var knowledgeCardStore: KnowledgeCardStore { container.getKnowledgeCardStore() }
     var skillStore: SkillStore { container.getSkillStore() }
+    var guidanceStore: InferenceGuidanceStore { container.getGuidanceStore() }
     private var coverRefStore: CoverRefStore { container.getCoverRefStore() }
     private var experienceDefaultsStore: ExperienceDefaultsStore { container.getExperienceDefaultsStore() }
     private var artifactRecordStore: ArtifactRecordStore { container.artifactRecordStore }
@@ -107,6 +108,10 @@ final class OnboardingInterviewCoordinator {
         container.llmFacade
     }
 
+    /// Guidance services
+    var voiceProfileService: VoiceProfileService { container.voiceProfileService }
+    var titleSetService: TitleSetService { container.titleSetService }
+
     // MARK: - UI State Properties (from ToolRouter)
     var pendingUploadRequests: [OnboardingUploadRequest] {
         toolRouter.pendingUploadRequests
@@ -138,6 +143,7 @@ final class OnboardingInterviewCoordinator {
         skillStore: SkillStore,
         coverRefStore: CoverRefStore,
         experienceDefaultsStore: ExperienceDefaultsStore,
+        guidanceStore: InferenceGuidanceStore,
         sessionStore: OnboardingSessionStore,
         dataStore: InterviewDataStore,
         preferences: OnboardingPreferences
@@ -151,6 +157,7 @@ final class OnboardingInterviewCoordinator {
             skillStore: skillStore,
             coverRefStore: coverRefStore,
             experienceDefaultsStore: experienceDefaultsStore,
+            guidanceStore: guidanceStore,
             sessionStore: sessionStore,
             dataStore: dataStore,
             preferences: preferences
@@ -400,6 +407,16 @@ final class OnboardingInterviewCoordinator {
         userMessage["content"].string = """
             I don't have writing samples available right now. \
             Please continue with the interview - we can develop my voice through conversation.
+            """
+        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+    }
+
+    /// Notify the LLM that title sets have been curated.
+    func notifyTitleSetsCurated() async {
+        var userMessage = SwiftyJSON.JSON()
+        userMessage["role"].string = "user"
+        userMessage["content"].string = """
+            <system>User saved identity title sets. Proceed to generate experience defaults.</system>
             """
         await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
     }
@@ -659,6 +676,12 @@ final class OnboardingInterviewCoordinator {
     // MARK: - UI Response Handling (Send User Messages)
     func submitChoiceSelection(_ selectionIds: [String]) async {
         await uiResponseCoordinator.submitChoiceSelection(selectionIds)
+    }
+    func submitChoiceSelectionWithOther(_ otherText: String) async {
+        await uiResponseCoordinator.submitChoiceSelectionWithOther(otherText)
+    }
+    func cancelChoiceSelection() async {
+        await uiResponseCoordinator.cancelChoiceSelection()
     }
     func completeUploadAndResume(id: UUID, fileURLs: [URL]) async {
         await uiResponseCoordinator.completeUploadAndResume(id: id, fileURLs: fileURLs, coordinator: self)
@@ -945,17 +968,13 @@ final class OnboardingInterviewCoordinator {
         }
         await eventBus.publish(.pendingExtractionUpdated(nil, statusMessage: nil))
         await eventBus.publish(.processingStateChanged(false))
-
-        // Deactivate document collection UI and clear waiting state
-        await MainActor.run {
-            ui.isDocumentCollectionActive = false
-        }
-        await container.sessionUIState.setDocumentCollectionActive(false)
-
-        // Send message to LLM
-        await sendChatMessage("I'm done uploading documents. (Note: Some document extractions were cancelled.) Please assess the completeness of my evidence.")
+        // Force batch completion so pending artifacts are sent
+        await eventBus.publish(.batchUploadCompleted)
 
         Logger.debug("✅ Extraction agents cancelled and document upload phase finished", category: .ai)
+
+        // Trigger the merge (same as clicking "Done with Uploads" without active agents)
+        await finishUploadsAndMergeCards()
     }
 
     /// Activate document collection UI and gate all tools until user clicks "Done with Uploads"
@@ -971,6 +990,10 @@ final class OnboardingInterviewCoordinator {
     /// Called when user clicks "Done with Uploads" button.
     func finishUploadsAndMergeCards() async {
         Logger.debug("📋 User finished uploads - emitting doneWithUploadsClicked event", category: .ai)
+
+        // Show immediate UI feedback before any async work
+        ui.isMergingCards = true
+        ui.isDocumentCollectionActive = false
 
         // Ensure this user action always succeeds - clear blocks and auto-complete pending tools
         await ensureUserActionSucceeds(actionDescription: "Done with Uploads")

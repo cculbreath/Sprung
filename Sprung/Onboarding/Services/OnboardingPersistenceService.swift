@@ -165,9 +165,9 @@ final class OnboardingPersistenceService {
         // Load current draft
         var draft = experienceDefaultsStore.loadDraft()
 
-        // Process each timeline card based on experience_type
+        // Process each timeline card based on experienceType
         for card in experiences {
-            let experienceType = card["experience_type"].string ?? "work"
+            let experienceType = card["experienceType"].string ?? "work"
 
             switch experienceType {
             case "work":

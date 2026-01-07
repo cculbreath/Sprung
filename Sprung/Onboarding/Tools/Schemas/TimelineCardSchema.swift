@@ -37,7 +37,7 @@ enum TimelineCardSchema {
             type: .object,
             description: "Timeline card fields mapping to JSON Resume work entry schema. Phase 1 skeleton entries contain only basic facts (who, what, where, when) - no descriptions or highlights.",
             properties: [
-                "experience_type": JSONSchema(
+                "experienceType": JSONSchema(
                     type: .string,
                     description: "Type of experience: 'work', 'education', 'volunteer', 'project'. Defaults to 'work' if not specified.",
                     enum: ["work", "education", "volunteer", "project"]

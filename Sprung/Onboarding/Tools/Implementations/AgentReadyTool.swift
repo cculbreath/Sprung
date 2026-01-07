@@ -20,15 +20,10 @@ struct AgentReadyTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
-        // Pre-populate the todo list for Phase 1
-        // This ensures the LLM doesn't skip steps like profile photo
-        await todoStore.setItems([
-            InterviewTodoItem(content: "Collect applicant profile (contact info)", status: .pending),
-            InterviewTodoItem(content: "Offer profile photo upload", status: .pending),
-            InterviewTodoItem(content: "Collect writing samples", status: .pending),
-            InterviewTodoItem(content: "Capture job search context", status: .pending),
-            InterviewTodoItem(content: "Extract voice primers", status: .pending)
-        ])
+        // Populate todo list from PhaseOneScript (single source of truth)
+        // Use setItemsFromScript to mark items as locked (LLM can't remove them)
+        let phaseOneScript = PhaseOneScript()
+        await todoStore.setItemsFromScript(phaseOneScript.initialTodoItems)
 
         var additionalData = JSON()
         additionalData["next_required_tool"].string = OnboardingToolName.getApplicantProfile.rawValue

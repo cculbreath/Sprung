@@ -164,6 +164,14 @@ final class UIStateUpdateHandler {
     func handlePhaseEvent(_ event: OnboardingEvent) async {
         switch event {
         case .phaseTransitionApplied(let phase, _):
+            if phase == InterviewPhase.phase4StrategicSynthesis.rawValue {
+                let customFields = await state.getCustomFieldDefinitions()
+                ui.shouldGenerateTitleSets = customFields.contains { $0.key.lowercased() == "custom.jobtitles" }
+                Logger.info(
+                    "🏷️ Phase 4 entry: title set curation \(ui.shouldGenerateTitleSets ? "enabled" : "disabled")",
+                    category: .ai
+                )
+            }
             if phase == InterviewPhase.complete.rawValue {
                 Logger.info("🏁 Interview complete - triggering window close", category: .ai)
                 ui.interviewJustCompleted = true

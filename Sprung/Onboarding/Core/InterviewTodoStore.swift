@@ -25,12 +25,16 @@ struct InterviewTodoItem: Codable, Identifiable {
     var status: InterviewTodoStatus
     /// Present tense form shown when item is in progress (e.g., "Collecting writing samples")
     var activeForm: String?
+    /// If true, this item was pre-populated by the phase script and cannot be removed by the LLM.
+    /// The LLM can only change its status, not delete it or modify its content.
+    var scriptLocked: Bool
 
-    init(id: UUID = UUID(), content: String, status: InterviewTodoStatus = .pending, activeForm: String? = nil) {
+    init(id: UUID = UUID(), content: String, status: InterviewTodoStatus = .pending, activeForm: String? = nil, scriptLocked: Bool = false) {
         self.id = id
         self.content = content
         self.status = status
         self.activeForm = activeForm
+        self.scriptLocked = scriptLocked
     }
 }
 
@@ -61,11 +65,47 @@ actor InterviewTodoStore {
 
     // MARK: - Public API (for tool)
 
-    /// Replace the entire todo list with new items.
+    /// Update the todo list from LLM input.
+    /// LLM can reorder and update statuses freely.
+    /// Any locked items that LLM omits are re-added at the end.
     /// This is the primary method called by the update_todo_list tool.
     func setItems(_ newItems: [InterviewTodoItem]) {
-        items = newItems
+        let lockedItems = items.filter { $0.scriptLocked }
+
+        // Start with what LLM sent (LLM-provided items are never locked)
+        var result = newItems.map { item in
+            var copy = item
+            copy.scriptLocked = false
+            return copy
+        }
+
+        // Re-add any locked items that LLM omitted
+        for lockedItem in lockedItems {
+            let wasIncluded = newItems.contains {
+                $0.content.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) ==
+                lockedItem.content.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            if !wasIncluded {
+                Logger.info("📋 Re-adding omitted locked todo: \(lockedItem.content)", category: .ai)
+                result.append(lockedItem)
+            }
+        }
+
+        items = result
         Logger.info("📋 Todo list updated: \(items.count) item(s)", category: .ai)
+        logCurrentState()
+        emitUpdateEvent()
+    }
+
+    /// Set items from phase script with scriptLocked = true.
+    /// Used during phase transitions to establish required items.
+    func setItemsFromScript(_ scriptItems: [InterviewTodoItem]) {
+        items = scriptItems.map { item in
+            var locked = item
+            locked.scriptLocked = true
+            return locked
+        }
+        Logger.info("📋 Todo list set from script: \(items.count) item(s) (all locked)", category: .ai)
         logCurrentState()
         emitUpdateEvent()
     }
@@ -117,10 +157,12 @@ actor InterviewTodoStore {
 
     /// Render the current todo list as XML for injection into system prompt.
     /// Returns nil if the list is empty (no need to inject).
+    /// Items marked with 📌 are required and cannot be removed (only status can change).
     func renderForSystemPrompt() -> String? {
         guard !items.isEmpty else { return nil }
 
         var lines: [String] = ["<todo-list>"]
+        lines.append("<!-- 📌 = required item (cannot be removed, only status changes allowed) -->")
 
         for (index, item) in items.enumerated() {
             let statusIcon: String
@@ -138,7 +180,9 @@ actor InterviewTodoStore {
                 statusText = item.content
             }
 
-            lines.append("  \(index + 1). \(statusIcon) \(statusText)")
+            // Add 📌 prefix for required (scriptLocked) items - before the number to avoid LLM including it in content
+            let requiredPrefix = item.scriptLocked ? "📌 " : "   "
+            lines.append("\(requiredPrefix)\(index + 1). \(statusIcon) \(statusText)")
         }
 
         lines.append("</todo-list>")

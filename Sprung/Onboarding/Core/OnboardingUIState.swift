@@ -73,6 +73,10 @@ final class OnboardingUIState {
     // MARK: - Objective Status (for Phase 3 subphase tracking)
     var objectiveStatuses: [String: String] = [:]
 
+    // MARK: - Guidance Flags
+    /// True when custom.jobTitles was enabled during section configuration
+    var shouldGenerateTitleSets: Bool = false
+
     // MARK: - Interview Completion State
     /// Set to true when interview transitions to .complete phase
     /// View observes this to close the window automatically

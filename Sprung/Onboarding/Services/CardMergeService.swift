@@ -56,8 +56,8 @@ actor CardMergeService {
 
     // MARK: - Private Types
 
-    /// Sendable snapshot of artifact data needed for processing
-    private struct ArtifactSnapshot: Sendable {
+    /// Snapshot of artifact data needed for processing
+    private struct ArtifactSnapshot {
         let id: String
         let filename: String
         let sourceType: String

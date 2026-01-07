@@ -57,7 +57,8 @@ final class KnowledgeCardWorkflowService {
         // Create skills processing service now that we have facade access
         self.skillsProcessingService = SkillsProcessingService(
             skillStore: skillStore,
-            facade: provider()
+            facade: provider(),
+            agentActivityTracker: agentActivityTracker
         )
     }
 
@@ -66,7 +67,7 @@ final class KnowledgeCardWorkflowService {
     /// Handle "Done with Uploads" button click - aggregates skills and narrative cards
     /// Cards are persisted to stores with isPending=true for user review
     func handleDoneWithUploadsClicked() async {
-        Logger.info("📋 Processing Done with Uploads - aggregating skills and narrative cards", category: .ai)
+        Logger.info("📋 Processing Done with Uploads - aggregating cards and skills", category: .ai)
 
         // Deactivate document collection UI and indicate aggregation is in progress
         ui.isDocumentCollectionActive = false
@@ -88,10 +89,68 @@ final class KnowledgeCardWorkflowService {
             }
         }
 
-        // Aggregate skills from all artifacts and persist with isPending=true
+        // STEP 1: Card merge (aggregate and deduplicate narrative cards)
+        let cardMergeAgentId = UUID().uuidString
+        agentActivityTracker.trackAgent(
+            id: cardMergeAgentId,
+            type: .cardMerge,
+            name: "Card Merge",
+            task: nil as Task<Void, Never>?
+        )
+        agentActivityTracker.appendTranscript(
+            agentId: cardMergeAgentId,
+            entryType: .system,
+            content: "Starting card aggregation and deduplication"
+        )
+
+        let rawCards = await cardMergeService.getAllNarrativeCardsFlat()
+        let rawCardCount = rawCards.count
+        Logger.info("📖 Found \(rawCardCount) raw narrative cards", category: .ai)
+        agentActivityTracker.appendTranscript(
+            agentId: cardMergeAgentId,
+            entryType: .system,
+            content: "Found \(rawCardCount) raw cards",
+            details: "Running deduplication..."
+        )
+
+        var cardsToAdd: [KnowledgeCard]
+
+        // Run deduplication to merge similar cards across documents
+        do {
+            let dedupeResult = try await cardMergeService.getAllNarrativeCardsDeduped()
+            cardsToAdd = dedupeResult.cards
+            let mergeCount = dedupeResult.mergeLog.filter { $0.action == .merged }.count
+            Logger.info("🔀 Deduplication: \(rawCardCount) → \(dedupeResult.cards.count) cards (\(mergeCount) merges)", category: .ai)
+            agentActivityTracker.appendTranscript(
+                agentId: cardMergeAgentId,
+                entryType: .system,
+                content: "Deduplication complete",
+                details: "\(rawCardCount) → \(dedupeResult.cards.count) cards (\(mergeCount) merges)"
+            )
+        } catch {
+            // Fall back to raw cards if deduplication fails
+            Logger.warning("⚠️ Deduplication failed, using raw cards: \(error.localizedDescription)", category: .ai)
+            cardsToAdd = rawCards
+            agentActivityTracker.appendTranscript(
+                agentId: cardMergeAgentId,
+                entryType: .system,
+                content: "Deduplication skipped",
+                details: "Using \(rawCards.count) raw cards"
+            )
+        }
+
+        // Mark all cards as pending and from onboarding, then persist
+        for card in cardsToAdd {
+            card.isFromOnboarding = true
+            card.isPending = true
+        }
+        knowledgeCardStore.addAll(cardsToAdd)
+        agentActivityTracker.markCompleted(agentId: cardMergeAgentId)
+
+        // STEP 2: Aggregate skills from all artifacts and persist with isPending=true
+        var skillsToAdd: [Skill] = []
         if let mergedSkillBank = await cardMergeService.getMergedSkillBank() {
-            let skillsToAdd = mergedSkillBank.skills.map { skill -> Skill in
-                // Create new Skill with isPending=true and isFromOnboarding=true
+            skillsToAdd = mergedSkillBank.skills.map { skill -> Skill in
                 Skill(
                     canonical: skill.canonical,
                     atsVariants: skill.atsVariants,
@@ -106,45 +165,20 @@ final class KnowledgeCardWorkflowService {
             }
             skillStore.addAll(skillsToAdd)
             Logger.info("🔧 Aggregated and persisted \(skillsToAdd.count) skills as pending", category: .ai)
+        }
 
-            // Run skills processing: deduplication + ATS synonym expansion
-            if let skillsService = skillsProcessingService {
-                do {
-                    let results = try await skillsService.processAllSkills()
-                    for result in results {
-                        Logger.info("🔧 \(result.operation): \(result.details)", category: .ai)
-                    }
-                } catch {
-                    Logger.warning("⚠️ Skills processing failed: \(error.localizedDescription)", category: .ai)
+        // STEP 3: Run skills processing (deduplication + ATS synonym expansion)
+        // processAllSkills() handles its own agent tracking including parallel subagents
+        if !skillsToAdd.isEmpty, let skillsService = skillsProcessingService {
+            do {
+                let results = try await skillsService.processAllSkills()
+                for result in results {
+                    Logger.info("🔧 \(result.operation): \(result.details)", category: .ai)
                 }
+            } catch {
+                Logger.warning("⚠️ Skills processing failed: \(error.localizedDescription)", category: .ai)
             }
         }
-
-        // Aggregate narrative cards from all artifacts (with deduplication)
-        let rawCards = await cardMergeService.getAllNarrativeCardsFlat()
-        let rawCardCount = rawCards.count
-        Logger.info("📖 Found \(rawCardCount) raw narrative cards", category: .ai)
-
-        var cardsToAdd: [KnowledgeCard]
-
-        // Run deduplication to merge similar cards across documents
-        do {
-            let dedupeResult = try await cardMergeService.getAllNarrativeCardsDeduped()
-            cardsToAdd = dedupeResult.cards
-            let mergeCount = dedupeResult.mergeLog.filter { $0.action == .merged }.count
-            Logger.info("🔀 Deduplication: \(rawCardCount) → \(dedupeResult.cards.count) cards (\(mergeCount) merges)", category: .ai)
-        } catch {
-            // Fall back to raw cards if deduplication fails
-            Logger.warning("⚠️ Deduplication failed, using raw cards: \(error.localizedDescription)", category: .ai)
-            cardsToAdd = rawCards
-        }
-
-        // Mark all cards as pending and from onboarding, then persist
-        for card in cardsToAdd {
-            card.isFromOnboarding = true
-            card.isPending = true
-        }
-        knowledgeCardStore.addAll(cardsToAdd)
 
         let cardCount = cardsToAdd.count
         let skillCount = skillStore.pendingSkills.count
@@ -181,7 +215,7 @@ final class KnowledgeCardWorkflowService {
     }
 
     /// Handle "Approve Cards" button click - approves pending knowledge cards and skills
-    /// This sets isPending=false on all remaining pending cards/skills
+    /// This sets isPending=false on all remaining pending cards/skills, then auto-advances to Phase 4
     func handleApproveCardsButtonClicked() async {
         Logger.info("✅ Approve Cards button clicked - approving pending cards and skills", category: .ai)
 
@@ -214,9 +248,18 @@ final class KnowledgeCardWorkflowService {
         ui.isGeneratingCards = false
         ui.cardAssignmentsReadyForApproval = false
 
-        // Notify LLM about the results
+        // Auto-advance to Phase 4 (Strategic Synthesis)
+        // Phase 3 is entirely UI-driven - user approval triggers phase transition
+        Logger.info("🚀 Auto-advancing to Phase 4 after card approval", category: .ai)
+        await eventBus.publish(.phaseTransitionRequested(
+            from: InterviewPhase.phase3EvidenceCollection.rawValue,
+            to: InterviewPhase.phase4StrategicSynthesis.rawValue,
+            reason: "User approved knowledge cards"
+        ))
+
+        // Notify LLM about the results (message will arrive in Phase 4)
         let skillSummary = skillCount > 0 ? " and \(skillCount) skills" : ""
-        await sendChatMessage("Knowledge cards approved: \(cardCount) cards\(skillSummary) are now available for resume generation.")
+        await sendChatMessage("Knowledge cards approved: \(cardCount) cards\(skillSummary) are now available. Moving to Phase 4: Strategic Synthesis.")
     }
 
     /// Legacy alias for handleApproveCardsButtonClicked

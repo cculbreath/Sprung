@@ -21,6 +21,11 @@ enum AgentType: String, Codable, CaseIterable {
     case backgroundMerge = "bg_merge"
     case pdfExtraction = "pdf_extract"
     case documentRegen = "doc_regen"
+    case voiceProfile = "voice_profile"
+    case experienceDefaults = "experience_defaults"
+    case titleSet = "title_set"
+    case skillsProcessing = "skills_processing"
+    case atsExpansion = "ats_expansion"
 
     var displayName: String {
         switch self {
@@ -31,6 +36,11 @@ enum AgentType: String, Codable, CaseIterable {
         case .backgroundMerge: return "Merge"
         case .pdfExtraction: return "PDF Extract"
         case .documentRegen: return "Regen"
+        case .voiceProfile: return "Voice Profile"
+        case .experienceDefaults: return "Experience Defaults"
+        case .titleSet: return "Title Sets"
+        case .skillsProcessing: return "Skills"
+        case .atsExpansion: return "ATS"
         }
     }
 
@@ -43,6 +53,11 @@ enum AgentType: String, Codable, CaseIterable {
         case .backgroundMerge: return "arrow.triangle.branch"
         case .pdfExtraction: return "doc.viewfinder"
         case .documentRegen: return "arrow.clockwise"
+        case .voiceProfile: return "mic"
+        case .experienceDefaults: return "list.bullet.rectangle"
+        case .titleSet: return "tag"
+        case .skillsProcessing: return "hammer"
+        case .atsExpansion: return "text.badge.plus"
         }
     }
 }
@@ -421,4 +436,3 @@ class AgentActivityTracker {
         agents.first { $0.id == id }
     }
 }
-

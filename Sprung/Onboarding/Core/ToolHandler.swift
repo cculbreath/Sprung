@@ -188,6 +188,9 @@ final class ToolHandler {
     func skipUpload(id: UUID) async -> JSON? {
         await uploadHandler.skipUpload(id: id)
     }
+    func clearPendingUploadRequests() {
+        uploadHandler.clearPendingUploadRequests()
+    }
     // MARK: - Section Toggle Handling
     func presentSectionToggle(_ request: OnboardingSectionToggleRequest) {
         sectionHandler.presentToggleRequest(request)

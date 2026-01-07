@@ -80,6 +80,7 @@ struct SprungApp: App {
                     appDelegate.applicantProfileStore = appDependencies.applicantProfileStore
                     appDelegate.experienceDefaultsStore = appDependencies.experienceDefaultsStore
                     appDelegate.careerKeywordStore = appDependencies.careerKeywordStore
+                    appDelegate.guidanceStore = appDependencies.guidanceStore
                     appDelegate.onboardingCoordinator = appDependencies.onboardingCoordinator
                     appDelegate.searchOpsCoordinator = appDependencies.searchOpsCoordinator
                     appDelegate.coverRefStore = appDependencies.coverRefStore

@@ -105,6 +105,9 @@ class CardMergeAgent {
     // Track cards currently being merged to prevent duplicates
     private var cardsBeingMerged: Set<String> = []
 
+    // Track cards that have been deleted by completed merges (to give better error messages)
+    private var deletedCardFiles: Set<String> = []
+
     init(
         workspacePath: URL,
         modelId: String,
@@ -383,6 +386,34 @@ class CardMergeAgent {
                 """
         }
 
+        // Check for cards that were already deleted by previous merges
+        let alreadyDeleted = requestedCards.intersection(deletedCardFiles)
+        if !alreadyDeleted.isEmpty {
+            return """
+                Error: Cannot merge - the following cards were already merged and deleted:
+                \(alreadyDeleted.sorted().joined(separator: "\n"))
+
+                These cards no longer exist. Please re-read index.json to see the current list of cards.
+                """
+        }
+
+        // Validate all card files exist before spawning merge
+        var missingCards: [String] = []
+        for cardFile in params.cardFiles {
+            let filePath = workspacePath.appendingPathComponent(cardFile)
+            if !FileManager.default.fileExists(atPath: filePath.path) {
+                missingCards.append(cardFile)
+            }
+        }
+        if !missingCards.isEmpty {
+            return """
+                Error: Cannot merge - the following card files do not exist:
+                \(missingCards.joined(separator: "\n"))
+
+                The card IDs may be incorrect. Please re-read index.json to see the current list of cards with their correct IDs.
+                """
+        }
+
         // Mark cards as being merged
         cardsBeingMerged.formUnion(requestedCards)
 
@@ -410,12 +441,23 @@ class CardMergeAgent {
         // Capture cards for cleanup after task completes
         let cardsToRemove = requestedCards
         let task = Task { [weak self] () -> BackgroundMergeResult in
-            defer {
-                Task { @MainActor [weak self] in
+            do {
+                let result = try await agent.run()
+                // On success, move cards from "being merged" to "deleted"
+                await MainActor.run { [weak self] in
+                    self?.cardsBeingMerged.subtract(cardsToRemove)
+                    if result.success {
+                        self?.deletedCardFiles.formUnion(cardsToRemove)
+                    }
+                }
+                return result
+            } catch {
+                // On failure, just remove from "being merged" (cards still exist)
+                await MainActor.run { [weak self] in
                     self?.cardsBeingMerged.subtract(cardsToRemove)
                 }
+                throw error
             }
-            return try await agent.run()
         }
         backgroundMergeTasks.append(task)
 

@@ -26,7 +26,8 @@ struct AnthropicHistoryBuilder {
     ///   (used when building tool response requests to avoid duplicate tool_results)
     func buildAnthropicHistory(excludeToolCallIds: Set<String> = []) async -> [AnthropicMessage] {
         // Get messages from transcript store through context assembler
-        let inputItems = await contextAssembler.buildConversationHistory()
+        // Pass through excludeToolCallIds to suppress warnings for call IDs we're about to add
+        let inputItems = await contextAssembler.buildConversationHistory(excludeToolCallIds: excludeToolCallIds)
 
         var messages: [AnthropicMessage] = []
         // Track pending assistant content blocks to merge text + tool_use into single message

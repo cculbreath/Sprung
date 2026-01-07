@@ -31,6 +31,9 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
     /// Timeout per document in batch (seconds)
     /// Large PDFs (20+ MB) can take 2+ minutes to extract via Google Files API
     private let timeoutPerDocumentSeconds: Double = 120.0
+    /// Flag to suppress self-echo when we emit batchUploadStarted
+    /// Prevents double-counting: uploadCompleted → startBatch → emit event → handleEvent → startBatch again
+    private var suppressNextBatchStarted = false
 
     private class PendingBatch {
         var expectedCount: Int
@@ -68,7 +71,7 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
             }
         }
 
-        // Subscribe to processing topic for batch start events (e.g., from archived artifact promotion)
+        // Subscribe to processing topic for batch upload events (from promoteArchivedArtifacts)
         processingSubscriptionTask = Task { [weak self] in
             guard let self else { return }
             for await event in await self.eventBus.stream(topic: .processing) {
@@ -110,8 +113,13 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
             }
 
         case .batchUploadStarted(let expectedCount):
-            // Handle batch start from other sources (e.g., archived artifact promotion)
-            await startBatch(expectedCount: expectedCount)
+            // Skip if this is our own event echoing back (prevents double-counting)
+            if suppressNextBatchStarted {
+                suppressNextBatchStarted = false
+                break
+            }
+            // Handle external batch starts (e.g., from promoteArchivedArtifacts)
+            await startBatch(expectedCount: expectedCount, emitStartEvent: false)
 
         case .artifactRecordProduced(let record):
             await handleArtifactProduced(record)
@@ -122,7 +130,7 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
     }
 
     // MARK: - Batch Management
-    private func startBatch(expectedCount: Int) async {
+    private func startBatch(expectedCount: Int, emitStartEvent: Bool = true) async {
         // Cancel any existing batch timeout
         pendingBatch?.timeoutTask?.cancel()
 
@@ -137,7 +145,12 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
             newExpectedCount = expectedCount
             Logger.info("📦 Starting new artifact batch: expecting \(expectedCount) document(s)", category: .ai)
             // Emit batch started event - this prevents validation prompts from interrupting uploads
-            await emit(.batchUploadStarted(expectedCount: expectedCount))
+            // Skip if caller already emitted the event (e.g., when handling .batchUploadStarted)
+            if emitStartEvent {
+                // Set flag to suppress the echo when we receive our own event back
+                suppressNextBatchStarted = true
+                await emit(.batchUploadStarted(expectedCount: expectedCount))
+            }
             pendingBatch = PendingBatch(expectedCount: expectedCount)
 
             // Send developer message to LLM so it knows to continue interviewing
@@ -162,12 +175,22 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
         // Handle git repository artifacts directly (no batching)
         if record["source_type"].stringValue == "git_repository" || record["type"].stringValue == "git_analysis" {
             await sendGitArtifact(record)
+            // Track as skipped so batch can complete (git repos bypass batching but still count toward expected)
+            if pendingBatch != nil {
+                pendingBatch?.skippedCount += 1
+                await checkBatchCompletion()
+            }
             return
         }
 
         // Handle image artifacts - send to LLM with context
         if contentType.lowercased().hasPrefix("image/") {
             await sendImageArtifact(record)
+            // Track as skipped so batch can complete (images bypass batching but still count toward expected)
+            if pendingBatch != nil {
+                pendingBatch?.skippedCount += 1
+                await checkBatchCompletion()
+            }
             return
         }
 
@@ -178,6 +201,11 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
                            contentType.lowercased().hasPrefix("text/")
         guard isExtractable else {
             Logger.debug("📄 Skipping non-extractable artifact: \(contentType)", category: .ai)
+            // Track as skipped so batch can complete
+            if pendingBatch != nil {
+                pendingBatch?.skippedCount += 1
+                await checkBatchCompletion()
+            }
             return
         }
 

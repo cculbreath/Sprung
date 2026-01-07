@@ -3,7 +3,7 @@
 //  Sprung
 //
 //  LLM-powered skills processing service for deduplication and ATS synonym expansion.
-//  Uses structured output for reliable processing of large skill sets.
+//  Uses parallel subagents for efficient ATS expansion across large skill sets.
 //
 
 import Foundation
@@ -35,21 +35,11 @@ struct DuplicateGroup: Codable {
     let canonicalName: String
     let skillIds: [String]
     let reasoning: String
-
-    enum CodingKeys: String, CodingKey {
-        case canonicalName = "canonical_name"
-        case skillIds = "skill_ids"
-        case reasoning
-    }
 }
 
 /// Response from deduplication analysis
 struct DeduplicationResponse: Codable {
     let duplicateGroups: [DuplicateGroup]
-
-    enum CodingKeys: String, CodingKey {
-        case duplicateGroups = "duplicate_groups"
-    }
 }
 
 // MARK: - ATS Expansion Types
@@ -58,11 +48,6 @@ struct DeduplicationResponse: Codable {
 struct SkillATSVariants: Codable {
     let skillId: String
     let variants: [String]
-
-    enum CodingKeys: String, CodingKey {
-        case skillId = "skill_id"
-        case variants
-    }
 }
 
 /// Response from ATS expansion
@@ -77,6 +62,7 @@ struct ATSExpansionResponse: Codable {
 final class SkillsProcessingService {
     private weak var facade: LLMFacade?
     private let skillStore: SkillStore
+    private let agentActivityTracker: AgentActivityTracker?
 
     // State
     private(set) var status: SkillsProcessingStatus = .idle
@@ -84,15 +70,20 @@ final class SkillsProcessingService {
     private(set) var currentBatch: Int = 0
     private(set) var totalBatches: Int = 0
 
-    // Configuration
+    // Configuration - UserDefaults backed
     private var modelId: String {
-        UserDefaults.standard.string(forKey: "skillsProcessingModelId") ?? DefaultModels.gemini
+        UserDefaults.standard.string(forKey: "skillsProcessingModelId") ?? "gemini-2.5-flash"
     }
-    private let batchSize = 50  // Skills per LLM call
 
-    init(skillStore: SkillStore, facade: LLMFacade?) {
+    private var parallelAgentCount: Int {
+        let count = UserDefaults.standard.integer(forKey: "skillsProcessingParallelAgents")
+        return count > 0 ? count : 12  // Default to 12 if not set
+    }
+
+    init(skillStore: SkillStore, facade: LLMFacade?, agentActivityTracker: AgentActivityTracker? = nil) {
         self.skillStore = skillStore
         self.facade = facade
+        self.agentActivityTracker = agentActivityTracker
         Logger.info("🔧 SkillsProcessingService initialized", category: .ai)
     }
 
@@ -104,7 +95,7 @@ final class SkillsProcessingService {
 
     /// LLM-powered intelligent deduplication of skills.
     /// Identifies semantically equivalent skills even with different names/casing.
-    /// Processes all skills in a single pass to catch duplicates across the entire set.
+    /// Uses model max tokens to handle large skill sets in a single pass.
     func consolidateDuplicates() async throws -> SkillsProcessingResult {
         guard let facade = facade else {
             throw SkillsProcessingError.llmNotConfigured
@@ -124,28 +115,14 @@ final class SkillsProcessingService {
         Logger.info("🔧 Starting deduplication of \(allSkills.count) skills", category: .ai)
 
         // Build compact skill list for LLM analysis (all skills in one pass)
-        // Format: "uuid: name [category]" - compact enough to fit hundreds of skills
         let skillDescriptions = allSkills.map { skill in
             "\(skill.id.uuidString): \(skill.canonical) [\(skill.category.rawValue)]"
         }
 
-        // For very large skill sets (500+), we may need multiple passes
-        // But typically ~420 skills at ~60 chars each = ~25KB, fits in one prompt
-        let duplicateGroups: [DuplicateGroup]
-
-        if allSkills.count > 500 {
-            // Multi-pass for very large sets: first pass finds candidates, second confirms
-            duplicateGroups = try await analyzeAllSkillsMultiPass(
-                skills: skillDescriptions,
-                facade: facade
-            )
-        } else {
-            // Single pass for normal sets
-            duplicateGroups = try await analyzeAllSkillsForDuplicates(
-                skills: skillDescriptions,
-                facade: facade
-            )
-        }
+        let duplicateGroups = try await analyzeAllSkillsForDuplicates(
+            skills: skillDescriptions,
+            facade: facade
+        )
 
         // Apply deduplication
         status = .processing("Merging \(duplicateGroups.count) duplicate groups...")
@@ -164,7 +141,7 @@ final class SkillsProcessingService {
         return result
     }
 
-    /// Analyze all skills in a single LLM call (for sets up to ~500 skills)
+    /// Analyze all skills in a single LLM call with max tokens
     private func analyzeAllSkillsForDuplicates(
         skills: [String],
         facade: LLMFacade
@@ -192,23 +169,23 @@ final class SkillsProcessingService {
         - "AWS" and "Azure" are NOT duplicates (different platforms)
         - "React" and "React Native" are NOT duplicates (different frameworks)
         - "Python" and "Python 3" ARE duplicates (same language)
-        - If no duplicates are found, return an empty duplicate_groups array
+        - If no duplicates are found, return an empty duplicateGroups array
         """
 
         let schema: [String: Any] = [
             "type": "object",
             "properties": [
-                "duplicate_groups": [
+                "duplicateGroups": [
                     "type": "array",
                     "description": "Groups of duplicate skills to merge",
                     "items": [
                         "type": "object",
                         "properties": [
-                            "canonical_name": [
+                            "canonicalName": [
                                 "type": "string",
                                 "description": "The best canonical name to use for this skill"
                             ],
-                            "skill_ids": [
+                            "skillIds": [
                                 "type": "array",
                                 "description": "UUIDs of all skills in this duplicate group",
                                 "items": ["type": "string"]
@@ -218,71 +195,25 @@ final class SkillsProcessingService {
                                 "description": "Brief explanation of why these are duplicates"
                             ]
                         ],
-                        "required": ["canonical_name", "skill_ids", "reasoning"]
+                        "required": ["canonicalName", "skillIds", "reasoning"]
                     ]
                 ]
             ],
-            "required": ["duplicate_groups"]
+            "required": ["duplicateGroups"]
         ]
 
+        // Use 65536 tokens (Gemini Flash max) to handle large skill sets
         let response: DeduplicationResponse = try await facade.executeStructuredWithDictionarySchema(
             prompt: prompt,
             modelId: modelId,
             as: DeduplicationResponse.self,
             schema: schema,
             schemaName: "deduplication_analysis",
-            maxOutputTokens: 32768,
+            maxOutputTokens: 65536,
             backend: .gemini
         )
 
         return response.duplicateGroups
-    }
-
-    /// Multi-pass analysis for very large skill sets (500+)
-    /// First pass: get candidate duplicate groups by category
-    /// Second pass: confirm and refine
-    private func analyzeAllSkillsMultiPass(
-        skills: [String],
-        facade: LLMFacade
-    ) async throws -> [DuplicateGroup] {
-        totalBatches = 2
-        var allGroups: [DuplicateGroup] = []
-
-        // Pass 1: Quick scan by sending skill names only (not UUIDs)
-        currentBatch = 1
-        progress = 0.5
-        status = .processing("Pass 1: Identifying candidate duplicates...")
-
-        // Group skills by category for more focused analysis
-        var skillsByCategory: [String: [String]] = [:]
-        for skill in skills {
-            if let catStart = skill.lastIndex(of: "["),
-               let catEnd = skill.lastIndex(of: "]") {
-                let category = String(skill[skill.index(after: catStart)..<catEnd])
-                skillsByCategory[category, default: []].append(skill)
-            }
-        }
-
-        // Analyze each category separately
-        for (_, categorySkills) in skillsByCategory {
-            if categorySkills.count < 2 { continue }
-
-            let groups = try await analyzeAllSkillsForDuplicates(
-                skills: categorySkills,
-                facade: facade
-            )
-            allGroups.append(contentsOf: groups)
-        }
-
-        // Pass 2: Cross-category check (skills that might be duplicated across categories)
-        currentBatch = 2
-        progress = 1.0
-        status = .processing("Pass 2: Cross-category verification...")
-
-        // This is a simplified cross-check - for now just return what we found
-        // A full implementation would look for same-name skills across categories
-
-        return allGroups
     }
 
     private func applyDuplicateMerges(groups: [DuplicateGroup]) -> Int {
@@ -353,11 +284,12 @@ final class SkillsProcessingService {
         return mergedCount
     }
 
-    // MARK: - ATS Expansion
+    // MARK: - ATS Expansion with Parallel Agents
 
-    /// LLM-powered ATS synonym expansion for all skills.
-    /// Adds common ATS variants for better resume matching.
-    func expandATSSynonyms() async throws -> SkillsProcessingResult {
+    /// LLM-powered ATS synonym expansion using parallel subagents.
+    /// Divides skills into batches and processes them concurrently.
+    /// Parent agent and subagents are tracked in the AgentActivityTracker.
+    func expandATSSynonyms(parentAgentId: String? = nil) async throws -> SkillsProcessingResult {
         guard let facade = facade else {
             throw SkillsProcessingError.llmNotConfigured
         }
@@ -372,28 +304,107 @@ final class SkillsProcessingService {
             )
         }
 
-        status = .processing("Generating ATS synonyms...")
-        Logger.info("🔧 Starting ATS expansion for \(allSkills.count) skills", category: .ai)
+        let agentCount = min(parallelAgentCount, allSkills.count)
+        status = .processing("Launching \(agentCount) parallel ATS expansion agents...")
+        Logger.info("🔧 Starting parallel ATS expansion with \(agentCount) agents for \(allSkills.count) skills", category: .ai)
 
-        // Process in batches
-        let batches = stride(from: 0, to: allSkills.count, by: batchSize).map {
-            Array(allSkills[$0..<min($0 + batchSize, allSkills.count)])
+        // Divide skills into batches for parallel processing
+        let batchSize = max(1, (allSkills.count + agentCount - 1) / agentCount)
+        var batches: [[Skill]] = []
+        for i in stride(from: 0, to: allSkills.count, by: batchSize) {
+            let end = min(i + batchSize, allSkills.count)
+            batches.append(Array(allSkills[i..<end]))
         }
 
         totalBatches = batches.count
-        var totalModified = 0
+        Logger.info("🔧 Created \(batches.count) batches of ~\(batchSize) skills each", category: .ai)
 
-        for (index, batch) in batches.enumerated() {
-            currentBatch = index + 1
-            progress = Double(currentBatch) / Double(totalBatches)
-            status = .processing("Processing batch \(currentBatch)/\(totalBatches)...")
-
-            let expansions = try await generateATSVariants(
-                skills: batch,
-                facade: facade
+        // Update parent agent progress
+        if let parentId = parentAgentId {
+            agentActivityTracker?.appendTranscript(
+                agentId: parentId,
+                entryType: .system,
+                content: "Launching \(batches.count) parallel ATS expansion agents",
+                details: "\(allSkills.count) skills, ~\(batchSize) per agent"
             )
+        }
 
-            // Apply expansions to skills
+        // Launch parallel tasks with child agent tracking
+        let results = await withTaskGroup(of: (Int, String, [SkillATSVariants]).self) { group in
+            for (index, batch) in batches.enumerated() {
+                group.addTask { [self] in
+                    // Create child agent ID
+                    let childAgentId = UUID().uuidString
+
+                    // Track child agent
+                    if let tracker = await MainActor.run(body: { self.agentActivityTracker }),
+                       let parentId = parentAgentId {
+                        await MainActor.run {
+                            tracker.trackChildAgent(
+                                id: childAgentId,
+                                parentAgentId: parentId,
+                                type: .atsExpansion,
+                                name: "ATS #\(index + 1)",
+                                task: nil as Task<Void, Never>?
+                            )
+                            tracker.appendTranscript(
+                                agentId: childAgentId,
+                                entryType: .system,
+                                content: "Processing \(batch.count) skills"
+                            )
+                        }
+                    }
+
+                    do {
+                        let variants = try await self.generateATSVariantsForBatch(
+                            skills: batch,
+                            batchIndex: index,
+                            facade: facade
+                        )
+
+                        // Mark child complete
+                        if let tracker = await MainActor.run(body: { self.agentActivityTracker }) {
+                            await MainActor.run {
+                                tracker.appendTranscript(
+                                    agentId: childAgentId,
+                                    entryType: .system,
+                                    content: "Generated \(variants.count) skill expansions"
+                                )
+                                tracker.markCompleted(agentId: childAgentId)
+                            }
+                        }
+
+                        return (index, childAgentId, variants)
+                    } catch {
+                        Logger.warning("⚠️ ATS expansion batch \(index) failed: \(error.localizedDescription)", category: .ai)
+
+                        // Mark child failed
+                        if let tracker = await MainActor.run(body: { self.agentActivityTracker }) {
+                            await MainActor.run {
+                                tracker.markFailed(agentId: childAgentId, error: error.localizedDescription)
+                            }
+                        }
+
+                        return (index, childAgentId, [])
+                    }
+                }
+            }
+
+            var allResults: [(Int, String, [SkillATSVariants])] = []
+            for await result in group {
+                allResults.append(result)
+                await MainActor.run {
+                    currentBatch = allResults.count
+                    progress = Double(currentBatch) / Double(totalBatches)
+                    status = .processing("Completed \(currentBatch)/\(totalBatches) agents...")
+                }
+            }
+            return allResults
+        }
+
+        // Apply all expansions
+        var totalModified = 0
+        for (_, _, expansions) in results {
             for expansion in expansions {
                 guard let uuid = UUID(uuidString: expansion.skillId),
                       let skill = skillStore.skill(withId: uuid) else { continue }
@@ -414,7 +425,7 @@ final class SkillsProcessingService {
             operation: "ATS Expansion",
             skillsProcessed: allSkills.count,
             skillsModified: totalModified,
-            details: "Added ATS variants to \(totalModified) skills"
+            details: "Added ATS variants to \(totalModified) skills using \(batches.count) parallel agents"
         )
 
         status = .completed("Added variants to \(totalModified) skills")
@@ -423,8 +434,10 @@ final class SkillsProcessingService {
         return result
     }
 
-    private func generateATSVariants(
+    /// Generate ATS variants for a single batch (runs as subagent)
+    private nonisolated func generateATSVariantsForBatch(
         skills: [Skill],
+        batchIndex: Int,
         facade: LLMFacade
     ) async throws -> [SkillATSVariants] {
         let skillDescriptions = skills.map { skill in
@@ -464,7 +477,7 @@ final class SkillsProcessingService {
                     "items": [
                         "type": "object",
                         "properties": [
-                            "skill_id": [
+                            "skillId": [
                                 "type": "string",
                                 "description": "UUID of the skill"
                             ],
@@ -474,12 +487,16 @@ final class SkillsProcessingService {
                                 "items": ["type": "string"]
                             ]
                         ],
-                        "required": ["skill_id", "variants"]
+                        "required": ["skillId", "variants"]
                     ]
                 ]
             ],
             "required": ["skills"]
         ]
+
+        let modelId = await MainActor.run { self.modelId }
+
+        Logger.debug("🔧 ATS batch \(batchIndex): Processing \(skills.count) skills", category: .ai)
 
         let response: ATSExpansionResponse = try await facade.executeStructuredWithDictionarySchema(
             prompt: prompt,
@@ -491,22 +508,70 @@ final class SkillsProcessingService {
             backend: .gemini
         )
 
+        Logger.debug("🔧 ATS batch \(batchIndex): Generated variants for \(response.skills.count) skills", category: .ai)
+
         return response.skills
     }
 
     // MARK: - Combined Processing
 
-    /// Run both deduplication and ATS expansion in sequence
+    /// Run both deduplication and ATS expansion in sequence.
+    /// Tracks the main agent and spawns child agents for parallel ATS expansion.
     func processAllSkills() async throws -> [SkillsProcessingResult] {
         var results: [SkillsProcessingResult] = []
 
-        // First deduplicate
-        let dedupeResult = try await consolidateDuplicates()
-        results.append(dedupeResult)
+        // Register the main skills processing agent
+        let mainAgentId = UUID().uuidString
+        agentActivityTracker?.trackAgent(
+            id: mainAgentId,
+            type: .skillsProcessing,
+            name: "Skills Processing",
+            task: nil as Task<Void, Never>?
+        )
+        agentActivityTracker?.appendTranscript(
+            agentId: mainAgentId,
+            entryType: .system,
+            content: "Starting skills processing pipeline"
+        )
 
-        // Then expand ATS variants
-        let atsResult = try await expandATSSynonyms()
-        results.append(atsResult)
+        do {
+            // First deduplicate
+            agentActivityTracker?.appendTranscript(
+                agentId: mainAgentId,
+                entryType: .system,
+                content: "Phase 1: Deduplicating skills"
+            )
+            let dedupeResult = try await consolidateDuplicates()
+            results.append(dedupeResult)
+
+            agentActivityTracker?.appendTranscript(
+                agentId: mainAgentId,
+                entryType: .system,
+                content: "Deduplication complete",
+                details: dedupeResult.details
+            )
+
+            // Then expand ATS variants with parallel child agents
+            agentActivityTracker?.appendTranscript(
+                agentId: mainAgentId,
+                entryType: .system,
+                content: "Phase 2: ATS variant expansion"
+            )
+            let atsResult = try await expandATSSynonyms(parentAgentId: mainAgentId)
+            results.append(atsResult)
+
+            agentActivityTracker?.appendTranscript(
+                agentId: mainAgentId,
+                entryType: .system,
+                content: "ATS expansion complete",
+                details: atsResult.details
+            )
+
+            agentActivityTracker?.markCompleted(agentId: mainAgentId)
+        } catch {
+            agentActivityTracker?.markFailed(agentId: mainAgentId, error: error.localizedDescription)
+            throw error
+        }
 
         return results
     }

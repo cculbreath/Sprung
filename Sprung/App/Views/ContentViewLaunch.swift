@@ -44,12 +44,13 @@ struct ContentViewLaunch: View {
             .environment(deps.coverLetterStore)
             .environment(deps.enabledLLMStore)
             .environment(deps.applicantProfileStore)
-                .environment(deps.experienceDefaultsStore)
-                .environment(deps.onboardingCoordinator)
-                .environment(deps.dragInfo)
-                .environment(deps.appEnvironment.llmFacade)
-                .environment(deps.reasoningStreamManager)
-                .environment(deps.resumeReviseViewModel)
+            .environment(deps.experienceDefaultsStore)
+            .environment(deps.guidanceStore)
+            .environment(deps.onboardingCoordinator)
+            .environment(deps.dragInfo)
+            .environment(deps.appEnvironment.llmFacade)
+            .environment(deps.reasoningStreamManager)
+            .environment(deps.resumeReviseViewModel)
     }
     private func restoreLatestBackup() {
         guard !isRestoring else { return }

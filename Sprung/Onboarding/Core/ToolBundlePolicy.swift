@@ -196,12 +196,13 @@ struct ToolBundlePolicy {
 
         .p3_cardReview: [            // LLM reviews generated cards from KC summaries
             OnboardingToolName.listArtifacts.rawValue,        // Summaries only
-            OnboardingToolName.getUserOption.rawValue,        // For clarifying questions
-            OnboardingToolName.nextPhase.rawValue
+            OnboardingToolName.getUserOption.rawValue         // For clarifying questions
+            // NOTE: next_phase NOT available in Phase 3 - user clicks "Approve Cards" to advance
         ],
 
         .p3_phaseTransition: [
-            OnboardingToolName.nextPhase.rawValue
+            // Phase 3 transitions automatically when user clicks "Approve Cards"
+            // No tools needed - this subphase exists only for completeness
         ],
 
         // MARK: Phase 4: Strategic Synthesis

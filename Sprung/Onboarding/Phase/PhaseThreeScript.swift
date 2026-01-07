@@ -20,7 +20,10 @@
 //  3. Card inventory + merge (batched, non-interruptive)
 //  4. KC generation (batched, interview during wait)
 //  5. LLM reviews generated cards, asks clarifying questions
-//  6. Transition to Phase 4
+//  6. USER clicks "Approve & Create Cards" → auto-advances to Phase 4
+//
+//  PHASE TRANSITION: Phase 3 is UI-driven. The interviewer does NOT call next_phase.
+//  Instead, the user clicks "Approve & Create Cards" which automatically advances to Phase 4.
 //
 import Foundation
 
@@ -32,6 +35,41 @@ struct PhaseThreeScript: PhaseScript {
         .knowledgeCardsGenerated         // KCs created and persisted
         // gitReposAnalyzed and cardInventoryComplete are intermediate steps, not strictly required
     ])
+
+    var initialTodoItems: [InterviewTodoItem] {
+        [
+            InterviewTodoItem(
+                content: "Open document collection UI",
+                status: .pending,
+                activeForm: "Opening document collection"
+            ),
+            InterviewTodoItem(
+                content: "Suggest documents to upload based on timeline",
+                status: .pending,
+                activeForm: "Suggesting documents"
+            ),
+            InterviewTodoItem(
+                content: "Interview about each role (while uploads process)",
+                status: .pending,
+                activeForm: "Interviewing about roles"
+            ),
+            InterviewTodoItem(
+                content: "Capture work preferences and unique circumstances",
+                status: .pending,
+                activeForm: "Capturing work preferences"
+            ),
+            InterviewTodoItem(
+                content: "Wait for document processing and card generation",
+                status: .pending,
+                activeForm: "Waiting for card generation"
+            ),
+            InterviewTodoItem(
+                content: "Review merged knowledge cards with user",
+                status: .pending,
+                activeForm: "Reviewing knowledge cards"
+            )
+        ]
+    }
 
     var objectiveWorkflows: [String: ObjectiveWorkflow] {
         [
@@ -52,23 +90,18 @@ struct PhaseThreeScript: PhaseScript {
                         """
                     let details = [
                         "action": "call_open_document_collection",
-                        "objective": OnboardingObjectiveId.evidenceDocumentsCollected.rawValue,
                         "approach": "strategic_requests"
                     ]
                     return [.coordinatorMessage(title: title, details: details, payload: nil)]
                 },
-                onComplete: { context in
+                onComplete: { _ in
                     let title = """
                         Evidence documents collected. Now proceeding to git repository selection. \
                         Ask which repositories best showcase their work: \
                         "Let's look at your code. Which repositories best showcase your work? \
                         Active/recent projects, solo or lead-contributor projects, and well-documented code are ideal."
                         """
-                    let details = [
-                        "next_objective": OnboardingObjectiveId.gitReposAnalyzed.rawValue,
-                        "status": context.status.rawValue
-                    ]
-                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
+                    return [.coordinatorMessage(title: title, details: [:], payload: nil)]
                 }
             ),
 
@@ -77,18 +110,13 @@ struct PhaseThreeScript: PhaseScript {
                 id: OnboardingObjectiveId.gitReposAnalyzed.rawValue,
                 dependsOn: [OnboardingObjectiveId.evidenceDocumentsCollected.rawValue],
                 autoStartWhenReady: true,
-                onComplete: { context in
+                onComplete: { _ in
                     let title = """
                         Git repositories analyzed. Card inventory being generated. \
                         INTERVIEW WHILE WAITING: Use get_user_option to gather dossier insights. \
                         Good topics: availability, self-assessment of strengths, hidden skills not on resume.
                         """
-                    let details = [
-                        "next_objective": OnboardingObjectiveId.cardInventoryComplete.rawValue,
-                        "status": context.status.rawValue,
-                        "interview_during_wait": "true"
-                    ]
-                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
+                    return [.coordinatorMessage(title: title, details: ["interview_during_wait": "true"], payload: nil)]
                 }
             ),
 
@@ -97,7 +125,7 @@ struct PhaseThreeScript: PhaseScript {
                 id: OnboardingObjectiveId.cardInventoryComplete.rawValue,
                 dependsOn: [OnboardingObjectiveId.gitReposAnalyzed.rawValue],
                 autoStartWhenReady: true,
-                onComplete: { context in
+                onComplete: { _ in
                     let title = """
                         Card inventory complete. Knowledge card generation starting. \
                         CONTINUE INTERVIEWING while KC generation runs (~2-3 min). \
@@ -106,8 +134,6 @@ struct PhaseThreeScript: PhaseScript {
                         You'll get a summary when cards are ready—DO NOT acknowledge each individually.
                         """
                     let details = [
-                        "next_objective": OnboardingObjectiveId.knowledgeCardsGenerated.rawValue,
-                        "status": context.status.rawValue,
                         "batch_processing": "true",
                         "interview_during_wait": "true"
                     ]
@@ -120,19 +146,16 @@ struct PhaseThreeScript: PhaseScript {
                 id: OnboardingObjectiveId.knowledgeCardsGenerated.rawValue,
                 dependsOn: [OnboardingObjectiveId.cardInventoryComplete.rawValue],
                 autoStartWhenReady: true,
-                onComplete: { context in
+                onComplete: { _ in
                     let title = """
-                        Knowledge cards generated. Review the cards and ask clarifying questions \
-                        if any seem thin or generic. Example: "The 'Industrial Automation' skill card \
-                        seems generic. Can you tell me more about what makes your automation work distinctive?" \
-                        Then call next_phase to transition to Phase 4 for strategic synthesis.
+                        Knowledge cards generated and ready for review. Help the user understand \
+                        what's been created and answer questions about any cards. \
+                        The user can delete cards they don't want in the tool pane. \
+                        IMPORTANT: DO NOT call next_phase. Phase 3 transitions automatically \
+                        when the user clicks "Approve & Create Cards" in the tool pane. \
+                        Your role is to review cards and answer questions while they decide.
                         """
-                    let details = [
-                        "status": context.status.rawValue,
-                        "action": "review_cards_then_next_phase"
-                    ]
-                    // LLM decides when to call next_phase based on context (no forced toolChoice)
-                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
+                    return [.coordinatorMessage(title: title, details: ["action": "review_cards_await_user_approval"], payload: nil)]
                 }
             )
         ]

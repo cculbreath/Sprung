@@ -29,6 +29,10 @@ struct KnowledgeCardCollectionView: View {
         pendingCards.count
     }
 
+    private var pendingSkillCount: Int {
+        coordinator.skillStore.pendingSkills.count
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             headerSection
@@ -82,13 +86,32 @@ struct KnowledgeCardCollectionView: View {
     }
 
     private var emptyState: some View {
-        ContentUnavailableView(
-            "Building Plan",
-            systemImage: "list.bullet.clipboard",
-            description: Text("Upload documents and click 'Done with Uploads' to generate card assignments...")
-        )
-        .frame(maxWidth: .infinity, minHeight: 150)
-        .frame(maxHeight: .infinity)
+        Group {
+            if isMerging {
+                // Show progress when merge is in progress
+                VStack(spacing: 12) {
+                    ProgressView()
+                        .scaleEffect(1.2)
+                    Text("Merging knowledge cards...")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.primary)
+                    Text("Aggregating and deduplicating cards from your documents")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity, minHeight: 150)
+                .frame(maxHeight: .infinity)
+            } else {
+                ContentUnavailableView(
+                    "Building Plan",
+                    systemImage: "list.bullet.clipboard",
+                    description: Text("Upload documents and click 'Done with Uploads' to generate card assignments...")
+                )
+                .frame(maxWidth: .infinity, minHeight: 150)
+                .frame(maxHeight: .infinity)
+            }
+        }
     }
 
     private var cardListSection: some View {
@@ -120,7 +143,7 @@ struct KnowledgeCardCollectionView: View {
             Button(action: onGenerateCards) {
                 HStack {
                     Image(systemName: "checkmark.circle.fill")
-                    Text("Approve & Create \(pendingCardCount) Card\(pendingCardCount == 1 ? "" : "s")")
+                    Text(approveButtonText)
                 }
                 .font(.caption.weight(.semibold))
                 .frame(maxWidth: .infinity)
@@ -135,6 +158,16 @@ struct KnowledgeCardCollectionView: View {
                 .foregroundStyle(.secondary)
         }
         .padding(.top, 4)
+    }
+
+    private var approveButtonText: String {
+        let cardText = "\(pendingCardCount) Card\(pendingCardCount == 1 ? "" : "s")"
+        if pendingSkillCount > 0 {
+            let skillText = "\(pendingSkillCount) Skill\(pendingSkillCount == 1 ? "" : "s")"
+            return "Approve & Create \(cardText) and \(skillText)"
+        } else {
+            return "Approve & Create \(cardText)"
+        }
     }
 
     private var generatingProgressView: some View {

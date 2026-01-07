@@ -66,8 +66,8 @@ struct UpdateTimelineCardTool: InterviewTool {
             throw ToolError.invalidParameters("At least one field must be provided for updates")
         }
 
-        // Build normalized fields JSON for backward compatibility with existing service layer
-        // Phase 1: Don't override experience_type on update
+        // Build normalized fields JSON for service layer
+        // Phase 1: Don't override experienceType on update
         var normalizedFields = JSON()
         if let title = input.title {
             normalizedFields["title"].string = title
