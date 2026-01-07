@@ -258,14 +258,22 @@ final class InterviewLifecycleController {
         }
 
         // Restore title set curation flag for Phase 4
+        // Check customFieldDefinitions first, fall back to enabled sections containing "custom"
         let phase = InterviewPhase(rawValue: session.phase) ?? .phase1VoiceContext
         if phase == .phase4StrategicSynthesis {
             let customFields = await state.getCustomFieldDefinitions()
-            ui.shouldGenerateTitleSets = customFields.contains { $0.key.lowercased() == "custom.jobtitles" }
-            Logger.info(
-                "📥 Restored title set curation: \(ui.shouldGenerateTitleSets ? "enabled" : "disabled")",
-                category: .ai
-            )
+            if customFields.contains(where: { $0.key.lowercased() == "custom.jobtitles" }) {
+                ui.shouldGenerateTitleSets = true
+                Logger.info("📥 Restored title set curation: enabled (from customFieldDefinitions)", category: .ai)
+            } else {
+                // Fallback: if "custom" section is enabled, assume job titles were configured
+                let enabledSections = await state.getEnabledSections()
+                ui.shouldGenerateTitleSets = enabledSections.contains("custom")
+                Logger.info(
+                    "📥 Restored title set curation: \(ui.shouldGenerateTitleSets ? "enabled" : "disabled") (from enabledSections fallback)",
+                    category: .ai
+                )
+            }
         }
     }
 

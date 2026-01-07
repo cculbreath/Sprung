@@ -39,8 +39,6 @@ class OnboardingSession {
     var isTimelineEditorActive: Bool?
     /// Todo list JSON (for restoring LLM task tracking state)
     var todoListJSON: String?
-    /// Custom field definitions JSON (for restoring title set curation flag)
-    var customFieldDefinitionsJSON: String?
 
     // MARK: - Relationships
     @Relationship(deleteRule: .cascade, inverse: \OnboardingObjectiveRecord.session)

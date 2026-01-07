@@ -275,19 +275,6 @@ final class OnboardingSessionStore: SwiftDataStore {
         session.todoListJSON
     }
 
-    /// Update custom field definitions JSON
-    func updateCustomFieldDefinitions(_ session: OnboardingSession, json: String?) {
-        session.customFieldDefinitionsJSON = json
-        session.lastActiveAt = Date()
-        saveContext()
-        Logger.debug("Persisted custom field definitions (\(json?.count ?? 0) chars)", category: .ai)
-    }
-
-    /// Get custom field definitions JSON
-    func getCustomFieldDefinitions(_ session: OnboardingSession) -> String? {
-        session.customFieldDefinitionsJSON
-    }
-
     // MARK: - UI State Management
 
     /// Update document collection active state

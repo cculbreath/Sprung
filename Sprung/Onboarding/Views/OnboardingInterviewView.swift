@@ -81,6 +81,7 @@ struct OnboardingInterviewView: View {
                     onContinue: { handleContinue(coordinator: coordinator) }
                 )
                 .padding(.horizontal, 16)
+                .padding(.bottom, 8)
                 .animation(.easeInOut(duration: 0.25), value: coordinator.wizardTracker.currentStep)
                 .opacity(bottomBarAppeared ? 1 : 0)
                 .scaleEffect(bottomBarAppeared ? 1 : 0.96)
