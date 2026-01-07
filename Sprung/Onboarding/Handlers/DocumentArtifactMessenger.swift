@@ -21,7 +21,8 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
     private let stateCoordinator: StateCoordinator
 
     // MARK: - Lifecycle State
-    private var subscriptionTask: Task<Void, Never>?
+    private var artifactSubscriptionTask: Task<Void, Never>?
+    private var processingSubscriptionTask: Task<Void, Never>?
     private var isActive = false
 
     // MARK: - Batch State
@@ -57,21 +58,35 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
     func start() {
         guard !isActive else { return }
         isActive = true
-        subscriptionTask = Task { [weak self] in
+
+        // Subscribe to artifact topic for artifact production events
+        artifactSubscriptionTask = Task { [weak self] in
             guard let self else { return }
             for await event in await self.eventBus.stream(topic: .artifact) {
                 if Task.isCancelled { break }
                 await self.handleEvent(event)
             }
         }
+
+        // Subscribe to processing topic for batch start events (e.g., from archived artifact promotion)
+        processingSubscriptionTask = Task { [weak self] in
+            guard let self else { return }
+            for await event in await self.eventBus.stream(topic: .processing) {
+                if Task.isCancelled { break }
+                await self.handleEvent(event)
+            }
+        }
+
         Logger.info("▶️ DocumentArtifactMessenger started", category: .ai)
     }
 
     func stop() {
         guard isActive else { return }
         isActive = false
-        subscriptionTask?.cancel()
-        subscriptionTask = nil
+        artifactSubscriptionTask?.cancel()
+        artifactSubscriptionTask = nil
+        processingSubscriptionTask?.cancel()
+        processingSubscriptionTask = nil
         pendingBatch?.timeoutTask?.cancel()
         pendingBatch = nil
         Logger.info("⏹️ DocumentArtifactMessenger stopped", category: .ai)
@@ -93,6 +108,10 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
             if extractableCount > 0 {
                 await startBatch(expectedCount: extractableCount)
             }
+
+        case .batchUploadStarted(let expectedCount):
+            // Handle batch start from other sources (e.g., archived artifact promotion)
+            await startBatch(expectedCount: expectedCount)
 
         case .artifactRecordProduced(let record):
             await handleArtifactProduced(record)

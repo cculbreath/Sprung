@@ -434,9 +434,9 @@ struct ArchivedArtifactsPickerSheet: View {
 
                 Button("Add to Interview") {
                     Task {
-                        for id in selectedIds {
-                            await coordinator.promoteArchivedArtifact(id: id.uuidString)
-                        }
+                        // Use batch promotion for proper LLM notification batching
+                        let ids = selectedIds.map { $0.uuidString }
+                        await coordinator.promoteArchivedArtifacts(ids: ids)
                         onDismiss()
                     }
                 }

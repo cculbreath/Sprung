@@ -786,32 +786,52 @@ final class OnboardingInterviewCoordinator {
     }
 
 
-    /// Promote an archived artifact to the current session.
-    /// This makes the artifact available to the LLM and adds it to the current interview.
-    func promoteArchivedArtifact(id: String) async {
+    /// Promote multiple archived artifacts to the current session as a batch.
+    /// This starts a batch so DocumentArtifactMessenger collects all notifications.
+    func promoteArchivedArtifacts(ids: [String]) async {
+        guard !ids.isEmpty else { return }
+
         guard let session = container.sessionPersistenceHandler.getActiveSession() else {
-            Logger.warning("Cannot promote artifact: no active session", category: .ai)
+            Logger.warning("Cannot promote artifacts: no active session", category: .ai)
             return
         }
 
-        guard let artifact = container.artifactRecordStore.artifact(byIdString: id) else {
-            Logger.warning("Cannot promote artifact: not found in SwiftData: \(id)", category: .ai)
-            return
+        // Collect valid artifacts first
+        var artifactsToPromote: [(artifact: ArtifactRecord, json: JSON)] = []
+        for id in ids {
+            if let artifact = container.artifactRecordStore.artifact(byIdString: id) {
+                let json = artifactRecordToJSON(artifact)
+                artifactsToPromote.append((artifact, json))
+            } else {
+                Logger.warning("Cannot promote artifact: not found in SwiftData: \(id)", category: .ai)
+            }
         }
 
-        // Update SwiftData: move artifact to current session
-        container.artifactRecordStore.promoteArtifact(artifact, to: session)
+        guard !artifactsToPromote.isEmpty else { return }
 
-        // Convert to JSON for in-memory repository and LLM notification
-        let artifactJSON = artifactRecordToJSON(artifact)
+        // Start batch by emitting batchUploadStarted (triggers DocumentArtifactMessenger to collect)
+        await eventBus.publish(.batchUploadStarted(expectedCount: artifactsToPromote.count))
+        Logger.info("📦 Starting batch promotion of \(artifactsToPromote.count) archived artifact(s)", category: .ai)
 
-        // Add to in-memory artifact list for event-driven components
-        await container.artifactRepository.addArtifactRecord(artifactJSON)
+        // Promote each artifact
+        for (artifact, json) in artifactsToPromote {
+            // Update SwiftData: move artifact to current session
+            container.artifactRecordStore.promoteArtifact(artifact, to: session)
 
-        // Emit event to notify LLM and other handlers
-        await eventBus.publish(.artifactRecordProduced(record: artifactJSON))
+            // Add to in-memory artifact list
+            await container.artifactRepository.addArtifactRecord(json)
 
-        Logger.info("📦 Promoted archived artifact: \(artifact.filename)", category: .ai)
+            // Emit event (will be batched by DocumentArtifactMessenger)
+            await eventBus.publish(.artifactRecordProduced(record: json))
+
+            Logger.info("📦 Promoted archived artifact: \(artifact.filename)", category: .ai)
+        }
+    }
+
+    /// Promote a single archived artifact to the current session.
+    /// For multiple artifacts, use promoteArchivedArtifacts(ids:) for proper batching.
+    func promoteArchivedArtifact(id: String) async {
+        await promoteArchivedArtifacts(ids: [id])
     }
 
     /// Permanently delete an archived artifact.
