@@ -21,6 +21,9 @@ final class KnowledgeCardWorkflowService {
     private weak var sessionUIState: SessionUIState?
     private weak var phaseTransitionController: PhaseTransitionController?
 
+    // Skills processing service for deduplication and ATS expansion
+    private var skillsProcessingService: SkillsProcessingService?
+
     // LLM facade for prose generation (set after container init due to circular dependency)
     private var llmFacadeProvider: (() -> LLMFacade?)?
 
@@ -51,6 +54,11 @@ final class KnowledgeCardWorkflowService {
     /// Set the LLM facade provider after container initialization
     func setLLMFacadeProvider(_ provider: @escaping () -> LLMFacade?) {
         self.llmFacadeProvider = provider
+        // Create skills processing service now that we have facade access
+        self.skillsProcessingService = SkillsProcessingService(
+            skillStore: skillStore,
+            facade: provider()
+        )
     }
 
     // MARK: - Event Handlers
@@ -98,6 +106,18 @@ final class KnowledgeCardWorkflowService {
             }
             skillStore.addAll(skillsToAdd)
             Logger.info("🔧 Aggregated and persisted \(skillsToAdd.count) skills as pending", category: .ai)
+
+            // Run skills processing: deduplication + ATS synonym expansion
+            if let skillsService = skillsProcessingService {
+                do {
+                    let results = try await skillsService.processAllSkills()
+                    for result in results {
+                        Logger.info("🔧 \(result.operation): \(result.details)", category: .ai)
+                    }
+                } catch {
+                    Logger.warning("⚠️ Skills processing failed: \(error.localizedDescription)", category: .ai)
+                }
+            }
         }
 
         // Aggregate narrative cards from all artifacts (with deduplication)
