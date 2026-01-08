@@ -115,7 +115,7 @@ final class UIStateUpdateHandler {
             break
         case .chatboxUserMessageAdded:
             ui.messages = await state.messages
-        case .streamingMessageBegan(_, _, _, let statusMessage):
+        case .streamingMessageBegan(_, _, let statusMessage):
             ui.messages = await state.messages
             if let statusMessage = statusMessage {
                 ui.currentStatusMessage = statusMessage

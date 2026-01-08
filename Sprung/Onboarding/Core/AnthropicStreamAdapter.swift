@@ -77,7 +77,6 @@ struct AnthropicStreamAdapter {
         return [.streamingMessageBegan(
             id: messageId!,
             text: "",
-            reasoningExpected: false,
             statusMessage: nil
         )]
     }
