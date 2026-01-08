@@ -11,6 +11,7 @@ final class PhaseTransitionController {
     private let artifactRecordStore: ArtifactRecordStore
     private weak var sessionPersistenceHandler: SwiftDataSessionPersistenceHandler?
     private let knowledgeCardStore: KnowledgeCardStore
+    private let artifactFilesystemContext: ArtifactFilesystemContext
 
     // MARK: - Initialization
     init(
@@ -19,7 +20,8 @@ final class PhaseTransitionController {
         phaseRegistry: PhaseScriptRegistry,
         artifactRecordStore: ArtifactRecordStore,
         sessionPersistenceHandler: SwiftDataSessionPersistenceHandler,
-        knowledgeCardStore: KnowledgeCardStore
+        knowledgeCardStore: KnowledgeCardStore,
+        artifactFilesystemContext: ArtifactFilesystemContext
     ) {
         self.state = state
         self.eventBus = eventBus
@@ -27,6 +29,7 @@ final class PhaseTransitionController {
         self.artifactRecordStore = artifactRecordStore
         self.sessionPersistenceHandler = sessionPersistenceHandler
         self.knowledgeCardStore = knowledgeCardStore
+        self.artifactFilesystemContext = artifactFilesystemContext
     }
     // MARK: - Phase Transition Handling
     func handlePhaseTransition(_ phaseName: String) async {
@@ -142,7 +145,7 @@ final class PhaseTransitionController {
                 try artifactRecordStore.exportKnowledgeCards(knowledgeCards, to: exportRoot)
             }
 
-            await ArtifactFilesystemContext.shared.setRoot(exportRoot)
+            await artifactFilesystemContext.setRoot(exportRoot)
             Logger.info("📁 Artifact filesystem initialized at \(exportRoot.path) (\(knowledgeCards.count) KCs)", category: .ai)
         } catch {
             Logger.error("📁 Failed to export artifacts for filesystem browsing: \(error)", category: .ai)
@@ -152,7 +155,7 @@ final class PhaseTransitionController {
     /// Re-export a single artifact to the existing filesystem root (for incremental updates).
     /// Called when artifacts are added or updated during Phase 3.
     func updateArtifactInFilesystem(_ artifact: ArtifactRecord) async {
-        guard let rootURL = await ArtifactFilesystemContext.shared.rootURL else {
+        guard let rootURL = await artifactFilesystemContext.rootURL else {
             // Filesystem not initialized yet, nothing to update
             return
         }
@@ -168,7 +171,7 @@ final class PhaseTransitionController {
     /// Export a single KnowledgeCard to the filesystem (for incremental updates when cards are created/modified).
     /// Called when knowledge cards are persisted during Phase 3+.
     func updateKnowledgeCardInFilesystem(_ knowledgeCard: KnowledgeCard) async {
-        guard let rootURL = await ArtifactFilesystemContext.shared.rootURL else {
+        guard let rootURL = await artifactFilesystemContext.rootURL else {
             // Filesystem not initialized yet, nothing to update
             return
         }

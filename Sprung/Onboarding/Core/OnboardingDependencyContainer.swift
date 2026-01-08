@@ -75,6 +75,7 @@ final class OnboardingDependencyContainer {
     let dataPersistenceService: DataPersistenceService
     let voiceProfileService: VoiceProfileService
     let titleSetService: TitleSetService
+    let dataResetService: OnboardingDataResetService
 
     // MARK: - Artifact Ingestion Infrastructure
     let documentIngestionKernel: DocumentIngestionKernel
@@ -129,6 +130,9 @@ final class OnboardingDependencyContainer {
     // MARK: - Interview Todo List
     let todoStore: InterviewTodoStore
 
+    // MARK: - Artifact Filesystem Context
+    let artifactFilesystemContext: ArtifactFilesystemContext
+
     // MARK: - Early-Initialized Coordinators (No Coordinator Reference Needed)
     let coordinatorEventRouter: CoordinatorEventRouter
     // MARK: - Late-Initialized Components (Require Coordinator Reference)
@@ -175,6 +179,7 @@ final class OnboardingDependencyContainer {
         self.agentActivityTracker = AgentActivityTracker()
         self.tokenUsageTracker = TokenUsageTracker()
         self.todoStore = InterviewTodoStore(eventBus: core.eventBus)
+        self.artifactFilesystemContext = ArtifactFilesystemContext()
 
         // 3. Initialize state stores
         let stores = Self.createStateStores(eventBus: core.eventBus, phasePolicy: core.phasePolicy)
@@ -236,6 +241,16 @@ final class OnboardingDependencyContainer {
         self.voiceProfileService = VoiceProfileService(llmFacade: llmFacade)
         self.titleSetService = TitleSetService(llmFacade: llmFacade)
 
+        // 7c. Initialize data reset service
+        self.dataResetService = OnboardingDataResetService(
+            sessionPersistenceHandler: sessionPersistenceHandler,
+            knowledgeCardStore: knowledgeCardStore,
+            skillStore: skillStore,
+            coverRefStore: coverRefStore,
+            experienceDefaultsStore: experienceDefaultsStore,
+            applicantProfileStore: applicantProfileStore
+        )
+
         // 7a. Initialize card merge service (deferred from 4a - needs sessionPersistenceHandler)
         self.cardMergeService = CardMergeService(
             artifactRecordStore: artifactRecordStore,
@@ -249,7 +264,7 @@ final class OnboardingDependencyContainer {
         self.phaseTransitionController = PhaseTransitionController(
             state: state, eventBus: core.eventBus, phaseRegistry: core.phaseRegistry,
             artifactRecordStore: artifactRecordStore, sessionPersistenceHandler: sessionPersistenceHandler,
-            knowledgeCardStore: knowledgeCardStore
+            knowledgeCardStore: knowledgeCardStore, artifactFilesystemContext: artifactFilesystemContext
         )
 
         // 9. Initialize services
@@ -498,7 +513,8 @@ final class OnboardingDependencyContainer {
             dataStore: dataStore,
             eventBus: eventBus,
             phaseRegistry: phaseRegistry,
-            todoStore: todoStore
+            todoStore: todoStore,
+            artifactFilesystemContext: artifactFilesystemContext
         )
         // Register tools
         toolRegistrar.registerTools(

@@ -8,6 +8,7 @@ final class OnboardingToolRegistrar {
     private let eventBus: EventCoordinator
     private let phaseRegistry: PhaseScriptRegistry
     private let todoStore: InterviewTodoStore
+    private let artifactFilesystemContext: ArtifactFilesystemContext
 
     init(
         coordinator: OnboardingInterviewCoordinator,
@@ -15,7 +16,8 @@ final class OnboardingToolRegistrar {
         dataStore: InterviewDataStore,
         eventBus: EventCoordinator,
         phaseRegistry: PhaseScriptRegistry,
-        todoStore: InterviewTodoStore
+        todoStore: InterviewTodoStore,
+        artifactFilesystemContext: ArtifactFilesystemContext
     ) {
         self.coordinator = coordinator
         self.toolRegistry = toolRegistry
@@ -23,6 +25,7 @@ final class OnboardingToolRegistrar {
         self.eventBus = eventBus
         self.phaseRegistry = phaseRegistry
         self.todoStore = todoStore
+        self.artifactFilesystemContext = artifactFilesystemContext
     }
     func registerTools(
         documentExtractionService: DocumentExtractionService,
@@ -72,10 +75,10 @@ final class OnboardingToolRegistrar {
         toolRegistry.register(SubmitCandidateDossierTool(eventBus: eventBus, dataStore: dataStore))
 
         // Filesystem tools for browsing exported artifacts (ephemeral responses, pruned after N turns)
-        toolRegistry.register(ReadArtifactFileTool())
-        toolRegistry.register(ListArtifactDirectoryTool())
-        toolRegistry.register(GlobArtifactSearchTool())
-        toolRegistry.register(GrepArtifactSearchTool())
+        toolRegistry.register(ReadArtifactFileTool(context: artifactFilesystemContext))
+        toolRegistry.register(ListArtifactDirectoryTool(context: artifactFilesystemContext))
+        toolRegistry.register(GlobArtifactSearchTool(context: artifactFilesystemContext))
+        toolRegistry.register(GrepArtifactSearchTool(context: artifactFilesystemContext))
 
         // Meta tools (interview process management)
         toolRegistry.register(UpdateTodoListTool(todoStore: todoStore))

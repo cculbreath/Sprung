@@ -20,8 +20,6 @@ import SwiftOpenAI
 /// Manages the exported artifact filesystem root for tool execution.
 /// Set by the coordinator when artifacts are exported.
 actor ArtifactFilesystemContext {
-    static let shared = ArtifactFilesystemContext()
-
     private var _rootURL: URL?
 
     var rootURL: URL? {
@@ -31,6 +29,11 @@ actor ArtifactFilesystemContext {
     func setRoot(_ url: URL?) {
         _rootURL = url
     }
+
+    /// Initializer for dependency injection
+    init(rootURL: URL? = nil) {
+        self._rootURL = rootURL
+    }
 }
 
 // MARK: - Read File Tool Wrapper
@@ -39,6 +42,12 @@ actor ArtifactFilesystemContext {
 /// Reads artifact content with pagination (offset/limit).
 struct ReadArtifactFileTool: InterviewTool {
     var name: String { "read_file" }
+
+    private let context: ArtifactFilesystemContext
+
+    init(context: ArtifactFilesystemContext) {
+        self.context = context
+    }
 
     var description: String {
         """
@@ -75,7 +84,7 @@ struct ReadArtifactFileTool: InterviewTool {
     }
 
     func execute(_ params: JSON) async throws -> ToolResult {
-        guard let rootURL = await ArtifactFilesystemContext.shared.rootURL else {
+        guard let rootURL = await context.rootURL else {
             return .error(.executionFailed("Artifact filesystem not initialized. No artifacts have been exported."))
         }
 
@@ -119,6 +128,12 @@ struct ReadArtifactFileTool: InterviewTool {
 struct ListArtifactDirectoryTool: InterviewTool {
     var name: String { "list_directory" }
 
+    private let context: ArtifactFilesystemContext
+
+    init(context: ArtifactFilesystemContext) {
+        self.context = context
+    }
+
     var description: String {
         """
         List contents of the artifact directory. Shows folders (one per artifact) and their files.
@@ -151,7 +166,7 @@ struct ListArtifactDirectoryTool: InterviewTool {
     }
 
     func execute(_ params: JSON) async throws -> ToolResult {
-        guard let rootURL = await ArtifactFilesystemContext.shared.rootURL else {
+        guard let rootURL = await context.rootURL else {
             return .error(.executionFailed("Artifact filesystem not initialized. No artifacts have been exported."))
         }
 
@@ -187,6 +202,12 @@ struct ListArtifactDirectoryTool: InterviewTool {
 struct GlobArtifactSearchTool: InterviewTool {
     var name: String { "glob_search" }
 
+    private let context: ArtifactFilesystemContext
+
+    init(context: ArtifactFilesystemContext) {
+        self.context = context
+    }
+
     var description: String {
         """
         Find files matching a glob pattern within exported artifacts.
@@ -219,7 +240,7 @@ struct GlobArtifactSearchTool: InterviewTool {
     }
 
     func execute(_ params: JSON) async throws -> ToolResult {
-        guard let rootURL = await ArtifactFilesystemContext.shared.rootURL else {
+        guard let rootURL = await context.rootURL else {
             return .error(.executionFailed("Artifact filesystem not initialized. No artifacts have been exported."))
         }
 
@@ -263,6 +284,12 @@ struct GlobArtifactSearchTool: InterviewTool {
 struct GrepArtifactSearchTool: InterviewTool {
     var name: String { "grep_search" }
 
+    private let context: ArtifactFilesystemContext
+
+    init(context: ArtifactFilesystemContext) {
+        self.context = context
+    }
+
     var description: String {
         """
         Search for a pattern in artifact file contents. Returns matching lines with context.
@@ -305,7 +332,7 @@ struct GrepArtifactSearchTool: InterviewTool {
     }
 
     func execute(_ params: JSON) async throws -> ToolResult {
-        guard let rootURL = await ArtifactFilesystemContext.shared.rootURL else {
+        guard let rootURL = await context.rootURL else {
             return .error(.executionFailed("Artifact filesystem not initialized. No artifacts have been exported."))
         }
 
