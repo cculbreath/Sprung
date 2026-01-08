@@ -170,25 +170,40 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         queueProcessingTask = nil
     }
 
-    /// Process files from the queue with concurrency limit
+    /// Process files from the queue with controlled concurrency using TaskGroup
     private func processQueue() async {
-        while !pendingFiles.isEmpty || activeProcessingCount > 0 {
-            // Start new tasks up to concurrency limit
-            while activeProcessingCount < maxConcurrentExtractions && !pendingFiles.isEmpty {
-                let queuedFile = pendingFiles.removeFirst()
-                activeProcessingCount += 1
-                updateExtractionStatus()
+        await withTaskGroup(of: Void.self) { group in
+            var fileIterator = pendingFiles.makeIterator()
+            pendingFiles.removeAll()  // Clear the pending list as we're processing them
 
-                // Fire and forget - task will call back when done
-                Task { [weak self] in
+            // Start initial batch up to max concurrency
+            var activeCount = 0
+            while activeCount < maxConcurrentExtractions,
+                  let file = fileIterator.next() {
+                activeProcessingCount += 1
+                activeCount += 1
+                updateExtractionStatus()
+                group.addTask { [weak self] in
                     guard let self else { return }
-                    await self.processQueuedFile(queuedFile)
+                    await self.processQueuedFile(file)
                 }
             }
 
-            // Wait briefly before checking again
-            if activeProcessingCount > 0 || !pendingFiles.isEmpty {
-                try? await Task.sleep(for: .milliseconds(100))
+            // As tasks complete, start new ones
+            for await _ in group {
+                activeProcessingCount -= 1
+                activeCount -= 1
+                updateExtractionStatus()
+
+                if let file = fileIterator.next() {
+                    activeProcessingCount += 1
+                    activeCount += 1
+                    updateExtractionStatus()
+                    group.addTask { [weak self] in
+                        guard let self else { return }
+                        await self.processQueuedFile(file)
+                    }
+                }
             }
         }
 
@@ -281,10 +296,7 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
             await emit(.extractionStateChanged(true, statusMessage: userMessage))
             try? await Task.sleep(for: .seconds(2))
         }
-
-        // Decrement active count
-        activeProcessingCount -= 1
-        updateExtractionStatus()
+        // Note: activeProcessingCount is managed by the TaskGroup in processQueue()
     }
 
     // MARK: - Image Artifact Helpers
