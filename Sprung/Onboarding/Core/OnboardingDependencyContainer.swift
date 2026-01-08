@@ -74,6 +74,7 @@ final class OnboardingDependencyContainer {
     let voiceProfileService: VoiceProfileService
     let titleSetService: TitleSetService
     let dataResetService: OnboardingDataResetService
+    let artifactArchiveManager: ArtifactArchiveManager
 
     // MARK: - Artifact Ingestion Infrastructure
     let documentIngestionKernel: DocumentIngestionKernel
@@ -130,6 +131,11 @@ final class OnboardingDependencyContainer {
 
     // MARK: - Artifact Filesystem Context
     let artifactFilesystemContext: ArtifactFilesystemContext
+
+    // MARK: - Debug Services
+    #if DEBUG
+    let debugRegenerationService: DebugRegenerationService
+    #endif
 
     // MARK: - Early-Initialized Coordinators (No Coordinator Reference Needed)
     let coordinatorEventRouter: CoordinatorEventRouter
@@ -248,6 +254,14 @@ final class OnboardingDependencyContainer {
             applicantProfileStore: applicantProfileStore
         )
 
+        // 7d. Initialize artifact archive manager
+        self.artifactArchiveManager = ArtifactArchiveManager(
+            artifactRecordStore: artifactRecordStore,
+            artifactRepository: stores.artifactRepository,
+            sessionPersistenceHandler: sessionPersistenceHandler,
+            eventBus: core.eventBus
+        )
+
         // 7a. Initialize card merge service (deferred from 4a - needs sessionPersistenceHandler)
         self.cardMergeService = CardMergeService(
             artifactRecordStore: artifactRecordStore,
@@ -256,6 +270,17 @@ final class OnboardingDependencyContainer {
             eventBus: core.eventBus,
             agentActivityTracker: agentActivityTracker
         )
+
+        // 7e. Initialize debug regeneration service
+        #if DEBUG
+        self.debugRegenerationService = DebugRegenerationService(
+            documentProcessingService: docs.documentProcessingService,
+            agentActivityTracker: agentActivityTracker,
+            cardMergeService: cardMergeService,
+            knowledgeCardStore: knowledgeCardStore,
+            eventBus: core.eventBus
+        )
+        #endif
 
         // 8. Initialize phase transition controller (depends on session persistence handler)
         self.phaseTransitionController = PhaseTransitionController(

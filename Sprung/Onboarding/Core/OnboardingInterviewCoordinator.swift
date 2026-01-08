@@ -175,6 +175,10 @@ final class OnboardingInterviewCoordinator {
         Logger.info("🎯 OnboardingInterviewCoordinator initialized with event-driven architecture", category: .ai)
         Task { await subscribeToEvents() }
         Task { await profilePersistenceHandler.start() }
+
+        #if DEBUG
+        configureDebugServices()
+        #endif
     }
     // MARK: - Event Subscription
     private func subscribeToEvents() async {
@@ -766,140 +770,44 @@ final class OnboardingInterviewCoordinator {
 
     /// Get archived artifacts for UI display (directly from SwiftData).
     func getArchivedArtifacts() -> [ArtifactRecord] {
-        container.artifactRecordStore.archivedArtifacts
+        container.artifactArchiveManager.archivedArtifacts
     }
 
     /// Get current session artifacts for UI display (directly from SwiftData).
     func getCurrentSessionArtifacts() -> [ArtifactRecord] {
-        guard let session = container.sessionPersistenceHandler.getActiveSession() else { return [] }
-        return container.artifactRecordStore.artifacts(for: session)
+        container.artifactArchiveManager.currentSessionArtifacts()
     }
 
-
     /// Promote multiple archived artifacts to the current session as a batch.
-    /// This starts a batch so DocumentArtifactMessenger collects all notifications.
     func promoteArchivedArtifacts(ids: [String]) async {
-        guard !ids.isEmpty else { return }
-
-        guard let session = container.sessionPersistenceHandler.getActiveSession() else {
-            Logger.warning("Cannot promote artifacts: no active session", category: .ai)
-            return
-        }
-
-        // Collect valid artifacts first
-        var artifactsToPromote: [(artifact: ArtifactRecord, json: JSON)] = []
-        for id in ids {
-            if let artifact = container.artifactRecordStore.artifact(byIdString: id) {
-                let json = artifactRecordToJSON(artifact)
-                artifactsToPromote.append((artifact, json))
-            } else {
-                Logger.warning("Cannot promote artifact: not found in SwiftData: \(id)", category: .ai)
-            }
-        }
-
-        guard !artifactsToPromote.isEmpty else { return }
-
-        // Start batch by emitting batchUploadStarted (triggers DocumentArtifactMessenger to collect)
-        await eventBus.publish(.batchUploadStarted(expectedCount: artifactsToPromote.count))
-        Logger.info("📦 Starting batch promotion of \(artifactsToPromote.count) archived artifact(s)", category: .ai)
-
-        // Promote each artifact
-        for (artifact, json) in artifactsToPromote {
-            // Update SwiftData: move artifact to current session
-            container.artifactRecordStore.promoteArtifact(artifact, to: session)
-
-            // Add to in-memory artifact list
-            await container.artifactRepository.addArtifactRecord(json)
-
-            // Emit event (will be batched by DocumentArtifactMessenger)
-            await eventBus.publish(.artifactRecordProduced(record: json))
-
-            Logger.info("📦 Promoted archived artifact: \(artifact.filename)", category: .ai)
-        }
+        await container.artifactArchiveManager.promoteArchivedArtifacts(ids: ids)
     }
 
     /// Promote a single archived artifact to the current session.
-    /// For multiple artifacts, use promoteArchivedArtifacts(ids:) for proper batching.
     func promoteArchivedArtifact(id: String) async {
-        await promoteArchivedArtifacts(ids: [id])
+        await container.artifactArchiveManager.promoteArchivedArtifact(id: id)
     }
 
     /// Permanently delete an archived artifact.
-    /// This removes the artifact from SwiftData - it cannot be recovered.
     func deleteArchivedArtifact(id: String) async {
-        guard let artifact = container.artifactRecordStore.artifact(byIdString: id) else {
-            Logger.warning("Cannot delete archived artifact: not found: \(id)", category: .ai)
-            return
-        }
-
-        let filename = artifact.filename
-
-        // Delete from SwiftData
-        container.artifactRecordStore.deleteArtifact(artifact)
-
-        Logger.info("🗑️ Permanently deleted archived artifact: \(filename)", category: .ai)
+        container.artifactArchiveManager.deleteArchivedArtifact(id: id)
     }
 
     /// Demote an artifact from the current session to archived status.
-    /// This removes the artifact from the current interview but keeps it available for future use.
     func demoteArtifact(id: String) async {
-        guard let artifact = container.artifactRecordStore.artifact(byIdString: id) else {
-            Logger.warning("Cannot demote artifact: not found: \(id)", category: .ai)
-            return
-        }
-
-        let filename = artifact.filename
-
-        // Demote in SwiftData (removes from session, keeps artifact)
-        container.artifactRecordStore.demoteArtifact(artifact)
-
-        // Remove from in-memory current artifacts
-        _ = await container.artifactRepository.deleteArtifactRecord(id: id)
+        let result = await container.artifactArchiveManager.demoteArtifact(id: id)
 
         // Notify LLM that artifact was removed from current interview
-        await sendCoordinatorMessage(
-            title: "Artifact Removed from Interview",
-            details: [
-                "artifact_id": id,
-                "filename": filename,
-                "action": "The user has removed this artifact from the current interview. It is no longer available for reference in this session, but remains in the archive for future use."
-            ]
-        )
-
-        Logger.info("📦 Demoted artifact to archive: \(filename)", category: .ai)
-    }
-
-    /// Convert ArtifactRecord to JSON format.
-    /// Uses metadataJSON as base to preserve all fields (skills, narrative cards, summary, etc.)
-    private func artifactRecordToJSON(_ record: ArtifactRecord) -> JSON {
-        // Start with the full persisted record (includes skills, narrative cards, metadata, etc.)
-        var json: JSON
-        if let metadataJSON = record.metadataJSON,
-           let data = metadataJSON.data(using: .utf8),
-           let fullRecord = try? JSON(data: data) {
-            json = fullRecord
-        } else {
-            json = JSON()
+        if result.success {
+            await sendCoordinatorMessage(
+                title: "Artifact Removed from Interview",
+                details: [
+                    "artifact_id": result.artifactId,
+                    "filename": result.filename,
+                    "action": "The user has removed this artifact from the current interview. It is no longer available for reference in this session, but remains in the archive for future use."
+                ]
+            )
         }
-        // Override with canonical SwiftData fields (in case of any discrepancy)
-        json["id"].string = record.id.uuidString
-        json["source_type"].string = record.sourceType
-        json["filename"].string = record.filename
-        json["extracted_text"].string = record.extractedContent
-        json["source_hash"].string = record.sha256
-        json["raw_file_path"].string = record.rawFileRelativePath
-        json["plan_item_id"].string = record.planItemId
-        json["ingested_at"].string = ISO8601DateFormatter().string(from: record.ingestedAt)
-        json["summary"].string = record.summary
-        json["brief_description"].string = record.briefDescription
-        json["title"].string = record.title
-        json["content_type"].string = record.contentType
-        json["size_bytes"].int = record.sizeInBytes
-        json["has_skills"].bool = record.hasSkills
-        json["has_narrative_cards"].bool = record.hasNarrativeCards
-        json["skills"].string = record.skillsJSON
-        json["narrative_cards"].string = record.narrativeCardsJSON
-        return json
     }
 
     /// Cancel all active LLM streams and ingestion tasks.
@@ -994,76 +902,19 @@ final class OnboardingInterviewCoordinator {
         await eventBus.clearHistory()
     }
 
+    /// Configure the debug regeneration service with session artifacts provider
+    func configureDebugServices() {
+        container.debugRegenerationService.setSessionArtifactsProvider { [weak self] in
+            self?.sessionArtifacts ?? []
+        }
+    }
+
     /// Clear all summaries and card inventories and regenerate them, then trigger merge
     func regenerateCardInventoriesAndMerge() async {
-        Logger.debug("🔄 Clearing and regenerating ALL summaries + card inventories...", category: .ai)
-
-        // Get all non-writing-sample artifacts
-        let artifactsToProcess = sessionArtifacts.filter { !$0.isWritingSample }
-
-        Logger.debug("📦 Found \(artifactsToProcess.count) artifacts to regenerate", category: .ai)
-
-        guard !artifactsToProcess.isEmpty else {
-            Logger.debug("⚠️ No artifacts to process", category: .ai)
-            return
-        }
-
-        // Clear existing summaries and knowledge extraction first
-        for artifact in artifactsToProcess {
-            artifact.summary = nil
-            artifact.briefDescription = nil
-            artifact.skillsJSON = nil
-            artifact.narrativeCardsJSON = nil
-            Logger.verbose("🗑️ Cleared summary + knowledge for: \(artifact.filename)", category: .ai)
-        }
-
-        // Use same concurrency limit as document extraction
-        let maxConcurrent = UserDefaults.standard.integer(forKey: "onboardingMaxConcurrentExtractions")
-        let concurrencyLimit = maxConcurrent > 0 ? maxConcurrent : 5
-
-        Logger.debug("📦 Processing \(artifactsToProcess.count) artifacts with concurrency limit \(concurrencyLimit)", category: .ai)
-
-        // Capture service reference for use in task group
-        let documentProcessingService = container.documentProcessingService
-
-        // Process with limited concurrency using TaskGroup
-        await withTaskGroup(of: Void.self) { group in
-            var inFlight = 0
-            var index = 0
-
-            for artifact in artifactsToProcess {
-                // Wait if we've hit the concurrency limit
-                if inFlight >= concurrencyLimit {
-                    await group.next()
-                    inFlight -= 1
-                }
-
-                group.addTask {
-                    await documentProcessingService.generateSummaryAndKnowledgeExtractionForExistingArtifact(artifact)
-                }
-                inFlight += 1
-                index += 1
-                Logger.verbose("📦 Dispatched \(index)/\(artifactsToProcess.count): \(artifact.filename)", category: .ai)
-            }
-
-            // Wait for all remaining tasks
-            for await _ in group { }
-        }
-
-        Logger.debug("✅ All summary + inventory regeneration complete", category: .ai)
-
-        // Trigger the merge
-        Logger.debug("🔄 Triggering card merge...", category: .ai)
-        await eventBus.publish(.doneWithUploadsClicked)
+        await container.debugRegenerationService.regenerateCardInventoriesAndMerge()
     }
 
     /// Selective regeneration based on user choices from RegenOptionsDialog
-    /// - Parameters:
-    ///   - artifactIds: Set of artifact IDs to process
-    ///   - regenerateSummary: Whether to regenerate summaries
-    ///   - regenerateSkills: Whether to regenerate skills
-    ///   - regenerateNarrativeCards: Whether to regenerate narrative cards
-    ///   - dedupeNarratives: Whether to run narrative deduplication after regeneration
     func regenerateSelected(
         artifactIds: Set<String>,
         regenerateSummary: Bool,
@@ -1071,167 +922,18 @@ final class OnboardingInterviewCoordinator {
         regenerateNarrativeCards: Bool,
         dedupeNarratives: Bool = false
     ) async {
-        Logger.debug("🔄 Selective regeneration: \(artifactIds.count) artifacts, summary=\(regenerateSummary), skills=\(regenerateSkills), cards=\(regenerateNarrativeCards), dedupe=\(dedupeNarratives)", category: .ai)
-
-        // Get selected artifacts
-        let artifactsToProcess = sessionArtifacts.filter { artifactIds.contains($0.idString) }
-
-        guard !artifactsToProcess.isEmpty else {
-            Logger.debug("⚠️ No artifacts selected", category: .ai)
-            return
-        }
-
-        // Build operation description
-        var ops: [String] = []
-        if regenerateSummary { ops.append("summary") }
-        if regenerateSkills { ops.append("skills") }
-        if regenerateNarrativeCards { ops.append("cards") }
-        let opsDesc = ops.joined(separator: "+")
-
-        // Track the regeneration as an agent
-        let agentId = agentActivityTracker.trackAgent(
-            type: .documentRegen,
-            name: "Regen \(artifactsToProcess.count) docs (\(opsDesc))",
-            task: nil as Task<Void, Never>?
+        await container.debugRegenerationService.regenerateSelected(
+            artifactIds: artifactIds,
+            regenerateSummary: regenerateSummary,
+            regenerateSkills: regenerateSkills,
+            regenerateNarrativeCards: regenerateNarrativeCards,
+            dedupeNarratives: dedupeNarratives
         )
-
-        agentActivityTracker.appendTranscript(
-            agentId: agentId,
-            entryType: .system,
-            content: "Starting regeneration",
-            details: "Artifacts: \(artifactsToProcess.count), Summary: \(regenerateSummary), Skills: \(regenerateSkills), Cards: \(regenerateNarrativeCards), Dedupe: \(dedupeNarratives)"
-        )
-
-        // Clear selected fields first
-        for artifact in artifactsToProcess {
-            if regenerateSummary {
-                artifact.summary = nil
-                artifact.briefDescription = nil
-            }
-            if regenerateSkills {
-                artifact.skillsJSON = nil
-            }
-            if regenerateNarrativeCards {
-                artifact.narrativeCardsJSON = nil
-            }
-            Logger.verbose("🗑️ Cleared selected fields for: \(artifact.filename)", category: .ai)
-        }
-
-        // Use same concurrency limit as document extraction
-        let maxConcurrent = UserDefaults.standard.integer(forKey: "onboardingMaxConcurrentExtractions")
-        let concurrencyLimit = maxConcurrent > 0 ? maxConcurrent : 5
-
-        let documentProcessingService = container.documentProcessingService
-        let tracker = agentActivityTracker
-
-        // Track completed count
-        let completedCount = Counter()
-
-        // Process with limited concurrency
-        await withTaskGroup(of: Void.self) { group in
-            var inFlight = 0
-            var index = 0
-
-            for artifact in artifactsToProcess {
-                if inFlight >= concurrencyLimit {
-                    await group.next()
-                    inFlight -= 1
-                }
-
-                let artifactName = artifact.filename
-                let total = artifactsToProcess.count
-
-                group.addTask {
-                    // Handle summary
-                    if regenerateSummary {
-                        await documentProcessingService.generateSummaryForExistingArtifact(artifact)
-                    }
-
-                    // Handle skills and narrative cards
-                    if regenerateSkills && regenerateNarrativeCards {
-                        // Both - use the combined method for efficiency
-                        await documentProcessingService.generateKnowledgeExtractionForExistingArtifact(artifact)
-                    } else if regenerateSkills {
-                        await documentProcessingService.generateSkillsOnlyForExistingArtifact(artifact)
-                    } else if regenerateNarrativeCards {
-                        await documentProcessingService.generateNarrativeCardsOnlyForExistingArtifact(artifact)
-                    }
-
-                    // Track completion
-                    let completed = await completedCount.increment()
-                    await MainActor.run {
-                        tracker.appendTranscript(
-                            agentId: agentId,
-                            entryType: .toolResult,
-                            content: "Completed \(completed)/\(total): \(artifactName)"
-                        )
-                        tracker.updateStatusMessage(agentId: agentId, message: "Processing \(completed)/\(total)...")
-                    }
-                }
-                inFlight += 1
-                index += 1
-                Logger.verbose("📦 Dispatched \(index)/\(artifactsToProcess.count): \(artifact.filename)", category: .ai)
-            }
-
-            for await _ in group { }
-        }
-
-        Logger.debug("✅ Selective regeneration complete", category: .ai)
-
-        agentActivityTracker.appendTranscript(
-            agentId: agentId,
-            entryType: .system,
-            content: "Regeneration complete",
-            details: "Processed \(artifactsToProcess.count) artifacts"
-        )
-
-        if dedupeNarratives {
-            Logger.debug("🔀 Running narrative deduplication...", category: .ai)
-            agentActivityTracker.appendTranscript(
-                agentId: agentId,
-                entryType: .system,
-                content: "Running narrative deduplication..."
-            )
-            await deduplicateNarratives()
-        }
-
-        agentActivityTracker.markCompleted(agentId: agentId)
-    }
-
-    /// Thread-safe counter for tracking completed operations
-    private actor Counter {
-        private var value = 0
-
-        func increment() -> Int {
-            value += 1
-            return value
-        }
     }
 
     /// Run narrative card deduplication manually
-    /// Uses LLM to identify and merge duplicate cards across documents
     func deduplicateNarratives() async {
-        do {
-            let result = try await cardMergeService.getAllNarrativeCardsDeduped()
-            Logger.info("✅ Deduplication complete: \(result.cards.count) cards, \(result.mergeLog.count) merges", category: .ai)
-
-            // Clear existing pending cards and add deduplicated ones
-            await MainActor.run {
-                knowledgeCardStore.deletePendingCards()
-                for card in result.cards {
-                    card.isFromOnboarding = true
-                    card.isPending = true
-                }
-                knowledgeCardStore.addAll(result.cards)
-            }
-
-            // Log merge decisions for debugging
-            for entry in result.mergeLog {
-                Logger.debug("🔀 \(entry.action.rawValue): \(entry.inputCardIds.joined(separator: " + ")) → \(entry.outputCardId ?? "N/A")", category: .ai)
-            }
-        } catch {
-            Logger.error("❌ Deduplication failed: \(error.localizedDescription)", category: .ai)
-        }
+        await container.debugRegenerationService.deduplicateNarratives()
     }
 
     func resetAllOnboardingData() async {
