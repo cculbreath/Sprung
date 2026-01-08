@@ -13,23 +13,39 @@ import SwiftData
 
 @Observable
 @MainActor
-final class OnboardingSessionStore: SwiftDataStore {
-    // Note: Using unowned is safe here because:
-    // 1. The ModelContext is owned by the SwiftData container at the app level
-    // 2. OnboardingSessionStore is created at app startup and persists for app lifetime
-    // 3. All access is @MainActor isolated
-    // If crashes occur during app teardown, consider the app's deinit order.
-    private(set) unowned var modelContext: ModelContext
+final class OnboardingSessionStore {
+    /// Weak reference to ModelContext to prevent crashes during container teardown.
+    /// Operations gracefully fail if context is deallocated.
+    private(set) weak var modelContext: ModelContext?
 
     init(context: ModelContext) {
         modelContext = context
         Logger.info("OnboardingSessionStore initialized", category: .ai)
     }
 
+    // MARK: - Context Management
+
+    /// Attempts to save the context, handling deallocated context gracefully.
+    @discardableResult
+    private func saveContext() -> Bool {
+        guard let context = modelContext else {
+            Logger.warning("ModelContext deallocated, skipping save", category: .storage)
+            return false
+        }
+        do {
+            try context.save()
+            return true
+        } catch {
+            Logger.error("SwiftData save failed: \(error.localizedDescription)", category: .storage)
+            return false
+        }
+    }
+
     // MARK: - Session Management
 
     /// Get the most recent incomplete session (for resume)
     func getActiveSession() -> OnboardingSession? {
+        guard let modelContext else { return nil }
         var descriptor = FetchDescriptor<OnboardingSession>(
             predicate: #Predicate { !$0.isComplete },
             sortBy: [SortDescriptor(\.lastActiveAt, order: .reverse)]
@@ -40,6 +56,7 @@ final class OnboardingSessionStore: SwiftDataStore {
 
     /// Get all sessions (for history/debugging)
     func getAllSessions() -> [OnboardingSession] {
+        guard let modelContext else { return [] }
         let descriptor = FetchDescriptor<OnboardingSession>(
             sortBy: [SortDescriptor(\.startedAt, order: .reverse)]
         )
@@ -49,6 +66,10 @@ final class OnboardingSessionStore: SwiftDataStore {
     /// Create a new session
     func createSession(phase: String = "phase1_core_facts") -> OnboardingSession {
         let session = OnboardingSession(phase: phase)
+        guard let modelContext else {
+            Logger.warning("ModelContext deallocated, cannot insert session", category: .ai)
+            return session
+        }
         modelContext.insert(session)
         saveContext()
         Logger.info("Created new onboarding session: \(session.id)", category: .ai)
@@ -79,6 +100,10 @@ final class OnboardingSessionStore: SwiftDataStore {
 
     /// Delete a session and all related data
     func deleteSession(_ session: OnboardingSession) {
+        guard let modelContext else {
+            Logger.warning("ModelContext deallocated, cannot delete session", category: .ai)
+            return
+        }
         modelContext.delete(session)
         saveContext()
         Logger.info("Deleted session: \(session.id)", category: .ai)
@@ -95,7 +120,9 @@ final class OnboardingSessionStore: SwiftDataStore {
             let record = OnboardingObjectiveRecord(objectiveId: objectiveId, status: status)
             record.session = session
             session.objectives.append(record)
-            modelContext.insert(record)
+            if let modelContext {
+                modelContext.insert(record)
+            }
         }
         session.lastActiveAt = Date()
         saveContext()
@@ -126,7 +153,9 @@ final class OnboardingSessionStore: SwiftDataStore {
         )
         record.session = session
         session.messages.append(record)
-        modelContext.insert(record)
+        if let modelContext {
+            modelContext.insert(record)
+        }
         // Don't call saveContext on every message - batch saves handled by caller
         return record
     }

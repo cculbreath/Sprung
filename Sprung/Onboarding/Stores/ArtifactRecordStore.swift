@@ -11,24 +11,39 @@ import SwiftData
 
 @Observable
 @MainActor
-final class ArtifactRecordStore: SwiftDataStore {
-    // Note: Using unowned is safe here because:
-    // 1. The ModelContext is owned by the SwiftData container
-    // 2. ArtifactRecordStore is owned by OnboardingDependencyContainer
-    // 3. The container's lifecycle ensures ModelContext outlives this store
-    // 4. All access is @MainActor isolated
-    // If crashes occur during teardown, the container's deinit order should be reviewed.
-    private(set) unowned var modelContext: ModelContext
+final class ArtifactRecordStore {
+    /// Weak reference to ModelContext to prevent crashes during container teardown.
+    /// Operations gracefully fail if context is deallocated.
+    private(set) weak var modelContext: ModelContext?
 
     init(context: ModelContext) {
         modelContext = context
         Logger.info("ArtifactRecordStore initialized", category: .ai)
     }
 
+    // MARK: - Context Management
+
+    /// Attempts to save the context, handling deallocated context gracefully.
+    @discardableResult
+    private func saveContext() -> Bool {
+        guard let context = modelContext else {
+            Logger.warning("ModelContext deallocated, skipping save", category: .storage)
+            return false
+        }
+        do {
+            try context.save()
+            return true
+        } catch {
+            Logger.error("SwiftData save failed: \(error.localizedDescription)", category: .storage)
+            return false
+        }
+    }
+
     // MARK: - Read Operations
 
     /// All artifact records (computed, always fresh from SwiftData)
     var allArtifacts: [ArtifactRecord] {
+        guard let modelContext else { return [] }
         let descriptor = FetchDescriptor<ArtifactRecord>(
             sortBy: [SortDescriptor(\.ingestedAt, order: .reverse)]
         )
@@ -42,6 +57,7 @@ final class ArtifactRecordStore: SwiftDataStore {
 
     /// Archived artifacts (no session, available for reuse)
     var archivedArtifacts: [ArtifactRecord] {
+        guard let modelContext else { return [] }
         let descriptor = FetchDescriptor<ArtifactRecord>(
             predicate: #Predicate { $0.session == nil },
             sortBy: [SortDescriptor(\.ingestedAt, order: .reverse)]
@@ -51,6 +67,7 @@ final class ArtifactRecordStore: SwiftDataStore {
 
     /// Find artifact by UUID
     func artifact(byId id: UUID) -> ArtifactRecord? {
+        guard let modelContext else { return nil }
         var descriptor = FetchDescriptor<ArtifactRecord>(
             predicate: #Predicate { $0.id == id }
         )
@@ -66,6 +83,7 @@ final class ArtifactRecordStore: SwiftDataStore {
 
     /// Find artifact by SHA256 hash
     func artifact(bySha256 hash: String) -> ArtifactRecord? {
+        guard let modelContext else { return nil }
         var descriptor = FetchDescriptor<ArtifactRecord>(
             predicate: #Predicate { $0.sha256 == hash }
         )
@@ -124,6 +142,10 @@ final class ArtifactRecordStore: SwiftDataStore {
         )
         record.session = session
         session.artifacts.append(record)
+        guard let modelContext else {
+            Logger.warning("ModelContext deallocated, cannot insert artifact", category: .ai)
+            return record
+        }
         modelContext.insert(record)
         saveContext()
         Logger.info("Added artifact: \(filename) (\(sourceType))", category: .ai)
@@ -165,6 +187,10 @@ final class ArtifactRecordStore: SwiftDataStore {
             planItemId: planItemId
         )
         // Note: session is nil, so artifact is immediately archived
+        guard let modelContext else {
+            Logger.warning("ModelContext deallocated, cannot insert standalone artifact", category: .ai)
+            return record
+        }
         modelContext.insert(record)
         saveContext()
         Logger.info("Added standalone artifact (archived): \(filename) (\(sourceType))", category: .ai)
@@ -242,6 +268,10 @@ final class ArtifactRecordStore: SwiftDataStore {
             session.artifacts.remove(at: index)
         }
 
+        guard let modelContext else {
+            Logger.warning("ModelContext deallocated, cannot delete artifact", category: .ai)
+            return
+        }
         modelContext.delete(artifact)
         saveContext()
         Logger.info("Permanently deleted artifact: \(filename)", category: .ai)
@@ -274,6 +304,7 @@ final class ArtifactRecordStore: SwiftDataStore {
         if let session {
             return session.artifacts.filter { $0.sourceType == sourceType }
         } else {
+            guard let modelContext else { return [] }
             let descriptor = FetchDescriptor<ArtifactRecord>(
                 predicate: #Predicate { $0.sourceType == sourceType },
                 sortBy: [SortDescriptor(\.ingestedAt, order: .reverse)]
@@ -287,6 +318,7 @@ final class ArtifactRecordStore: SwiftDataStore {
         if let session {
             return session.artifacts.filter { $0.hasKnowledgeExtraction }
         } else {
+            guard let modelContext else { return [] }
             // Note: Can't use hasKnowledgeExtraction computed property in predicate,
             // so we filter after fetch
             let descriptor = FetchDescriptor<ArtifactRecord>(
@@ -302,6 +334,7 @@ final class ArtifactRecordStore: SwiftDataStore {
         if let session {
             return session.artifacts.filter { $0.hasSkills }
         } else {
+            guard let modelContext else { return [] }
             let descriptor = FetchDescriptor<ArtifactRecord>(
                 sortBy: [SortDescriptor(\.ingestedAt, order: .reverse)]
             )
@@ -315,6 +348,7 @@ final class ArtifactRecordStore: SwiftDataStore {
         if let session {
             return session.artifacts.filter { $0.hasNarrativeCards }
         } else {
+            guard let modelContext else { return [] }
             let descriptor = FetchDescriptor<ArtifactRecord>(
                 sortBy: [SortDescriptor(\.ingestedAt, order: .reverse)]
             )

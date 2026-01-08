@@ -168,7 +168,8 @@ final class OnboardingDependencyContainer {
         self.dataStore = dataStore
 
         // Initialize artifact store using same context as sessionStore
-        self.artifactRecordStore = ArtifactRecordStore(context: sessionStore.modelContext)
+        // Force unwrap is safe: container is created at app startup when context is guaranteed valid
+        self.artifactRecordStore = ArtifactRecordStore(context: sessionStore.modelContext!)
 
         // 1. Initialize core infrastructure
         let core = Self.createCoreInfrastructure()
