@@ -63,6 +63,10 @@ final class StateCoordinatorTests: XCTestCase {
         // Objective Store
         objectiveStore = ObjectiveStore(eventBus: eventBus, phasePolicy: policy, initialPhase: .phase1CoreFacts)
 
+        // ConversationLog and OperationTracker (new architecture)
+        let operationTracker = OperationTracker()
+        let conversationLog = ConversationLog(operations: operationTracker, eventBus: eventBus)
+
         // State Coordinator
         stateCoordinator = StateCoordinator(
             eventBus: eventBus,
@@ -72,7 +76,9 @@ final class StateCoordinatorTests: XCTestCase {
             artifacts: artifactRepo,
             streamingBuffer: streamingBuffer,
             uiState: uiState,
-            todoStore: todoStore
+            todoStore: todoStore,
+            operationTracker: operationTracker,
+            conversationLog: conversationLog
         )
     }
 

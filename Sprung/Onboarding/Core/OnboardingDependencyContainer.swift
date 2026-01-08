@@ -17,6 +17,8 @@ private struct StateStores {
     let artifactRepository: ArtifactRepository
     let streamingBuffer: StreamingMessageBuffer
     let sessionUIState: SessionUIState
+    let operationTracker: OperationTracker
+    let conversationLog: ConversationLog
 }
 
 /// Groups document processing components for initialization
@@ -186,7 +188,8 @@ final class OnboardingDependencyContainer {
             eventBus: core.eventBus, phasePolicy: core.phasePolicy, phaseRegistry: core.phaseRegistry,
             objectives: stores.objectiveStore, artifacts: stores.artifactRepository,
             streamingBuffer: stores.streamingBuffer, uiState: stores.sessionUIState,
-            todoStore: todoStore
+            todoStore: todoStore, operationTracker: stores.operationTracker,
+            conversationLog: stores.conversationLog
         )
 
         // 4a. Initialize card pipeline services (deferred - needs sessionPersistenceHandler)
@@ -194,7 +197,7 @@ final class OnboardingDependencyContainer {
         if let facade = llmFacade {
             self.chatInventoryService = ChatInventoryService(
                 llmFacade: facade,
-                conversationLog: state.getConversationLog(),
+                conversationLog: stores.conversationLog,
                 artifactRepository: stores.artifactRepository,
                 eventBus: core.eventBus
             )
@@ -380,11 +383,15 @@ final class OnboardingDependencyContainer {
     }
 
     private static func createStateStores(eventBus: EventCoordinator, phasePolicy: PhasePolicy) -> StateStores {
-        StateStores(
+        let operationTracker = OperationTracker()
+        let conversationLog = ConversationLog(operations: operationTracker, eventBus: eventBus)
+        return StateStores(
             objectiveStore: ObjectiveStore(eventBus: eventBus, phasePolicy: phasePolicy, initialPhase: .phase1VoiceContext),
             artifactRepository: ArtifactRepository(eventBus: eventBus),
             streamingBuffer: StreamingMessageBuffer(),
-            sessionUIState: SessionUIState(eventBus: eventBus, phasePolicy: phasePolicy, initialPhase: .phase1VoiceContext)
+            sessionUIState: SessionUIState(eventBus: eventBus, phasePolicy: phasePolicy, initialPhase: .phase1VoiceContext),
+            operationTracker: operationTracker,
+            conversationLog: conversationLog
         )
     }
 

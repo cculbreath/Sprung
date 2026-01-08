@@ -75,7 +75,9 @@ actor StateCoordinator: OnboardingEventEmitter {
         artifacts: ArtifactRepository,
         streamingBuffer: StreamingMessageBuffer,
         uiState: SessionUIState,
-        todoStore: InterviewTodoStore
+        todoStore: InterviewTodoStore,
+        operationTracker: OperationTracker,
+        conversationLog: ConversationLog
     ) {
         self.eventBus = eventBus
         self.phasePolicy = phasePolicy
@@ -88,9 +90,9 @@ actor StateCoordinator: OnboardingEventEmitter {
         self.streamQueueManager = StreamQueueManager(eventBus: eventBus)
         self.llmStateManager = LLMStateManager()
 
-        // New architecture: ConversationLog with OperationTracker
-        self.operationTracker = OperationTracker()
-        self.conversationLog = ConversationLog(operations: operationTracker, eventBus: eventBus)
+        // New architecture: ConversationLog with OperationTracker (injected)
+        self.operationTracker = operationTracker
+        self.conversationLog = conversationLog
 
         Logger.info("🎯 StateCoordinator initialized (orchestrator mode with injected services)", category: .ai)
     }
