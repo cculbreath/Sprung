@@ -500,9 +500,8 @@ class GitAnalysisAgent {
     }
 
     private static func buildTool<T: AgentTool>(_ tool: T.Type) -> ChatCompletionParameters.Tool {
-        // Build JSONSchema from the tool's parameter schema
         let schemaDict = tool.parametersSchema
-        let schema = buildJSONSchema(from: schemaDict)
+        let schema = AgentSchemaUtilities.buildJSONSchema(from: schemaDict)
 
         let function = ChatCompletionParameters.ChatFunction(
             name: tool.name,
@@ -512,57 +511,6 @@ class GitAnalysisAgent {
         )
 
         return ChatCompletionParameters.Tool(function: function)
-    }
-
-    private static func buildJSONSchema(from dict: [String: Any]) -> JSONSchema {
-        return buildJSONSchemaRecursive(from: dict)
-    }
-
-    private static func buildJSONSchemaRecursive(from dict: [String: Any]) -> JSONSchema {
-        let typeStr = dict["type"] as? String ?? "object"
-        let desc = dict["description"] as? String
-        let enumValues = dict["enum"] as? [String]
-
-        let schemaType: JSONSchemaType
-        switch typeStr {
-        case "string": schemaType = .string
-        case "integer": schemaType = .integer
-        case "number": schemaType = .number
-        case "boolean": schemaType = .boolean
-        case "array": schemaType = .array
-        case "object": schemaType = .object
-        default: schemaType = .string
-        }
-
-        // Handle properties for objects
-        var properties: [String: JSONSchema]? = nil
-        if let propsDict = dict["properties"] as? [String: [String: Any]] {
-            var propSchemas: [String: JSONSchema] = [:]
-            for (key, propSpec) in propsDict {
-                propSchemas[key] = buildJSONSchemaRecursive(from: propSpec)
-            }
-            properties = propSchemas
-        }
-
-        // Handle items for arrays
-        var items: JSONSchema? = nil
-        if schemaType == .array, let itemsDict = dict["items"] as? [String: Any] {
-            items = buildJSONSchemaRecursive(from: itemsDict)
-        }
-
-        let required = dict["required"] as? [String]
-        let additionalProps = dict["additionalProperties"] as? Bool ?? false
-
-        // JSONSchema init order: type, description, properties, items, required, additionalProperties, enum
-        return JSONSchema(
-            type: schemaType,
-            description: desc,
-            properties: properties,
-            items: items,
-            required: required,
-            additionalProperties: additionalProps,
-            enum: enumValues
-        )
     }
 
     // MARK: - Result Parsing

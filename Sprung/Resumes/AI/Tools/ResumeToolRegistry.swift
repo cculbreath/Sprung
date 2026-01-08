@@ -123,7 +123,7 @@ class ResumeToolRegistry {
     /// Build ChatCompletionParameters.Tool array for OpenRouter
     func buildChatTools() -> [ChatCompletionParameters.Tool] {
         tools.map { tool in
-            let schema = Self.buildJSONSchema(from: type(of: tool).parametersSchema)
+            let schema = AgentSchemaUtilities.buildJSONSchema(from: type(of: tool).parametersSchema)
             let function = ChatCompletionParameters.ChatFunction(
                 name: type(of: tool).name,
                 strict: false,
@@ -162,58 +162,5 @@ class ResumeToolRegistry {
     /// Get tool names for logging/debugging
     var toolNames: [String] {
         tools.map { type(of: $0).name }
-    }
-
-    // MARK: - JSON Schema Building
-
-    /// Build JSONSchema from dictionary representation
-    static func buildJSONSchema(from dict: [String: Any]) -> JSONSchema {
-        return buildJSONSchemaRecursive(from: dict)
-    }
-
-    private static func buildJSONSchemaRecursive(from dict: [String: Any]) -> JSONSchema {
-        let typeStr = dict["type"] as? String ?? "object"
-        let desc = dict["description"] as? String
-        let enumValues = dict["enum"] as? [String]
-
-        let schemaType: JSONSchemaType
-        switch typeStr {
-        case "string": schemaType = .string
-        case "integer": schemaType = .integer
-        case "number": schemaType = .number
-        case "boolean": schemaType = .boolean
-        case "array": schemaType = .array
-        case "object": schemaType = .object
-        default: schemaType = .string
-        }
-
-        // Handle properties for objects
-        var properties: [String: JSONSchema]? = nil
-        if let propsDict = dict["properties"] as? [String: [String: Any]] {
-            var propSchemas: [String: JSONSchema] = [:]
-            for (key, propSpec) in propsDict {
-                propSchemas[key] = buildJSONSchemaRecursive(from: propSpec)
-            }
-            properties = propSchemas
-        }
-
-        // Handle items for arrays
-        var items: JSONSchema? = nil
-        if schemaType == .array, let itemsDict = dict["items"] as? [String: Any] {
-            items = buildJSONSchemaRecursive(from: itemsDict)
-        }
-
-        let required = dict["required"] as? [String]
-        let additionalProps = dict["additionalProperties"] as? Bool ?? false
-
-        return JSONSchema(
-            type: schemaType,
-            description: desc,
-            properties: properties,
-            items: items,
-            required: required,
-            additionalProperties: additionalProps,
-            enum: enumValues
-        )
     }
 }
