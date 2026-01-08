@@ -194,7 +194,7 @@ final class OnboardingDependencyContainer {
         if let facade = llmFacade {
             self.chatInventoryService = ChatInventoryService(
                 llmFacade: facade,
-                chatTranscriptStore: stores.chatTranscriptStore,
+                conversationLog: state.getConversationLog(),
                 artifactRepository: stores.artifactRepository,
                 eventBus: core.eventBus
             )
@@ -276,7 +276,6 @@ final class OnboardingDependencyContainer {
             documentArtifactMessenger: docs.documentArtifactMessenger,
             ui: ui,
             sessionPersistenceHandler: sessionPersistenceHandler,
-            chatTranscriptStore: stores.chatTranscriptStore,
             knowledgeCardStore: knowledgeCardStore,
             skillStore: skillStore,
             todoStore: todoStore
@@ -384,7 +383,7 @@ final class OnboardingDependencyContainer {
         StateStores(
             objectiveStore: ObjectiveStore(eventBus: eventBus, phasePolicy: phasePolicy, initialPhase: .phase1VoiceContext),
             artifactRepository: ArtifactRepository(eventBus: eventBus),
-            chatTranscriptStore: ChatTranscriptStore(eventBus: eventBus),
+            chatTranscriptStore: ChatTranscriptStore(),
             sessionUIState: SessionUIState(eventBus: eventBus, phasePolicy: phasePolicy, initialPhase: .phase1VoiceContext)
         )
     }

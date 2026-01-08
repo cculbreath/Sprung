@@ -17,7 +17,6 @@ final class OnboardingInterviewCoordinator {
     var toolRegistry: ToolRegistry { container.toolRegistry }
     var ui: OnboardingUIState { container.ui }
     var conversationLogStore: ConversationLogStore { container.conversationLogStore }
-    var chatTranscriptStore: ChatTranscriptStore { container.chatTranscriptStore }
     // MARK: - Public Sub-Services (Direct Access)
     // Timeline Management
     var timeline: TimelineManagementService { container.timelineManagementService }

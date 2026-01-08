@@ -386,19 +386,15 @@ struct EventDumpView: View {
         case .processingStateChanged(let processing, let statusMessage):
             let statusInfo = statusMessage.map { " - \($0)" } ?? ""
             return "processingStateChanged(\(processing))\(statusInfo)"
-        case .streamingMessageBegan(let id, _, let reasoningExpected, let statusMessage):
+        case .streamingMessageBegan(let id, _, let statusMessage):
             let statusInfo = statusMessage.map { " - \($0)" } ?? ""
-            return "streamingMessageBegan(id: \(id.uuidString.prefix(8)), reasoningExpected: \(reasoningExpected))\(statusInfo)"
+            return "streamingMessageBegan(id: \(id.uuidString.prefix(8)))\(statusInfo)"
         case .streamingMessageUpdated(let id, let delta, let statusMessage):
             let statusInfo = statusMessage.map { " - \($0)" } ?? ""
             return "streamingMessageUpdated(id: \(id.uuidString.prefix(8)), delta: \(delta.count) chars)\(statusInfo)"
         case .streamingMessageFinalized(let id, let text, let toolCalls, _):
             let toolInfo = toolCalls.map { " toolCalls: \($0.count)" } ?? ""
             return "streamingMessageFinalized(id: \(id.uuidString.prefix(8)), text: \(text.count) chars\(toolInfo))"
-        case .llmReasoningSummaryDelta(let delta):
-            return "llmReasoningSummaryDelta(\(delta.prefix(50))...)"
-        case .llmReasoningSummaryComplete(let text):
-            return "llmReasoningSummaryComplete(\(text.count) chars)"
         case .toolCallRequested(let call, let statusMessage):
             let statusInfo = statusMessage.map { " - \($0)" } ?? ""
             return "toolCallRequested(\(call.name))\(statusInfo)"

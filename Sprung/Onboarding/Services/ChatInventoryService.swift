@@ -14,18 +14,18 @@ import SwiftOpenAI
 /// and creates an artifact for inclusion in the knowledge merge.
 actor ChatInventoryService {
     private let llmFacade: LLMFacade
-    private let chatTranscriptStore: ChatTranscriptStore
+    private let conversationLog: ConversationLog
     private let artifactRepository: ArtifactRepository
     private let eventBus: EventCoordinator
 
     init(
         llmFacade: LLMFacade,
-        chatTranscriptStore: ChatTranscriptStore,
+        conversationLog: ConversationLog,
         artifactRepository: ArtifactRepository,
         eventBus: EventCoordinator
     ) {
         self.llmFacade = llmFacade
-        self.chatTranscriptStore = chatTranscriptStore
+        self.conversationLog = conversationLog
         self.artifactRepository = artifactRepository
         self.eventBus = eventBus
         Logger.info("💬 ChatInventoryService initialized", category: .ai)
@@ -34,8 +34,8 @@ actor ChatInventoryService {
     /// Extract skills and narrative cards from chat and create artifact
     /// - Returns: The created artifact ID, or nil if no relevant facts found
     func extractAndCreateArtifact() async throws -> String? {
-        // Get all messages from chat
-        let messages = await chatTranscriptStore.getAllMessages()
+        // Get all messages from ConversationLog (source of truth)
+        let messages = await conversationLog.getMessagesForUI()
 
         // Filter to user messages only (these contain the facts)
         let userMessages = messages.filter { $0.role == .user && !$0.isSystemGenerated }

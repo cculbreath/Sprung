@@ -15,6 +15,7 @@ class AppState {
         self.modelValidationService = modelValidationService
         updateOpenRouterConfiguration(configureClient: true)
         refreshOpenAiKeyState()
+        refreshAnthropicKeyState()
         observeAPIKeyChanges()
     }
     var isReadOnlyMode = false
@@ -27,6 +28,7 @@ class AppState {
     // Cached API key state for SwiftUI bindings
     var openRouterApiKey: String = ""
     var openAiApiKey: String = ""
+    var anthropicApiKey: String = ""
     @ObservationIgnored
     private var apiKeysObserver: NSObjectProtocol?
     deinit {
@@ -45,6 +47,9 @@ class AppState {
     private func refreshOpenAiKeyState() {
         openAiApiKey = normalizedKey(for: .openAI)
     }
+    private func refreshAnthropicKeyState() {
+        anthropicApiKey = normalizedKey(for: .anthropic)
+    }
     private func observeAPIKeyChanges() {
         apiKeysObserver = NotificationCenter.default.addObserver(
             forName: .apiKeysChanged,
@@ -59,6 +64,7 @@ class AppState {
     func reconfigureOpenRouterService() {
         updateOpenRouterConfiguration(configureClient: true)
         refreshOpenAiKeyState()
+        refreshAnthropicKeyState()
         llmService?.reconfigureClient()
     }
     private func normalizedKey(for type: APIKeyType) -> String {

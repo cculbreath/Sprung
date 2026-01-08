@@ -294,8 +294,8 @@ private extension OnboardingInterviewView {
         let interviewStarted = !coordinator.ui.messages.isEmpty
         switch coordinator.wizardTracker.currentStep {
         case .voice:
-            if !interviewStarted && appEnvironment.appState.openAiApiKey.isEmpty {
-                return "OpenAI API key required. Click to open setup wizard."
+            if !interviewStarted && appEnvironment.appState.anthropicApiKey.isEmpty {
+                return "Anthropic API key required. Click to open setup wizard."
             }
             if interviewStarted && coordinator.ui.isProcessing {
                 return "Waiting for AI response..."
@@ -318,7 +318,7 @@ private extension OnboardingInterviewView {
         case .voice:
             if !interviewStarted {
                 // Show setup wizard if API key is missing
-                if appEnvironment.appState.openAiApiKey.isEmpty {
+                if appEnvironment.appState.anthropicApiKey.isEmpty {
                     showSetupWizard = true
                     return
                 }

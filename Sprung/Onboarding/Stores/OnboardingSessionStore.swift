@@ -64,16 +64,6 @@ final class OnboardingSessionStore: SwiftDataStore {
         Logger.info("Session phase updated to: \(phase)", category: .ai)
     }
 
-    /// Update previousResponseId for OpenAI thread continuity
-    func updatePreviousResponseId(_ session: OnboardingSession, responseId: String?) {
-        session.previousResponseId = responseId
-        session.lastActiveAt = Date()
-        saveContext()
-        if let id = responseId {
-            Logger.debug("Session previousResponseId updated: \(id.prefix(12))...", category: .ai)
-        }
-    }
-
     /// Mark session as complete
     func completeSession(_ session: OnboardingSession) {
         session.isComplete = true
@@ -152,6 +142,11 @@ final class OnboardingSessionStore: SwiftDataStore {
 
     /// Batch save messages (call after streaming completes)
     func saveMessages() {
+        saveContext()
+    }
+
+    /// Batch save conversation entries (new architecture)
+    func saveConversationEntries() {
         saveContext()
     }
 

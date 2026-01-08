@@ -478,13 +478,13 @@ struct ToolBundlePolicy {
     ) -> Set<String> {
         // Handle toolChoice overrides
         // CRITICAL: When forcing a specific tool, that tool MUST be included.
-        // The OpenAI API requires the forced tool to be present in the tools array.
+        // The API requires the forced tool to be present in the tools array.
         if let choice = toolChoice {
             switch choice {
             case .none:
                 return []
             case .functionTool(let ft):
-                // Always include the forced tool - this is required by OpenAI API
+                // Always include the forced tool - this is required by the API
                 var bundle: Set<String> = [ft.name]
                 bundle.formUnion(safeEscapeTools)
                 // Artifact access tools for Phase 2-4 (not Phase 1)
@@ -493,7 +493,7 @@ struct ToolBundlePolicy {
                 }
                 return bundle
             case .customTool(let ct):
-                // Always include the forced tool - this is required by OpenAI API
+                // Always include the forced tool - this is required by the API
                 var bundle: Set<String> = [ct.name]
                 bundle.formUnion(safeEscapeTools)
                 // Artifact access tools for Phase 2-4 (not Phase 1)

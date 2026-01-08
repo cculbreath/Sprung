@@ -20,6 +20,10 @@ actor StateCoordinator: OnboardingEventEmitter {
     private let llmStateManager: LLMStateManager
     private let todoStore: InterviewTodoStore
     private let phaseRegistry: PhaseScriptRegistry
+
+    // MARK: - New Architecture (ConversationLog)
+    private let conversationLog: ConversationLog
+    private let operationTracker: OperationTracker
     // MARK: - Phase Policy
     private let phasePolicy: PhasePolicy
     // Runtime tool exclusions (e.g., one-time bootstrap tools)
@@ -78,6 +82,11 @@ actor StateCoordinator: OnboardingEventEmitter {
         self.todoStore = todoStore
         self.streamQueueManager = StreamQueueManager(eventBus: eventBus)
         self.llmStateManager = LLMStateManager()
+
+        // New architecture: ConversationLog with OperationTracker
+        self.operationTracker = OperationTracker()
+        self.conversationLog = ConversationLog(operations: operationTracker, eventBus: eventBus)
+
         Logger.info("🎯 StateCoordinator initialized (orchestrator mode with injected services)", category: .ai)
     }
     // MARK: - Phase Management
@@ -261,10 +270,6 @@ actor StateCoordinator: OnboardingEventEmitter {
         case .processingStateChanged(let processing, _):
             // Delegate to SessionUIState
             await uiState.setProcessingState(processing, emitEvent: false)
-            // Clear reasoning summary when processing ends to dismiss the thinking overlay
-            if !processing {
-                await chatStore.clearReasoningSummary()
-            }
         case .waitingStateChanged(let waiting, _):
             // SessionUIState handles this internally, just log
             Logger.debug("Waiting state changed: \(waiting ?? "nil")", category: .ai)
@@ -275,21 +280,13 @@ actor StateCoordinator: OnboardingEventEmitter {
         case .streamingStatusUpdated(let status, _):
             await uiState.setStreamingStatus(status)
         case .errorOccurred(let error):
-            // On stream errors, handle pending tool responses or revert to clean state
+            // On stream errors, retry pending tool responses if any
             if error.hasPrefix("Stream error:") {
-                // Check if there are pending tool responses that need retry (with retry counting)
                 if let pendingPayloads = await llmStateManager.getPendingToolResponsesForRetry() {
-                    // Retry pending tool responses instead of reverting
                     Logger.warning("🔄 Stream error recovery: retrying \(pendingPayloads.count) pending tool response(s)", category: .ai)
-                    // Exponential backoff is handled by LLMStateManager's retry counter
-                    // which tracks retries and returns nil when max retries exceeded
                     await retryToolResponses(pendingPayloads)
-                } else if let cleanId = await llmStateManager.getLastCleanResponseId() {
-                    // No pending tool responses (or max retries exceeded) - revert to clean state
-                    await llmStateManager.setLastResponseId(cleanId)
-                    Logger.warning("🔄 Stream error recovery: reverted to last clean response ID (\(cleanId.prefix(8)))", category: .ai)
                 } else {
-                    Logger.warning("🔄 Stream error recovery: no clean response ID available, conversation may be stuck", category: .ai)
+                    Logger.warning("🔄 Stream error: recovery exhausted, conversation will resend full history on next request", category: .ai)
                 }
             }
         default:
@@ -301,24 +298,28 @@ actor StateCoordinator: OnboardingEventEmitter {
         case .llmUserMessageSent(_, let payload, let isSystemGenerated):
             if isSystemGenerated {
                 let text = payload["text"].stringValue
-                _ = await chatStore.appendUserMessage(text, isSystemGenerated: isSystemGenerated)
-                Logger.debug("StateCoordinator: system-generated user message appended", category: .ai)
+                // ConversationLog handles gating - will fill pending tool slots before appending
+                await conversationLog.appendUser(text: text, isSystemGenerated: isSystemGenerated)
+                Logger.debug("StateCoordinator: system-generated user message sent to ConversationLog", category: .ai)
             }
         case .llmSentToolResponseMessage:
             break
         case .llmStatus(let status):
             let newProcessingState = status == .busy
             await uiState.setProcessingState(newProcessingState)
-        case .streamingMessageBegan(let id, let text, let reasoningExpected, _):
-            _ = await chatStore.beginStreamingMessage(id: id, initialText: text, reasoningExpected: reasoningExpected)
+        case .streamingMessageBegan(let id, let text, _):
+            _ = await chatStore.beginStreamingMessage(id: id, initialText: text)
         case .streamingMessageUpdated(let id, let delta, _):
             await chatStore.updateStreamingMessage(id: id, delta: delta)
         case .streamingMessageFinalized(let id, let finalText, let toolCalls, _):
+            // ConversationLog is the sole source of truth
+            let logToolCalls = toolCalls?.map { info in
+                ToolCallInfo(id: info.id, name: info.name, arguments: info.arguments)
+            }
+            await conversationLog.appendAssistant(id: id, text: finalText, toolCalls: logToolCalls)
+
+            // Legacy: Also update ChatTranscriptStore for UI streaming display (to be removed)
             await chatStore.finalizeStreamingMessage(id: id, finalText: finalText, toolCalls: toolCalls)
-        case .llmReasoningSummaryDelta(let delta):
-            await chatStore.updateReasoningSummary(delta: delta)
-        case .llmReasoningSummaryComplete(let text):
-            await chatStore.completeReasoningSummary(finalText: text)
         case .llmEnqueueUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText, let toolChoice):
             // Bundle any queued coordinator messages WITH the user message
             // They'll be included as input items in the same API request
@@ -542,13 +543,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         }
     }
     // MARK: - LLM State Accessors (Delegated to LLMStateManager)
-    /// Update conversation state (called by LLMMessenger when response completes)
-    /// - Parameters:
-    ///   - responseId: The response ID from the completed response
-    ///   - hadToolCalls: Whether this response included tool calls (affects checkpoint safety)
-    func updateConversationState(responseId: String, hadToolCalls: Bool = false) async {
-        await llmStateManager.updateConversationState(responseId: responseId, hadToolCalls: hadToolCalls)
-    }
+
     /// Set model ID
     func setModelId(_ modelId: String) async {
         await llmStateManager.setModelId(modelId)
@@ -585,55 +580,10 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     // MARK: - Completed Tool Results (Anthropic History)
 
-    /// Store a completed tool result for inclusion in Anthropic conversation history
-    /// Uses paired storage: result is attached directly to the tool call in the message
-    /// For ephemeral results, calculates and injects `expiry_turn` based on current turn count
+    /// Store a completed tool result - ConversationLog is the sole source of truth
     func addCompletedToolResult(callId: String, toolName: String, output: String) async {
-        // Check if this is an ephemeral result and inject expiry_turn if so
-        let processedOutput = await injectExpiryTurnIfEphemeral(output)
-
-        // Legacy: Store in separate list (for backwards compatibility during migration)
-        await llmStateManager.addCompletedToolResult(callId: callId, toolName: toolName, output: processedOutput)
-
-        // NEW: Paired storage - attach result directly to the tool call in the message
-        let paired = await chatStore.setToolResult(callId: callId, result: processedOutput)
-        if paired {
-            Logger.debug("✅ Tool result paired with call in message: \(toolName) (\(callId.prefix(8)))", category: .ai)
-        } else {
-            Logger.warning("⚠️ Tool result could not be paired - call not found: \(toolName) (\(callId.prefix(8)))", category: .ai)
-        }
-    }
-
-    /// Inject expiry_turn into ephemeral tool results
-    /// Reads ephemeral_turns setting from UserDefaults and calculates absolute expiry turn
-    private func injectExpiryTurnIfEphemeral(_ output: String) async -> String {
-        guard let data = output.data(using: .utf8) else { return output }
-        var json = JSON(data)
-
-        // Check if marked as ephemeral
-        guard json["ephemeral"].boolValue else { return output }
-
-        // Calculate current turn count (assistant messages with tool calls)
-        let messages = await chatStore.getAllMessages()
-        let currentTurn = messages.filter { $0.role == .assistant && !($0.toolCalls?.isEmpty ?? true) }.count
-
-        // Get ephemeral turns from settings (default 3)
-        let ephemeralTurns = UserDefaults.standard.integer(forKey: "onboardingEphemeralTurns")
-        let turnsToKeep = ephemeralTurns > 0 ? ephemeralTurns : 3
-
-        // Inject absolute expiry turn
-        json["expiry_turn"].int = currentTurn + turnsToKeep
-
-        // Remove the relative ephemeral_turns field (no longer needed)
-        json["ephemeral_turns"] = JSON.null
-
-        Logger.debug("📝 Injected expiry_turn=\(currentTurn + turnsToKeep) for ephemeral result (current=\(currentTurn), keep=\(turnsToKeep))", category: .ai)
-        return json.rawString() ?? output
-    }
-
-    /// Get all completed tool results for building Anthropic conversation history
-    func getCompletedToolResults() async -> [(callId: String, toolName: String, output: String)] {
-        await llmStateManager.getCompletedToolResults()
+        await conversationLog.setToolResult(callId: callId, output: output, status: .completed)
+        Logger.debug("✅ Tool result stored: \(toolName) (\(callId.prefix(8)))", category: .ai)
     }
 
     // MARK: - Pending UI Tool Call (Codex Paradigm)
@@ -686,7 +636,22 @@ actor StateCoordinator: OnboardingEventEmitter {
         await uiState.reset()
         await streamQueueManager.reset()
         await llmStateManager.reset()
+        // Reset new architecture
+        await conversationLog.reset()
+        await operationTracker.reset()
         Logger.info("🔄 StateCoordinator reset (all services reset)", category: .ai)
+    }
+
+    // MARK: - ConversationLog Access (New Architecture)
+
+    /// Get the conversation log for direct access
+    func getConversationLog() -> ConversationLog {
+        conversationLog
+    }
+
+    /// Get the operation tracker for tool lifecycle management
+    func getOperationTracker() -> OperationTracker {
+        operationTracker
     }
     // MARK: - ToolPane Card Tracking (Delegated to LLMStateManager)
     func getCurrentToolPaneCard() async -> OnboardingToolPaneCard {
@@ -797,25 +762,35 @@ actor StateCoordinator: OnboardingEventEmitter {
         }
     }
 
-    // Chat delegation
+    // Chat delegation - ConversationLog is source of truth, plus streaming message
     var messages: [OnboardingMessage] {
         get async {
-            await chatStore.getAllMessages()
+            // Get finalized messages from ConversationLog
+            var msgs = await conversationLog.getMessagesForUI()
+
+            // Add current streaming message if any (not yet in ConversationLog)
+            if let streamingMsg = await chatStore.currentStreamingMessage {
+                msgs.append(streamingMsg)
+            }
+
+            return msgs
         }
     }
-    func appendUserMessage(_ text: String, isSystemGenerated: Bool = false) async -> UUID {
-        let id = await chatStore.appendUserMessage(text, isSystemGenerated: isSystemGenerated)
-        return id
+    /// Append user message - gated by ConversationLog (fills pending tool slots first)
+    /// - Returns: Message ID (always appends, gating is internal)
+    func appendUserMessage(_ text: String, isSystemGenerated: Bool = false) async -> UUID? {
+        // ConversationLog is the sole source of truth - handles gating for pending tool calls
+        await conversationLog.appendUser(text: text, isSystemGenerated: isSystemGenerated)
+
+        // Return a UUID for backwards compatibility (ConversationLog doesn't expose IDs)
+        // TODO: Clean up callers that depend on this return value
+        return UUID()
     }
 
     func appendAssistantMessage(_ text: String) async -> UUID {
-        await chatStore.appendAssistantMessage(text)
-    }
-    func getPreviousResponseId() async -> String? {
-        await chatStore.getPreviousResponseId()
-    }
-    func setPreviousResponseId(_ responseId: String?) async {
-        await chatStore.setPreviousResponseId(responseId)
+        let id = UUID()
+        await conversationLog.appendAssistant(id: id, text: text, toolCalls: nil)
+        return id
     }
     // UI State delegation
     func setActiveState(_ active: Bool) async {

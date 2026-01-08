@@ -172,9 +172,6 @@ class TokenUsageTracker {
             .map { (source: $0.key, stats: $0.value) }
     }
 
-    // MARK: - Event Bus Reference (for budget enforcement)
-    private var eventBus: EventCoordinator?
-
     // MARK: - Initialization
 
     init() {
@@ -186,8 +183,6 @@ class TokenUsageTracker {
 
     /// Start listening to token usage events from the event bus
     func startEventSubscription(eventBus: EventCoordinator) {
-        self.eventBus = eventBus  // Store reference for budget enforcement
-
         Task { @MainActor [weak self] in
             for await event in await eventBus.stream(topic: .llm) {
                 guard let self = self else { return }
@@ -226,40 +221,9 @@ class TokenUsageTracker {
             "📊 Token usage: +\(entry.inputTokens) in, +\(entry.outputTokens) out (\(entry.modelId), \(entry.source.displayName))",
             category: .ai
         )
-
-        // Budget enforcement (Milestone 8): Check if main coordinator input exceeds hard stop
-        // Only check main coordinator requests (not agent or extraction requests)
-        if entry.source == .mainCoordinator {
-            checkBudgetAndEmitIfExceeded(inputTokens: entry.inputTokens)
-        }
     }
 
-    // MARK: - Budget Enforcement (Milestone 8)
-
-    /// Check if input tokens exceed the hard stop budget and emit event if so
-    /// This triggers a PRI thread reset to prevent runaway context
-    private func checkBudgetAndEmitIfExceeded(inputTokens: Int) {
-        let status = TokenBudgetPolicy.checkBudget(inputTokens: inputTokens, isFirstTurn: false)
-
-        if case .exceededHardStop = status {
-            Logger.warning("🛑 Budget enforcement: \(inputTokens) tokens exceeds hard stop (\(TokenBudgetPolicy.hardStopBudget))", category: .ai)
-
-            // Emit event to trigger PRI reset
-            guard let eventBus = eventBus else {
-                Logger.error("🛑 Cannot emit budget exceeded event: no eventBus reference", category: .ai)
-                return
-            }
-
-            Task {
-                await eventBus.publish(.llmBudgetExceeded(
-                    inputTokens: inputTokens,
-                    threshold: TokenBudgetPolicy.hardStopBudget
-                ))
-            }
-        }
-    }
-
-    /// Record usage with raw values (for non-OpenAI providers)
+    /// Record usage with raw values
     func recordUsage(
         modelId: String,
         source: UsageSource,

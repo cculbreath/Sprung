@@ -2,14 +2,14 @@
 //  AnthropicToolConverter.swift
 //  Sprung
 //
-//  Converts OpenAI tool schemas to Anthropic format.
+//  Converts tool schemas to Anthropic format.
 //  Extracted from AnthropicRequestBuilder for single responsibility.
 //
 
 import Foundation
 import SwiftOpenAI
 
-/// Converts OpenAI tool schemas to Anthropic format
+/// Converts tool schemas to Anthropic format
 struct AnthropicToolConverter {
     private let toolRegistry: ToolRegistry
     private let stateCoordinator: StateCoordinator
@@ -43,7 +43,7 @@ struct AnthropicToolConverter {
             return []
         }
 
-        // Get OpenAI Tool schemas and convert to Anthropic format
+        // Get tool schemas and convert to Anthropic format
         let openAITools = await toolRegistry.toolSchemas(filteredBy: bundledNames)
         var anthropicTools: [AnthropicTool] = openAITools.compactMap { tool -> AnthropicTool? in
             guard case .function(let funcTool) = tool else { return nil }
@@ -63,7 +63,7 @@ struct AnthropicToolConverter {
 
     // MARK: - Conversion
 
-    /// Convert an OpenAI function tool to Anthropic format
+    /// Convert a function tool to Anthropic format
     func convertToAnthropicTool(_ funcTool: Tool.FunctionTool) -> AnthropicTool {
         // Convert JSONSchema to dictionary for Anthropic's input_schema
         let inputSchema = convertJSONSchemaToDictionary(funcTool.parameters)

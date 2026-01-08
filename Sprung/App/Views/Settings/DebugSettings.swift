@@ -7,7 +7,6 @@ import SwiftUI
 struct DebugSettingsView: View {
     @Environment(DebugSettingsStore.self) private var debugSettings
     @Environment(SkillStore.self) private var skillStore
-    @State private var tokenBudgetHardStop: Int = TokenBudgetPolicy.hardStopBudget
     @State private var showClearSkillsConfirmation = false
 
     private var saveDebugPromptsBinding: Binding<Bool> {
@@ -84,24 +83,6 @@ struct DebugSettingsView: View {
                 }
 
                 Text("Deletes all skills from the local store.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                Stepper(value: $tokenBudgetHardStop, in: 25_000...200_000, step: 5_000) {
-                    HStack {
-                        Text("PRI Reset Threshold")
-                        Spacer()
-                        Text("\(tokenBudgetHardStop / 1000)k tokens")
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    }
-                }
-                .onChange(of: tokenBudgetHardStop) { _, newValue in
-                    TokenBudgetPolicy.setHardStopBudget(newValue)
-                }
-                Text("When input tokens exceed this threshold, the conversation thread resets to prevent runaway context. Default: 75k.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

@@ -60,11 +60,22 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
         case .available:
             // Tool is available - proceed with execution
             Logger.debug("🔧 Executing tool: \(call.name)", category: .ai)
+
+            // Create ToolOperation for lifecycle tracking
+            let operation = ToolOperation(
+                callId: call.callId,
+                name: call.name,
+                arguments: call.arguments.rawString() ?? "{}"
+            )
+            let tracker = await stateCoordinator.getOperationTracker()
+            await tracker.register(operation)
+
             do {
                 let result = try await toolExecutor.handleToolCall(call)
-                await handleToolResult(result, callId: call.callId, toolName: call.name)
+                await handleToolResult(result, callId: call.callId, toolName: call.name, operation: operation)
             } catch {
                 Logger.error("Tool execution failed: \(error)", category: .ai)
+                await operation.fail(error: error)
                 await emitToolError(callId: call.callId, toolName: call.name, message: "Tool execution failed: \(error.localizedDescription)")
             }
 
@@ -75,9 +86,11 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
         }
     }
     /// Handle tool execution result
-    private func handleToolResult(_ result: ToolResult, callId: String, toolName: String?) async {
+    private func handleToolResult(_ result: ToolResult, callId: String, toolName: String?, operation: ToolOperation) async {
         switch result {
         case .immediate(let output):
+            // Mark operation as completed
+            await operation.complete(output: output.rawString() ?? "{}")
             // Special handling for extract_document tool - emit artifact record produced event
             // DocumentArtifactMessenger will batch and send the extracted content to the LLM
             // No separate developer message needed - tool response + content message suffice
@@ -85,7 +98,6 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
                 await emit(.artifactRecordProduced(record: output["artifact_record"]))
             }
             // Determine reasoning effort for specific tools
-            // GPT-5.1 supports: none, low, medium, high (not "minimal")
             // Hard tasks use elevated reasoning; all others use default from settings
             let hardTaskTools: Set<String> = [
                 "validate_applicant_profile"
@@ -112,6 +124,9 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
                 }
             }
         case .error(let error):
+            // Mark operation as failed
+            await operation.fail(error: error)
+
             // Tool execution error
             var errorOutput = JSON()
             errorOutput["error"].string = error.localizedDescription
@@ -130,6 +145,9 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             if let existingPending = await stateCoordinator.getPendingUIToolCall() {
                 Logger.warning("⚠️ Duplicate UI tool call detected: \(pendingToolName) (callId: \(callId.prefix(8))) while \(existingPending.toolName) (callId: \(existingPending.callId.prefix(8))) is already pending", category: .ai)
 
+                // Mark this duplicate operation as cancelled
+                await operation.cancel(reason: "Duplicate UI tool call")
+
                 // Return incomplete - be honest that this duplicate wasn't processed
                 var output = JSON()
                 output["status"].string = "incomplete"
@@ -138,6 +156,10 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
                 Logger.info("⚠️ Duplicate UI tool call returned incomplete: \(pendingToolName)", category: .ai)
                 return
             }
+
+            // Set operation to awaiting user state
+            // The UI dismiss handler will be set by the tool pane when it presents the UI
+            await operation.setAwaitingUser()
 
             await stateCoordinator.setPendingUIToolCall(callId: callId, toolName: pendingToolName)
             Logger.info("🎯 UI tool pending user action: \(pendingToolName) (callId: \(callId.prefix(8)))", category: .ai)

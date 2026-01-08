@@ -19,7 +19,7 @@ enum OnboardingEvent {
     // MARK: - Processing State
     case processingStateChanged(Bool, statusMessage: String? = nil)
     // MARK: - Messages
-    case streamingMessageBegan(id: UUID, text: String, reasoningExpected: Bool, statusMessage: String? = nil)
+    case streamingMessageBegan(id: UUID, text: String, statusMessage: String? = nil)
     case streamingMessageUpdated(id: UUID, delta: String, statusMessage: String? = nil)
     case streamingMessageFinalized(id: UUID, finalText: String, toolCalls: [OnboardingMessage.ToolCallInfo]? = nil, statusMessage: String? = nil)
     // MARK: - Status Updates
@@ -150,17 +150,14 @@ enum OnboardingEvent {
     case llmExecuteToolResponse(payload: JSON)
     case llmExecuteCoordinatorMessage(payload: JSON)
     case llmStreamCompleted  // Signal that a stream finished and queue can process next item
-    // Sidebar reasoning (ChatGPT-style, not attached to messages)
-    case llmReasoningSummaryDelta(delta: String)  // Incremental reasoning text for sidebar
-    case llmReasoningSummaryComplete(text: String)  // Final reasoning text for sidebar
-    case llmReasoningItemsForToolCalls(ids: [String])  // Reasoning item IDs to pass back with tool outputs
-
     // Token usage tracking
     case llmTokenUsageReceived(modelId: String, inputTokens: Int, outputTokens: Int, cachedTokens: Int, reasoningTokens: Int, source: UsageSource)
-    case llmBudgetExceeded(inputTokens: Int, threshold: Int)  // Triggers PRI thread reset (Milestone 8)
     // Session persistence events
-    case llmResponseIdUpdated(responseId: String?)  // previousResponseId updated after API response
     case toolResultPairedWithMessage(messageId: UUID, toolCallsJSON: String)  // tool result paired with message (for persistence update)
+
+    // MARK: - Conversation Log Events
+    case conversationEntryAppended(entry: ConversationEntry)  // New entry added to conversation log
+    case toolResultFilled(callId: String, status: String)  // Tool result slot filled in last entry
     // MARK: - Phase Management (§6 spec)
     case phaseTransitionRequested(from: String, to: String, reason: String?)
     case phaseTransitionApplied(phase: String, timestamp: Date)
@@ -244,6 +241,10 @@ enum OnboardingEvent {
         case .toolResultPairedWithMessage(let messageId, let toolCallsJSON):
             let preview = String(toolCallsJSON.prefix(100))
             return "toolResultPairedWithMessage(messageId: \(messageId), json: \(preview)...)"
+        case .conversationEntryAppended(let entry):
+            return "conversationEntryAppended(\(entry.isUser ? "user" : "assistant"), id: \(entry.id))"
+        case .toolResultFilled(let callId, let status):
+            return "toolResultFilled(callId: \(callId.prefix(8))..., status: \(status))"
         // Events with minimal payloads - use default description
         default:
             return String(describing: self)
@@ -437,9 +438,9 @@ actor EventCoordinator {
              .llmEnqueueUserMessage, .llmEnqueueToolResponse,
              .llmToolCallBatchStarted, .llmExecuteBatchedToolResponses,
              .llmExecuteUserMessage, .llmExecuteToolResponse, .llmExecuteCoordinatorMessage, .llmStreamCompleted,
-             .llmReasoningSummaryDelta, .llmReasoningSummaryComplete, .llmReasoningItemsForToolCalls, .llmCancelRequested,
-             .llmResponseIdUpdated, .llmTokenUsageReceived, .llmBudgetExceeded, .toolResultPairedWithMessage,
-             .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized:
+             .llmCancelRequested, .llmTokenUsageReceived, .toolResultPairedWithMessage,
+             .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized,
+             .conversationEntryAppended, .toolResultFilled:
             return .llm
         // State events
         case .stateSnapshot, .stateAllowedToolsUpdated,
@@ -518,7 +519,7 @@ actor EventCoordinator {
         case .processingStateChanged(let processing, let statusMessage):
             let statusInfo = statusMessage.map { " - \($0)" } ?? ""
             description = "Processing: \(processing)\(statusInfo)"
-        case .streamingMessageBegan(_, _, _, let statusMessage):
+        case .streamingMessageBegan(_, _, let statusMessage):
             let statusInfo = statusMessage.map { " - \($0)" } ?? ""
             description = "Streaming began\(statusInfo)"
         case .streamingMessageUpdated(_, _, let statusMessage):
@@ -705,12 +706,6 @@ actor EventCoordinator {
             description = "LLM stream completed"
         case .llmStatus(let status):
             description = "LLM status: \(status.rawValue)"
-        case .llmReasoningSummaryDelta(let delta):
-            description = "LLM reasoning summary delta (\(delta.prefix(50))...)"
-        case .llmReasoningSummaryComplete(let text):
-            description = "LLM reasoning summary complete (\(text.count) chars)"
-        case .llmReasoningItemsForToolCalls(let ids):
-            description = "LLM reasoning items for tool calls (\(ids.count) item(s))"
         case .phaseTransitionRequested(let from, let to, _):
             description = "Phase transition requested: \(from) → \(to)"
         case .phaseTransitionApplied(let phase, _):
@@ -731,15 +726,15 @@ actor EventCoordinator {
             description = "Dismiss Profile Summary Requested"
         case .toolPaneCardRestored(let card):
             description = "ToolPane card restored: \(card.rawValue)"
-        case .llmResponseIdUpdated(let responseId):
-            description = "LLM response ID updated: \(responseId?.prefix(12) ?? "nil")..."
         case .toolResultPairedWithMessage(let messageId, _):
             description = "Tool result paired with message: \(messageId)"
+        case .conversationEntryAppended(let entry):
+            description = "Conversation entry appended: \(entry.isUser ? "user" : "assistant") (\(entry.id))"
+        case .toolResultFilled(let callId, let status):
+            description = "Tool result filled: \(callId.prefix(8))... (\(status))"
         case .llmTokenUsageReceived(let modelId, let inputTokens, let outputTokens, let cachedTokens, _, let source):
             let cachedStr = cachedTokens > 0 ? ", cached: \(cachedTokens)" : ""
             description = "Token usage [\(source.displayName)]: \(modelId) - in: \(inputTokens), out: \(outputTokens)\(cachedStr)"
-        case .llmBudgetExceeded(let inputTokens, let threshold):
-            description = "🛑 Token budget exceeded: \(inputTokens) > \(threshold) - triggering PRI reset"
         case .mergedInventoryStored(let inventoryJSON):
             description = "Merged inventory stored: \(inventoryJSON.count) chars"
         case .todoListUpdated(let todoListJSON):

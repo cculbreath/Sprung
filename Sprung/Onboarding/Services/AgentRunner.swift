@@ -3,10 +3,9 @@
 //  Sprung
 //
 //  Isolated agent execution loop for sub-agents (e.g., Git analysis agents).
-//  Each AgentRunner has its own conversation thread, tool executor, and response ID chain.
+//  Each AgentRunner has its own conversation thread and tool executor.
 //
 //  CRITICAL: Sub-agents are completely isolated from the main coordinator:
-//  - Own responseId chain (never touches main's)
 //  - Own message history (built locally)
 //  - Own tool executor (limited tool set)
 //  - Does NOT emit events to main EventCoordinator

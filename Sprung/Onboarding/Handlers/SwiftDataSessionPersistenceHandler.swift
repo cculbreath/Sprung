@@ -93,7 +93,7 @@ final class SwiftDataSessionPersistenceHandler {
         guard !isActive else { return }
         isActive = true
 
-        // Subscribe to LLM events (messages, previousResponseId)
+        // Subscribe to LLM events (messages, tool results)
         let llmTask = Task { [weak self] in
             guard let self else { return }
             for await event in await self.eventBus.stream(topic: .llm) {
@@ -185,22 +185,12 @@ final class SwiftDataSessionPersistenceHandler {
         guard let session = currentSession else { return }
 
         switch event {
-        case .llmUserMessageSent(let messageId, let payload, _):
-            persistUserMessage(session: session, messageId: messageId, payload: payload)
+        // ConversationLog is the single source of truth for message persistence
+        case .conversationEntryAppended(let entry):
+            persistConversationEntry(session: session, entry: entry)
 
-        case .streamingMessageFinalized(let id, let finalText, let toolCalls, _):
-            persistAssistantMessage(session: session, id: id, finalText: finalText, toolCalls: toolCalls)
-
-        case .llmResponseIdUpdated(let responseId):
-            sessionStore.updatePreviousResponseId(session, responseId: responseId)
-            if let id = responseId {
-                Logger.info("💾 Persisted previousResponseId: \(id.prefix(20))...", category: .ai)
-            } else {
-                Logger.info("💾 Cleared previousResponseId (thread reset)", category: .ai)
-            }
-
-        case .toolResultPairedWithMessage(let messageId, let toolCallsJSON):
-            sessionStore.updateMessageToolCalls(session, messageId: messageId, toolCallsJSON: toolCallsJSON)
+        case .toolResultFilled(let callId, let status):
+            updateConversationEntryToolResult(session: session, callId: callId, status: status)
 
         default:
             break
@@ -307,53 +297,6 @@ final class SwiftDataSessionPersistenceHandler {
 
     // MARK: - Persistence Methods
 
-    private func persistUserMessage(session: OnboardingSession, messageId: String, payload: JSON) {
-        guard let text = payload["text"].string else {
-            Logger.warning("Cannot persist user message: missing text", category: .ai)
-            return
-        }
-
-        let id = UUID(uuidString: messageId) ?? UUID()
-        let isSystemGenerated = payload["isSystemGenerated"].boolValue
-
-        _ = sessionStore.addMessage(
-            session,
-            id: id,
-            role: "user",
-            text: text,
-            isSystemGenerated: isSystemGenerated
-        )
-
-        Logger.debug("Persisted user message: \(messageId)", category: .ai)
-    }
-
-    private func persistAssistantMessage(
-        session: OnboardingSession,
-        id: UUID,
-        finalText: String,
-        toolCalls: [OnboardingMessage.ToolCallInfo]?
-    ) {
-        var toolCallsJSON: String?
-        if let calls = toolCalls, !calls.isEmpty {
-            if let data = try? JSONEncoder().encode(calls) {
-                toolCallsJSON = String(data: data, encoding: .utf8)
-            }
-        }
-
-        _ = sessionStore.addMessage(
-            session,
-            id: id,
-            role: "assistant",
-            text: finalText,
-            toolCallsJSON: toolCallsJSON
-        )
-
-        // Batch save after message is added
-        sessionStore.saveMessages()
-
-        Logger.debug("Persisted assistant message: \(id)", category: .ai)
-    }
-
     private func persistArtifact(session: OnboardingSession, record: JSON) {
         let artifactIdString = record["id"].string
         let sourceType = record["source_type"].stringValue
@@ -438,24 +381,58 @@ final class SwiftDataSessionPersistenceHandler {
         Logger.debug("Updated artifact metadata: \(artifact.filename)", category: .ai)
     }
 
-    // MARK: - Session Restore
+    // MARK: - ConversationLog Persistence (New Architecture)
 
-    /// Restore session state to in-memory stores
-    func restoreSession(_ session: OnboardingSession, to chatStore: ChatTranscriptStore) async {
-        // Restore messages
-        let messages = sessionStore.restoreMessages(session)
-        await chatStore.restoreMessages(messages)
+    /// Persist a ConversationEntry to SwiftData
+    private func persistConversationEntry(session: OnboardingSession, entry: ConversationEntry) {
+        // Calculate sequence index
+        let sequenceIndex = session.conversationEntries.count
 
-        // Restore previousResponseId
-        if let responseId = session.previousResponseId {
-            await chatStore.setPreviousResponseId(responseId)
-            Logger.info("📥 Restored previousResponseId: \(responseId.prefix(20))...", category: .ai)
-        } else {
-            Logger.warning("⚠️ Session has no previousResponseId - will rebuild conversation context", category: .ai)
+        let record = ConversationEntryRecord.from(entry, sequenceIndex: sequenceIndex)
+        record.session = session
+        session.conversationEntries.append(record)
+
+        sessionStore.saveConversationEntries()
+
+        Logger.debug("💾 Persisted conversation entry: \(entry.isUser ? "user" : "assistant") (seq: \(sequenceIndex))", category: .ai)
+    }
+
+    /// Update a tool result in a persisted ConversationEntry
+    private func updateConversationEntryToolResult(session: OnboardingSession, callId: String, status: String) {
+        // Find the last assistant entry that contains this tool call
+        guard let record = session.conversationEntries.last(where: { entry in
+            guard entry.entryType == "assistant",
+                  let toolCallsJSON = entry.toolCallsJSON,
+                  let data = toolCallsJSON.data(using: .utf8),
+                  let toolCalls = try? JSONDecoder().decode([ToolCall].self, from: data) else {
+                return false
+            }
+            return toolCalls.contains { $0.callId == callId }
+        }) else {
+            Logger.warning("Cannot update tool result - entry not found for call \(callId.prefix(8))", category: .ai)
+            return
         }
 
-        Logger.info("Restored session state: \(messages.count) messages", category: .ai)
+        // Decode, update, and re-encode tool calls
+        guard let data = record.toolCallsJSON?.data(using: .utf8),
+              var toolCalls = try? JSONDecoder().decode([ToolCall].self, from: data),
+              let index = toolCalls.firstIndex(where: { $0.callId == callId }) else {
+            return
+        }
+
+        // The result is already set in ConversationLog - we need to sync it
+        // For now, just mark that the status changed (the result will be synced on session restore)
+        toolCalls[index].status = ToolCallStatus(rawValue: status) ?? .completed
+
+        if let newData = try? JSONEncoder().encode(toolCalls),
+           let newJSON = String(data: newData, encoding: .utf8) {
+            record.toolCallsJSON = newJSON
+            sessionStore.saveConversationEntries()
+            Logger.debug("💾 Updated tool result status: \(callId.prefix(8)) → \(status)", category: .ai)
+        }
     }
+
+    // MARK: - Session Restore
 
     /// Get restored objective statuses
     func getRestoredObjectiveStatuses(_ session: OnboardingSession) -> [String: String] {
@@ -544,6 +521,18 @@ final class SwiftDataSessionPersistenceHandler {
     /// Get restored todo list JSON
     func getRestoredTodoList(_ session: OnboardingSession) -> String? {
         sessionStore.getTodoList(session)
+    }
+
+    // MARK: - ConversationLog Restore (New Architecture)
+
+    /// Restore ConversationLog entries from SwiftData
+    func restoreConversationLog(_ session: OnboardingSession, to conversationLog: ConversationLog) async {
+        let entries = session.conversationEntries
+            .sorted { $0.sequenceIndex < $1.sequenceIndex }
+            .compactMap { $0.toConversationEntry() }
+
+        await conversationLog.restore(entries: entries)
+        Logger.info("📥 Restored \(entries.count) conversation entries to ConversationLog", category: .ai)
     }
 
     // MARK: - Archived Artifacts

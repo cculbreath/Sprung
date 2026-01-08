@@ -3,7 +3,7 @@
 //  Sprung
 //
 //  Network stream monitoring and event emission (Spec §4.4)
-//  Monitors SSE/WebSocket deltas from OpenAI and converts to events
+//  Monitors SSE/WebSocket deltas and converts to events
 //
 import Foundation
 import SwiftOpenAI
@@ -12,8 +12,7 @@ import SwiftyJSON
 /// Responsibilities (Spec §4.4):
 /// - Monitor SSE/WebSocket streams
 /// - Parse streaming deltas
-/// - Emit events: LLM.messageDelta, LLM.messageReceived, LLM.toolCallReceived,
-///                LLM.reasoningDelta, LLM.reasoningDone, LLM.error
+/// - Emit events: LLM.messageDelta, LLM.messageReceived, LLM.toolCallReceived, LLM.error
 actor NetworkRouter: OnboardingEventEmitter {
     // MARK: - Properties
     let eventBus: EventCoordinator
@@ -63,8 +62,6 @@ actor NetworkRouter: OnboardingEventEmitter {
                 if streamingBuffers.isEmpty {
                     await processMessageContent(message)
                 }
-            case .reasoning(let reasoning):
-                await processReasoningItem(reasoning)
             case .webSearchCall(let webSearch):
                 await processWebSearchCall(webSearch)
             default:
@@ -110,18 +107,12 @@ actor NetworkRouter: OnboardingEventEmitter {
                 switch item {
                 case .message(let message):
                     await processMessageContent(message)
-                case .reasoning(let reasoning):
-                    await processReasoningItem(reasoning)
                 case .webSearchCall(let webSearch):
                     await processWebSearchCall(webSearch)
                 default:
                     break
                 }
             }
-        case .reasoningSummaryTextDelta(let delta):
-            await processReasoningSummaryDelta(delta)
-        case .reasoningSummaryTextDone(let done):
-            await processReasoningSummaryDone(done)
         case .responseCreated, .responseIncomplete:
             // These events don't need special handling
             break
@@ -145,7 +136,7 @@ actor NetworkRouter: OnboardingEventEmitter {
         // Initialize buffer for new message
         if streamingBuffers[itemId] == nil {
             let messageId = UUID()
-            await emit(.streamingMessageBegan(id: messageId, text: "", reasoningExpected: false, statusMessage: "Receiving response..."))
+            await emit(.streamingMessageBegan(id: messageId, text: "", statusMessage: "Receiving response..."))
             streamingBuffers[itemId] = StreamBuffer(
                 messageId: messageId,
                 text: "",
@@ -207,8 +198,6 @@ actor NetworkRouter: OnboardingEventEmitter {
                 )
                 await emit(.toolCallRequested(call, statusMessage: "Executing \(functionName)..."))
                 Logger.info("🔧 Tool call received: \(functionName)", category: .ai)
-            case .reasoning(let reasoning):
-                await processReasoningItem(reasoning)
             default:
                 break
             }
@@ -219,7 +208,7 @@ actor NetworkRouter: OnboardingEventEmitter {
             // Apply URL citations as markdown links
             let annotatedText = applyURLCitations(to: completeText, annotations: allAnnotations)
             let messageId = UUID()
-            await emit(.streamingMessageBegan(id: messageId, text: annotatedText, reasoningExpected: false))
+            await emit(.streamingMessageBegan(id: messageId, text: annotatedText))
             await emit(.streamingMessageFinalized(id: messageId, finalText: annotatedText, toolCalls: toolCalls.isEmpty ? nil : toolCalls))
             let citationCount = allAnnotations.filter { $0.isURLCitation }.count
             Logger.info("📝 Extracted complete message (\(completeText.count) chars, \(toolCalls.count) tool calls, \(citationCount) citations) from completed response", category: .ai)
@@ -293,28 +282,6 @@ actor NetworkRouter: OnboardingEventEmitter {
         // The annotations in the message will contain URL citations
         // No explicit action needed here - just log for debugging
         Logger.info("🌐 Web search completed: id=\(webSearch.id), status=\(webSearch.status ?? "unknown")", category: .ai)
-    }
-
-    // MARK: - Reasoning Support
-    /// Process reasoning item from output (indicates reasoning is present)
-    private func processReasoningItem(_ reasoning: OutputItem.Reasoning) async {
-        // Reasoning items are handled automatically by previous_response_id
-        // No need to track or pass them back with tool responses
-        Logger.debug("🧠 Reasoning output: \(reasoning.id)", category: .ai)
-    }
-    /// Process reasoning summary text delta (streaming)
-    /// Reasoning summaries display in a separate sidebar, not attached to specific messages
-    private func processReasoningSummaryDelta(_ event: ReasoningSummaryTextDeltaEvent) async {
-        // Emit the actual delta text for StateCoordinator to accumulate in sidebar
-        await emit(.llmReasoningSummaryDelta(delta: event.delta))
-        Logger.debug("🧠 Reasoning summary delta: \(event.delta.prefix(50))...", category: .ai)
-    }
-    /// Process reasoning summary completion
-    /// Reasoning summaries display in a separate sidebar, not attached to specific messages
-    private func processReasoningSummaryDone(_ event: ReasoningSummaryTextDoneEvent) async {
-        // Emit the complete text for sidebar display
-        await emit(.llmReasoningSummaryComplete(text: event.text))
-        Logger.info("🧠 Reasoning summary complete (\(event.text.count) chars)", category: .ai)
     }
 
     // MARK: - URL Citation Processing

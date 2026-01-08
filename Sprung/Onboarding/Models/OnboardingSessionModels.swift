@@ -11,12 +11,10 @@ import SwiftData
 // MARK: - Session Checkpoint
 
 /// Root model for an onboarding session. One per onboarding attempt.
-/// Stores the OpenAI thread reference and overall session state.
+/// Stores overall session state and conversation history.
 @Model
 class OnboardingSession {
     var id: UUID
-    /// OpenAI Responses API thread reference (valid for ~30 days)
-    var previousResponseId: String?
     /// Current interview phase (InterviewPhase.rawValue)
     var phase: String
     /// When the session was started
@@ -54,9 +52,36 @@ class OnboardingSession {
     @Relationship(deleteRule: .cascade, inverse: \OnboardingPlanItemRecord.session)
     var planItems: [OnboardingPlanItemRecord] = []
 
+    // MARK: - Tool Coordination (Single Source of Truth)
+
+    @Relationship(deleteRule: .cascade, inverse: \PendingToolResponseRecord.session)
+    var pendingToolResponses: [PendingToolResponseRecord] = []
+
+    @Relationship(deleteRule: .cascade, inverse: \PendingUserMessageRecord.session)
+    var pendingUserMessages: [PendingUserMessageRecord] = []
+
+    // MARK: - Conversation Log (New Architecture)
+
+    @Relationship(deleteRule: .cascade, inverse: \ConversationEntryRecord.session)
+    var conversationEntries: [ConversationEntryRecord] = []
+
+    /// Expected number of tool responses in current batch (transient, reset on load)
+    var expectedToolResponseCount: Int = 0
+
+    /// Comma-separated tool call IDs in current batch
+    var currentBatchCallIdsCSV: String?
+
+    /// Comma-separated tool call IDs for UI tools awaiting user action
+    var pendingUIToolCallIdsCSV: String?
+
+    /// Currently pending UI tool call ID (single tool awaiting user action)
+    var pendingUIToolCallId: String?
+
+    /// Currently pending UI tool name
+    var pendingUIToolName: String?
+
     init(
         id: UUID = UUID(),
-        previousResponseId: String? = nil,
         phase: String = "phase1_core_facts",
         startedAt: Date = Date(),
         lastActiveAt: Date = Date(),
@@ -70,7 +95,6 @@ class OnboardingSession {
         todoListJSON: String? = nil
     ) {
         self.id = id
-        self.previousResponseId = previousResponseId
         self.phase = phase
         self.startedAt = startedAt
         self.lastActiveAt = lastActiveAt
@@ -82,6 +106,43 @@ class OnboardingSession {
         self.isDocumentCollectionActive = isDocumentCollectionActive
         self.isTimelineEditorActive = isTimelineEditorActive
         self.todoListJSON = todoListJSON
+    }
+
+    // MARK: - Tool Coordination Computed Properties
+
+    /// Current batch call IDs as a Set
+    var currentBatchCallIds: Set<String> {
+        get {
+            guard let csv = currentBatchCallIdsCSV, !csv.isEmpty else { return [] }
+            return Set(csv.split(separator: ",").map { String($0) })
+        }
+        set {
+            currentBatchCallIdsCSV = newValue.isEmpty ? nil : newValue.sorted().joined(separator: ",")
+        }
+    }
+
+    /// Pending UI tool call IDs as a Set
+    var pendingUIToolCallIds: Set<String> {
+        get {
+            guard let csv = pendingUIToolCallIdsCSV, !csv.isEmpty else { return [] }
+            return Set(csv.split(separator: ",").map { String($0) })
+        }
+        set {
+            pendingUIToolCallIdsCSV = newValue.isEmpty ? nil : newValue.sorted().joined(separator: ",")
+        }
+    }
+
+    /// Check if there's a pending UI tool in the current batch
+    var hasPendingUIToolInBatch: Bool {
+        !currentBatchCallIds.intersection(pendingUIToolCallIds).isEmpty
+    }
+
+    /// Reset transient tool coordination state (called on session load)
+    func resetTransientToolState() {
+        expectedToolResponseCount = 0
+        currentBatchCallIdsCSV = nil
+        // Note: pendingUIToolCallIds and pendingToolResponses may need to persist
+        // depending on whether we want to resume mid-tool-batch
     }
 }
 
@@ -179,5 +240,150 @@ class OnboardingPlanItemRecord {
         self.descriptionText = descriptionText
         self.status = status
         self.timelineEntryId = timelineEntryId
+    }
+}
+
+// MARK: - Tool Coordination Records
+
+/// Pending tool response awaiting batch release.
+/// Collected here until all tool calls in a batch are complete.
+@Model
+class PendingToolResponseRecord {
+    var callId: String
+    var toolName: String
+    /// JSON string of the tool output
+    var outputJSON: String
+    var timestamp: Date
+
+    var session: OnboardingSession?
+
+    init(
+        callId: String,
+        toolName: String,
+        outputJSON: String,
+        timestamp: Date = Date()
+    ) {
+        self.callId = callId
+        self.toolName = toolName
+        self.outputJSON = outputJSON
+        self.timestamp = timestamp
+    }
+}
+
+/// Pending user message queued while tool calls are unresolved.
+/// System-generated messages wait here; chatbox messages bypass.
+@Model
+class PendingUserMessageRecord {
+    var text: String
+    var isSystemGenerated: Bool
+    var timestamp: Date
+
+    var session: OnboardingSession?
+
+    init(
+        text: String,
+        isSystemGenerated: Bool,
+        timestamp: Date = Date()
+    ) {
+        self.text = text
+        self.isSystemGenerated = isSystemGenerated
+        self.timestamp = timestamp
+    }
+}
+
+// MARK: - Conversation Entry Record (ConversationLog persistence)
+
+/// Persisted conversation entry for the new ConversationLog architecture.
+/// Replaces OnboardingMessageRecord with clean slot-fill model.
+@Model
+class ConversationEntryRecord {
+    var id: UUID
+    /// Entry type: "user" or "assistant"
+    var entryType: String
+    /// Message text content
+    var text: String
+    /// For user entries: whether this was system-generated
+    var isSystemGenerated: Bool?
+    /// For assistant entries: serialized [ToolCall] array as JSON
+    var toolCallsJSON: String?
+    /// When the entry was created
+    var timestamp: Date
+    /// Explicit ordering in the conversation sequence
+    var sequenceIndex: Int
+
+    var session: OnboardingSession?
+
+    init(
+        id: UUID = UUID(),
+        entryType: String,
+        text: String,
+        isSystemGenerated: Bool? = nil,
+        toolCallsJSON: String? = nil,
+        timestamp: Date = Date(),
+        sequenceIndex: Int = 0
+    ) {
+        self.id = id
+        self.entryType = entryType
+        self.text = text
+        self.isSystemGenerated = isSystemGenerated
+        self.toolCallsJSON = toolCallsJSON
+        self.timestamp = timestamp
+        self.sequenceIndex = sequenceIndex
+    }
+
+    /// Convert to ConversationEntry for ConversationLog restore
+    func toConversationEntry() -> ConversationEntry? {
+        switch entryType {
+        case "user":
+            return .user(
+                id: id,
+                text: text,
+                isSystemGenerated: isSystemGenerated ?? false,
+                timestamp: timestamp
+            )
+        case "assistant":
+            var toolCalls: [ToolCall]?
+            if let json = toolCallsJSON,
+               let data = json.data(using: .utf8) {
+                toolCalls = try? JSONDecoder().decode([ToolCall].self, from: data)
+            }
+            return .assistant(
+                id: id,
+                text: text,
+                toolCalls: toolCalls,
+                timestamp: timestamp
+            )
+        default:
+            return nil
+        }
+    }
+
+    /// Create from ConversationEntry
+    static func from(_ entry: ConversationEntry, sequenceIndex: Int) -> ConversationEntryRecord {
+        switch entry {
+        case .user(let id, let text, let isSystemGenerated, let timestamp):
+            return ConversationEntryRecord(
+                id: id,
+                entryType: "user",
+                text: text,
+                isSystemGenerated: isSystemGenerated,
+                timestamp: timestamp,
+                sequenceIndex: sequenceIndex
+            )
+        case .assistant(let id, let text, let toolCalls, let timestamp):
+            var toolCallsJSON: String?
+            if let calls = toolCalls,
+               let data = try? JSONEncoder().encode(calls) {
+                toolCallsJSON = String(data: data, encoding: .utf8)
+            }
+            return ConversationEntryRecord(
+                id: id,
+                entryType: "assistant",
+                text: text,
+                toolCallsJSON: toolCallsJSON,
+                timestamp: timestamp,
+                sequenceIndex: sequenceIndex
+            )
+        }
     }
 }

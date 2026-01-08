@@ -546,7 +546,11 @@ final class UIResponseCoordinator {
         // It should only be dismissed by "Done with Uploads" button or phase transitions.
 
         // Add the message to chat transcript IMMEDIATELY so user sees it in the UI
-        let messageId = await state.appendUserMessage(text, isSystemGenerated: false)
+        // Chatbox messages (isSystemGenerated=false) always return a messageId - they're never queued
+        guard let messageId = await state.appendUserMessage(text, isSystemGenerated: false) else {
+            Logger.error("❌ Chatbox message unexpectedly queued - this should never happen", category: .ai)
+            return
+        }
         // Emit event so coordinator can sync its messages array to UI
         await eventBus.publish(.chatboxUserMessageAdded(messageId: messageId.uuidString))
         // Wrap user chatbox messages in <chatbox> tags for LLM context

@@ -51,7 +51,7 @@ final class PhaseTransitionController {
         let introPrompt = script.introductoryPrompt
         var introPayload = JSON()
         introPayload["text"].string = introPrompt
-        introPayload["reasoningEffort"].string = "low"  // GPT-5.1 supports: none, low, medium, high
+        introPayload["reasoningEffort"].string = "low"
 
         // Don't force toolChoice - let the model output preamble text naturally before calling tools
         // The initial user message includes explicit instructions to output the welcome message

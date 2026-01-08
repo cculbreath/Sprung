@@ -99,8 +99,6 @@ actor LLMMessenger: OnboardingEventEmitter {
             await executeCoordinatorMessage(payload)
         case .llmCancelRequested:
             await cancelCurrentStream()
-        case .llmBudgetExceeded(let inputTokens, let threshold):
-            await handleBudgetExceeded(inputTokens: inputTokens, threshold: threshold)
         default:
             break
         }
@@ -136,29 +134,6 @@ actor LLMMessenger: OnboardingEventEmitter {
     func activate() {
         isActive = true
         Logger.info("✅ LLMMessenger activated", category: .ai)
-    }
-    // MARK: - Budget Enforcement (Milestone 8)
-
-    /// Handle budget exceeded event by resetting the PRI thread
-    /// This starts a fresh conversation thread seeded with base developer message + WorkingMemory
-    private func handleBudgetExceeded(inputTokens: Int, threshold: Int) async {
-        Logger.warning(
-            "🛑 PRI Reset: Input tokens (\(inputTokens)) exceeded hard stop (\(threshold)). Clearing previous_response_id.",
-            category: .ai
-        )
-
-        // Clear the previous_response_id - this resets the conversation thread
-        // The next request will automatically:
-        // 1. Include the base developer message (since previousResponseId == nil)
-        // 2. Include WorkingMemory in the instructions parameter
-        // Note: StateCoordinator.setPreviousResponseId() delegates to ChatTranscriptStore,
-        // and ConversationContextAssembler.getPreviousResponseId() reads from the same source
-        await stateCoordinator.setPreviousResponseId(nil)
-
-        Logger.info(
-            "✅ PRI thread reset complete. Next request will start fresh with base developer message + WorkingMemory.",
-            category: .ai
-        )
     }
 
     // MARK: - Stream Cancellation

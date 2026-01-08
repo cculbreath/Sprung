@@ -47,7 +47,7 @@ final class CoordinatorEventRouter {
         // Log events - use debug level for high-frequency streaming events to reduce console noise
         // Use logDescription to avoid bloating logs with full JSON payloads
         switch event {
-        case .streamingMessageUpdated, .llmReasoningSummaryDelta:
+        case .streamingMessageUpdated:
             Logger.debug("📊 CoordinatorEventRouter: \(event.logDescription)", category: .ai)
         default:
             Logger.info("📊 CoordinatorEventRouter: \(event.logDescription)", category: .ai)
@@ -68,8 +68,6 @@ final class CoordinatorEventRouter {
         case .processingStateChanged:
             break
         case .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized:
-            break
-        case .llmReasoningSummaryDelta, .llmReasoningSummaryComplete:
             break
         case .streamingStatusUpdated:
             break

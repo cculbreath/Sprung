@@ -23,7 +23,6 @@ final class InterviewLifecycleController {
     private let documentArtifactMessenger: DocumentArtifactMessenger
     private let ui: OnboardingUIState
     private let sessionPersistenceHandler: SwiftDataSessionPersistenceHandler
-    private let chatTranscriptStore: ChatTranscriptStore
     private let knowledgeCardStore: KnowledgeCardStore
     private let skillStore: SkillStore
     private let todoStore: InterviewTodoStore
@@ -57,7 +56,6 @@ final class InterviewLifecycleController {
         documentArtifactMessenger: DocumentArtifactMessenger,
         ui: OnboardingUIState,
         sessionPersistenceHandler: SwiftDataSessionPersistenceHandler,
-        chatTranscriptStore: ChatTranscriptStore,
         knowledgeCardStore: KnowledgeCardStore,
         skillStore: SkillStore,
         todoStore: InterviewTodoStore
@@ -77,7 +75,6 @@ final class InterviewLifecycleController {
         self.documentArtifactMessenger = documentArtifactMessenger
         self.ui = ui
         self.sessionPersistenceHandler = sessionPersistenceHandler
-        self.chatTranscriptStore = chatTranscriptStore
         self.knowledgeCardStore = knowledgeCardStore
         self.skillStore = skillStore
         self.todoStore = todoStore
@@ -130,12 +127,13 @@ final class InterviewLifecycleController {
 
     /// Resume from an existing persisted session
     private func resumeSession(_ session: OnboardingSession) async -> Bool {
-        // Restore messages to chat transcript store
-        await sessionPersistenceHandler.restoreSession(session, to: chatTranscriptStore)
+        // Restore ConversationLog (single source of truth)
+        let conversationLog = await state.getConversationLog()
+        await sessionPersistenceHandler.restoreConversationLog(session, to: conversationLog)
 
-        // Sync UI messages from restored chat transcript
-        ui.messages = await chatTranscriptStore.getAllMessages()
-        Logger.info("📥 Synced \(ui.messages.count) messages to UI", category: .ai)
+        // Sync UI messages from ConversationLog
+        ui.messages = await conversationLog.getMessagesForUI()
+        Logger.info("📥 Synced \(ui.messages.count) messages to UI from ConversationLog", category: .ai)
 
         // Restore UI state
         let phase = InterviewPhase(rawValue: session.phase) ?? .phase1VoiceContext
