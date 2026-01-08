@@ -85,11 +85,15 @@ enum OnboardingObjectiveId: String, CaseIterable {
     case jobSearchContextCaptured = "job_search_context_captured"
     /// Contact info validated (name, email, phone, location)
     case applicantProfileComplete = "applicant_profile_complete"
-    // Legacy Phase 1 objectives (backwards compatibility)
+    /// Profile data collection objective
     case applicantProfile = "applicant_profile"
+    /// User selected contact import source
     case contactSourceSelected = "contact_source_selected"
+    /// Contact data collected from source
     case contactDataCollected = "contact_data_collected"
+    /// Contact data validated by user
     case contactDataValidated = "contact_data_validated"
+    /// Profile photo collected
     case contactPhotoCollected = "contact_photo_collected"
 
     // MARK: Phase 2: Career Story
@@ -103,10 +107,13 @@ enum OnboardingObjectiveId: String, CaseIterable {
     case uniqueCircumstancesDocumented = "unique_circumstances_documented"
     /// User has configured which sections to include
     case enabledSections = "enabled_sections"
-    // Legacy Phase 2 objectives (backwards compatibility)
+    /// Initial timeline skeleton captured
     case skeletonTimeline = "skeleton_timeline"
+    /// Initial dossier data seeded
     case dossierSeed = "dossier_seed"
+    /// Evidence documents audited
     case evidenceAuditCompleted = "evidence_audit_completed"
+    /// Knowledge cards generated from evidence
     case cardsGenerated = "cards_generated"
 
     // MARK: Phase 3: Evidence Collection
@@ -128,7 +135,7 @@ enum OnboardingObjectiveId: String, CaseIterable {
     case dossierComplete = "dossier_complete"
     /// Resume defaults configured
     case experienceDefaultsSet = "experience_defaults_set"
-    // Legacy Phase 3 objectives (backwards compatibility)
+    /// At least one writing sample collected
     case oneWritingSample = "one_writing_sample"
 }
 // MARK: - Data Types
