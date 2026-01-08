@@ -229,45 +229,13 @@ final class OnboardingInterviewCoordinator {
 
     /// Delete the current SwiftData session (used when starting over)
     func deleteCurrentSession() {
-        if let session = container.sessionPersistenceHandler.getActiveSession() {
-            container.sessionPersistenceHandler.deleteSession(session)
-        }
+        container.dataResetService.deleteCurrentSession()
     }
 
     /// Clear all onboarding data: session, knowledge cards, skills, CoverRefs, ExperienceDefaults, and ApplicantProfile
     /// Used when user chooses "Start Over" to begin fresh
     func clearAllOnboardingData() {
-        Logger.info("🗑️ Clearing all onboarding data", category: .ai)
-        // Delete session
-        deleteCurrentSession()
-        // Delete onboarding knowledge cards
-        knowledgeCardStore.deleteOnboardingCards()
-        // Delete onboarding skills
-        skillStore.deleteOnboardingSkills()
-        // Delete all CoverRefs
-        for coverRef in coverRefStore.storedCoverRefs {
-            coverRefStore.deleteCoverRef(coverRef)
-        }
-        Logger.debug("🗑️ Deleted all CoverRefs", category: .ai)
-        // Clear ExperienceDefaults
-        let defaults = experienceDefaultsStore.currentDefaults()
-        defaults.work.removeAll()
-        defaults.education.removeAll()
-        defaults.volunteer.removeAll()
-        defaults.projects.removeAll()
-        defaults.skills.removeAll()
-        defaults.awards.removeAll()
-        defaults.certificates.removeAll()
-        defaults.publications.removeAll()
-        defaults.languages.removeAll()
-        defaults.interests.removeAll()
-        defaults.references.removeAll()
-        experienceDefaultsStore.save(defaults)
-        experienceDefaultsStore.clearCache()
-        Logger.debug("🗑️ Cleared ExperienceDefaults", category: .ai)
-        // Reset ApplicantProfile to defaults (including photo)
-        applicantProfileStore.reset()
-        Logger.debug("🗑️ Reset ApplicantProfile", category: .ai)
+        container.dataResetService.clearAllOnboardingData()
     }
     /// Called when user is done with the interview - triggers finalization flow
     func endInterview() async {

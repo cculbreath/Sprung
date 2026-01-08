@@ -34,7 +34,6 @@ private struct ToolRouterComponents {
     let toolRouter: ToolHandler
     let toolExecutor: ToolExecutor
     let toolExecutionCoordinator: ToolExecutionCoordinator
-    let chatboxHandler: ChatboxHandler
 }
 
 /// Groups service components for initialization
@@ -63,7 +62,6 @@ final class OnboardingDependencyContainer {
     let phaseRegistry: PhaseScriptRegistry
     // MARK: - Handlers
     let toolRouter: ToolHandler
-    let chatboxHandler: ChatboxHandler
     let toolExecutionCoordinator: ToolExecutionCoordinator
     // MARK: - Controllers
     let lifecycleController: InterviewLifecycleController
@@ -228,7 +226,6 @@ final class OnboardingDependencyContainer {
         self.toolRouter = tools.toolRouter
         self.toolExecutor = tools.toolExecutor
         self.toolExecutionCoordinator = tools.toolExecutionCoordinator
-        self.chatboxHandler = tools.chatboxHandler
 
         // 7. Initialize session persistence handler (needed by phase transition controller)
         self.sessionPersistenceHandler = SwiftDataSessionPersistenceHandler(
@@ -282,7 +279,6 @@ final class OnboardingDependencyContainer {
             state: state,
             eventBus: core.eventBus,
             phaseRegistry: core.phaseRegistry,
-            chatboxHandler: tools.chatboxHandler,
             toolExecutionCoordinator: tools.toolExecutionCoordinator,
             toolRouter: tools.toolRouter,
             llmFacade: llmFacade,
@@ -440,7 +436,6 @@ final class OnboardingDependencyContainer {
         uploadStorage: OnboardingUploadStorage, applicantProfileStore: ApplicantProfileStore,
         dataStore: InterviewDataStore
     ) -> ToolRouterComponents {
-        let chatboxHandler = ChatboxHandler(eventBus: eventBus, state: state)
         let toolExecutor = ToolExecutor(registry: toolRegistry)
         let toolExecutionCoordinator = ToolExecutionCoordinator(
             eventBus: eventBus, toolExecutor: toolExecutor, stateCoordinator: state
@@ -456,7 +451,7 @@ final class OnboardingDependencyContainer {
             sectionHandler: SectionToggleHandler(), eventBus: eventBus
         )
         return ToolRouterComponents(toolRouter: toolRouter, toolExecutor: toolExecutor,
-                                    toolExecutionCoordinator: toolExecutionCoordinator, chatboxHandler: chatboxHandler)
+                                    toolExecutionCoordinator: toolExecutionCoordinator)
     }
 
     private static func createServices(
