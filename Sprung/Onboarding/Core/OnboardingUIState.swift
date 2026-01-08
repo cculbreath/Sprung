@@ -48,7 +48,6 @@ final class OnboardingUIState {
     // MARK: - Sync Caches (Mirrored from StateCoordinator)
     var pendingExtraction: OnboardingPendingExtraction?
     var pendingStreamingStatus: String?
-    var evidenceRequirements: [EvidenceRequirement] = []
     /// Stores last shown profile summary to display until skeleton timeline loads
     var lastApplicantProfileSummary: JSON?
 

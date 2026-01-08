@@ -284,10 +284,6 @@ actor SessionUIState: OnboardingEventEmitter {
         guard emitEvent else { return }
         await emit(.pendingExtractionUpdated(extraction))
     }
-    /// Set streaming status
-    func setStreamingStatus(_ status: String?) {
-        pendingStreamingStatus = status
-    }
 
     // MARK: - Document Collection State
 

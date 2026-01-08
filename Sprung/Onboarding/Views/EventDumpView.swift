@@ -398,9 +398,6 @@ struct EventDumpView: View {
         case .toolCallRequested(let call, let statusMessage):
             let statusInfo = statusMessage.map { " - \($0)" } ?? ""
             return "toolCallRequested(\(call.name))\(statusInfo)"
-        case .toolCallCompleted(let id, _, let statusMessage):
-            let statusInfo = statusMessage.map { " - \($0)" } ?? ""
-            return "toolCallCompleted(\(id.uuidString.prefix(8)))\(statusInfo)"
         case .objectiveStatusChanged(let id, let oldStatus, let newStatus, let phase, _, _, _):
             return "objectiveStatusChanged(\(id): \(oldStatus ?? "nil") → \(newStatus), phase: \(phase))"
         case .phaseTransitionApplied(let phase, let timestamp):

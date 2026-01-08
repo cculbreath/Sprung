@@ -242,9 +242,6 @@ final class SwiftDataSessionPersistenceHandler {
         guard let session = currentSession else { return }
 
         switch event {
-        case .mergedInventoryStored(let inventoryJSON):
-            sessionStore.updateMergedInventory(session, inventoryJSON: inventoryJSON)
-
         case .todoListUpdated(let todoListJSON):
             sessionStore.updateTodoList(session, todoListJSON: todoListJSON)
             Logger.debug("💾 Persisted todo list: \(todoListJSON.count) chars", category: .ai)

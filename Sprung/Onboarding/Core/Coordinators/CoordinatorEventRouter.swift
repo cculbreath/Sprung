@@ -69,8 +69,6 @@ final class CoordinatorEventRouter {
             break
         case .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized:
             break
-        case .streamingStatusUpdated:
-            break
         case .waitingStateChanged:
             break
         case .errorOccurred(let error):
@@ -79,15 +77,6 @@ final class CoordinatorEventRouter {
         case .llmUserMessageFailed(let messageId, let originalText, let error):
             // Handle failed message: remove from transcript and prepare for input restoration
             ui.handleMessageFailure(messageId: messageId, originalText: originalText, error: error)
-        // MARK: - Evidence & Draft Events (Phase 2)
-        case .evidenceRequirementAdded(let req):
-            ui.evidenceRequirements.append(req)
-        case .evidenceRequirementUpdated(let req):
-            if let index = ui.evidenceRequirements.firstIndex(where: { $0.id == req.id }) {
-                ui.evidenceRequirements[index] = req
-            }
-        case .evidenceRequirementRemoved(let id):
-            ui.evidenceRequirements.removeAll { $0.id == id }
         case .applicantProfileStored:
             // Handled by ProfilePersistenceHandler
             break
@@ -97,13 +86,6 @@ final class CoordinatorEventRouter {
             await onboardingPersistence.handleExperienceDefaultsGenerated(defaults)
         case .toolCallRequested:
             break
-        case .toolCallCompleted:
-            break
-        case .objectiveStatusRequested(let id, let response):
-            Logger.info("📊 CoordinatorEventRouter: objectiveStatusRequested - awaiting status for \(id)", category: .ai)
-            let status = await state.getObjectiveStatus(id)?.rawValue
-            response(status)
-            Logger.info("📊 CoordinatorEventRouter: objectiveStatusRequested - completed for \(id)", category: .ai)
         case .phaseTransitionApplied(let phaseName, _):
             await phaseTransitionController.handlePhaseTransition(phaseName)
             if let phase = InterviewPhase(rawValue: phaseName) {

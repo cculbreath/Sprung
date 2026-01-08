@@ -30,7 +30,6 @@ actor StateCoordinator: OnboardingEventEmitter {
     private var excludedTools: Set<String> = []
     // MARK: - Core Interview State
     private(set) var phase: InterviewPhase = .phase1VoiceContext
-    private(set) var evidenceRequirements: [EvidenceRequirement] = []
 
     // MARK: - Dossier Tracking (Opportunistic Collection)
     private var dossierTracker = CandidateDossierTracker()
@@ -254,20 +253,6 @@ actor StateCoordinator: OnboardingEventEmitter {
             Logger.info("📑 Enabled sections updated via event", category: .ai)
         case .stateAllowedToolsUpdated(let tools):
             await llmStateManager.setAllowedToolNames(tools)
-        case .evidenceRequirementAdded(let req):
-            evidenceRequirements.append(req)
-            Logger.info("📋 Evidence requirement added: \(req.description)", category: .ai)
-        case .evidenceRequirementUpdated(let req):
-            if let index = evidenceRequirements.firstIndex(where: { $0.id == req.id }) {
-                evidenceRequirements[index] = req
-                Logger.info("📋 Evidence requirement updated: \(req.description)", category: .ai)
-            }
-        case .evidenceRequirementRemoved(let id):
-            evidenceRequirements.removeAll { $0.id == id }
-            Logger.info("📋 Evidence requirement removed: \(id)", category: .ai)
-        case .dossierFieldCollected(let field):
-            dossierTracker.recordFieldCollected(field)
-            Logger.info("📋 Dossier field collected: \(field)", category: .ai)
         default:
             break
         }
@@ -284,8 +269,6 @@ actor StateCoordinator: OnboardingEventEmitter {
             // Pass emitEvent: false to avoid infinite loop
             // (this event was already emitted by the original source)
             await uiState.setPendingExtraction(extraction, emitEvent: false)
-        case .streamingStatusUpdated(let status, _):
-            await uiState.setStreamingStatus(status)
         case .errorOccurred(let error):
             // On stream errors, retry pending tool responses if any
             if error.hasPrefix("Stream error:") {
@@ -404,9 +387,6 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
     private func handleObjectiveEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .objectiveStatusRequested(let id, let response):
-            let status = await objectiveStore.getObjectiveStatus(id)
-            response(status?.rawValue)
         case .objectiveStatusUpdateRequested(let id, let statusString, let source, let notes, let details):
             guard let status = ObjectiveStatus(rawValue: statusString) else {
                 Logger.warning("Invalid objective status: \(statusString)", category: .ai)
@@ -500,14 +480,10 @@ actor StateCoordinator: OnboardingEventEmitter {
         switch event {
         case .artifactRecordProduced(let record):
             await artifactRepository.upsertArtifactRecord(record)
-        case .artifactRecordsReplaced(let records):
-            await artifactRepository.setArtifactRecords(records)
         case .artifactMetadataUpdateRequested(let artifactId, let updates):
             await artifactRepository.updateArtifactMetadata(artifactId: artifactId, updates: updates)
         case .knowledgeCardPersisted(let card):
             await artifactRepository.addKnowledgeCard(card)
-        case .knowledgeCardsReplaced(let cards):
-            await artifactRepository.setKnowledgeCards(cards)
         default:
             break
         }

@@ -42,7 +42,6 @@ enum OnboardingEvent {
     case timelineEditorActiveChanged(Bool)
     // MARK: - Tool Execution
     case toolCallRequested(ToolCall, statusMessage: String? = nil)
-    case toolCallCompleted(id: UUID, result: JSON, statusMessage: String? = nil)
     // MARK: - Tool UI Requests
     case choicePromptRequested(prompt: OnboardingChoicePrompt)
     case choicePromptCleared
@@ -52,27 +51,16 @@ enum OnboardingEvent {
     case validationPromptCleared
     case applicantProfileIntakeRequested
     case applicantProfileIntakeCleared
-    case profileSummaryUpdateRequested(profile: JSON)
-    case profileSummaryDismissRequested
     case sectionToggleRequested(request: OnboardingSectionToggleRequest)
     case sectionToggleCleared
-    case toolPaneCardRestored(OnboardingToolPaneCard)
-    // MARK: - Artifact Management (§4.8 spec)
-    case artifactGetRequested(id: UUID)
-    case artifactNewRequested(fileURL: URL, kind: OnboardingUploadKind, performExtraction: Bool)
-    case artifactAdded(id: UUID, kind: OnboardingUploadKind)
-    case artifactUpdated(id: UUID, extractedText: String?)
-    case artifactDeleted(id: UUID)
     // Upload completion (generic)
     case uploadCompleted(files: [ProcessedUploadInfo], requestKind: String, callId: String?, metadata: JSON)
     // Artifact pipeline (tool → state → SwiftData persistence)
     case artifactRecordProduced(record: JSON)  // emitted when a tool returns an artifact_record
-    case artifactRecordsReplaced(records: [JSON]) // emitted when persisted artifact records replace in-memory state
     case artifactMetadataUpdateRequested(artifactId: String, updates: JSON) // emitted when LLM requests metadata update
     case artifactMetadataUpdated(artifact: JSON) // emitted after StateCoordinator updates metadata (includes full artifact)
     // MARK: - Knowledge Card Operations
     case knowledgeCardPersisted(card: JSON) // emitted when a knowledge card is approved and persisted
-    case knowledgeCardsReplaced(cards: [JSON]) // emitted when persisted knowledge cards replace in-memory state
 
     // MARK: - Phase 3 Operations
     case writingSamplePersisted(sample: JSON) // emitted when a writing sample is persisted
@@ -84,11 +72,6 @@ enum OnboardingEvent {
     case voicePrimerExtractionCompleted(primer: JSON) // emitted when voice primer extraction succeeds
     case voicePrimerExtractionFailed(error: String) // emitted when voice primer extraction fails
 
-    // MARK: - Dossier Collection (Opportunistic)
-    /// Emitted when a dossier field is collected via persist_data(dataType: "candidate_dossier_entry")
-    /// Used to track which fields have been collected to avoid duplicate questions
-    case dossierFieldCollected(field: String)
-
     // MARK: - Card Generation Workflow
     /// UI emits when user clicks "Done with Uploads" button to trigger merge
     case doneWithUploadsClicked
@@ -96,19 +79,8 @@ enum OnboardingEvent {
     case generateCardsButtonClicked
     /// Emitted when card inventory merge completes
     case mergeComplete(cardCount: Int, gapCount: Int)
-    /// Emitted when merged inventory is produced (for persistence)
-    case mergedInventoryStored(inventoryJSON: String)
     /// Emitted when todo list is updated (for persistence)
     case todoListUpdated(todoListJSON: String)
-    // MARK: - Evidence Requirements
-    case evidenceRequirementAdded(EvidenceRequirement)
-    case evidenceRequirementUpdated(EvidenceRequirement)
-    case evidenceRequirementRemoved(String)
-
-    // MARK: - Git Repository Analysis
-    case gitRepoAnalysisStarted(repoPath: String, planItemId: String?)
-    case gitRepoAnalysisCompleted(repoPath: String, artifactId: String, planItemId: String?)
-    case gitRepoAnalysisFailed(repoPath: String, error: String, planItemId: String?)
 
     // MARK: - Git Agent Progress (multi-turn agent)
     case gitAgentTurnStarted(turn: Int, maxTurns: Int)
@@ -122,11 +94,9 @@ enum OnboardingEvent {
     case timelineCardsReordered(ids: [String])
     case timelineUIUpdateNeeded(timeline: JSON)  // Emitted AFTER repository update, signals UI to refresh
     // MARK: - Objective Management
-    case objectiveStatusRequested(id: String, response: (String?) -> Void)
     case objectiveStatusUpdateRequested(id: String, status: String, source: String?, notes: String?, details: [String: String]?)
     case objectiveStatusChanged(id: String, oldStatus: String?, newStatus: String, phase: String, source: String?, notes: String?, details: [String: String]?)
     // MARK: - State Management (§6 spec)
-    case stateSnapshot(updatedKeys: [String], snapshot: JSON)
     case stateAllowedToolsUpdated(tools: Set<String>)
     // MARK: - LLM Topics (§6 spec)
     case chatboxUserMessageAdded(messageId: String)  // Emitted when chatbox adds message to transcript immediately
@@ -151,9 +121,6 @@ enum OnboardingEvent {
     case llmStreamCompleted  // Signal that a stream finished and queue can process next item
     // Token usage tracking
     case llmTokenUsageReceived(modelId: String, inputTokens: Int, outputTokens: Int, cachedTokens: Int, reasoningTokens: Int, source: UsageSource)
-    // Session persistence events
-    case toolResultPairedWithMessage(messageId: UUID, toolCallsJSON: String)  // tool result paired with message (for persistence update)
-
     // MARK: - Conversation Log Events
     case conversationEntryAppended(entry: ConversationEntry)  // New entry added to conversation log
     case toolResultFilled(callId: String, status: String)  // Tool result slot filled in last entry
@@ -199,20 +166,14 @@ enum OnboardingEvent {
             return "streamingMessageUpdated(id: \(id))"
         case .toolCallRequested(let toolCall, _):
             return "toolCallRequested(name: \(toolCall.name))"
-        case .toolCallCompleted(let id, _, _):
-            return "toolCallCompleted(id: \(id))"
         case .artifactRecordProduced:
             return "artifactRecordProduced"
-        case .artifactRecordsReplaced(let records):
-            return "artifactRecordsReplaced(count: \(records.count))"
         case .artifactMetadataUpdateRequested(let artifactId, _):
             return "artifactMetadataUpdateRequested(artifactId: \(artifactId.prefix(8))...)"
         case .artifactMetadataUpdated:
             return "artifactMetadataUpdated"
         case .knowledgeCardPersisted:
             return "knowledgeCardPersisted"
-        case .knowledgeCardsReplaced(let cards):
-            return "knowledgeCardsReplaced(count: \(cards.count))"
         case .skeletonTimelineReplaced:
             return "skeletonTimelineReplaced"
         case .applicantProfileStored:
@@ -229,17 +190,10 @@ enum OnboardingEvent {
             return "timelineCardUpdated(id: \(id.prefix(8))...)"
         case .timelineUIUpdateNeeded:
             return "timelineUIUpdateNeeded"
-        case .stateSnapshot(let updatedKeys, _):
-            return "stateSnapshot(keys: \(updatedKeys.joined(separator: ", ")))"
-        case .profileSummaryUpdateRequested:
-            return "profileSummaryUpdateRequested"
         case .writingSamplePersisted:
             return "writingSamplePersisted"
         case .candidateDossierPersisted:
             return "candidateDossierPersisted"
-        case .toolResultPairedWithMessage(let messageId, let toolCallsJSON):
-            let preview = String(toolCallsJSON.prefix(100))
-            return "toolResultPairedWithMessage(messageId: \(messageId), json: \(preview)...)"
         case .conversationEntryAppended(let entry):
             return "conversationEntryAppended(\(entry.isUser ? "user" : "assistant"), id: \(entry.id))"
         case .toolResultFilled(let callId, let status):
@@ -437,12 +391,12 @@ actor EventCoordinator {
              .llmEnqueueUserMessage, .llmEnqueueToolResponse,
              .llmToolCallBatchStarted, .llmExecuteBatchedToolResponses,
              .llmExecuteUserMessage, .llmExecuteToolResponse, .llmExecuteCoordinatorMessage, .llmStreamCompleted,
-             .llmCancelRequested, .llmTokenUsageReceived, .toolResultPairedWithMessage,
+             .llmCancelRequested, .llmTokenUsageReceived,
              .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized,
              .conversationEntryAppended, .toolResultFilled:
             return .llm
         // State events
-        case .stateSnapshot, .stateAllowedToolsUpdated,
+        case .stateAllowedToolsUpdated,
              .applicantProfileStored, .skeletonTimelineStored, .enabledSectionsUpdated,
              .documentCollectionActiveChanged, .timelineEditorActiveChanged:
             return .state
@@ -450,49 +404,38 @@ actor EventCoordinator {
         case .phaseTransitionRequested, .phaseTransitionApplied:
             return .phase
         // Objective events
-        case .objectiveStatusRequested, .objectiveStatusUpdateRequested, .objectiveStatusChanged:
+        case .objectiveStatusUpdateRequested, .objectiveStatusChanged:
             return .objective
         // Tool events
-        case .toolCallRequested, .toolCallCompleted, .mergedInventoryStored, .todoListUpdated:
+        case .toolCallRequested, .todoListUpdated:
             return .tool
         // Artifact events
         case .uploadCompleted,
-             .artifactGetRequested, .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted,
-             .artifactRecordProduced, .artifactRecordsReplaced,
+             .artifactRecordProduced,
              .artifactMetadataUpdateRequested, .artifactMetadataUpdated,
-             .knowledgeCardPersisted, .knowledgeCardsReplaced,
+             .knowledgeCardPersisted,
              .doneWithUploadsClicked, .generateCardsButtonClicked, .mergeComplete,
              .writingSamplePersisted, .candidateDossierPersisted, .experienceDefaultsGenerated,
              .voicePrimerExtractionStarted, .voicePrimerExtractionCompleted, .voicePrimerExtractionFailed:
             return .artifact
-        // Evidence Requirements (treated as state/objectives)
-        case .evidenceRequirementAdded, .evidenceRequirementUpdated, .evidenceRequirementRemoved:
-            return .state
-
-        // Git Repository Analysis (treated as processing)
-        case .gitRepoAnalysisStarted, .gitRepoAnalysisCompleted, .gitRepoAnalysisFailed,
-             .gitAgentTurnStarted, .gitAgentToolExecuting, .gitAgentProgressUpdated:
+        // Git Agent Progress (treated as processing)
+        case .gitAgentTurnStarted, .gitAgentToolExecuting, .gitAgentProgressUpdated:
             return .processing
-
         // Toolpane events
         case .choicePromptRequested, .choicePromptCleared, .uploadRequestPresented,
              .uploadRequestCancelled, .validationPromptRequested, .validationPromptCleared,
-             .applicantProfileIntakeRequested, .profileSummaryUpdateRequested, .applicantProfileIntakeCleared, .profileSummaryDismissRequested,
-             .sectionToggleRequested, .sectionToggleCleared, .toolPaneCardRestored:
+             .applicantProfileIntakeRequested, .applicantProfileIntakeCleared,
+             .sectionToggleRequested, .sectionToggleCleared:
             return .toolpane
         // Timeline events
         case .timelineCardCreated, .timelineCardUpdated, .timelineCardDeleted, .timelineCardsReordered,
              .skeletonTimelineReplaced, .timelineUIUpdateNeeded:
             return .timeline
         // Processing events
-        case .processingStateChanged, .streamingStatusUpdated, .waitingStateChanged,
+        case .processingStateChanged, .waitingStateChanged,
              .pendingExtractionUpdated, .errorOccurred, .batchUploadStarted, .batchUploadCompleted,
              .extractionStateChanged:
             return .processing
-
-        // Dossier events (treated as state)
-        case .dossierFieldCollected:
-            return .state
         }
     }
     #if DEBUG
@@ -527,9 +470,6 @@ actor EventCoordinator {
         case .streamingMessageFinalized(_, _, _, let statusMessage):
             let statusInfo = statusMessage.map { " - \($0)" } ?? ""
             description = "Streaming finalized\(statusInfo)"
-        case .streamingStatusUpdated(let status, let statusMessage):
-            let statusInfo = statusMessage.map { " - \($0)" } ?? ""
-            description = "Status: \(status ?? "nil")\(statusInfo)"
         case .waitingStateChanged(let state, let statusMessage):
             let statusInfo = statusMessage.map { " - \($0)" } ?? ""
             description = "Waiting: \(state ?? "nil")\(statusInfo)"
@@ -545,8 +485,6 @@ actor EventCoordinator {
         case .extractionStateChanged(let inProgress, let statusMessage):
             let statusInfo = statusMessage.map { " - \($0)" } ?? ""
             description = "Extraction: \(inProgress ? "started" : "completed")\(statusInfo)"
-        case .dossierFieldCollected(let field):
-            description = "Dossier field collected: \(field)"
         case .applicantProfileStored:
             description = "Profile stored"
         case .skeletonTimelineStored:
@@ -560,9 +498,6 @@ actor EventCoordinator {
         case .toolCallRequested(_, let statusMessage):
             let statusInfo = statusMessage.map { " - \($0)" } ?? ""
             description = "Tool call requested\(statusInfo)"
-        case .toolCallCompleted(_, _, let statusMessage):
-            let statusInfo = statusMessage.map { " - \($0)" } ?? ""
-            description = "Tool call completed\(statusInfo)"
         case .choicePromptRequested:
             description = "Choice prompt requested"
         case .choicePromptCleared:
@@ -583,28 +518,14 @@ actor EventCoordinator {
             description = "Section toggle requested"
         case .sectionToggleCleared:
             description = "Section toggle cleared"
-        case .artifactGetRequested(let id):
-            description = "Artifact get requested: \(id)"
-        case .artifactNewRequested:
-            description = "Artifact new requested"
-        case .artifactAdded(let id, _):
-            description = "Artifact added: \(id)"
-        case .artifactUpdated(let id, _):
-            description = "Artifact updated: \(id)"
-        case .artifactDeleted(let id):
-            description = "Artifact deleted: \(id)"
         case .artifactRecordProduced(let record):
             description = "Artifact record produced: \(record["id"].stringValue)"
-        case .artifactRecordsReplaced(let records):
-            description = "Artifact records replaced (\(records.count))"
         case .artifactMetadataUpdateRequested(let artifactId, let updates):
             description = "Artifact metadata update requested: \(artifactId) (\(updates.dictionaryValue.keys.count) fields)"
         case .artifactMetadataUpdated(let artifact):
             description = "Artifact metadata updated: \(artifact["id"].stringValue)"
         case .knowledgeCardPersisted(let card):
             description = "Knowledge card persisted: \(card["title"].stringValue)"
-        case .knowledgeCardsReplaced(let cards):
-            description = "Knowledge cards replaced (\(cards.count))"
         case .writingSamplePersisted(let sample):
             description = "Writing sample persisted: \(sample["name"].stringValue)"
         case .candidateDossierPersisted:
@@ -625,19 +546,6 @@ actor EventCoordinator {
             description = "Generate cards button clicked"
         case .mergeComplete(let cardCount, let gapCount):
             description = "Merge complete: \(cardCount) cards, \(gapCount) gaps"
-        case .evidenceRequirementAdded(let req):
-            description = "Evidence requirement added: \(req.description)"
-        case .evidenceRequirementUpdated(let req):
-            description = "Evidence requirement updated: \(req.description) (\(req.status))"
-        case .evidenceRequirementRemoved(let id):
-            description = "Evidence requirement removed: \(id)"
-        case .gitRepoAnalysisStarted(let repoPath, let planItemId):
-            let itemInfo = planItemId.map { " for item: \($0)" } ?? ""
-            description = "Git repo analysis started: \(repoPath)\(itemInfo)"
-        case .gitRepoAnalysisCompleted(let repoPath, let artifactId, _):
-            description = "Git repo analysis completed: \(repoPath) → artifact \(artifactId)"
-        case .gitRepoAnalysisFailed(let repoPath, let error, _):
-            description = "Git repo analysis failed: \(repoPath) - \(error)"
         case .gitAgentTurnStarted(let turn, let maxTurns):
             description = "Git agent turn \(turn)/\(maxTurns) started"
         case .gitAgentToolExecuting(let toolName, let turn):
@@ -654,16 +562,12 @@ actor EventCoordinator {
             description = "Timeline cards reordered"
         case .timelineUIUpdateNeeded:
             description = "Timeline UI update needed"
-        case .objectiveStatusRequested:
-            description = "Objective status requested"
         case .objectiveStatusUpdateRequested(let id, let status, _, _, _):
             description = "Objective update requested: \(id) → \(status)"
         case .objectiveStatusChanged(let id, let oldStatus, let newStatus, _, let source, _, _):
             let sourceInfo = source.map { " (source: \($0))" } ?? ""
             let oldInfo = oldStatus.map { "\($0) → " } ?? ""
             description = "Objective \(id): \(oldInfo)\(newStatus)\(sourceInfo)"
-        case .stateSnapshot(let keys, _):
-            description = "State snapshot (\(keys.count) keys updated)"
         case .stateAllowedToolsUpdated(let tools):
             description = "Allowed tools updated (\(tools.count) tools)"
         case .chatboxUserMessageAdded:
@@ -719,14 +623,6 @@ actor EventCoordinator {
             }
         case .uploadCompleted(let files, let requestKind, _, _):
             description = "Upload completed: \(files.count) file(s), kind: \(requestKind)"
-        case .profileSummaryUpdateRequested:
-            description = "Profile Summary Update Requested"
-        case .profileSummaryDismissRequested:
-            description = "Dismiss Profile Summary Requested"
-        case .toolPaneCardRestored(let card):
-            description = "ToolPane card restored: \(card.rawValue)"
-        case .toolResultPairedWithMessage(let messageId, _):
-            description = "Tool result paired with message: \(messageId)"
         case .conversationEntryAppended(let entry):
             description = "Conversation entry appended: \(entry.isUser ? "user" : "assistant") (\(entry.id))"
         case .toolResultFilled(let callId, let status):
@@ -734,8 +630,6 @@ actor EventCoordinator {
         case .llmTokenUsageReceived(let modelId, let inputTokens, let outputTokens, let cachedTokens, _, let source):
             let cachedStr = cachedTokens > 0 ? ", cached: \(cachedTokens)" : ""
             description = "Token usage [\(source.displayName)]: \(modelId) - in: \(inputTokens), out: \(outputTokens)\(cachedStr)"
-        case .mergedInventoryStored(let inventoryJSON):
-            description = "Merged inventory stored: \(inventoryJSON.count) chars"
         case .todoListUpdated(let todoListJSON):
             description = "Todo list updated: \(todoListJSON.count) chars"
         }

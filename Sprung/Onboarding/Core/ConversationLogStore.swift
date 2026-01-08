@@ -139,17 +139,6 @@ final class ConversationLogStore {
             let argsDisplay = call.arguments.rawString() ?? "{}"
             addEntry(type: .toolCall, content: "\(call.name)(\(argsDisplay))", metadata: ["callId": call.callId, "name": call.name])
 
-        // Tool call completed (response back to LLM)
-        case .toolCallCompleted(let id, let result, _):
-            var resultDisplay = "{}"
-            if let prettyData = try? JSONSerialization.data(withJSONObject: result.object, options: [.prettyPrinted, .sortedKeys]),
-               let prettyString = String(data: prettyData, encoding: .utf8) {
-                resultDisplay = prettyString
-            } else {
-                resultDisplay = result.rawString() ?? "{}"
-            }
-            addEntry(type: .toolResponse, content: resultDisplay, metadata: ["callId": id.uuidString])
-
         // Assistant messages (streaming)
         case .streamingMessageFinalized(let id, let finalText, let toolCalls, _):
             if !finalText.isEmpty {

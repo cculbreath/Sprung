@@ -52,19 +52,11 @@ final class UIStateUpdateHandler {
             ui.updateProcessing(isProcessing: isProcessing, statusMessage: statusMessage)
             Logger.info("🎨 UI Update: Chat glow/spinner \(isProcessing ? "ACTIVATED ✨" : "DEACTIVATED") - isProcessing=\(isProcessing), status: \(ui.currentStatusMessage ?? "none")", category: .ai)
             await syncWizardProgressFromState()
-        case .streamingStatusUpdated(_, let statusMessage):
-            if let statusMessage = statusMessage {
-                ui.currentStatusMessage = statusMessage
-            }
         case .waitingStateChanged(_, let statusMessage):
             if let statusMessage = statusMessage {
                 ui.currentStatusMessage = statusMessage
             }
         case .toolCallRequested(_, let statusMessage):
-            if let statusMessage = statusMessage {
-                ui.currentStatusMessage = statusMessage
-            }
-        case .toolCallCompleted(_, _, let statusMessage):
             if let statusMessage = statusMessage {
                 ui.currentStatusMessage = statusMessage
             }
@@ -85,9 +77,7 @@ final class UIStateUpdateHandler {
     // MARK: - Artifact Events
     func handleArtifactEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .artifactNewRequested, .artifactAdded, .artifactUpdated, .artifactDeleted,
-             .artifactRecordProduced, .artifactRecordsReplaced,
-             .knowledgeCardPersisted, .knowledgeCardsReplaced:
+        case .artifactRecordProduced, .knowledgeCardPersisted:
             // Typed artifacts are accessed via coordinator.sessionArtifacts (no UI sync needed)
             await syncWizardProgressFromState()
 
@@ -137,7 +127,7 @@ final class UIStateUpdateHandler {
     // MARK: - State Sync Events
     func handleStateSyncEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .stateSnapshot, .stateAllowedToolsUpdated:
+        case .stateAllowedToolsUpdated:
             await syncWizardProgressFromState()
         default:
             break
