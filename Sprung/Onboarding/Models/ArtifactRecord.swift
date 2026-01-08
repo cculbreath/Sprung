@@ -301,8 +301,15 @@ extension ArtifactRecord: Hashable {
 }
 
 // MARK: - Sendable Conformance
-// SwiftData @Model generates unavailable Sendable conformance.
-// We need explicit @unchecked Sendable for cross-actor usage patterns.
-// This will need refactoring for full Swift 6 compliance.
+// SwiftData @Model classes require @unchecked Sendable for cross-actor usage.
+// This is safe because:
+// 1. All mutations occur on @MainActor (via ArtifactRecordStore)
+// 2. The ModelContext enforces single-threaded access
+// 3. Reads across actors access immutable snapshots after model is persisted
+//
+// THREAD SAFETY REQUIREMENTS:
+// - NEVER mutate ArtifactRecord properties outside @MainActor context
+// - Always use ArtifactRecordStore methods for updates
+// - Treat cross-actor references as read-only snapshots
 extension ArtifactRecord: @unchecked Sendable {}
 

@@ -12,7 +12,13 @@ import SwiftData
 @Observable
 @MainActor
 final class ArtifactRecordStore: SwiftDataStore {
-    unowned let modelContext: ModelContext
+    // Note: Using unowned is safe here because:
+    // 1. The ModelContext is owned by the SwiftData container
+    // 2. ArtifactRecordStore is owned by OnboardingDependencyContainer
+    // 3. The container's lifecycle ensures ModelContext outlives this store
+    // 4. All access is @MainActor isolated
+    // If crashes occur during teardown, the container's deinit order should be reviewed.
+    private(set) unowned var modelContext: ModelContext
 
     init(context: ModelContext) {
         modelContext = context

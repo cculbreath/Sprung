@@ -23,7 +23,6 @@ enum OnboardingEvent {
     case streamingMessageUpdated(id: UUID, delta: String, statusMessage: String? = nil)
     case streamingMessageFinalized(id: UUID, finalText: String, toolCalls: [OnboardingMessage.ToolCallInfo]? = nil, statusMessage: String? = nil)
     // MARK: - Status Updates
-    case streamingStatusUpdated(String?, statusMessage: String? = nil)
     case waitingStateChanged(String?, statusMessage: String? = nil)
     case pendingExtractionUpdated(OnboardingPendingExtraction?, statusMessage: String? = nil)
     case errorOccurred(String)

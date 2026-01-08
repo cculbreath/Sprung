@@ -14,7 +14,12 @@ import SwiftData
 @Observable
 @MainActor
 final class OnboardingSessionStore: SwiftDataStore {
-    unowned let modelContext: ModelContext
+    // Note: Using unowned is safe here because:
+    // 1. The ModelContext is owned by the SwiftData container at the app level
+    // 2. OnboardingSessionStore is created at app startup and persists for app lifetime
+    // 3. All access is @MainActor isolated
+    // If crashes occur during app teardown, consider the app's deinit order.
+    private(set) unowned var modelContext: ModelContext
 
     init(context: ModelContext) {
         modelContext = context
