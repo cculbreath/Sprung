@@ -50,7 +50,7 @@ struct ToolPaneTabsView<InterviewContent: View>: View {
         // Auto-switch to Timeline tab when LLM activates editor
         .onChange(of: coordinator.ui.isTimelineEditorActive) { _, isActive in
             if isActive && selectedTab != .timeline {
-                withAnimation(.easeInOut(duration: 0.2)) {
+                withAnimation(OnboardingAnimations.ToolPane.tabAutoSwitch) {
                     selectedTab = .timeline
                 }
             }
@@ -61,7 +61,7 @@ struct ToolPaneTabsView<InterviewContent: View>: View {
         let hasActiveAgents = tab == .agents && coordinator.agentActivityTracker.isAnyRunning
 
         return Button {
-            withAnimation(.easeInOut(duration: 0.15)) {
+            withAnimation(OnboardingAnimations.ToolPane.tabSwitch) {
                 selectedTab = tab
             }
         } label: {
@@ -117,8 +117,7 @@ struct ToolPaneTabsView<InterviewContent: View>: View {
         case .interview:
             return 0 // Interview tab doesn't show a count badge
         case .timeline:
-            let experiences = coordinator.ui.skeletonTimeline?["experiences"].array
-            return experiences?.isEmpty == false ? experiences!.count : 0
+            return coordinator.ui.skeletonTimeline?["experiences"].array?.count ?? 0
         case .artifacts:
             // Query SwiftData directly to match ArtifactsTabContent
             return coordinator.getCurrentSessionArtifacts().count

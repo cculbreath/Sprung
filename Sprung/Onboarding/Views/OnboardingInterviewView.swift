@@ -51,7 +51,7 @@ struct OnboardingInterviewView: View {
                     coordinator: coordinator,
                     state: uiState
                 )
-                .animation(.spring(response: 0.4, dampingFraction: 0.82), value: coordinator.wizardTracker.currentStep)
+                .animation(OnboardingAnimations.Card.stepTransition, value: coordinator.wizardTracker.currentStep)
                 .opacity(cardAppeared ? 1 : 0)
                 .scaleEffect(cardAppeared ? 1 : 0.88)
                 .offset(y: cardAppeared ? 0 : 22)
@@ -65,24 +65,22 @@ struct OnboardingInterviewView: View {
                 )
                 .frame(width: 1040) // Match card width
                 .padding(.top, 4)
-                .animation(.easeInOut(duration: 0.2), value: coordinator.agentActivityTracker.isAnyRunning)
-                .animation(.easeInOut(duration: 0.2), value: coordinator.ui.isExtractionInProgress)
+                .animation(OnboardingAnimations.StatusBar.stateChange, value: coordinator.agentActivityTracker.isAnyRunning)
+                .animation(OnboardingAnimations.StatusBar.stateChange, value: coordinator.ui.isExtractionInProgress)
 
                 Spacer(minLength: 16) // centers body relative to bottom bar
 
                 OnboardingInterviewBottomBar(
-                    showBack: shouldShowBackButton(for: coordinator.wizardTracker.currentStep),
                     continueTitle: continueButtonTitle(for: coordinator.wizardTracker.currentStep),
                     isContinueDisabled: isContinueDisabled(coordinator: coordinator),
                     continueTooltip: continueButtonTooltip(coordinator: coordinator),
                     onShowSettings: openSettings,
-                    onBack: { handleBack() },
                     onCancel: { handleCancel() },
                     onContinue: { handleContinue(coordinator: coordinator) }
                 )
                 .padding(.horizontal, 16)
                 .padding(.bottom, 8)
-                .animation(.easeInOut(duration: 0.25), value: coordinator.wizardTracker.currentStep)
+                .animation(OnboardingAnimations.StatusBar.stepChange, value: coordinator.wizardTracker.currentStep)
                 .opacity(bottomBarAppeared ? 1 : 0)
                 .scaleEffect(bottomBarAppeared ? 1 : 0.96)
                 .offset(y: bottomBarAppeared ? 0 : 36)
@@ -186,10 +184,10 @@ struct OnboardingInterviewView: View {
                     bottomBarAppeared = true
                     return
                 }
-                withAnimation(.spring(response: 0.7, dampingFraction: 0.68)) { windowAppeared = true }
-                withAnimation(.spring(response: 0.55, dampingFraction: 0.72).delay(0.14)) { progressAppeared = true }
-                withAnimation(.spring(response: 0.8, dampingFraction: 0.62).delay(0.26)) { cardAppeared = true }
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.72).delay(0.38)) { bottomBarAppeared = true }
+                withAnimation(OnboardingAnimations.InterviewEntrance.windowSpring) { windowAppeared = true }
+                withAnimation(OnboardingAnimations.InterviewEntrance.progressSpring.delay(OnboardingAnimations.InterviewEntrance.progressDelay)) { progressAppeared = true }
+                withAnimation(OnboardingAnimations.InterviewEntrance.cardSpring.delay(OnboardingAnimations.InterviewEntrance.cardDelay)) { cardAppeared = true }
+                withAnimation(OnboardingAnimations.InterviewEntrance.bottomBarSpring.delay(OnboardingAnimations.InterviewEntrance.bottomBarDelay)) { bottomBarAppeared = true }
             }
             .onDisappear {
                 windowAppeared = false
@@ -263,10 +261,6 @@ private extension OnboardingInterviewView {
             return "Continue"
         }
     }
-    func shouldShowBackButton(for _: OnboardingWizardStep) -> Bool {
-        // Go Back functionality was never implemented - hide the button
-        false
-    }
     func isContinueDisabled(
         coordinator: OnboardingInterviewCoordinator
     ) -> Bool {
@@ -331,9 +325,6 @@ private extension OnboardingInterviewView {
         case .strategy:
             handleCancel()
         }
-    }
-    func handleBack() {
-        // Wizard steps are now derived from objectives - no manual reset needed
     }
     func handleCancel() {
         Task {

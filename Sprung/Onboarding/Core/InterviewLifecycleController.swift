@@ -9,7 +9,6 @@ final class InterviewLifecycleController {
     private let state: StateCoordinator
     private let eventBus: EventCoordinator
     private let phaseRegistry: PhaseScriptRegistry
-    private let chatboxHandler: ChatboxHandler
     private let toolExecutionCoordinator: ToolExecutionCoordinator
     private let toolRouter: ToolHandler
     private var llmFacade: LLMFacade?
@@ -44,7 +43,6 @@ final class InterviewLifecycleController {
         state: StateCoordinator,
         eventBus: EventCoordinator,
         phaseRegistry: PhaseScriptRegistry,
-        chatboxHandler: ChatboxHandler,
         toolExecutionCoordinator: ToolExecutionCoordinator,
         toolRouter: ToolHandler,
         llmFacade: LLMFacade?,
@@ -63,7 +61,6 @@ final class InterviewLifecycleController {
         self.state = state
         self.eventBus = eventBus
         self.phaseRegistry = phaseRegistry
-        self.chatboxHandler = chatboxHandler
         self.toolExecutionCoordinator = toolExecutionCoordinator
         self.toolRouter = toolRouter
         self.llmFacade = llmFacade
@@ -313,7 +310,6 @@ final class InterviewLifecycleController {
         // StateCoordinator must be listening for .llmEnqueueUserMessage events
         // to process the queue and emit .llmExecuteUserMessage for LLMMessenger
         await state.startEventSubscriptions()
-        await chatboxHandler.startEventSubscriptions()
         await toolExecutionCoordinator.startEventSubscriptions()
         await toolRouter.startEventSubscriptions()
 
