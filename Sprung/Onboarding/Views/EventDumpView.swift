@@ -52,6 +52,7 @@ struct EventDumpView: View {
             }
         }
         .frame(minWidth: 600, minHeight: 400)
+        .toastOverlay()
     }
 
     // MARK: - Tab Content Views
@@ -467,8 +468,10 @@ struct EventDumpView: View {
             do {
                 try output.write(to: url, atomically: true, encoding: .utf8)
                 Logger.info("Event dump exported to: \(url.path)", category: .general)
+                ToastManager.shared.show(.success("Event dump exported successfully"))
             } catch {
                 Logger.error("Failed to export event dump: \(error.localizedDescription)", category: .general)
+                ToastManager.shared.show(.error("Export failed: \(error.localizedDescription)"))
             }
         }
     }
@@ -506,8 +509,10 @@ struct EventDumpView: View {
             do {
                 try output.write(to: url, atomically: true, encoding: .utf8)
                 Logger.info("Conversation log exported to: \(url.path)", category: .general)
+                ToastManager.shared.show(.success("Conversation log exported successfully"))
             } catch {
                 Logger.error("Failed to export conversation log: \(error.localizedDescription)", category: .general)
+                ToastManager.shared.show(.error("Export failed: \(error.localizedDescription)"))
             }
         }
     }

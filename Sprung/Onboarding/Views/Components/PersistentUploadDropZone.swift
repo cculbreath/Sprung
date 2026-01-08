@@ -67,13 +67,7 @@ struct PersistentUploadDropZone: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(isDropTargetHighlighted ? Color.accentColor.opacity(0.08) : Color(nsColor: .controlBackgroundColor))
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(
-                    isDropTargetHighlighted ? Color.accentColor : Color.secondary.opacity(0.2),
-                    style: StrokeStyle(lineWidth: 1, dash: [4, 4])
-                )
-        )
+        .dropZoneStyle(isHighlighted: isDropTargetHighlighted, cornerRadius: 10)
         .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .onTapGesture { onSelectFiles() }
         .onDrop(of: DropZoneHandler.acceptedDropTypes, isTargeted: $isDropTargetHighlighted) { providers in

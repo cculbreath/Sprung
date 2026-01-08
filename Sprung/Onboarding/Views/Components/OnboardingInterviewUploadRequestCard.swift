@@ -1,11 +1,14 @@
 import SwiftUI
 import UniformTypeIdentifiers
+
 struct UploadRequestCard: View {
     let request: OnboardingUploadRequest
     let onSelectFile: () -> Void
     let onDropFiles: ([URL]) -> Void
     let onDecline: () -> Void
+
     @State private var isDropTargetHighlighted = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(request.metadata.title)
@@ -32,9 +35,9 @@ struct UploadRequestCard: View {
         .background(Color(nsColor: .controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
+
     private var filePickerArea: some View {
-        let dashStyle = StrokeStyle(lineWidth: 1.2, dash: [6, 6])
-        return VStack(spacing: 12) {
+        VStack(spacing: 12) {
             VStack(spacing: 4) {
                 Image(systemName: "tray.and.arrow.down.fill")
                     .font(.system(size: 28, weight: .semibold))
@@ -56,70 +59,37 @@ struct UploadRequestCard: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(
-            EdgeInsets(top: 18, leading: 20, bottom: 18, trailing: 20)
-        )
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(isDropTargetHighlighted ? Color.accentColor.opacity(0.1) : Color.clear)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(isDropTargetHighlighted ? Color.accentColor : Color.secondary.opacity(0.2), style: dashStyle)
-        )
+        .padding(EdgeInsets(top: 18, leading: 20, bottom: 18, trailing: 20))
+        .dropZoneStyle(isHighlighted: isDropTargetHighlighted)
         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onTapGesture { onSelectFile() }
-        .onDrop(of: [UTType.fileURL], isTargeted: $isDropTargetHighlighted, perform: handleDrop(providers:))
+        .onDrop(of: DropZoneHandler.acceptedDropTypes, isTargeted: $isDropTargetHighlighted) { providers in
+            DropZoneHandler.handleDrop(providers: providers) { urls in
+                let filtered = filterByAcceptedTypes(urls)
+                guard !filtered.isEmpty else { return }
+                let limited = request.metadata.allowMultiple ? filtered : Array(filtered.prefix(1))
+                onDropFiles(limited)
+            }
+            return true
+        }
     }
+
     private var skipButtonTitle: String {
         if request.metadata.targetKey == "basics.image" {
             return "Skip photo for now"
         }
         return "Skip"
     }
-    private func handleDrop(providers: [NSItemProvider]) -> Bool {
-        let supportingProviders = providers.filter { $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) }
-        guard !supportingProviders.isEmpty else { return false }
-        Task {
-            var collected: [URL] = []
-            for provider in supportingProviders {
-                if let url = await loadURL(from: provider) {
-                    // Validate file type if accepts list is specified
-                    if isFileTypeAllowed(url) {
-                        collected.append(url)
-                        if !request.metadata.allowMultiple { break }
-                    }
-                }
-            }
-            if !collected.isEmpty {
-                let limited = request.metadata.allowMultiple ? collected : Array(collected.prefix(1))
-                await MainActor.run {
-                    onDropFiles(limited)
-                }
-            }
-        }
-        return true
-    }
-    private func isFileTypeAllowed(_ url: URL) -> Bool {
-        // If no specific types are specified, allow all
-        guard !request.metadata.accepts.isEmpty else { return true }
-        let fileExtension = url.pathExtension.lowercased()
-        return request.metadata.accepts.contains { acceptedType in
-            acceptedType.lowercased() == fileExtension
-        }
-    }
-    private func loadURL(from provider: NSItemProvider) async -> URL? {
-        await withCheckedContinuation { continuation in
-            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
-                if let url = item as? URL {
-                    continuation.resume(returning: url)
-                } else if let data = item as? Data,
-                          let string = String(data: data, encoding: .utf8),
-                          let url = URL(string: string.trimmingCharacters(in: .whitespacesAndNewlines)) {
-                    continuation.resume(returning: url)
-                } else {
-                    continuation.resume(returning: nil)
-                }
+
+    /// Filter URLs by the request's accepted file types
+    private func filterByAcceptedTypes(_ urls: [URL]) -> [URL] {
+        // If no specific types are specified, allow all that pass DropZoneHandler validation
+        guard !request.metadata.accepts.isEmpty else { return urls }
+
+        return urls.filter { url in
+            let fileExtension = url.pathExtension.lowercased()
+            return request.metadata.accepts.contains { acceptedType in
+                acceptedType.lowercased() == fileExtension
             }
         }
     }
