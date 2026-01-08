@@ -16,8 +16,9 @@ import Foundation
 
 // MARK: - Data Types
 
-/// Tool call with result slot
-struct ToolCall: Sendable, Codable {
+/// Tool call slot in conversation entry (tracks call ID, arguments, and result)
+/// Named to avoid ambiguity with ToolProtocol.ToolCall used in events
+struct ToolCallSlot: Sendable, Codable {
     let callId: String
     let name: String
     let arguments: String
@@ -46,7 +47,7 @@ enum ToolCallStatus: String, Sendable, Codable {
 /// Conversation entry (user or assistant message)
 enum ConversationEntry: Identifiable, Sendable {
     case user(id: UUID, text: String, isSystemGenerated: Bool, timestamp: Date)
-    case assistant(id: UUID, text: String, toolCalls: [ToolCall]?, timestamp: Date)
+    case assistant(id: UUID, text: String, toolCalls: [ToolCallSlot]?, timestamp: Date)
 
     var id: UUID {
         switch self {
@@ -171,7 +172,7 @@ actor ConversationLog {
     /// Append assistant message with optional tool calls (slots start as nil)
     func appendAssistant(id: UUID, text: String, toolCalls: [ToolCallInfo]?) {
         let calls = toolCalls?.map { info in
-            ToolCall(
+            ToolCallSlot(
                 callId: info.id,
                 name: info.name,
                 arguments: info.arguments,

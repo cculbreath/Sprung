@@ -304,7 +304,7 @@ class ConversationEntryRecord {
     var text: String
     /// For user entries: whether this was system-generated
     var isSystemGenerated: Bool?
-    /// For assistant entries: serialized [ToolCall] array as JSON
+    /// For assistant entries: serialized [ToolCallSlot] array as JSON
     var toolCallsJSON: String?
     /// When the entry was created
     var timestamp: Date
@@ -342,10 +342,10 @@ class ConversationEntryRecord {
                 timestamp: timestamp
             )
         case "assistant":
-            var toolCalls: [ToolCall]?
+            var toolCalls: [ToolCallSlot]?
             if let json = toolCallsJSON,
                let data = json.data(using: .utf8) {
-                toolCalls = try? JSONDecoder().decode([ToolCall].self, from: data)
+                toolCalls = try? JSONDecoder().decode([ToolCallSlot].self, from: data)
             }
             return .assistant(
                 id: id,

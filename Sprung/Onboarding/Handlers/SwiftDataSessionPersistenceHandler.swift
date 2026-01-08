@@ -404,7 +404,7 @@ final class SwiftDataSessionPersistenceHandler {
             guard entry.entryType == "assistant",
                   let toolCallsJSON = entry.toolCallsJSON,
                   let data = toolCallsJSON.data(using: .utf8),
-                  let toolCalls = try? JSONDecoder().decode([ToolCall].self, from: data) else {
+                  let toolCalls = try? JSONDecoder().decode([ToolCallSlot].self, from: data) else {
                 return false
             }
             return toolCalls.contains { $0.callId == callId }
@@ -415,7 +415,7 @@ final class SwiftDataSessionPersistenceHandler {
 
         // Decode, update, and re-encode tool calls
         guard let data = record.toolCallsJSON?.data(using: .utf8),
-              var toolCalls = try? JSONDecoder().decode([ToolCall].self, from: data),
+              var toolCalls = try? JSONDecoder().decode([ToolCallSlot].self, from: data),
               let index = toolCalls.firstIndex(where: { $0.callId == callId }) else {
             return
         }
