@@ -89,8 +89,15 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
     private func handleToolResult(_ result: ToolResult, callId: String, toolName: String?, operation: ToolOperation) async {
         switch result {
         case .immediate(let output):
+            let outputString = output.rawString() ?? "{}"
             // Mark operation as completed
-            await operation.complete(output: output.rawString() ?? "{}")
+            await operation.complete(output: outputString)
+
+            // Fill ConversationLog slot immediately (enables batch send when all slots filled)
+            if let name = toolName {
+                await stateCoordinator.addCompletedToolResult(callId: callId, toolName: name, output: outputString)
+            }
+
             // Special handling for extract_document tool - emit artifact record produced event
             // DocumentArtifactMessenger will batch and send the extracted content to the LLM
             // No separate developer message needed - tool response + content message suffice
@@ -113,7 +120,7 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             // Check for toolChoice chaining (next_required_tool forces the LLM to call a specific tool)
             let nextRequiredTool = output["next_required_tool"].string
 
-            // Tool completed - send response to LLM
+            // Tool completed - send response to LLM (slot already filled above)
             await emitToolResponse(callId: callId, toolName: toolName, output: output, reasoningEffort: reasoningEffort, nextRequiredTool: nextRequiredTool)
 
             // Special handling for bootstrap tools - remove from allowed tools after use
@@ -131,6 +138,13 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             var errorOutput = JSON()
             errorOutput["error"].string = error.localizedDescription
             errorOutput["status"].string = "incomplete"
+            let errorOutputString = errorOutput.rawString() ?? "{}"
+
+            // Fill ConversationLog slot with error result
+            if let name = toolName {
+                await stateCoordinator.addCompletedToolResult(callId: callId, toolName: name, output: errorOutputString)
+            }
+
             await emitToolResponse(callId: callId, toolName: toolName, output: errorOutput)
 
         case .pendingUserAction:

@@ -13,8 +13,10 @@ final class StateCoordinatorTests: XCTestCase {
     
     // Dependencies
     var artifactRepo: ArtifactRepository!
-    var chatStore: ChatTranscriptStore!
+    var streamingBuffer: StreamingMessageBuffer!
     var uiState: SessionUIState!
+    var phaseRegistry: PhaseScriptRegistry!
+    var todoStore: InterviewTodoStore!
 
     override func setUpWithError() throws {
         // Setup SwiftData
@@ -52,21 +54,25 @@ final class StateCoordinatorTests: XCTestCase {
             artifactRecordStore: artifactRecordStore
         )
         
-        artifactRepo = ArtifactRepository(eventBus: eventBus, sessionPersistenceHandler: persistenceHandler)
-        chatStore = ChatTranscriptStore(eventBus: eventBus, sessionPersistenceHandler: persistenceHandler)
-        uiState = SessionUIState(eventBus: eventBus)
-        
+        artifactRepo = ArtifactRepository(eventBus: eventBus)
+        streamingBuffer = StreamingMessageBuffer()
+        uiState = SessionUIState(eventBus: eventBus, phasePolicy: policy, initialPhase: .phase1CoreFacts)
+        phaseRegistry = PhaseScriptRegistry()
+        todoStore = InterviewTodoStore(eventBus: eventBus)
+
         // Objective Store
         objectiveStore = ObjectiveStore(eventBus: eventBus, phasePolicy: policy, initialPhase: .phase1CoreFacts)
-        
+
         // State Coordinator
         stateCoordinator = StateCoordinator(
             eventBus: eventBus,
             phasePolicy: policy,
+            phaseRegistry: phaseRegistry,
             objectives: objectiveStore,
             artifacts: artifactRepo,
-            chat: chatStore,
-            uiState: uiState
+            streamingBuffer: streamingBuffer,
+            uiState: uiState,
+            todoStore: todoStore
         )
     }
 

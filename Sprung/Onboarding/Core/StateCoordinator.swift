@@ -14,7 +14,7 @@ actor StateCoordinator: OnboardingEventEmitter {
     // MARK: - Domain Services (Injected)
     private let objectiveStore: ObjectiveStore
     private let artifactRepository: ArtifactRepository
-    private let chatStore: ChatTranscriptStore
+    private let streamingBuffer: StreamingMessageBuffer
     private let uiState: SessionUIState
     private let streamQueueManager: StreamQueueManager
     private let llmStateManager: LLMStateManager
@@ -57,8 +57,13 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
     private(set) var currentWizardStep: WizardStep = .voice
     private(set) var completedWizardSteps: Set<WizardStep> = []
+
+    // MARK: - Tool Response Batching
+    // Collects tool response payloads until all ConversationLog slots are filled
+    private var collectedToolResponsePayloads: [JSON] = []
+
     // MARK: - Stream Queue (Delegated to StreamQueueManager)
-    // StreamQueueManager handles serial LLM streaming and parallel tool call batching
+    // StreamQueueManager handles serial LLM streaming (simplified - no tool tracking)
     // MARK: - LLM State (Delegated to LLMStateManager)
     // LLMStateManager handles tool names, response IDs, model config, and tool pane cards
     // MARK: - Initialization
@@ -68,7 +73,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         phaseRegistry: PhaseScriptRegistry,
         objectives: ObjectiveStore,
         artifacts: ArtifactRepository,
-        chat: ChatTranscriptStore,
+        streamingBuffer: StreamingMessageBuffer,
         uiState: SessionUIState,
         todoStore: InterviewTodoStore
     ) {
@@ -77,7 +82,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         self.phaseRegistry = phaseRegistry
         self.objectiveStore = objectives
         self.artifactRepository = artifacts
-        self.chatStore = chat
+        self.streamingBuffer = streamingBuffer
         self.uiState = uiState
         self.todoStore = todoStore
         self.streamQueueManager = StreamQueueManager(eventBus: eventBus)
@@ -308,18 +313,17 @@ actor StateCoordinator: OnboardingEventEmitter {
             let newProcessingState = status == .busy
             await uiState.setProcessingState(newProcessingState)
         case .streamingMessageBegan(let id, let text, _):
-            _ = await chatStore.beginStreamingMessage(id: id, initialText: text)
+            await streamingBuffer.begin(id: id, initialText: text)
         case .streamingMessageUpdated(let id, let delta, _):
-            await chatStore.updateStreamingMessage(id: id, delta: delta)
+            await streamingBuffer.appendDelta(id: id, delta: delta)
         case .streamingMessageFinalized(let id, let finalText, let toolCalls, _):
             // ConversationLog is the sole source of truth
             let logToolCalls = toolCalls?.map { info in
                 ToolCallInfo(id: info.id, name: info.name, arguments: info.arguments)
             }
             await conversationLog.appendAssistant(id: id, text: finalText, toolCalls: logToolCalls)
-
-            // Legacy: Also update ChatTranscriptStore for UI streaming display (to be removed)
-            await chatStore.finalizeStreamingMessage(id: id, finalText: finalText, toolCalls: toolCalls)
+            // Clear streaming buffer - message is now in ConversationLog
+            await streamingBuffer.finalize()
         case .llmEnqueueUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText, let toolChoice):
             // Bundle any queued coordinator messages WITH the user message
             // They'll be included as input items in the same API request
@@ -347,9 +351,48 @@ actor StateCoordinator: OnboardingEventEmitter {
             await llmStateManager.queueCoordinatorMessage(payload)
             Logger.debug("📥 Developer message queued (awaiting user action)", category: .ai)
         case .llmToolCallBatchStarted(let expectedCount, let callIds):
-            await streamQueueManager.startToolCallBatch(expectedCount: expectedCount, callIds: callIds)
+            // Reset collected payloads for new batch
+            // ConversationLog already has slots created via appendAssistant
+            collectedToolResponsePayloads = []
+            Logger.info("📦 Tool call batch started: expecting \(expectedCount) responses, callIds: \(callIds.map { String($0.prefix(8)) })", category: .ai)
         case .llmEnqueueToolResponse(let payload):
-            await streamQueueManager.enqueueToolResponse(payload)
+            // Collect the payload
+            collectedToolResponsePayloads.append(payload)
+            let callId = payload["callId"].stringValue
+            Logger.info("📦 Tool response collected: \(callId.prefix(8)) (total: \(collectedToolResponsePayloads.count))", category: .ai)
+
+            // Check if all ConversationLog slots are filled (including UI tool slots)
+            let hasPending = await conversationLog.hasPendingToolCalls
+            if !hasPending {
+                // All slots filled - send the batch
+                let payloadsToSend = collectedToolResponsePayloads
+                collectedToolResponsePayloads = []
+                if payloadsToSend.count == 1 {
+                    await streamQueueManager.enqueue(.toolResponse(payload: payloadsToSend[0]))
+                    Logger.info("📦 Single tool response enqueued", category: .ai)
+                } else if payloadsToSend.count > 1 {
+                    await streamQueueManager.enqueue(.batchedToolResponses(payloads: payloadsToSend))
+                    Logger.info("📦 Batched tool responses enqueued (\(payloadsToSend.count) responses)", category: .ai)
+                }
+            } else {
+                Logger.debug("📦 Holding tool response - waiting for more slots to fill", category: .ai)
+            }
+        case .toolResultFilled:
+            // Tool slot filled in ConversationLog - check if we can release held payloads
+            if !collectedToolResponsePayloads.isEmpty {
+                let hasPending = await conversationLog.hasPendingToolCalls
+                if !hasPending {
+                    let payloadsToSend = collectedToolResponsePayloads
+                    collectedToolResponsePayloads = []
+                    if payloadsToSend.count == 1 {
+                        await streamQueueManager.enqueue(.toolResponse(payload: payloadsToSend[0]))
+                        Logger.info("📦 Single tool response released after slot fill", category: .ai)
+                    } else if payloadsToSend.count > 1 {
+                        await streamQueueManager.enqueue(.batchedToolResponses(payloads: payloadsToSend))
+                        Logger.info("📦 Batched tool responses released after slot fill (\(payloadsToSend.count) responses)", category: .ai)
+                    }
+                }
+            }
         case .llmStreamCompleted:
             // Handle stream completion via event to ensure proper ordering with tool call events
             await streamQueueManager.handleStreamCompleted()
@@ -589,28 +632,27 @@ actor StateCoordinator: OnboardingEventEmitter {
     // MARK: - Pending UI Tool Call (Codex Paradigm)
     // UI tools present cards and await user action before responding.
     // When a UI tool is pending, coordinator messages are queued behind it.
+    // NOTE: OperationTracker is the source of truth for pending UI tool state.
+    // When a tool returns .pendingUserAction, ToolExecutionCoordinator calls
+    // operation.setAwaitingUser() which sets the operation's state in OperationTracker.
 
     /// Set a UI tool as pending (awaiting user action)
+    /// NOTE: This is called for logging/coordination. The actual state is in OperationTracker.
     func setPendingUIToolCall(callId: String, toolName: String) async {
-        await llmStateManager.setPendingUIToolCall(callId: callId, toolName: toolName)
-        // Notify StreamQueueManager to hold batch until this UI tool completes
-        await streamQueueManager.markUIToolPending(callId: callId)
+        // Operation already in awaitingUser state via ToolOperation.setAwaitingUser()
+        Logger.info("🎯 UI tool pending: \(toolName) (callId: \(callId.prefix(8)))", category: .ai)
     }
 
-    /// Get the pending UI tool call info
+    /// Get the pending UI tool call info from OperationTracker
     func getPendingUIToolCall() async -> (callId: String, toolName: String)? {
-        await llmStateManager.getPendingUIToolCall()
+        await operationTracker.getAwaitingUserOperation()
     }
 
     /// Clear the pending UI tool call (after user action sends tool output)
+    /// NOTE: The operation gets completed via operation.complete() when tool response is sent.
     func clearPendingUIToolCall() async {
-        // Get the callId before clearing so we can notify StreamQueueManager
-        let pending = await llmStateManager.getPendingUIToolCall()
-        await llmStateManager.clearPendingUIToolCall()
-        // Notify StreamQueueManager that UI tool is complete - may release held batch
-        if let callId = pending?.callId {
-            await streamQueueManager.markUIToolComplete(callId: callId)
-        }
+        // Batch release is handled by .toolResultFilled event when slot is filled
+        Logger.debug("✅ UI tool call cleared (operation completed)", category: .ai)
     }
 
     /// Pop any pending forced tool choice override (one-shot).
@@ -629,10 +671,11 @@ actor StateCoordinator: OnboardingEventEmitter {
         phase = .phase1VoiceContext
         currentWizardStep = .voice
         completedWizardSteps.removeAll()
+        collectedToolResponsePayloads = []
         // Reset all services
         await objectiveStore.reset()
         await artifactRepository.reset()
-        await chatStore.reset()
+        await streamingBuffer.reset()
         await uiState.reset()
         await streamQueueManager.reset()
         await llmStateManager.reset()
@@ -769,7 +812,7 @@ actor StateCoordinator: OnboardingEventEmitter {
             var msgs = await conversationLog.getMessagesForUI()
 
             // Add current streaming message if any (not yet in ConversationLog)
-            if let streamingMsg = await chatStore.currentStreamingMessage {
+            if let streamingMsg = await streamingBuffer.currentMessage {
                 msgs.append(streamingMsg)
             }
 

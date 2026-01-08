@@ -30,14 +30,11 @@ actor LLMStateManager {
     /// Maximum retries for pending tool responses before giving up
     private let maxPendingToolResponseRetries: Int = 3
 
-    // MARK: - Pending UI Tool Call (Codex Paradigm)
+    // MARK: - Coordinator Message Queuing (Codex Paradigm)
+    // Coordinator (developer) messages are queued and bundled with the next user message.
+    // NOTE: Pending UI tool state is now tracked by OperationTracker, not here.
 
-    /// UI tools that present cards and await user action before responding.
-    /// Based on Codex CLI paradigm: tool outputs must be sent before new LLM turns.
-    /// When a UI tool is pending, coordinator messages are queued behind it.
-    private var pendingUIToolCall: (callId: String, toolName: String)?
-
-    /// Queued coordinator messages waiting for pending UI tool to complete
+    /// Queued coordinator messages waiting for next user message
     private var queuedCoordinatorMessages: [JSON] = []
 
     // MARK: - Pending Forced Tool Choice (Tool Chaining)
@@ -100,28 +97,9 @@ actor LLMStateManager {
         currentToolPaneCard = card
     }
 
-    // MARK: - Pending UI Tool Call Management (Codex Paradigm)
+    // MARK: - Coordinator Message Queue Management
 
-    /// Set a UI tool as pending (awaiting user action)
-    func setPendingUIToolCall(callId: String, toolName: String) {
-        pendingUIToolCall = (callId: callId, toolName: toolName)
-        Logger.info("🎯 UI tool pending: \(toolName) (callId: \(callId.prefix(8)))", category: .ai)
-    }
-
-    /// Get the pending UI tool call info
-    func getPendingUIToolCall() -> (callId: String, toolName: String)? {
-        pendingUIToolCall
-    }
-
-    /// Clear the pending UI tool call (after user action sends tool output)
-    func clearPendingUIToolCall() {
-        if let pending = pendingUIToolCall {
-            Logger.info("✅ UI tool cleared: \(pending.toolName) (callId: \(pending.callId.prefix(8)))", category: .ai)
-        }
-        pendingUIToolCall = nil
-    }
-
-    /// Queue a coordinator message while a UI tool is pending
+    /// Queue a coordinator message to be bundled with next user message
     func queueCoordinatorMessage(_ payload: JSON) {
         queuedCoordinatorMessages.append(payload)
         let title = payload["title"].stringValue
@@ -211,7 +189,6 @@ actor LLMStateManager {
         currentToolPaneCard = .none
         pendingToolResponsePayloads = []
         pendingToolResponseRetryCount = 0
-        pendingUIToolCall = nil
         queuedCoordinatorMessages = []
         pendingForcedToolChoice = nil
     }

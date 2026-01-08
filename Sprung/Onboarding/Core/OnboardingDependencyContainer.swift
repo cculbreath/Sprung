@@ -15,7 +15,7 @@ private struct CoreInfrastructure {
 private struct StateStores {
     let objectiveStore: ObjectiveStore
     let artifactRepository: ArtifactRepository
-    let chatTranscriptStore: ChatTranscriptStore
+    let streamingBuffer: StreamingMessageBuffer
     let sessionUIState: SessionUIState
 }
 
@@ -89,7 +89,7 @@ final class OnboardingDependencyContainer {
     // MARK: - Stores
     let objectiveStore: ObjectiveStore
     let artifactRepository: ArtifactRepository
-    let chatTranscriptStore: ChatTranscriptStore
+    let streamingBuffer: StreamingMessageBuffer
     let sessionUIState: SessionUIState
     // MARK: - Session Persistence
     let sessionPersistenceHandler: SwiftDataSessionPersistenceHandler
@@ -178,14 +178,14 @@ final class OnboardingDependencyContainer {
         let stores = Self.createStateStores(eventBus: core.eventBus, phasePolicy: core.phasePolicy)
         self.objectiveStore = stores.objectiveStore
         self.artifactRepository = stores.artifactRepository
-        self.chatTranscriptStore = stores.chatTranscriptStore
+        self.streamingBuffer = stores.streamingBuffer
         self.sessionUIState = stores.sessionUIState
 
         // 4. Initialize state coordinator
         self.state = StateCoordinator(
             eventBus: core.eventBus, phasePolicy: core.phasePolicy, phaseRegistry: core.phaseRegistry,
             objectives: stores.objectiveStore, artifacts: stores.artifactRepository,
-            chat: stores.chatTranscriptStore, uiState: stores.sessionUIState,
+            streamingBuffer: stores.streamingBuffer, uiState: stores.sessionUIState,
             todoStore: todoStore
         )
 
@@ -383,7 +383,7 @@ final class OnboardingDependencyContainer {
         StateStores(
             objectiveStore: ObjectiveStore(eventBus: eventBus, phasePolicy: phasePolicy, initialPhase: .phase1VoiceContext),
             artifactRepository: ArtifactRepository(eventBus: eventBus),
-            chatTranscriptStore: ChatTranscriptStore(),
+            streamingBuffer: StreamingMessageBuffer(),
             sessionUIState: SessionUIState(eventBus: eventBus, phasePolicy: phasePolicy, initialPhase: .phase1VoiceContext)
         )
     }

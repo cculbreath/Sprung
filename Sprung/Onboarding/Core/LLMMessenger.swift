@@ -435,14 +435,7 @@ actor LLMMessenger: OnboardingEventEmitter {
                         }
 
                         await stateCoordinator.clearPendingToolResponses()
-                        // Store completed tool result for future requests
-                        let outputString = output.rawString() ?? "{}"
-                        Logger.info("📝 Storing tool result for \(toolName): \(outputString.prefix(300))", category: .ai)
-                        await stateCoordinator.addCompletedToolResult(
-                            callId: callId,
-                            toolName: toolName,
-                            output: outputString
-                        )
+                        // Note: Tool result already stored in ConversationLog by ToolExecutionCoordinator
                         await emit(.llmStatus(status: .idle))
                         // NOTE: Don't emit .llmStreamCompleted here - markStreamCompleted() handles it
                         return
@@ -519,18 +512,7 @@ actor LLMMessenger: OnboardingEventEmitter {
                         }
 
                         await stateCoordinator.clearPendingToolResponses()
-                        // Store completed tool results for future requests
-                        for payload in payloads {
-                            let callId = payload["callId"].stringValue
-                            let toolName = payload["toolName"].stringValue
-                            let output = payload["output"]
-                            let outputString = output.rawString() ?? "{}"
-                            await stateCoordinator.addCompletedToolResult(
-                                callId: callId,
-                                toolName: toolName,
-                                output: outputString
-                            )
-                        }
+                        // Note: Tool results already stored in ConversationLog by ToolExecutionCoordinator
                         await emit(.llmStatus(status: .idle))
                         // NOTE: Don't emit .llmStreamCompleted here - markStreamCompleted() handles it
                         return

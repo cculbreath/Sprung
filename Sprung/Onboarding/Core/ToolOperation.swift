@@ -73,6 +73,16 @@ actor ToolOperation {
         Logger.debug("ToolOperation[\(callId.prefix(8))]: State -> running", category: .ai)
     }
 
+    /// Set state to awaiting user (dismiss handler can be set later via setDismissHandler)
+    func setAwaitingUser() {
+        guard !isTerminal else {
+            Logger.warning("ToolOperation[\(callId.prefix(8))]: Cannot set awaitingUser, already terminal", category: .ai)
+            return
+        }
+        self.state = .awaitingUser
+        Logger.debug("ToolOperation[\(callId.prefix(8))]: State -> awaitingUser", category: .ai)
+    }
+
     /// Set state to awaiting user with a dismiss callback
     func setAwaitingUser(dismissUI: @escaping () async -> Void) {
         guard !isTerminal else {
@@ -82,6 +92,11 @@ actor ToolOperation {
         self.uiDismissHandler = dismissUI
         self.state = .awaitingUser
         Logger.debug("ToolOperation[\(callId.prefix(8))]: State -> awaitingUser", category: .ai)
+    }
+
+    /// Set the dismiss handler for UI cleanup (can be set after setAwaitingUser())
+    func setDismissHandler(_ handler: @escaping () async -> Void) {
+        self.uiDismissHandler = handler
     }
 
     /// Complete the operation successfully
