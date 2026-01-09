@@ -97,29 +97,28 @@ struct SubmitCandidateDossierTool: InterviewTool {
             let identifier = try await dataStore.persist(dataType: "candidate_dossier", payload: dossier)
 
             // Emit event for downstream handling
-            await eventBus.publish(.candidateDossierPersisted(dossier: dossier))
+            await eventBus.publish(.artifact(.candidateDossierPersisted(dossier: dossier)))
             Logger.info("📋 Candidate dossier persisted: \(dossierId)", category: .ai)
 
             // Mark objective as completed so subphase can advance
-            await eventBus.publish(.objectiveStatusUpdateRequested(
+            await eventBus.publish(.objective(.statusUpdateRequested(
                 id: OnboardingObjectiveId.dossierComplete.rawValue,
                 status: "completed",
                 source: "tool_execution",
                 notes: "Candidate dossier persisted",
                 details: nil
-            ))
+            )))
 
             // Force user review via submit_for_validation
             var devPayload = JSON()
             devPayload["title"].string = "Review Candidate Dossier"
-            devPayload["toolChoice"].string = OnboardingToolName.submitForValidation.rawValue
             var details = JSON()
             details["instruction"].string = """
                 Next, call submit_for_validation with validation_type=\"candidate_dossier\" and a short summary. \
                 If the user rejects or requests changes, revise and re-run submit_candidate_dossier before proceeding.
                 """
             devPayload["details"] = details
-            await eventBus.publish(.llmSendCoordinatorMessage(payload: devPayload))
+            await eventBus.publish(.llm(.sendCoordinatorMessage(payload: devPayload)))
 
             // Build response
             var response = JSON()

@@ -5,7 +5,7 @@ import SwiftOpenAI
 /// Returns artifact with full extracted text (up to ~10,000 words).
 struct GetArtifactRecordTool: InterviewTool {
     private static let schema: JSONSchema = ArtifactSchemas.getArtifact
-    private unowned let coordinator: OnboardingInterviewCoordinator
+    private weak var coordinator: OnboardingInterviewCoordinator?
 
     /// Maximum characters to return (~10,000 words)
     private let maxExtractedChars = 60_000
@@ -17,6 +17,9 @@ struct GetArtifactRecordTool: InterviewTool {
     var description: String { "Retrieve artifact with full extracted text content (up to ~10,000 words)." }
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {
+        guard let coordinator else {
+            return .error(ToolError.executionFailed("Coordinator unavailable"))
+        }
         let artifactId = try ToolResultHelpers.requireString(
             params["artifact_id"].string?.trimmingCharacters(in: .whitespacesAndNewlines),
             named: "artifact_id"

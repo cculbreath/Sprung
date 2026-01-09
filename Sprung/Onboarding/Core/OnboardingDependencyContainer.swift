@@ -132,6 +132,9 @@ final class OnboardingDependencyContainer {
     // MARK: - Artifact Filesystem Context
     let artifactFilesystemContext: ArtifactFilesystemContext
 
+    // MARK: - UI Tool Continuation Manager
+    let uiToolContinuationManager: UIToolContinuationManager
+
     // MARK: - Debug Services
     #if DEBUG
     let debugRegenerationService: DebugRegenerationService
@@ -168,8 +171,11 @@ final class OnboardingDependencyContainer {
         self.dataStore = dataStore
 
         // Initialize artifact store using same context as sessionStore
-        // Force unwrap is safe: container is created at app startup when context is guaranteed valid
-        self.artifactRecordStore = ArtifactRecordStore(context: sessionStore.modelContext!)
+        guard let context = sessionStore.modelContext else {
+            fatalError("OnboardingDependencyContainer requires valid model context at initialization. " +
+                       "Ensure SessionStore has initialized its model context before creating the container.")
+        }
+        self.artifactRecordStore = ArtifactRecordStore(context: context)
 
         // 1. Initialize core infrastructure
         let core = Self.createCoreInfrastructure()
@@ -185,6 +191,7 @@ final class OnboardingDependencyContainer {
         self.tokenUsageTracker = TokenUsageTracker()
         self.todoStore = InterviewTodoStore(eventBus: core.eventBus)
         self.artifactFilesystemContext = ArtifactFilesystemContext()
+        self.uiToolContinuationManager = UIToolContinuationManager()
 
         // 3. Initialize state stores
         let stores = Self.createStateStores(eventBus: core.eventBus, phasePolicy: core.phasePolicy)
@@ -201,6 +208,41 @@ final class OnboardingDependencyContainer {
             todoStore: todoStore, operationTracker: stores.operationTracker,
             conversationLog: stores.conversationLog
         )
+
+        // Wire up agent activity tracker for status reporting in interview context
+        // (captured locally to avoid self capture issue in init)
+        let stateRef = self.state
+        let trackerRef = self.agentActivityTracker
+        Task {
+            await stateRef.setAgentActivityTracker(trackerRef)
+        }
+
+        // Wire up "all agents done" callback to notify LLM when background work completes
+        let eventBusRef = self.eventBus
+        trackerRef.onAllAgentsCompleted = { summaries in
+            // Build the notification message
+            var lines: [String] = ["<agent_status>"]
+            lines.append("  <event>all_agents_completed</event>")
+            lines.append("  <results>")
+            for summary in summaries {
+                let status = summary.succeeded ? "completed" : "failed"
+                let durationStr = summary.duration.map { String(format: "%.1fs", $0) } ?? "unknown"
+                let errorInfo = summary.errorMessage.map { " error=\"\($0)\"" } ?? ""
+                lines.append("    <agent type=\"\(summary.agentType.displayName)\" status=\"\(status)\" duration=\"\(durationStr)\"\(errorInfo)>\(summary.name)</agent>")
+            }
+            lines.append("  </results>")
+            lines.append("  <note>All background processing is complete. You may now use the results in your response.</note>")
+            lines.append("</agent_status>")
+
+            let messageText = lines.joined(separator: "\n")
+            var payload = JSON()
+            payload["text"].string = messageText
+
+            Task {
+                await eventBusRef.publish(.llm(.sendUserMessage(payload: payload, isSystemGenerated: true)))
+                Logger.info("📨 Sent 'all agents done' notification to LLM", category: .ai)
+            }
+        }
 
         // 4a. Initialize card pipeline services (deferred - needs sessionPersistenceHandler)
         // Created below after sessionPersistenceHandler is initialized
@@ -342,7 +384,7 @@ final class OnboardingDependencyContainer {
         )
         self.uiResponseCoordinator = UIResponseCoordinator(
             eventBus: core.eventBus, toolRouter: tools.toolRouter, state: state, ui: ui,
-            sessionUIState: sessionUIState
+            sessionUIState: sessionUIState, continuationManager: uiToolContinuationManager
         )
 
         // 12a. Initialize voice profile extraction handler

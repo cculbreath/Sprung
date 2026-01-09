@@ -33,7 +33,7 @@ struct AskUserSkipToNextPhaseTool: InterviewTool {
         additionalProperties: false
     )
 
-    private unowned let coordinator: OnboardingInterviewCoordinator
+    private weak var coordinator: OnboardingInterviewCoordinator?
 
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
@@ -46,6 +46,9 @@ struct AskUserSkipToNextPhaseTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
+        guard let coordinator else {
+            return .error(ToolError.executionFailed("Coordinator unavailable"))
+        }
         let reason = params["reason"].stringValue
 
         // Create a choice prompt for user approval
@@ -69,9 +72,9 @@ struct AskUserSkipToNextPhaseTool: InterviewTool {
         )
 
         // Present the choice prompt
-        await coordinator.eventBus.publish(.choicePromptRequested(prompt: prompt))
-
-        // Return pending - user response will complete the tool call
-        return .pendingUserAction
+        await coordinator.eventBus.publish(.toolpane(.choicePromptRequested(prompt: prompt)))
+        // Block until user completes the action or interrupts
+        let result = await coordinator.uiToolContinuationManager.awaitUserAction(toolName: name)
+        return .immediate(result.toJSON())
     }
 }

@@ -24,7 +24,7 @@ struct UpdateDossierNotesTool: InterviewTool {
         )
     }()
 
-    private unowned let coordinator: OnboardingInterviewCoordinator
+    private weak var coordinator: OnboardingInterviewCoordinator?
 
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
@@ -39,6 +39,9 @@ struct UpdateDossierNotesTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
+        guard let coordinator else {
+            return .error(ToolError.executionFailed("Coordinator unavailable"))
+        }
         let notes = try ToolResultHelpers.requireString(params["notes"].string, named: "notes")
 
         let shouldAppend = params["append"].boolValue

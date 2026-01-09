@@ -2,7 +2,7 @@ import Foundation
 import SwiftyJSON
 import SwiftOpenAI
 struct ValidateApplicantProfileTool: InterviewTool {
-    private unowned let coordinator: OnboardingInterviewCoordinator
+    private weak var coordinator: OnboardingInterviewCoordinator?
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
@@ -39,6 +39,9 @@ struct ValidateApplicantProfileTool: InterviewTool {
         )
     }
     func execute(_ params: JSON) async throws -> ToolResult {
+        guard let coordinator else {
+            return .error(ToolError.executionFailed("Coordinator unavailable"))
+        }
         let data = params["data"]
         guard data != .null else {
             throw ToolError.invalidParameters("data is required")
@@ -49,9 +52,9 @@ struct ValidateApplicantProfileTool: InterviewTool {
             message: "Review your contact details."
         )
         // Emit UI request to show the validation prompt
-        await coordinator.eventBus.publish(.validationPromptRequested(prompt: prompt))
-        // Codex paradigm: Return pending - don't send tool response until user acts.
-        // The tool output will be sent when user confirms/rejects validation.
-        return .pendingUserAction
+        await coordinator.eventBus.publish(.toolpane(.validationPromptRequested(prompt: prompt)))
+        // Block until user completes the action or interrupts
+        let result = await coordinator.uiToolContinuationManager.awaitUserAction(toolName: name)
+        return .immediate(result.toJSON())
     }
 }

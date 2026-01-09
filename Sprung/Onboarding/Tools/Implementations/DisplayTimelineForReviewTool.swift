@@ -20,7 +20,7 @@ struct DisplayTimelineForReviewTool: InterviewTool {
             additionalProperties: false
         )
     }()
-    private unowned let coordinator: OnboardingInterviewCoordinator
+    private weak var coordinator: OnboardingInterviewCoordinator?
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
@@ -28,23 +28,26 @@ struct DisplayTimelineForReviewTool: InterviewTool {
     var description: String { "Activate timeline EDITOR UI before creating cards. User can edit/save changes. NOT final approval - use submit_for_validation afterward." }
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {
+        guard let coordinator else {
+            return .error(ToolError.executionFailed("Coordinator unavailable"))
+        }
         // Activate the timeline editor in the Timeline tab
         // The Timeline tab will auto-switch and show in editor mode
         await MainActor.run {
             coordinator.ui.isTimelineEditorActive = true
         }
         // Emit event for session persistence
-        await coordinator.eventBus.publish(.timelineEditorActiveChanged(true))
+        await coordinator.eventBus.publish(.state(.timelineEditorActiveChanged(true)))
 
         // Mark timeline enrichment objective as in_progress
         // This gates submit_for_validation(skeleton_timeline) - it can only be called after the editor is displayed
-        await coordinator.eventBus.publish(.objectiveStatusUpdateRequested(
+        await coordinator.eventBus.publish(.objective(.statusUpdateRequested(
             id: OnboardingObjectiveId.timelineEnriched.rawValue,
             status: "in_progress",
             source: "display_timeline_tool",
             notes: "Timeline editor activated",
             details: nil
-        ))
+        )))
 
         // Return completed - the tool's job is to activate UI, which it has done
         // Timeline cards created afterward will appear in the Timeline tab automatically

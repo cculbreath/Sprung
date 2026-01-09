@@ -9,7 +9,7 @@ import SwiftyJSON
 import SwiftOpenAI
 struct NextPhaseTool: InterviewTool {
     private static let schema: JSONSchema = PhaseSchemas.phaseTransitionSchema()
-    private unowned let coordinator: OnboardingInterviewCoordinator
+    private weak var coordinator: OnboardingInterviewCoordinator?
     private let dataStore: InterviewDataStore
     private let registry: PhaseScriptRegistry
 
@@ -34,6 +34,9 @@ struct NextPhaseTool: InterviewTool {
     }
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {
+        guard let coordinator else {
+            return .error(ToolError.executionFailed("Coordinator unavailable"))
+        }
         let currentPhase = await coordinator.currentPhase
         let missingObjectives = await coordinator.timeline.missingObjectives()
 

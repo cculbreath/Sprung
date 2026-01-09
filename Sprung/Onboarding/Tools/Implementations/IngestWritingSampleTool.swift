@@ -46,7 +46,7 @@ struct IngestWritingSampleTool: InterviewTool {
         )
     }()
 
-    private unowned let coordinator: OnboardingInterviewCoordinator
+    private weak var coordinator: OnboardingInterviewCoordinator?
     private let eventBus: EventCoordinator
 
     init(coordinator: OnboardingInterviewCoordinator, eventBus: EventCoordinator) {
@@ -59,6 +59,9 @@ struct IngestWritingSampleTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
+        guard let coordinator else {
+            return .error(ToolError.executionFailed("Coordinator unavailable"))
+        }
         let sampleName = try ToolResultHelpers.requireString(params["name"].string, named: "name")
         let content = try ToolResultHelpers.requireString(params["content"].string, named: "content")
         let writingType = try ToolResultHelpers.requireString(params["writing_type"].string, named: "writing_type")
@@ -114,7 +117,7 @@ struct IngestWritingSampleTool: InterviewTool {
         artifactRecord["metadata"] = metadata
 
         // Emit artifact record produced event for StateCoordinator to process
-        await eventBus.publish(.artifactRecordProduced(record: artifactRecord))
+        await eventBus.publish(.artifact(.recordProduced(record: artifactRecord)))
 
         Logger.info("📝 Writing sample ingested: \(sampleName) (\(content.count) chars)", category: .ai)
 

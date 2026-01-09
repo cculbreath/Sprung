@@ -25,7 +25,7 @@ struct ReorderTimelineCardsTool: InterviewTool {
         required: ["ordered_ids"],
         additionalProperties: false
     )
-    private unowned let coordinator: OnboardingInterviewCoordinator
+    private weak var coordinator: OnboardingInterviewCoordinator?
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
@@ -33,6 +33,9 @@ struct ReorderTimelineCardsTool: InterviewTool {
     var description: String { "Reorder timeline cards. CRITICAL: Must include ALL card IDs - omitted cards are removed. Returns {success, count}." }
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {
+        guard let coordinator else {
+            return .error(ToolError.executionFailed("Coordinator unavailable"))
+        }
         let orderedIdsArray = try ToolResultHelpers.requireNonEmptyArray(params["ordered_ids"].array, named: "ordered_ids")
 
         let orderedIds = orderedIdsArray.compactMap { $0.string }

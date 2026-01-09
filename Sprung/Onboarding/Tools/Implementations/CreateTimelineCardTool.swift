@@ -19,7 +19,7 @@ struct CreateTimelineCardTool: InterviewTool {
         )
     }()
 
-    private unowned let coordinator: OnboardingInterviewCoordinator
+    private weak var coordinator: OnboardingInterviewCoordinator?
 
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
@@ -30,6 +30,9 @@ struct CreateTimelineCardTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
+        guard let coordinator else {
+            return .error(ToolError.executionFailed("Coordinator unavailable"))
+        }
         // Decode at the boundary: Use JSONDecoder for type-safe parsing
         guard let fieldsDict = params["fields"].dictionary else {
             throw ToolError.invalidParameters("fields is required and must be an object")

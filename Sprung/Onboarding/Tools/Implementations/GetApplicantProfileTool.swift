@@ -21,7 +21,7 @@ struct GetApplicantProfileTool: InterviewTool {
         required: [],
         additionalProperties: false
     )
-    private unowned let coordinator: OnboardingInterviewCoordinator
+    private weak var coordinator: OnboardingInterviewCoordinator?
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
@@ -29,11 +29,13 @@ struct GetApplicantProfileTool: InterviewTool {
     var description: String { "Present profile intake UI card (upload/URL/manual/contacts). Returns immediately - intake completion arrives as user message." }
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {
+        guard let coordinator else {
+            return .error(ToolError.executionFailed("Coordinator unavailable"))
+        }
         // Emit UI request to show the profile intake card
-        await coordinator.eventBus.publish(.applicantProfileIntakeRequested)
-        // Codex paradigm: Return pending - don't send tool response until user acts.
-        // The tool output will be sent when user completes/cancels the profile intake.
-        // Developer messages are queued behind this pending tool.
-        return .pendingUserAction
+        await coordinator.eventBus.publish(.toolpane(.applicantProfileIntakeRequested))
+        // Block until user completes the action or interrupts
+        let result = await coordinator.uiToolContinuationManager.awaitUserAction(toolName: name)
+        return .immediate(result.toJSON())
     }
 }

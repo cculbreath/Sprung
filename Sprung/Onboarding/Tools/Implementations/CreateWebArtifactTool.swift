@@ -72,7 +72,7 @@ struct CreateWebArtifactTool: InterviewTool {
         artifactRecord["summary_metadata"] = summaryMetadata
 
         // Emit artifact record produced event for StateCoordinator to process
-        await eventBus.publish(.artifactRecordProduced(record: artifactRecord))
+        await eventBus.publish(.artifact(.recordProduced(record: artifactRecord)))
 
         Logger.info("🌐 Web artifact created: id=\(artifactId), type=\(documentType), url=\(url)", category: .ai)
 

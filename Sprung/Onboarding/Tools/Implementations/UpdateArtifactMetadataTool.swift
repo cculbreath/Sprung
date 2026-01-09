@@ -10,7 +10,7 @@ import SwiftOpenAI
 
 struct UpdateArtifactMetadataTool: InterviewTool {
     private static let schema: JSONSchema = ArtifactSchemas.updateArtifactMetadata
-    private unowned let coordinator: OnboardingInterviewCoordinator
+    private weak var coordinator: OnboardingInterviewCoordinator?
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
@@ -18,6 +18,9 @@ struct UpdateArtifactMetadataTool: InterviewTool {
     var description: String { "Update metadata fields on an artifact record (field-level merge)." }
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {
+        guard let coordinator else {
+            return .error(ToolError.executionFailed("Coordinator unavailable"))
+        }
         guard let artifactId = params["artifact_id"].string, !artifactId.isEmpty else {
             throw ToolError.invalidParameters("artifact_id must be provided")
         }

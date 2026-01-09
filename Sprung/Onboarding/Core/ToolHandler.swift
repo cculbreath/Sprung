@@ -66,23 +66,23 @@ final class ToolHandler {
     }
     private func handleToolUIEvent(_ event: OnboardingEvent) {
         switch event {
-        case .choicePromptRequested(let prompt):
+        case .toolpane(.choicePromptRequested(let prompt)):
             presentChoicePrompt(prompt)
-        case .choicePromptCleared:
+        case .toolpane(.choicePromptCleared):
             clearChoicePrompt()
-        case .uploadRequestPresented(let request):
+        case .toolpane(.uploadRequestPresented(let request)):
             presentUploadRequest(request)
-        case .validationPromptRequested(let prompt):
+        case .toolpane(.validationPromptRequested(let prompt)):
             presentValidationPrompt(prompt)
-        case .validationPromptCleared:
+        case .toolpane(.validationPromptCleared):
             clearValidationPrompt()
-        case .applicantProfileIntakeRequested:
+        case .toolpane(.applicantProfileIntakeRequested):
             presentApplicantProfileIntake()
-        case .applicantProfileIntakeCleared:
+        case .toolpane(.applicantProfileIntakeCleared):
             clearApplicantProfileIntake()
-        case .sectionToggleRequested(let request):
+        case .toolpane(.sectionToggleRequested(let request)):
             presentSectionToggle(request)
-        case .sectionToggleCleared:
+        case .toolpane(.sectionToggleCleared):
             clearSectionToggle()
         default:
             break
@@ -213,24 +213,28 @@ final class ToolHandler {
     }
     private func configureStatusResolvers() {
         statusResolvers = [
-            .getUserOption: { [unowned self] in
-                promptHandler.pendingChoicePrompt == nil ? .ready : .waitingForUser
+            .getUserOption: { [weak self] in
+                guard let self else { return .ready }
+                return promptHandler.pendingChoicePrompt == nil ? .ready : .waitingForUser
             },
-            .getUserUpload: { [unowned self] in
-                uploadHandler.pendingUploadRequests.isEmpty ? .ready : .waitingForUser
+            .getUserUpload: { [weak self] in
+                guard let self else { return .ready }
+                return uploadHandler.pendingUploadRequests.isEmpty ? .ready : .waitingForUser
             },
-            .getApplicantProfile: { [unowned self] in
-    if let intake = profileHandler.pendingApplicantProfileIntake {
-        if case .loading = intake.mode { return .processing }
-        return .waitingForUser
-    }
-    if profileHandler.pendingApplicantProfileRequest != nil {
-        return .waitingForUser
-    }
-    return .ready
-    },
-            .submitForValidation: { [unowned self] in
-                promptHandler.pendingValidationPrompt == nil ? .ready : .waitingForUser
+            .getApplicantProfile: { [weak self] in
+                guard let self else { return .ready }
+                if let intake = profileHandler.pendingApplicantProfileIntake {
+                    if case .loading = intake.mode { return .processing }
+                    return .waitingForUser
+                }
+                if profileHandler.pendingApplicantProfileRequest != nil {
+                    return .waitingForUser
+                }
+                return .ready
+            },
+            .submitForValidation: { [weak self] in
+                guard let self else { return .ready }
+                return promptHandler.pendingValidationPrompt == nil ? .ready : .waitingForUser
             }
         ]
     }

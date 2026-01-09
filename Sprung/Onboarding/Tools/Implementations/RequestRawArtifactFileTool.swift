@@ -4,7 +4,7 @@ import SwiftOpenAI
 
 struct RequestRawArtifactFileTool: InterviewTool {
     private static let schema: JSONSchema = ArtifactSchemas.requestRawFile
-    private unowned let coordinator: OnboardingInterviewCoordinator
+    private weak var coordinator: OnboardingInterviewCoordinator?
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
@@ -12,6 +12,9 @@ struct RequestRawArtifactFileTool: InterviewTool {
     var description: String { "Get original file URL for artifact. Returns {status, file_url, filename}. Rarely needed - use get_artifact for text content." }
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {
+        guard let coordinator else {
+            return .error(ToolError.executionFailed("Coordinator unavailable"))
+        }
         let artifactId = try ToolResultHelpers.requireString(
             params["artifact_id"].string?.trimmingCharacters(in: .whitespacesAndNewlines),
             named: "artifact_id"

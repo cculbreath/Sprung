@@ -25,7 +25,7 @@ struct CancelUserUploadTool: InterviewTool {
             additionalProperties: false
         )
     }()
-    private unowned let coordinator: OnboardingInterviewCoordinator
+    private weak var coordinator: OnboardingInterviewCoordinator?
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
@@ -33,12 +33,16 @@ struct CancelUserUploadTool: InterviewTool {
     var description: String { "Dismiss active upload card. Returns {status: cancelled}. Use when user wants to skip upload and provide data via chat instead." }
     var parameters: JSONSchema { Self.schema }
     func isAvailable() async -> Bool {
+        guard let coordinator else { return false }
         // Check if there's an active upload request
-        await MainActor.run {
+        return await MainActor.run {
             !coordinator.pendingUploadRequests.isEmpty
         }
     }
     func execute(_ params: JSON) async throws -> ToolResult {
+        guard let coordinator else {
+            return .error(ToolError.executionFailed("Coordinator unavailable"))
+        }
         let reason = params["reason"].string
         // Get the current upload requests
         let uploadRequests = await MainActor.run { coordinator.pendingUploadRequests }

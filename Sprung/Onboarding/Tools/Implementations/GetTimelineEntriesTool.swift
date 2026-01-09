@@ -17,7 +17,7 @@ struct GetTimelineEntriesTool: InterviewTool {
         )
     }()
 
-    private unowned let coordinator: OnboardingInterviewCoordinator
+    private weak var coordinator: OnboardingInterviewCoordinator?
 
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
@@ -28,6 +28,9 @@ struct GetTimelineEntriesTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
+        guard let coordinator else {
+            return .error(ToolError.executionFailed("Coordinator unavailable"))
+        }
         let timeline = await coordinator.state.artifacts.skeletonTimeline
 
         guard let timeline = timeline else {

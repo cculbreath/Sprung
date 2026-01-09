@@ -46,7 +46,7 @@ struct OpenDocumentCollectionTool: InterviewTool {
         )
     }()
 
-    private unowned let coordinator: OnboardingInterviewCoordinator
+    private weak var coordinator: OnboardingInterviewCoordinator?
 
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
@@ -57,6 +57,9 @@ struct OpenDocumentCollectionTool: InterviewTool {
     var parameters: JSONSchema { Self.schema }
 
     func execute(_ params: JSON) async throws -> ToolResult {
+        guard let coordinator else {
+            return .error(ToolError.executionFailed("Coordinator unavailable"))
+        }
         let message = params["message"].string
         // Activate document collection UI and gate all tools
         await coordinator.activateDocumentCollection()

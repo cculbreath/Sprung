@@ -36,7 +36,7 @@ struct GetUserOptionTool: InterviewTool {
             additionalProperties: false
         )
     }()
-    private unowned let coordinator: OnboardingInterviewCoordinator
+    private weak var coordinator: OnboardingInterviewCoordinator?
     var name: String { OnboardingToolName.getUserOption.rawValue }
     var description: String { "Present multiple-choice selection card. Returns immediately - selection arrives as user message. Use for structured decisions (2-6 options)." }
     var parameters: JSONSchema { Self.schema }
@@ -44,12 +44,15 @@ struct GetUserOptionTool: InterviewTool {
         self.coordinator = coordinator
     }
     func execute(_ params: JSON) async throws -> ToolResult {
+        guard let coordinator else {
+            return .error(ToolError.executionFailed("Coordinator unavailable"))
+        }
         let payload = try OptionPromptPayload(json: params)
         // Emit UI request to show the choice prompt
-        await coordinator.eventBus.publish(.choicePromptRequested(prompt: payload.toChoicePrompt()))
-        // Codex paradigm: Return pending - don't send tool response until user acts.
-        // The tool output will be sent when user makes a selection.
-        return .pendingUserAction
+        await coordinator.eventBus.publish(.toolpane(.choicePromptRequested(prompt: payload.toChoicePrompt())))
+        // Block until user completes the action or interrupts
+        let result = await coordinator.uiToolContinuationManager.awaitUserAction(toolName: name)
+        return .immediate(result.toJSON())
     }
 }
 private struct OptionPromptPayload {

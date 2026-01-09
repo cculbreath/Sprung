@@ -4,7 +4,7 @@ import SwiftOpenAI
 
 struct ListArtifactsTool: InterviewTool {
     private static let schema: JSONSchema = ArtifactSchemas.listArtifacts
-    private unowned let coordinator: OnboardingInterviewCoordinator
+    private weak var coordinator: OnboardingInterviewCoordinator?
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
@@ -12,10 +12,14 @@ struct ListArtifactsTool: InterviewTool {
     var description: String { "List artifacts with pagination. Returns {total, artifacts: [{id, filename, content_type}]}." }
     var parameters: JSONSchema { Self.schema }
     func isAvailable() async -> Bool {
+        guard let coordinator else { return false }
         let summaries = await coordinator.listArtifactSummaries()
         return !summaries.isEmpty
     }
     func execute(_ params: JSON) async throws -> ToolResult {
+        guard let coordinator else {
+            return .error(ToolError.executionFailed("Coordinator unavailable"))
+        }
         let allSummaries = await coordinator.listArtifactSummaries()
 
         // Parse pagination parameters

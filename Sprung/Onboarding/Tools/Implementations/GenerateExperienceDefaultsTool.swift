@@ -12,7 +12,7 @@ import SwiftyJSON
 import SwiftOpenAI
 
 struct GenerateExperienceDefaultsTool: InterviewTool {
-    private unowned let coordinator: OnboardingInterviewCoordinator
+    private weak var coordinator: OnboardingInterviewCoordinator?
     private let eventBus: EventCoordinator
     private let agentActivityTracker: AgentActivityTracker
 
@@ -56,6 +56,9 @@ struct GenerateExperienceDefaultsTool: InterviewTool {
     }
 
     func execute(_ params: JSON) async throws -> ToolResult {
+        guard let coordinator else {
+            return .error(ToolError.executionFailed("Coordinator unavailable"))
+        }
         // Check prerequisites
         let (knowledgeCards, shouldGenerateTitleSets, titleSets, state) = await MainActor.run {
             (
@@ -117,7 +120,6 @@ struct GenerateExperienceDefaultsTool: InterviewTool {
             // Prompt user review
             var devPayload = JSON()
             devPayload["title"].string = "Experience Defaults Generated"
-            devPayload["toolChoice"].string = OnboardingToolName.submitForValidation.rawValue
             var details = JSON()
             details["instruction"].string = """
                 The agent has generated experience defaults. \
@@ -125,7 +127,7 @@ struct GenerateExperienceDefaultsTool: InterviewTool {
                 what was generated and get their approval.
                 """
             devPayload["details"] = details
-            await eventBus.publish(.llmSendCoordinatorMessage(payload: devPayload))
+            await eventBus.publish(.llm(.sendCoordinatorMessage(payload: devPayload)))
 
             return .immediate(response)
 

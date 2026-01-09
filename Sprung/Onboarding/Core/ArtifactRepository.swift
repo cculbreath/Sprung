@@ -9,9 +9,15 @@ actor ArtifactRepository: OnboardingEventEmitter {
     private var artifacts = OnboardingArtifacts()
 
     // MARK: - Synchronous Caches (for SwiftUI)
+    /// Sync cache for SwiftUI access. Safe because:
+    /// 1. Only mutated from actor-isolated methods (this actor's methods)
+    /// 2. Only read from @MainActor SwiftUI views
+    /// 3. Writes complete before reads occur due to event sequencing
     nonisolated(unsafe) private(set) var artifactRecordsSync: [JSON] = []
+    /// Sync cache for skeleton timeline. Safe for same reasons as artifactRecordsSync.
     nonisolated(unsafe) private(set) var skeletonTimelineSync: JSON?
-    /// Archived artifacts (from previous sessions, available for reuse)
+    /// Archived artifacts (from previous sessions, available for reuse).
+    /// Sync cache for SwiftUI access. Safe for same reasons as artifactRecordsSync.
     nonisolated(unsafe) private(set) var archivedArtifactsSync: [JSON] = []
     // MARK: - Initialization
     init(eventBus: EventCoordinator) {
@@ -29,7 +35,7 @@ actor ArtifactRepository: OnboardingEventEmitter {
         Logger.info("👤 Applicant profile \(profile != nil ? "saved" : "cleared")", category: .ai)
         // Emit event for state coordinator to update objectives
         if profile != nil {
-            await emit(.applicantProfileStored(profile!))
+            await emit(.state(.applicantProfileStored(profile!)))
         }
     }
     /// Get applicant profile
@@ -43,7 +49,7 @@ actor ArtifactRepository: OnboardingEventEmitter {
         Logger.info("📅 Skeleton timeline \(timeline != nil ? "saved" : "cleared")", category: .ai)
         // Emit event for state coordinator to update objectives
         if timeline != nil {
-            await emit(.skeletonTimelineStored(timeline!))
+            await emit(.state(.skeletonTimelineStored(timeline!)))
         }
     }
     /// Get skeleton timeline
@@ -55,7 +61,7 @@ actor ArtifactRepository: OnboardingEventEmitter {
         artifacts.enabledSections = sections
         Logger.info("📑 Enabled sections updated: \(sections.count) sections", category: .ai)
         // Emit event for state coordinator to update objectives
-        await emit(.enabledSectionsUpdated(sections))
+        await emit(.state(.enabledSectionsUpdated(sections)))
     }
     /// Get enabled sections
     func getEnabledSections() -> Set<String> {
@@ -139,7 +145,7 @@ actor ArtifactRepository: OnboardingEventEmitter {
         artifactRecordsSync = artifacts.artifactRecords
         Logger.info("✅ Artifact metadata updated: \(artifactId) (\(updates.dictionaryValue.keys.count) fields)", category: .ai)
         // Emit confirmation event for persistence
-        await emit(.artifactMetadataUpdated(artifact: artifact))
+        await emit(.artifact(.metadataUpdated(artifact: artifact)))
     }
     /// List artifact summaries (id, filename, size, content_type, summary)
     /// Used by main coordinator to see all docs at a glance without full text
