@@ -12,6 +12,13 @@ import Foundation
 /// All prompts are stored in Sprung/Onboarding/Resources/Prompts/ directory.
 enum PromptLibrary {
 
+    // MARK: - Interview System Prompt
+
+    /// Base system prompt for the onboarding interview agent
+    static let interviewBaseSystem: String = {
+        loadPrompt(named: "interview_base_system")
+    }()
+
     // MARK: - Interview Phase Prompts
 
     /// Phase 1 introductory prompt (Voice & Context)

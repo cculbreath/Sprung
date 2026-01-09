@@ -56,12 +56,12 @@ final class PhaseTransitionController {
         introPayload["text"].string = introPrompt
         introPayload["reasoningEffort"].string = "low"
 
-        // Don't force toolChoice - let the model output preamble text naturally before calling tools
+        // Let the model output preamble text naturally before calling tools
         // The initial user message includes explicit instructions to output the welcome message
 
-        await eventBus.publish(.llmSendCoordinatorMessage(
+        await eventBus.publish(.llm(.sendCoordinatorMessage(
             payload: introPayload
-        ))
+        )))
         // Query and surface artifacts targeted for this phase's objectives
         // Include both required objectives and all their child objectives
         let allObjectives = await state.getObjectivesForPhase(phase)
@@ -101,20 +101,20 @@ final class PhaseTransitionController {
             """
             var artifactPayload = JSON()
             artifactPayload["text"].string = artifactMessage
-            await eventBus.publish(.llmSendCoordinatorMessage(
+            await eventBus.publish(.llm(.sendCoordinatorMessage(
                 payload: artifactPayload
-            ))
+            )))
             Logger.info("📦 Surfaced \(targetedArtifacts.count) targeted artifacts for phase: \(phaseName)", category: .ai)
         }
         Logger.info("🔄 Phase introductory prompt sent as developer message for phase: \(phaseName)", category: .ai)
     }
     // MARK: - Phase Transition Requests
     func requestPhaseTransition(from: String, to: String, reason: String?) async {
-        await eventBus.publish(.phaseTransitionRequested(
+        await eventBus.publish(.phase(.transitionRequested(
             from: from,
             to: to,
             reason: reason
-        ))
+        )))
     }
     // MARK: - Objective Management
     func registerObjectivesForCurrentPhase() async {
@@ -137,12 +137,12 @@ final class PhaseTransitionController {
         }
 
         do {
-            let exportRoot = try artifactRecordStore.exportArtifactsToFilesystem(session)
+            let exportRoot = try ArtifactExporter.exportArtifactsToFilesystem(session)
 
             // Also export knowledge cards to the same root
             let knowledgeCards = knowledgeCardStore.knowledgeCards
             if !knowledgeCards.isEmpty {
-                try artifactRecordStore.exportKnowledgeCards(knowledgeCards, to: exportRoot)
+                try ArtifactExporter.exportKnowledgeCards(knowledgeCards, to: exportRoot)
             }
 
             await artifactFilesystemContext.setRoot(exportRoot)
@@ -161,7 +161,7 @@ final class PhaseTransitionController {
         }
 
         do {
-            try artifactRecordStore.exportSingleArtifact(artifact, to: rootURL)
+            try ArtifactExporter.exportSingleArtifact(artifact, to: rootURL)
             Logger.info("📁 Updated artifact in filesystem: \(artifact.filename)", category: .ai)
         } catch {
             Logger.error("📁 Failed to update artifact in filesystem: \(error)", category: .ai)
@@ -177,7 +177,7 @@ final class PhaseTransitionController {
         }
 
         do {
-            try artifactRecordStore.exportSingleKnowledgeCard(knowledgeCard, to: rootURL)
+            try ArtifactExporter.exportSingleKnowledgeCard(knowledgeCard, to: rootURL)
             Logger.info("📁 Updated knowledge card in filesystem: \(knowledgeCard.title)", category: .ai)
         } catch {
             Logger.error("📁 Failed to update knowledge card in filesystem: \(error)", category: .ai)

@@ -96,18 +96,7 @@ final class ArtifactRecord {
 
     /// Folder name for filesystem export (sanitized filename without extension)
     var artifactFolderName: String {
-        let baseName: String
-        if !filename.isEmpty {
-            let nameWithoutExt = URL(fileURLWithPath: filename).deletingPathExtension().lastPathComponent
-            baseName = nameWithoutExt.isEmpty ? filename : nameWithoutExt
-        } else {
-            baseName = id.uuidString
-        }
-        return baseName
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: ":", with: "_")
-            .replacingOccurrences(of: "\\", with: "_")
-            .replacingOccurrences(of: " ", with: "_")
+        ArtifactRecordService.folderName(for: self)
     }
 
     /// True if this is a PDF document
@@ -117,21 +106,7 @@ final class ArtifactRecord {
 
     /// True if this is a writing sample (should not have card inventory)
     var isWritingSample: Bool {
-        // Check source type
-        if sourceType == "writing_sample" {
-            return true
-        }
-        // Check document_type in metadata
-        if let docType = metadataString("document_type") {
-            if docType == "writingSample" || docType == "writing_sample" {
-                return true
-            }
-        }
-        // Check for writing_type in metadata
-        if metadataString("writing_type") != nil {
-            return true
-        }
-        return false
+        ArtifactRecordService.isWritingSample(self)
     }
 
     /// True if this is a git repository artifact
@@ -154,18 +129,17 @@ final class ArtifactRecord {
 
     /// Estimate token count from text (approximately 4 characters per token for English)
     static func estimateTokens(_ text: String) -> Int {
-        max(1, text.count / 4)
+        ArtifactRecordService.estimateTokens(for: text)
     }
 
     /// Estimated tokens in extracted content
     var extractedContentTokens: Int {
-        Self.estimateTokens(extractedContent)
+        ArtifactRecordService.estimateExtractedContentTokens(for: self)
     }
 
     /// Estimated tokens in summary
     var summaryTokens: Int {
-        guard let summary, !summary.isEmpty else { return 0 }
-        return Self.estimateTokens(summary)
+        ArtifactRecordService.estimateSummaryTokens(for: self)
     }
 
     // MARK: - Metadata Accessors
@@ -181,30 +155,12 @@ final class ArtifactRecord {
 
     /// Parsed skills (lazily decoded from JSON string)
     var skills: [Skill]? {
-        guard let jsonString = skillsJSON,
-              let data = jsonString.data(using: .utf8) else { return nil }
-        // Note: Skill model has explicit CodingKeys for snake_case - no conversion needed
-        let decoder = JSONDecoder()
-        do {
-            return try decoder.decode([Skill].self, from: data)
-        } catch {
-            Logger.warning("Failed to decode skills for \(filename): \(error.localizedDescription)", category: .ai)
-            return nil
-        }
+        ArtifactRecordService.extractSkills(from: self)
     }
 
     /// Parsed narrative cards (lazily decoded from JSON string)
     var narrativeCards: [KnowledgeCard]? {
-        guard let jsonString = narrativeCardsJSON,
-              let data = jsonString.data(using: .utf8) else { return nil }
-        // Note: KnowledgeCard model has explicit CodingKeys for snake_case - no conversion needed
-        let decoder = JSONDecoder()
-        do {
-            return try decoder.decode([KnowledgeCard].self, from: data)
-        } catch {
-            Logger.warning("Failed to decode narrative cards for \(filename): \(error.localizedDescription)", category: .ai)
-            return nil
-        }
+        ArtifactRecordService.extractNarrativeCards(from: self)
     }
 
     /// Get a metadata value as a string
