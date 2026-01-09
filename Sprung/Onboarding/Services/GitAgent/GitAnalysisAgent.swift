@@ -57,13 +57,6 @@ struct GitAnalysisResult: Codable {
     let repoName: String
     let analyzedAt: Date
 
-    enum CodingKeys: String, CodingKey {
-        case skills
-        case narrativeCards = "narrative_cards"
-        case repoName = "repo_name"
-        case analyzedAt = "analyzed_at"
-    }
-
     init(skills: [Skill] = [], narrativeCards: [KnowledgeCard] = [], repoName: String, analyzedAt: Date = Date()) {
         self.skills = skills
         self.narrativeCards = narrativeCards
@@ -150,7 +143,7 @@ class GitAnalysisAgent {
                 }
 
                 turnCount += 1
-                await emitEvent(.gitAgentTurnStarted(turn: turnCount, maxTurns: maxTurns))
+                await emitEvent(.processing(.gitAgentTurnStarted(turn: turnCount, maxTurns: maxTurns)))
                 await updateProgress("(Turn \(turnCount)) Calling LLM...")
 
                 // Add turn marker to transcript
@@ -178,14 +171,14 @@ class GitAnalysisAgent {
                     let outputTokens = usage.completionTokens ?? 0
                     let cachedTokens = usage.promptTokensDetails?.cachedTokens ?? 0
 
-                    await emitEvent(.llmTokenUsageReceived(
+                    await emitEvent(.llm(.tokenUsageReceived(
                         modelId: modelId,
                         inputTokens: inputTokens,
                         outputTokens: outputTokens,
                         cachedTokens: cachedTokens,
                         reasoningTokens: 0,  // Chat API doesn't have reasoning tokens
                         source: .gitAgent
-                    ))
+                    )))
 
                     // Update agent's token tracking
                     if let agentId = agentId {
@@ -234,7 +227,7 @@ class GitAnalysisAgent {
                     do {
                         let result = try parseCompleteAnalysis(arguments: completionCall.function.arguments)
                         status = .completed
-                        await emitEvent(.gitAgentProgressUpdated(message: "Analysis complete!", turn: turnCount))
+                        await emitEvent(.processing(.gitAgentProgressUpdated(message: "Analysis complete!", turn: turnCount)))
                         await updateProgress("Analysis complete!")
                         return result
                     } catch {
@@ -267,7 +260,7 @@ class GitAnalysisAgent {
                         let arguments = toolCall.function.arguments
 
                         group.addTask { [self] in
-                            await self.emitEvent(.gitAgentToolExecuting(toolName: toolName, turn: self.turnCount))
+                            await self.emitEvent(.processing(.gitAgentToolExecuting(toolName: toolName, turn: self.turnCount)))
                             let result = await self.executeTool(name: toolName, arguments: arguments)
                             return (toolId, toolName, result)
                         }
@@ -369,7 +362,7 @@ class GitAnalysisAgent {
 
         do {
             let result = try parseCompleteAnalysis(arguments: completionCall.function.arguments)
-            await emitEvent(.gitAgentProgressUpdated(message: "Analysis complete (forced)!", turn: turnCount + 1))
+            await emitEvent(.processing(.gitAgentProgressUpdated(message: "Analysis complete (forced)!", turn: turnCount + 1)))
             await updateProgress("Analysis complete (forced)!")
             Logger.info("✅ GitAgent: Forced completion succeeded", category: .ai)
             return result
@@ -675,7 +668,7 @@ class GitAnalysisAgent {
             tracker?.updateStatusMessage(agentId: agentId, message: message)
         } else {
             // Fallback for agents not using the tracker - emit extraction state
-            await emitEvent(.extractionStateChanged(true, statusMessage: "Git analysis: \(message)"))
+            await emitEvent(.processing(.extractionStateChanged(inProgress: true, statusMessage: "Git analysis: \(message)")))
         }
     }
 

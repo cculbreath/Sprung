@@ -23,28 +23,23 @@ struct MergeCardsTool: AgentTool {
     static let parametersSchema: [String: Any] = [
         "type": "object",
         "properties": [
-            "card_files": [
+            "cardFiles": [
                 "type": "array",
                 "items": ["type": "string"],
                 "minItems": 2,
                 "description": "Paths to card files to merge (e.g., ['cards/uuid1.json', 'cards/uuid2.json'])"
             ],
-            "merge_reason": [
+            "mergeReason": [
                 "type": "string",
                 "description": "Brief explanation of why these cards should be merged (e.g., 'Same project with different names')"
             ]
         ],
-        "required": ["card_files", "merge_reason"],
+        "required": ["cardFiles", "mergeReason"],
         "additionalProperties": false
     ]
 
     struct Parameters: Codable {
         let cardFiles: [String]
         let mergeReason: String
-
-        enum CodingKeys: String, CodingKey {
-            case cardFiles = "card_files"
-            case mergeReason = "merge_reason"
-        }
     }
 }

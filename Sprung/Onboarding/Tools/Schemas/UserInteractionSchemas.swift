@@ -13,7 +13,7 @@ import SwiftyJSON
 enum UserInteractionSchemas {
     // MARK: - Upload Tool Schemas
 
-    /// Schema for upload_type field
+    /// Schema for uploadType field
     static let uploadType = JSONSchema(
         type: .string,
         description: "Expected file category. Valid types: resume, artifact, coverletter, portfolio, transcript, certificate, writingSample, generic, linkedIn",
@@ -23,16 +23,16 @@ enum UserInteractionSchemas {
     /// Schema for title field (upload card title)
     static let uploadTitle = JSONSchema(
         type: .string,
-        description: "Optional custom title for the upload card (e.g., 'Upload Photo'). If omitted, auto-generated from upload_type."
+        description: "Optional custom title for the upload card (e.g., 'Upload Photo'). If omitted, auto-generated from uploadType."
     )
 
-    /// Schema for prompt_to_user field
+    /// Schema for promptToUser field
     static let promptToUser = JSONSchema(
         type: .string,
         description: "Instructions shown to user in upload card UI. Required. Be specific about what you're requesting."
     )
 
-    /// Schema for allowed_types field
+    /// Schema for allowedTypes field
     static let allowedTypes = JSONSchema(
         type: .array,
         description: "Allowed file extensions without dots (e.g., ['pdf', 'docx', 'jpg']). Defaults: pdf, txt, rtf, doc, docx, jpg, jpeg, png, gif, md, html, htm",
@@ -40,26 +40,26 @@ enum UserInteractionSchemas {
         additionalProperties: false
     )
 
-    /// Schema for allow_multiple field
+    /// Schema for allowMultiple field
     static let allowMultiple = JSONSchema(
         type: .boolean,
         description: "Allow selecting multiple files in one upload. Defaults to true except for resume uploads."
     )
 
-    /// Schema for allow_url field
-    static let allowURL = JSONSchema(
+    /// Schema for allowUrl field
+    static let allowUrl = JSONSchema(
         type: .boolean,
         description: "Allow user to paste URL instead of uploading file. Defaults to true."
     )
 
-    /// Schema for target_key field
+    /// Schema for targetKey field
     static let targetKey = JSONSchema(
         type: .string,
         description: "JSON Resume key path this upload should populate (e.g., 'basics.image'). Currently only 'basics.image' is supported.",
         enum: ["basics.image"]
     )
 
-    /// Schema for cancel_message field
+    /// Schema for cancelMessage field
     static let cancelMessage = JSONSchema(
         type: .string,
         description: "Optional message to send if user dismisses upload card without providing files."
@@ -127,7 +127,7 @@ enum UserInteractionSchemas {
         description: "Optional message to display to the user (e.g., suggestions for document types)"
     )
 
-    /// Schema for suggested_doc_types field
+    /// Schema for suggestedDocTypes field
     static let suggestedDocTypes = JSONSchema(
         type: .array,
         description: "List of suggested document types for the user to upload (shown as tags)",
@@ -136,7 +136,7 @@ enum UserInteractionSchemas {
 
     // MARK: - Evidence Request Schemas
 
-    /// Schema for timeline_entry_id field (evidence request)
+    /// Schema for timelineEntryId field (evidence request)
     static let timelineEntryId = JSONSchema(
         type: .string,
         description: "ID of the timeline entry this evidence relates to."

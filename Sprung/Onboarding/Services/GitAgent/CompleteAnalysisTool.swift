@@ -22,7 +22,7 @@ struct CompleteAnalysisTool: AgentTool {
     static let parametersSchema: [String: Any] = [
         "type": "object",
         "properties": [
-            "document_type": [
+            "documentType": [
                 "type": "string",
                 "description": "Always 'git_analysis' for repository analysis",
                 "enum": ["git_analysis"]
@@ -33,26 +33,26 @@ struct CompleteAnalysisTool: AgentTool {
                 "items": [
                     "type": "object",
                     "properties": [
-                        "card_type": [
+                        "cardType": [
                             "type": "string",
                             "enum": ["employment", "project", "skill", "achievement", "education"],
                             "description": "Type of card: skill (for technologies/tools), project (for the repo or sub-projects), achievement (for notable accomplishments)"
                         ],
-                        "proposed_title": [
+                        "proposedTitle": [
                             "type": "string",
                             "description": "Specific, descriptive title (e.g., 'SwiftUI Application Architecture' not just 'Swift')"
                         ],
-                        "evidence_strength": [
+                        "evidenceStrength": [
                             "type": "string",
                             "enum": ["primary", "supporting", "mention"],
                             "description": "primary: main source of evidence, supporting: adds detail, mention: brief reference"
                         ],
-                        "evidence_locations": [
+                        "evidenceLocations": [
                             "type": "array",
                             "items": ["type": "string"],
                             "description": "File paths where evidence was found (e.g., 'src/services/AuthService.swift:45-120')"
                         ],
-                        "key_facts": [
+                        "keyFacts": [
                             "type": "array",
                             "items": ["type": "string"],
                             "description": "Specific facts extracted: patterns used, complexity handled, problems solved. Be detailed."
@@ -62,30 +62,30 @@ struct CompleteAnalysisTool: AgentTool {
                             "items": ["type": "string"],
                             "description": "All technologies, frameworks, tools, libraries demonstrated"
                         ],
-                        "quantified_outcomes": [
+                        "quantifiedOutcomes": [
                             "type": "array",
                             "items": ["type": "string"],
                             "description": "Any quantifiable metrics: lines of code, test coverage, performance numbers, scale indicators"
                         ],
-                        "date_range": [
+                        "dateRange": [
                             "type": "string",
                             "description": "Date range if determinable from git history (e.g., '2023-2024')"
                         ],
-                        "cross_references": [
+                        "crossReferences": [
                             "type": "array",
                             "items": ["type": "string"],
                             "description": "Titles of related cards (e.g., a project card referencing skill cards for technologies used)"
                         ],
-                        "extraction_notes": [
+                        "extractionNotes": [
                             "type": "string",
                             "description": "Notes about evidence quality, gaps, or recommendations for this card"
                         ]
                     ],
-                    "required": ["card_type", "proposed_title", "evidence_strength", "evidence_locations", "key_facts", "technologies", "quantified_outcomes", "cross_references"]
+                    "required": ["cardType", "proposedTitle", "evidenceStrength", "evidenceLocations", "keyFacts", "technologies", "quantifiedOutcomes", "crossReferences"]
                 ]
             ]
         ],
-        "required": ["document_type", "cards"],
+        "required": ["documentType", "cards"],
         "additionalProperties": false
     ]
 
@@ -103,28 +103,10 @@ struct CompleteAnalysisTool: AgentTool {
         let dateRange: String?
         let crossReferences: [String]
         let extractionNotes: String?
-
-        enum CodingKeys: String, CodingKey {
-            case cardType = "card_type"
-            case proposedTitle = "proposed_title"
-            case evidenceStrength = "evidence_strength"
-            case evidenceLocations = "evidence_locations"
-            case keyFacts = "key_facts"
-            case technologies
-            case quantifiedOutcomes = "quantified_outcomes"
-            case dateRange = "date_range"
-            case crossReferences = "cross_references"
-            case extractionNotes = "extraction_notes"
-        }
     }
 
     struct Parameters: Codable {
         let documentType: String
         let cards: [ProposedCard]
-
-        enum CodingKeys: String, CodingKey {
-            case documentType = "document_type"
-            case cards
-        }
     }
 }

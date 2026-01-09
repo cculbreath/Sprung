@@ -11,12 +11,12 @@ struct OnboardingProcessedUpload {
         var json = JSON()
         json["id"].string = id
         json["filename"].string = filename
-        json["file_url"].string = storageURL.absoluteString
+        json["fileUrl"].string = storageURL.absoluteString
         json["storageUrl"].string = storageURL.absoluteString
         json["url"].string = storageURL.absoluteString
-        json["size_bytes"].int = sizeInBytes
+        json["sizeBytes"].int = sizeInBytes
         if let contentType {
-            json["content_type"].string = contentType
+            json["contentType"].string = contentType
         }
         return json
     }

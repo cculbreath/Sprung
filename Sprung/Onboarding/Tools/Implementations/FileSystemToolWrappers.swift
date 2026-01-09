@@ -313,7 +313,7 @@ struct GrepArtifactSearchTool: InterviewTool {
                     type: .string,
                     description: "Directory to search in. Default: artifacts root"
                 ),
-                "file_pattern": JSONSchema(
+                "filePattern": JSONSchema(
                     type: .string,
                     description: "Filter files by glob (e.g., '*.txt')"
                 ),
@@ -321,7 +321,7 @@ struct GrepArtifactSearchTool: InterviewTool {
                     type: .integer,
                     description: "Maximum files to return. Default: 20"
                 ),
-                "context_lines": JSONSchema(
+                "contextLines": JSONSchema(
                     type: .integer,
                     description: "Lines of context before/after matches. Default: 2"
                 )
@@ -338,9 +338,9 @@ struct GrepArtifactSearchTool: InterviewTool {
 
         let pattern = params["pattern"].stringValue
         let path = params["path"].string
-        let filePattern = params["file_pattern"].string
+        let filePattern = params["filePattern"].string
         let limit = params["limit"].int ?? 20
-        let contextLines = params["context_lines"].int ?? 2
+        let contextLines = params["contextLines"].int ?? 2
 
         do {
             let fsParams = GrepSearchTool.Parameters(
@@ -354,12 +354,12 @@ struct GrepArtifactSearchTool: InterviewTool {
 
             var response = JSON()
             response["status"].string = "success"
-            response["formatted_results"].string = result.formatted
-            response["total_files"].int = result.totalFiles
-            response["total_matches"].int = result.totalMatches
+            response["formattedResults"].string = result.formatted
+            response["totalFiles"].int = result.totalFiles
+            response["totalMatches"].int = result.totalMatches
             response["truncated"].bool = result.truncated
             response["ephemeral"].bool = true  // Mark for context pruning
-            response["ephemeral_turns"].int = 3
+            response["ephemeralTurns"].int = 3
 
             return .immediate(response)
         } catch {

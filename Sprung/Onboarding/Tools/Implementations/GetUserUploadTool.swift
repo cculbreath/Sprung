@@ -18,31 +18,31 @@ struct GetUserUploadTool: InterviewTool {
                 text is extracted and packaged as ArtifactRecords.
                 RETURNS: { "message": "UI presented. Awaiting user input.", "status": "completed" }
                 The tool completes immediately after presenting UI. User uploads arrive as new user messages with artifact metadata.
-                USAGE: Use during skeleton_timeline to gather resume/LinkedIn/transcripts, or for profile photos. \
-                Always set target_phase_objectives to help route artifacts to correct workflow stages.
+                USAGE: Use during skeletonTimeline to gather resume/LinkedIn/transcripts, or for profile photos. \
+                Always set targetPhaseObjectives to help route artifacts to correct workflow stages.
                 WORKFLOW:
                 1. Call get_user_upload with appropriate prompt
                 2. Tool returns immediately - card is now active in tool pane
                 3. User uploads file(s) or pastes URL
                 4. System extracts text and creates ArtifactRecord(s)
                 5. You receive artifact notification and can process contents
-                ERROR: Will fail if prompt_to_user is empty or upload_type is invalid.
+                ERROR: Will fail if promptToUser is empty or uploadType is invalid.
                 """,
             properties: [
-                "upload_type": UserInteractionSchemas.uploadType,
+                "uploadType": UserInteractionSchemas.uploadType,
                 "title": UserInteractionSchemas.uploadTitle,
-                "prompt_to_user": UserInteractionSchemas.promptToUser,
-                "allowed_types": UserInteractionSchemas.allowedTypes,
-                "allow_multiple": UserInteractionSchemas.allowMultiple,
-                "allow_url": UserInteractionSchemas.allowURL,
-                "target_key": UserInteractionSchemas.targetKey,
-                "cancel_message": UserInteractionSchemas.cancelMessage
+                "promptToUser": UserInteractionSchemas.promptToUser,
+                "allowedTypes": UserInteractionSchemas.allowedTypes,
+                "allowMultiple": UserInteractionSchemas.allowMultiple,
+                "allowUrl": UserInteractionSchemas.allowUrl,
+                "targetKey": UserInteractionSchemas.targetKey,
+                "cancelMessage": UserInteractionSchemas.cancelMessage
             ],
-            required: ["prompt_to_user"],
+            required: ["promptToUser"],
             additionalProperties: false
         )
     }()
-    private unowned let coordinator: OnboardingInterviewCoordinator
+    private weak var coordinator: OnboardingInterviewCoordinator?
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
@@ -52,6 +52,9 @@ struct GetUserUploadTool: InterviewTool {
     }
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {
+        guard let coordinator else {
+            return .error(ToolError.executionFailed("Coordinator unavailable"))
+        }
         let requestPayload = try UploadRequestPayload(json: params)
 
         // Phase 1 has a dedicated writing samples UI - don't use get_user_upload for writing samples
@@ -74,10 +77,10 @@ struct GetUserUploadTool: InterviewTool {
             metadata: requestPayload.metadata
         )
         // Emit UI request to show the upload picker
-        await coordinator.eventBus.publish(.uploadRequestPresented(request: uploadRequest))
-        // Codex paradigm: Return pending - don't send tool response until user acts.
-        // The tool output will be sent when user completes/cancels the upload.
-        return .pendingUserAction
+        await coordinator.eventBus.publish(.toolpane(.uploadRequestPresented(request: uploadRequest)))
+        // Block until user completes the action or interrupts
+        let result = await coordinator.uiToolContinuationManager.awaitUserAction(toolName: name)
+        return .immediate(result.toJSON())
     }
 }
 // MARK: - Payload Parsing
@@ -87,36 +90,36 @@ private struct UploadRequestPayload {
     let targetKey: String?
     let cancelMessage: String?
     init(json: JSON) throws {
-        if let rawType = json["upload_type"].string {
+        if let rawType = json["uploadType"].string {
             let normalizedType = rawType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard let parsedKind = OnboardingUploadKind.allCases.first(where: {
             $0.rawValue.lowercased() == normalizedType
         }) else {
                 let options = OnboardingUploadKind.allCases.map { $0.rawValue }.joined(separator: ", ")
-                throw ToolError.invalidParameters("upload_type must be one of: \(options)")
+                throw ToolError.invalidParameters("uploadType must be one of: \(options)")
             }
             kind = parsedKind
         } else {
             kind = .generic
         }
-        guard let prompt = json["prompt_to_user"].string?.trimmingCharacters(in: .whitespacesAndNewlines), !prompt.isEmpty else {
-            throw ToolError.invalidParameters("prompt_to_user must be provided and non-empty.")
+        guard let prompt = json["promptToUser"].string?.trimmingCharacters(in: .whitespacesAndNewlines), !prompt.isEmpty else {
+            throw ToolError.invalidParameters("promptToUser must be provided and non-empty.")
         }
-        let formats = (json["allowed_types"].arrayObject as? [String]) ?? [
+        let formats = (json["allowedTypes"].arrayObject as? [String]) ?? [
             "pdf", "txt", "rtf", "docx", "jpg", "jpeg", "png", "gif", "md", "html", "htm"
         ]
         let normalized = formats.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
-        let allowMultiple = json["allow_multiple"].bool ?? (kind != .resume)
-        let allowURL = json["allow_url"].bool ?? true
-        if let cancel = json["cancel_message"].string?.trimmingCharacters(in: .whitespacesAndNewlines),
+        let allowMultiple = json["allowMultiple"].bool ?? (kind != .resume)
+        let allowURL = json["allowUrl"].bool ?? true
+        if let cancel = json["cancelMessage"].string?.trimmingCharacters(in: .whitespacesAndNewlines),
            !cancel.isEmpty {
             cancelMessage = cancel
         } else {
             cancelMessage = nil
         }
-        if let target = json["target_key"].string?.trimmingCharacters(in: .whitespacesAndNewlines), !target.isEmpty {
+        if let target = json["targetKey"].string?.trimmingCharacters(in: .whitespacesAndNewlines), !target.isEmpty {
             guard UploadRequestPayload.allowedTargetKeys.contains(target) else {
-                throw ToolError.invalidParameters("Unsupported target_key: \(target)")
+                throw ToolError.invalidParameters("Unsupported targetKey: \(target)")
             }
             targetKey = target
         } else {

@@ -186,10 +186,10 @@ final class SwiftDataSessionPersistenceHandler {
 
         switch event {
         // ConversationLog is the single source of truth for message persistence
-        case .conversationEntryAppended(let entry):
+        case .llm(.conversationEntryAppended(let entry)):
             persistConversationEntry(session: session, entry: entry)
 
-        case .toolResultFilled(let callId, let status):
+        case .llm(.toolResultFilled(let callId, let status)):
             updateConversationEntryToolResult(session: session, callId: callId, status: status)
 
         default:
@@ -201,11 +201,11 @@ final class SwiftDataSessionPersistenceHandler {
         guard let session = currentSession else { return }
 
         switch event {
-        case .artifactRecordProduced(let record):
+        case .artifact(.recordProduced(let record)):
             // Persist to SwiftData when artifact is produced
             persistArtifact(session: session, record: record)
 
-        case .artifactMetadataUpdated(let artifact):
+        case .artifact(.metadataUpdated(let artifact)):
             // Update metadata when artifact is updated
             updateArtifactMetadata(record: artifact)
 
@@ -218,7 +218,7 @@ final class SwiftDataSessionPersistenceHandler {
         guard let session = currentSession else { return }
 
         switch event {
-        case .phaseTransitionApplied(let phase, _):
+        case .phase(.transitionApplied(let phase, _)):
             sessionStore.updatePhase(session, phase: phase)
 
         default:
@@ -230,7 +230,7 @@ final class SwiftDataSessionPersistenceHandler {
         guard let session = currentSession else { return }
 
         switch event {
-        case .objectiveStatusChanged(let id, _, let newStatus, _, _, _, _):
+        case .objective(.statusChanged(let id, _, let newStatus, _, _, _, _)):
             sessionStore.updateObjective(session, objectiveId: id, status: newStatus)
 
         default:
@@ -242,7 +242,7 @@ final class SwiftDataSessionPersistenceHandler {
         guard let session = currentSession else { return }
 
         switch event {
-        case .todoListUpdated(let todoListJSON):
+        case .tool(.todoListUpdated(let todoListJSON)):
             sessionStore.updateTodoList(session, todoListJSON: todoListJSON)
             Logger.debug("💾 Persisted todo list: \(todoListJSON.count) chars", category: .ai)
 
@@ -255,19 +255,19 @@ final class SwiftDataSessionPersistenceHandler {
         guard let session = currentSession else { return }
 
         switch event {
-        case .applicantProfileStored(let profile):
+        case .state(.applicantProfileStored(let profile)):
             sessionStore.updateApplicantProfile(session, profileJSON: profile.rawString())
 
-        case .skeletonTimelineStored(let timeline):
+        case .state(.skeletonTimelineStored(let timeline)):
             sessionStore.updateSkeletonTimeline(session, timelineJSON: timeline.rawString())
 
-        case .enabledSectionsUpdated(let sections):
+        case .state(.enabledSectionsUpdated(let sections)):
             sessionStore.updateEnabledSections(session, sections: sections)
 
-        case .documentCollectionActiveChanged(let isActive):
+        case .state(.documentCollectionActiveChanged(let isActive)):
             sessionStore.updateDocumentCollectionActive(session, isActive: isActive)
 
-        case .timelineEditorActiveChanged(let isActive):
+        case .state(.timelineEditorActiveChanged(let isActive)):
             sessionStore.updateTimelineEditorActive(session, isActive: isActive)
 
         default:
@@ -279,10 +279,10 @@ final class SwiftDataSessionPersistenceHandler {
         guard let session = currentSession else { return }
 
         switch event {
-        case .skeletonTimelineReplaced(let timeline, _, _):
+        case .timeline(.skeletonReplaced(let timeline, _, _)):
             sessionStore.updateSkeletonTimeline(session, timelineJSON: timeline.rawString())
 
-        case .timelineUIUpdateNeeded(let timeline):
+        case .timeline(.uiUpdateNeeded(let timeline)):
             // Persist timeline when individual cards are created/updated/deleted
             sessionStore.updateSkeletonTimeline(session, timelineJSON: timeline.rawString())
             Logger.debug("Persisted timeline after card update (\(timeline["experiences"].array?.count ?? 0) cards)", category: .ai)
@@ -543,23 +543,23 @@ final class SwiftDataSessionPersistenceHandler {
     private func artifactRecordToJSON(_ record: ArtifactRecord) -> JSON {
         var json = JSON()
         json["id"].string = record.id.uuidString
-        json["source_type"].string = record.sourceType
+        json["sourceType"].string = record.sourceType
         json["filename"].string = record.filename
-        json["extracted_text"].string = record.extractedContent
-        json["source_hash"].string = record.sha256
-        json["raw_file_path"].string = record.rawFileRelativePath
-        json["plan_item_id"].string = record.planItemId
-        json["ingested_at"].string = ISO8601DateFormatter().string(from: record.ingestedAt)
-        json["is_archived"].bool = record.isArchived
-        json["content_type"].string = record.contentType
-        json["size_bytes"].int = record.sizeInBytes
+        json["extractedText"].string = record.extractedContent
+        json["sourceHash"].string = record.sha256
+        json["rawFilePath"].string = record.rawFileRelativePath
+        json["planItemId"].string = record.planItemId
+        json["ingestedAt"].string = ISO8601DateFormatter().string(from: record.ingestedAt)
+        json["isArchived"].bool = record.isArchived
+        json["contentType"].string = record.contentType
+        json["sizeBytes"].int = record.sizeInBytes
         json["summary"].string = record.summary
-        json["brief_description"].string = record.briefDescription
+        json["briefDescription"].string = record.briefDescription
         json["title"].string = record.title
-        json["has_skills"].bool = record.hasSkills
-        json["has_narrative_cards"].bool = record.hasNarrativeCards
+        json["hasSkills"].bool = record.hasSkills
+        json["hasNarrativeCards"].bool = record.hasNarrativeCards
         json["skills"].string = record.skillsJSON
-        json["narrative_cards"].string = record.narrativeCardsJSON
+        json["narrativeCards"].string = record.narrativeCardsJSON
         if let metadataJSON = record.metadataJSON,
            let data = metadataJSON.data(using: .utf8),
            let metadata = try? JSON(data: data) {

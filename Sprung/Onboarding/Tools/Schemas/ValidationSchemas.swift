@@ -11,7 +11,8 @@ import SwiftyJSON
 
 /// Shared schema definitions for validation-related fields
 enum ValidationSchemas {
-    /// Schema for validation_type enum used across validation tools
+    /// Schema for validationType enum used across validation tools
+    /// Note: Enum values match OnboardingDataType raw values for backwards compatibility
     static let validationType = JSONSchema(
         type: .string,
         description: "Type of data being validated. Each type presents specialized validation UI.",

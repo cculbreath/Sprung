@@ -165,7 +165,7 @@ enum MiscSchemas {
     /// Candidate dossier field schemas
     static func candidateDossierProperties() -> [String: JSONSchema] {
         [
-            "job_search_context": JSONSchema(
+            "jobSearchContext": JSONSchema(
                 type: .string,
                 description: """
                     REQUIRED. Why looking, what seeking, priorities, non-negotiables, ideal role attributes.
@@ -176,7 +176,7 @@ enum MiscSchemas {
                     Compensation target $160-180k base, flexible for equity upside."
                     """
             ),
-            "work_arrangement_preferences": JSONSchema(
+            "workArrangementPreferences": JSONSchema(
                 type: .string,
                 description: """
                     Remote/hybrid/onsite preferences, relocation willingness, location constraints, travel tolerance.
@@ -192,7 +192,7 @@ enum MiscSchemas {
                     No major timing constraints."
                     """
             ),
-            "unique_circumstances": JSONSchema(
+            "uniqueCircumstances": JSONSchema(
                 type: .string,
                 description: """
                     Context for gaps, pivots, visa status, non-compete, sabbatical, or anything unconventional.
@@ -201,7 +201,7 @@ enum MiscSchemas {
                     Intentional skill investment, not unemployment."
                     """
             ),
-            "strengths_to_emphasize": JSONSchema(
+            "strengthsToEmphasize": JSONSchema(
                 type: .string,
                 description: """
                     Hidden or under-emphasized strengths not obvious from resume. How to surface these.
@@ -216,7 +216,7 @@ enum MiscSchemas {
                     demonstrated follow-through (sabbatical learning, OSS contributions)."
                     """
             ),
-            "pitfalls_to_avoid": JSONSchema(
+            "pitfallsToAvoid": JSONSchema(
                 type: .string,
                 description: """
                     Potential concerns, vulnerabilities, or red flags and how to address/mitigate them.

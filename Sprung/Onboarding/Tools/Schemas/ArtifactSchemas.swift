@@ -37,15 +37,15 @@ enum ArtifactSchemas {
     static var getArtifact: JSONSchema {
         JSONSchema(
             type: .object,
-            description: "Retrieve artifact content. Use max_chars to limit extracted_text size. Returns {artifact: {...}}.",
+            description: "Retrieve artifact content. Use maxChars to limit extractedText size. Returns {artifact: {...}}.",
             properties: [
-                "artifact_id": artifactId,
-                "max_chars": JSONSchema(
+                "artifactId": artifactId,
+                "maxChars": JSONSchema(
                     type: .integer,
-                    description: "Max chars for extracted_text (default: unlimited). Use 2000-5000 for bounded retrieval."
+                    description: "Max chars for extractedText (default: unlimited). Use 2000-5000 for bounded retrieval."
                 )
             ],
-            required: ["artifact_id"],
+            required: ["artifactId"],
             additionalProperties: false
         )
     }
@@ -64,7 +64,7 @@ enum ArtifactSchemas {
                     type: .integer,
                     description: "Skip first N items for pagination (default: 0)"
                 ),
-                "include_summary": JSONSchema(
+                "includeSummary": JSONSchema(
                     type: .boolean,
                     description: "Include brief description/summary (default: false to reduce tokens)"
                 )
@@ -80,10 +80,10 @@ enum ArtifactSchemas {
             type: .object,
             description: "Update metadata fields on an artifact record. Performs field-level merge.",
             properties: [
-                "artifact_id": artifactId,
-                "metadata_updates": metadataUpdates
+                "artifactId": artifactId,
+                "metadataUpdates": metadataUpdates
             ],
-            required: ["artifact_id", "metadata_updates"],
+            required: ["artifactId", "metadataUpdates"],
             additionalProperties: false
         )
     }
@@ -94,9 +94,9 @@ enum ArtifactSchemas {
             type: .object,
             description: "Get original file URL (for images/binary files). Use get_artifact for text content instead.",
             properties: [
-                "artifact_id": artifactId
+                "artifactId": artifactId
             ],
-            required: ["artifact_id"],
+            required: ["artifactId"],
             additionalProperties: false
         )
     }
@@ -119,17 +119,17 @@ enum ArtifactSchemas {
                     type: .string,
                     description: "The relevant extracted text content from the web page (key information, achievements, project details)"
                 ),
-                "document_type": JSONSchema(
+                "documentType": JSONSchema(
                     type: .string,
                     description: "Type of web content",
-                    enum: ["portfolio", "linkedin", "github", "company_page", "project_page", "article", "other"]
+                    enum: ["portfolio", "linkedin", "github", "companyPage", "projectPage", "article", "other"]
                 ),
                 "summary": JSONSchema(
                     type: .string,
                     description: "A brief 1-2 sentence summary of what this artifact contains"
                 )
             ],
-            required: ["url", "title", "content", "document_type"],
+            required: ["url", "title", "content", "documentType"],
             additionalProperties: false
         )
     }

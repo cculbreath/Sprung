@@ -27,7 +27,7 @@ struct GrepSearchTool: AgentTool {
                 "type": "string",
                 "description": "Directory to search in. Defaults to repository root."
             ],
-            "file_pattern": [
+            "filePattern": [
                 "type": "string",
                 "description": "Filter files by glob pattern (e.g., '*.swift', '*.ts')"
             ],
@@ -35,7 +35,7 @@ struct GrepSearchTool: AgentTool {
                 "type": "integer",
                 "description": "Maximum number of matching files to return. Default: 20"
             ],
-            "context_lines": [
+            "contextLines": [
                 "type": "integer",
                 "description": "Number of context lines before and after matches. Default: 2"
             ]
@@ -50,14 +50,6 @@ struct GrepSearchTool: AgentTool {
         let filePattern: String?
         let limit: Int?
         let contextLines: Int?
-
-        enum CodingKeys: String, CodingKey {
-            case pattern
-            case path
-            case filePattern = "file_pattern"
-            case limit
-            case contextLines = "context_lines"
-        }
     }
 
     struct Match: Codable {

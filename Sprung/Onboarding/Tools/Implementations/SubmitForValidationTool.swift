@@ -10,7 +10,7 @@ import SwiftOpenAI
 struct SubmitForValidationTool: InterviewTool {
     private static let schema: JSONSchema = {
         let properties: [String: JSONSchema] = [
-            "validation_type": ValidationSchemas.validationType,
+            "validationType": ValidationSchemas.validationType,
             "data": ValidationSchemas.dataPayload,
             "summary": ValidationSchemas.summary
         ]
@@ -60,10 +60,10 @@ struct SubmitForValidationTool: InterviewTool {
                 Once meta.validation_state = "user_validated", trust it.
                 """,
             properties: properties,
-            required: ["validation_type", "data", "summary"]
+            required: ["validationType", "data", "summary"]
         )
     }()
-    private unowned let coordinator: OnboardingInterviewCoordinator
+    private weak var coordinator: OnboardingInterviewCoordinator?
     init(coordinator: OnboardingInterviewCoordinator) {
         self.coordinator = coordinator
     }
@@ -76,6 +76,9 @@ struct SubmitForValidationTool: InterviewTool {
     }
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {
+        guard let coordinator else {
+            return .error(ToolError.executionFailed("Coordinator unavailable"))
+        }
         var payload = try ValidationPayload(json: params)
         // Auto-fetch current data from coordinator for certain validation types
         if payload.validationType == OnboardingDataType.skeletonTimeline.rawValue {
@@ -114,10 +117,10 @@ struct SubmitForValidationTool: InterviewTool {
             )
         }
         // Emit UI request to show the validation prompt
-        await coordinator.eventBus.publish(.validationPromptRequested(prompt: payload.toValidationPrompt()))
-        // Codex paradigm: Return pending - don't send tool response until user acts.
-        // The tool output will be sent when user confirms/rejects validation.
-        return .pendingUserAction
+        await coordinator.eventBus.publish(.toolpane(.validationPromptRequested(prompt: payload.toValidationPrompt())))
+        // Block until user completes the action or interrupts
+        let result = await coordinator.uiToolContinuationManager.awaitUserAction(toolName: name)
+        return .immediate(result.toJSON())
     }
 }
 private struct ValidationPayload {
@@ -125,13 +128,13 @@ private struct ValidationPayload {
     let data: JSON
     let summary: String
     init(json: JSON) throws {
-        guard let type = json["validation_type"].string, !type.isEmpty else {
-            throw ToolError.invalidParameters("validation_type must be provided")
+        guard let type = json["validationType"].string, !type.isEmpty else {
+            throw ToolError.invalidParameters("validationType must be provided")
         }
         let validTypes: [OnboardingDataType] = [.applicantProfile, .skeletonTimeline, .enabledSections, .knowledgeCard, .candidateDossier, .experienceDefaults]
         let validTypeStrings = validTypes.map(\.rawValue)
         guard validTypeStrings.contains(type) else {
-            throw ToolError.invalidParameters("validation_type must be one of: \(validTypeStrings.joined(separator: ", "))")
+            throw ToolError.invalidParameters("validationType must be one of: \(validTypeStrings.joined(separator: ", "))")
         }
         self.validationType = type
         // For skeleton_timeline, data is optional (will be auto-fetched from coordinator)
@@ -141,7 +144,7 @@ private struct ValidationPayload {
             self.data = json["data"]
         } else {
             guard let data = json["data"].dictionary, !data.isEmpty else {
-                throw ToolError.invalidParameters("Missing required 'data' parameter. For \(type) validation, you must include the complete data object to validate. Example: {\"validation_type\": \"\(type)\", \"data\": {...your content...}, \"summary\": \"...\"}")
+                throw ToolError.invalidParameters("Missing required 'data' parameter. For \(type) validation, you must include the complete data object to validate. Example: {\"validationType\": \"\(type)\", \"data\": {...your content...}, \"summary\": \"...\"}")
             }
             self.data = json["data"]
         }

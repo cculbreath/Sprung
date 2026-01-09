@@ -24,7 +24,7 @@ struct CompleteMergeTool: AgentTool {
                 "type": "string",
                 "description": "Brief summary of the merge operation (e.g., 'Merged 12 duplicate cards into 5')"
             ],
-            "merge_log": [
+            "mergeLog": [
                 "type": "array",
                 "description": "Log of merge operations performed",
                 "items": [
@@ -35,12 +35,12 @@ struct CompleteMergeTool: AgentTool {
                             "enum": ["merged", "kept"],
                             "description": "'merged' if cards were combined, 'kept' if card was unique"
                         ],
-                        "source_card_ids": [
+                        "sourceCardIds": [
                             "type": "array",
                             "items": ["type": "string"],
                             "description": "UUIDs of the source cards that were merged or kept"
                         ],
-                        "result_card_id": [
+                        "resultCardId": [
                             "type": "string",
                             "description": "UUID of the resulting card (same as source for 'kept', new UUID for 'merged')"
                         ],
@@ -49,11 +49,11 @@ struct CompleteMergeTool: AgentTool {
                             "description": "Brief explanation of why cards were merged (empty for 'kept')"
                         ]
                     ],
-                    "required": ["action", "source_card_ids", "result_card_id", "reasoning"]
+                    "required": ["action", "sourceCardIds", "resultCardId", "reasoning"]
                 ]
             ]
         ],
-        "required": ["summary", "merge_log"],
+        "required": ["summary", "mergeLog"],
         "additionalProperties": false
     ]
 
@@ -62,22 +62,10 @@ struct CompleteMergeTool: AgentTool {
         let sourceCardIds: [String]
         let resultCardId: String
         let reasoning: String
-
-        enum CodingKeys: String, CodingKey {
-            case action
-            case sourceCardIds = "source_card_ids"
-            case resultCardId = "result_card_id"
-            case reasoning
-        }
     }
 
     struct Parameters: Codable {
         let summary: String
         let mergeLog: [MergeLogEntry]
-
-        enum CodingKeys: String, CodingKey {
-            case summary
-            case mergeLog = "merge_log"
-        }
     }
 }

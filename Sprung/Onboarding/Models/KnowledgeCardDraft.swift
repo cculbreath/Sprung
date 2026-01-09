@@ -23,20 +23,12 @@ struct KnowledgeCardSource: Identifiable, Equatable, Codable {
     var chatExcerpt: String?
     var chatContext: String?
 
-    enum CodingKeys: String, CodingKey {
-        case id
-        case type
-        case artifactId = "artifact_id"
-        case chatExcerpt = "chat_excerpt"
-        case chatContext = "chat_context"
-    }
-
     init(json: JSON) {
         id = UUID(uuidString: json["id"].stringValue) ?? UUID()
         type = json["type"].stringValue
-        artifactId = json["artifact_id"].string
-        chatExcerpt = json["chat_excerpt"].string
-        chatContext = json["chat_context"].string
+        artifactId = json["artifactId"].string
+        chatExcerpt = json["chatExcerpt"].string
+        chatContext = json["chatContext"].string
     }
 
     func toJSON() -> JSON {
@@ -44,13 +36,13 @@ struct KnowledgeCardSource: Identifiable, Equatable, Codable {
         json["id"].string = id.uuidString
         json["type"].string = type
         if let artifactId {
-            json["artifact_id"].string = artifactId
+            json["artifactId"].string = artifactId
         }
         if let chatExcerpt {
-            json["chat_excerpt"].string = chatExcerpt
+            json["chatExcerpt"].string = chatExcerpt
         }
         if let chatContext {
-            json["chat_context"].string = chatContext
+            json["chatContext"].string = chatContext
         }
         return json
     }
@@ -67,23 +59,12 @@ struct KnowledgeCardDraft: Identifiable, Equatable, Codable {
     var organization: String?
     var location: String?
 
-    enum CodingKeys: String, CodingKey {
-        case id
-        case title
-        case cardType = "type"
-        case content
-        case sources
-        case timePeriod = "time_period"
-        case organization
-        case location
-    }
-
     init(json: JSON) {
         id = UUID(uuidString: json["id"].stringValue) ?? UUID()
         title = json["title"].stringValue
-        cardType = json["type"].string
+        cardType = json["cardType"].string
         content = json["content"].stringValue
-        timePeriod = json["time_period"].string
+        timePeriod = json["timePeriod"].string
         organization = json["organization"].string
         location = json["location"].string
 
@@ -100,12 +81,12 @@ struct KnowledgeCardDraft: Identifiable, Equatable, Codable {
         json["id"].string = id.uuidString
         json["title"].string = title
         if let cardType {
-            json["type"].string = cardType
+            json["cardType"].string = cardType
         }
         json["content"].string = content
         json["sources"] = JSON(sources.map { $0.toJSON() })
         if let timePeriod {
-            json["time_period"].string = timePeriod
+            json["timePeriod"].string = timePeriod
         }
         if let organization {
             json["organization"].string = organization

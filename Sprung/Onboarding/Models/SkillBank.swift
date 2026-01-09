@@ -13,12 +13,6 @@ struct SkillBank: Codable {
     let generatedAt: Date
     let sourceDocumentIds: [String]
 
-    enum CodingKeys: String, CodingKey {
-        case skills
-        case generatedAt = "generated_at"
-        case sourceDocumentIds = "source_document_ids"
-    }
-
     /// Find skills matching ATS terms from job listing
     func matchingSkills(for terms: [String]) -> [Skill] {
         let normalizedTerms = terms.map { $0.lowercased() }

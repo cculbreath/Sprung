@@ -55,12 +55,17 @@ final class ArtifactArchiveManager {
     /// Promote multiple archived artifacts to the current session as a batch.
     /// Emits batchUploadStarted to trigger DocumentArtifactMessenger collection.
     func promoteArchivedArtifacts(ids: [String]) async {
-        guard !ids.isEmpty else { return }
+        Logger.info("📦 promoteArchivedArtifacts called with \(ids.count) ID(s)", category: .ai)
+        guard !ids.isEmpty else {
+            Logger.warning("📦 promoteArchivedArtifacts: Empty IDs array, returning early", category: .ai)
+            return
+        }
 
         guard let session = sessionPersistenceHandler.getActiveSession() else {
             Logger.warning("Cannot promote artifacts: no active session", category: .ai)
             return
         }
+        Logger.info("📦 promoteArchivedArtifacts: Active session found", category: .ai)
 
         // Collect valid artifacts first
         var artifactsToPromote: [(artifact: ArtifactRecord, json: JSON)] = []
@@ -68,15 +73,19 @@ final class ArtifactArchiveManager {
             if let artifact = artifactRecordStore.artifact(byIdString: id) {
                 let json = artifactRecordToJSON(artifact)
                 artifactsToPromote.append((artifact, json))
+                Logger.debug("📦 Found artifact to promote: \(artifact.filename)", category: .ai)
             } else {
                 Logger.warning("Cannot promote artifact: not found in SwiftData: \(id)", category: .ai)
             }
         }
 
-        guard !artifactsToPromote.isEmpty else { return }
+        guard !artifactsToPromote.isEmpty else {
+            Logger.warning("📦 promoteArchivedArtifacts: No valid artifacts found to promote", category: .ai)
+            return
+        }
 
         // Start batch by emitting batchUploadStarted (triggers DocumentArtifactMessenger to collect)
-        await eventBus.publish(.batchUploadStarted(expectedCount: artifactsToPromote.count))
+        await eventBus.publish(.processing(.batchUploadStarted(expectedCount: artifactsToPromote.count)))
         Logger.info("📦 Starting batch promotion of \(artifactsToPromote.count) archived artifact(s)", category: .ai)
 
         // Promote each artifact
@@ -88,7 +97,7 @@ final class ArtifactArchiveManager {
             await artifactRepository.addArtifactRecord(json)
 
             // Emit event (will be batched by DocumentArtifactMessenger)
-            await eventBus.publish(.artifactRecordProduced(record: json))
+            await eventBus.publish(.artifact(.recordProduced(record: json)))
 
             Logger.info("📦 Promoted archived artifact: \(artifact.filename)", category: .ai)
         }
@@ -157,22 +166,22 @@ final class ArtifactArchiveManager {
 
         // Override with canonical SwiftData fields (in case of any discrepancy)
         json["id"].string = record.id.uuidString
-        json["source_type"].string = record.sourceType
+        json["sourceType"].string = record.sourceType
         json["filename"].string = record.filename
-        json["extracted_text"].string = record.extractedContent
-        json["source_hash"].string = record.sha256
-        json["raw_file_path"].string = record.rawFileRelativePath
-        json["plan_item_id"].string = record.planItemId
-        json["ingested_at"].string = ISO8601DateFormatter().string(from: record.ingestedAt)
+        json["extractedText"].string = record.extractedContent
+        json["sourceHash"].string = record.sha256
+        json["rawFilePath"].string = record.rawFileRelativePath
+        json["planItemId"].string = record.planItemId
+        json["ingestedAt"].string = ISO8601DateFormatter().string(from: record.ingestedAt)
         json["summary"].string = record.summary
-        json["brief_description"].string = record.briefDescription
+        json["briefDescription"].string = record.briefDescription
         json["title"].string = record.title
-        json["content_type"].string = record.contentType
-        json["size_bytes"].int = record.sizeInBytes
-        json["has_skills"].bool = record.hasSkills
-        json["has_narrative_cards"].bool = record.hasNarrativeCards
+        json["contentType"].string = record.contentType
+        json["sizeBytes"].int = record.sizeInBytes
+        json["hasSkills"].bool = record.hasSkills
+        json["hasNarrativeCards"].bool = record.hasNarrativeCards
         json["skills"].string = record.skillsJSON
-        json["narrative_cards"].string = record.narrativeCardsJSON
+        json["narrativeCards"].string = record.narrativeCardsJSON
 
         return json
     }

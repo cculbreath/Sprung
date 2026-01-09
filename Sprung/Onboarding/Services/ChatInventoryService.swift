@@ -204,21 +204,21 @@ actor ChatInventoryService {
         let evidenceAnchorSchema = JSONSchema(
             type: .object,
             properties: [
-                "source_document_id": JSONSchema(type: .string),
-                "quote_or_reference": JSONSchema(type: .string),
+                "sourceDocumentId": JSONSchema(type: .string),
+                "quoteOrReference": JSONSchema(type: .string),
                 "strength": JSONSchema(type: .string, enum: ["strong", "moderate", "weak"])
             ],
-            required: ["source_document_id", "strength"]
+            required: ["sourceDocumentId", "strength"]
         )
 
         let skillSchema = JSONSchema(
             type: .object,
             properties: [
                 "name": JSONSchema(type: .string, description: "The skill name"),
-                "category": JSONSchema(type: .string, enum: ["technical", "soft_skill", "domain", "tool", "methodology"]),
+                "category": JSONSchema(type: .string, enum: ["technical", "softSkill", "domain", "tool", "methodology"]),
                 "proficiency": JSONSchema(type: .string, enum: ["expert", "advanced", "intermediate", "beginner"]),
-                "years_experience": JSONSchema(type: .integer),
-                "ats_variants": JSONSchema(type: .array, items: JSONSchema(type: .string)),
+                "yearsExperience": JSONSchema(type: .integer),
+                "atsVariants": JSONSchema(type: .array, items: JSONSchema(type: .string)),
                 "evidence": JSONSchema(type: .array, items: evidenceAnchorSchema),
                 "context": JSONSchema(type: .string)
             ],
@@ -233,36 +233,36 @@ actor ChatInventoryService {
         let evidenceAnchorSchema = JSONSchema(
             type: .object,
             properties: [
-                "source_document_id": JSONSchema(type: .string),
-                "quote_or_reference": JSONSchema(type: .string),
+                "sourceDocumentId": JSONSchema(type: .string),
+                "quoteOrReference": JSONSchema(type: .string),
                 "strength": JSONSchema(type: .string, enum: ["strong", "moderate", "weak"])
             ],
-            required: ["source_document_id", "strength"]
+            required: ["sourceDocumentId", "strength"]
         )
 
         let cardSchema = JSONSchema(
             type: .object,
             properties: [
                 "id": JSONSchema(type: .string),
-                "card_type": JSONSchema(type: .string, enum: ["employment", "project", "achievement", "education", "volunteer", "certification", "publication", "award"]),
+                "cardType": JSONSchema(type: .string, enum: ["employment", "project", "achievement", "education", "volunteer", "certification", "publication", "award"]),
                 "title": JSONSchema(type: .string),
                 "organization": JSONSchema(type: .string),
-                "time_period": JSONSchema(type: .string),
-                "why_section": JSONSchema(type: .string, description: "Context and motivation"),
-                "journey_section": JSONSchema(type: .string, description: "What happened, challenges, actions"),
-                "lessons_section": JSONSchema(type: .string, description: "Outcomes and learnings"),
+                "timePeriod": JSONSchema(type: .string),
+                "whySection": JSONSchema(type: .string, description: "Context and motivation"),
+                "journeySection": JSONSchema(type: .string, description: "What happened, challenges, actions"),
+                "lessonsSection": JSONSchema(type: .string, description: "Outcomes and learnings"),
                 "technologies": JSONSchema(type: .array, items: JSONSchema(type: .string)),
                 "evidence": JSONSchema(type: .array, items: evidenceAnchorSchema),
-                "extractable_metadata": JSONSchema(
+                "extractableMetadata": JSONSchema(
                     type: .object,
                     properties: [
                         "metrics": JSONSchema(type: .array, items: JSONSchema(type: .string)),
-                        "key_achievements": JSONSchema(type: .array, items: JSONSchema(type: .string)),
+                        "keyAchievements": JSONSchema(type: .array, items: JSONSchema(type: .string)),
                         "collaborations": JSONSchema(type: .array, items: JSONSchema(type: .string))
                     ]
                 )
             ],
-            required: ["id", "card_type", "title", "why_section", "journey_section", "lessons_section"]
+            required: ["id", "cardType", "title", "whySection", "journeySection", "lessonsSection"]
         )
 
         return JSONSchema(type: .array, items: cardSchema)

@@ -166,7 +166,7 @@ actor SubAgentToolExecutor {
             type: .object,
             description: "Knowledge card generation output - fact-based format",
             properties: [
-                "card_type": JSONSchema(
+                "cardType": JSONSchema(
                     type: .string,
                     description: "Card type/category",
                     enum: ["job", "skill", "education", "project", "employment", "achievement"]
@@ -177,7 +177,7 @@ actor SubAgentToolExecutor {
                     description: "Array of extracted facts from the artifacts. Include ALL relevant facts (minimum 3).",
                     items: factSchema
                 ),
-                "suggested_bullets": JSONSchema(
+                "suggestedBullets": JSONSchema(
                     type: .array,
                     description: "Resume bullet point templates derived from facts",
                     items: JSONSchema(type: .string)
@@ -187,16 +187,16 @@ actor SubAgentToolExecutor {
                     description: "Technologies, tools, and skills mentioned",
                     items: JSONSchema(type: .string)
                 ),
-                "sources_used": JSONSchema(
+                "sourcesUsed": JSONSchema(
                     type: .array,
                     description: "Artifact filenames used as evidence sources",
                     items: JSONSchema(type: .string)
                 ),
-                "date_range": JSONSchema(type: .string, description: "Date range (empty string if not applicable)"),
+                "dateRange": JSONSchema(type: .string, description: "Date range (empty string if not applicable)"),
                 "organization": JSONSchema(type: .string, description: "Organization name (empty string if not applicable)"),
                 "location": JSONSchema(type: .string, description: "Location/remote (empty string if not applicable)")
             ],
-            required: ["card_type", "title", "facts", "suggested_bullets", "technologies", "sources_used", "date_range", "organization", "location"],
+            required: ["cardType", "title", "facts", "suggestedBullets", "technologies", "sourcesUsed", "dateRange", "organization", "location"],
             additionalProperties: false
         )
 
@@ -208,12 +208,12 @@ actor SubAgentToolExecutor {
                 The result JSON will be returned to the calling coordinator.
 
                 For knowledge card agents, the result should include:
-                - card_type: "job", "skill", "education", "project", "employment", or "achievement"
+                - cardType: "job", "skill", "education", "project", "employment", or "achievement"
                 - title: Title of the knowledge card
                 - facts: Array of extracted facts with category, statement, confidence, and source
-                - suggested_bullets: Resume bullet templates derived from facts
+                - suggestedBullets: Resume bullet templates derived from facts
                 - technologies: Tools, languages, frameworks mentioned
-                - sources_used: Artifact filenames used as evidence
+                - sourcesUsed: Artifact filenames used as evidence
                 """,
             properties: [
                 "result": resultSchema
