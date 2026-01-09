@@ -24,57 +24,9 @@ actor ConversationContextAssembler {
 
     // MARK: - Context Assembly
 
-    /// Build input items for a tool response
-    func buildForToolResponse(
-        output: JSON,
-        callId: String
-    ) async -> [InputItem] {
-        let outputString = output.rawString() ?? "{}"
-        let status = sanitizeToolStatus(output["status"].string)
-        let toolOutput = InputItem.functionToolCallOutput(FunctionToolCallOutput(
-            callId: callId,
-            output: outputString,
-            status: status
-        ))
-        Logger.debug("📦 Assembled tool response: 1 item (status: \(status ?? "nil"))", category: .ai)
-        return [toolOutput]
-    }
-
-    /// Build input items for batched tool responses (parallel tool calls)
-    func buildForBatchedToolResponses(payloads: [JSON]) async -> [InputItem] {
-        var items: [InputItem] = []
-        for payload in payloads {
-            let callId = payload["callId"].stringValue
-            let output = payload["output"]
-            let outputString = output.rawString() ?? "{}"
-            let status = sanitizeToolStatus(output["status"].string)
-            let toolOutput = InputItem.functionToolCallOutput(FunctionToolCallOutput(
-                callId: callId,
-                output: outputString,
-                status: status
-            ))
-            items.append(toolOutput)
-        }
-        Logger.debug("📦 Assembled batched tool responses: \(items.count) items", category: .ai)
-        return items
-    }
-
-    // MARK: - Private Helpers
-
-    private func sanitizeToolStatus(_ status: String?) -> String? {
-        guard let status else { return nil }
-        let allowed = ["in_progress", "completed", "incomplete"]
-        guard allowed.contains(status) else {
-            Logger.warning("⚠️ Tool status '\(status)' not allowed by API; coercing to 'incomplete'", category: .ai)
-            return "incomplete"
-        }
-        return status
-    }
-
     /// Build full conversation history from ConversationLog
     /// ConversationLog guarantees tool results are always present (gated appending)
-    /// - Parameter excludeToolCallIds: Tool call IDs to exclude from "missing result" warnings
-    func buildConversationHistory(excludeToolCallIds: Set<String> = []) async -> [InputItem] {
+    func buildConversationHistory() async -> [InputItem] {
         let messages = await state.messages
 
         return messages.flatMap { message -> [InputItem] in
@@ -113,7 +65,7 @@ actor ConversationContextAssembler {
                             output: output,
                             status: nil
                         )))
-                    } else if !excludeToolCallIds.contains(toolCall.id) {
+                    } else {
                         // With ConversationLog gating, this should rarely happen
                         // Only during the current turn before results are filled
                         Logger.debug("📝 Tool call pending result: \(toolCall.name) (id: \(toolCall.id))", category: .ai)

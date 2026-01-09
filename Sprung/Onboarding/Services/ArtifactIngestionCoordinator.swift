@@ -40,7 +40,7 @@ actor ArtifactIngestionCoordinator {
     /// Process an evidence upload and store as artifact (Phase 2 evidence requirements)
     func handleEvidenceUpload(url: URL, requirementId: String) async {
         Logger.info("📎 Handling evidence upload for requirement: \(requirementId)", category: .ai)
-        await eventBus.publish(.processingStateChanged(true, statusMessage: "Processing evidence..."))
+        await eventBus.publish(.processing(.stateChanged(isProcessing: true, statusMessage: "Processing evidence...")))
 
         do {
             var metadata = JSON()
@@ -52,14 +52,14 @@ actor ArtifactIngestionCoordinator {
                 callId: nil,
                 metadata: metadata
             )
-            await eventBus.publish(.artifactRecordProduced(record: record))
+            await eventBus.publish(.artifact(.recordProduced(record: record)))
             Logger.info("✅ Evidence processed and artifact stored (ID: \(record["id"].stringValue))", category: .ai)
         } catch {
             Logger.error("❌ Evidence upload failed: \(error.localizedDescription)", category: .ai)
-            await eventBus.publish(.errorOccurred("Failed to process evidence: \(error.localizedDescription)"))
+            await eventBus.publish(.processing(.errorOccurred("Failed to process evidence: \(error.localizedDescription)")))
         }
 
-        await eventBus.publish(.processingStateChanged(false))
+        await eventBus.publish(.processing(.stateChanged(isProcessing: false)))
     }
 
     /// Ingest a git repository
@@ -116,7 +116,7 @@ actor ArtifactIngestionCoordinator {
         // DocumentArtifactMessenger handles this:
         // - PDF artifacts are batched and sent as user messages
         // - Git artifacts are sent as developer messages (queued until next user action)
-        await eventBus.publish(.artifactRecordProduced(record: result.artifactRecord))
+        await eventBus.publish(.artifact(.recordProduced(record: result.artifactRecord)))
 
         // Note: We no longer send a separate artifactIngestionCompleted user message for git repos.
         // The developer message from DocumentArtifactMessenger.sendGitArtifact() contains
@@ -159,7 +159,7 @@ actor ArtifactIngestionCoordinator {
         // Only trigger blocking processing state for documents, not git repos
         // Git repos run in background via AgentActivityTracker and use extractionStateChanged
         if pending.source != .gitRepository {
-            await eventBus.publish(.processingStateChanged(true, statusMessage: "Processing \(pending.filename)..."))
+            await eventBus.publish(.processing(.stateChanged(isProcessing: true, statusMessage: "Processing \(pending.filename)...")))
         }
         await eventBus.publish(.artifactIngestionStarted(pending: pending))
     }
@@ -174,7 +174,7 @@ actor ArtifactIngestionCoordinator {
         }
         payload["error"].string = error
 
-        await eventBus.publish(.llmSendCoordinatorMessage(payload: payload))
-        await eventBus.publish(.processingStateChanged(false))
+        await eventBus.publish(.llm(.sendCoordinatorMessage(payload: payload)))
+        await eventBus.publish(.processing(.stateChanged(isProcessing: false)))
     }
 }

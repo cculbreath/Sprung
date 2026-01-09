@@ -44,9 +44,9 @@ actor TranscriptPersistenceHandler: OnboardingEventEmitter {
     // MARK: - Event Handling
     private func handleLLMEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .llmUserMessageSent(let messageId, let payload, _):
+        case .llm(.userMessageSent(let messageId, let payload, _)):
             await persistUserMessage(messageId: messageId, payload: payload)
-        case .streamingMessageFinalized(let id, let finalText, _, _):
+        case .llm(.streamingMessageFinalized(let id, let finalText, _, _)):
             await persistAssistantMessage(id: id, finalText: finalText)
         default:
             break

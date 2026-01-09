@@ -50,7 +50,7 @@ struct AnthropicStreamAdapter {
             return handleMessageStop()
 
         case .error(let errorEvent):
-            return [.errorOccurred(errorEvent.error.message)]
+            return [.processing(.errorOccurred(errorEvent.error.message))]
 
         case .ping, .unknown:
             return []
@@ -74,11 +74,11 @@ struct AnthropicStreamAdapter {
             outputTokens = output
         }
 
-        return [.streamingMessageBegan(
+        return [.llm(.streamingMessageBegan(
             id: messageId!,
             text: "",
             statusMessage: nil
-        )]
+        ))]
     }
 
     private mutating func handleContentBlockStart(_ event: AnthropicContentBlockStartEvent) -> [OnboardingEvent] {
@@ -103,7 +103,7 @@ struct AnthropicStreamAdapter {
             // Text content delta
             accumulatedText += text
             if let id = messageId {
-                events.append(.streamingMessageUpdated(id: id, delta: text, statusMessage: nil))
+                events.append(.llm(.streamingMessageUpdated(id: id, delta: text, statusMessage: nil)))
             }
 
         case .inputJsonDelta(let partialJson):
@@ -152,22 +152,22 @@ struct AnthropicStreamAdapter {
         var events: [OnboardingEvent] = []
 
         // Finalize the message
-        events.append(.streamingMessageFinalized(
+        events.append(.llm(.streamingMessageFinalized(
             id: id,
             finalText: accumulatedText,
             toolCalls: pendingToolCalls.isEmpty ? nil : pendingToolCalls,
             statusMessage: nil
-        ))
+        )))
 
         // Emit token usage
-        events.append(.llmTokenUsageReceived(
+        events.append(.llm(.tokenUsageReceived(
             modelId: modelId,
             inputTokens: inputTokens,
             outputTokens: outputTokens,
             cachedTokens: 0,  // Anthropic reports this differently
             reasoningTokens: 0,  // Extended thinking would go here if enabled
             source: .mainCoordinator
-        ))
+        )))
 
         // Emit tool call events for each pending tool call
         for toolCallInfo in pendingToolCalls {
@@ -179,14 +179,14 @@ struct AnthropicStreamAdapter {
                 callId: toolCallInfo.id  // Anthropic tool_use.id serves as callId
             )
             // Display tool name as code symbol
-            events.append(.toolCallRequested(call, statusMessage: "\(toolCallInfo.name)()"))
+            events.append(.tool(.callRequested(call, statusMessage: "\(toolCallInfo.name)()")))
         }
 
         // Emit batch started event for any tool calls (including single tool)
         // StreamQueueManager needs this to know when it's safe to release tool responses
         if !pendingToolCalls.isEmpty {
             let callIds = pendingToolCalls.map { $0.id }
-            events.append(.llmToolCallBatchStarted(expectedCount: pendingToolCalls.count, callIds: callIds))
+            events.append(.llm(.toolCallBatchStarted(expectedCount: pendingToolCalls.count, callIds: callIds)))
         }
 
         // Reset state
@@ -204,11 +204,11 @@ struct AnthropicStreamAdapter {
         guard let id = messageId else { return [] }
 
         // Finalize with whatever we have
-        return [.streamingMessageFinalized(
+        return [.llm(.streamingMessageFinalized(
             id: id,
             finalText: accumulatedText,
             toolCalls: pendingToolCalls.isEmpty ? nil : pendingToolCalls,
             statusMessage: "Cancelled"
-        )]
+        ))]
     }
 }

@@ -198,7 +198,7 @@ actor ObjectiveStore: OnboardingEventEmitter {
         }
         objectives[id] = objective
         // Emit event to notify listeners (e.g., ObjectiveWorkflowEngine, StateCoordinator)
-        await emit(.objectiveStatusChanged(
+        await emit(.objective(.statusChanged(
             id: id,
             oldStatus: oldStatus.rawValue,
             newStatus: status.rawValue,
@@ -206,7 +206,7 @@ actor ObjectiveStore: OnboardingEventEmitter {
             source: objective.source,
             notes: objective.notes,
             details: objective.details
-        ))
+        )))
         Logger.info("✅ Objective \(id): \(oldStatus) → \(status)", category: .ai)
         // Auto-completion: If this objective is completed/skipped and has a parent,
         // check if all siblings are done and auto-complete parent

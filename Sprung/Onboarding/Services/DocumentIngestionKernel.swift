@@ -71,7 +71,7 @@ actor DocumentIngestionKernel {
     ) async {
         do {
             // Emit processing state (don't emit false - let coordinator manage batch state)
-            await eventBus.publish(.processingStateChanged(true, statusMessage: "Extracting text from \(fileURL.lastPathComponent)..."))
+            await eventBus.publish(.processing(.stateChanged(isProcessing: true, statusMessage: "Extracting text from \(fileURL.lastPathComponent)...")))
 
             let artifactRecord = try await documentProcessingService.processDocument(
                 fileURL: fileURL,
@@ -80,7 +80,7 @@ actor DocumentIngestionKernel {
                 metadata: metadata,
                 statusCallback: { [weak self] status in
                     Task {
-                        await self?.eventBus.publish(.processingStateChanged(true, statusMessage: status))
+                        await self?.eventBus.publish(.processing(.stateChanged(isProcessing: true, statusMessage: status)))
                     }
                 }
             )

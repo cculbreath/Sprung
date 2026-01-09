@@ -345,7 +345,7 @@ struct OnboardingInterviewToolPane: View {
                             coordinator: coordinator,
                             onGenerateCards: {
                                 Task {
-                                    await coordinator.eventBus.publish(.generateCardsButtonClicked)
+                                    await coordinator.eventBus.publish(.artifact(.generateCardsButtonClicked))
                                 }
                             },
                             onAdvanceToNextPhase: {
@@ -397,7 +397,7 @@ struct OnboardingInterviewToolPane: View {
                             coordinator: coordinator,
                             onGenerateCards: {
                                 Task {
-                                    await coordinator.eventBus.publish(.generateCardsButtonClicked)
+                                    await coordinator.eventBus.publish(.artifact(.generateCardsButtonClicked))
                                 }
                             },
                             onAdvanceToNextPhase: {

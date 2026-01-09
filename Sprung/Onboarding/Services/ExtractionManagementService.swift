@@ -35,7 +35,7 @@ final class ExtractionManagementService: OnboardingEventEmitter {
                 // Create status message based on the update
                 let statusMessage = createStatusMessage(for: update)
                 // Publish event with status message
-                await eventBus.publish(.pendingExtractionUpdated(extraction, statusMessage: statusMessage))
+                await eventBus.publish(.processing(.pendingExtractionUpdated(extraction, statusMessage: statusMessage)))
                 // StateCoordinator maintains sync cache
             } else {
                 pendingExtractionProgressBuffer.append(update)

@@ -438,7 +438,9 @@ struct ArchivedArtifactsPickerSheet: View {
                     Task {
                         // Use batch promotion for proper LLM notification batching
                         let ids = selectedIds.map { $0.uuidString }
+                        Logger.info("📦 ArchivedArtifactsPicker: Importing \(ids.count) artifact(s): \(ids.joined(separator: ", "))", category: .ai)
                         await coordinator.promoteArchivedArtifacts(ids: ids)
+                        Logger.info("📦 ArchivedArtifactsPicker: Import completed, dismissing sheet", category: .ai)
                         onDismiss()
                     }
                 } label: {

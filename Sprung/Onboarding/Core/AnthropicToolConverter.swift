@@ -36,7 +36,7 @@ struct AnthropicToolConverter {
         )
 
         // Select tools based on subphase
-        let bundledNames = ToolBundlePolicy.selectBundleForSubphase(subphase, toolChoice: nil)
+        let bundledNames = ToolBundlePolicy.selectBundleForSubphase(subphase)
 
         if bundledNames.isEmpty {
             Logger.debug("🔧 Anthropic tool bundling: subphase=\(subphase.rawValue), sending 0 tools", category: .ai)

@@ -37,11 +37,6 @@ actor LLMStateManager {
     /// Queued coordinator messages waiting for next user message
     private var queuedCoordinatorMessages: [JSON] = []
 
-    // MARK: - Pending Forced Tool Choice (Tool Chaining)
-
-    /// One-shot override used to force the next LLM request to call a specific tool.
-    private var pendingForcedToolChoice: String?
-
     // MARK: - Tool Names
 
     /// Update the allowed tool names
@@ -116,19 +111,6 @@ actor LLMStateManager {
         return messages
     }
 
-    // MARK: - Forced Tool Choice Override
-
-    func setPendingForcedToolChoice(_ toolName: String) {
-        pendingForcedToolChoice = toolName
-        Logger.info("🎯 Pending forced toolChoice set: \(toolName)", category: .ai)
-    }
-
-    /// Pop (return + clear) the pending forced tool choice.
-    func popPendingForcedToolChoice() -> String? {
-        defer { pendingForcedToolChoice = nil }
-        return pendingForcedToolChoice
-    }
-
     /// Remove queued coordinator messages for a specific objective
     func clearQueuedMessagesForObjective(_ objectiveId: String) {
         let before = queuedCoordinatorMessages.count
@@ -190,6 +172,5 @@ actor LLMStateManager {
         pendingToolResponsePayloads = []
         pendingToolResponseRetryCount = 0
         queuedCoordinatorMessages = []
-        pendingForcedToolChoice = nil
     }
 }

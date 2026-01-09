@@ -6,7 +6,7 @@ import SwiftyJSON
 actor StreamQueueManager {
     // MARK: - Types
     enum StreamRequestType {
-        case userMessage(payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String?, originalText: String?, bundledCoordinatorMessages: [JSON], toolChoice: String?)
+        case userMessage(payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String?, originalText: String?, bundledCoordinatorMessages: [JSON])
         case toolResponse(payload: JSON)
         case batchedToolResponses(payloads: [JSON])
         case coordinatorMessage(payload: JSON)
@@ -40,7 +40,7 @@ actor StreamQueueManager {
 
     /// Mark stream as completed
     func markStreamCompleted() async {
-        await eventBus.publish(.llmStreamCompleted)
+        await eventBus.publish(.llm(.streamCompleted))
     }
     /// Handle stream completion (called via event)
     func handleStreamCompleted() {
@@ -60,7 +60,7 @@ actor StreamQueueManager {
             }
         }
     }
-    /// Check if this is the first response (for toolChoice logic)
+    /// Check if this is the first response (tools disabled until greeting)
     func getHasStreamedFirstResponse() -> Bool {
         hasStreamedFirstResponse
     }
@@ -91,7 +91,7 @@ actor StreamQueueManager {
             // Check for high-priority chatbox message first
             // Chatbox messages (isSystemGenerated=false) should never be blocked
             if let chatboxIndex = streamQueue.firstIndex(where: { request in
-                if case .userMessage(_, let isSystemGenerated, _, _, _, _) = request {
+                if case .userMessage(_, let isSystemGenerated, _, _, _) = request {
                     return !isSystemGenerated  // Chatbox messages are NOT system-generated
                 }
                 return false
@@ -126,21 +126,20 @@ actor StreamQueueManager {
     /// Emit the appropriate stream request event for LLMMessenger to handle
     private func emitStreamRequest(_ requestType: StreamRequestType) async {
         switch requestType {
-        case .userMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText, let bundledCoordinatorMessages, let toolChoice):
-            await eventBus.publish(.llmExecuteUserMessage(
+        case .userMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText, let bundledCoordinatorMessages):
+            await eventBus.publish(.llm(.executeUserMessage(
                 payload: payload,
                 isSystemGenerated: isSystemGenerated,
                 chatboxMessageId: chatboxMessageId,
                 originalText: originalText,
-                bundledCoordinatorMessages: bundledCoordinatorMessages,
-                toolChoice: toolChoice
-            ))
+                bundledCoordinatorMessages: bundledCoordinatorMessages
+            )))
         case .toolResponse(let payload):
-            await eventBus.publish(.llmExecuteToolResponse(payload: payload))
+            await eventBus.publish(.llm(.executeToolResponse(payload: payload)))
         case .batchedToolResponses(let payloads):
-            await eventBus.publish(.llmExecuteBatchedToolResponses(payloads: payloads))
+            await eventBus.publish(.llm(.executeBatchedToolResponses(payloads: payloads)))
         case .coordinatorMessage(let payload):
-            await eventBus.publish(.llmExecuteCoordinatorMessage(payload: payload))
+            await eventBus.publish(.llm(.executeCoordinatorMessage(payload: payload)))
         }
     }
 }

@@ -468,44 +468,9 @@ struct ToolBundlePolicy {
 
     /// Select tool bundle based on subphase.
     /// Returns the set of tools to send to the LLM for this specific subphase.
-    /// - Parameters:
-    ///   - subphase: The current interview subphase
-    ///   - toolChoice: Optional tool choice override (for forcing a specific tool)
+    /// - Parameter subphase: The current interview subphase
     /// - Returns: Set of tool names to include in the API request
-    static func selectBundleForSubphase(
-        _ subphase: InterviewSubphase,
-        toolChoice: ToolChoiceMode? = nil
-    ) -> Set<String> {
-        // Handle toolChoice overrides
-        // CRITICAL: When forcing a specific tool, that tool MUST be included.
-        // The API requires the forced tool to be present in the tools array.
-        if let choice = toolChoice {
-            switch choice {
-            case .none:
-                return []
-            case .functionTool(let ft):
-                // Always include the forced tool - this is required by the API
-                var bundle: Set<String> = [ft.name]
-                bundle.formUnion(safeEscapeTools)
-                // Artifact access tools for Phase 2-4 (not Phase 1)
-                if subphase.phase != .phase1VoiceContext {
-                    bundle.formUnion(artifactAccessTools)
-                }
-                return bundle
-            case .customTool(let ct):
-                // Always include the forced tool - this is required by the API
-                var bundle: Set<String> = [ct.name]
-                bundle.formUnion(safeEscapeTools)
-                // Artifact access tools for Phase 2-4 (not Phase 1)
-                if subphase.phase != .phase1VoiceContext {
-                    bundle.formUnion(artifactAccessTools)
-                }
-                return bundle
-            default:
-                break
-            }
-        }
-
+    static func selectBundleForSubphase(_ subphase: InterviewSubphase) -> Set<String> {
         // Get base bundle for subphase
         var bundle = subphaseBundles[subphase] ?? []
 

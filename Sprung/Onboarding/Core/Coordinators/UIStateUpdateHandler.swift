@@ -48,25 +48,25 @@ final class UIStateUpdateHandler {
     // MARK: - Processing Events
     func handleProcessingEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .processingStateChanged(let isProcessing, let statusMessage):
+        case .processing(.stateChanged(let isProcessing, let statusMessage)):
             ui.updateProcessing(isProcessing: isProcessing, statusMessage: statusMessage)
             Logger.info("🎨 UI Update: Chat glow/spinner \(isProcessing ? "ACTIVATED ✨" : "DEACTIVATED") - isProcessing=\(isProcessing), status: \(ui.currentStatusMessage ?? "none")", category: .ai)
             await syncWizardProgressFromState()
-        case .waitingStateChanged(_, let statusMessage):
+        case .processing(.waitingStateChanged(_, let statusMessage)):
             if let statusMessage = statusMessage {
                 ui.currentStatusMessage = statusMessage
             }
-        case .toolCallRequested(_, let statusMessage):
+        case .tool(.callRequested(_, let statusMessage)):
             if let statusMessage = statusMessage {
                 ui.currentStatusMessage = statusMessage
             }
-        case .batchUploadStarted(let expectedCount):
+        case .processing(.batchUploadStarted(let expectedCount)):
             ui.hasBatchUploadInProgress = true
             Logger.info("📦 Batch upload started: \(expectedCount) document(s) expected", category: .ai)
-        case .batchUploadCompleted:
+        case .processing(.batchUploadCompleted):
             ui.hasBatchUploadInProgress = false
             Logger.info("📦 Batch upload completed", category: .ai)
-        case .extractionStateChanged(let inProgress, let statusMessage):
+        case .processing(.extractionStateChanged(let inProgress, let statusMessage)):
             ui.updateExtraction(inProgress: inProgress, statusMessage: statusMessage)
             Logger.info("📄 Extraction state: \(inProgress ? "started" : "completed") - \(statusMessage ?? "no message")", category: .ai)
 
@@ -77,18 +77,18 @@ final class UIStateUpdateHandler {
     // MARK: - Artifact Events
     func handleArtifactEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .artifactRecordProduced, .knowledgeCardPersisted:
+        case .artifact(.recordProduced), .artifact(.knowledgeCardPersisted):
             // Typed artifacts are accessed via coordinator.sessionArtifacts (no UI sync needed)
             await syncWizardProgressFromState()
 
         // MARK: Multi-Agent Workflow State (categorized as .artifact)
-        case .mergeComplete(let cardCount, let gapCount):
+        case .artifact(.mergeComplete(let cardCount, let gapCount)):
             ui.cardAssignmentsReadyForApproval = true
             ui.proposedAssignmentCount = cardCount
             ui.identifiedGapCount = gapCount
             Logger.info("📋 UI: Merge complete - \(cardCount) cards ready for approval (\(gapCount) gaps)", category: .ai)
 
-        case .generateCardsButtonClicked:
+        case .artifact(.generateCardsButtonClicked):
             ui.cardAssignmentsReadyForApproval = false
             ui.isGeneratingCards = true
             Logger.info("🚀 UI: Generate Cards initiated", category: .ai)
@@ -101,24 +101,24 @@ final class UIStateUpdateHandler {
     // MARK: - LLM Events
     func handleLLMEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .llmStatus:
+        case .llm(.status):
             break
-        case .chatboxUserMessageAdded:
+        case .llm(.chatboxUserMessageAdded):
             ui.messages = await state.messages
-        case .streamingMessageBegan(_, _, let statusMessage):
-            ui.messages = await state.messages
-            if let statusMessage = statusMessage {
-                ui.currentStatusMessage = statusMessage
-            }
-        case .streamingMessageUpdated(_, _, let statusMessage):
+        case .llm(.streamingMessageBegan(_, _, let statusMessage)):
             ui.messages = await state.messages
             if let statusMessage = statusMessage {
                 ui.currentStatusMessage = statusMessage
             }
-        case .streamingMessageFinalized(_, _, _, let statusMessage):
+        case .llm(.streamingMessageUpdated(_, _, let statusMessage)):
+            ui.messages = await state.messages
+            if let statusMessage = statusMessage {
+                ui.currentStatusMessage = statusMessage
+            }
+        case .llm(.streamingMessageFinalized(_, _, _, let statusMessage)):
             ui.messages = await state.messages
             ui.currentStatusMessage = statusMessage ?? nil
-        case .llmUserMessageSent:
+        case .llm(.userMessageSent):
             ui.messages = await state.messages
         default:
             break
@@ -127,7 +127,7 @@ final class UIStateUpdateHandler {
     // MARK: - State Sync Events
     func handleStateSyncEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .stateAllowedToolsUpdated:
+        case .state(.allowedToolsUpdated):
             await syncWizardProgressFromState()
         default:
             break
@@ -139,7 +139,7 @@ final class UIStateUpdateHandler {
     /// This provides immediate UI updates when timeline cards are created/updated/deleted
     func handleTimelineEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .timelineUIUpdateNeeded(let timeline):
+        case .timeline(.uiUpdateNeeded(let timeline)):
             let cardCount = timeline["experiences"].array?.count ?? 0
             Logger.info("📊 UIStateUpdateHandler: Received timelineUIUpdateNeeded with \(cardCount) cards", category: .ai)
             ui.updateTimeline(timeline)
@@ -153,7 +153,7 @@ final class UIStateUpdateHandler {
     /// Handle phase transition events - closes window when interview completes
     func handlePhaseEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .phaseTransitionApplied(let phase, _):
+        case .phase(.transitionApplied(let phase, _)):
             if phase == InterviewPhase.phase4StrategicSynthesis.rawValue {
                 let customFields = await state.getCustomFieldDefinitions()
                 ui.shouldGenerateTitleSets = customFields.contains { $0.key.lowercased() == "custom.jobtitles" }

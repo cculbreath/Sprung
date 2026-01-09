@@ -33,7 +33,7 @@ final class ProfilePersistenceHandler {
     }
     private func handleEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .applicantProfileStored(let json):
+        case .state(.applicantProfileStored(let json)):
             await persistProfileToSwiftData(json)
         default:
             break

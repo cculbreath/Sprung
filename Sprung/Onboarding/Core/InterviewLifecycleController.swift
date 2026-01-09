@@ -320,10 +320,10 @@ final class InterviewLifecycleController {
         self.orchestrator = orchestrator
 
         // Publish phase transition BEFORE orchestrator sends initial message
-        // This ensures the phase intro (with toolChoice=agent_ready) is queued
-        // and can be bundled with the initial "I'm ready to begin" user message
+        // This ensures the phase intro is queued and can be bundled with
+        // the initial "I'm ready to begin" user message
         if !isResuming {
-            await eventBus.publish(.phaseTransitionApplied(phase: phase.rawValue, timestamp: Date()))
+            await eventBus.publish(.phase(.transitionApplied(phase: phase.rawValue, timestamp: Date())))
         }
 
         // Initialize orchestrator with resume flag

@@ -42,7 +42,7 @@ struct EventDumpView: View {
             .task {
                 // Live update todo list when events fire
                 for await event in await coordinator.eventBus.streamAll() {
-                    if case .todoListUpdated = event {
+                    if case .tool(.todoListUpdated) = event {
                         await loadTodoItems()
                     }
                 }
@@ -384,33 +384,33 @@ struct EventDumpView: View {
     private func formatEvent(_ event: OnboardingEvent) -> String {
         // Simple format - just use the enum case name and basic info
         switch event {
-        case .processingStateChanged(let processing, let statusMessage):
+        case .processing(.stateChanged(let processing, let statusMessage)):
             let statusInfo = statusMessage.map { " - \($0)" } ?? ""
-            return "processingStateChanged(\(processing))\(statusInfo)"
-        case .streamingMessageBegan(let id, _, let statusMessage):
+            return "processing.stateChanged(\(processing))\(statusInfo)"
+        case .llm(.streamingMessageBegan(let id, _, let statusMessage)):
             let statusInfo = statusMessage.map { " - \($0)" } ?? ""
-            return "streamingMessageBegan(id: \(id.uuidString.prefix(8)))\(statusInfo)"
-        case .streamingMessageUpdated(let id, let delta, let statusMessage):
+            return "llm.streamingMessageBegan(id: \(id.uuidString.prefix(8)))\(statusInfo)"
+        case .llm(.streamingMessageUpdated(let id, let delta, let statusMessage)):
             let statusInfo = statusMessage.map { " - \($0)" } ?? ""
-            return "streamingMessageUpdated(id: \(id.uuidString.prefix(8)), delta: \(delta.count) chars)\(statusInfo)"
-        case .streamingMessageFinalized(let id, let text, let toolCalls, _):
+            return "llm.streamingMessageUpdated(id: \(id.uuidString.prefix(8)), delta: \(delta.count) chars)\(statusInfo)"
+        case .llm(.streamingMessageFinalized(let id, let text, let toolCalls, _)):
             let toolInfo = toolCalls.map { " toolCalls: \($0.count)" } ?? ""
-            return "streamingMessageFinalized(id: \(id.uuidString.prefix(8)), text: \(text.count) chars\(toolInfo))"
-        case .toolCallRequested(let call, let statusMessage):
+            return "llm.streamingMessageFinalized(id: \(id.uuidString.prefix(8)), text: \(text.count) chars\(toolInfo))"
+        case .tool(.callRequested(let call, let statusMessage)):
             let statusInfo = statusMessage.map { " - \($0)" } ?? ""
-            return "toolCallRequested(\(call.name))\(statusInfo)"
-        case .objectiveStatusChanged(let id, let oldStatus, let newStatus, let phase, _, _, _):
-            return "objectiveStatusChanged(\(id): \(oldStatus ?? "nil") → \(newStatus), phase: \(phase))"
-        case .phaseTransitionApplied(let phase, let timestamp):
-            return "phaseTransitionApplied(\(phase), \(timestamp.formatted()))"
-        case .skeletonTimelineReplaced(_, let diff, _):
+            return "tool.callRequested(\(call.name))\(statusInfo)"
+        case .objective(.statusChanged(let id, let oldStatus, let newStatus, let phase, _, _, _)):
+            return "objective.statusChanged(\(id): \(oldStatus ?? "nil") → \(newStatus), phase: \(phase))"
+        case .phase(.transitionApplied(let phase, let timestamp)):
+            return "phase.transitionApplied(\(phase), \(timestamp.formatted()))"
+        case .timeline(.skeletonReplaced(_, let diff, _)):
             if let diff = diff {
-                return "skeletonTimelineReplaced(\(diff.summary))"
+                return "timeline.skeletonReplaced(\(diff.summary))"
             } else {
-                return "skeletonTimelineReplaced"
+                return "timeline.skeletonReplaced"
             }
-        case .knowledgeCardPersisted(let card):
-            return "knowledgeCardPersisted(title: \(card["title"].stringValue))"
+        case .artifact(.knowledgeCardPersisted(let card)):
+            return "artifact.knowledgeCardPersisted(title: \(card["title"].stringValue))"
         default:
             return "\(event)"
         }

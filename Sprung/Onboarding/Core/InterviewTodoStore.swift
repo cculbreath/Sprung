@@ -220,7 +220,7 @@ actor InterviewTodoStore {
         if let data = try? JSONEncoder().encode(items),
            let jsonString = String(data: data, encoding: .utf8) {
             Task {
-                await eventBus.publish(.todoListUpdated(todoListJSON: jsonString))
+                await eventBus.publish(.tool(.todoListUpdated(todoListJSON: jsonString)))
             }
         }
     }

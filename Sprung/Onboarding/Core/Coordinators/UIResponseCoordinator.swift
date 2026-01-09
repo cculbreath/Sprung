@@ -9,18 +9,21 @@ final class UIResponseCoordinator {
     private let state: StateCoordinator
     private let ui: OnboardingUIState
     private let sessionUIState: SessionUIState
+    private let continuationManager: UIToolContinuationManager
     init(
         eventBus: EventCoordinator,
         toolRouter: ToolHandler,
         state: StateCoordinator,
         ui: OnboardingUIState,
-        sessionUIState: SessionUIState
+        sessionUIState: SessionUIState,
+        continuationManager: UIToolContinuationManager
     ) {
         self.eventBus = eventBus
         self.toolRouter = toolRouter
         self.state = state
         self.ui = ui
         self.sessionUIState = sessionUIState
+        self.continuationManager = continuationManager
     }
     // MARK: - Choice Selection
     func submitChoiceSelection(_ selectionIds: [String]) async {
@@ -32,32 +35,41 @@ final class UIResponseCoordinator {
     func submitChoiceSelectionWithOther(_ otherText: String) async {
         // Clear the choice prompt
         toolRouter.clearChoicePrompt()
-        await eventBus.publish(.choicePromptCleared)
+        await eventBus.publish(.toolpane(.choicePromptCleared))
 
-        // Complete pending UI tool call with the free-form response
-        var output = JSON()
-        output["message"].string = "User selected 'Other' and provided: \(otherText)"
-        output["status"].string = "completed"
-        output["other_response"].string = otherText
-        await completePendingUIToolCall(output: output)
-        Logger.info("✅ Choice selection (Other) - free-form response included in tool response", category: .ai)
+        // Complete the UI tool continuation
+        let result = buildCompletionResult(
+            status: "completed",
+            message: "User selected 'Other' and provided: \(otherText)",
+            data: JSON(["other_response": otherText])
+        )
+        completeUITool(toolName: OnboardingToolName.getUserOption.rawValue, result: result)
+        Logger.info("✅ Choice selection (Other) completed", category: .ai)
     }
 
-    /// Cancel a choice selection - dismisses UI and sends cancellation to LLM
+    /// Cancel a choice selection - dismisses UI and completes tool with cancellation
     func cancelChoiceSelection() async {
         // Clear the choice prompt UI
         toolRouter.clearChoicePrompt()
-        await eventBus.publish(.choicePromptCleared)
+        await eventBus.publish(.toolpane(.choicePromptCleared))
 
-        // Complete pending UI tool call with cancelled status
-        var output = JSON()
-        output["message"].string = "User cancelled the selection prompt"
-        output["status"].string = "cancelled"
-        await completePendingUIToolCall(output: output)
-        Logger.info("✅ Choice selection cancelled - info included in tool response", category: .ai)
+        // Complete the UI tool with cancellation
+        let result = buildCompletionResult(
+            status: "cancelled",
+            message: "User cancelled the selection prompt"
+        )
+        completeUITool(toolName: OnboardingToolName.getUserOption.rawValue, result: result)
+        Logger.info("✅ Choice selection cancelled", category: .ai)
     }
 
     private func submitChoiceSelectionInternal(selectionIds: [String], result: (payload: JSON, source: String?)) async {
+        // Determine the tool name based on source
+        let toolName: String
+        if result.source == "skip_phase_approval" {
+            toolName = OnboardingToolName.askUserSkipToNextPhase.rawValue
+        } else {
+            toolName = OnboardingToolName.getUserOption.rawValue
+        }
 
         // Handle special skip phase approval
         if result.source == "skip_phase_approval" {
@@ -75,31 +87,35 @@ final class UIResponseCoordinator {
         }
 
         // Clear the choice prompt and waiting state
-        await eventBus.publish(.choicePromptCleared)
+        await eventBus.publish(.toolpane(.choicePromptCleared))
 
-        // Complete pending UI tool call (Codex paradigm)
-        // No separate user message needed - tool response contains the selection info
-        var output = JSON()
-        // For skip phase approval, provide clear feedback on user decision
+        // Build completion result
+        let completionResult: UIToolCompletionResult
         if result.source == "skip_phase_approval" {
             let approved = selectionIds.contains("approve")
-            output["status"].string = approved ? "phase_advanced" : "rejected"
-            output["message"].string = approved
-                ? "User approved skip. Phase has been advanced. Begin new phase immediately."
-                : "User rejected skip request. Continue working on current phase objectives."
+            completionResult = buildCompletionResult(
+                status: approved ? "phase_advanced" : "rejected",
+                message: approved
+                    ? "User approved skip. Phase has been advanced. Begin new phase immediately."
+                    : "User rejected skip request. Continue working on current phase objectives."
+            )
         } else {
-            output["message"].string = "User selected option(s): \(selectionIds.joined(separator: ", "))"
-            output["status"].string = "completed"
+            completionResult = buildCompletionResult(
+                status: "completed",
+                message: "User selected option(s): \(selectionIds.joined(separator: ", "))",
+                data: JSON(["selected_ids": selectionIds])
+            )
         }
-        await completePendingUIToolCall(output: output)
-        Logger.info("✅ Choice selection - info included in tool response", category: .ai)
+
+        completeUITool(toolName: toolName, result: completionResult)
+        Logger.info("✅ Choice selection completed", category: .ai)
     }
 
     // MARK: - Forced Phase Transition
 
     /// Force an immediate phase transition without waiting for LLM to call next_phase.
     /// Used when user action should directly advance the phase (section toggle, skip approval, etc.)
-    /// This is more reliable than forced toolChoice and eliminates LLM round trips.
+    /// Direct transitions are more reliable and eliminate LLM round trips.
     private func forcePhaseTransition(reason: String = "User action triggered phase advance") async {
         let currentPhase = await state.phase
         guard let nextPhase = currentPhase.next() else {
@@ -111,50 +127,56 @@ final class UIResponseCoordinator {
 
         // Emit phase transition request - StateCoordinator will handle the actual transition
         // This triggers: setPhase() → phaseTransitionApplied → handlePhaseTransition (sends intro prompt)
-        await eventBus.publish(.phaseTransitionRequested(
+        await eventBus.publish(.phase(.transitionRequested(
             from: currentPhase.rawValue,
             to: nextPhase.rawValue,
             reason: reason
-        ))
+        )))
     }
     // MARK: - Upload Handling
     func completeUploadAndResume(id: UUID, fileURLs: [URL], coordinator: OnboardingInterviewCoordinator) async {
         guard await coordinator.completeUpload(id: id, fileURLs: fileURLs) != nil else { return }
 
         // Check if any uploaded files require async extraction (PDF, DOCX, HTML, etc.)
-        // For these, DON'T send a tool response yet - keep the tool call pending.
-        // DocumentArtifactMessenger will complete the tool call with extracted content,
-        // eliminating an unnecessary LLM round trip.
         let requiresAsyncExtraction = fileURLs.contains { url in
             let ext = url.pathExtension.lowercased()
             return ["pdf", "docx", "html", "htm"].contains(ext)
         }
+
+        let filenames = fileURLs.map { $0.lastPathComponent }.joined(separator: ", ")
+        let result: UIToolCompletionResult
+
         if requiresAsyncExtraction {
-            // Don't complete the tool call yet - leave it pending
-            // DocumentArtifactMessenger will complete it with extracted content
-            Logger.info("📄 Upload completed - async extraction in progress, tool response deferred until extraction completes", category: .ai)
-            return
+            // Complete the tool with extraction_in_progress status
+            // DocumentArtifactMessenger will send the extracted content as a follow-up user message
+            result = buildCompletionResult(
+                status: "extraction_in_progress",
+                message: "User uploaded \(fileURLs.count) file(s): \(filenames). Text extraction in progress - content will follow.",
+                data: JSON(["filenames": filenames, "count": fileURLs.count, "async_extraction": true])
+            )
+            Logger.info("📄 Upload completed - async extraction in progress", category: .ai)
+        } else {
+            // For non-extractable files (images, text), complete immediately
+            result = buildCompletionResult(
+                status: "completed",
+                message: "User uploaded \(fileURLs.count) file(s): \(filenames)",
+                data: JSON(["filenames": filenames, "count": fileURLs.count])
+            )
+            Logger.info("✅ Upload completed (non-extractable files)", category: .ai)
         }
 
-        // For non-extractable files (images, text), complete immediately with all info in tool response
-        // No separate user message needed - tool response contains the completion info
-        let filenames = fileURLs.map { $0.lastPathComponent }.joined(separator: ", ")
-        var output = JSON()
-        output["message"].string = "User uploaded \(fileURLs.count) file(s): \(filenames)"
-        output["status"].string = "completed"
-        await completePendingUIToolCall(output: output)
-        Logger.info("✅ Upload completed (non-extractable files) - info included in tool response", category: .ai)
+        completeUITool(toolName: OnboardingToolName.getUserUpload.rawValue, result: result)
     }
     func skipUploadAndResume(id: UUID, coordinator: OnboardingInterviewCoordinator) async {
         guard await coordinator.skipUpload(id: id) != nil else { return }
 
-        // Complete pending UI tool call with cancelled status
-        // No separate user message needed - tool response contains the completion info
-        var output = JSON()
-        output["message"].string = "User skipped the upload"
-        output["status"].string = "completed"
-        await completePendingUIToolCall(output: output)
-        Logger.info("✅ Upload skipped - info included in tool response", category: .ai)
+        // Complete the UI tool with skip status
+        let result = buildCompletionResult(
+            status: "completed",
+            message: "User skipped the upload"
+        )
+        completeUITool(toolName: OnboardingToolName.getUserUpload.rawValue, result: result)
+        Logger.info("✅ Upload skipped", category: .ai)
     }
     // MARK: - Validation Handling
     func submitValidationAndResume(
@@ -177,64 +199,44 @@ final class UIResponseCoordinator {
             statusDescription = status.lowercased()
         }
 
-        // Complete the pending tool call with validation response
+        // Build result message with next step guidance included
         var message = "Validation response: \(statusDescription)"
         if let notes = notes, !notes.isEmpty {
             message += ". Notes: \(notes)"
         }
-
-        var output = JSON()
-        output["message"].string = message
-        output["status"].string = "completed"
-
-        // Determine instruction based on validation type and status
-        // Per Anthropic best practices, instruction text travels WITH the tool result
-        let instruction: String?
         if statusDescription == "confirmed" {
-            // Check if this is a timeline validation by looking at pending tool call
-            let pendingTool = await state.getPendingUIToolCall()
-            if pendingTool?.toolName == OnboardingToolName.submitForValidation.rawValue {
-                // Timeline validated - guide to next step
-                instruction = """
-                    Timeline validation confirmed. Now call configure_enabled_sections \
-                    to let the user choose which resume sections to include based on their timeline.
-                    """
-            } else {
-                instruction = nil
-            }
-        } else {
-            instruction = nil
+            message += ". Next step: call configure_enabled_sections to let the user choose which resume sections to include."
         }
 
-        await completePendingUIToolCall(output: output, instruction: instruction)
-
-        Logger.info("✅ Validation response - info included in tool response", category: .ai)
+        let result = buildCompletionResult(status: "completed", message: message)
+        completeUITool(toolName: OnboardingToolName.submitForValidation.rawValue, result: result)
+        Logger.info("✅ Validation response completed", category: .ai)
     }
 
     func clearValidationPromptAndNotifyLLM(message: String) async {
         // Clear the validation prompt
         toolRouter.clearValidationPrompt()
-        await eventBus.publish(.validationPromptCleared)
+        await eventBus.publish(.toolpane(.validationPromptCleared))
 
-        // Complete the pending UI tool call with "changes_submitted" status
-        // This unblocks the LLM from waiting for the submit_for_validation response
-        var output = JSON()
-        output["message"].string = message
-        output["status"].string = "changes_submitted"
-        await completePendingUIToolCall(output: output)
-
-        // Get current timeline state to include in the message
+        // Get current timeline state to include in the result
         let timelineInfo = await buildTimelineCardSummary()
-        // Send user message to LLM with current card state
-        var userMessage = JSON()
-        userMessage["role"].string = "user"
-        var content = message
+
+        // Build the result with timeline info
+        var resultData = JSON()
+        resultData["timeline_summary"].string = timelineInfo.isEmpty ? "No timeline cards" : timelineInfo
+
+        var resultMessage = message
         if !timelineInfo.isEmpty {
-            content += "\n\nCurrent timeline cards (with IDs for programmatic editing):\n\(timelineInfo)"
+            resultMessage += "\n\nCurrent timeline cards (with IDs for programmatic editing):\n\(timelineInfo)"
         }
-        userMessage["content"].string = content
-        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
-        Logger.info("✅ Validation prompt cleared and user message sent to LLM (including \(timelineInfo.isEmpty ? "no" : "current") card state)", category: .ai)
+
+        let result = buildCompletionResult(
+            status: "changes_submitted",
+            message: resultMessage,
+            data: resultData
+        )
+        completeUITool(toolName: OnboardingToolName.submitForValidation.rawValue, result: result)
+        Logger.info("✅ Validation prompt cleared (including \(timelineInfo.isEmpty ? "no" : "current") card state)", category: .ai)
     }
 
     /// Build a summary of current timeline cards with their IDs for the LLM
@@ -263,20 +265,20 @@ final class UIResponseCoordinator {
         // Deactivate the timeline editor mode
         ui.isTimelineEditorActive = false
         // Emit event for session persistence
-        await eventBus.publish(.timelineEditorActiveChanged(false))
+        await eventBus.publish(.state(.timelineEditorActiveChanged(false)))
 
         // Clear the validation/editor prompt (legacy, may not be set)
         toolRouter.clearValidationPrompt()
-        await eventBus.publish(.validationPromptCleared)
+        await eventBus.publish(.toolpane(.validationPromptCleared))
 
         // Mark timeline enrichment objective as completed
-        await eventBus.publish(.objectiveStatusUpdateRequested(
+        await eventBus.publish(.objective(.statusUpdateRequested(
             id: OnboardingObjectiveId.timelineEnriched.rawValue,
             status: "completed",
             source: "user_done_with_timeline",
             notes: "User clicked Done with Timeline",
             details: nil
-        ))
+        )))
 
         // UNGATE: Allow submit_for_validation now that user clicked Done
         await sessionUIState.includeTool(OnboardingToolName.submitForValidation.rawValue)
@@ -285,7 +287,7 @@ final class UIResponseCoordinator {
         // Get current timeline info
         let timelineInfo = await buildTimelineCardSummary()
 
-        // Send user message with mandatory toolChoice - LLM must call submit_for_validation
+        // Send user message asking LLM to call submit_for_validation
         var payload = JSON()
         var messageText = """
             I've completed editing my timeline and clicked "Done with Timeline". \
@@ -297,19 +299,15 @@ final class UIResponseCoordinator {
         }
         payload["text"].string = messageText
 
-        await eventBus.publish(.llmSendUserMessage(
+        await eventBus.publish(.llm(.sendUserMessage(
             payload: payload,
-            isSystemGenerated: true,
-            toolChoice: OnboardingToolName.submitForValidation.rawValue
-        ))
-        Logger.info("✅ Timeline editing complete - mandating submit_for_validation via toolChoice", category: .ai)
+            isSystemGenerated: true
+        )))
+        Logger.info("✅ Timeline editing complete - requesting submit_for_validation", category: .ai)
     }
     // MARK: - Applicant Profile Handling
     func confirmApplicantProfile(draft: ApplicantProfileDraft) async {
         guard let resolution = toolRouter.resolveApplicantProfile(with: draft) else { return }
-
-        // Complete pending UI tool call (Codex paradigm)
-        await completePendingUIToolCall(output: buildUICompletedOutput(message: "Profile confirmed via validation"))
 
         // Extract the actual profile data from the resolution
         let profileData = resolution["data"]
@@ -318,79 +316,79 @@ final class UIResponseCoordinator {
         await state.storeApplicantProfile(profileData)
         // Mark objective chain complete to trigger photo follow-up workflow
         // The objectives must be completed in dependency order
-        await eventBus.publish(.objectiveStatusUpdateRequested(
+        await eventBus.publish(.objective(.statusUpdateRequested(
             id: OnboardingObjectiveId.contactSourceSelected.rawValue,
             status: "completed",
             source: "ui_profile_confirmed",
             notes: "Profile confirmed via intake card",
             details: ["method": "intake_card"]
-        ))
-        await eventBus.publish(.objectiveStatusUpdateRequested(
+        )))
+        await eventBus.publish(.objective(.statusUpdateRequested(
             id: OnboardingObjectiveId.contactDataCollected.rawValue,
             status: "completed",
             source: "ui_profile_confirmed",
             notes: "Profile confirmed via intake card",
             details: ["method": "intake_card"]
-        ))
-        await eventBus.publish(.objectiveStatusUpdateRequested(
+        )))
+        await eventBus.publish(.objective(.statusUpdateRequested(
             id: OnboardingObjectiveId.contactDataValidated.rawValue,
             status: "completed",
             source: "ui_profile_confirmed",
             notes: "Profile confirmed via intake card",
             details: ["method": "intake_card"]
-        ))
+        )))
         // Mark the main applicant_profile_complete objective as complete
-        await eventBus.publish(.objectiveStatusUpdateRequested(
+        await eventBus.publish(.objective(.statusUpdateRequested(
             id: OnboardingObjectiveId.applicantProfileComplete.rawValue,
             status: "completed",
             source: "ui_profile_confirmed",
             notes: "Applicant profile validated and saved",
             details: ["method": "intake_card"]
-        ))
+        )))
         Logger.info("✅ applicant_profile_complete objective marked complete", category: .ai)
-        // Build user message with the validated profile information
-        var userMessage = JSON()
-        userMessage["role"].string = "user"
-        // Format profile data for the LLM
-        var contentParts: [String] = ["I have provided my contact information:"]
+
+        // Build result with profile data for the LLM
+        var resultData = JSON()
+        resultData["profile"] = profileData
+        resultData["validation_status"].string = status
+
+        // Format a human-readable summary
+        var summaryParts: [String] = ["Profile confirmed:"]
         if let name = profileData["name"].string {
-            contentParts.append("- Name: \(name)")
+            summaryParts.append("- Name: \(name)")
         }
         if let email = profileData["email"].string {
-            contentParts.append("- Email: \(email)")
+            summaryParts.append("- Email: \(email)")
         }
         if let phone = profileData["phone"].string {
-            contentParts.append("- Phone: \(phone)")
+            summaryParts.append("- Phone: \(phone)")
         }
         if let location = profileData["location"].string {
-            contentParts.append("- Location: \(location)")
+            summaryParts.append("- Location: \(location)")
         }
-        if let personalURL = profileData["personal_url"].string {
-            contentParts.append("- Website: \(personalURL)")
-        }
-        // Add social profiles if present
-        if let social = profileData["social_profiles"].array, !social.isEmpty {
-            contentParts.append("- Social profiles: \(social.count) profile(s)")
-        }
-        contentParts.append("\nThis information has been validated and is ready for use.")
-        userMessage["content"].string = contentParts.joined(separator: "\n")
-        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
-        Logger.info("✅ Applicant profile confirmed (\(status)) and data sent to LLM", category: .ai)
+
+        let result = buildCompletionResult(
+            status: "completed",
+            message: summaryParts.joined(separator: "\n"),
+            data: resultData
+        )
+        completeUITool(toolName: OnboardingToolName.validateApplicantProfile.rawValue, result: result)
+        Logger.info("✅ Applicant profile confirmed (\(status))", category: .ai)
     }
     func rejectApplicantProfile(reason: String) async {
         guard toolRouter.rejectApplicantProfile(reason: reason) != nil else { return }
 
-        // Complete pending UI tool call with rejection (Codex paradigm)
-        // No separate user message needed - tool response contains the rejection info
-        var output = JSON()
-        output["message"].string = "Applicant profile rejected. Reason: \(reason)"
-        output["status"].string = "rejected"
-        await completePendingUIToolCall(output: output)
-        Logger.info("✅ Applicant profile rejected - info included in tool response", category: .ai)
+        // Complete the UI tool with rejection
+        let result = buildCompletionResult(
+            status: "rejected",
+            message: "Applicant profile rejected. Reason: \(reason)"
+        )
+        completeUITool(toolName: OnboardingToolName.validateApplicantProfile.rawValue, result: result)
+        Logger.info("✅ Applicant profile rejected", category: .ai)
     }
     func submitProfileDraft(draft: ApplicantProfileDraft, source: OnboardingApplicantProfileIntakeState.Source) async {
         // Close the profile intake UI via event
-        await eventBus.publish(.applicantProfileIntakeCleared)
+        await eventBus.publish(.toolpane(.applicantProfileIntakeCleared))
         // Store profile in StateCoordinator/ArtifactRepository (which will emit the event)
         let profileJSON = draft.toSafeJSON()
         await state.storeApplicantProfile(profileJSON)
@@ -401,56 +399,54 @@ final class UIResponseCoordinator {
         // Store in UI state to persist until timeline loads
         ui.lastApplicantProfileSummary = profileJSON
         // Mark objectives complete
-        await eventBus.publish(.objectiveStatusUpdateRequested(
+        await eventBus.publish(.objective(.statusUpdateRequested(
             id: OnboardingObjectiveId.contactSourceSelected.rawValue,
             status: "completed",
             source: "ui_profile_draft",
             notes: "Profile submitted via \(source == .contacts ? "contacts" : "manual")",
             details: ["source": source == .contacts ? "contacts" : "manual"]
-        ))
-        await eventBus.publish(.objectiveStatusUpdateRequested(
+        )))
+        await eventBus.publish(.objective(.statusUpdateRequested(
             id: OnboardingObjectiveId.contactDataCollected.rawValue,
             status: "completed",
             source: "ui_profile_draft",
             notes: "Profile data collected",
             details: nil
-        ))
-        await eventBus.publish(.objectiveStatusUpdateRequested(
+        )))
+        await eventBus.publish(.objective(.statusUpdateRequested(
             id: OnboardingObjectiveId.contactDataValidated.rawValue,
             status: "completed",
             source: "ui_profile_draft",
             notes: "Profile validated via intake UI",
             details: nil
-        ))
-        await eventBus.publish(.objectiveStatusUpdateRequested(
+        )))
+        await eventBus.publish(.objective(.statusUpdateRequested(
             id: OnboardingObjectiveId.applicantProfileComplete.rawValue,
             status: "completed",
             source: "ui_profile_draft",
             notes: "Applicant profile validated and saved",
             details: nil
-        ))
+        )))
         Logger.info("✅ applicant_profile_complete objective marked complete via draft submission", category: .ai)
 
-        // Build comprehensive tool output that includes profile data
-        // This eliminates the need for a separate user message, reducing LLM round trips
-        // Tool response is visible to the LLM; omit binary photo data to avoid token waste.
+        // Build result with profile data for the LLM
+        // Omit binary photo data to avoid token waste
         var llmSafeProfile = profileJSON
         if let image = llmSafeProfile["image"].string, !image.isEmpty {
             llmSafeProfile["image"].string = "[Image uploaded - binary data omitted]"
         }
 
-        var wrappedData = JSON()
-        wrappedData["applicant_profile"] = llmSafeProfile
-        wrappedData["validation_status"].string = "validated_by_user"
+        var resultData = JSON()
+        resultData["applicant_profile"] = llmSafeProfile
+        resultData["validation_status"].string = "validated_by_user"
 
-        var output = JSON()
-        output["message"].string = "Profile submitted via \(source == .contacts ? "contacts import" : "manual entry") and validated by user. Proceed to photo step."
-        output["status"].string = "completed"
-        output["profile_data"] = wrappedData
-
-        // Complete pending UI tool call with full profile data (Codex paradigm)
-        await completePendingUIToolCall(output: output)
-        Logger.info("✅ Profile submitted with data included in tool response (source: \(source == .contacts ? "contacts" : "manual"))", category: .ai)
+        let result = buildCompletionResult(
+            status: "completed",
+            message: "Profile submitted via \(source == .contacts ? "contacts import" : "manual entry") and validated by user. Proceed to photo step.",
+            data: resultData
+        )
+        completeUITool(toolName: OnboardingToolName.getApplicantProfile.rawValue, result: result)
+        Logger.info("✅ Profile submitted (source: \(source == .contacts ? "contacts" : "manual"))", category: .ai)
     }
     func submitProfileURL(_ urlString: String) async {
         // Process URL submission (creates artifact if needed)
@@ -459,7 +455,7 @@ final class UIResponseCoordinator {
         var userMessage = JSON()
         userMessage["role"].string = "user"
         userMessage["content"].string = "Profile URL submitted: \(urlString). Processing for contact information extraction."
-        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+        await eventBus.publish(.llm(.enqueueUserMessage(payload: userMessage, isSystemGenerated: true)))
         Logger.info("✅ Profile URL submitted and user message sent to LLM", category: .ai)
     }
     // MARK: - Section Toggle Handling
@@ -479,44 +475,47 @@ final class UIResponseCoordinator {
         Logger.info("🏷️ Title set curation \(hasJobTitles ? "enabled" : "disabled") via custom.jobTitles", category: .ai)
 
         // Mark enabled_sections objective as complete
-        await eventBus.publish(.objectiveStatusUpdateRequested(
+        await eventBus.publish(.objective(.statusUpdateRequested(
             id: OnboardingObjectiveId.enabledSections.rawValue,
             status: "completed",
             source: "ui_section_toggle_confirmed",
             notes: "Section toggle confirmed by user",
             details: ["sections": enabled.joined(separator: ", ")]
-        ))
+        )))
 
         // Execute phase transition directly - no need to ask LLM to call next_phase
-        // This is more reliable than forced toolChoice and eliminates a round trip
+        // Direct transitions are more reliable and eliminate a round trip
         await forcePhaseTransition(reason: "Section configuration confirmed by user")
 
-        // Build tool output informing LLM that phase has advanced
-        var output = JSON()
+        // Build result informing LLM that phase has advanced
         var message = "Section toggle confirmed. Enabled sections: \(enabled.joined(separator: ", "))"
         if !customFields.isEmpty {
             let customFieldsSummary = customFields.map { "\($0.key): \($0.description)" }.joined(separator: "; ")
             message += ". Custom fields: \(customFieldsSummary)"
         }
         message += ". Phase has been advanced to Phase 3 (Evidence Collection)."
-        output["message"].string = message
-        output["status"].string = "phase_advanced"
 
-        // Complete pending UI tool call - LLM receives confirmation that phase changed
-        await completePendingUIToolCall(output: output)
+        var resultData = JSON()
+        resultData["enabled_sections"] = JSON(enabled)
+        if !customFields.isEmpty {
+            resultData["custom_fields"] = JSON(customFields.map { ["key": $0.key, "description": $0.description] })
+        }
 
-        Logger.info("✅ Section toggle confirmed - phase advanced directly to Phase 3", category: .ai)
+        let result = buildCompletionResult(status: "phase_advanced", message: message, data: resultData)
+        completeUITool(toolName: OnboardingToolName.configureEnabledSections.rawValue, result: result)
+
+        Logger.info("✅ Section toggle confirmed, phase advanced to Phase 3", category: .ai)
     }
     func rejectSectionToggle(reason: String) async {
         guard toolRouter.rejectSectionToggle(reason: reason) != nil else { return }
 
-        // Complete pending UI tool call with rejection (Codex paradigm)
-        // No separate user message needed - tool response contains the rejection info
-        var output = JSON()
-        output["message"].string = "Section toggle rejected: \(reason)"
-        output["status"].string = "rejected"
-        await completePendingUIToolCall(output: output)
-        Logger.info("✅ Section toggle rejected - info included in tool response", category: .ai)
+        // Complete UI tool with rejection
+        let result = buildCompletionResult(
+            status: "rejected",
+            message: "Section toggle rejected: \(reason)"
+        )
+        completeUITool(toolName: OnboardingToolName.configureEnabledSections.rawValue, result: result)
+        Logger.info("✅ Section toggle rejected", category: .ai)
     }
     // MARK: - Chat & Control
     func sendChatMessage(_ text: String) async {
@@ -528,19 +527,8 @@ final class UIResponseCoordinator {
             Logger.info("💬 Chatbox message cleared waiting state: \(previousWaitingState?.rawValue ?? "none")", category: .ai)
         }
 
-        // Auto-complete any pending UI tool call - user sending a message means they're ready to proceed
-        // This prevents conversation sync errors where a tool call is left hanging
-        if let pendingTool = await state.getPendingUIToolCall() {
-            Logger.info("💬 Chatbox message auto-completing pending UI tool: \(pendingTool.toolName) (callId: \(pendingTool.callId.prefix(8)))", category: .ai)
-
-            // Dismiss any visible UI associated with the pending tool
-            await dismissPendingUIPrompts()
-
-            var autoCompleteOutput = JSON()
-            autoCompleteOutput["status"].string = "completed"
-            autoCompleteOutput["message"].string = "User proceeded via chatbox message"
-            await completePendingUIToolCall(output: autoCompleteOutput)
-        }
+        // Dismiss any visible UI prompts - user sending a chatbox message means they want to proceed differently
+        await dismissPendingUIPrompts()
 
         // NOTE: Document collection mode is NOT cleared by chatbox messages.
         // It should only be dismissed by "Done with Uploads" button or phase transitions.
@@ -552,22 +540,22 @@ final class UIResponseCoordinator {
             return
         }
         // Emit event so coordinator can sync its messages array to UI
-        await eventBus.publish(.chatboxUserMessageAdded(messageId: messageId.uuidString))
+        await eventBus.publish(.llm(.chatboxUserMessageAdded(messageId: messageId.uuidString)))
         // Wrap user chatbox messages in <chatbox> tags for LLM context
         var payload = JSON()
         payload["text"].string = "<chatbox>\(text)</chatbox>"
         // Emit processing state change for UI feedback
-        await eventBus.publish(.processingStateChanged(true, statusMessage: "Processing your message..."))
+        await eventBus.publish(.processing(.stateChanged(isProcessing: true, statusMessage: "Processing your message...")))
         // Emit event for LLMMessenger to handle, including messageId and original text for error recovery
-        await eventBus.publish(.llmSendUserMessage(
+        await eventBus.publish(.llm(.sendUserMessage(
             payload: payload,
             isSystemGenerated: false,
             chatboxMessageId: messageId.uuidString,
             originalText: text
-        ))
+        )))
     }
     func requestCancelLLM() async {
-        await eventBus.publish(.llmCancelRequested)
+        await eventBus.publish(.llm(.cancelRequested))
     }
 
     // MARK: - Direct File Upload (Persistent Drop Zone)
@@ -598,12 +586,12 @@ final class UIResponseCoordinator {
 
             // Emit uploadCompleted event - DocumentArtifactHandler will process
             // DocumentArtifactMessenger will batch artifacts and send a consolidated message to LLM
-            await eventBus.publish(.uploadCompleted(
+            await eventBus.publish(.artifact(.uploadCompleted(
                 files: uploadInfos,
                 requestKind: "artifact",
                 callId: nil,
                 metadata: metadata
-            ))
+            )))
 
             // Note: We no longer send an immediate "I've uploaded..." message here
             // DocumentArtifactMessenger handles batching and sends a consolidated message
@@ -648,12 +636,12 @@ final class UIResponseCoordinator {
 
             // Emit uploadCompleted event with writing_sample type
             // DocumentArtifactHandler will process with verbatim transcription
-            await eventBus.publish(.uploadCompleted(
+            await eventBus.publish(.artifact(.uploadCompleted(
                 files: uploadInfos,
                 requestKind: "writing_sample",
                 callId: nil,
                 metadata: metadata
-            ))
+            )))
 
             Logger.info("📝 Writing sample upload started: \(fileURLs.count) file(s)", category: .ai)
         } catch {
@@ -674,7 +662,7 @@ final class UIResponseCoordinator {
             timelineJSON["meta"] = meta
         }
         // Publish replacement event which will update state and persistence
-        await eventBus.publish(.skeletonTimelineReplaced(timeline: timelineJSON, diff: diff, meta: meta))
+        await eventBus.publish(.timeline(.skeletonReplaced(timeline: timelineJSON, diff: diff, meta: meta)))
         // Build card summary with IDs for LLM
         let cardSummary = buildTimelineCardSummarySync(cards: cards)
         // Notify LLM of the changes with current card state
@@ -685,7 +673,7 @@ final class UIResponseCoordinator {
             content += "\n\nCurrent timeline cards (with IDs for programmatic editing):\n\(cardSummary)"
         }
         userMessage["content"].string = content
-        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+        await eventBus.publish(.llm(.enqueueUserMessage(payload: userMessage, isSystemGenerated: true)))
         Logger.info("✅ User timeline update applied and notified LLM (including card IDs)", category: .ai)
     }
 
@@ -705,44 +693,27 @@ final class UIResponseCoordinator {
         return lines.joined(separator: "\n")
     }
 
-    // MARK: - Codex Paradigm: Pending Tool Output Management
+    // MARK: - UI Tool Continuation Completion
 
-    /// Complete a pending UI tool call by sending the tool output.
-    /// This implements the Codex CLI paradigm where UI tools defer their response until user action.
+    /// Complete a pending UI tool by resuming its continuation with the result.
+    /// The tool will then return this result as its tool response (single API turn).
     ///
     /// - Parameters:
-    ///   - output: The tool output JSON
-    ///   - instruction: Optional instruction text to include after the tool_result.
-    ///     Per Anthropic best practices, this text travels WITH the tool result
-    ///     to provide immediate guidance for the next action.
-    private func completePendingUIToolCall(output: JSON, instruction: String? = nil) async {
-        guard let pending = await state.getPendingUIToolCall() else {
-            Logger.debug("⚠️ No pending UI tool call to complete", category: .ai)
-            return
+    ///   - toolName: The name of the tool that presented the UI
+    ///   - result: The result data from the user action
+    private func completeUITool(toolName: String, result: UIToolCompletionResult) {
+        let completed = continuationManager.complete(toolName: toolName, result: result)
+        if completed {
+            Logger.info("✅ UI tool continuation completed: \(toolName)", category: .ai)
+        } else {
+            // No pending continuation - tool may have timed out or been interrupted
+            Logger.warning("⚠️ No pending continuation for \(toolName) - may have been interrupted", category: .ai)
         }
-
-        // Build and emit the tool response
-        var payload = JSON()
-        payload["callId"].string = pending.callId
-        payload["output"] = output
-        if let instruction = instruction {
-            payload["instruction"].string = instruction
-        }
-        await eventBus.publish(.llmToolResponseMessage(payload: payload))
-
-        let instructionInfo = instruction != nil ? " + instruction" : ""
-        Logger.info("📤 Pending tool output sent: \(pending.toolName) (callId: \(pending.callId.prefix(8)))\(instructionInfo)", category: .ai)
-
-        // Clear the pending tool call
-        await state.clearPendingUIToolCall()
     }
 
-    /// Build a standard "UI presented, awaiting input" output for pending tools
-    private func buildUICompletedOutput(message: String? = nil) -> JSON {
-        var output = JSON()
-        output["message"].string = message ?? "UI presented. Awaiting user input."
-        output["status"].string = "completed"
-        return output
+    /// Build a completion result for UI action
+    private func buildCompletionResult(status: String, message: String, data: JSON? = nil) -> UIToolCompletionResult {
+        UIToolCompletionResult(status: status, message: message, data: data)
     }
 
     /// Dismiss any visible UI prompts (choice, validation, etc.)
@@ -751,14 +722,14 @@ final class UIResponseCoordinator {
         // Clear choice prompt if visible
         if toolRouter.pendingChoicePrompt != nil {
             toolRouter.clearChoicePrompt()
-            await eventBus.publish(.choicePromptCleared)
+            await eventBus.publish(.toolpane(.choicePromptCleared))
             Logger.info("💬 Dismissed choice prompt via chatbox message", category: .ai)
         }
 
         // Clear validation prompt if visible
         if toolRouter.pendingValidationPrompt != nil {
             toolRouter.clearValidationPrompt()
-            await eventBus.publish(.validationPromptCleared)
+            await eventBus.publish(.toolpane(.validationPromptCleared))
             Logger.info("💬 Dismissed validation prompt via chatbox message", category: .ai)
         }
 
@@ -771,7 +742,7 @@ final class UIResponseCoordinator {
         // Clear section toggle request if visible
         if toolRouter.pendingSectionToggleRequest != nil {
             toolRouter.clearSectionToggle()
-            await eventBus.publish(.sectionToggleCleared)
+            await eventBus.publish(.toolpane(.sectionToggleCleared))
             Logger.info("💬 Dismissed section toggle via chatbox message", category: .ai)
         }
     }

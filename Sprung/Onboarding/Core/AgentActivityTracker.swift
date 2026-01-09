@@ -190,6 +190,17 @@ struct TrackedAgent: Identifiable, Codable {
     }
 }
 
+// MARK: - Agent Completion Summary
+
+/// Summary of a completed agent for notification purposes
+struct AgentCompletionSummary {
+    let agentType: AgentType
+    let name: String
+    let succeeded: Bool
+    let duration: TimeInterval?
+    let errorMessage: String?
+}
+
 // MARK: - Agent Activity Tracker
 
 /// Central tracking for all agent activity with full transcript storage.
@@ -207,6 +218,13 @@ class AgentActivityTracker {
 
     /// Active task handles for cancellation (type-erased for flexibility)
     private var activeTasks: [String: any CancellableTask] = [:]
+
+    /// Callback fired when all running agents complete (count transitions from >0 to 0)
+    /// Provides summaries of the agents that just completed in this batch
+    var onAllAgentsCompleted: (([AgentCompletionSummary]) -> Void)?
+
+    /// Tracks agent IDs that completed since the last "all done" notification
+    private var recentlyCompletedAgentIds: Set<String> = []
 
     // MARK: - Computed Properties
 
@@ -350,8 +368,11 @@ class AgentActivityTracker {
         agents[index].status = .completed
         agents[index].endTime = Date()
         activeTasks[agentId] = nil
+        recentlyCompletedAgentIds.insert(agentId)
 
         Logger.info("✅ Agent completed: \(agents[index].name) (\(agents[index].durationString))", category: .ai)
+
+        checkAllAgentsCompleted()
     }
 
     /// Mark an agent as failed with an error message
@@ -365,6 +386,7 @@ class AgentActivityTracker {
         agents[index].endTime = Date()
         agents[index].error = error
         activeTasks[agentId] = nil
+        recentlyCompletedAgentIds.insert(agentId)
 
         // Add error to transcript
         appendTranscript(
@@ -373,6 +395,8 @@ class AgentActivityTracker {
             content: "Agent failed",
             details: error
         )
+
+        checkAllAgentsCompleted()
 
         Logger.error("❌ Agent failed: \(agents[index].name) - \(error)", category: .ai)
     }
@@ -434,5 +458,36 @@ class AgentActivityTracker {
     /// Get a specific agent by ID
     func getAgent(id: String) -> TrackedAgent? {
         agents.first { $0.id == id }
+    }
+
+    // MARK: - Private Helpers
+
+    /// Check if all agents completed and fire callback if so
+    private func checkAllAgentsCompleted() {
+        guard runningAgentCount == 0,
+              !recentlyCompletedAgentIds.isEmpty,
+              let callback = onAllAgentsCompleted else {
+            return
+        }
+
+        // Build summaries for recently completed agents
+        let summaries: [AgentCompletionSummary] = recentlyCompletedAgentIds.compactMap { agentId in
+            guard let agent = agents.first(where: { $0.id == agentId }) else { return nil }
+            return AgentCompletionSummary(
+                agentType: agent.agentType,
+                name: agent.name,
+                succeeded: agent.status == .completed,
+                duration: agent.duration,
+                errorMessage: agent.error
+            )
+        }
+
+        // Clear the tracking set
+        recentlyCompletedAgentIds.removeAll()
+
+        Logger.info("🏁 All agents completed (\(summaries.count) in batch)", category: .ai)
+
+        // Fire the callback
+        callback(summaries)
     }
 }

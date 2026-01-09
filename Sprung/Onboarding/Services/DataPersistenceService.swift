@@ -33,8 +33,8 @@ actor DataPersistenceService: OnboardingEventEmitter {
         await dataStore.reset()
     }
     func resetStore() async {
-        await eventBus.publish(.processingStateChanged(false))
-        await eventBus.publish(.waitingStateChanged(nil))
+        await eventBus.publish(.processing(.stateChanged(isProcessing: false)))
+        await eventBus.publish(.processing(.waitingStateChanged(nil)))
         await state.reset()
         await MainActor.run {
             toolRouter.reset()

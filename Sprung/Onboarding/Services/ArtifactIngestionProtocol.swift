@@ -48,7 +48,7 @@ extension OnboardingEvent {
         }
         messageText += ". Please wait for completion."
         payload["text"].string = messageText
-        return .llmSendCoordinatorMessage(payload: payload)
+        return .llm(.sendCoordinatorMessage(payload: payload))
     }
 
 }

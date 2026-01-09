@@ -73,7 +73,7 @@ final class OnboardingPersistenceService {
         }
 
         // Emit events for persistence completion
-        await eventBus.publish(.writingSamplePersisted(sample: JSON(["count": writingSamples.count])))
+        await eventBus.publish(.artifact(.writingSamplePersisted(sample: JSON(["count": writingSamples.count]))))
         Logger.info("💾 [persistWritingCorpus] END - Persistence complete", category: .ai)
     }
 
@@ -385,13 +385,13 @@ final class OnboardingPersistenceService {
         }
 
         // Mark objective as completed so subphase can advance to p4_completion
-        await eventBus.publish(.objectiveStatusUpdateRequested(
+        await eventBus.publish(.objective(.statusUpdateRequested(
             id: OnboardingObjectiveId.experienceDefaultsSet.rawValue,
             status: "completed",
             source: "persistence_service",
             notes: "Experience defaults generated and persisted",
             details: nil
-        ))
+        )))
     }
 
     // MARK: - LLM JSON to Draft Converters

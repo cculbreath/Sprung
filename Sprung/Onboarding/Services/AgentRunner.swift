@@ -545,14 +545,14 @@ actor AgentRunner {
         guard let eventBus = eventBus else { return }
 
         let source: UsageSource = (config.agentType == .knowledgeCard) ? .cardGeneration : .mainCoordinator
-        await eventBus.publish(.llmTokenUsageReceived(
+        await eventBus.publish(.llm(.tokenUsageReceived(
             modelId: modelId,
             inputTokens: inputTokens,
             outputTokens: outputTokens,
             cachedTokens: cachedTokens,
             reasoningTokens: reasoningTokens,
             source: source
-        ))
+        )))
 
         // Update agent's token tracking
         await MainActor.run {

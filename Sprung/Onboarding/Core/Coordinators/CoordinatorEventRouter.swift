@@ -47,13 +47,13 @@ final class CoordinatorEventRouter {
         // Log events - use debug level for high-frequency streaming events to reduce console noise
         // Use logDescription to avoid bloating logs with full JSON payloads
         switch event {
-        case .streamingMessageUpdated:
+        case .llm(.streamingMessageUpdated):
             Logger.debug("📊 CoordinatorEventRouter: \(event.logDescription)", category: .ai)
         default:
             Logger.info("📊 CoordinatorEventRouter: \(event.logDescription)", category: .ai)
         }
         switch event {
-        case .objectiveStatusChanged(let id, _, let newStatus, _, _, _, _):
+        case .objective(.statusChanged(let id, _, let newStatus, _, _, _, _)):
             Logger.debug("📊 CoordinatorEventRouter: objectiveStatusChanged received - id=\(id), newStatus=\(newStatus)", category: .ai)
             // Update UI state for views to track objective progress
             ui.objectiveStatuses[id] = newStatus
@@ -61,32 +61,32 @@ final class CoordinatorEventRouter {
                 Logger.info("📊 CoordinatorEventRouter: Dismissing profile summary for applicant_profile_complete completion", category: .ai)
                 toolRouter.profileHandler.dismissProfileSummary()
             }
-        case .timelineUIUpdateNeeded:
+        case .timeline(.uiUpdateNeeded):
             // Timeline UI updates are now handled by UIStateUpdateHandler via topic-specific stream
             // This provides immediate updates without waiting in the congested streamAll() queue
             break
-        case .processingStateChanged:
+        case .processing(.stateChanged):
             break
-        case .streamingMessageBegan, .streamingMessageUpdated, .streamingMessageFinalized:
+        case .llm(.streamingMessageBegan), .llm(.streamingMessageUpdated), .llm(.streamingMessageFinalized):
             break
-        case .waitingStateChanged:
+        case .processing(.waitingStateChanged):
             break
-        case .errorOccurred(let error):
+        case .processing(.errorOccurred(let error)):
             Logger.error("Interview error: \(error)", category: .ai)
             // Errors are now displayed via spinner status message, not popup alerts
-        case .llmUserMessageFailed(let messageId, let originalText, let error):
+        case .llm(.userMessageFailed(let messageId, let originalText, let error)):
             // Handle failed message: remove from transcript and prepare for input restoration
             ui.handleMessageFailure(messageId: messageId, originalText: originalText, error: error)
-        case .applicantProfileStored:
+        case .state(.applicantProfileStored):
             // Handled by ProfilePersistenceHandler
             break
-        case .skeletonTimelineStored, .enabledSectionsUpdated:
+        case .state(.skeletonTimelineStored), .state(.enabledSectionsUpdated):
             break
-        case .experienceDefaultsGenerated(let defaults):
+        case .artifact(.experienceDefaultsGenerated(let defaults)):
             await onboardingPersistence.handleExperienceDefaultsGenerated(defaults)
-        case .toolCallRequested:
+        case .tool(.callRequested):
             break
-        case .phaseTransitionApplied(let phaseName, _):
+        case .phase(.transitionApplied(let phaseName, _)):
             await phaseTransitionController.handlePhaseTransition(phaseName)
             if let phase = InterviewPhase(rawValue: phaseName) {
                 ui.phase = phase
@@ -104,18 +104,18 @@ final class CoordinatorEventRouter {
             }
 
         // MARK: - Card Generation Workflow
-        case .doneWithUploadsClicked:
+        case .artifact(.doneWithUploadsClicked):
             await knowledgeCardWorkflow.handleDoneWithUploadsClicked()
 
-        case .generateCardsButtonClicked:
+        case .artifact(.generateCardsButtonClicked):
             await knowledgeCardWorkflow.handleGenerateCardsButtonClicked()
 
-        case .mergeComplete:
+        case .artifact(.mergeComplete):
             // Event handled by UI; user clicks Approve & Create to generate
             Logger.info("📋 Merge complete - awaiting user approval via Approve & Create button", category: .ai)
 
         // MARK: - Dossier Collection Trigger (Parallel-Safe)
-        case .extractionStateChanged(let inProgress, _):
+        case .processing(.extractionStateChanged(let inProgress, _)):
             if inProgress {
                 // Increment active count
                 activeExtractionCount += 1
@@ -134,7 +134,7 @@ final class CoordinatorEventRouter {
             }
 
         // MARK: - Document Collection UI
-        case .documentCollectionActiveChanged(let isActive):
+        case .state(.documentCollectionActiveChanged(let isActive)):
             // When document collection mode is activated, dismiss profile summary so DocumentCollectionView can show
             if isActive {
                 toolRouter.profileHandler.dismissProfileSummary()
@@ -168,7 +168,7 @@ final class CoordinatorEventRouter {
         // This prevents the LLM from directly acknowledging the instruction text
         var payload = JSON()
         payload["text"].string = prompt
-        await eventBus.publish(.llmExecuteCoordinatorMessage(payload: payload))
+        await eventBus.publish(.llm(.executeCoordinatorMessage(payload: payload)))
         Logger.info("📋 Triggered dossier collection during extraction", category: .ai)
     }
 }

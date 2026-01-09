@@ -44,7 +44,7 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
     // MARK: - Event Handlers
     private func handleToolEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .toolCallRequested(let call, _):
+        case .tool(.callRequested(let call, _)):
             await handleToolCall(call)
         default:
             break
@@ -100,28 +100,12 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
 
             // Special handling for extract_document tool - emit artifact record produced event
             // DocumentArtifactMessenger will batch and send the extracted content to the LLM
-            // No separate developer message needed - tool response + content message suffice
             if toolName == "extract_document", output["artifact_record"] != .null {
-                await emit(.artifactRecordProduced(record: output["artifact_record"]))
+                await emit(.artifact(.recordProduced(record: output["artifact_record"])))
             }
-            // Determine reasoning effort for specific tools
-            // Hard tasks use elevated reasoning; all others use default from settings
-            let hardTaskTools: Set<String> = [
-                "validate_applicant_profile"
-            ]
-            let reasoningEffort: String? = {
-                if let name = toolName, hardTaskTools.contains(name) {
-                    return UserDefaults.standard.string(forKey: "onboardingInterviewHardTaskReasoningEffort") ?? "medium"
-                }
-                // All other tools use default reasoning (nil = LLMMessenger applies default from settings)
-                return nil
-            }()
 
-            // Check for toolChoice chaining (next_required_tool forces the LLM to call a specific tool)
-            let nextRequiredTool = output["next_required_tool"].string
-
-            // Tool completed - send response to LLM (slot already filled above)
-            await emitToolResponse(callId: callId, toolName: toolName, output: output, reasoningEffort: reasoningEffort, nextRequiredTool: nextRequiredTool)
+            // Tool completed - send response to LLM (result already stored in ConversationLog above)
+            await emitToolResponse(callId: callId, toolName: toolName)
 
             // Special handling for bootstrap tools - remove from allowed tools after use
             if output["disable_after_use"].bool == true {
@@ -134,82 +118,42 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             // Mark operation as failed
             await operation.fail(error: error)
 
-            // Tool execution error
+            // Tool execution error - store in ConversationLog
             var errorOutput = JSON()
             errorOutput["error"].string = error.localizedDescription
             errorOutput["status"].string = "incomplete"
             let errorOutputString = errorOutput.rawString() ?? "{}"
 
-            // Fill ConversationLog slot with error result
             if let name = toolName {
                 await stateCoordinator.addCompletedToolResult(callId: callId, toolName: name, output: errorOutputString)
             }
 
-            await emitToolResponse(callId: callId, toolName: toolName, output: errorOutput)
-
-        case .pendingUserAction:
-            // Codex paradigm: UI tool presented, awaiting user action.
-            // Don't send tool response yet - it will be sent when user acts.
-            // Developer messages will be queued behind this pending tool.
-            let pendingToolName = toolName ?? "unknown"
-
-            // Check if there's already a pending UI tool call
-            // If so, return incomplete status - don't lie about completion
-            // (The LLM sometimes issues parallel identical UI tool calls in a batch)
-            if let existingPending = await stateCoordinator.getPendingUIToolCall() {
-                Logger.warning("⚠️ Duplicate UI tool call detected: \(pendingToolName) (callId: \(callId.prefix(8))) while \(existingPending.toolName) (callId: \(existingPending.callId.prefix(8))) is already pending", category: .ai)
-
-                // Mark this duplicate operation as cancelled
-                await operation.cancel(reason: "Duplicate UI tool call")
-
-                // Return incomplete - be honest that this duplicate wasn't processed
-                var output = JSON()
-                output["status"].string = "incomplete"
-                output["error"].string = "Duplicate request - \(existingPending.toolName) is already awaiting user response. Wait for user to complete the active prompt."
-                await emitToolResponse(callId: callId, toolName: pendingToolName, output: output)
-                Logger.info("⚠️ Duplicate UI tool call returned incomplete: \(pendingToolName)", category: .ai)
-                return
-            }
-
-            // Set operation to awaiting user state
-            // The UI dismiss handler will be set by the tool pane when it presents the UI
-            await operation.setAwaitingUser()
-
-            await stateCoordinator.setPendingUIToolCall(callId: callId, toolName: pendingToolName)
-            Logger.info("🎯 UI tool pending user action: \(pendingToolName) (callId: \(callId.prefix(8)))", category: .ai)
+            await emitToolResponse(callId: callId, toolName: toolName)
         }
     }
     // MARK: - Event Emission
     /// Emit tool response to LLM
     /// - Parameters:
     ///   - callId: The tool call ID
-    ///   - toolName: The tool name (for result storage)
-    ///   - output: The tool output JSON
-    ///   - reasoningEffort: Optional reasoning effort level
-    ///   - nextRequiredTool: Optional tool name to force as toolChoice (for chaining)
-    private func emitToolResponse(callId: String, toolName: String? = nil, output: JSON, reasoningEffort: String? = nil, nextRequiredTool: String? = nil) async {
+    ///   - toolName: The tool name (for logging)
+    private func emitToolResponse(callId: String, toolName: String? = nil) async {
         var payload = JSON()
         payload["callId"].string = callId
         if let name = toolName {
             payload["toolName"].string = name
         }
-        payload["output"] = output
-        if let effort = reasoningEffort {
-            payload["reasoningEffort"].string = effort
-        }
-        if let nextTool = nextRequiredTool {
-            payload["toolChoice"].string = nextTool
-            Logger.info("🔗 Tool chaining: next required tool = \(nextTool)", category: .ai)
-        }
-        await emit(.llmToolResponseMessage(payload: payload))
+        await emit(.llm(.toolResponseMessage(payload: payload)))
         Logger.info("📤 Tool response sent to LLM (call: \(callId.prefix(8)))", category: .ai)
-        Logger.debug("📤 Full tool response payload: callId=\(callId), output=\(output)", category: .ai)
     }
     /// Emit tool error
     private func emitToolError(callId: String, toolName: String, message: String) async {
         var errorOutput = JSON()
         errorOutput["error"].string = message
         errorOutput["status"].string = "incomplete"
-        await emitToolResponse(callId: callId, toolName: toolName, output: errorOutput)
+        let errorOutputString = errorOutput.rawString() ?? "{}"
+
+        // Store in ConversationLog first, then emit response
+        await stateCoordinator.addCompletedToolResult(callId: callId, toolName: toolName, output: errorOutputString)
+        await emitToolResponse(callId: callId, toolName: toolName)
     }
 }

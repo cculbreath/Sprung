@@ -164,13 +164,33 @@ actor ConversationLog {
         Logger.info("ConversationLog: Appended user message (total: \(entries.count))", category: .ai)
 
         // Publish event for persistence
-        await eventBus.publish(.conversationEntryAppended(entry: entry))
+        await eventBus.publish(.llm(.conversationEntryAppended(entry: entry)))
     }
 
     // MARK: - Assistant Message
 
     /// Append assistant message with optional tool calls (slots start as nil)
-    func appendAssistant(id: UUID, text: String, toolCalls: [ToolCallInfo]?) {
+    /// Auto-fills any orphaned tool slots from previous assistant entry to maintain
+    /// Anthropic API invariant: every tool_use must have tool_result immediately after.
+    func appendAssistant(id: UUID, text: String, toolCalls: [ToolCallInfo]?) async {
+        // CRITICAL: If the previous entry is an assistant with pending tool calls,
+        // fill them with synthetic results before appending new assistant message.
+        // This maintains the invariant: only the LAST entry can have pending slots.
+        // Anthropic API requires: every tool_use must have a tool_result immediately after.
+        if hasPendingToolCalls {
+            let pendingIds = pendingToolCallIds
+            Logger.warning("ConversationLog: Auto-filling \(pendingIds.count) orphaned tool slot(s) before new assistant message", category: .ai)
+
+            for callId in pendingIds {
+                // Cancel the operation if it's still running
+                await operations.cancel(callId: callId, reason: "LLM sent new message before tool response")
+
+                // Fill with synthetic result - check if operation has a result
+                let result = await operations.getResult(callId: callId) ?? #"{"status":"superseded","reason":"LLM sent new message before tool response"}"#
+                setToolResult(callId: callId, output: result, status: .cancelled)
+            }
+        }
+
         let calls = toolCalls?.map { info in
             ToolCallSlot(
                 callId: info.id,
@@ -193,19 +213,25 @@ actor ConversationLog {
         Logger.info("ConversationLog: Appended assistant message with \(toolCount) tool call(s)", category: .ai)
 
         // Publish event for persistence
-        Task {
-            await eventBus.publish(.conversationEntryAppended(entry: entry))
-        }
+        await eventBus.publish(.llm(.conversationEntryAppended(entry: entry)))
     }
 
     // MARK: - Tool Result (Slot Fill)
 
     /// Fill a tool result slot in the last assistant entry
-    func setToolResult(callId: String, output: String, status: ToolCallStatus = .completed) {
+    /// Returns true if slot was found and filled, false if slot not found (orphaned/already filled)
+    @discardableResult
+    func setToolResult(callId: String, output: String, status: ToolCallStatus = .completed) -> Bool {
         guard case .assistant(let id, let text, var toolCalls?, let timestamp) = entries.last,
               let index = toolCalls.firstIndex(where: { $0.callId == callId }) else {
             Logger.warning("ConversationLog: Tool result for unknown call \(callId.prefix(8))", category: .ai)
-            return
+            return false
+        }
+
+        // Check if already resolved (prevent double-fill)
+        if toolCalls[index].isResolved {
+            Logger.warning("ConversationLog: Tool slot \(callId.prefix(8)) already resolved, skipping", category: .ai)
+            return false
         }
 
         // Fill the slot
@@ -224,8 +250,9 @@ actor ConversationLog {
 
         // Publish event for persistence update
         Task {
-            await eventBus.publish(.toolResultFilled(callId: callId, status: status.rawValue))
+            await eventBus.publish(.llm(.toolResultFilled(callId: callId, status: status.rawValue)))
         }
+        return true
     }
 
     /// Check if all tool calls in last entry are resolved

@@ -24,6 +24,9 @@ actor StateCoordinator: OnboardingEventEmitter {
     // MARK: - New Architecture (ConversationLog)
     private let conversationLog: ConversationLog
     private let operationTracker: OperationTracker
+
+    // MARK: - Agent Activity Tracking
+    private var agentActivityTracker: AgentActivityTracker?
     // MARK: - Phase Policy
     private let phasePolicy: PhasePolicy
     // Runtime tool exclusions (e.g., one-time bootstrap tools)
@@ -95,6 +98,35 @@ actor StateCoordinator: OnboardingEventEmitter {
 
         Logger.info("🎯 StateCoordinator initialized (orchestrator mode with injected services)", category: .ai)
     }
+
+    // MARK: - Agent Activity Tracking
+
+    /// Set the agent activity tracker for status reporting
+    func setAgentActivityTracker(_ tracker: AgentActivityTracker) {
+        self.agentActivityTracker = tracker
+    }
+
+    /// Get running agent status for inclusion in interview context
+    func getRunningAgentStatus() async -> [(type: String, name: String, status: String)]? {
+        guard let tracker = agentActivityTracker else { return nil }
+
+        // Access MainActor-isolated tracker
+        let runningAgents = await MainActor.run { tracker.runningAgents }
+        guard !runningAgents.isEmpty else { return nil }
+
+        return runningAgents.map { agent in
+            (type: agent.agentType.displayName,
+             name: agent.name,
+             status: agent.statusMessage ?? "Running...")
+        }
+    }
+
+    /// Get count of running agents
+    func getRunningAgentCount() async -> Int {
+        guard let tracker = agentActivityTracker else { return 0 }
+        return await MainActor.run { tracker.runningAgentCount }
+    }
+
     // MARK: - Phase Management
     func setPhase(_ phase: InterviewPhase) async {
         self.phase = phase
@@ -245,13 +277,13 @@ actor StateCoordinator: OnboardingEventEmitter {
     // MARK: - Event Handlers (Delegate to Services)
     private func handleStateEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .applicantProfileStored:
+        case .state(.applicantProfileStored):
             Logger.info("👤 Applicant profile stored via event", category: .ai)
-        case .skeletonTimelineStored:
+        case .state(.skeletonTimelineStored):
             Logger.info("📅 Skeleton timeline stored via event", category: .ai)
-        case .enabledSectionsUpdated:
+        case .state(.enabledSectionsUpdated):
             Logger.info("📑 Enabled sections updated via event", category: .ai)
-        case .stateAllowedToolsUpdated(let tools):
+        case .state(.allowedToolsUpdated(let tools)):
             await llmStateManager.setAllowedToolNames(tools)
         default:
             break
@@ -259,17 +291,17 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
     private func handleProcessingEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .processingStateChanged(let processing, _):
+        case .processing(.stateChanged(let processing, _)):
             // Delegate to SessionUIState
             await uiState.setProcessingState(processing, emitEvent: false)
-        case .waitingStateChanged(let waiting, _):
+        case .processing(.waitingStateChanged(let waiting, _)):
             // SessionUIState handles this internally, just log
             Logger.debug("Waiting state changed: \(waiting ?? "nil")", category: .ai)
-        case .pendingExtractionUpdated(let extraction, _):
+        case .processing(.pendingExtractionUpdated(let extraction, _)):
             // Pass emitEvent: false to avoid infinite loop
             // (this event was already emitted by the original source)
             await uiState.setPendingExtraction(extraction, emitEvent: false)
-        case .errorOccurred(let error):
+        case .processing(.errorOccurred(let error)):
             // On stream errors, retry pending tool responses if any
             if error.hasPrefix("Stream error:") {
                 if let pendingPayloads = await llmStateManager.getPendingToolResponsesForRetry() {
@@ -285,23 +317,23 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
     private func handleLLMEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .llmUserMessageSent(_, let payload, let isSystemGenerated):
+        case .llm(.userMessageSent(_, let payload, let isSystemGenerated)):
             if isSystemGenerated {
                 let text = payload["text"].stringValue
                 // ConversationLog handles gating - will fill pending tool slots before appending
                 await conversationLog.appendUser(text: text, isSystemGenerated: isSystemGenerated)
                 Logger.debug("StateCoordinator: system-generated user message sent to ConversationLog", category: .ai)
             }
-        case .llmSentToolResponseMessage:
+        case .llm(.sentToolResponseMessage):
             break
-        case .llmStatus(let status):
+        case .llm(.status(let status)):
             let newProcessingState = status == .busy
             await uiState.setProcessingState(newProcessingState)
-        case .streamingMessageBegan(let id, let text, _):
+        case .llm(.streamingMessageBegan(let id, let text, _)):
             await streamingBuffer.begin(id: id, initialText: text)
-        case .streamingMessageUpdated(let id, let delta, _):
+        case .llm(.streamingMessageUpdated(let id, let delta, _)):
             await streamingBuffer.appendDelta(id: id, delta: delta)
-        case .streamingMessageFinalized(let id, let finalText, let toolCalls, _):
+        case .llm(.streamingMessageFinalized(let id, let finalText, let toolCalls, _)):
             // ConversationLog is the sole source of truth
             let logToolCalls = toolCalls?.map { info in
                 ToolCallInfo(id: info.id, name: info.name, arguments: info.arguments)
@@ -309,7 +341,7 @@ actor StateCoordinator: OnboardingEventEmitter {
             await conversationLog.appendAssistant(id: id, text: finalText, toolCalls: logToolCalls)
             // Clear streaming buffer - message is now in ConversationLog
             await streamingBuffer.finalize()
-        case .llmEnqueueUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText, let toolChoice):
+        case .llm(.enqueueUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText)):
             // Bundle any queued coordinator messages WITH the user message
             // They'll be included as input items in the same API request
             let bundledDevMessages = await llmStateManager.drainQueuedCoordinatorMessages()
@@ -321,26 +353,22 @@ actor StateCoordinator: OnboardingEventEmitter {
                 isSystemGenerated: isSystemGenerated,
                 chatboxMessageId: chatboxMessageId,
                 originalText: originalText,
-                bundledCoordinatorMessages: bundledDevMessages,
-                toolChoice: toolChoice
+                bundledCoordinatorMessages: bundledDevMessages
             ))
-        case .llmSendCoordinatorMessage(let payload):
+        case .llm(.sendCoordinatorMessage(let payload)):
             // Codex paradigm: Always queue coordinator messages until user action
             // Developer messages are batched and flushed when:
             // 1. User sends a chatbox message
             // 2. An artifact completion arrives (sent as user message)
             // 3. A pending UI tool call is completed
-            if let forcedTool = payload["toolChoice"].string {
-                await llmStateManager.setPendingForcedToolChoice(forcedTool)
-            }
             await llmStateManager.queueCoordinatorMessage(payload)
             Logger.debug("📥 Developer message queued (awaiting user action)", category: .ai)
-        case .llmToolCallBatchStarted(let expectedCount, let callIds):
+        case .llm(.toolCallBatchStarted(let expectedCount, let callIds)):
             // Reset collected payloads for new batch
             // ConversationLog already has slots created via appendAssistant
             collectedToolResponsePayloads = []
             Logger.info("📦 Tool call batch started: expecting \(expectedCount) responses, callIds: \(callIds.map { String($0.prefix(8)) })", category: .ai)
-        case .llmEnqueueToolResponse(let payload):
+        case .llm(.enqueueToolResponse(let payload)):
             // Collect the payload
             collectedToolResponsePayloads.append(payload)
             let callId = payload["callId"].stringValue
@@ -362,7 +390,7 @@ actor StateCoordinator: OnboardingEventEmitter {
             } else {
                 Logger.debug("📦 Holding tool response - waiting for more slots to fill", category: .ai)
             }
-        case .toolResultFilled:
+        case .llm(.toolResultFilled):
             // Tool slot filled in ConversationLog - check if we can release held payloads
             if !collectedToolResponsePayloads.isEmpty {
                 let hasPending = await conversationLog.hasPendingToolCalls
@@ -378,7 +406,7 @@ actor StateCoordinator: OnboardingEventEmitter {
                     }
                 }
             }
-        case .llmStreamCompleted:
+        case .llm(.streamCompleted):
             // Handle stream completion via event to ensure proper ordering with tool call events
             await streamQueueManager.handleStreamCompleted()
         default:
@@ -387,13 +415,13 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
     private func handleObjectiveEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .objectiveStatusUpdateRequested(let id, let statusString, let source, let notes, let details):
+        case .objective(.statusUpdateRequested(let id, let statusString, let source, let notes, let details)):
             guard let status = ObjectiveStatus(rawValue: statusString) else {
                 Logger.warning("Invalid objective status: \(statusString)", category: .ai)
                 return
             }
             await objectiveStore.setObjectiveStatus(id, status: status, source: source, notes: notes, details: details)
-        case .objectiveStatusChanged(let id, _, let newStatus, _, _, _, _):
+        case .objective(.statusChanged(let id, _, let newStatus, _, _, _, _)):
             // Update wizard progress
             await updateWizardProgress()
             // Clear any queued coordinator messages for this objective when it completes
@@ -406,7 +434,7 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
     private func handlePhaseEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .phaseTransitionRequested(let from, let to, _):
+        case .phase(.transitionRequested(let from, let to, _)):
             if from == phase.rawValue {
                 if let newPhase = InterviewPhase(rawValue: to) {
                     // Pre-populate todo list BEFORE phase change
@@ -417,7 +445,7 @@ actor StateCoordinator: OnboardingEventEmitter {
                         Logger.info("📋 Pre-populated todo list for \(newPhase.rawValue): \(script.initialTodoItems.count) items (locked)", category: .ai)
                     }
                     await setPhase(newPhase)
-                    await emit(.phaseTransitionApplied(phase: newPhase.rawValue, timestamp: Date()))
+                    await emit(.phase(.transitionApplied(phase: newPhase.rawValue, timestamp: Date())))
                 }
             }
         default:
@@ -426,50 +454,50 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
     private func handleTimelineEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .timelineCardCreated(let card):
+        case .timeline(.cardCreated(let card)):
             Logger.info("📊 StateCoordinator: Received timelineCardCreated", category: .ai)
             await artifactRepository.createTimelineCard(card)
             Logger.info("📊 StateCoordinator: Timeline sync updated. Cards count: \(artifactRepository.skeletonTimelineSync?["experiences"].array?.count ?? 0)", category: .ai)
             // Emit UI update event AFTER repository is updated
             if let timeline = await artifactRepository.getSkeletonTimeline() {
-                await emit(.timelineUIUpdateNeeded(timeline: timeline))
+                await emit(.timeline(.uiUpdateNeeded(timeline: timeline)))
                 Logger.info("📊 StateCoordinator: Emitted timelineUIUpdateNeeded after card create", category: .ai)
             }
-        case .timelineCardUpdated(let id, let fields):
+        case .timeline(.cardUpdated(let id, let fields)):
             Logger.info("📊 StateCoordinator: Received timelineCardUpdated for id=\(id)", category: .ai)
             await artifactRepository.updateTimelineCard(id: id, fields: fields)
             // Emit UI update event AFTER repository is updated
             if let timeline = await artifactRepository.getSkeletonTimeline() {
-                await emit(.timelineUIUpdateNeeded(timeline: timeline))
+                await emit(.timeline(.uiUpdateNeeded(timeline: timeline)))
                 Logger.info("📊 StateCoordinator: Emitted timelineUIUpdateNeeded after card \(id) update", category: .ai)
             } else {
                 Logger.warning("📊 StateCoordinator: No timeline found after card \(id) update - UI update skipped", category: .ai)
             }
-        case .timelineCardDeleted(let id, let fromUI):
+        case .timeline(.cardDeleted(let id, let fromUI)):
             Logger.info("📊 StateCoordinator: Received timelineCardDeleted for id=\(id), fromUI=\(fromUI)", category: .ai)
             await artifactRepository.deleteTimelineCard(id: id)
             // Only emit UI update for non-UI deletions (UI-initiated already has the update)
             if !fromUI, let timeline = await artifactRepository.getSkeletonTimeline() {
-                await emit(.timelineUIUpdateNeeded(timeline: timeline))
+                await emit(.timeline(.uiUpdateNeeded(timeline: timeline)))
                 Logger.info("📊 StateCoordinator: Emitted timelineUIUpdateNeeded after card \(id) delete", category: .ai)
             }
-        case .timelineCardsReordered(let orderedIds):
+        case .timeline(.cardsReordered(let orderedIds)):
             Logger.info("📊 StateCoordinator: Received timelineCardsReordered", category: .ai)
             await artifactRepository.reorderTimelineCards(orderedIds: orderedIds)
             // Emit UI update event AFTER repository is updated
             if let timeline = await artifactRepository.getSkeletonTimeline() {
-                await emit(.timelineUIUpdateNeeded(timeline: timeline))
+                await emit(.timeline(.uiUpdateNeeded(timeline: timeline)))
                 Logger.info("📊 StateCoordinator: Emitted timelineUIUpdateNeeded after reorder", category: .ai)
             }
-        case .skeletonTimelineReplaced(let timeline, let diff, _):
+        case .timeline(.skeletonReplaced(let timeline, let diff, _)):
             Logger.info("📊 StateCoordinator: Received skeletonTimelineReplaced", category: .ai)
             await artifactRepository.replaceSkeletonTimeline(timeline, diff: diff)
             // Emit UI update event AFTER repository is updated
             if let updatedTimeline = await artifactRepository.getSkeletonTimeline() {
-                await emit(.timelineUIUpdateNeeded(timeline: updatedTimeline))
+                await emit(.timeline(.uiUpdateNeeded(timeline: updatedTimeline)))
                 Logger.info("📊 StateCoordinator: Emitted timelineUIUpdateNeeded after timeline replace", category: .ai)
             }
-        case .timelineUIUpdateNeeded:
+        case .timeline(.uiUpdateNeeded):
             // Don't handle our own event to avoid loops
             break
         default:
@@ -478,11 +506,11 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
     private func handleArtifactEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .artifactRecordProduced(let record):
+        case .artifact(.recordProduced(let record)):
             await artifactRepository.upsertArtifactRecord(record)
-        case .artifactMetadataUpdateRequested(let artifactId, let updates):
+        case .artifact(.metadataUpdateRequested(let artifactId, let updates)):
             await artifactRepository.updateArtifactMetadata(artifactId: artifactId, updates: updates)
-        case .knowledgeCardPersisted(let card):
+        case .artifact(.knowledgeCardPersisted(let card)):
             await artifactRepository.addKnowledgeCard(card)
         default:
             break
@@ -490,31 +518,31 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
     private func handleToolpaneEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .choicePromptRequested(let prompt):
+        case .toolpane(.choicePromptRequested(let prompt)):
             await uiState.setPendingChoice(prompt)
             await llmStateManager.setToolPaneCard(.choicePrompt)
-        case .choicePromptCleared:
+        case .toolpane(.choicePromptCleared):
             await uiState.setPendingChoice(nil)
             await llmStateManager.setToolPaneCard(.none)
-        case .uploadRequestPresented(let request):
+        case .toolpane(.uploadRequestPresented(let request)):
             await uiState.setPendingUpload(request)
             await llmStateManager.setToolPaneCard(.uploadRequest)
-        case .uploadRequestCancelled:
+        case .toolpane(.uploadRequestCancelled):
             await uiState.setPendingUpload(nil)
             await llmStateManager.setToolPaneCard(.none)
-        case .validationPromptRequested(let prompt):
+        case .toolpane(.validationPromptRequested(let prompt)):
             await uiState.setPendingValidation(prompt)
             await llmStateManager.setToolPaneCard(prompt.mode == .editor ? .editTimelineCards : .confirmTimelineCards)
-        case .validationPromptCleared:
+        case .toolpane(.validationPromptCleared):
             await uiState.setPendingValidation(nil)
             await llmStateManager.setToolPaneCard(.none)
-        case .applicantProfileIntakeRequested:
+        case .toolpane(.applicantProfileIntakeRequested):
             await llmStateManager.setToolPaneCard(.applicantProfileRequest)
-        case .applicantProfileIntakeCleared:
+        case .toolpane(.applicantProfileIntakeCleared):
             await llmStateManager.setToolPaneCard(.none)
-        case .sectionToggleRequested:
+        case .toolpane(.sectionToggleRequested):
             await llmStateManager.setToolPaneCard(.sectionToggle)
-        case .sectionToggleCleared:
+        case .toolpane(.sectionToggleCleared):
             await llmStateManager.setToolPaneCard(.none)
         default:
             break
@@ -538,9 +566,9 @@ actor StateCoordinator: OnboardingEventEmitter {
 
         // Publish retry event
         if payloads.count == 1 {
-            await eventBus.publish(.llmExecuteToolResponse(payload: payloads[0]))
+            await eventBus.publish(.llm(.executeToolResponse(payload: payloads[0])))
         } else {
-            await eventBus.publish(.llmExecuteBatchedToolResponses(payloads: payloads))
+            await eventBus.publish(.llm(.executeBatchedToolResponses(payloads: payloads)))
         }
     }
 
@@ -550,7 +578,7 @@ actor StateCoordinator: OnboardingEventEmitter {
     func markStreamCompleted() async {
         await streamQueueManager.markStreamCompleted()
     }
-    /// Check if this is the first response (for toolChoice logic)
+    /// Check if this is the first response (tools disabled until greeting)
     func getHasStreamedFirstResponse() async -> Bool {
         await streamQueueManager.getHasStreamedFirstResponse()
     }
@@ -602,47 +630,18 @@ actor StateCoordinator: OnboardingEventEmitter {
     // MARK: - Completed Tool Results (Anthropic History)
 
     /// Store a completed tool result - ConversationLog is the sole source of truth
-    func addCompletedToolResult(callId: String, toolName: String, output: String) async {
-        await conversationLog.setToolResult(callId: callId, output: output, status: .completed)
-        Logger.debug("✅ Tool result stored: \(toolName) (\(callId.prefix(8)))", category: .ai)
+    /// Returns true if the slot was found and filled, false if slot not found (orphaned/already filled)
+    @discardableResult
+    func addCompletedToolResult(callId: String, toolName: String, output: String) async -> Bool {
+        let success = await conversationLog.setToolResult(callId: callId, output: output, status: .completed)
+        if success {
+            Logger.debug("✅ Tool result stored: \(toolName) (\(callId.prefix(8)))", category: .ai)
+        } else {
+            Logger.warning("⚠️ Tool result not stored (slot not found): \(toolName) (\(callId.prefix(8)))", category: .ai)
+        }
+        return success
     }
 
-    // MARK: - Pending UI Tool Call (Codex Paradigm)
-    // UI tools present cards and await user action before responding.
-    // When a UI tool is pending, coordinator messages are queued behind it.
-    // NOTE: OperationTracker is the source of truth for pending UI tool state.
-    // When a tool returns .pendingUserAction, ToolExecutionCoordinator calls
-    // operation.setAwaitingUser() which sets the operation's state in OperationTracker.
-
-    /// Set a UI tool as pending (awaiting user action)
-    /// NOTE: This is called for logging/coordination. The actual state is in OperationTracker.
-    func setPendingUIToolCall(callId: String, toolName: String) async {
-        // Operation already in awaitingUser state via ToolOperation.setAwaitingUser()
-        Logger.info("🎯 UI tool pending: \(toolName) (callId: \(callId.prefix(8)))", category: .ai)
-    }
-
-    /// Get the pending UI tool call info from OperationTracker
-    func getPendingUIToolCall() async -> (callId: String, toolName: String)? {
-        await operationTracker.getAwaitingUserOperation()
-    }
-
-    /// Clear the pending UI tool call (after user action sends tool output)
-    /// NOTE: The operation gets completed via operation.complete() when tool response is sent.
-    func clearPendingUIToolCall() async {
-        // Batch release is handled by .toolResultFilled event when slot is filled
-        Logger.debug("✅ UI tool call cleared (operation completed)", category: .ai)
-    }
-
-    /// Pop any pending forced tool choice override (one-shot).
-    func popPendingForcedToolChoice() async -> String? {
-        await llmStateManager.popPendingForcedToolChoice()
-    }
-
-    /// Set a pending forced tool choice for the next LLM request.
-    /// Used to force a specific tool call after a UI tool completes.
-    func setPendingForcedToolChoice(_ toolName: String) async {
-        await llmStateManager.setPendingForcedToolChoice(toolName)
-    }
 
     // MARK: - Reset
     func reset() async {

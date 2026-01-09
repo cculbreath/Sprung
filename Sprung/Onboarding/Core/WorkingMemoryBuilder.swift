@@ -83,6 +83,16 @@ struct WorkingMemoryBuilder {
             xml.append("  <dossier_notes>\(escapeXML(truncatedNotes))</dossier_notes>")
         }
 
+        // Running agents (if any)
+        if let runningAgents = await stateCoordinator.getRunningAgentStatus(), !runningAgents.isEmpty {
+            xml.append("  <running_agents count=\"\(runningAgents.count)\">")
+            for agent in runningAgents {
+                xml.append("    <agent type=\"\(agent.type)\">\(escapeXML(agent.name)): \(escapeXML(agent.status))</agent>")
+            }
+            xml.append("  </running_agents>")
+            xml.append("  <note>Background agents are processing. Results will be reported when complete.</note>")
+        }
+
         xml.append("</interview_context>")
 
         let context = xml.joined(separator: "\n")

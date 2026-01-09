@@ -183,7 +183,7 @@ actor SessionUIState: OnboardingEventEmitter {
             Logger.info("🔓 Clearing waiting state '\(waitingState!.rawValue)' on phase transition to \(phase.rawValue)", category: .ai)
             waitingState = nil
             // Emit the waiting state change event
-            await emit(.waitingStateChanged(nil))
+            await emit(.processing(.waitingStateChanged(nil)))
         }
 
         // Apply phase-specific initial exclusions
@@ -219,7 +219,7 @@ actor SessionUIState: OnboardingEventEmitter {
         isProcessing = processing
         guard emitEvent, didChange else { return }
         // Emit event for other coordinators only when the value changes
-        await emit(.processingStateChanged(processing))
+        await emit(.processing(.stateChanged(isProcessing: processing, statusMessage: nil)))
     }
     /// Set active state
     func setActiveState(_ active: Bool) async {
@@ -239,7 +239,7 @@ actor SessionUIState: OnboardingEventEmitter {
         await publishToolPermissions()
         // Emit waiting state change event only if requested
         if emitEvent {
-            await emit(.waitingStateChanged(state?.rawValue))
+            await emit(.processing(.waitingStateChanged(state?.rawValue)))
         }
         // Log state transition
         if let state = state {
@@ -282,7 +282,7 @@ actor SessionUIState: OnboardingEventEmitter {
         await setWaitingState(newWaitingState, emitEvent: emitEvent)
         // Emit event only if requested (avoid loop when called from event handler)
         guard emitEvent else { return }
-        await emit(.pendingExtractionUpdated(extraction))
+        await emit(.processing(.pendingExtractionUpdated(extraction, statusMessage: nil)))
     }
 
     // MARK: - Document Collection State
@@ -293,7 +293,7 @@ actor SessionUIState: OnboardingEventEmitter {
         let newWaitingState: WaitingState? = active ? .documentCollection : nil
         await setWaitingState(newWaitingState)
         // Emit event for session persistence
-        await emit(.documentCollectionActiveChanged(active))
+        await emit(.state(.documentCollectionActiveChanged(active)))
         if active {
             Logger.info("📂 Document collection mode activated - tools gated until 'Done with Uploads'", category: .ai)
         }
@@ -336,7 +336,7 @@ actor SessionUIState: OnboardingEventEmitter {
         }
         lastPublishedTools = tools
 
-        await emit(.stateAllowedToolsUpdated(tools: tools))
+        await emit(.state(.allowedToolsUpdated(tools: tools)))
 
         // Log after emitting
         if let waitingState = waitingState {

@@ -138,8 +138,7 @@ struct PhaseTwoScript: PhaseScript {
             // MARK: - Section Configuration
             // NOTE: No onComplete handler needed here. The instruction text in the tool response
             // (from confirmSectionToggle in UIResponseCoordinator) guides Claude to call next_phase.
-            // This follows Anthropic's recommended pattern of including guidance WITH tool results
-            // rather than using forced toolChoice or developer messages.
+            // This follows Anthropic's pattern of including guidance WITH tool results.
             OnboardingObjectiveId.enabledSections.rawValue: ObjectiveWorkflow(
                 id: OnboardingObjectiveId.enabledSections.rawValue,
                 dependsOn: [OnboardingObjectiveId.timelineEnriched.rawValue]

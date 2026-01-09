@@ -98,3 +98,6 @@ technical-debt.md
 # Sandbox and simulator logs
 .sandboxHome/
 LLM Docs/
+buildServer.json
+
+round2/

@@ -185,12 +185,12 @@ final class UploadInteractionHandler {
                         contentType: "application/x-url",
                         filename: url.absoluteString
                     )
-                    await eventBus.publish(.uploadCompleted(
+                    await eventBus.publish(.artifact(.uploadCompleted(
                         files: [info],
                         requestKind: request.kind.rawValue,
                         callId: nil,
                         metadata: uploadMetadata
-                    ))
+                    )))
                 } else {
                     // Process files through storage (off main thread to avoid blocking UI)
                     Logger.info("📤 [TRACE] About to call processFile for \(fileURLs.count) file(s)", category: .ai)
@@ -227,12 +227,12 @@ final class UploadInteractionHandler {
                             filename: item.filename
                         )
                     }
-                    await eventBus.publish(.uploadCompleted(
+                    await eventBus.publish(.artifact(.uploadCompleted(
                         files: uploadInfos,
                         requestKind: request.kind.rawValue,
                         callId: nil,
                         metadata: uploadMetadata
-                    ))
+                    )))
                 } else {
                     Logger.debug("ℹ️ Upload has no target_key (generic upload)", category: .ai)
                 }
@@ -320,7 +320,7 @@ final class UploadInteractionHandler {
             // Convert to JSON and emit event to trigger summary card update
             let draft = ApplicantProfileDraft(profile: profile)
             let profileJSON = draft.toSafeJSON()
-            await eventBus.publish(.applicantProfileStored(profileJSON))
+            await eventBus.publish(.state(.applicantProfileStored(profileJSON)))
             Logger.debug("📸 Applicant profile image updated (\(data.count) bytes, mime: \(first.contentType ?? "unknown"))", category: .ai)
 
             // Notify LLM (without sending image data)
@@ -332,16 +332,16 @@ final class UploadInteractionHandler {
             details["content_type"].string = first.contentType
             details["note"].string = "Photo stored in ApplicantProfile; binary image data is not sent to the LLM."
             devPayload["details"] = details
-            await eventBus.publish(.llmSendCoordinatorMessage(payload: devPayload))
+            await eventBus.publish(.llm(.sendCoordinatorMessage(payload: devPayload)))
 
             // Mark contact_photo_collected objective as complete
-            await eventBus.publish(.objectiveStatusUpdateRequested(
+            await eventBus.publish(.objective(.statusUpdateRequested(
                 id: OnboardingObjectiveId.contactPhotoCollected.rawValue,
                 status: "completed",
                 source: "photo_upload",
                 notes: "Profile photo uploaded successfully",
                 details: nil
-            ))
+            )))
         default:
             throw ToolError.invalidParameters("Unsupported target_key: \(target)")
         }

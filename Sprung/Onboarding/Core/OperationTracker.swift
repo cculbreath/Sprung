@@ -127,21 +127,4 @@ actor OperationTracker {
         }
     }
 
-    /// Get the first operation awaiting user input (UI tool pending)
-    func getAwaitingUserOperation() async -> (callId: String, toolName: String)? {
-        for op in operations.values {
-            let state = await op.state
-            if case .awaitingUser = state {
-                let callId = await op.callId
-                let name = await op.name
-                return (callId: callId, toolName: name)
-            }
-        }
-        return nil
-    }
-
-    /// Check if any operation is awaiting user input
-    func hasAwaitingUserOperation() async -> Bool {
-        await getAwaitingUserOperation() != nil
-    }
 }

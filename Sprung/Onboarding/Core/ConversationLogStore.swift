@@ -110,10 +110,10 @@ final class ConversationLogStore {
     private func handleEvent(_ event: OnboardingEvent) async {
         switch event {
         // User messages
-        case .chatboxUserMessageAdded(let messageId):
+        case .llm(.chatboxUserMessageAdded(let messageId)):
             addEntry(type: .user, content: "Message added to chatbox", metadata: ["messageId": String(messageId.prefix(8))])
 
-        case .llmUserMessageSent(let messageId, let payload, let isSystemGenerated):
+        case .llm(.userMessageSent(let messageId, let payload, let isSystemGenerated)):
             // Check both "text" and "content" keys - different code paths use different keys
             let text = payload["text"].string ?? payload["content"].stringValue
             let truncated = text.count > 200 ? String(text.prefix(200)) + "..." : text
@@ -121,26 +121,26 @@ final class ConversationLogStore {
             addEntry(type: .user, content: truncated, metadata: ["source": source, "messageId": String(messageId.prefix(8))])
 
         // Developer messages
-        case .llmCoordinatorMessageSent(let messageId, let payload):
+        case .llm(.coordinatorMessageSent(let messageId, let payload)):
             let text = payload["text"].stringValue
             let truncated = text.count > 300 ? String(text.prefix(300)) + "..." : text
             addEntry(type: .developer, content: truncated, metadata: ["messageId": String(messageId.prefix(8))])
 
         // Tool responses sent to LLM
-        case .llmSentToolResponseMessage(let messageId, let payload):
+        case .llm(.sentToolResponseMessage(let messageId, let payload)):
             let callId = payload["callId"].stringValue
             let output = payload["output"]
             let resultPreview = output.rawString()?.prefix(150) ?? "{}"
             addEntry(type: .toolResponse, content: " → \(resultPreview)", metadata: ["messageId": String(messageId.prefix(8)), "callId": String(callId.prefix(12))])
 
         // Tool calls from LLM (incoming requests)
-        case .toolCallRequested(let call, _):
+        case .tool(.callRequested(let call, _)):
             // Format as: tool_name({ "arg": "value" })
             let argsDisplay = call.arguments.rawString() ?? "{}"
             addEntry(type: .toolCall, content: "\(call.name)(\(argsDisplay))", metadata: ["callId": call.callId, "name": call.name])
 
         // Assistant messages (streaming)
-        case .streamingMessageFinalized(let id, let finalText, let toolCalls, _):
+        case .llm(.streamingMessageFinalized(let id, let finalText, let toolCalls, _)):
             if !finalText.isEmpty {
                 let truncated = finalText.count > 300 ? String(finalText.prefix(300)) + "..." : finalText
                 addEntry(type: .assistant, content: truncated, metadata: ["messageId": String(id.uuidString.prefix(8))])
@@ -150,7 +150,7 @@ final class ConversationLogStore {
             }
 
         // Token usage events (correlate with recent assistant messages)
-        case .llmTokenUsageReceived(_, let inputTokens, let outputTokens, let cachedTokens, _, let source):
+        case .llm(.tokenUsageReceived(_, let inputTokens, let outputTokens, let cachedTokens, _, let source)):
             // Only track main coordinator tokens for conversation correlation
             guard source == .mainCoordinator else { break }
 

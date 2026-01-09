@@ -80,7 +80,7 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
     /// Handle upload event by quickly queueing files and starting processing.
     /// Returns immediately - processing happens asynchronously.
     private func handleEvent(_ event: OnboardingEvent) async {
-        guard case .uploadCompleted(let files, let requestKind, let callId, let metadata) = event else {
+        guard case .artifact(.uploadCompleted(let files, let requestKind, let callId, let metadata)) = event else {
             return
         }
         // Skip targeted uploads (e.g., profile photos with target_key="basics.image")
@@ -121,7 +121,7 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
                     callId: callId,
                     metadata: metadata
                 )
-                await emit(.artifactRecordProduced(record: artifactRecord))
+                await emit(.artifact(.recordProduced(record: artifactRecord)))
                 Logger.info("🖼️ Image artifact created: \(file.filename)", category: .ai)
             }
         }
@@ -140,7 +140,7 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         let active = activeProcessingCount
 
         if pending == 0 && active == 0 {
-            Task { await emit(.extractionStateChanged(false)) }
+            Task { await emit(.processing(.extractionStateChanged(inProgress: false, statusMessage: nil))) }
         } else {
             let status: String
             if pending > 0 && active > 0 {
@@ -150,7 +150,7 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
             } else {
                 status = "\(pending) document(s) queued..."
             }
-            Task { await emit(.extractionStateChanged(true, statusMessage: status)) }
+            Task { await emit(.processing(.extractionStateChanged(inProgress: true, statusMessage: status))) }
         }
     }
 
@@ -208,7 +208,7 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         }
 
         // All done - clear extraction indicator
-        await emit(.extractionStateChanged(false))
+        await emit(.processing(.extractionStateChanged(inProgress: false, statusMessage: nil)))
         Logger.info("📄 Queue processing complete", category: .ai)
     }
 
@@ -250,7 +250,7 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
                         // Update extraction status
                         let pending = await self.pendingFiles.count
                         let queueInfo = pending > 0 ? " (+\(pending) queued)" : ""
-                        await self.emit(.extractionStateChanged(true, statusMessage: "\(filename): \(statusMsg)\(queueInfo)"))
+                        await self.emit(.processing(.extractionStateChanged(inProgress: true, statusMessage: "\(filename): \(statusMsg)\(queueInfo)")))
 
                         // Log to agent transcript
                         await MainActor.run {
@@ -275,7 +275,7 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
                 agentTracker.markCompleted(agentId: agentId)
             }
 
-            await emit(.artifactRecordProduced(record: artifactRecord))
+            await emit(.artifact(.recordProduced(record: artifactRecord)))
             Logger.info("✅ Document processed: \(filename)", category: .ai)
 
         } catch {
@@ -293,7 +293,7 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
             } else {
                 userMessage = "Failed to extract \(filename)"
             }
-            await emit(.extractionStateChanged(true, statusMessage: userMessage))
+            await emit(.processing(.extractionStateChanged(inProgress: true, statusMessage: userMessage)))
             try? await Task.sleep(for: .seconds(2))
         }
         // Note: activeProcessingCount is managed by the TaskGroup in processQueue()
@@ -343,8 +343,7 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
     /// Used for resume uploads to allow the LLM to read the document natively
     /// without skills extraction or knowledge card generation.
     ///
-    /// The PDF is included IN the tool response message (alongside the tool_result block)
-    /// so the LLM sees it in the same turn, not as a separate follow-up message.
+    /// The PDF is sent as a user message with PDF data attachment.
     private func sendPDFDirectlyToLLM(
         file: ProcessedUploadInfo,
         requestKind: String,
@@ -364,42 +363,28 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         let pdfBase64 = pdfData.base64EncodedString()
         let sizeKB = pdfData.count / 1024
 
-        // Check if there's a pending UI tool call (from get_user_upload)
-        guard let pendingCall = await stateCoordinator.getPendingUIToolCall() else {
-            Logger.warning("⚠️ No pending tool call for resume PDF - cannot attach to response", category: .ai)
-            return
-        }
-
-        Logger.info("📤 Completing tool call with PDF attachment (call: \(pendingCall.callId.prefix(8))...)", category: .ai)
-
-        // Build tool output with PDF attachment info
-        // IMPORTANT: Include storage URL so the PDF can be re-included when rebuilding conversation history
-        var output = JSON()
-        output["status"].string = "completed"
-        output["message"].string = "Resume PDF attached below. Please review to understand the user's professional background."
+        // Build UI action result with PDF attachment info
+        var result = JSON()
+        result["status"].string = "completed"
+        result["message"].string = "Resume PDF attached below. Please review to understand the user's professional background."
         var pdfAttachment = JSON()
         pdfAttachment["storage_url"].string = file.storageURL.path
         pdfAttachment["filename"].string = filename
         pdfAttachment["size_kb"].int = sizeKB
-        output["pdf_attachment"] = pdfAttachment
-        Logger.info("📄 Tool output with pdf_attachment: \(output.rawString()?.prefix(200) ?? "nil")", category: .ai)
+        result["pdf_attachment"] = pdfAttachment
 
-        // Build tool response payload WITH PDF data
-        // The PDF will be included as a document block alongside the tool_result
-        var toolPayload = JSON()
-        toolPayload["callId"].string = pendingCall.callId
-        toolPayload["output"] = output
-        // Include PDF data in the tool response payload
-        toolPayload["pdf_data"].string = pdfBase64
-        toolPayload["pdf_filename"].string = filename
-        toolPayload["pdf_size_kb"].int = sizeKB
+        let resultString = result.rawString() ?? "{}"
 
-        // Emit tool response with PDF attachment
-        await emit(.llmToolResponseMessage(payload: toolPayload))
+        // Build user message with ui-action-result tags and PDF data
+        let taggedMessage = "<ui-action-result tool=\"\(OnboardingToolName.getUserUpload.rawValue)\">\n\(resultString)\n</ui-action-result>"
+        var payload = JSON()
+        payload["text"].string = taggedMessage
+        // Include PDF data for LLM to see the document
+        payload["pdf_data"].string = pdfBase64
+        payload["pdf_filename"].string = filename
+        payload["pdf_size_kb"].int = sizeKB
 
-        // Clear the pending tool call
-        await stateCoordinator.clearPendingUIToolCall()
-
-        Logger.info("✅ Resume PDF sent with tool response: \(filename) (\(sizeKB) KB)", category: .ai)
+        await emit(.llm(.sendUserMessage(payload: payload, isSystemGenerated: true)))
+        Logger.info("✅ Resume PDF sent as ui-action-result: \(filename) (\(sizeKB) KB)", category: .ai)
     }
 }

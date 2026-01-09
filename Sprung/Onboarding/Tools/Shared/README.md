@@ -131,7 +131,7 @@ These utilities work within the current tool architecture:
 
 1. **Tools implement `InterviewTool` protocol** - Defined in `ToolProtocol.swift`
 2. **Tools hold `unowned` reference to coordinator** - No circular dependency
-3. **Tools return `ToolResult`** - Already defined as `.immediate(JSON)`, `.error(ToolError)`, or `.pendingUserAction`
+3. **Tools return `ToolResult`** - Defined as `.immediate(JSON)` or `.error(ToolError)`. UI tools block via `UIToolContinuationManager.awaitUserAction()` until user interaction completes, then return the result in a single API turn.
 4. **Coordinator methods delegate to services** - Services emit events for state updates
 
 The shared utilities provide:

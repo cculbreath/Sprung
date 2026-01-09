@@ -29,7 +29,7 @@ actor TimelineManagementService: OnboardingEventEmitter {
             card["id"].string = UUID().uuidString
         }
         // Emit event to create timeline card
-        await eventBus.publish(.timelineCardCreated(card: card))
+        await eventBus.publish(.timeline(.cardCreated(card: card)))
         var result = JSON()
         result["status"].string = "completed"
         result["success"].boolValue = true
@@ -38,7 +38,7 @@ actor TimelineManagementService: OnboardingEventEmitter {
     }
     func updateTimelineCard(id: String, fields: JSON) async -> JSON {
         // Emit event to update timeline card
-        await eventBus.publish(.timelineCardUpdated(id: id, fields: fields))
+        await eventBus.publish(.timeline(.cardUpdated(id: id, fields: fields)))
         var result = JSON()
         result["status"].string = "completed"
         result["success"].boolValue = true
@@ -47,7 +47,7 @@ actor TimelineManagementService: OnboardingEventEmitter {
     }
     func deleteTimelineCard(id: String) async -> JSON {
         // Emit event to delete timeline card
-        await eventBus.publish(.timelineCardDeleted(id: id))
+        await eventBus.publish(.timeline(.cardDeleted(id: id)))
         var result = JSON()
         result["status"].string = "completed"
         result["success"].boolValue = true
@@ -56,7 +56,7 @@ actor TimelineManagementService: OnboardingEventEmitter {
     }
     func reorderTimelineCards(orderedIds: [String]) async -> JSON {
         // Emit event to reorder timeline cards
-        await eventBus.publish(.timelineCardsReordered(ids: orderedIds))
+        await eventBus.publish(.timeline(.cardsReordered(ids: orderedIds)))
         var result = JSON()
         result["status"].string = "completed"
         result["success"].boolValue = true

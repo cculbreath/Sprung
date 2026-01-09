@@ -119,7 +119,7 @@ final class DebugRegenerationService {
 
         // Trigger the merge
         Logger.debug("🔄 Triggering card merge...", category: .ai)
-        await eventBus.publish(.doneWithUploadsClicked)
+        await eventBus.publish(.artifact(.doneWithUploadsClicked))
     }
 
     /// Selective regeneration based on user choices from RegenOptionsDialog

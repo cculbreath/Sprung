@@ -43,9 +43,9 @@ actor NetworkRouter: OnboardingEventEmitter {
             pendingToolCallIds = []
             receivedOutputItemDone = false
             streamingBuffers.removeAll()
-            await emit(.errorOccurred("Stream error: \(message)"))
+            await emit(.processing(.errorOccurred("Stream error: \(message)")))
             // Emit stream completed so the queue can continue processing
-            await emit(.llmStreamCompleted)
+            await emit(.llm(.streamCompleted))
         case .outputTextDelta(let delta):
             // Handle streaming text deltas for real-time message display
             await processContentDelta(0, delta.delta)
@@ -81,20 +81,20 @@ actor NetworkRouter: OnboardingEventEmitter {
                 let count = pendingToolCallIds.count
                 let callIds = pendingToolCallIds
                 pendingToolCallIds = []  // Reset for next response
-                await emit(.llmToolCallBatchStarted(expectedCount: count, callIds: callIds))
+                await emit(.llm(.toolCallBatchStarted(expectedCount: count, callIds: callIds)))
                 Logger.info("🔧 Tool call batch started: expecting \(count) response(s)", category: .ai)
             }
             // Emit token usage event if usage data is available
             if let usage = completed.response.usage {
                 let modelId = completed.response.model
-                await emit(.llmTokenUsageReceived(
+                await emit(.llm(.tokenUsageReceived(
                     modelId: modelId,
                     inputTokens: usage.inputTokens ?? 0,
                     outputTokens: usage.outputTokens ?? 0,
                     cachedTokens: usage.inputTokensDetails?.cachedTokens ?? 0,
                     reasoningTokens: usage.outputTokensDetails?.reasoningTokens ?? 0,
                     source: .mainCoordinator
-                ))
+                )))
             }
             // Reset state for next response
             receivedOutputItemDone = false
@@ -136,7 +136,7 @@ actor NetworkRouter: OnboardingEventEmitter {
         // Initialize buffer for new message
         if streamingBuffers[itemId] == nil {
             let messageId = UUID()
-            await emit(.streamingMessageBegan(id: messageId, text: "", statusMessage: "Receiving response..."))
+            await emit(.llm(.streamingMessageBegan(id: messageId, text: "", statusMessage: "Receiving response...")))
             streamingBuffers[itemId] = StreamBuffer(
                 messageId: messageId,
                 text: "",
@@ -149,14 +149,14 @@ actor NetworkRouter: OnboardingEventEmitter {
         buffer.text += text
         buffer.pendingFragment += text
         // Emit delta event
-        await emit(.streamingMessageUpdated(id: buffer.messageId, delta: buffer.pendingFragment))
+        await emit(.llm(.streamingMessageUpdated(id: buffer.messageId, delta: buffer.pendingFragment, statusMessage: nil)))
         buffer.pendingFragment = ""
         streamingBuffers[itemId] = buffer
     }
     private func finalizePendingMessages() async {
         for (_, buffer) in streamingBuffers {
             let toolCalls = buffer.toolCalls.isEmpty ? nil : buffer.toolCalls
-            await emit(.streamingMessageFinalized(id: buffer.messageId, finalText: buffer.text, toolCalls: toolCalls))
+            await emit(.llm(.streamingMessageFinalized(id: buffer.messageId, finalText: buffer.text, toolCalls: toolCalls, statusMessage: nil)))
         }
         streamingBuffers.removeAll()
         messageIds.removeAll()
@@ -196,7 +196,7 @@ actor NetworkRouter: OnboardingEventEmitter {
                     arguments: argsJSON,
                     callId: toolCall.callId
                 )
-                await emit(.toolCallRequested(call, statusMessage: "Executing \(functionName)..."))
+                await emit(.tool(.callRequested(call, statusMessage: "Executing \(functionName)...")))
                 Logger.info("🔧 Tool call received: \(functionName)", category: .ai)
             default:
                 break
@@ -208,8 +208,8 @@ actor NetworkRouter: OnboardingEventEmitter {
             // Apply URL citations as markdown links
             let annotatedText = applyURLCitations(to: completeText, annotations: allAnnotations)
             let messageId = UUID()
-            await emit(.streamingMessageBegan(id: messageId, text: annotatedText))
-            await emit(.streamingMessageFinalized(id: messageId, finalText: annotatedText, toolCalls: toolCalls.isEmpty ? nil : toolCalls))
+            await emit(.llm(.streamingMessageBegan(id: messageId, text: annotatedText, statusMessage: nil)))
+            await emit(.llm(.streamingMessageFinalized(id: messageId, finalText: annotatedText, toolCalls: toolCalls.isEmpty ? nil : toolCalls, statusMessage: nil)))
             let citationCount = allAnnotations.filter { $0.isURLCitation }.count
             Logger.info("📝 Extracted complete message (\(completeText.count) chars, \(toolCalls.count) tool calls, \(citationCount) citations) from completed response", category: .ai)
         } else if !toolCalls.isEmpty {
@@ -230,7 +230,7 @@ actor NetworkRouter: OnboardingEventEmitter {
         // Finalize all partial messages with their current text
         for (_, buffer) in streamingBuffers {
             let cancelledText = buffer.text.isEmpty ? "(cancelled)" : buffer.text
-            await emit(.streamingMessageFinalized(id: buffer.messageId, finalText: cancelledText))
+            await emit(.llm(.streamingMessageFinalized(id: buffer.messageId, finalText: cancelledText, toolCalls: nil, statusMessage: nil)))
             Logger.debug("🛑 Finalized cancelled stream: \(buffer.messageId)", category: .ai)
         }
         // Clean up all tracking state
@@ -270,7 +270,7 @@ actor NetworkRouter: OnboardingEventEmitter {
         }
         // Emit tool call event (Spec §6: LLM.toolCallReceived)
         // Orchestrator will subscribe to this and manage continuations
-        await emit(.toolCallRequested(call, statusMessage: "Processing \(functionName)..."))
+        await emit(.tool(.callRequested(call, statusMessage: "Processing \(functionName)...")))
         Logger.info("🔧 Tool call received: \(functionName)", category: .ai)
     }
     // MARK: - Web Search Support

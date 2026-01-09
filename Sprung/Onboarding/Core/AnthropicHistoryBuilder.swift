@@ -24,9 +24,8 @@ struct AnthropicHistoryBuilder {
     // MARK: - History Building
 
     /// Build Anthropic message history from conversation transcript
-    /// - Parameter excludeToolCallIds: Tool call IDs that will be added explicitly after history
-    func buildAnthropicHistory(excludeToolCallIds: Set<String> = []) async -> [AnthropicMessage] {
-        let inputItems = await contextAssembler.buildConversationHistory(excludeToolCallIds: excludeToolCallIds)
+    func buildAnthropicHistory() async -> [AnthropicMessage] {
+        let inputItems = await contextAssembler.buildConversationHistory()
 
         var messages: [AnthropicMessage] = []
         var pendingAssistantBlocks: [AnthropicContentBlock] = []

@@ -67,18 +67,18 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
             Logger.warning("InterviewOrchestrator not active, cannot send initial message", category: .ai)
             return
         }
-        await emit(.processingStateChanged(true, statusMessage: "Starting interview..."))
+        await emit(.processing(.stateChanged(isProcessing: true, statusMessage: "Starting interview...")))
 
         // Front-load the welcome message into chat history before LLM sees it
         // This guarantees consistent welcome without relying on model behavior
         _ = await state.appendAssistantMessage(Self.welcomeMessage)
         Logger.info("👋 Welcome message injected into conversation history", category: .ai)
 
-        // Send user message with forced toolChoice to skip any LLM greeting
+        // Send user message to trigger LLM response
         var payload = JSON()
         payload["text"].string = "I'm ready to proceed."
-        await emit(.llmSendUserMessage(payload: payload, isSystemGenerated: true, toolChoice: "agent_ready"))
-        Logger.info("📤 Initial user message sent with forced agent_ready tool", category: .ai)
+        await emit(.llm(.sendUserMessage(payload: payload, isSystemGenerated: true)))
+        Logger.info("📤 Initial user message sent", category: .ai)
     }
     func startInterview(isResuming: Bool = false) async throws {
         await initializeSubscriptions()

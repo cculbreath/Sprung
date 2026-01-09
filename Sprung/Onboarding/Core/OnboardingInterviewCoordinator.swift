@@ -17,6 +17,7 @@ final class OnboardingInterviewCoordinator {
     var toolRegistry: ToolRegistry { container.toolRegistry }
     var ui: OnboardingUIState { container.ui }
     var conversationLogStore: ConversationLogStore { container.conversationLogStore }
+    var uiToolContinuationManager: UIToolContinuationManager { container.uiToolContinuationManager }
     // MARK: - Public Sub-Services (Direct Access)
     // Timeline Management
     var timeline: TimelineManagementService { container.timelineManagementService }
@@ -199,6 +200,49 @@ final class OnboardingInterviewCoordinator {
         container.sessionPersistenceHandler.hasActiveSession()
     }
 
+    // MARK: - UI Tool Interruption
+
+    /// Whether any UI tool is currently blocked awaiting user input
+    var hasPendingUITools: Bool {
+        uiToolContinuationManager.hasPendingTools
+    }
+
+    /// Names of tools currently blocked awaiting user input
+    var pendingUIToolNames: [String] {
+        uiToolContinuationManager.pendingToolNames
+    }
+
+    /// Interrupt all pending UI tools, dismissing their UIs and returning cancelled results.
+    /// Called when user presses interrupt button or escape key.
+    func interruptPendingUITools() {
+        guard hasPendingUITools else {
+            Logger.info("🛑 Interrupt requested but no pending UI tools", category: .ai)
+            return
+        }
+
+        // Clear any visible UI prompts
+        toolRouter.clearChoicePrompt()
+        toolRouter.clearValidationPrompt()
+        toolRouter.clearPendingUploadRequests()
+        toolRouter.clearSectionToggle()
+
+        // Emit events to update UI state
+        // Note: uploadRequestCancelled requires an ID but handler ignores it for clearing state
+        Task {
+            await eventBus.publish(.toolpane(.choicePromptCleared))
+            await eventBus.publish(.toolpane(.validationPromptCleared))
+            for request in pendingUploadRequests {
+                await eventBus.publish(.toolpane(.uploadRequestCancelled(id: request.id)))
+            }
+            await eventBus.publish(.toolpane(.sectionToggleCleared))
+            await eventBus.publish(.toolpane(.applicantProfileIntakeCleared))
+        }
+
+        // Resume all continuations with cancelled result
+        uiToolContinuationManager.interruptAll()
+        Logger.info("🛑 Pending UI tools interrupted by user", category: .ai)
+    }
+
     /// Check if there's any existing onboarding data (session, ResRefs, CoverRefs, or ExperienceDefaults)
     /// Used to determine whether to show the resume/start-over prompt
     func hasExistingOnboardingData() -> Bool {
@@ -246,13 +290,13 @@ final class OnboardingInterviewCoordinator {
         Logger.info("🏁 User clicked 'End Interview' - initiating finalization flow", category: .ai)
 
         // Mark dossier objective as completed if not already
-        await eventBus.publish(.objectiveStatusUpdateRequested(
+        await eventBus.publish(.objective(.statusUpdateRequested(
             id: OnboardingObjectiveId.dossierComplete.rawValue,
             status: "completed",
             source: "user_action",
             notes: "User clicked 'End Interview' button",
             details: nil
-        ))
+        )))
 
         // Send a system-generated message to trigger ExperienceDefaults generation and finalization
         var userMessage = SwiftyJSON.JSON()
@@ -263,7 +307,7 @@ final class OnboardingInterviewCoordinator {
             2. Complete any remaining Phase 3 objectives
             3. Call next_phase to complete the interview
             """
-        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+        await eventBus.publish(.llm(.enqueueUserMessage(payload: userMessage, isSystemGenerated: true)))
     }
 
     // MARK: - User Action Helpers
@@ -279,27 +323,10 @@ final class OnboardingInterviewCoordinator {
             Logger.debug("🔓 '\(actionDescription)' cleared waiting state: \(previousWaitingState?.rawValue ?? "none")", category: .ai)
         }
 
-        // Auto-complete any pending UI tool call - user action means they're ready to proceed
-        if let pendingTool = await state.getPendingUIToolCall() {
-            Logger.debug("🔓 '\(actionDescription)' auto-completing pending UI tool: \(pendingTool.toolName) (callId: \(pendingTool.callId.prefix(8)))", category: .ai)
-            var autoCompleteOutput = JSON()
-            autoCompleteOutput["status"].string = "completed"
-            autoCompleteOutput["message"].string = "User proceeded via '\(actionDescription)' action"
-
-            // Build and emit the tool response
-            var payload = JSON()
-            payload["callId"].string = pendingTool.callId
-            payload["output"] = autoCompleteOutput
-            await eventBus.publish(.llmToolResponseMessage(payload: payload))
-
-            // Clear the pending tool call
-            await state.clearPendingUIToolCall()
-        }
-
         // Clear document collection mode if active
         if ui.isDocumentCollectionActive {
             ui.isDocumentCollectionActive = false
-            await eventBus.publish(.documentCollectionActiveChanged(false))
+            await eventBus.publish(.state(.documentCollectionActiveChanged(false)))
             Logger.debug("🔓 '\(actionDescription)' cleared document collection mode", category: .ai)
         }
     }
@@ -317,13 +344,13 @@ final class OnboardingInterviewCoordinator {
 
         if currentPhase == .phase1VoiceContext {
             // Phase 1: Mark the Phase 1 writing samples objective as completed
-            await eventBus.publish(.objectiveStatusUpdateRequested(
+            await eventBus.publish(.objective(.statusUpdateRequested(
                 id: OnboardingObjectiveId.writingSamplesCollected.rawValue,
                 status: "completed",
                 source: "user_action",
                 notes: "User clicked 'Done with Writing Samples' button in Phase 1",
                 details: nil
-            ))
+            )))
 
             // Send a system-tagged message (not chatbox) to indicate app state change
             // Using <system> tags tells Claude this is an app notification, not user speech
@@ -333,16 +360,16 @@ final class OnboardingInterviewCoordinator {
                 <system>User clicked 'Done with Writing Samples'. \
                 The upload UI has been dismissed. Continue with the interview.</system>
                 """
-            await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+            await eventBus.publish(.llm(.enqueueUserMessage(payload: userMessage, isSystemGenerated: true)))
         } else {
             // Phase 3: Mark the Phase 3 writing samples objective as completed
-            await eventBus.publish(.objectiveStatusUpdateRequested(
+            await eventBus.publish(.objective(.statusUpdateRequested(
                 id: OnboardingObjectiveId.oneWritingSample.rawValue,
                 status: "completed",
                 source: "user_action",
                 notes: "User clicked 'Done with Writing Samples' button in Phase 3",
                 details: nil
-            ))
+            )))
 
             // Send a system-tagged message to trigger dossier compilation
             var userMessage = SwiftyJSON.JSON()
@@ -351,7 +378,7 @@ final class OnboardingInterviewCoordinator {
                 <system>User clicked 'Done with Writing Samples'. \
                 The upload UI has been dismissed. Proceed to compile the candidate dossier.</system>
                 """
-            await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+            await eventBus.publish(.llm(.enqueueUserMessage(payload: userMessage, isSystemGenerated: true)))
         }
     }
 
@@ -364,13 +391,13 @@ final class OnboardingInterviewCoordinator {
         await ensureUserActionSucceeds(actionDescription: "Skip Writing Samples")
 
         // Mark the writing samples objective as completed (skipped is still complete)
-        await eventBus.publish(.objectiveStatusUpdateRequested(
+        await eventBus.publish(.objective(.statusUpdateRequested(
             id: OnboardingObjectiveId.writingSamplesCollected.rawValue,
             status: "completed",
             source: "user_action",
             notes: "User chose to skip writing samples",
             details: nil
-        ))
+        )))
 
         // Send a system-generated user message to inform the LLM
         var userMessage = SwiftyJSON.JSON()
@@ -379,7 +406,7 @@ final class OnboardingInterviewCoordinator {
             I don't have writing samples available right now. \
             Please continue with the interview - we can develop my voice through conversation.
             """
-        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+        await eventBus.publish(.llm(.enqueueUserMessage(payload: userMessage, isSystemGenerated: true)))
     }
 
     /// Notify the LLM that title sets have been curated.
@@ -389,7 +416,7 @@ final class OnboardingInterviewCoordinator {
         userMessage["content"].string = """
             <system>User saved identity title sets. Proceed to generate experience defaults.</system>
             """
-        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+        await eventBus.publish(.llm(.enqueueUserMessage(payload: userMessage, isSystemGenerated: true)))
     }
 
     // MARK: - Evidence Handling
@@ -403,13 +430,13 @@ final class OnboardingInterviewCoordinator {
         notes: String? = nil,
         details: [String: String]? = nil
     ) async throws -> JSON {
-        await eventBus.publish(.objectiveStatusUpdateRequested(
+        await eventBus.publish(.objective(.statusUpdateRequested(
             id: objectiveId,
             status: status.lowercased(),
             source: "tool",
             notes: notes,
             details: details
-        ))
+        )))
         var result = JSON()
         result["status"].string = "completed"
         result["success"].boolValue = true
@@ -436,7 +463,7 @@ final class OnboardingInterviewCoordinator {
         }
         // Also emit the event so StateCoordinator updates its state
         // Pass fromUI: true so CoordinatorEventRouter doesn't re-increment the UI token
-        await eventBus.publish(.timelineCardDeleted(id: id, fromUI: true))
+        await eventBus.publish(.timeline(.cardDeleted(id: id, fromUI: true)))
     }
     // MARK: - Artifact Queries
 
@@ -452,12 +479,12 @@ final class OnboardingInterviewCoordinator {
 
     /// Request an update to artifact metadata.
     func requestMetadataUpdate(artifactId: String, updates: JSON) async {
-        await eventBus.publish(.artifactMetadataUpdateRequested(artifactId: artifactId, updates: updates))
+        await eventBus.publish(.artifact(.metadataUpdateRequested(artifactId: artifactId, updates: updates)))
     }
 
     /// Cancel an upload request.
     func cancelUploadRequest(id: UUID) async {
-        await eventBus.publish(.uploadRequestCancelled(id: id))
+        await eventBus.publish(.toolpane(.uploadRequestCancelled(id: id)))
     }
 
     // MARK: - Artifact Ingestion (Git Repos, Documents)
@@ -481,21 +508,21 @@ final class OnboardingInterviewCoordinator {
             Use web_search to fetch the content, then use create_web_artifact
             to save it as an artifact for document collection.
             """
-        await container.eventBus.publish(.llmExecuteCoordinatorMessage(payload: payload))
+        await container.eventBus.publish(.llm(.executeCoordinatorMessage(payload: payload)))
     }
 
     // MARK: - Tool Management
 
     func presentUploadRequest(_ request: OnboardingUploadRequest) {
         Task {
-            await eventBus.publish(.uploadRequestPresented(request: request))
+            await eventBus.publish(.toolpane(.uploadRequestPresented(request: request)))
         }
     }
 
     func completeUpload(id: UUID, fileURLs: [URL]) async -> JSON? {
         let result = await toolRouter.completeUpload(id: id, fileURLs: fileURLs)
         Task {
-            await eventBus.publish(.uploadRequestCancelled(id: id))
+            await eventBus.publish(.toolpane(.uploadRequestCancelled(id: id)))
         }
         return result
     }
@@ -503,7 +530,7 @@ final class OnboardingInterviewCoordinator {
     func skipUpload(id: UUID) async -> JSON? {
         let result = await toolRouter.skipUpload(id: id)
         Task {
-            await eventBus.publish(.uploadRequestCancelled(id: id))
+            await eventBus.publish(.toolpane(.uploadRequestCancelled(id: id)))
         }
         return result
     }
@@ -522,7 +549,7 @@ final class OnboardingInterviewCoordinator {
            let data = updatedData,
            data != .null,
            ["approved", "modified"].contains(status.lowercased()) {
-            await eventBus.publish(.knowledgeCardPersisted(card: data))
+            await eventBus.publish(.artifact(.knowledgeCardPersisted(card: data)))
         }
 
         let result = toolRouter.submitValidationResponse(
@@ -534,31 +561,30 @@ final class OnboardingInterviewCoordinator {
 
         if result != nil {
             Task {
-                await eventBus.publish(.validationPromptCleared)
+                await eventBus.publish(.toolpane(.validationPromptCleared))
             }
             // Mark skeleton_timeline objective as complete when user confirms validation
             if let validation = pendingValidation,
                validation.dataType == "skeleton_timeline",
                ["confirmed", "confirmed_with_changes", "approved", "modified"].contains(status.lowercased()) {
-                await eventBus.publish(.objectiveStatusUpdateRequested(
+                await eventBus.publish(.objective(.statusUpdateRequested(
                     id: OnboardingObjectiveId.skeletonTimelineComplete.rawValue,
                     status: "completed",
                     source: "ui_timeline_validated",
                     notes: "Timeline validated by user",
                     details: nil
-                ))
+                )))
                 Logger.debug("✅ skeleton_timeline_complete objective marked complete after validation", category: .ai)
 
-                // Force configure_enabled_sections as next step (instead of directly ungating next_phase)
+                // Prompt for configure_enabled_sections as next step
                 // next_phase will be ungated when enabledSections objective completes
                 var payload = JSON()
                 payload["text"].string = """
                     Timeline approved. Now configure which resume sections to include. \
                     Call configure_enabled_sections with recommendations based on user's background.
                     """
-                payload["toolChoice"].string = OnboardingToolName.configureEnabledSections.rawValue
-                await eventBus.publish(.llmSendCoordinatorMessage(payload: payload))
-                Logger.info("🎯 Forcing configure_enabled_sections after timeline validation", category: .ai)
+                await eventBus.publish(.llm(.sendCoordinatorMessage(payload: payload)))
+                Logger.info("📋 Prompting configure_enabled_sections after timeline validation", category: .ai)
             }
         }
         return result
@@ -636,7 +662,7 @@ final class OnboardingInterviewCoordinator {
                 Continue the interview in the new phase.</system>
                 """
         }
-        await eventBus.publish(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
+        await eventBus.publish(.llm(.sendUserMessage(payload: payload, isSystemGenerated: true)))
     }
 
     /// Legacy: Request phase advance by asking LLM (use advanceToNextPhaseFromUI instead)
@@ -720,7 +746,7 @@ final class OnboardingInterviewCoordinator {
     func sendChatMessage(_ text: String) async {
         await uiResponseCoordinator.sendChatMessage(text)
     }
-    func sendCoordinatorMessage(title: String, details: [String: String] = [:], toolChoice: String? = nil) async {
+    func sendCoordinatorMessage(title: String, details: [String: String] = [:]) async {
         var payload = JSON()
         payload["title"].string = title
         var detailsJSON = JSON()
@@ -728,10 +754,7 @@ final class OnboardingInterviewCoordinator {
             detailsJSON[key].string = value
         }
         payload["details"] = detailsJSON
-        if let toolChoice = toolChoice {
-            payload["toolChoice"].string = toolChoice
-        }
-        await eventBus.publish(.llmSendCoordinatorMessage(payload: payload))
+        await eventBus.publish(.llm(.sendCoordinatorMessage(payload: payload)))
     }
 
     /// Delete an artifact record and notify the LLM via developer message.
@@ -822,7 +845,7 @@ final class OnboardingInterviewCoordinator {
         await container.artifactIngestionCoordinator.cancelAllIngestion()
 
         // Ensure processing state is cleared
-        await eventBus.publish(.processingStateChanged(false))
+        await eventBus.publish(.processing(.stateChanged(isProcessing: false, statusMessage: nil)))
 
         Logger.info("✅ All streams and ingestion cancelled", category: .ai)
     }
@@ -841,10 +864,10 @@ final class OnboardingInterviewCoordinator {
             ui.isExtractionInProgress = false
             ui.extractionStatusMessage = nil
         }
-        await eventBus.publish(.pendingExtractionUpdated(nil, statusMessage: nil))
-        await eventBus.publish(.processingStateChanged(false))
+        await eventBus.publish(.processing(.pendingExtractionUpdated(nil, statusMessage: nil)))
+        await eventBus.publish(.processing(.stateChanged(isProcessing: false, statusMessage: nil)))
         // Force batch completion so pending artifacts are sent
-        await eventBus.publish(.batchUploadCompleted)
+        await eventBus.publish(.processing(.batchUploadCompleted))
 
         Logger.debug("✅ Extraction agents cancelled and document upload phase finished", category: .ai)
 
@@ -873,7 +896,7 @@ final class OnboardingInterviewCoordinator {
         // Ensure this user action always succeeds - clear blocks and auto-complete pending tools
         await ensureUserActionSucceeds(actionDescription: "Done with Uploads")
 
-        await eventBus.publish(.doneWithUploadsClicked)
+        await eventBus.publish(.artifact(.doneWithUploadsClicked))
     }
 
     // MARK: - Data Store Management

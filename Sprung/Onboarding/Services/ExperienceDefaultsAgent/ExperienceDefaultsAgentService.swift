@@ -134,7 +134,7 @@ final class ExperienceDefaultsAgentService {
             // 1. Persisting to ExperienceDefaultsStore
             // 2. Persisting to InterviewDataStore for phase completion gating
             // 3. Marking the experienceDefaultsSet objective as completed
-            await coordinator.eventBus.publish(.experienceDefaultsGenerated(defaults: result.defaults))
+            await coordinator.eventBus.publish(.artifact(.experienceDefaultsGenerated(defaults: result.defaults)))
 
             // Step 4: Cleanup
             try? workspaceService.deleteWorkspace()

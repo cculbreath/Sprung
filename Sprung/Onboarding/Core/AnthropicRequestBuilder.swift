@@ -41,7 +41,6 @@ struct AnthropicRequestBuilder {
         text: String,
         isSystemGenerated: Bool,
         bundledCoordinatorMessages: [JSON] = [],
-        forcedToolChoice: String? = nil,
         imageBase64: String? = nil,
         imageContentType: String? = nil
     ) async -> AnthropicMessageParameter {
@@ -163,8 +162,7 @@ struct AnthropicRequestBuilder {
     /// Per Anthropic best practices, coordinator instructions are sent as user messages
     /// with <coordinator> XML tags, not stuffed into system prompt.
     func buildCoordinatorMessageRequest(
-        text: String,
-        toolChoice toolChoiceName: String? = nil
+        text: String
     ) async -> AnthropicMessageParameter {
         var messages: [AnthropicMessage] = []
 
@@ -196,9 +194,6 @@ struct AnthropicRequestBuilder {
             messages.append(.user(fullMessageText))
         }
 
-        // Tool choice - prefer auto (no forced toolChoice in Anthropic-native pattern)
-        let toolChoice: AnthropicToolChoice = .auto
-
         let tools = await toolConverter.getAnthropicTools()
         let systemPrompt = await buildSystemPrompt()
         let modelId = await stateCoordinator.getAnthropicModelId()
@@ -210,7 +205,7 @@ struct AnthropicRequestBuilder {
             maxTokens: 4096,
             stream: true,
             tools: tools.isEmpty ? nil : tools,
-            toolChoice: tools.isEmpty ? nil : toolChoice,
+            toolChoice: tools.isEmpty ? nil : .auto,
             temperature: 1.0
         )
 
@@ -224,51 +219,28 @@ struct AnthropicRequestBuilder {
 
     // MARK: - Tool Response Request
 
-    /// Build a request containing tool results.
+    /// Build a request after a tool has completed.
     ///
-    /// Per Anthropic best practices, instruction text can be included AFTER tool_result blocks
-    /// in the same user message. This provides immediate guidance to Claude for the next action.
+    /// The tool result is already stored in ConversationLog (via setToolResult).
+    /// This method builds history from ConversationLog (which includes the tool_result),
+    /// then appends computed context (interview state, coordinator instructions).
     ///
     /// - Parameters:
-    ///   - output: The tool output JSON
-    ///   - callId: The tool call ID to respond to
-    ///   - toolName: The name of the tool (for logging)
+    ///   - callId: The tool call ID (for logging)
     ///   - instruction: Optional instruction text to include after the tool_result.
-    ///     This travels WITH the tool result for immediate guidance.
-    ///   - forcedToolChoice: Optional tool to force (deprecated - prefer instruction text)
+    ///     This provides immediate guidance to Claude for the next action.
     ///   - pdfBase64: Optional base64-encoded PDF to include as a document block
     ///   - pdfFilename: Optional filename for the PDF attachment
     func buildToolResponseRequest(
-        output: JSON,
         callId: String,
-        toolName: String,
         instruction: String? = nil,
-        forcedToolChoice: String? = nil,
         pdfBase64: String? = nil,
         pdfFilename: String? = nil
     ) async -> AnthropicMessageParameter {
-        var messages: [AnthropicMessage] = []
+        // Build conversation history - tool_result is already in ConversationLog
+        var messages = await historyBuilder.buildAnthropicHistory()
 
-        // Include conversation history, excluding the current callId since we add it below
-        let history = await historyBuilder.buildAnthropicHistory(excludeToolCallIds: [callId])
-        messages.append(contentsOf: history)
-
-        // Build tool result message with interview context and optional instruction
-        // Per Anthropic docs: tool_result blocks FIRST, then other content AFTER
-        let resultContent = output.rawString() ?? "{}"
-        var contentBlocks: [AnthropicContentBlock] = [
-            .toolResult(AnthropicToolResultBlock(toolUseId: callId, content: resultContent))
-        ]
-
-        // If PDF data is provided, include it as a document block
-        // This allows resumes to be sent directly to the LLM alongside the tool result
-        if let pdfData = pdfBase64 {
-            let docSource = AnthropicDocumentSource(mediaType: "application/pdf", data: pdfData)
-            contentBlocks.append(.document(AnthropicDocumentBlock(source: docSource)))
-            Logger.info("📄 Including PDF document block with tool result: \(pdfFilename ?? "unknown")", category: .ai)
-        }
-
-        // Build text content: interview_context + optional coordinator instruction
+        // Build computed context to append: interview_context + optional coordinator instruction
         var textParts: [String] = []
 
         // Include interview context so Claude always has current state
@@ -282,43 +254,33 @@ struct AnthropicRequestBuilder {
             Logger.info("📋 Including coordinator instruction with tool result", category: .ai)
         }
 
-        // Append text after tool_result if we have any
+        // Build additional content blocks (PDF, computed context)
+        var additionalBlocks: [AnthropicContentBlock] = []
+
+        // If PDF data is provided, include it as a document block
+        if let pdfData = pdfBase64 {
+            let docSource = AnthropicDocumentSource(mediaType: "application/pdf", data: pdfData)
+            additionalBlocks.append(.document(AnthropicDocumentBlock(source: docSource)))
+            Logger.info("📄 Including PDF document block with tool result: \(pdfFilename ?? "unknown")", category: .ai)
+        }
+
+        // Append computed context text if we have any
         if !textParts.isEmpty {
-            contentBlocks.append(.text(AnthropicTextBlock(text: textParts.joined(separator: "\n\n"))))
+            additionalBlocks.append(.text(AnthropicTextBlock(text: textParts.joined(separator: "\n\n"))))
         }
 
-        // CRITICAL: Anthropic requires ALL tool_results from a single assistant turn to be in
-        // the IMMEDIATELY FOLLOWING user message. If history ends with a user message (containing
-        // synthetic tool_results for other calls from the same turn), we MUST merge our tool_result
-        // into that message, not append a new one.
-        if let lastIndex = messages.indices.last, messages[lastIndex].role == "user" {
-            // Merge tool_result into existing user message
-            let existingBlocks = historyBuilder.extractContentBlocks(messages[lastIndex])
-            // Put tool_results first (Anthropic convention), then existing content, then new text
-            let toolResultBlocks = contentBlocks.filter { block in
-                if case .toolResult = block { return true }
-                return false
+        // Append additional content to the last user message (which contains the tool_result from history)
+        if !additionalBlocks.isEmpty {
+            if let lastIndex = messages.indices.last, messages[lastIndex].role == "user" {
+                let existingBlocks = historyBuilder.extractContentBlocks(messages[lastIndex])
+                let mergedBlocks = existingBlocks + additionalBlocks
+                messages[lastIndex] = AnthropicMessage(role: "user", content: .blocks(mergedBlocks))
+                Logger.info("📝 Appended computed context to tool result message", category: .ai)
+            } else {
+                // Shouldn't happen - history should end with user message containing tool_result
+                Logger.warning("⚠️ History doesn't end with user message - appending context as new message", category: .ai)
+                messages.append(AnthropicMessage(role: "user", content: .blocks(additionalBlocks)))
             }
-            let otherBlocks = contentBlocks.filter { block in
-                if case .toolResult = block { return false }
-                return true
-            }
-            let mergedBlocks = toolResultBlocks + existingBlocks + otherBlocks
-            messages[lastIndex] = AnthropicMessage(role: "user", content: .blocks(mergedBlocks))
-            Logger.info("📝 Merged tool_result with trailing user message (multi-tool-call handling)", category: .ai)
-        } else {
-            messages.append(AnthropicMessage(role: "user", content: .blocks(contentBlocks)))
-        }
-
-        let toolChoice: AnthropicToolChoice
-        if let forcedTool = forcedToolChoice {
-            // Use 'any' instead of forcing specific tool - Anthropic has a bug where
-            // forced tool_choice returns stop_reason=tool_use but no content blocks.
-            // The system prompt guides the model to call the intended tool.
-            toolChoice = .any
-            Logger.info("🔗 Using toolChoice=any (intended: \(forcedTool)) - Anthropic workaround", category: .ai)
-        } else {
-            toolChoice = .auto
         }
 
         let tools = await toolConverter.getAnthropicTools()
@@ -332,7 +294,7 @@ struct AnthropicRequestBuilder {
             maxTokens: 4096,
             stream: true,
             tools: tools.isEmpty ? nil : tools,
-            toolChoice: tools.isEmpty ? nil : toolChoice,
+            toolChoice: tools.isEmpty ? nil : .auto,
             temperature: 1.0
         )
 
@@ -340,7 +302,7 @@ struct AnthropicRequestBuilder {
         let (toolUseCount, toolResultCount) = countToolBlocks(in: messages)
         Logger.info(
             "📝 Built Anthropic tool response request: callId=\(callId), " +
-            "tool_use=\(toolUseCount), tool_result=\(toolResultCount) (should match after this response)",
+            "tool_use=\(toolUseCount), tool_result=\(toolResultCount)",
             category: .ai
         )
 
@@ -384,34 +346,18 @@ struct AnthropicRequestBuilder {
 
     // MARK: - Batched Tool Response Request
 
-    /// Build a request containing multiple tool results.
+    /// Build a request after multiple tools have completed.
     ///
-    /// Per Anthropic best practices, instruction text can be included AFTER tool_result blocks.
-    /// For batched results, include instruction from the last payload if present.
+    /// Tool results are already stored in ConversationLog (via setToolResult).
+    /// This method builds history from ConversationLog (which includes all tool_results),
+    /// then appends computed context (interview state, coordinator instructions).
+    ///
+    /// - Parameter payloads: Payloads containing callIds and optional instructions (output not needed)
     func buildBatchedToolResponseRequest(payloads: [JSON]) async -> AnthropicMessageParameter {
-        var messages: [AnthropicMessage] = []
+        // Build conversation history - all tool_results are already in ConversationLog
+        var messages = await historyBuilder.buildAnthropicHistory()
 
-        // Extract all callIds to exclude from history (we add them below)
-        let excludeCallIds = Set(payloads.map { $0["callId"].stringValue })
-
-        // Include conversation history, excluding the current callIds since we add them below
-        let history = await historyBuilder.buildAnthropicHistory(excludeToolCallIds: excludeCallIds)
-        messages.append(contentsOf: history)
-
-        // Add all tool results in a single user message with multiple tool_result blocks
-        // Per Anthropic docs: tool_result blocks FIRST, then text AFTER
-        var contentBlocks: [AnthropicContentBlock] = []
-        for payload in payloads {
-            let callId = payload["callId"].stringValue
-            let output = payload["output"]
-            let resultContent = output.rawString() ?? "{}"
-            contentBlocks.append(.toolResult(AnthropicToolResultBlock(
-                toolUseId: callId,
-                content: resultContent
-            )))
-        }
-
-        // Build text content: interview_context + optional coordinator instruction
+        // Build computed context to append: interview_context + optional coordinator instruction
         var textParts: [String] = []
 
         // Include interview context so Claude always has current state
@@ -425,28 +371,19 @@ struct AnthropicRequestBuilder {
             Logger.info("📋 Including coordinator instruction with batched tool results", category: .ai)
         }
 
-        // Append text after tool_result blocks if we have any
+        // Append computed context to the last user message (which contains tool_results from history)
         if !textParts.isEmpty {
-            contentBlocks.append(.text(AnthropicTextBlock(text: textParts.joined(separator: "\n\n"))))
-        }
-
-        // CRITICAL: Same merging logic as buildToolResponseRequest - if history ends with a user
-        // message (from synthetic tool_results), merge our batch into it.
-        if let lastIndex = messages.indices.last, messages[lastIndex].role == "user" {
-            let existingBlocks = historyBuilder.extractContentBlocks(messages[lastIndex])
-            let toolResultBlocks = contentBlocks.filter { block in
-                if case .toolResult = block { return true }
-                return false
+            let textBlock = AnthropicContentBlock.text(AnthropicTextBlock(text: textParts.joined(separator: "\n\n")))
+            if let lastIndex = messages.indices.last, messages[lastIndex].role == "user" {
+                let existingBlocks = historyBuilder.extractContentBlocks(messages[lastIndex])
+                let mergedBlocks = existingBlocks + [textBlock]
+                messages[lastIndex] = AnthropicMessage(role: "user", content: .blocks(mergedBlocks))
+                Logger.info("📝 Appended computed context to batched tool results message", category: .ai)
+            } else {
+                // Shouldn't happen - history should end with user message containing tool_results
+                Logger.warning("⚠️ History doesn't end with user message - appending context as new message", category: .ai)
+                messages.append(AnthropicMessage(role: "user", content: .blocks([textBlock])))
             }
-            let otherBlocks = contentBlocks.filter { block in
-                if case .toolResult = block { return false }
-                return true
-            }
-            let mergedBlocks = toolResultBlocks + existingBlocks + otherBlocks
-            messages[lastIndex] = AnthropicMessage(role: "user", content: .blocks(mergedBlocks))
-            Logger.info("📝 Merged batched tool_results with trailing user message", category: .ai)
-        } else {
-            messages.append(AnthropicMessage(role: "user", content: .blocks(contentBlocks)))
         }
 
         let tools = await toolConverter.getAnthropicTools()
@@ -465,7 +402,7 @@ struct AnthropicRequestBuilder {
         )
 
         Logger.info(
-            "📝 Built Anthropic batched tool response request: \(payloads.count) tool outputs",
+            "📝 Built Anthropic batched tool response request: \(payloads.count) tools",
             category: .ai
         )
 

@@ -41,7 +41,7 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
     }
     // MARK: - Event Handling
     private func handleObjectiveEvent(_ event: OnboardingEvent) async {
-        guard case .objectiveStatusChanged(
+        guard case .objective(.statusChanged(
             let id,
             let oldStatusString,
             let newStatusString,
@@ -49,7 +49,7 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
             let source,
             let notes,
             let eventDetails
-        ) = event else {
+        )) = event else {
             return
         }
         guard let newStatus = ObjectiveStatus(rawValue: newStatusString) else {
@@ -141,13 +141,13 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
                 Logger.info("🚀 Auto-starting objective: \(objective.id) (dependencies met: \(workflow.dependsOn.joined(separator: ", ")))", category: .ai)
                 // Emit event to transition to inProgress
                 // This will trigger the onBegin callback via the normal event flow
-                await emit(.objectiveStatusUpdateRequested(
+                await emit(.objective(.statusUpdateRequested(
                     id: objective.id,
                     status: ObjectiveStatus.inProgress.rawValue,
                     source: "workflow_auto_start",
                     notes: "Auto-started after dependencies completed: \(workflow.dependsOn.joined(separator: ", "))",
                     details: nil
-                ))
+                )))
             } else {
                 let missingDeps = workflow.dependsOn.filter { !completedObjectives.contains($0) }
                 Logger.debug("⏳ Objective \(objective.id) still waiting for: \(missingDeps.joined(separator: ", "))", category: .ai)
@@ -157,14 +157,14 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
     // MARK: - Workflow Output Processing
     private func processWorkflowOutput(_ output: ObjectiveWorkflowOutput) async {
         switch output {
-        case .coordinatorMessage(let title, let details, let payload, let toolChoice):
-            await sendCoordinatorMessage(title: title, details: details, payload: payload, toolChoice: toolChoice)
+        case .coordinatorMessage(let title, let details, let payload):
+            await sendCoordinatorMessage(title: title, details: details, payload: payload)
         case .triggerPhotoFollowUp(let extraDetails):
             await triggerPhotoFollowUp(extraDetails: extraDetails)
         }
     }
     /// Send a coordinator message to the LLM
-    private func sendCoordinatorMessage(title: String, details: [String: String], payload: JSON?, toolChoice: String? = nil) async {
+    private func sendCoordinatorMessage(title: String, details: [String: String], payload: JSON?) async {
         var messagePayload = JSON()
         messagePayload["text"].string = "Developer status: \(title)"
         if !details.isEmpty {
@@ -177,13 +177,8 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
         if let payload = payload {
             messagePayload["payload"] = payload
         }
-        // Force specific tool call if specified (helps weaker models follow instructions)
-        if let toolChoice = toolChoice {
-            messagePayload["toolChoice"].string = toolChoice
-            Logger.info("🎯 Forcing toolChoice: \(toolChoice)", category: .ai)
-        }
         Logger.info("📤 Workflow sending developer message: \(title)", category: .ai)
-        await emit(.llmSendCoordinatorMessage(payload: messagePayload))
+        await emit(.llm(.sendCoordinatorMessage(payload: messagePayload)))
     }
     /// Trigger the photo follow-up workflow
     private func triggerPhotoFollowUp(extraDetails: [String: String]) async {

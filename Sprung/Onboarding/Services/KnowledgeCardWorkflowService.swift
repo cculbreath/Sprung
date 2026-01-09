@@ -199,7 +199,7 @@ final class KnowledgeCardWorkflowService {
         if let count = cardsByType[.education], count > 0 { typeBreakdown.append("\(count) education") }
         let typeSummary = typeBreakdown.joined(separator: ", ")
 
-        await eventBus.publish(.mergeComplete(cardCount: cardCount, gapCount: 0))
+        await eventBus.publish(.artifact(.mergeComplete(cardCount: cardCount, gapCount: 0)))
 
         // Update UI
         ui.cardAssignmentsReadyForApproval = true
@@ -224,7 +224,7 @@ final class KnowledgeCardWorkflowService {
 
         guard !pendingCards.isEmpty else {
             Logger.error("❌ No pending cards found - user must click 'Done with Uploads' first", category: .ai)
-            await eventBus.publish(.errorOccurred("No cards found. Please upload documents and click 'Done with Uploads' first."))
+            await eventBus.publish(.processing(.errorOccurred("No cards found. Please upload documents and click 'Done with Uploads' first.")))
             return
         }
 
@@ -251,11 +251,11 @@ final class KnowledgeCardWorkflowService {
         // Auto-advance to Phase 4 (Strategic Synthesis)
         // Phase 3 is entirely UI-driven - user approval triggers phase transition
         Logger.info("🚀 Auto-advancing to Phase 4 after card approval", category: .ai)
-        await eventBus.publish(.phaseTransitionRequested(
+        await eventBus.publish(.phase(.transitionRequested(
             from: InterviewPhase.phase3EvidenceCollection.rawValue,
             to: InterviewPhase.phase4StrategicSynthesis.rawValue,
             reason: "User approved knowledge cards"
-        ))
+        )))
 
         // Notify LLM about the results (message will arrive in Phase 4)
         let skillSummary = skillCount > 0 ? " and \(skillCount) skills" : ""
@@ -273,6 +273,6 @@ final class KnowledgeCardWorkflowService {
         var userMessage = JSON()
         userMessage["role"].string = "user"
         userMessage["content"].string = text
-        await eventBus.publish(.llmEnqueueUserMessage(payload: userMessage, isSystemGenerated: true))
+        await eventBus.publish(.llm(.enqueueUserMessage(payload: userMessage, isSystemGenerated: true)))
     }
 }

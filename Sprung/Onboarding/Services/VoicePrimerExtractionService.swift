@@ -55,7 +55,7 @@ actor VoicePrimerExtractionService {
         }
 
         isExtracting = true
-        await eventBus.publish(.voicePrimerExtractionStarted(sampleCount: samples.count))
+        await eventBus.publish(.artifact(.voicePrimerExtractionStarted(sampleCount: samples.count)))
 
         Logger.info("🎤 Starting voice primer extraction from \(samples.count) sample(s)", category: .ai)
 
@@ -68,13 +68,13 @@ actor VoicePrimerExtractionService {
             let primerJSON = primer.rawString()
             await persistVoicePrimer(summary: summary, primerJSON: primerJSON)
 
-            await eventBus.publish(.voicePrimerExtractionCompleted(primer: primer))
+            await eventBus.publish(.artifact(.voicePrimerExtractionCompleted(primer: primer)))
             Logger.info("🎤 Voice primer extraction completed successfully", category: .ai)
 
             isExtracting = false
             return primer
         } catch {
-            await eventBus.publish(.voicePrimerExtractionFailed(error: error.localizedDescription))
+            await eventBus.publish(.artifact(.voicePrimerExtractionFailed(error: error.localizedDescription)))
             Logger.error("🎤 Voice primer extraction failed: \(error.localizedDescription)", category: .ai)
             isExtracting = false
             return nil

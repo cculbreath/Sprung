@@ -75,44 +75,42 @@ actor LLMMessenger: OnboardingEventEmitter {
     }
     private func handleLLMEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .llmSendUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText, let toolChoice):
+        case .llm(.sendUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText)):
             guard isActive else {
                 Logger.warning("LLMMessenger not active, ignoring message", category: .ai)
                 return
             }
-            await emit(.llmEnqueueUserMessage(
+            await emit(.llm(.enqueueUserMessage(
                 payload: payload,
                 isSystemGenerated: isSystemGenerated,
                 chatboxMessageId: chatboxMessageId,
-                originalText: originalText,
-                toolChoice: toolChoice
-            ))
-        case .llmToolResponseMessage(let payload):
-            await emit(.llmEnqueueToolResponse(payload: payload))
-        case .llmExecuteUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText, let bundledCoordinatorMessages, let toolChoice):
-            await executeUserMessage(payload, isSystemGenerated: isSystemGenerated, chatboxMessageId: chatboxMessageId, originalText: originalText, bundledCoordinatorMessages: bundledCoordinatorMessages, toolChoice: toolChoice)
-        case .llmExecuteToolResponse(let payload):
+                originalText: originalText
+            )))
+        case .llm(.toolResponseMessage(let payload)):
+            await emit(.llm(.enqueueToolResponse(payload: payload)))
+        case .llm(.executeUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText, let bundledCoordinatorMessages)):
+            await executeUserMessage(payload, isSystemGenerated: isSystemGenerated, chatboxMessageId: chatboxMessageId, originalText: originalText, bundledCoordinatorMessages: bundledCoordinatorMessages)
+        case .llm(.executeToolResponse(let payload)):
             await executeToolResponse(payload)
-        case .llmExecuteBatchedToolResponses(let payloads):
+        case .llm(.executeBatchedToolResponses(let payloads)):
             await executeBatchedToolResponses(payloads)
-        case .llmExecuteCoordinatorMessage(let payload):
+        case .llm(.executeCoordinatorMessage(let payload)):
             await executeCoordinatorMessage(payload)
-        case .llmCancelRequested:
+        case .llm(.cancelRequested):
             await cancelCurrentStream()
         default:
             break
         }
     }
 
-    private func executeUserMessage(_ payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String? = nil, originalText: String? = nil, bundledCoordinatorMessages: [JSON] = [], toolChoice: String? = nil) async {
+    private func executeUserMessage(_ payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String? = nil, originalText: String? = nil, bundledCoordinatorMessages: [JSON] = []) async {
         // Anthropic-only: directly call Anthropic implementation
         await executeUserMessageViaAnthropic(
             payload,
             isSystemGenerated: isSystemGenerated,
             chatboxMessageId: chatboxMessageId,
             originalText: originalText,
-            bundledCoordinatorMessages: bundledCoordinatorMessages,
-            toolChoice: toolChoice
+            bundledCoordinatorMessages: bundledCoordinatorMessages
         )
     }
     private func executeCoordinatorMessage(_ payload: JSON) async {
@@ -147,7 +145,7 @@ actor LLMMessenger: OnboardingEventEmitter {
         task.cancel()
         currentStreamTask = nil
         await networkRouter.cancelPendingStreams()
-        await emit(.llmStatus(status: .idle))
+        await emit(.llm(.status( .idle)))
         Logger.info("✅ LLM stream cancelled and cleaned up", category: .ai)
     }
     // MARK: - Error Handling (Delegated to LLMErrorHandler)
@@ -165,7 +163,7 @@ actor LLMMessenger: OnboardingEventEmitter {
 
         let errorMessage = errorHandler.buildUserFriendlyMessage(from: error)
         let payload = JSON(["text": errorMessage])
-        await emit(.llmUserMessageSent(messageId: UUID().uuidString, payload: payload, isSystemGenerated: true))
+        await emit(.llm(.userMessageSent(messageId: UUID().uuidString, payload: payload, isSystemGenerated: true)))
         Logger.error("📢 Error surfaced to UI: \(errorMessage)", category: .ai)
     }
 
@@ -177,27 +175,34 @@ actor LLMMessenger: OnboardingEventEmitter {
         isSystemGenerated: Bool,
         chatboxMessageId: String? = nil,
         originalText: String? = nil,
-        bundledCoordinatorMessages: [JSON] = [],
-        toolChoice: String? = nil
+        bundledCoordinatorMessages: [JSON] = []
     ) async {
-        await emit(.llmStatus(status: .busy))
+        await emit(.llm(.status( .busy)))
         let text = payload["content"].string ?? payload["text"].stringValue
 
-        // Extract image data if present
-        let imageData = payload["image_data"].string
-        let imageContentType = payload["content_type"].string
+        // Extract file attachment data if present (image or PDF)
+        // PDF data takes precedence if both are present
+        let fileData: String?
+        let fileContentType: String?
+        if let pdfData = payload["pdf_data"].string {
+            fileData = pdfData
+            fileContentType = "application/pdf"
+            Logger.info("📄 PDF attachment detected in user message payload", category: .ai)
+        } else {
+            fileData = payload["image_data"].string
+            fileContentType = payload["content_type"].string
+        }
 
         do {
             let request = await anthropicRequestBuilder.buildUserMessageRequest(
                 text: text,
                 isSystemGenerated: isSystemGenerated,
                 bundledCoordinatorMessages: bundledCoordinatorMessages,
-                forcedToolChoice: toolChoice,
-                imageBase64: imageData,
-                imageContentType: imageContentType
+                imageBase64: fileData,
+                imageContentType: fileContentType
             )
             let messageId = UUID().uuidString
-            await emit(.llmUserMessageSent(messageId: messageId, payload: payload, isSystemGenerated: isSystemGenerated))
+            await emit(.llm(.userMessageSent(messageId: messageId, payload: payload, isSystemGenerated: isSystemGenerated)))
 
             currentStreamTask = Task {
                 var retryCount = 0
@@ -225,14 +230,14 @@ actor LLMMessenger: OnboardingEventEmitter {
                                 await emit(domainEvent)
 
                                 // Handle tool calls by dispatching to tool executor
-                                if case .toolCallRequested(let call, _) = domainEvent {
+                                if case .tool(.callRequested(let call, _)) = domainEvent {
                                     await executeToolCall(call)
                                 }
                             }
                         }
                         Logger.info("📡 Anthropic stream completed: \(eventCount) events processed", category: .ai)
 
-                        await emit(.llmStatus(status: .idle))
+                        await emit(.llm(.status( .idle)))
                         // NOTE: Don't emit .llmStreamCompleted here - markStreamCompleted() handles it
                         // to avoid duplicate emissions that cause "isStreaming=false" warnings
                         return // Success - exit retry loop
@@ -266,15 +271,15 @@ actor LLMMessenger: OnboardingEventEmitter {
         } catch {
             errorHandler.logAnthropicError(error, context: "user message (outer)")
             Logger.error("❌ Anthropic failed to send message: \(error)", category: .ai)
-            await emit(.errorOccurred("Failed to send message: \(error.localizedDescription)"))
-            await emit(.llmStatus(status: .error))
+            await emit(.processing(.errorOccurred("Failed to send message: \(error.localizedDescription)")))
+            await emit(.llm(.status( .error)))
 
             if let chatboxMessageId = chatboxMessageId, let originalText = originalText {
-                await emit(.llmUserMessageFailed(
+                await emit(.llm(.userMessageFailed(
                     messageId: chatboxMessageId,
                     originalText: originalText,
                     error: error.localizedDescription
-                ))
+                )))
             } else {
                 await surfaceErrorToUI(error: error)
             }
@@ -284,18 +289,16 @@ actor LLMMessenger: OnboardingEventEmitter {
 
     /// Execute developer message via Anthropic Messages API
     private func executeCoordinatorMessageViaAnthropic(_ payload: JSON) async {
-        await emit(.llmStatus(status: .busy))
+        await emit(.llm(.status( .busy)))
         let text = payload["text"].stringValue
-        let toolChoiceName = payload["toolChoice"].string
         Logger.info("📨 Sending Anthropic developer message (\(text.prefix(100))...)", category: .ai)
 
         do {
             let request = await anthropicRequestBuilder.buildCoordinatorMessageRequest(
-                text: text,
-                toolChoice: toolChoiceName
+                text: text
             )
             let messageId = UUID().uuidString
-            await emit(.llmCoordinatorMessageSent(messageId: messageId, payload: payload))
+            await emit(.llm(.coordinatorMessageSent(messageId: messageId, payload: payload)))
 
             currentStreamTask = Task {
                 var retryCount = 0
@@ -312,13 +315,13 @@ actor LLMMessenger: OnboardingEventEmitter {
                             for domainEvent in domainEvents {
                                 await emit(domainEvent)
 
-                                if case .toolCallRequested(let call, _) = domainEvent {
+                                if case .tool(.callRequested(let call, _)) = domainEvent {
                                     await executeToolCall(call)
                                 }
                             }
                         }
 
-                        await emit(.llmStatus(status: .idle))
+                        await emit(.llm(.status( .idle)))
                         // NOTE: Don't emit .llmStreamCompleted here - markStreamCompleted() handles it
                         return
                     } catch {
@@ -351,8 +354,8 @@ actor LLMMessenger: OnboardingEventEmitter {
             await stateCoordinator.markStreamCompleted()
         } catch {
             errorHandler.logAnthropicError(error, context: "developer message (outer)")
-            await emit(.errorOccurred("Failed to send developer message: \(error.localizedDescription)"))
-            await emit(.llmStatus(status: .error))
+            await emit(.processing(.errorOccurred("Failed to send developer message: \(error.localizedDescription)")))
+            await emit(.llm(.status( .error)))
             await surfaceErrorToUI(error: error)
             await stateCoordinator.markStreamCompleted()
         }
@@ -360,12 +363,11 @@ actor LLMMessenger: OnboardingEventEmitter {
 
     /// Execute tool response via Anthropic Messages API
     private func executeToolResponseViaAnthropic(_ payload: JSON) async {
-        await emit(.llmStatus(status: .busy))
+        await emit(.llm(.status( .busy)))
         await stateCoordinator.setPendingToolResponses([payload])
 
         do {
             let callId = payload["callId"].stringValue
-            let output = payload["output"]
             let toolName = payload["toolName"].stringValue
             let instruction = payload["instruction"].string  // Anthropic-native guidance
 
@@ -373,14 +375,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             let pdfBase64 = payload["pdf_data"].string
             let pdfFilename = payload["pdf_filename"].string
 
-            let toolChoice: String?
-            if let payloadToolChoice = payload["toolChoice"].string {
-                toolChoice = payloadToolChoice
-            } else {
-                toolChoice = await stateCoordinator.popPendingForcedToolChoice()
-            }
-
-            Logger.debug("📤 Anthropic tool response: callId=\(callId), output=\(output.rawString() ?? "nil")", category: .ai)
+            Logger.debug("📤 Anthropic tool response: callId=\(callId), tool=\(toolName)", category: .ai)
             if let instruction = instruction {
                 Logger.debug("📋 Instruction attached: \(instruction.prefix(50))...", category: .ai)
             }
@@ -389,14 +384,10 @@ actor LLMMessenger: OnboardingEventEmitter {
             }
             Logger.verbose("📤 Sending Anthropic tool response for callId=\(String(callId.prefix(12)))...", category: .ai)
 
-            // Note: Don't store result before building request - buildToolResponseRequest adds it explicitly
-            // We pass the callId to exclude from synthetic result insertion since we're about to add it
+            // Tool result is already stored in ConversationLog - request builder reads from history
             let request = await anthropicRequestBuilder.buildToolResponseRequest(
-                output: output,
                 callId: callId,
-                toolName: toolName,
                 instruction: instruction,
-                forcedToolChoice: toolChoice,
                 pdfBase64: pdfBase64,
                 pdfFilename: pdfFilename
             )
@@ -411,7 +402,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             }
 
             let messageId = UUID().uuidString
-            await emit(.llmSentToolResponseMessage(messageId: messageId, payload: payload))
+            await emit(.llm(.sentToolResponseMessage(messageId: messageId, payload: payload)))
 
             currentStreamTask = Task {
                 var retryCount = 0
@@ -428,7 +419,7 @@ actor LLMMessenger: OnboardingEventEmitter {
                             for domainEvent in domainEvents {
                                 await emit(domainEvent)
 
-                                if case .toolCallRequested(let call, _) = domainEvent {
+                                if case .tool(.callRequested(let call, _)) = domainEvent {
                                     await executeToolCall(call)
                                 }
                             }
@@ -436,7 +427,7 @@ actor LLMMessenger: OnboardingEventEmitter {
 
                         await stateCoordinator.clearPendingToolResponses()
                         // Note: Tool result already stored in ConversationLog by ToolExecutionCoordinator
-                        await emit(.llmStatus(status: .idle))
+                        await emit(.llm(.status( .idle)))
                         // NOTE: Don't emit .llmStreamCompleted here - markStreamCompleted() handles it
                         return
                     } catch {
@@ -468,15 +459,15 @@ actor LLMMessenger: OnboardingEventEmitter {
             await stateCoordinator.markStreamCompleted()
         } catch {
             errorHandler.logAnthropicError(error, context: "tool response (outer)")
-            await emit(.errorOccurred("Failed to send Anthropic tool response: \(error.localizedDescription)"))
-            await emit(.llmStatus(status: .error))
+            await emit(.processing(.errorOccurred("Failed to send Anthropic tool response: \(error.localizedDescription)")))
+            await emit(.llm(.status( .error)))
             await stateCoordinator.markStreamCompleted()
         }
     }
 
     /// Execute batched tool responses via Anthropic Messages API
     private func executeBatchedToolResponsesViaAnthropic(_ payloads: [JSON]) async {
-        await emit(.llmStatus(status: .busy))
+        await emit(.llm(.status( .busy)))
         await stateCoordinator.setPendingToolResponses(payloads)
 
         do {
@@ -487,7 +478,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             let messageId = UUID().uuidString
 
             for payload in payloads {
-                await emit(.llmSentToolResponseMessage(messageId: messageId, payload: payload))
+                await emit(.llm(.sentToolResponseMessage(messageId: messageId, payload: payload)))
             }
 
             currentStreamTask = Task {
@@ -505,7 +496,7 @@ actor LLMMessenger: OnboardingEventEmitter {
                             for domainEvent in domainEvents {
                                 await emit(domainEvent)
 
-                                if case .toolCallRequested(let call, _) = domainEvent {
+                                if case .tool(.callRequested(let call, _)) = domainEvent {
                                     await executeToolCall(call)
                                 }
                             }
@@ -513,7 +504,7 @@ actor LLMMessenger: OnboardingEventEmitter {
 
                         await stateCoordinator.clearPendingToolResponses()
                         // Note: Tool results already stored in ConversationLog by ToolExecutionCoordinator
-                        await emit(.llmStatus(status: .idle))
+                        await emit(.llm(.status( .idle)))
                         // NOTE: Don't emit .llmStreamCompleted here - markStreamCompleted() handles it
                         return
                     } catch {
@@ -545,8 +536,8 @@ actor LLMMessenger: OnboardingEventEmitter {
             await stateCoordinator.markStreamCompleted()
         } catch {
             errorHandler.logAnthropicError(error, context: "batched tool response (outer)")
-            await emit(.errorOccurred("Failed to send Anthropic batched tool responses: \(error.localizedDescription)"))
-            await emit(.llmStatus(status: .error))
+            await emit(.processing(.errorOccurred("Failed to send Anthropic batched tool responses: \(error.localizedDescription)")))
+            await emit(.llm(.status( .error)))
             await stateCoordinator.markStreamCompleted()
         }
     }

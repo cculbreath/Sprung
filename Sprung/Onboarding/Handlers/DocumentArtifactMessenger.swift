@@ -98,7 +98,7 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
     // MARK: - Event Handling
     private func handleEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .uploadCompleted(let files, _, _, let metadata):
+        case .artifact(.uploadCompleted(let files, _, _, let metadata)):
             // Skip targeted uploads (e.g., profile photos)
             if metadata["target_key"].string != nil {
                 return
@@ -112,7 +112,7 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
                 await startBatch(expectedCount: extractableCount)
             }
 
-        case .batchUploadStarted(let expectedCount):
+        case .processing(.batchUploadStarted(let expectedCount)):
             // Skip if this is our own event echoing back (prevents double-counting)
             if suppressNextBatchStarted {
                 suppressNextBatchStarted = false
@@ -121,7 +121,7 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
             // Handle external batch starts (e.g., from promoteArchivedArtifacts)
             await startBatch(expectedCount: expectedCount, emitStartEvent: false)
 
-        case .artifactRecordProduced(let record):
+        case .artifact(.recordProduced(let record)):
             await handleArtifactProduced(record)
 
         default:
@@ -149,7 +149,7 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
             if emitStartEvent {
                 // Set flag to suppress the echo when we receive our own event back
                 suppressNextBatchStarted = true
-                await emit(.batchUploadStarted(expectedCount: expectedCount))
+                await emit(.processing(.batchUploadStarted(expectedCount: expectedCount)))
             }
             pendingBatch = PendingBatch(expectedCount: expectedCount)
 
@@ -255,7 +255,7 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
             batch.timeoutTask?.cancel()
             pendingBatch = nil
             // Still emit batchUploadCompleted to clear the hasBatchUploadInProgress flag
-            await emit(.batchUploadCompleted)
+            await emit(.processing(.batchUploadCompleted))
             return
         }
 
@@ -273,7 +273,7 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
         pendingBatch = nil
 
         // Emit batch completed event - allows validation prompts to proceed
-        await emit(.batchUploadCompleted)
+        await emit(.processing(.batchUploadCompleted))
 
         guard !artifacts.isEmpty else {
             Logger.warning("⚠️ Batch complete but no artifacts to send", category: .ai)
@@ -285,38 +285,21 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
         // Build consolidated message content (summaries only to prevent context bloat)
         let messageText = buildExtractedContentMessage(artifacts: artifacts)
 
-        // Check if there's a pending UI tool call (from get_user_upload)
-        // If so, complete it with extracted content instead of sending a separate user message
-        // This eliminates an unnecessary LLM round trip
-        if let pendingCall = await stateCoordinator.getPendingUIToolCall() {
-            Logger.info("📤 Completing pending tool call with extracted content (call: \(pendingCall.callId.prefix(8))...)", category: .ai)
+        // Build UI action result with extracted content
+        var result = JSON()
+        result["status"].string = "completed"
+        result["message"].string = "Document extraction complete. \(artifacts.count) document(s) processed."
+        result["extracted_content"].string = messageText
 
-            // Build tool output with extracted content
-            var output = JSON()
-            output["status"].string = "completed"
-            output["message"].string = "Document extraction complete. \(artifacts.count) document(s) processed."
-            output["extracted_content"].string = messageText
+        let resultString = result.rawString() ?? "{}"
 
-            // Build tool response payload
-            var payload = JSON()
-            payload["callId"].string = pendingCall.callId
-            payload["output"] = output
+        // Send as ui-action-result user message
+        let taggedMessage = "<ui-action-result tool=\"\(OnboardingToolName.getUserUpload.rawValue)\">\n\(resultString)\n</ui-action-result>"
+        var payload = JSON()
+        payload["text"].string = taggedMessage
 
-            // Emit tool response (this completes the pending tool call)
-            await emit(.llmToolResponseMessage(payload: payload))
-
-            // Clear the pending tool call
-            await stateCoordinator.clearPendingUIToolCall()
-
-            Logger.info("✅ Batch of \(artifacts.count) artifact(s) sent via tool response (eliminated extra LLM turn)", category: .ai)
-        } else {
-            // No pending tool call - send as user message (fallback for direct uploads)
-            var payload = JSON()
-            payload["text"].string = messageText
-
-            await emit(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
-            Logger.info("✅ Batch of \(artifacts.count) artifact(s) sent as user message", category: .ai)
-        }
+        await emit(.llm(.sendUserMessage(payload: payload, isSystemGenerated: true)))
+        Logger.info("✅ Batch of \(artifacts.count) artifact(s) sent as ui-action-result", category: .ai)
 
         // Send developer message to LLM that background processing is complete
         // This tells the LLM to weave acknowledgment naturally into its response
@@ -439,37 +422,21 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
         let messageText = buildExtractedContentMessage(artifacts: [record])
         let artifactId = record["id"].stringValue
 
-        // Check if there's a pending UI tool call (from get_user_upload)
-        // If so, complete it with extracted content instead of sending a separate user message
-        if let pendingCall = await stateCoordinator.getPendingUIToolCall() {
-            Logger.info("📤 Completing pending tool call with extracted content (call: \(pendingCall.callId.prefix(8))...)", category: .ai)
+        // Build UI action result with extracted content
+        var result = JSON()
+        result["status"].string = "completed"
+        result["message"].string = "Document extraction complete."
+        result["extracted_content"].string = messageText
 
-            // Build tool output with extracted content
-            var output = JSON()
-            output["status"].string = "completed"
-            output["message"].string = "Document extraction complete."
-            output["extracted_content"].string = messageText
+        let resultString = result.rawString() ?? "{}"
 
-            // Build tool response payload
-            var payload = JSON()
-            payload["callId"].string = pendingCall.callId
-            payload["output"] = output
+        // Send as ui-action-result user message
+        let taggedMessage = "<ui-action-result tool=\"\(OnboardingToolName.getUserUpload.rawValue)\">\n\(resultString)\n</ui-action-result>"
+        var payload = JSON()
+        payload["text"].string = taggedMessage
 
-            // Emit tool response (this completes the pending tool call)
-            await emit(.llmToolResponseMessage(payload: payload))
-
-            // Clear the pending tool call
-            await stateCoordinator.clearPendingUIToolCall()
-
-            Logger.info("✅ Single artifact sent via tool response (eliminated extra LLM turn): \(artifactId)", category: .ai)
-        } else {
-            // No pending tool call - send as user message (fallback for direct uploads)
-            var payload = JSON()
-            payload["text"].string = messageText
-
-            await emit(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
-            Logger.info("📤 Single document artifact sent as user message: \(artifactId)", category: .ai)
-        }
+        await emit(.llm(.sendUserMessage(payload: payload, isSystemGenerated: true)))
+        Logger.info("📤 Single document artifact sent as ui-action-result: \(artifactId)", category: .ai)
     }
 
     /// Send image artifact to LLM with context about current workflow
@@ -506,7 +473,7 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
         payload["image_filename"].string = filename
         payload["content_type"].string = record["content_type"].stringValue
 
-        await emit(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
+        await emit(.llm(.sendUserMessage(payload: payload, isSystemGenerated: true)))
         Logger.info("🖼️ Image artifact sent to LLM: \(artifactId)", category: .ai)
     }
 
@@ -523,7 +490,7 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
             """
         var payload = JSON()
         payload["text"].string = message
-        await emit(.llmSendCoordinatorMessage(payload: payload))
+        await emit(.llm(.sendCoordinatorMessage(payload: payload)))
         Logger.info("📤 Background processing started notification sent to LLM", category: .ai)
     }
 
@@ -537,7 +504,7 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
             """
         var payload = JSON()
         payload["text"].string = message
-        await emit(.llmSendCoordinatorMessage(payload: payload))
+        await emit(.llm(.sendCoordinatorMessage(payload: payload)))
         Logger.info("📤 Background processing completed notification sent to LLM", category: .ai)
     }
 
@@ -587,10 +554,10 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
         var payload = JSON()
         payload["text"].string = messageText
 
-        await emit(.llmSendUserMessage(payload: payload, isSystemGenerated: true))
+        await emit(.llm(.sendUserMessage(payload: payload, isSystemGenerated: true)))
 
         // Turn off extraction indicator now that analysis is complete
-        await emit(.extractionStateChanged(false, statusMessage: nil))
+        await emit(.processing(.extractionStateChanged(inProgress: false, statusMessage: nil)))
 
         Logger.info("📤 Git analysis summary sent to LLM: \(artifactId)", category: .ai)
     }

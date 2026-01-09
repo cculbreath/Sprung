@@ -51,7 +51,7 @@ final class VoiceProfileExtractionHandler {
     }
 
     private func handleObjectiveEvent(_ event: OnboardingEvent) async {
-        guard case .objectiveStatusChanged(
+        guard case .objective(.statusChanged(
             let id,
             _,
             let newStatus,
@@ -59,7 +59,7 @@ final class VoiceProfileExtractionHandler {
             _,
             _,
             _
-        ) = event else {
+        )) = event else {
             return
         }
 
@@ -98,7 +98,7 @@ final class VoiceProfileExtractionHandler {
         extractionTask = Task { [weak self] in
             guard let self else { return }
             do {
-                await eventBus.publish(.voicePrimerExtractionStarted(sampleCount: samples.count))
+                await eventBus.publish(.artifact(.voicePrimerExtractionStarted(sampleCount: samples.count)))
 
                 guard !samples.isEmpty else {
                     Logger.warning("🎤 No writing samples found, using default profile", category: .ai)
@@ -119,7 +119,7 @@ final class VoiceProfileExtractionHandler {
 
                 if let data = try? JSONEncoder().encode(profile),
                    let json = try? JSON(data: data) {
-                    await eventBus.publish(.voicePrimerExtractionCompleted(primer: json))
+                    await eventBus.publish(.artifact(.voicePrimerExtractionCompleted(primer: json)))
                 }
 
                 await markObjectiveComplete()
@@ -133,7 +133,7 @@ final class VoiceProfileExtractionHandler {
 
             } catch {
                 Logger.error("🎤 Voice profile extraction failed: \(error.localizedDescription)", category: .ai)
-                await eventBus.publish(.voicePrimerExtractionFailed(error: error.localizedDescription))
+                await eventBus.publish(.artifact(.voicePrimerExtractionFailed(error: error.localizedDescription)))
 
                 let defaultProfile = VoiceProfile()
                 voiceProfileService.storeVoiceProfile(defaultProfile, in: guidanceStore)
@@ -162,12 +162,12 @@ final class VoiceProfileExtractionHandler {
     }
 
     private func markObjectiveComplete() async {
-        await eventBus.publish(.objectiveStatusUpdateRequested(
+        await eventBus.publish(.objective(.statusUpdateRequested(
             id: OnboardingObjectiveId.voicePrimersExtracted.rawValue,
             status: ObjectiveStatus.completed.rawValue,
             source: "voice_profile_handler",
             notes: "Voice profile extracted and stored",
             details: nil
-        ))
+        )))
     }
 }
