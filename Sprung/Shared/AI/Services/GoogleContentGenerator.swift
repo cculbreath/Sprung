@@ -53,8 +53,8 @@ actor GoogleContentGenerator {
             self.session = session
         } else {
             let config = URLSessionConfiguration.default
-            config.timeoutIntervalForRequest = 300
-            config.timeoutIntervalForResource = 600
+            config.timeoutIntervalForRequest = 600  // 10 min for heavy thinking models
+            config.timeoutIntervalForResource = 900
             self.session = URLSession(configuration: config)
         }
     }

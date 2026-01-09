@@ -102,7 +102,8 @@ final class ExperienceDefaultsWorkspaceService {
         skills: [Skill],
         timelineEntries: [JSON],
         enabledSections: [String],
-        customFields: [CustomFieldDefinition]
+        customFields: [CustomFieldDefinition],
+        selectedTitles: [String]? = nil
     ) throws {
         guard workspacePath != nil else {
             throw WorkspaceError.workspaceNotCreated
@@ -111,7 +112,7 @@ final class ExperienceDefaultsWorkspaceService {
         try exportKnowledgeCards(knowledgeCards)
         try exportSkills(skills)
         try exportTimeline(timelineEntries)
-        try exportConfig(enabledSections: enabledSections, customFields: customFields)
+        try exportConfig(enabledSections: enabledSections, customFields: customFields, selectedTitles: selectedTitles)
         let includeTitleSets = customFields.contains { $0.key.lowercased() == "custom.jobtitles" }
         try exportGuidance(includeTitleSets: includeTitleSets)
         try writeOverviewDocument(
@@ -119,7 +120,8 @@ final class ExperienceDefaultsWorkspaceService {
             skillCount: skills.count,
             timelineCount: timelineEntries.count,
             enabledSections: enabledSections,
-            includeTitleSets: includeTitleSets
+            includeTitleSets: includeTitleSets,
+            selectedTitles: selectedTitles
         )
     }
 
@@ -213,8 +215,12 @@ final class ExperienceDefaultsWorkspaceService {
         Logger.info("📤 Exported \(entries.count) timeline entries to workspace", category: .ai)
     }
 
-    /// Exports configuration (enabled sections, custom fields)
-    private func exportConfig(enabledSections: [String], customFields: [CustomFieldDefinition]) throws {
+    /// Exports configuration (enabled sections, custom fields, selected titles)
+    private func exportConfig(
+        enabledSections: [String],
+        customFields: [CustomFieldDefinition],
+        selectedTitles: [String]?
+    ) throws {
         guard let configDir = configPath else { throw WorkspaceError.workspaceNotCreated }
 
         // Enabled sections
@@ -229,6 +235,14 @@ final class ExperienceDefaultsWorkspaceService {
         }
         let customFieldsData = try JSONSerialization.data(withJSONObject: customFieldsArray, options: [.prettyPrinted])
         try customFieldsData.write(to: customFieldsFile)
+
+        // Selected titles (if provided)
+        if let titles = selectedTitles {
+            let titlesFile = configDir.appendingPathComponent("selected_titles.json")
+            let titlesData = try JSONSerialization.data(withJSONObject: titles, options: [.prettyPrinted])
+            try titlesData.write(to: titlesFile)
+            Logger.info("📤 Exported selected titles: \(titles.joined(separator: ", "))", category: .ai)
+        }
 
         Logger.info("📤 Exported config to workspace", category: .ai)
     }
@@ -282,7 +296,8 @@ final class ExperienceDefaultsWorkspaceService {
         skillCount: Int,
         timelineCount: Int,
         enabledSections: [String],
-        includeTitleSets: Bool
+        includeTitleSets: Bool,
+        selectedTitles: [String]?
     ) throws {
         guard let workspace = workspacePath else { throw WorkspaceError.workspaceNotCreated }
 
@@ -291,12 +306,36 @@ final class ExperienceDefaultsWorkspaceService {
             ? "Voice profile and title sets have been pre-generated. Read these FIRST:"
             : "Voice profile has been pre-generated. Read this FIRST:"
 
-        let titleSetsSection = includeTitleSets ? """
-        ### Title Sets (`guidance/title_sets.json`)
-        User has curated identity title options. SELECT the best-fit set based on:
-        - Job type match (suggested_for field)
-        - User favorites (is_favorite: true)
-        """ : ""
+        // If titles are pre-selected, use them directly; otherwise agent picks from curated sets
+        let titleSetsSection: String
+        if let titles = selectedTitles {
+            titleSetsSection = """
+            ### Identity Titles (PRE-SELECTED)
+            The orchestrator has already selected the best title set for broad applicability:
+            **\(titles.joined(separator: " • "))**
+
+            Use these exact titles in `config/selected_titles.json` for the custom.jobTitles field.
+            Do NOT pick different titles from guidance/title_sets.json.
+            """
+        } else if includeTitleSets {
+            titleSetsSection = """
+            ### Title Sets (`guidance/title_sets.json`)
+            User has curated identity title options. SELECT the best-fit set based on:
+            - Job type match (suggested_for field)
+            - User favorites (is_favorite: true)
+            """
+        } else {
+            titleSetsSection = ""
+        }
+
+        let titleInstruction: String
+        if selectedTitles != nil {
+            titleInstruction = "custom.jobTitles is enabled: use the pre-selected titles from config/selected_titles.json."
+        } else if includeTitleSets {
+            titleInstruction = "custom.jobTitles is enabled: select titles from guidance/title_sets.json."
+        } else {
+            titleInstruction = "custom.jobTitles is NOT enabled: do not output identity titles."
+        }
 
         let overview = """
         # Experience Defaults Workspace
@@ -317,8 +356,7 @@ final class ExperienceDefaultsWorkspaceService {
 
         \(titleSetsSection)
 
-        \(includeTitleSets ? "custom.jobTitles is enabled: select titles from guidance/title_sets.json." :
-        "custom.jobTitles is NOT enabled: do not output identity titles.")
+        \(titleInstruction)
 
         ## Available Data
 

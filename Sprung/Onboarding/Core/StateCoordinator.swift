@@ -637,7 +637,10 @@ actor StateCoordinator: OnboardingEventEmitter {
         if success {
             Logger.debug("✅ Tool result stored: \(toolName) (\(callId.prefix(8)))", category: .ai)
         } else {
-            Logger.warning("⚠️ Tool result not stored (slot not found): \(toolName) (\(callId.prefix(8)))", category: .ai)
+            Logger.warning("⚠️ Tool result not stored (slot not found or already resolved): \(toolName) (\(callId.prefix(8)))", category: .ai)
+            // Even if slot not found (orphaned/superseded call) or already resolved (race with auto-fill),
+            // publish the event so DrainGate can remove this callId from its pending set and avoid stale blocks
+            await eventBus.publish(.llm(.toolResultFilled(callId: callId, status: "orphaned")))
         }
         return success
     }
@@ -695,6 +698,21 @@ actor StateCoordinator: OnboardingEventEmitter {
     func getObjectiveStatusMap() async -> [String: String] {
         let objectives = await objectiveStore.getAllObjectives()
         return Dictionary(uniqueKeysWithValues: objectives.map { ($0.id, $0.status.rawValue) })
+    }
+
+    /// Get Phase 4 UI context for tool gating (title set curation state)
+    func getPhase4UIContext() async -> ToolBundlePolicy.Phase4UIContext {
+        await uiState.getPhase4UIContext()
+    }
+
+    /// Set whether title sets are required (called when entering Phase 4)
+    func setTitleSetsRequired(_ required: Bool) async {
+        await uiState.setTitleSetsRequired(required)
+    }
+
+    /// Mark title sets as curated (called when user saves their selections)
+    func setTitleSetsCurated(_ curated: Bool) async {
+        await uiState.setTitleSetsCurated(curated)
     }
     /// Restore an objective status from persisted session
     func restoreObjectiveStatus(objectiveId: String, status: String) async {

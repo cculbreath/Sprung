@@ -60,6 +60,7 @@ struct OnboardingInterviewView: View {
                 // Background agent status bar - positioned directly below card
                 BackgroundAgentStatusBar(
                     tracker: coordinator.agentActivityTracker,
+                    drainGate: coordinator.drainGate,
                     extractionMessage: coordinator.ui.extractionStatusMessage,
                     isExtractionInProgress: coordinator.ui.isExtractionInProgress
                 )
@@ -67,6 +68,7 @@ struct OnboardingInterviewView: View {
                 .padding(.top, 4)
                 .animation(OnboardingAnimations.StatusBar.stateChange, value: coordinator.agentActivityTracker.isAnyRunning)
                 .animation(OnboardingAnimations.StatusBar.stateChange, value: coordinator.ui.isExtractionInProgress)
+                .animation(OnboardingAnimations.StatusBar.stateChange, value: coordinator.drainGate.executingBackgroundTools.count)
 
                 Spacer(minLength: 16) // centers body relative to bottom bar
 

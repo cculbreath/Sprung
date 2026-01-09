@@ -60,13 +60,12 @@ struct OnboardingInterviewChatPanel: View {
                 isEditable: coordinator.ui.isActive,
                 isProcessing: coordinator.ui.isProcessing,
                 isWaitingForValidation: isWaitingForValidation,
+                queuedMessageCount: coordinator.ui.queuedMessageCount,
                 onSend: { text in
                     send(text)
                 },
-                onCancel: {
-                    Task {
-                        await coordinator.requestCancelLLM()
-                    }
+                onInterrupt: { text in
+                    interrupt(text)
                 }
             )
             .padding(.top, sectionSpacing)
@@ -108,13 +107,22 @@ struct OnboardingInterviewChatPanel: View {
     }
 
     private func send(_ text: String) {
-        guard coordinator.ui.isProcessing == false else { return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         state.shouldAutoScroll = true
         state.userInput = ""
         Task {
             await coordinator.sendChatMessage(trimmed)
+        }
+    }
+
+    private func interrupt(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        state.shouldAutoScroll = true
+        state.userInput = ""
+        Task {
+            await coordinator.interruptWithMessage(trimmed)
         }
     }
 }

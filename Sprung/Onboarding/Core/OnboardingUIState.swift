@@ -11,6 +11,11 @@ final class OnboardingUIState {
     var currentStatusMessage: String?
     var isActive: Bool = false
 
+    // MARK: - Streaming State (for chatbox glow)
+    /// True only when LLM text is actively streaming (incoming or outgoing user-visible text).
+    /// Does NOT activate for background tool execution or coordinator messages.
+    var isStreaming: Bool = false
+
     // MARK: - Batch Upload State
     /// True when a batch of documents is being processed (extraction in progress)
     /// Used to prevent validation prompts from interrupting batch uploads
@@ -22,6 +27,10 @@ final class OnboardingUIState {
     var isExtractionInProgress: Bool = false
     /// Status message to display during extraction (e.g., "Extracting resume.pdf...")
     var extractionStatusMessage: String?
+    // MARK: - Chat Queue State
+    /// Number of messages waiting in the queue (for Queue button display)
+    var queuedMessageCount: Int = 0
+
     // MARK: - Chat State
     var messages: [OnboardingMessage] = []
     var modelAvailabilityMessage: String?
@@ -75,6 +84,8 @@ final class OnboardingUIState {
     // MARK: - Guidance Flags
     /// True when custom.jobTitles was enabled during section configuration
     var shouldGenerateTitleSets: Bool = false
+    /// True when user has completed title set curation (selected and saved their choices)
+    var titleSetsCurated: Bool = false
 
     // MARK: - Interview Completion State
     /// Set to true when interview transitions to .complete phase
@@ -95,6 +106,12 @@ final class OnboardingUIState {
             self.currentStatusMessage = nil
         }
     }
+
+    /// Update streaming state (for chatbox glow - only during actual text streaming)
+    func updateStreaming(_ streaming: Bool) {
+        self.isStreaming = streaming
+    }
+
     func updateTimeline(_ timeline: JSON?) {
         let oldToken = self.timelineUIChangeToken
         self.skeletonTimeline = timeline

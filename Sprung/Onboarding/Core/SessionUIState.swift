@@ -164,6 +164,12 @@ actor SessionUIState: OnboardingEventEmitter {
     private(set) var pendingExtraction: OnboardingPendingExtraction?
     private(set) var pendingStreamingStatus: String?
 
+    // MARK: - Phase 4 Title Set Curation State
+    /// True if custom.jobTitles was enabled and title sets need to be curated
+    private(set) var titleSetsRequired: Bool = false
+    /// True if user has completed title set curation
+    private(set) var titleSetsCurated: Bool = false
+
     // MARK: - Initialization
     init(eventBus: EventCoordinator, phasePolicy: PhasePolicy, initialPhase: InterviewPhase) {
         self.eventBus = eventBus
@@ -297,6 +303,28 @@ actor SessionUIState: OnboardingEventEmitter {
         if active {
             Logger.info("📂 Document collection mode activated - tools gated until 'Done with Uploads'", category: .ai)
         }
+    }
+
+    // MARK: - Phase 4 Title Set Curation State
+
+    /// Update title set curation requirement (called when entering Phase 4)
+    func setTitleSetsRequired(_ required: Bool) {
+        titleSetsRequired = required
+        Logger.info("🏷️ Title sets required: \(required)", category: .ai)
+    }
+
+    /// Mark title sets as curated (called when user saves their selections)
+    func setTitleSetsCurated(_ curated: Bool) {
+        titleSetsCurated = curated
+        Logger.info("🏷️ Title sets curated: \(curated)", category: .ai)
+    }
+
+    /// Get Phase 4 UI context for tool gating
+    func getPhase4UIContext() -> ToolBundlePolicy.Phase4UIContext {
+        ToolBundlePolicy.Phase4UIContext(
+            titleSetsRequired: titleSetsRequired,
+            titleSetsCurated: titleSetsCurated
+        )
     }
 
     // MARK: - Tool Gating Logic

@@ -17,8 +17,7 @@ final class NarrativeDeduplicationService {
     private weak var agentActivityTracker: AgentActivityTracker?
 
     private var modelId: String {
-        UserDefaults.standard.string(forKey: "onboardingCardMergeModelId")
-            ?? "openai/gpt-5"  // Default to capable model for merge decisions
+        UserDefaults.standard.string(forKey: "onboardingCardMergeModelId") ?? DefaultModels.openRouter
     }
 
     private let workspaceService = CardMergeWorkspaceService()

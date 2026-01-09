@@ -42,16 +42,24 @@ final class ExperienceDefaultsAgentService {
     private(set) var currentMessage: String = ""
     private(set) var agent: ExperienceDefaultsAgent?
 
-    // Configuration
+    // Selected titles (from orchestrator LLM selection)
+    private let selectedTitles: [String]?
+
+    // Configuration - uses same model as card merge (agentic OpenRouter model)
     private var modelId: String {
-        UserDefaults.standard.string(forKey: "experienceDefaultsAgentModelId") ?? DefaultModels.openAI
+        UserDefaults.standard.string(forKey: "onboardingCardMergeModelId") ?? DefaultModels.openRouter
     }
 
-    init(coordinator: OnboardingInterviewCoordinator, tracker: AgentActivityTracker? = nil) {
+    init(
+        coordinator: OnboardingInterviewCoordinator,
+        tracker: AgentActivityTracker? = nil,
+        selectedTitles: [String]? = nil
+    ) {
         self.coordinator = coordinator
         self.tracker = tracker
+        self.selectedTitles = selectedTitles
         self.workspaceService = ExperienceDefaultsWorkspaceService(guidanceStore: coordinator.guidanceStore)
-        Logger.info("🗂️ ExperienceDefaultsAgentService initialized", category: .ai)
+        Logger.info("🗂️ ExperienceDefaultsAgentService initialized\(selectedTitles != nil ? " with selected titles" : "")", category: .ai)
     }
 
     // MARK: - Public API
@@ -104,7 +112,8 @@ final class ExperienceDefaultsAgentService {
                 skills: skills,
                 timelineEntries: timelineEntries,
                 enabledSections: enabledSections.sorted(),
-                customFields: customFields
+                customFields: customFields,
+                selectedTitles: selectedTitles
             )
 
             Logger.info("🗂️ Workspace prepared with \(knowledgeCards.count) KCs, \(skills.count) skills, \(timelineEntries.count) timeline entries", category: .ai)

@@ -50,7 +50,7 @@ final class UIStateUpdateHandler {
         switch event {
         case .processing(.stateChanged(let isProcessing, let statusMessage)):
             ui.updateProcessing(isProcessing: isProcessing, statusMessage: statusMessage)
-            Logger.info("🎨 UI Update: Chat glow/spinner \(isProcessing ? "ACTIVATED ✨" : "DEACTIVATED") - isProcessing=\(isProcessing), status: \(ui.currentStatusMessage ?? "none")", category: .ai)
+            Logger.info("🎨 UI Update: Processing state \(isProcessing ? "ACTIVE" : "INACTIVE") - status: \(ui.currentStatusMessage ?? "none")", category: .ai)
             await syncWizardProgressFromState()
         case .processing(.waitingStateChanged(_, let statusMessage)):
             if let statusMessage = statusMessage {
@@ -69,6 +69,9 @@ final class UIStateUpdateHandler {
         case .processing(.extractionStateChanged(let inProgress, let statusMessage)):
             ui.updateExtraction(inProgress: inProgress, statusMessage: statusMessage)
             Logger.info("📄 Extraction state: \(inProgress ? "started" : "completed") - \(statusMessage ?? "no message")", category: .ai)
+
+        case .processing(.queuedMessageCountChanged(let count)):
+            ui.queuedMessageCount = count
 
         default:
             break
@@ -107,6 +110,8 @@ final class UIStateUpdateHandler {
             ui.messages = await state.messages
         case .llm(.streamingMessageBegan(_, _, let statusMessage)):
             ui.messages = await state.messages
+            ui.updateStreaming(true)
+            Logger.info("✨ Chatbox glow ACTIVATED (streaming began)", category: .ai)
             if let statusMessage = statusMessage {
                 ui.currentStatusMessage = statusMessage
             }
@@ -117,6 +122,8 @@ final class UIStateUpdateHandler {
             }
         case .llm(.streamingMessageFinalized(_, _, _, let statusMessage)):
             ui.messages = await state.messages
+            ui.updateStreaming(false)
+            Logger.info("✨ Chatbox glow DEACTIVATED (streaming finalized)", category: .ai)
             ui.currentStatusMessage = statusMessage ?? nil
         case .llm(.userMessageSent):
             ui.messages = await state.messages
@@ -156,9 +163,12 @@ final class UIStateUpdateHandler {
         case .phase(.transitionApplied(let phase, _)):
             if phase == InterviewPhase.phase4StrategicSynthesis.rawValue {
                 let customFields = await state.getCustomFieldDefinitions()
-                ui.shouldGenerateTitleSets = customFields.contains { $0.key.lowercased() == "custom.jobtitles" }
+                let titleSetsRequired = customFields.contains { $0.key.lowercased() == "custom.jobtitles" }
+                ui.shouldGenerateTitleSets = titleSetsRequired
+                // Sync to SessionUIState for tool gating
+                await state.setTitleSetsRequired(titleSetsRequired)
                 Logger.info(
-                    "🏷️ Phase 4 entry: title set curation \(ui.shouldGenerateTitleSets ? "enabled" : "disabled")",
+                    "🏷️ Phase 4 entry: title set curation \(titleSetsRequired ? "enabled" : "disabled")",
                     category: .ai
                 )
             }

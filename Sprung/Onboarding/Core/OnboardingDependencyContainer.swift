@@ -135,6 +135,12 @@ final class OnboardingDependencyContainer {
     // MARK: - UI Tool Continuation Manager
     let uiToolContinuationManager: UIToolContinuationManager
 
+    // MARK: - User Action Queue Infrastructure
+    let userActionQueue: UserActionQueue
+    let drainGate: DrainGate
+    let queueDrainCoordinator: QueueDrainCoordinator
+    let gateBlockEventHandler: GateBlockEventHandler
+
     // MARK: - Debug Services
     #if DEBUG
     let debugRegenerationService: DebugRegenerationService
@@ -192,6 +198,20 @@ final class OnboardingDependencyContainer {
         self.todoStore = InterviewTodoStore(eventBus: core.eventBus)
         self.artifactFilesystemContext = ArtifactFilesystemContext()
         self.uiToolContinuationManager = UIToolContinuationManager()
+
+        // 2b. Initialize user action queue infrastructure
+        self.userActionQueue = UserActionQueue()
+        self.drainGate = DrainGate()
+        self.queueDrainCoordinator = QueueDrainCoordinator(
+            queue: userActionQueue,
+            gate: drainGate,
+            eventBus: self.eventBus
+        )
+        self.gateBlockEventHandler = GateBlockEventHandler(
+            eventBus: self.eventBus,
+            drainGate: drainGate
+        )
+        // Note: gateBlockEventHandler.startListening() called later after all properties initialized
 
         // 3. Initialize state stores
         let stores = Self.createStateStores(eventBus: core.eventBus, phasePolicy: core.phasePolicy)
@@ -384,7 +404,9 @@ final class OnboardingDependencyContainer {
         )
         self.uiResponseCoordinator = UIResponseCoordinator(
             eventBus: core.eventBus, toolRouter: tools.toolRouter, state: state, ui: ui,
-            sessionUIState: sessionUIState, continuationManager: uiToolContinuationManager
+            sessionUIState: sessionUIState, continuationManager: uiToolContinuationManager,
+            userActionQueue: userActionQueue, drainGate: drainGate,
+            queueDrainCoordinator: queueDrainCoordinator
         )
 
         // 12a. Initialize voice profile extraction handler
@@ -441,6 +463,12 @@ final class OnboardingDependencyContainer {
 
         // 15. Start conversation log listening
         conversationLogStore.startListening(eventBus: core.eventBus)
+
+        // 16. Start gate block event handler listening
+        let gateHandler = self.gateBlockEventHandler
+        Task {
+            await gateHandler.startListening()
+        }
 
         Logger.info("🏗️ OnboardingDependencyContainer initialized", category: .ai)
     }

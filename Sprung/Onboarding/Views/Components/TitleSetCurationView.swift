@@ -10,6 +10,10 @@ struct TitleSetCurationView: View {
     @State private var selectedSetIds: Set<String> = []
     @State private var isGenerating = false
     @State private var isGeneratingMore = false
+    @State private var isSaving = false
+    @State private var isGeneratingCustom = false
+    @State private var customTitleInput: String = ""
+    @State private var showCustomTitleField = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -43,19 +47,57 @@ struct TitleSetCurationView: View {
                 }
                 .frame(maxHeight: 300)
 
+                // Custom title input
+                if showCustomTitleField {
+                    HStack {
+                        TextField("Enter a title (e.g., Architect)", text: $customTitleInput)
+                            .textFieldStyle(.roundedBorder)
+
+                        Button("Generate") {
+                            Task { await generateWithCustomTitle() }
+                        }
+                        .disabled(customTitleInput.trimmingCharacters(in: .whitespaces).isEmpty || isGeneratingCustom)
+
+                        Button {
+                            showCustomTitleField = false
+                            customTitleInput = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    if isGeneratingCustom {
+                        ProgressView("Generating sets with \"\(customTitleInput)\"...")
+                            .font(.caption)
+                    }
+                }
+
                 HStack {
                     Button("Generate More") {
                         Task { await generateMoreTitleSets() }
                     }
-                    .disabled(isGeneratingMore)
+                    .disabled(isGeneratingMore || isSaving || isGeneratingCustom)
+
+                    Button("Specify Title") {
+                        showCustomTitleField.toggle()
+                    }
+                    .disabled(isGeneratingMore || isSaving || isGeneratingCustom)
 
                     Spacer()
 
-                    Button("Save Selected") {
-                        saveSelectedSets()
+                    Button(isSaving ? "Saving..." : "Save & Continue") {
+                        Task { await saveSelectedSets() }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(selectedSetIds.isEmpty)
+                    .disabled(selectedSetIds.isEmpty || isSaving || isGeneratingMore || isGeneratingCustom)
+                }
+
+                if selectedSetIds.isEmpty && !titleSets.isEmpty {
+                    Text("Select at least one title set to continue")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
                 }
 
                 if isGeneratingMore {
@@ -116,11 +158,14 @@ struct TitleSetCurationView: View {
             status: "Generating additional title options"
         )
 
+        // Get user's current favorites to guide generation
+        let favoritedSets = titleSets.filter { selectedSetIds.contains($0.id) }
+
         do {
             let moreSets = try await titleSetService.generateMoreTitleSets(
                 vocabulary: vocabulary,
                 existingSets: titleSets,
-                count: 5
+                favoritedSets: favoritedSets
             )
 
             titleSets.append(contentsOf: moreSets)
@@ -130,6 +175,41 @@ struct TitleSetCurationView: View {
             )
         } catch {
             Logger.error("🏷️ Generate more failed: \(error.localizedDescription)", category: .ai)
+            await failTitleSetAgent(agentId: agentId, error: error.localizedDescription)
+        }
+    }
+
+    private func generateWithCustomTitle() async {
+        let specifiedTitle = customTitleInput.trimmingCharacters(in: .whitespaces)
+        guard !specifiedTitle.isEmpty else { return }
+
+        isGeneratingCustom = true
+        defer { isGeneratingCustom = false }
+
+        let agentId = await trackTitleSetAgent(
+            name: "Title Sets (Custom: \(specifiedTitle))",
+            status: "Generating sets with \"\(specifiedTitle)\""
+        )
+
+        do {
+            let customSets = try await titleSetService.generateWithSpecifiedTitle(
+                specifiedTitle: specifiedTitle,
+                vocabulary: vocabulary,
+                existingSets: titleSets
+            )
+
+            titleSets.append(contentsOf: customSets)
+
+            // Clear input and hide field on success
+            customTitleInput = ""
+            showCustomTitleField = false
+
+            await finalizeTitleSetAgent(
+                agentId: agentId,
+                summary: "Generated \(customSets.count) sets with \"\(specifiedTitle)\""
+            )
+        } catch {
+            Logger.error("🏷️ Custom title generation failed: \(error.localizedDescription)", category: .ai)
             await failTitleSetAgent(agentId: agentId, error: error.localizedDescription)
         }
     }
@@ -147,20 +227,38 @@ struct TitleSetCurationView: View {
         selectedSetIds.remove(titleSet.id)
     }
 
-    private func saveSelectedSets() {
-        var updatedSets = titleSets
-        for i in updatedSets.indices {
-            updatedSets[i].isFavorite = selectedSetIds.contains(updatedSets[i].id)
-        }
+    private func saveSelectedSets() async {
+        isSaving = true
+        defer { isSaving = false }
 
-        Task { @MainActor in
-            titleSetService.storeTitleSets(
-                vocabulary: vocabulary,
-                titleSets: updatedSets,
-                in: guidanceStore
-            )
-            await coordinator.notifyTitleSetsCurated()
-        }
+        // Only persist the approved/selected title sets
+        let approvedSets = titleSets
+            .filter { selectedSetIds.contains($0.id) }
+            .map { set in
+                var approved = set
+                approved.isFavorite = true  // All approved sets are favorites
+                return approved
+            }
+
+        Logger.info("🏷️ Persisting \(approvedSets.count) approved title sets to inference guidance", category: .ai)
+
+        titleSetService.storeTitleSets(
+            vocabulary: vocabulary,
+            titleSets: approvedSets,
+            in: guidanceStore
+        )
+
+        Logger.info("🏷️ Title sets persisted to guidance store, dismissing curation UI", category: .ai)
+
+        // Mark curation complete and dismiss the UI
+        coordinator.ui.titleSetsCurated = true
+        coordinator.ui.shouldGenerateTitleSets = false
+
+        // Sync to SessionUIState for tool gating (unlocks generate_experience_defaults)
+        await coordinator.state.setTitleSetsCurated(true)
+
+        // Notify the LLM with the approved sets so it can choose the best one
+        await coordinator.notifyTitleSetsCurated(approvedSets: approvedSets)
     }
 
     private func trackTitleSetAgent(name: String, status: String) async -> String {

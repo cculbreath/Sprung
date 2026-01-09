@@ -39,6 +39,11 @@ struct GenerateExperienceDefaultsTool: InterviewTool {
                 "notes": JSONSchema(
                     type: .string,
                     description: "Optional notes or special instructions for the agent"
+                ),
+                "selected_titles": JSONSchema(
+                    type: .array,
+                    description: "The 4 identity titles selected from the curated title sets (required if custom.jobTitles was enabled). Example: [\"Engineer\", \"Developer\", \"Builder\", \"Maker\"]",
+                    items: JSONSchema(type: .string)
                 )
             ],
             required: []
@@ -76,11 +81,25 @@ struct GenerateExperienceDefaultsTool: InterviewTool {
             ))
         }
 
+        // Extract and validate selected titles if title sets feature is enabled
+        var selectedTitles: [String]?
         if shouldGenerateTitleSets {
             if titleSets.isEmpty {
                 return .error(.executionFailed(
                     "Identity title sets have not been curated yet. " +
                     "Ask the user to select and save title sets before generating experience defaults."
+                ))
+            }
+
+            // Require selected_titles parameter when title sets are enabled
+            let titlesArray = params["selected_titles"].array?.compactMap { $0.string }
+            if let titles = titlesArray, titles.count == 4 {
+                selectedTitles = titles
+                Logger.info("🗂️ Selected identity titles: \(titles.joined(separator: ", "))", category: .ai)
+            } else {
+                return .error(.executionFailed(
+                    "Missing or invalid selected_titles. Provide an array of exactly 4 title strings " +
+                    "chosen from the curated title sets."
                 ))
             }
         }
@@ -98,12 +117,13 @@ struct GenerateExperienceDefaultsTool: InterviewTool {
         let service = await MainActor.run {
             ExperienceDefaultsAgentService(
                 coordinator: coordinator,
-                tracker: agentActivityTracker
+                tracker: agentActivityTracker,
+                selectedTitles: selectedTitles
             )
         }
 
         // Run agent (this may take a while)
-        Logger.info("🗂️ Starting ExperienceDefaults agent", category: .ai)
+        Logger.info("🗂️ Starting ExperienceDefaults agent\(selectedTitles != nil ? " with selected titles" : "")", category: .ai)
 
         do {
             let result = try await service.run()

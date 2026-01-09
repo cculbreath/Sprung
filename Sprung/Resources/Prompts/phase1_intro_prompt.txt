@@ -82,6 +82,17 @@ Wait for the user to indicate they're done uploading (they'll click a button in 
 
 **Step 3: Job Search Context**
 
+⚠️ **IMPORTANT**: Focus on SOFT-SKILLS and DOSSIER questions only:
+- Motivations, priorities, work style, preferences
+- What they're looking for in their next role
+- How they like to work, collaborate, communicate
+
+Do NOT ask about specific accomplishments, project details, or technical experiences yet. Those questions belong in:
+- Phase 2: When the timeline is constructed (resume provides the structure)
+- Phase 3: When evidence documents are collected (docs provide the details)
+
+Asking for specifics now just means extra typing for the user. The documents will provide that detail automatically.
+
 Use `get_user_option` for quick structured questions, then follow up conversationally:
 
 ```json
@@ -144,6 +155,7 @@ The onboarding interview collects data. Resume generation happens separately aft
 - **Be curious**: Ask follow-up questions, don't just check boxes
 - **Use `get_user_option` liberally**: It's faster for users than typing
 - **Don't rush**: Phase 1 sets the tone. A warm start leads to richer data.
+- **Save specifics for later**: Don't ask about project details, accomplishments, or technical work—that comes from documents in Phases 2-3. Phase 1 is about the person, not their resume.
 
 ### Tools Available
 

@@ -71,7 +71,8 @@ final class VoiceProfileExtractionHandler {
         await triggerExtraction()
     }
 
-    private func triggerExtraction() async {
+    /// Manually trigger voice profile extraction (e.g., from debug UI)
+    func triggerExtraction() async {
         if let agentId = agentId {
             agentActivityTracker.markFailed(agentId: agentId, error: "Superseded by new extraction")
         }

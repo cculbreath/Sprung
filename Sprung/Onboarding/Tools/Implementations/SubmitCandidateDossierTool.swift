@@ -100,7 +100,23 @@ struct SubmitCandidateDossierTool: InterviewTool {
             await eventBus.publish(.artifact(.candidateDossierPersisted(dossier: dossier)))
             Logger.info("📋 Candidate dossier persisted: \(dossierId)", category: .ai)
 
-            // Mark objective as completed so subphase can advance
+            // Mark all Phase 4 synthesis objectives as completed
+            // Submitting the dossier represents completion of strategic synthesis work
+            await eventBus.publish(.objective(.statusUpdateRequested(
+                id: OnboardingObjectiveId.strengthsIdentified.rawValue,
+                status: "completed",
+                source: "tool_execution",
+                notes: "Strategic synthesis complete via dossier submission",
+                details: nil
+            )))
+            await eventBus.publish(.objective(.statusUpdateRequested(
+                id: OnboardingObjectiveId.pitfallsDocumented.rawValue,
+                status: "completed",
+                source: "tool_execution",
+                notes: "Strategic synthesis complete via dossier submission",
+                details: nil
+            )))
+            // Mark dossier objective as completed so subphase can advance
             await eventBus.publish(.objective(.statusUpdateRequested(
                 id: OnboardingObjectiveId.dossierComplete.rawValue,
                 status: "completed",

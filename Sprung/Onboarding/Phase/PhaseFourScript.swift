@@ -4,10 +4,20 @@
 //
 //  Phase 4: Strategic Synthesis — Strengths, pitfalls, dossier completion, experience defaults.
 //
-//  INTERVIEW REVITALIZATION PLAN:
-//  This phase synthesizes everything gathered in Phases 1-3 into strategic intelligence
-//  for the job search. The interviewer acts as a career strategist, identifying strengths
-//  to emphasize, pitfalls to avoid, and ensuring the dossier is complete.
+//  WORKFLOW:
+//  1. Analyze evidence and present strategic STRENGTHS (2-3 with evidence) - discuss with user
+//  2. Identify potential PITFALLS and suggest mitigation strategies - discuss with user
+//  3. Fill any remaining DOSSIER GAPS (availability, preferences, circumstances)
+//  4. Call submit_candidate_dossier with all gathered insights
+//     → This automatically satisfies: strengthsIdentified, pitfallsDocumented, dossierComplete
+//  5. If custom.jobTitles was enabled:
+//     → WAIT for user to complete Title Set Curation in tool pane (user-driven)
+//     → You'll receive a "Title Sets Curated" notification when ready
+//  6. Call generate_experience_defaults (with selected_titles if title sets were curated)
+//  7. Summarize and call next_phase to complete
+//
+//  IMPORTANT: Do NOT rush to submit_candidate_dossier. The synthesis work (strengths analysis,
+//  pitfalls analysis, gap-filling questions) must happen FIRST through conversation.
 //
 //  TOOL AVAILABILITY: Defined in ToolBundlePolicy.swift (single source of truth)
 //
@@ -26,24 +36,29 @@ struct PhaseFourScript: PhaseScript {
     var initialTodoItems: [InterviewTodoItem] {
         [
             InterviewTodoItem(
-                content: "Synthesize strategic strengths with evidence",
+                content: "Analyze evidence and present strategic strengths (2-3 with evidence)",
                 status: .pending,
-                activeForm: "Synthesizing strengths"
+                activeForm: "Analyzing strengths"
             ),
             InterviewTodoItem(
-                content: "Document pitfalls with mitigation strategies",
+                content: "Identify pitfalls and suggest mitigation strategies",
                 status: .pending,
-                activeForm: "Documenting pitfalls"
+                activeForm: "Analyzing pitfalls"
             ),
             InterviewTodoItem(
-                content: "Fill remaining dossier gaps",
+                content: "Fill remaining dossier gaps (availability, preferences, circumstances)",
                 status: .pending,
-                activeForm: "Completing dossier"
+                activeForm: "Filling dossier gaps"
             ),
             InterviewTodoItem(
-                content: "Generate and curate identity title sets (if enabled)",
+                content: "Submit candidate dossier with strengths and pitfalls",
                 status: .pending,
-                activeForm: "Generating title sets"
+                activeForm: "Submitting dossier"
+            ),
+            InterviewTodoItem(
+                content: "Wait for user to complete Title Set curation (if enabled)",
+                status: .pending,
+                activeForm: "Waiting for title sets"
             ),
             InterviewTodoItem(
                 content: "Generate experience defaults",
@@ -51,12 +66,7 @@ struct PhaseFourScript: PhaseScript {
                 activeForm: "Generating experience defaults"
             ),
             InterviewTodoItem(
-                content: "Submit dossier for validation",
-                status: .pending,
-                activeForm: "Submitting dossier"
-            ),
-            InterviewTodoItem(
-                content: "Summarize interview and complete onboarding",
+                content: "Summarize interview and call next_phase",
                 status: .pending,
                 activeForm: "Completing interview"
             )
@@ -66,62 +76,60 @@ struct PhaseFourScript: PhaseScript {
     var objectiveWorkflows: [String: ObjectiveWorkflow] {
         [
             // MARK: - Strengths Synthesis
+            // NOTE: This objective is automatically satisfied when submit_candidate_dossier is called.
+            // The workflow guides the LLM to do the analysis work BEFORE calling the tool.
             OnboardingObjectiveId.strengthsIdentified.rawValue: ObjectiveWorkflow(
                 id: OnboardingObjectiveId.strengthsIdentified.rawValue,
                 onBegin: { _ in
                     let title = """
-                        Starting Phase 4: Strategic Synthesis. Begin by analyzing all gathered evidence \
-                        (writing samples, timeline, knowledge cards) to identify the candidate's key differentiators. \
-                        Present 2-3 strategic strengths with evidence from the collected materials. \
-                        Use get_user_option for structured feedback. Ask: "Does this resonate? What would you add?"
+                        Starting Phase 4: Strategic Synthesis.
+
+                        IMPORTANT: Work through your todo list in order. Do NOT skip to submit_candidate_dossier.
+
+                        First, analyze all gathered evidence (writing samples, timeline, knowledge cards) \
+                        to identify 2-3 key strategic STRENGTHS with specific evidence. Present these to the user \
+                        and discuss: "Does this resonate? What would you add or change?"
+
+                        Use get_user_option for structured feedback on your analysis.
                         """
                     let details = [
                         "action": "synthesize_strengths",
-                        "approach": "evidence_based_analysis"
+                        "approach": "evidence_based_analysis",
+                        "note": "Do conversational analysis BEFORE calling submit_candidate_dossier"
                     ]
                     return [.coordinatorMessage(title: title, details: details, payload: nil)]
-                },
-                onComplete: { _ in
-                    let title = """
-                        Strengths identified. Now analyze potential concerns and pitfalls. \
-                        Look for gaps in employment, transitions that need framing, or areas \
-                        where the candidate might face skepticism. For each pitfall, suggest a mitigation strategy.
-                        """
-                    return [.coordinatorMessage(title: title, details: [:], payload: nil)]
                 }
             ),
 
             // MARK: - Pitfalls Analysis
+            // NOTE: This objective is automatically satisfied when submit_candidate_dossier is called.
             OnboardingObjectiveId.pitfallsDocumented.rawValue: ObjectiveWorkflow(
                 id: OnboardingObjectiveId.pitfallsDocumented.rawValue,
                 dependsOn: [OnboardingObjectiveId.strengthsIdentified.rawValue],
-                autoStartWhenReady: true,
-                onComplete: { _ in
-                    let title = """
-                        Pitfalls documented with mitigation strategies. Now fill any remaining dossier gaps. \
-                        Check for: availability, work arrangement preferences, unique circumstances, \
-                        and any other context needed for job applications. \
-                        Use get_user_option for rapid structured questions to fill gaps.
-                        """
-                    return [.coordinatorMessage(title: title, details: ["action": "fill_dossier_gaps"], payload: nil)]
-                }
+                autoStartWhenReady: false  // Don't auto-start - LLM drives via todos
             ),
 
             // MARK: - Dossier Completion
+            // NOTE: This objective is satisfied when submit_candidate_dossier is called.
+            // submit_candidate_dossier also marks strengthsIdentified and pitfallsDocumented complete.
             OnboardingObjectiveId.dossierComplete.rawValue: ObjectiveWorkflow(
                 id: OnboardingObjectiveId.dossierComplete.rawValue,
                 dependsOn: [OnboardingObjectiveId.pitfallsDocumented.rawValue],
-                autoStartWhenReady: true,
+                autoStartWhenReady: false,  // Don't auto-start - LLM drives via todos
                 onComplete: { _ in
                     let title = """
-                        Dossier complete. Next is experience defaults generation. \
-                        If custom.jobTitles was enabled in configure_enabled_sections, \
-                        have the user curate identity title sets in the tool pane before calling generate_experience_defaults. \
-                        Otherwise, call generate_experience_defaults to launch the Experience Defaults agent. \
-                        The agent has access to all knowledge cards, skills, and timeline data, \
-                        and will generate high-quality, resume-ready content automatically.
+                        Dossier submitted! Next step depends on whether custom.jobTitles was enabled:
+
+                        IF custom.jobTitles was enabled:
+                        → The tool pane now shows Title Set Curation
+                        → WAIT for the user to generate, select, and save their title sets
+                        → You'll receive a "Title Sets Curated" notification with the approved titles
+                        → THEN call generate_experience_defaults with the selected_titles parameter
+
+                        IF custom.jobTitles was NOT enabled:
+                        → Proceed directly to generate_experience_defaults (no selected_titles needed)
                         """
-                    return [.coordinatorMessage(title: title, details: ["action": "call_generate_experience_defaults"], payload: nil)]
+                    return [.coordinatorMessage(title: title, details: ["action": "await_title_curation_or_generate_defaults"], payload: nil)]
                 }
             ),
 
@@ -129,22 +137,19 @@ struct PhaseFourScript: PhaseScript {
             OnboardingObjectiveId.experienceDefaultsSet.rawValue: ObjectiveWorkflow(
                 id: OnboardingObjectiveId.experienceDefaultsSet.rawValue,
                 dependsOn: [OnboardingObjectiveId.dossierComplete.rawValue],
-                autoStartWhenReady: true,
-                onBegin: { _ in
-                    let title = """
-                        Starting experience defaults generation. \
-                        If custom.jobTitles was enabled, first guide the user to curate identity title sets \
-                        in the tool pane, then proceed with generate_experience_defaults. \
-                        If custom.jobTitles is not enabled, proceed directly to generate_experience_defaults.
-                        """
-                    return [.coordinatorMessage(title: title, details: ["action": "prepare_experience_defaults"], payload: nil)]
-                },
+                autoStartWhenReady: false,  // Don't auto-start - wait for title curation if needed
                 onComplete: { _ in
                     let title = """
-                        Experience defaults configured. Interview complete! \
-                        Summarize what was accomplished: voice primers, knowledge cards, strategic dossier, \
-                        and resume defaults. Explain next steps (resume customization, cover letter generation). \
-                        Then call next_phase to complete the interview.
+                        Experience defaults generated! Interview is nearly complete.
+
+                        Summarize what was accomplished:
+                        - Voice primers extracted from writing samples
+                        - Knowledge cards generated from evidence
+                        - Strategic dossier with strengths and pitfall mitigations
+                        - Resume defaults ready for customization
+
+                        Explain next steps (resume customization, cover letter generation, job applications).
+                        Then call next_phase to complete the onboarding interview.
                         """
                     return [.coordinatorMessage(title: title, details: ["action": "call_next_phase"], payload: nil)]
                 }

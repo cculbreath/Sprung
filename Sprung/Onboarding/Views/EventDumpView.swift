@@ -13,6 +13,7 @@ struct EventDumpView: View {
     @State private var metricsText: String = ""
     @State private var conversationEntries: [ConversationLogEntry] = []
     @State private var todoItems: [InterviewTodoItem] = []
+    @State private var contextPreview: ContextPreviewSnapshot?
     @State private var selectedTab = 0
     @State private var showRegenDialog = false
     @State private var isDeduping = false
@@ -31,6 +32,10 @@ struct EventDumpView: View {
                 todoListTabContent
                     .tabItem { Label("Todo List", systemImage: "checklist") }
                     .tag(2)
+
+                contextPreviewTabContent
+                    .tabItem { Label("Context", systemImage: "doc.text.magnifyingglass") }
+                    .tag(3)
             }
             .navigationTitle("Debug Logs")
             .toolbar { toolbarContent }
@@ -38,6 +43,7 @@ struct EventDumpView: View {
                 loadEvents()
                 loadConversationLog()
                 await loadTodoItems()
+                await loadContextPreview()
             }
             .task {
                 // Live update todo list when events fire
@@ -212,6 +218,152 @@ struct EventDumpView: View {
         todoItems = await coordinator.todoStore.getItemsForPersistence()
     }
 
+    // MARK: - Context Preview Tab
+
+    @ViewBuilder
+    private var contextPreviewTabContent: some View {
+        VStack(spacing: 0) {
+            if let preview = contextPreview {
+                contextPreviewHeader(preview)
+                contextPreviewList(preview)
+            } else {
+                ContentUnavailableView {
+                    Label("No Context", systemImage: "doc.text.magnifyingglass")
+                } description: {
+                    Text("Loading context preview...")
+                }
+            }
+        }
+    }
+
+    private func contextPreviewHeader(_ preview: ContextPreviewSnapshot) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Estimated Context Size")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 12) {
+                    HStack(spacing: 4) {
+                        Text("Tokens:")
+                            .foregroundStyle(.tertiary)
+                        Text(TokenUsageTracker.formatTokenCount(preview.totalEstimatedTokens))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.blue)
+                    }
+                    HStack(spacing: 4) {
+                        Text("Bytes:")
+                            .foregroundStyle(.tertiary)
+                        Text(formatBytes(preview.totalBytes))
+                            .fontWeight(.medium)
+                    }
+                    HStack(spacing: 4) {
+                        Text("Tools:")
+                            .foregroundStyle(.tertiary)
+                        Text("\(preview.toolCount)")
+                        Text("(~\(TokenUsageTracker.formatTokenCount(preview.toolSchemaTokens)) tokens)")
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .font(.caption.monospacedDigit())
+            }
+            Spacer()
+            Button("Refresh") {
+                Task { await loadContextPreview() }
+            }
+            .buttonStyle(.borderless)
+            .font(.caption)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color(nsColor: .controlBackgroundColor))
+    }
+
+    private func contextPreviewList(_ preview: ContextPreviewSnapshot) -> some View {
+        List {
+            ForEach(preview.items) { item in
+                contextPreviewItemRow(item)
+                    .listRowSeparator(.visible)
+            }
+        }
+        .listStyle(.plain)
+    }
+
+    private func contextPreviewItemRow(_ item: ContextPreviewItem) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(item.type.rawValue)
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(colorForContextType(item.type))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(colorForContextType(item.type).opacity(0.15))
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+
+                Text(item.label)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                HStack(spacing: 8) {
+                    Text("~\(TokenUsageTracker.formatTokenCount(item.estimatedTokens)) tokens")
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    Text(formatBytes(item.byteSize))
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.tertiary)
+                }
+            }
+
+            Text(truncateContent(item.content))
+                .font(.system(.caption2, design: .monospaced))
+                .foregroundStyle(.primary)
+                .textSelection(.enabled)
+                .lineLimit(6)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func colorForContextType(_ type: ContextPreviewItem.ContextItemType) -> Color {
+        switch type {
+        case .systemPrompt: return .purple
+        case .userMessage: return .blue
+        case .assistantMessage: return .green
+        case .toolCall: return .orange
+        case .toolResult: return .cyan
+        case .interviewContext: return .indigo
+        case .coordinator: return .yellow
+        case .document: return .pink
+        }
+    }
+
+    private func truncateContent(_ content: String) -> String {
+        if content.count > 500 {
+            return String(content.prefix(500)) + "..."
+        }
+        return content
+    }
+
+    private func formatBytes(_ bytes: Int) -> String {
+        if bytes >= 1_000_000 {
+            return String(format: "%.1f MB", Double(bytes) / 1_000_000)
+        } else if bytes >= 1_000 {
+            return String(format: "%.1f KB", Double(bytes) / 1_000)
+        }
+        return "\(bytes) B"
+    }
+
+    private func loadContextPreview() async {
+        let service = ContextPreviewService(
+            stateCoordinator: coordinator.state,
+            phaseRegistry: coordinator.phaseRegistry,
+            toolRegistry: coordinator.toolRegistry,
+            todoStore: coordinator.todoStore
+        )
+        contextPreview = await service.buildPreview()
+    }
+
     private func conversationEntryRow(_ entry: ConversationLogEntry) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             conversationEntryHeader(entry)
@@ -290,6 +442,9 @@ struct EventDumpView: View {
                 Button("Export Conversation Log") {
                     exportConversationLog()
                 }
+                Button("Export Context Preview") {
+                    exportContextPreview()
+                }
             } label: {
                 Label("Export", systemImage: "square.and.arrow.up")
             }
@@ -299,6 +454,10 @@ struct EventDumpView: View {
             Button("Refresh") {
                 loadEvents()
                 loadConversationLog()
+                Task {
+                    await loadTodoItems()
+                    await loadContextPreview()
+                }
             }
         }
         ToolbarItem(placement: .automatic) {
@@ -328,6 +487,14 @@ struct EventDumpView: View {
             }
             .disabled(isDeduping)
             .help("Run LLM-powered deduplication on narrative cards")
+        }
+        ToolbarItem(placement: .automatic) {
+            Button("Regen Voice Profile") {
+                Task {
+                    await coordinator.regenerateVoiceProfile()
+                }
+            }
+            .help("Re-extract voice profile from writing samples")
         }
         ToolbarItem(placement: .automatic) {
             Button("Reset All Data", role: .destructive) {
@@ -512,6 +679,58 @@ struct EventDumpView: View {
                 ToastManager.shared.show(.success("Conversation log exported successfully"))
             } catch {
                 Logger.error("Failed to export conversation log: \(error.localizedDescription)", category: .general)
+                ToastManager.shared.show(.error("Export failed: \(error.localizedDescription)"))
+            }
+        }
+    }
+
+    private func exportContextPreview() {
+        guard let preview = contextPreview else {
+            ToastManager.shared.show(.error("No context preview available"))
+            return
+        }
+
+        let savePanel = NSSavePanel()
+        savePanel.nameFieldStringValue = "context-preview-\(Date().formatted(.iso8601.year().month().day().time(includingFractionalSeconds: false).dateSeparator(.dash).dateTimeSeparator(.space).timeSeparator(.colon))).txt"
+        savePanel.allowedContentTypes = [.plainText]
+        savePanel.canCreateDirectories = true
+        savePanel.isExtensionHidden = false
+        savePanel.title = "Export Context Preview"
+        savePanel.message = "Choose where to save the context preview"
+
+        savePanel.begin { response in
+            guard response == .OK, let url = savePanel.url else { return }
+
+            var output = "Sprung Context Preview\n"
+            output += "Generated: \(Date().formatted())\n"
+            output += String(repeating: "=", count: 80) + "\n\n"
+
+            // Summary
+            output += "SUMMARY\n"
+            output += String(repeating: "-", count: 40) + "\n"
+            output += "Total Estimated Tokens: \(TokenUsageTracker.formatTokenCount(preview.totalEstimatedTokens))\n"
+            output += "Total Bytes: \(formatBytes(preview.totalBytes))\n"
+            output += "Tool Count: \(preview.toolCount) (~\(TokenUsageTracker.formatTokenCount(preview.toolSchemaTokens)) tokens)\n"
+            output += "Items: \(preview.items.count)\n\n"
+
+            // Items
+            output += "CONTEXT ITEMS\n"
+            output += String(repeating: "=", count: 80) + "\n\n"
+
+            for (index, item) in preview.items.enumerated() {
+                output += "[\(index + 1)] \(item.type.rawValue.uppercased()): \(item.label)\n"
+                output += "    Tokens: ~\(TokenUsageTracker.formatTokenCount(item.estimatedTokens)) | Bytes: \(formatBytes(item.byteSize))\n"
+                output += String(repeating: "-", count: 40) + "\n"
+                output += item.content + "\n"
+                output += String(repeating: "=", count: 80) + "\n\n"
+            }
+
+            do {
+                try output.write(to: url, atomically: true, encoding: .utf8)
+                Logger.info("Context preview exported to: \(url.path)", category: .general)
+                ToastManager.shared.show(.success("Context preview exported successfully"))
+            } catch {
+                Logger.error("Failed to export context preview: \(error.localizedDescription)", category: .general)
                 ToastManager.shared.show(.error("Export failed: \(error.localizedDescription)"))
             }
         }

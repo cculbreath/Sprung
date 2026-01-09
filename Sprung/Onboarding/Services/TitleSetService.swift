@@ -65,11 +65,12 @@ final class TitleSetService {
 
         ### Step 2: Generate Title Sets
 
-        Create 8-12 four-title combinations:
+        Create exactly 20 unique four-title combinations:
         - Each set has exactly 4 single-word titles
         - Vary rhythm (mix syllable counts)
         - Cover different emphases: technical, research, leadership, balanced
         - Tag with job types each set works for
+        - Ensure all 20 sets are distinct from each other
 
         ## Output Format
 
@@ -103,7 +104,7 @@ final class TitleSetService {
             as: TitleSetGenerationResult.self,
             schema: TitleSetSchemas.generationSchema,
             schemaName: "title_set_generation",
-            maxOutputTokens: 8192,
+            maxOutputTokens: 16384,
             backend: .gemini
         )
 
@@ -118,14 +119,31 @@ final class TitleSetService {
     func generateMoreTitleSets(
         vocabulary: [IdentityTerm],
         existingSets: [TitleSet],
-        count: Int = 5
+        favoritedSets: [TitleSet] = [],
+        count: Int = 20
     ) async throws -> [TitleSet] {
         guard let facade = llmFacade else {
             throw TitleSetError.llmNotConfigured
         }
 
         let vocabList = vocabulary.map { $0.term }.joined(separator: ", ")
-        let existingList = existingSets.map { $0.titles.joined(separator: ". ") + "." }.joined(separator: "\n")
+        // Only include last 30 sets to avoid exceeding token limits
+        let recentSets = existingSets.suffix(30)
+        let existingList = recentSets.map { $0.titles.joined(separator: " ") }.joined(separator: "\n")
+
+        // Include user preferences if they've favorited any sets
+        let preferencesSection: String
+        if !favoritedSets.isEmpty {
+            let favList = favoritedSets.map { $0.titles.joined(separator: " ") }.joined(separator: "\n")
+            preferencesSection = """
+
+            ## User Preferences (generate similar styles)
+            The user has favorited these sets - use them as guidance for style/emphasis:
+            \(favList)
+            """
+        } else {
+            preferencesSection = ""
+        }
 
         let prompt = """
         # Generate More Title Sets
@@ -133,17 +151,23 @@ final class TitleSetService {
         ## Available Vocabulary
         \(vocabList)
 
-        ## Existing Sets (avoid duplicates)
+        ## Existing Sets (DO NOT duplicate these)
         \(existingList)
+        \(preferencesSection)
 
         ## Task
-        Generate \(count) NEW four-title combinations that are DIFFERENT from existing sets.
-        Vary the emphasis (technical, research, leadership, balanced).
+        Generate exactly \(count) NEW and UNIQUE four-title combinations:
+        - Each set must be DIFFERENT from all existing sets above
+        - Each set must be DIFFERENT from all other new sets
+        - Each set has exactly 4 single-word titles
+        - Vary the emphasis (technical, research, leadership, balanced)
+        - Use creative combinations from the vocabulary
+        \(favoritedSets.isEmpty ? "" : "- Generate sets similar in style to the user's favorited sets")
 
-        Return JSON array of TitleSet objects.
+        Return JSON with "sets" array containing \(count) unique TitleSet objects.
         """
 
-        Logger.info("🏷️ Generating \(count) more title sets", category: .ai)
+        Logger.info("🏷️ Generating \(count) more title sets\(favoritedSets.isEmpty ? "" : " (with user preferences)")", category: .ai)
 
         struct Response: Codable {
             let sets: [TitleSet]
@@ -155,7 +179,66 @@ final class TitleSetService {
             as: Response.self,
             schema: TitleSetSchemas.moreSetsSchema,
             schemaName: "more_title_sets",
-            maxOutputTokens: 4096,
+            maxOutputTokens: 16384,
+            backend: .gemini
+        )
+
+        return response.sets
+    }
+
+    /// Generate title sets that include a user-specified title
+    func generateWithSpecifiedTitle(
+        specifiedTitle: String,
+        vocabulary: [IdentityTerm],
+        existingSets: [TitleSet],
+        count: Int = 5
+    ) async throws -> [TitleSet] {
+        guard let facade = llmFacade else {
+            throw TitleSetError.llmNotConfigured
+        }
+
+        let vocabList = vocabulary.map { $0.term }.joined(separator: ", ")
+        let recentSets = existingSets.suffix(20)
+        let existingList = recentSets.map { $0.titles.joined(separator: " ") }.joined(separator: "\n")
+
+        let prompt = """
+        # Generate Title Sets with Specified Title
+
+        ## User's Required Title
+        "\(specifiedTitle)" - This title MUST appear in EVERY generated set.
+
+        ## Available Vocabulary (for the other 3 titles)
+        \(vocabList)
+
+        ## Existing Sets (DO NOT duplicate these)
+        \(existingList)
+
+        ## Task
+        Generate exactly \(count) NEW and UNIQUE four-title combinations where:
+        - EVERY set MUST include "\(specifiedTitle)" somewhere in the 4 titles
+        - IMPORTANT: Do NOT put "\(specifiedTitle)" in the same position every time!
+          Vary its placement across sets (sometimes 1st, sometimes 2nd, 3rd, or 4th)
+        - The other 3 titles should complement "\(specifiedTitle)" well
+        - Vary the emphasis across sets (technical, research, leadership, balanced)
+        - Consider rhythm and flow when ordering the 4 titles
+        - Each set must be DIFFERENT from existing sets
+
+        Return JSON with "sets" array containing \(count) unique TitleSet objects.
+        """
+
+        Logger.info("🏷️ Generating \(count) title sets with specified title: \(specifiedTitle)", category: .ai)
+
+        struct Response: Codable {
+            let sets: [TitleSet]
+        }
+
+        let response: Response = try await facade.executeStructuredWithDictionarySchema(
+            prompt: prompt,
+            modelId: modelId,
+            as: Response.self,
+            schema: TitleSetSchemas.moreSetsSchema,
+            schemaName: "custom_title_sets",
+            maxOutputTokens: 16384,
             backend: .gemini
         )
 

@@ -108,6 +108,17 @@ final class OnboardingInterviewCoordinator {
         container.llmFacade
     }
 
+    // MARK: - User Action Queue Infrastructure
+
+    /// User action queue for boundary-safe message delivery (exposed for UI)
+    var userActionQueue: UserActionQueue { container.userActionQueue }
+
+    /// Drain gate for controlling queue processing (exposed for status bar UI)
+    var drainGate: DrainGate { container.drainGate }
+
+    /// Queue drain coordinator for processing queued actions
+    private var queueDrainCoordinator: QueueDrainCoordinator { container.queueDrainCoordinator }
+
     /// Guidance services
     var voiceProfileService: VoiceProfileService { container.voiceProfileService }
     var titleSetService: TitleSetService { container.titleSetService }
@@ -409,14 +420,28 @@ final class OnboardingInterviewCoordinator {
         await eventBus.publish(.llm(.enqueueUserMessage(payload: userMessage, isSystemGenerated: true)))
     }
 
-    /// Notify the LLM that title sets have been curated.
-    func notifyTitleSetsCurated() async {
-        var userMessage = SwiftyJSON.JSON()
-        userMessage["role"].string = "user"
-        userMessage["content"].string = """
-            <system>User saved identity title sets. Proceed to generate experience defaults.</system>
+    /// Notify the LLM that title sets have been curated, providing the approved options.
+    func notifyTitleSetsCurated(approvedSets: [TitleSet]) async {
+        let setsDescription = approvedSets.enumerated().map { index, set in
+            "  \(index + 1). [\"\(set.titles.joined(separator: "\", \""))\"] - \(set.emphasis.rawValue)"
+        }.joined(separator: "\n")
+
+        var payload = SwiftyJSON.JSON()
+        payload["title"].string = "Title Sets Curated"
+        payload["details"]["approvedCount"].int = approvedSets.count
+        payload["details"]["instruction"].string = """
+            User has approved \(approvedSets.count) identity title sets:
+
+            \(setsDescription)
+
+            Choose the ONE title set that would work best for the WIDEST range of job applications. \
+            Consider versatility, professional appeal, and breadth of applicability.
+
+            Call generate_experience_defaults with your chosen titles in the `selected_titles` parameter \
+            as an array of 4 strings, e.g. ["Engineer", "Developer", "Builder", "Maker"].
             """
-        await eventBus.publish(.llm(.enqueueUserMessage(payload: userMessage, isSystemGenerated: true)))
+
+        await eventBus.publish(.llm(.sendCoordinatorMessage(payload: payload)))
     }
 
     // MARK: - Evidence Handling
@@ -619,11 +644,12 @@ final class OnboardingInterviewCoordinator {
         await uiResponseCoordinator.submitProfileURL(urlString)
     }
     // MARK: - Phase Advance
-    /// Directly advance to the next phase from UI button click (bypasses LLM)
+    /// Advance to the next phase from UI button click
+    /// The action is queued and processed at a safe boundary to prevent race conditions
     func advanceToNextPhaseFromUI() async {
         let currentPhase = ui.phase
 
-        // Determine next phase and its start tool
+        // Determine next phase
         let nextPhase: InterviewPhase?
         switch currentPhase {
         case .phase1VoiceContext:
@@ -643,26 +669,13 @@ final class OnboardingInterviewCoordinator {
             return
         }
 
-        Logger.info("🚀 Phase advance triggered from UI: \(currentPhase.rawValue) → \(nextPhase.rawValue)", category: .ai)
+        Logger.info("🚀 Phase advance queued from UI: \(currentPhase.rawValue) → \(nextPhase.rawValue)", category: .ai)
 
-        // Trigger the phase transition directly
-        await timeline.requestPhaseTransition(
-            from: currentPhase.rawValue,
-            to: nextPhase.rawValue,
-            reason: "User clicked advance button"
-        )
+        // Queue the phase advance action for safe boundary processing
+        userActionQueue.enqueue(.phaseAdvance(from: currentPhase, to: nextPhase), priority: .high)
 
-        // Send a synthetic message to notify LLM of the phase change
-        var payload = JSON()
-        if nextPhase == .complete {
-            payload["text"].string = "<system>User has completed the interview.</system>"
-        } else {
-            payload["text"].string = """
-                <system>User has advanced to \(nextPhase.rawValue). \
-                Continue the interview in the new phase.</system>
-                """
-        }
-        await eventBus.publish(.llm(.sendUserMessage(payload: payload, isSystemGenerated: true)))
+        // Attempt to drain the queue (will check gate before processing)
+        await queueDrainCoordinator.checkAndDrain()
     }
 
     /// Legacy: Request phase advance by asking LLM (use advanceToNextPhaseFromUI instead)
@@ -746,6 +759,22 @@ final class OnboardingInterviewCoordinator {
     func sendChatMessage(_ text: String) async {
         await uiResponseCoordinator.sendChatMessage(text)
     }
+
+    /// Interrupt current LLM operation and send the message immediately.
+    /// Called when user clicks the Interrupt button.
+    func interruptWithMessage(_ text: String) async {
+        Logger.info("⚡ Interrupt with message requested", category: .ai)
+
+        // 1. Cancel current LLM operation
+        await requestCancelLLM()
+
+        // 2. Clear all drain gate blocks to allow immediate processing
+        drainGate.clearAllBlocks()
+
+        // 3. Send the message (it will be queued and processed immediately since gate is clear)
+        await sendChatMessage(text)
+    }
+
     func sendCoordinatorMessage(title: String, details: [String: String] = [:]) async {
         var payload = JSON()
         payload["title"].string = title
@@ -957,6 +986,11 @@ final class OnboardingInterviewCoordinator {
     /// Run narrative card deduplication manually
     func deduplicateNarratives() async {
         await container.debugRegenerationService.deduplicateNarratives()
+    }
+
+    /// Manually trigger voice profile extraction from writing samples
+    func regenerateVoiceProfile() async {
+        await container.voiceProfileExtractionHandler.triggerExtraction()
     }
 
     func resetAllOnboardingData() async {

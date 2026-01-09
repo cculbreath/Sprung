@@ -15,8 +15,9 @@ struct OnboardingInterviewToolPane: View {
 
     var body: some View {
         let paneOccupied = isPaneOccupied(coordinator: coordinator)
-        let isLLMActive = coordinator.ui.isProcessing || coordinator.ui.pendingStreamingStatus != nil
-        let showSpinner = coordinator.ui.pendingExtraction != nil || isLLMActive
+        // Only show spinner for document extraction, not LLM activity
+        // LLM text streaming is indicated by the chatbox glow instead
+        let showSpinner = coordinator.ui.pendingExtraction != nil
 
         return ToolPaneTabsView(
             coordinator: coordinator,

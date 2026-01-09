@@ -28,11 +28,15 @@ struct AnthropicToolConverter {
         let toolPaneCard = await stateCoordinator.getCurrentToolPaneCard()
         let objectives = await stateCoordinator.getObjectiveStatusMap()
 
+        // Get Phase 4 UI context for title set curation gating
+        let phase4Context = await stateCoordinator.getPhase4UIContext()
+
         // Infer current subphase from objectives + UI state
         let subphase = ToolBundlePolicy.inferSubphase(
             phase: phase,
             toolPaneCard: toolPaneCard,
-            objectives: objectives
+            objectives: objectives,
+            phase4Context: phase4Context
         )
 
         // Select tools based on subphase

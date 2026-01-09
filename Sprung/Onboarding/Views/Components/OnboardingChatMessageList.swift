@@ -33,7 +33,7 @@ struct OnboardingChatMessageList: View {
             .textSelection(.enabled)
             .background(bubbleShape.fill(.thinMaterial))
             .clipShape(bubbleShape)
-            .modifier(ConditionalIntelligenceGlow(isActive: coordinator.ui.isProcessing, shape: bubbleShape))
+            .modifier(ConditionalIntelligenceGlow(isActive: coordinator.ui.isStreaming, shape: bubbleShape))
             .overlay(alignment: .bottomTrailing) {
                 scrollToLatestButton(proxy: proxy)
             }
@@ -42,8 +42,8 @@ struct OnboardingChatMessageList: View {
             .onChange(of: coordinator.ui.messages.count, initial: true) { _, newValue in
                 handleMessageCountChange(newValue: newValue, proxy: proxy)
             }
-            .onChange(of: coordinator.ui.isProcessing) { oldValue, newValue in
-                // Track when streaming ends (processing goes from true to false)
+            .onChange(of: coordinator.ui.isStreaming) { oldValue, newValue in
+                // Track when streaming ends (isStreaming goes from true to false)
                 if oldValue == true && newValue == false && isStreamingMessage {
                     // LLM message was finalized, scroll to bottom
                     isStreamingMessage = false
@@ -56,7 +56,7 @@ struct OnboardingChatMessageList: View {
                         shouldAutoScroll = true
                     }
                 } else if oldValue == false && newValue == true {
-                    // Processing started - scroll to bottom if auto-scroll is enabled
+                    // Streaming started - scroll to bottom if auto-scroll is enabled
                     isStreamingMessage = true
                     lastStreamingContentLength = 0
                     if shouldAutoScroll {
@@ -124,8 +124,8 @@ struct OnboardingChatMessageList: View {
         defer { lastMessageCount = newValue }
         guard newValue > lastMessageCount else { return }
         // Check if this is a user message (not streaming)
-        // User messages are added when not processing, or at the start of processing
-        if !coordinator.ui.isProcessing || !isStreamingMessage {
+        // User messages are added when not streaming, or at the start of streaming
+        if !coordinator.ui.isStreaming || !isStreamingMessage {
             // This is likely a user message, scroll to bottom
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(100))
@@ -136,7 +136,7 @@ struct OnboardingChatMessageList: View {
                 shouldAutoScroll = true
             }
         }
-        // For streaming messages, we'll scroll when processing ends (handled in onChange of isProcessingSync)
+        // For streaming messages, we'll scroll when streaming ends (handled in onChange of isStreaming)
     }
 
     private func exportTranscriptContextMenu() -> some View {

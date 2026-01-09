@@ -233,6 +233,18 @@ struct ToolBundlePolicy {
         ]
     ]
 
+    // MARK: - UI State Context for Phase 4 Gating
+
+    /// Context for Phase 4 tool gating based on UI state
+    struct Phase4UIContext {
+        /// True if custom.jobTitles was enabled and title sets need to be curated
+        let titleSetsRequired: Bool
+        /// True if user has completed title set curation
+        let titleSetsCurated: Bool
+
+        static let none = Phase4UIContext(titleSetsRequired: false, titleSetsCurated: false)
+    }
+
     // MARK: - Subphase Inference
 
     /// Infer the current subphase from objective status and UI state
@@ -240,11 +252,13 @@ struct ToolBundlePolicy {
     ///   - phase: Current interview phase
     ///   - toolPaneCard: Currently displayed tool pane card
     ///   - objectives: Map of objective ID to status
+    ///   - phase4Context: Optional UI context for Phase 4 gating
     /// - Returns: The inferred subphase
     static func inferSubphase(
         phase: InterviewPhase,
         toolPaneCard: OnboardingToolPaneCard,
-        objectives: [String: String]
+        objectives: [String: String],
+        phase4Context: Phase4UIContext = .none
     ) -> InterviewSubphase {
         switch phase {
         case .phase1VoiceContext:
@@ -254,7 +268,7 @@ struct ToolBundlePolicy {
         case .phase3EvidenceCollection:
             return inferPhase3Subphase(toolPaneCard: toolPaneCard, objectives: objectives)
         case .phase4StrategicSynthesis:
-            return inferPhase4Subphase(toolPaneCard: toolPaneCard, objectives: objectives)
+            return inferPhase4Subphase(toolPaneCard: toolPaneCard, objectives: objectives, uiContext: phase4Context)
         case .complete:
             return .p4_completion
         }
@@ -418,9 +432,11 @@ struct ToolBundlePolicy {
     }
 
     /// Infer Phase 4 subphase (Strategic Synthesis)
+    /// Phase 4 workflow: strengths → pitfalls → dossier → (title curation if enabled) → experience defaults
     private static func inferPhase4Subphase(
         toolPaneCard: OnboardingToolPaneCard,
-        objectives: [String: String]
+        objectives: [String: String],
+        uiContext: Phase4UIContext
     ) -> InterviewSubphase {
         // UI state takes precedence for specific card types
         switch toolPaneCard {
@@ -440,23 +456,29 @@ struct ToolBundlePolicy {
         let dossierStatus = objectives[OnboardingObjectiveId.dossierComplete.rawValue] ?? "pending"
         let defaultsStatus = objectives[OnboardingObjectiveId.experienceDefaultsSet.rawValue] ?? "pending"
 
-        // Strengths synthesis
+        // Strengths synthesis (first step)
         if strengthsStatus == "pending" || strengthsStatus == "in_progress" {
             return .p4_strengthsSynthesis
         }
 
-        // Pitfalls analysis
+        // Pitfalls analysis (second step)
         if pitfallsStatus == "pending" || pitfallsStatus == "in_progress" {
             return .p4_pitfallsAnalysis
         }
 
-        // Dossier completion
+        // Dossier completion (third step)
         if dossierStatus == "pending" || dossierStatus == "in_progress" {
             return .p4_dossierCompletion
         }
 
-        // Experience defaults
+        // Experience defaults (fourth step)
+        // Gate: If title sets are required but not yet curated, stay in dossier completion
+        // (generate_experience_defaults won't be available until user completes curation)
         if defaultsStatus == "pending" || defaultsStatus == "in_progress" {
+            // If title sets required but not curated, keep LLM in dossier phase (awaiting user action)
+            if uiContext.titleSetsRequired && !uiContext.titleSetsCurated {
+                return .p4_dossierCompletion  // User must complete title curation in UI
+            }
             return .p4_experienceDefaults
         }
 

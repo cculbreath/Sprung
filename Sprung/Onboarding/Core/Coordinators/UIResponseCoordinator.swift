@@ -10,13 +10,20 @@ final class UIResponseCoordinator {
     private let ui: OnboardingUIState
     private let sessionUIState: SessionUIState
     private let continuationManager: UIToolContinuationManager
+    private let userActionQueue: UserActionQueue
+    private let drainGate: DrainGate
+    private let queueDrainCoordinator: QueueDrainCoordinator
+
     init(
         eventBus: EventCoordinator,
         toolRouter: ToolHandler,
         state: StateCoordinator,
         ui: OnboardingUIState,
         sessionUIState: SessionUIState,
-        continuationManager: UIToolContinuationManager
+        continuationManager: UIToolContinuationManager,
+        userActionQueue: UserActionQueue,
+        drainGate: DrainGate,
+        queueDrainCoordinator: QueueDrainCoordinator
     ) {
         self.eventBus = eventBus
         self.toolRouter = toolRouter
@@ -24,6 +31,9 @@ final class UIResponseCoordinator {
         self.ui = ui
         self.sessionUIState = sessionUIState
         self.continuationManager = continuationManager
+        self.userActionQueue = userActionQueue
+        self.drainGate = drainGate
+        self.queueDrainCoordinator = queueDrainCoordinator
     }
     // MARK: - Choice Selection
     func submitChoiceSelection(_ selectionIds: [String]) async {
@@ -539,20 +549,19 @@ final class UIResponseCoordinator {
             Logger.error("❌ Chatbox message unexpectedly queued - this should never happen", category: .ai)
             return
         }
+
         // Emit event so coordinator can sync its messages array to UI
         await eventBus.publish(.llm(.chatboxUserMessageAdded(messageId: messageId.uuidString)))
-        // Wrap user chatbox messages in <chatbox> tags for LLM context
-        var payload = JSON()
-        payload["text"].string = "<chatbox>\(text)</chatbox>"
-        // Emit processing state change for UI feedback
-        await eventBus.publish(.processing(.stateChanged(isProcessing: true, statusMessage: "Processing your message...")))
-        // Emit event for LLMMessenger to handle, including messageId and original text for error recovery
-        await eventBus.publish(.llm(.sendUserMessage(
-            payload: payload,
-            isSystemGenerated: false,
-            chatboxMessageId: messageId.uuidString,
-            originalText: text
-        )))
+
+        // Queue the message for sending at a safe boundary
+        // This prevents race conditions with ongoing tool execution
+        userActionQueue.enqueue(.chatboxMessage(text: text, id: messageId), priority: .normal)
+
+        // Update UI queue count for reactive display
+        ui.queuedMessageCount = userActionQueue.pendingChatMessageIds().count
+
+        // Attempt to drain the queue (will check gate before processing)
+        await queueDrainCoordinator.checkAndDrain()
     }
     func requestCancelLLM() async {
         await eventBus.publish(.llm(.cancelRequested))
@@ -719,31 +728,62 @@ final class UIResponseCoordinator {
     /// Dismiss any visible UI prompts (choice, validation, etc.)
     /// Called when auto-completing a pending tool via chatbox message
     private func dismissPendingUIPrompts() async {
-        // Clear choice prompt if visible
+        // Clear choice prompt if visible - complete tool with cancellation
         if toolRouter.pendingChoicePrompt != nil {
             toolRouter.clearChoicePrompt()
             await eventBus.publish(.toolpane(.choicePromptCleared))
-            Logger.info("💬 Dismissed choice prompt via chatbox message", category: .ai)
+
+            // Complete the UI tool with cancellation so tool result is filled
+            let result = buildCompletionResult(
+                status: "dismissed",
+                message: "User sent a chatbox message instead of making a selection"
+            )
+            completeUITool(toolName: OnboardingToolName.getUserOption.rawValue, result: result)
+            Logger.info("💬 Dismissed choice prompt via chatbox message (tool cancelled)", category: .ai)
         }
 
-        // Clear validation prompt if visible
+        // Clear validation prompt if visible - complete tool with cancellation
         if toolRouter.pendingValidationPrompt != nil {
             toolRouter.clearValidationPrompt()
             await eventBus.publish(.toolpane(.validationPromptCleared))
-            Logger.info("💬 Dismissed validation prompt via chatbox message", category: .ai)
+
+            // Complete the UI tool with cancellation
+            let result = buildCompletionResult(
+                status: "dismissed",
+                message: "User sent a chatbox message instead of validating"
+            )
+            completeUITool(toolName: OnboardingToolName.submitForValidation.rawValue, result: result)
+            Logger.info("💬 Dismissed validation prompt via chatbox message (tool cancelled)", category: .ai)
         }
 
-        // Clear pending upload requests if visible
+        // Clear pending upload requests if visible - complete tools with cancellation
         if !toolRouter.pendingUploadRequests.isEmpty {
+            // Complete each pending upload tool
+            for request in toolRouter.pendingUploadRequests {
+                let result = buildCompletionResult(
+                    status: "dismissed",
+                    message: "User sent a chatbox message instead of uploading"
+                )
+                completeUITool(toolName: OnboardingToolName.getUserUpload.rawValue, result: result)
+                // Also emit the cancellation event for the specific request
+                await eventBus.publish(.toolpane(.uploadRequestCancelled(id: request.id)))
+            }
             toolRouter.clearPendingUploadRequests()
-            Logger.info("💬 Dismissed upload request(s) via chatbox message", category: .ai)
+            Logger.info("💬 Dismissed upload request(s) via chatbox message (tool(s) cancelled)", category: .ai)
         }
 
-        // Clear section toggle request if visible
+        // Clear section toggle request if visible - complete tool with cancellation
         if toolRouter.pendingSectionToggleRequest != nil {
             toolRouter.clearSectionToggle()
             await eventBus.publish(.toolpane(.sectionToggleCleared))
-            Logger.info("💬 Dismissed section toggle via chatbox message", category: .ai)
+
+            // Complete the UI tool with cancellation
+            let result = buildCompletionResult(
+                status: "dismissed",
+                message: "User sent a chatbox message instead of configuring sections"
+            )
+            completeUITool(toolName: OnboardingToolName.configureEnabledSections.rawValue, result: result)
+            Logger.info("💬 Dismissed section toggle via chatbox message (tool cancelled)", category: .ai)
         }
     }
 }

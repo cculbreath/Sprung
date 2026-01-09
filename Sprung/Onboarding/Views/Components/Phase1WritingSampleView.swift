@@ -32,36 +32,43 @@ struct Phase1WritingSampleView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                if profileComplete && !writingSamplesComplete {
-                    // Active writing sample collection
-                    headerSection
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    if profileComplete && !writingSamplesComplete {
+                        // Active writing sample collection
+                        headerSection
 
-                    // Upload drop zone (visual hint - drop handled by pane-level)
-                    WritingSampleDropZone(
-                        onSelectFiles: onSelectFiles
-                    )
+                        // Upload drop zone (visual hint - drop handled by pane-level)
+                        WritingSampleDropZone(
+                            onSelectFiles: onSelectFiles
+                        )
 
-                    // Paste hint
-                    pasteHint
+                        // Paste hint
+                        pasteHint
 
-                    // List of collected samples
-                    if !writingSamples.isEmpty {
-                        collectedSamplesList
+                        // List of collected samples
+                        if !writingSamples.isEmpty {
+                            collectedSamplesList
+                        }
+                    } else if !profileComplete {
+                        // Waiting for profile
+                        waitingForProfileView
+                    } else {
+                        // Samples complete
+                        completedView
                     }
-
-                    // Action buttons
-                    actionButtons
-                } else if !profileComplete {
-                    // Waiting for profile
-                    waitingForProfileView
-                } else {
-                    // Samples complete
-                    completedView
                 }
+                .padding(12)
             }
-            .padding(12)
+
+            // Sticky footer with action buttons
+            if profileComplete && !writingSamplesComplete {
+                Divider()
+                actionButtons
+                    .padding(12)
+                    .background(Color(nsColor: .controlBackgroundColor))
+            }
         }
         .background(Color(nsColor: .controlBackgroundColor))
         .cornerRadius(12)
@@ -127,35 +134,17 @@ struct Phase1WritingSampleView: View {
     }
 
     private var actionButtons: some View {
-        VStack(spacing: 8) {
-            // Done button (prominent when samples exist)
-            if !writingSamples.isEmpty {
-                Button(action: onDoneWithSamples) {
-                    HStack {
-                        Image(systemName: "checkmark.circle.fill")
-                        Text("Done with Writing Samples")
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.regular)
-                .disabled(buttonsDisabled)
+        // Single button - action depends on whether samples were collected
+        Button(action: writingSamples.isEmpty ? onSkipSamples : onDoneWithSamples) {
+            HStack {
+                Image(systemName: writingSamples.isEmpty ? "arrow.right.circle" : "checkmark.circle.fill")
+                Text(writingSamples.isEmpty ? "Continue Without Samples" : "Done with Writing Samples")
             }
-
-            // Skip button (always available)
-            Button(action: onSkipSamples) {
-                HStack {
-                    Image(systemName: writingSamples.isEmpty ? "arrow.right.circle" : "arrow.right.circle")
-                    Text(writingSamples.isEmpty ? "Skip - I don't have samples handy" : "Continue without more samples")
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.regular)
-            .foregroundStyle(.secondary)
-            .disabled(buttonsDisabled)
+            .frame(maxWidth: .infinity)
         }
-        .padding(.top, 8)
+        .buttonStyle(.borderedProminent)
+        .controlSize(.regular)
+        .disabled(buttonsDisabled)
     }
 
     private var waitingForProfileView: some View {

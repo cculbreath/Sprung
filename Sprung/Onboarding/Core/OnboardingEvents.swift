@@ -119,6 +119,9 @@ extension OnboardingEvent {
         case extractionStateChanged(inProgress: Bool, statusMessage: String? = nil)
         case pendingExtractionUpdated(OnboardingPendingExtraction?, statusMessage: String? = nil)
 
+        // Queue state (for reactive UI updates)
+        case queuedMessageCountChanged(count: Int)
+
         // Batch upload state
         case batchUploadStarted(expectedCount: Int)
         case batchUploadCompleted
@@ -403,6 +406,8 @@ extension OnboardingEvent.ProcessingEvent {
             return "processing.gitAgentToolExecuting(\(toolName), turn \(turn))"
         case .gitAgentProgressUpdated(let message, let turn):
             return "processing.gitAgentProgress(turn \(turn)): \(message.prefix(50))"
+        case .queuedMessageCountChanged(let count):
+            return "processing.queuedMessageCountChanged(\(count))"
         }
     }
 }
