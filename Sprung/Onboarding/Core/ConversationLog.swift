@@ -266,14 +266,29 @@ actor ConversationLog {
     // MARK: - Persistence Support
 
     /// Restore entries from persistence
+    /// Immediately heals any orphaned tool calls to maintain Anthropic API invariant
     func restore(entries: [ConversationEntry]) {
         self.entries = entries
         Logger.info("ConversationLog: Restored \(entries.count) entries", category: .ai)
 
-        // Note: If last entry has unfilled tool slots, they'll be filled
-        // with synthetic results on next user message (self-healing)
+        // CRITICAL: Heal orphaned tool calls immediately on restore.
+        // Anthropic API requires every tool_use to have a tool_result immediately after.
+        // Deferring healing to "next user message" doesn't work because:
+        // 1. AnthropicHistoryBuilder builds history BEFORE appendUser() is called
+        // 2. AnthropicRequestBuilder may merge with trailing user message, bypassing appendUser()
+        // Healing now ensures the conversation state is always valid for API calls.
         if hasPendingToolCalls {
-            Logger.warning("ConversationLog: Restored with \(pendingToolCallIds.count) pending tool calls (will heal on next user message)", category: .ai)
+            let pendingIds = pendingToolCallIds
+            Logger.warning("ConversationLog: Healing \(pendingIds.count) orphaned tool call(s) on restore", category: .ai)
+
+            for callId in pendingIds {
+                setToolResult(
+                    callId: callId,
+                    output: #"{"status":"interrupted","reason":"Session ended before tool completion"}"#,
+                    status: .cancelled
+                )
+            }
+            Logger.info("ConversationLog: Orphaned tool calls healed", category: .ai)
         }
     }
 
