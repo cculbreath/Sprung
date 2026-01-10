@@ -184,6 +184,9 @@ actor AgentRunner {
                     reasoningEffort: config.reasoningEffort
                 )
 
+                // Check for cancellation immediately after LLM call returns
+                try Task.checkCancellation()
+
                 // Emit token usage event if available
                 let outputTokens = response.usage?.completionTokens ?? 0
                 if let usage = response.usage {
@@ -315,6 +318,9 @@ actor AgentRunner {
                     }
                     return collected
                 }
+
+                // Check for cancellation after tool execution
+                try Task.checkCancellation()
 
                 // Add tool results to messages
                 await updateStatus("(Turn \(turnCount)) Processing results...")

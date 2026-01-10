@@ -71,16 +71,21 @@ enum AgentStatus: String, Codable {
     case killed = "killed"
 }
 
-// MARK: - Task Cancellation Protocol
+// MARK: - Task Cancellation
 
-/// Protocol for type-erased task cancellation
-private protocol CancellableTask {
-    func cancel()
-}
+/// Type-erased wrapper for any Task, enabling cancellation regardless of Success/Failure types.
+/// This is necessary because `Task<Success, Failure>.cancel()` is available for all Task types,
+/// but Swift's type system doesn't allow storing heterogeneous Task types without type erasure.
+final class AnyCancellableTask: @unchecked Sendable {
+    private let _cancel: () -> Void
 
-/// Extension to make Task conform to CancellableTask
-extension Task: CancellableTask where Failure == Never {
-    // Task already has cancel(), so this just provides protocol conformance
+    init<Success, Failure>(_ task: Task<Success, Failure>) {
+        self._cancel = { task.cancel() }
+    }
+
+    func cancel() {
+        _cancel()
+    }
 }
 
 // MARK: - Transcript Entry
@@ -216,8 +221,12 @@ class AgentActivityTracker {
     /// Currently selected agent ID for detail view
     var selectedAgentId: String?
 
-    /// Active task handles for cancellation (type-erased for flexibility)
-    private var activeTasks: [String: any CancellableTask] = [:]
+    /// Active task handles for cancellation (type-erased to support any Task type)
+    private var activeTasks: [String: AnyCancellableTask] = [:]
+
+    /// Set of agent IDs that have been cancelled. Agents can check this flag to stop work.
+    /// This provides cancellation support even when the Task reference isn't stored.
+    private var cancelledAgentIds: Set<String> = []
 
     /// Callback fired when all running agents complete (count transitions from >0 to 0)
     /// Provides summaries of the agents that just completed in this batch
@@ -248,12 +257,12 @@ class AgentActivityTracker {
     /// Register a new agent for tracking
     /// - Returns: The agent ID for later reference
     @discardableResult
-    func trackAgent<Success>(
+    func trackAgent<Success, Failure>(
         id: String = UUID().uuidString,
         type: AgentType,
         name: String,
         status: AgentStatus = .running,
-        task: Task<Success, Never>? = nil
+        task: Task<Success, Failure>? = nil
     ) -> String {
         let agent = TrackedAgent(
             id: id,
@@ -266,7 +275,7 @@ class AgentActivityTracker {
         agents.insert(agent, at: 0) // Most recent first
 
         if let task = task {
-            activeTasks[id] = task
+            activeTasks[id] = AnyCancellableTask(task)
         }
 
         let statusEmoji = status == .pending ? "⏳" : "🚀"
@@ -278,13 +287,13 @@ class AgentActivityTracker {
     /// Track a child agent nested under a parent
     /// - Returns: The child agent ID for later reference
     @discardableResult
-    func trackChildAgent<Success>(
+    func trackChildAgent<Success, Failure>(
         id: String = UUID().uuidString,
         parentAgentId: String,
         type: AgentType,
         name: String,
         status: AgentStatus = .running,
-        task: Task<Success, Never>? = nil
+        task: Task<Success, Failure>? = nil
     ) -> String {
         let agent = TrackedAgent(
             id: id,
@@ -303,7 +312,7 @@ class AgentActivityTracker {
         }
 
         if let task = task {
-            activeTasks[id] = task
+            activeTasks[id] = AnyCancellableTask(task)
         }
 
         Logger.info("🔀 Child agent tracked: [\(type.displayName)] \(name) (parent: \(parentAgentId.prefix(8)))", category: .ai)
@@ -333,8 +342,8 @@ class AgentActivityTracker {
     }
 
     /// Associate a task with an already-tracked agent
-    func setTask<Success>(_ task: Task<Success, Never>, forAgentId agentId: String) {
-        activeTasks[agentId] = task
+    func setTask<Success, Failure>(_ task: Task<Success, Failure>, forAgentId agentId: String) {
+        activeTasks[agentId] = AnyCancellableTask(task)
     }
 
     /// Append a transcript entry to an agent
@@ -434,6 +443,18 @@ class AgentActivityTracker {
             return
         }
 
+        // Mark as cancelled so agents checking isCancelled() will stop
+        cancelledAgentIds.insert(agentId)
+
+        // Also cancel any child agents
+        for childId in agents[index].childAgentIds {
+            cancelledAgentIds.insert(childId)
+            if let childTask = activeTasks[childId] {
+                childTask.cancel()
+                activeTasks[childId] = nil
+            }
+        }
+
         // Cancel the task if it exists
         if let task = activeTasks[agentId] {
             task.cancel()
@@ -451,6 +472,20 @@ class AgentActivityTracker {
         )
 
         Logger.info("⏹️ Agent killed: \(agents[index].name)", category: .ai)
+    }
+
+    /// Check if an agent has been cancelled. Agents should call this periodically to support cancellation.
+    /// - Returns: true if the agent has been cancelled and should stop work
+    func isCancelled(agentId: String) -> Bool {
+        cancelledAgentIds.contains(agentId)
+    }
+
+    /// Throws CancellationError if the agent has been cancelled.
+    /// Convenience method for agents to check cancellation and throw in one call.
+    func checkCancellation(agentId: String) throws {
+        if cancelledAgentIds.contains(agentId) {
+            throw CancellationError()
+        }
     }
 
     // MARK: - Query Methods

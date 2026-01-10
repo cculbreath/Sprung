@@ -132,13 +132,11 @@ struct AgentRowView: View {
                             .font(.caption2)
                             .foregroundStyle(.secondary)
 
-                        if let duration = formattedDuration {
-                            Text("·")
-                                .foregroundStyle(.tertiary)
-                            Text(duration)
-                                .font(.caption2.monospacedDigit())
-                                .foregroundStyle(.tertiary)
-                        }
+                        Text("·")
+                            .foregroundStyle(.tertiary)
+
+                        // Use live-updating duration for running agents
+                        AgentDurationView(agent: agent)
 
                         if agent.totalTokens > 0 {
                             Text("·")
@@ -198,14 +196,32 @@ struct AgentRowView: View {
                 .font(.caption)
         }
     }
+}
 
-    private var formattedDuration: String? {
-        guard let duration = agent.duration else {
-            // Still running - calculate current duration
-            let elapsed = Date().timeIntervalSince(agent.startTime)
-            return formatInterval(elapsed)
+/// Live-updating duration display for agents.
+/// Uses TimelineView to update every second for running agents.
+private struct AgentDurationView: View {
+    let agent: TrackedAgent
+
+    var body: some View {
+        if agent.status == .running {
+            // Live-updating duration for running agents
+            TimelineView(.periodic(from: agent.startTime, by: 1.0)) { context in
+                Text(formatInterval(context.date.timeIntervalSince(agent.startTime)))
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.tertiary)
+            }
+        } else if let duration = agent.duration {
+            // Static duration for completed/failed/killed agents
+            Text(formatInterval(duration))
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.tertiary)
+        } else {
+            // Fallback for pending agents
+            Text("--")
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.tertiary)
         }
-        return formatInterval(duration)
     }
 
     private func formatInterval(_ interval: TimeInterval) -> String {

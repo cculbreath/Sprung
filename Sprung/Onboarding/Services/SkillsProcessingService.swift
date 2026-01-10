@@ -535,6 +535,10 @@ final class SkillsProcessingService {
         )
 
         do {
+            // Check for cancellation before starting
+            try Task.checkCancellation()
+            try agentActivityTracker?.checkCancellation(agentId: mainAgentId)
+
             // First deduplicate
             agentActivityTracker?.appendTranscript(
                 agentId: mainAgentId,
@@ -543,6 +547,10 @@ final class SkillsProcessingService {
             )
             let dedupeResult = try await consolidateDuplicates()
             results.append(dedupeResult)
+
+            // Check for cancellation after deduplication
+            try Task.checkCancellation()
+            try agentActivityTracker?.checkCancellation(agentId: mainAgentId)
 
             agentActivityTracker?.appendTranscript(
                 agentId: mainAgentId,
@@ -560,6 +568,10 @@ final class SkillsProcessingService {
             let atsResult = try await expandATSSynonyms(parentAgentId: mainAgentId)
             results.append(atsResult)
 
+            // Check for cancellation after ATS expansion
+            try Task.checkCancellation()
+            try agentActivityTracker?.checkCancellation(agentId: mainAgentId)
+
             agentActivityTracker?.appendTranscript(
                 agentId: mainAgentId,
                 entryType: .system,
@@ -568,6 +580,10 @@ final class SkillsProcessingService {
             )
 
             agentActivityTracker?.markCompleted(agentId: mainAgentId)
+        } catch is CancellationError {
+            // Agent was cancelled - don't mark as failed, it's already marked as killed
+            Logger.info("⏹️ Skills processing cancelled", category: .ai)
+            throw CancellationError()
         } catch {
             agentActivityTracker?.markFailed(agentId: mainAgentId, error: error.localizedDescription)
             throw error
