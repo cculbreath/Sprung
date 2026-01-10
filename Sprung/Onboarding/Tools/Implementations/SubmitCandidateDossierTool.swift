@@ -73,6 +73,7 @@ struct SubmitCandidateDossierTool: InterviewTool {
         dossier["job_search_context"].string = jobSearchContext
 
         // Optional fields - read camelCase from params, write snake_case to output
+        // Note: LLM sometimes abbreviates key names, so we accept both variants
         if let value = params["workArrangementPreferences"].string, !value.isEmpty {
             dossier["work_arrangement_preferences"].string = value
         }
@@ -82,10 +83,12 @@ struct SubmitCandidateDossierTool: InterviewTool {
         if let value = params["uniqueCircumstances"].string, !value.isEmpty {
             dossier["unique_circumstances"].string = value
         }
-        if let value = params["strengthsToEmphasize"].string, !value.isEmpty {
+        // Accept both "strengthsToEmphasize" (schema) and "strengths" (LLM abbreviation)
+        if let value = params["strengthsToEmphasize"].string ?? params["strengths"].string, !value.isEmpty {
             dossier["strengths_to_emphasize"].string = value
         }
-        if let value = params["pitfallsToAvoid"].string, !value.isEmpty {
+        // Accept both "pitfallsToAvoid" (schema) and "pitfalls" (LLM abbreviation)
+        if let value = params["pitfallsToAvoid"].string ?? params["pitfalls"].string, !value.isEmpty {
             dossier["pitfalls_to_avoid"].string = value
         }
         if let value = params["notes"].string, !value.isEmpty {
