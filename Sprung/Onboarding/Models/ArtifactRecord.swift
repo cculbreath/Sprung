@@ -6,7 +6,7 @@
 //  Consolidated from OnboardingArtifactRecord and the ArtifactRecord struct.
 //
 import Foundation
-import SwiftData
+@preconcurrency import SwiftData
 import SwiftyJSON
 
 /// Persisted artifact record with extracted content and metadata.
@@ -257,15 +257,8 @@ extension ArtifactRecord: Hashable {
 }
 
 // MARK: - Sendable Conformance
-// SwiftData @Model classes require @unchecked Sendable for cross-actor usage.
-// This is safe because:
-// 1. All mutations occur on @MainActor (via ArtifactRecordStore)
-// 2. The ModelContext enforces single-threaded access
-// 3. Reads across actors access immutable snapshots after model is persisted
-//
-// THREAD SAFETY REQUIREMENTS:
-// - NEVER mutate ArtifactRecord properties outside @MainActor context
-// - Always use ArtifactRecordStore methods for updates
-// - Treat cross-actor references as read-only snapshots
-extension ArtifactRecord: @unchecked Sendable {}
 
+// @Model synthesizes an unavailable Sendable conformance. This explicit @unchecked Sendable
+// overrides that to enable cross-actor usage. The redundant conformance warning is expected.
+// Thread safety: All mutations occur on @MainActor via stores; cross-actor reads are safe.
+extension ArtifactRecord: @unchecked Sendable {}

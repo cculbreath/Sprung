@@ -6,7 +6,7 @@
 //  Events are grouped into nested enums by topic for better organization.
 //
 import Foundation
-import SwiftyJSON
+@preconcurrency import SwiftyJSON
 
 // MARK: - Supporting Types
 

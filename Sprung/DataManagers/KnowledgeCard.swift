@@ -9,7 +9,7 @@
 //
 
 import Foundation
-import SwiftData
+@preconcurrency import SwiftData
 
 // MARK: - Card Type
 
@@ -527,7 +527,8 @@ struct VerbatimExcerpt: Codable {
 }
 
 // MARK: - Sendable Conformance
-// SwiftData @Model generates unavailable Sendable conformance.
-// We need explicit @unchecked Sendable for cross-actor usage patterns.
-// This will need refactoring for full Swift 6 compliance.
+
+// @Model synthesizes an unavailable Sendable conformance. This explicit @unchecked Sendable
+// overrides that to enable cross-actor usage. The redundant conformance warning is expected.
+// Thread safety: All mutations occur on @MainActor via stores; cross-actor reads are safe.
 extension KnowledgeCard: @unchecked Sendable {}
