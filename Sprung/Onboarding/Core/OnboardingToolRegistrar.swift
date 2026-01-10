@@ -9,6 +9,7 @@ final class OnboardingToolRegistrar {
     private let phaseRegistry: PhaseScriptRegistry
     private let todoStore: InterviewTodoStore
     private let artifactFilesystemContext: ArtifactFilesystemContext
+    private let candidateDossierStore: CandidateDossierStore
 
     init(
         coordinator: OnboardingInterviewCoordinator,
@@ -17,7 +18,8 @@ final class OnboardingToolRegistrar {
         eventBus: EventCoordinator,
         phaseRegistry: PhaseScriptRegistry,
         todoStore: InterviewTodoStore,
-        artifactFilesystemContext: ArtifactFilesystemContext
+        artifactFilesystemContext: ArtifactFilesystemContext,
+        candidateDossierStore: CandidateDossierStore
     ) {
         self.coordinator = coordinator
         self.toolRegistry = toolRegistry
@@ -26,6 +28,7 @@ final class OnboardingToolRegistrar {
         self.phaseRegistry = phaseRegistry
         self.todoStore = todoStore
         self.artifactFilesystemContext = artifactFilesystemContext
+        self.candidateDossierStore = candidateDossierStore
     }
     func registerTools(
         documentExtractionService: DocumentExtractionService,
@@ -72,7 +75,10 @@ final class OnboardingToolRegistrar {
             eventBus: eventBus,
             agentActivityTracker: coordinator.agentActivityTracker
         ))
-        toolRegistry.register(SubmitCandidateDossierTool(eventBus: eventBus, dataStore: dataStore))
+        toolRegistry.register(SubmitCandidateDossierTool(
+            eventBus: eventBus,
+            candidateDossierStore: candidateDossierStore
+        ))
 
         // Filesystem tools for browsing exported artifacts (ephemeral responses, pruned after N turns)
         toolRegistry.register(ReadArtifactFileTool(context: artifactFilesystemContext))

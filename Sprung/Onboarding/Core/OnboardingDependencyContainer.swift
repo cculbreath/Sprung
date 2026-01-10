@@ -108,6 +108,7 @@ final class OnboardingDependencyContainer {
     private let guidanceStore: InferenceGuidanceStore
     let sessionStore: OnboardingSessionStore
     private let dataStore: InterviewDataStore
+    private let candidateDossierStore: CandidateDossierStore
     let documentExtractionService: DocumentExtractionService
     // MARK: - Mutable State
     private(set) var llmFacade: LLMFacade?
@@ -162,6 +163,7 @@ final class OnboardingDependencyContainer {
         guidanceStore: InferenceGuidanceStore,
         sessionStore: OnboardingSessionStore,
         dataStore: InterviewDataStore,
+        candidateDossierStore: CandidateDossierStore,
         preferences: OnboardingPreferences
     ) {
         // Store external dependencies
@@ -175,6 +177,7 @@ final class OnboardingDependencyContainer {
         self.guidanceStore = guidanceStore
         self.sessionStore = sessionStore
         self.dataStore = dataStore
+        self.candidateDossierStore = candidateDossierStore
 
         // Initialize artifact store using same context as sessionStore
         guard let context = sessionStore.modelContext else {
@@ -605,7 +608,8 @@ final class OnboardingDependencyContainer {
             eventBus: eventBus,
             phaseRegistry: phaseRegistry,
             todoStore: todoStore,
-            artifactFilesystemContext: artifactFilesystemContext
+            artifactFilesystemContext: artifactFilesystemContext,
+            candidateDossierStore: candidateDossierStore
         )
         // Register tools
         toolRegistrar.registerTools(

@@ -58,19 +58,7 @@ final class OnboardingPersistenceService {
 
         Logger.info("✅ [persistWritingCorpus] Persisted \(writingSamples.count) writing samples to CoverRefStore", category: .ai)
 
-        // Persist candidate dossier if present (to CoverRefStore for cover letter generation)
-        // Fetch from InterviewDataStore where SubmitCandidateDossierTool persists it
-        Logger.info("💾 [persistWritingCorpus] Checking InterviewDataStore for candidate_dossier...", category: .ai)
-        let dossiers = await dataStore.list(dataType: "candidate_dossier")
-        Logger.info("💾 [persistWritingCorpus] Found \(dossiers.count) dossier(s) in data store", category: .ai)
-
-        if let dossier = dossiers.first {
-            Logger.info("💾 [persistWritingCorpus] Dossier found with keys: \(dossier.dictionaryValue.keys.sorted())", category: .ai)
-            persistDossierToCoverRef(dossier: dossier)
-            Logger.info("✅ [persistWritingCorpus] Persisted candidate dossier to CoverRefStore", category: .ai)
-        } else {
-            Logger.warning("⚠️ [persistWritingCorpus] No candidate dossier found in data store - was submit_candidate_dossier tool called?", category: .ai)
-        }
+        // Note: Candidate dossier is persisted directly to CandidateDossierStore by SubmitCandidateDossierTool
 
         // Emit events for persistence completion
         await eventBus.publish(.artifact(.writingSamplePersisted(sample: JSON(["count": writingSamples.count]))))
@@ -98,56 +86,6 @@ final class OnboardingPersistenceService {
 
         coverRefStore.addCoverRef(coverRef)
         Logger.info("💾 Writing sample persisted to CoverRef: \(name)", category: .ai)
-    }
-
-    /// Convert candidate dossier to CoverRef and persist (for cover letter generation)
-    private func persistDossierToCoverRef(dossier: JSON) {
-        let name = "Candidate Dossier"
-
-        // Build content from dossier fields
-        var contentParts: [String] = []
-
-        if let jobContext = dossier["job_search_context"].string, !jobContext.isEmpty {
-            contentParts.append("Job Search Context:\n\(jobContext)")
-        }
-        if let workPrefs = dossier["work_arrangement_preferences"].string, !workPrefs.isEmpty {
-            contentParts.append("Work Arrangement Preferences:\n\(workPrefs)")
-        }
-        if let availability = dossier["availability"].string, !availability.isEmpty {
-            contentParts.append("Availability:\n\(availability)")
-        }
-        if let circumstances = dossier["unique_circumstances"].string, !circumstances.isEmpty {
-            contentParts.append("Unique Circumstances:\n\(circumstances)")
-        }
-        if let strengths = dossier["strengths_to_emphasize"].string, !strengths.isEmpty {
-            contentParts.append("Strengths to Emphasize:\n\(strengths)")
-        }
-        if let pitfalls = dossier["pitfalls_to_avoid"].string, !pitfalls.isEmpty {
-            contentParts.append("Pitfalls to Avoid:\n\(pitfalls)")
-        }
-        if let notes = dossier["notes"].string, !notes.isEmpty {
-            contentParts.append("Notes:\n\(notes)")
-        }
-
-        let content = contentParts.joined(separator: "\n\n")
-
-        // Skip if no content
-        guard !content.isEmpty else {
-            Logger.warning("⚠️ Skipping dossier with empty content", category: .ai)
-            return
-        }
-
-        // Use backgroundFact type for dossier - it provides candidate background context
-        let coverRef = CoverRef(
-            name: name,
-            content: content,
-            enabledByDefault: true,
-            type: .backgroundFact,
-            isDossier: true
-        )
-
-        coverRefStore.addCoverRef(coverRef)
-        Logger.info("💾 Candidate dossier persisted to CoverRef: \(name)", category: .ai)
     }
 
     // MARK: - Experience Defaults Propagation

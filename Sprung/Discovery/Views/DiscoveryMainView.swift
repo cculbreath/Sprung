@@ -43,7 +43,7 @@ enum DiscoverySection: String, CaseIterable, Identifiable {
 
 struct DiscoveryMainView: View {
     @Environment(DiscoveryCoordinator.self) private var coordinator
-    @Environment(CoverRefStore.self) private var coverRefStore
+    @Environment(CandidateDossierStore.self) private var candidateDossierStore
     @Environment(ApplicantProfileStore.self) private var applicantProfileStore
     @State private var selectedSection: DiscoverySection = .daily
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
@@ -57,7 +57,7 @@ struct DiscoveryMainView: View {
             if showOnboarding || coordinator.needsOnboarding {
                 DiscoveryOnboardingView(
                     coordinator: coordinator,
-                    coverRefStore: coverRefStore,
+                    candidateDossierStore: candidateDossierStore,
                     applicantProfileStore: applicantProfileStore
                 ) {
                     showOnboarding = false

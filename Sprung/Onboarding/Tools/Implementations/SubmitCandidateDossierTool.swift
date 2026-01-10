@@ -49,7 +49,7 @@ struct SubmitCandidateDossierTool: InterviewTool {
     }()
 
     private let eventBus: EventCoordinator
-    private let dataStore: InterviewDataStore
+    private let candidateDossierStore: CandidateDossierStore
 
     var name: String { OnboardingToolName.submitCandidateDossier.rawValue }
     var description: String {
@@ -61,9 +61,9 @@ struct SubmitCandidateDossierTool: InterviewTool {
     }
     var parameters: JSONSchema { Self.schema }
 
-    init(eventBus: EventCoordinator, dataStore: InterviewDataStore) {
+    init(eventBus: EventCoordinator, candidateDossierStore: CandidateDossierStore) {
         self.eventBus = eventBus
-        self.dataStore = dataStore
+        self.candidateDossierStore = candidateDossierStore
     }
 
     func execute(_ params: JSON) async throws -> ToolResult {
@@ -130,125 +130,82 @@ struct SubmitCandidateDossierTool: InterviewTool {
             return ToolResultHelpers.executionFailed(errorMessage)
         }
 
-        // Build dossier with auto-generated fields
-        let dossierId = "doss_\(UUID().uuidString.prefix(8).lowercased())"
-        let now = ISO8601DateFormatter().string(from: Date())
-
-        var dossier = JSON()
-        dossier["dossier_id"].string = dossierId
-        dossier["created_at"].string = now
-        dossier["updated_at"].string = now
-
-        // Required field (output uses snake_case for downstream consumers)
-        dossier["job_search_context"].string = jobSearchContext
-
-        // Optional fields - read camelCase from params, write snake_case to output
-        // Note: LLM sometimes abbreviates key names, so we accept both variants
-        if let value = params["workArrangementPreferences"].string, !value.isEmpty {
-            dossier["work_arrangement_preferences"].string = value
+        // Persist to CandidateDossierStore (SwiftData)
+        let dossier = await MainActor.run {
+            candidateDossierStore.upsertDossier(
+                jobSearchContext: jobSearchContext,
+                strengthsToEmphasize: strengthsValue,
+                pitfallsToAvoid: pitfallsValue,
+                workArrangementPreferences: params["workArrangementPreferences"].string,
+                availability: params["availability"].string,
+                uniqueCircumstances: params["uniqueCircumstances"].string,
+                interviewerNotes: notesValue
+            )
         }
-        if let value = params["availability"].string, !value.isEmpty {
-            dossier["availability"].string = value
+        Logger.info("📋 Candidate dossier persisted to SwiftData: \(dossier.id)", category: .ai)
+
+        // Emit event for downstream handling
+        var eventPayload = JSON()
+        eventPayload["dossier_id"].string = dossier.id.uuidString
+        await eventBus.publish(.artifact(.candidateDossierPersisted(dossier: eventPayload)))
+
+        // Mark all Phase 4 synthesis objectives as completed
+        await eventBus.publish(.objective(.statusUpdateRequested(
+            id: OnboardingObjectiveId.strengthsIdentified.rawValue,
+            status: "completed",
+            source: "tool_execution",
+            notes: "Strategic synthesis complete via dossier submission",
+            details: nil
+        )))
+        await eventBus.publish(.objective(.statusUpdateRequested(
+            id: OnboardingObjectiveId.pitfallsDocumented.rawValue,
+            status: "completed",
+            source: "tool_execution",
+            notes: "Strategic synthesis complete via dossier submission",
+            details: nil
+        )))
+        await eventBus.publish(.objective(.statusUpdateRequested(
+            id: OnboardingObjectiveId.dossierComplete.rawValue,
+            status: "completed",
+            source: "tool_execution",
+            notes: "Candidate dossier persisted",
+            details: nil
+        )))
+
+        // Force user review via submit_for_validation
+        var devPayload = JSON()
+        devPayload["title"].string = "Review Candidate Dossier"
+        var details = JSON()
+        details["instruction"].string = """
+            Next, call submit_for_validation with validation_type=\"candidate_dossier\" and a short summary. \
+            If the user rejects or requests changes, revise and re-run submit_candidate_dossier before proceeding.
+            """
+        devPayload["details"] = details
+        await eventBus.publish(.llm(.sendCoordinatorMessage(payload: devPayload)))
+
+        // Build response
+        var response = JSON()
+        response["status"].string = "completed"
+        response["dossier_id"].string = dossier.id.uuidString
+        response["word_count"].int = dossier.wordCount
+
+        // List which fields were included
+        var includedFields: [String] = ["jobSearchContext"]
+        if strengthsValue != nil { includedFields.append("strengthsToEmphasize") }
+        if pitfallsValue != nil { includedFields.append("pitfallsToAvoid") }
+        if params["workArrangementPreferences"].string != nil { includedFields.append("workArrangementPreferences") }
+        if params["availability"].string != nil { includedFields.append("availability") }
+        if params["uniqueCircumstances"].string != nil { includedFields.append("uniqueCircumstances") }
+        if notesValue != nil { includedFields.append("notes") }
+        response["fields_included"].arrayObject = includedFields
+
+        // Include validation warnings if any
+        if !validationWarnings.isEmpty {
+            response["warnings"].arrayObject = validationWarnings
+            Logger.warning("⚠️ Dossier accepted with warnings: \(validationWarnings.count) issues", category: .ai)
         }
-        if let value = params["uniqueCircumstances"].string, !value.isEmpty {
-            dossier["unique_circumstances"].string = value
-        }
-        // Accept both "strengthsToEmphasize" (schema) and "strengths" (LLM abbreviation)
-        if let value = params["strengthsToEmphasize"].string ?? params["strengths"].string, !value.isEmpty {
-            dossier["strengths_to_emphasize"].string = value
-        }
-        // Accept both "pitfallsToAvoid" (schema) and "pitfalls" (LLM abbreviation)
-        if let value = params["pitfallsToAvoid"].string ?? params["pitfalls"].string, !value.isEmpty {
-            dossier["pitfalls_to_avoid"].string = value
-        }
-        if let value = params["notes"].string, !value.isEmpty {
-            dossier["notes"].string = value
-        }
 
-        // Persist to data store
-        do {
-            let identifier = try await dataStore.persist(dataType: "candidate_dossier", payload: dossier)
-
-            // Emit event for downstream handling
-            await eventBus.publish(.artifact(.candidateDossierPersisted(dossier: dossier)))
-            Logger.info("📋 Candidate dossier persisted: \(dossierId)", category: .ai)
-
-            // Mark all Phase 4 synthesis objectives as completed
-            // Submitting the dossier represents completion of strategic synthesis work
-            await eventBus.publish(.objective(.statusUpdateRequested(
-                id: OnboardingObjectiveId.strengthsIdentified.rawValue,
-                status: "completed",
-                source: "tool_execution",
-                notes: "Strategic synthesis complete via dossier submission",
-                details: nil
-            )))
-            await eventBus.publish(.objective(.statusUpdateRequested(
-                id: OnboardingObjectiveId.pitfallsDocumented.rawValue,
-                status: "completed",
-                source: "tool_execution",
-                notes: "Strategic synthesis complete via dossier submission",
-                details: nil
-            )))
-            // Mark dossier objective as completed so subphase can advance
-            await eventBus.publish(.objective(.statusUpdateRequested(
-                id: OnboardingObjectiveId.dossierComplete.rawValue,
-                status: "completed",
-                source: "tool_execution",
-                notes: "Candidate dossier persisted",
-                details: nil
-            )))
-
-            // Force user review via submit_for_validation
-            var devPayload = JSON()
-            devPayload["title"].string = "Review Candidate Dossier"
-            var details = JSON()
-            details["instruction"].string = """
-                Next, call submit_for_validation with validation_type=\"candidate_dossier\" and a short summary. \
-                If the user rejects or requests changes, revise and re-run submit_candidate_dossier before proceeding.
-                """
-            devPayload["details"] = details
-            await eventBus.publish(.llm(.sendCoordinatorMessage(payload: devPayload)))
-
-            // Calculate total word count for quality logging
-            let allContent = [
-                jobSearchContext,
-                strengthsValue ?? "",
-                pitfallsValue ?? "",
-                params["workArrangementPreferences"].string ?? "",
-                params["availability"].string ?? "",
-                params["uniqueCircumstances"].string ?? "",
-                notesValue ?? ""
-            ].joined(separator: " ")
-            let wordCount = allContent.split(separator: " ").count
-            Logger.info("📋 Dossier word count: \(wordCount) words", category: .ai)
-
-            // Build response
-            var response = JSON()
-            response["status"].string = "completed"
-            response["dossier_id"].string = dossierId
-            response["persisted_id"].string = identifier
-            response["word_count"].int = wordCount
-
-            // List which fields were included (report camelCase names as sent by LLM)
-            var includedFields: [String] = ["jobSearchContext"]
-            if dossier["work_arrangement_preferences"].exists() { includedFields.append("workArrangementPreferences") }
-            if dossier["availability"].exists() { includedFields.append("availability") }
-            if dossier["unique_circumstances"].exists() { includedFields.append("uniqueCircumstances") }
-            if dossier["strengths_to_emphasize"].exists() { includedFields.append("strengthsToEmphasize") }
-            if dossier["pitfalls_to_avoid"].exists() { includedFields.append("pitfallsToAvoid") }
-            if dossier["notes"].exists() { includedFields.append("notes") }
-
-            response["fields_included"].arrayObject = includedFields
-
-            // Include validation warnings if any
-            if !validationWarnings.isEmpty {
-                response["warnings"].arrayObject = validationWarnings
-                Logger.warning("⚠️ Dossier accepted with warnings: \(validationWarnings.count) issues", category: .ai)
-            }
-
-            return .immediate(response)
-        } catch {
-            return ToolResultHelpers.executionFailed("Failed to persist dossier: \(error.localizedDescription)")
-        }
+        Logger.info("📋 Dossier word count: \(dossier.wordCount) words", category: .ai)
+        return .immediate(response)
     }
 }

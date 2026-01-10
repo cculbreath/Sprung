@@ -22,7 +22,7 @@ struct CoachingToolHandler {
     }
 
     /// Handle get_knowledge_card tool call
-    func handleGetKnowledgeCard(_ args: JSON, knowledgeCards: [KnowledgeCardDraft]) -> String {
+    func handleGetKnowledgeCard(_ args: JSON, knowledgeCards: [KnowledgeCard]) -> String {
         let cardId = args["card_id"].stringValue
         let startLine = args["start_line"].int
         let endLine = args["end_line"].int
@@ -31,7 +31,7 @@ struct CoachingToolHandler {
             return JSON(["error": "Knowledge card not found: \(cardId)"]).rawString() ?? "{}"
         }
 
-        var content = card.content
+        var content = card.narrative
 
         // Apply line range if specified
         if let start = startLine, let end = endLine {
@@ -46,11 +46,11 @@ struct CoachingToolHandler {
         var result = JSON()
         result["card_id"].string = cardId
         result["title"].string = card.title
-        result["type"].string = card.cardType
+        result["type"].string = card.cardType?.rawValue
         result["organization"].string = card.organization
-        result["time_period"].string = card.timePeriod
+        result["date_range"].string = card.dateRange
         result["content"].string = content
-        result["word_count"].int = card.wordCount
+        result["word_count"].int = card.narrative.split(separator: " ").count
 
         return result.rawString() ?? "{}"
     }
@@ -121,8 +121,8 @@ struct CoachingToolHandler {
     func handleChooseBestJobs(
         _ args: JSON,
         agentService: DiscoveryAgentService?,
-        knowledgeCards: [KnowledgeCardDraft],
-        dossierEntries: [JSON]
+        knowledgeCards: [KnowledgeCard],
+        dossier: CandidateDossier?
     ) async -> String {
         guard let agent = agentService else {
             return JSON(["error": "Agent service not configured"]).rawString() ?? "{}"
@@ -153,22 +153,16 @@ struct CoachingToolHandler {
             )
         }
 
-        // Build knowledge context from cached knowledge cards
+        // Build knowledge context from knowledge cards
         let knowledgeContext = knowledgeCards
             .map { card in
-                let typeLabel = card.cardType ?? "general"
-                return "[\(typeLabel)] \(card.title):\n\(card.content)"
+                let typeLabel = card.cardType?.rawValue ?? "general"
+                return "[\(typeLabel)] \(card.title):\n\(card.narrative)"
             }
             .joined(separator: "\n\n")
 
-        // Build dossier context from cached dossier entries
-        let dossierContext = dossierEntries
-            .map { entry in
-                let section = entry["section"].stringValue
-                let value = entry["value"].stringValue
-                return "\(section): \(value)"
-            }
-            .joined(separator: "\n")
+        // Build dossier context from CandidateDossier
+        let dossierContext = dossier?.exportForJobMatching() ?? "No dossier available."
 
         do {
             let result = try await agent.chooseBestJobs(

@@ -143,14 +143,21 @@ final class DiscoveryCoordinator {
 
     // MARK: - Private Dependencies
 
-    private let interviewDataStore: InterviewDataStore
+    private let candidateDossierStore: CandidateDossierStore
+    private let knowledgeCardStore: KnowledgeCardStore
 
     // MARK: - Initialization
 
-    init(modelContext: ModelContext, jobAppStore: JobAppStore, interviewDataStore: InterviewDataStore) {
+    init(
+        modelContext: ModelContext,
+        jobAppStore: JobAppStore,
+        candidateDossierStore: CandidateDossierStore,
+        knowledgeCardStore: KnowledgeCardStore
+    ) {
         self.pipelineCoordinator = DiscoveryPipelineCoordinator(modelContext: modelContext, jobAppStore: jobAppStore)
         self.networkingCoordinator = DiscoveryNetworkingCoordinator(modelContext: modelContext)
-        self.interviewDataStore = interviewDataStore
+        self.candidateDossierStore = candidateDossierStore
+        self.knowledgeCardStore = knowledgeCardStore
     }
 
     /// Configure the LLM service. Must be called after initialization with LLMFacade.
@@ -201,7 +208,8 @@ final class DiscoveryCoordinator {
             dailyTaskStore: dailyTaskStore,
             preferencesStore: preferencesStore,
             jobAppStore: jobAppStore,
-            interviewDataStore: interviewDataStore
+            candidateDossierStore: candidateDossierStore,
+            knowledgeCardStore: knowledgeCardStore
         )
 
         // Set agent service reference for workflows like chooseBestJobs

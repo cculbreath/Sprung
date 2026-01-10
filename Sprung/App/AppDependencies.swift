@@ -159,6 +159,7 @@ final class AppDependencies {
             guidanceStore: guidanceStore,
             sessionStore: onboardingSessionStore,
             dataStore: interviewDataStore,
+            candidateDossierStore: candidateDossierStore,
             preferences: preferences
         )
         self.onboardingCoordinator = onboardingCoordinator
@@ -167,7 +168,8 @@ final class AppDependencies {
         let searchOpsCoordinator = DiscoveryCoordinator(
             modelContext: modelContext,
             jobAppStore: jobAppStore,
-            interviewDataStore: interviewDataStore
+            candidateDossierStore: candidateDossierStore,
+            knowledgeCardStore: knowledgeCardStore
         )
         searchOpsCoordinator.configureLLMService(llmFacade: llmFacade)
         self.searchOpsCoordinator = searchOpsCoordinator

@@ -157,6 +157,7 @@ final class OnboardingInterviewCoordinator {
         guidanceStore: InferenceGuidanceStore,
         sessionStore: OnboardingSessionStore,
         dataStore: InterviewDataStore,
+        candidateDossierStore: CandidateDossierStore,
         preferences: OnboardingPreferences
     ) {
         // Create dependency container with all service wiring
@@ -171,6 +172,7 @@ final class OnboardingInterviewCoordinator {
             guidanceStore: guidanceStore,
             sessionStore: sessionStore,
             dataStore: dataStore,
+            candidateDossierStore: candidateDossierStore,
             preferences: preferences
         )
         // Complete late initialization (components requiring self reference)

@@ -39,7 +39,7 @@ struct CoverRefCardView: View {
     private var typeLabel: String {
         switch coverRef.type {
         case .backgroundFact:
-            return coverRef.isDossier ? "Dossier" : "Background Fact"
+            return "Background Fact"
         case .writingSample:
             return "Writing Sample"
         case .voicePrimer:

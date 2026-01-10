@@ -21,7 +21,8 @@ final class CoachingService {
     private let dailyTaskStore: DailyTaskStore
     private let preferencesStore: SearchPreferencesStore
     private let jobAppStore: JobAppStore
-    private let interviewDataStore: InterviewDataStore
+    private let candidateDossierStore: CandidateDossierStore
+    private let knowledgeCardStore: KnowledgeCardStore
 
     // Extracted component handlers
     private let toolHandler: CoachingToolHandler
@@ -48,10 +49,6 @@ final class CoachingService {
     /// The tool call ID for the currently displayed question
     private var currentQuestionToolCallId: String?
 
-    // Cached context for tool calls
-    private var knowledgeCards: [KnowledgeCardDraft] = []
-    private var dossierEntries: [JSON] = []
-
     // MARK: - Initialization
 
     init(
@@ -62,7 +59,8 @@ final class CoachingService {
         dailyTaskStore: DailyTaskStore,
         preferencesStore: SearchPreferencesStore,
         jobAppStore: JobAppStore,
-        interviewDataStore: InterviewDataStore
+        candidateDossierStore: CandidateDossierStore,
+        knowledgeCardStore: KnowledgeCardStore
     ) {
         self.modelContext = modelContext
         self.llmService = llmService
@@ -71,7 +69,8 @@ final class CoachingService {
         self.dailyTaskStore = dailyTaskStore
         self.preferencesStore = preferencesStore
         self.jobAppStore = jobAppStore
-        self.interviewDataStore = interviewDataStore
+        self.candidateDossierStore = candidateDossierStore
+        self.knowledgeCardStore = knowledgeCardStore
 
         // Initialize extracted components
         self.toolHandler = CoachingToolHandler(modelContext: modelContext, jobAppStore: jobAppStore)
@@ -147,9 +146,6 @@ final class CoachingService {
         // Generate activity snapshot
         let snapshot = activityReportService.generateSnapshot(since: sinceDate)
 
-        // Load dossier and knowledge cards context
-        await loadUserContext()
-
         // Create new session
         let session = CoachingSession()
         session.activitySummary = snapshot
@@ -157,12 +153,18 @@ final class CoachingService {
         session.llmModel = coachingModelId
         currentSession = session
 
+        // Build dossier context from CandidateDossier
+        let dossierContext = candidateDossierStore.dossier?.exportForDiscovery() ?? "No dossier available."
+
+        // Build knowledge cards list from KnowledgeCardStore
+        let knowledgeCardsList = contextBuilder.buildKnowledgeCardsList(from: knowledgeCardStore.knowledgeCards)
+
         // Build system prompt with full context
         let systemPrompt = contextBuilder.buildSystemPrompt(
             activitySummary: snapshot.textSummary(),
             recentHistory: sessionStore.recentHistorySummary(),
-            dossierContext: contextBuilder.buildDossierContext(from: dossierEntries),
-            knowledgeCardsList: contextBuilder.buildKnowledgeCardsList(from: knowledgeCards),
+            dossierContext: dossierContext,
+            knowledgeCardsList: knowledgeCardsList,
             activeJobApps: contextBuilder.buildActiveJobAppsList()
         )
 
@@ -180,18 +182,6 @@ final class CoachingService {
 
         // Send initial message to trigger tool calls
         try await sendInitialMessage()
-    }
-
-    /// Load user context from dossier and knowledge cards
-    private func loadUserContext() async {
-        // Load dossier entries
-        dossierEntries = await interviewDataStore.list(dataType: "candidate_dossier_entry")
-
-        // Load knowledge cards
-        let knowledgeCardJSONs = await interviewDataStore.list(dataType: "knowledge_card")
-        knowledgeCards = knowledgeCardJSONs.map { KnowledgeCardDraft(json: $0) }
-
-        Logger.debug("Coaching: loaded \(dossierEntries.count) dossier entries, \(knowledgeCards.count) knowledge cards", category: .ai)
     }
 
     /// Submit answer to current question
@@ -377,7 +367,7 @@ final class CoachingService {
 
         switch name {
         case CoachingToolSchemas.getKnowledgeCardToolName:
-            return toolHandler.handleGetKnowledgeCard(args, knowledgeCards: knowledgeCards)
+            return toolHandler.handleGetKnowledgeCard(args, knowledgeCards: knowledgeCardStore.knowledgeCards)
 
         case CoachingToolSchemas.getJobDescriptionToolName:
             return toolHandler.handleGetJobDescription(args)
@@ -389,8 +379,8 @@ final class CoachingService {
             return await toolHandler.handleChooseBestJobs(
                 args,
                 agentService: agentService,
-                knowledgeCards: knowledgeCards,
-                dossierEntries: dossierEntries
+                knowledgeCards: knowledgeCardStore.knowledgeCards,
+                dossier: candidateDossierStore.dossier
             )
 
         default:

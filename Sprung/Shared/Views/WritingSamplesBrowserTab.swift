@@ -19,7 +19,6 @@ struct WritingSamplesBrowserTab: View {
         case all = "All"
         case backgroundFacts = "Background Facts"
         case writingSamples = "Writing Samples"
-        case dossier = "Dossier"
     }
 
     private var filteredCards: [CoverRef] {
@@ -27,10 +26,8 @@ struct WritingSamplesBrowserTab: View {
 
         switch selectedFilter {
         case .all: break
-        case .dossier:
-            result = result.filter { $0.isDossier }
         case .backgroundFacts:
-            result = result.filter { $0.type == .backgroundFact && !$0.isDossier }
+            result = result.filter { $0.type == .backgroundFact }
         case .writingSamples:
             result = result.filter { $0.type == .writingSample }
         }
@@ -175,8 +172,7 @@ struct WritingSamplesBrowserTab: View {
     private func countFor(_ filter: SampleTypeFilter) -> Int {
         switch filter {
         case .all: return cards.count
-        case .dossier: return cards.filter { $0.isDossier }.count
-        case .backgroundFacts: return cards.filter { $0.type == .backgroundFact && !$0.isDossier }.count
+        case .backgroundFacts: return cards.filter { $0.type == .backgroundFact }.count
         case .writingSamples: return cards.filter { $0.type == .writingSample }.count
         }
     }

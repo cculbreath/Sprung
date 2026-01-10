@@ -10,7 +10,7 @@ import SwiftUI
 
 struct DiscoveryOnboardingView: View {
     let coordinator: DiscoveryCoordinator
-    let coverRefStore: CoverRefStore
+    let candidateDossierStore: CandidateDossierStore
     let applicantProfileStore: ApplicantProfileStore
     let onComplete: () -> Void
 
@@ -266,7 +266,7 @@ struct DiscoveryOnboardingView: View {
     // MARK: - Suggested Roles Section
 
     private var hasDossierData: Bool {
-        !coverRefStore.storedCoverRefs.filter { $0.isDossier }.isEmpty
+        candidateDossierStore.hasDossier
     }
 
     private var suggestedRolesSection: some View {
@@ -368,25 +368,7 @@ struct DiscoveryOnboardingView: View {
     }
 
     private func buildDossierSummary() -> String {
-        let dossierRefs = coverRefStore.storedCoverRefs.filter { $0.isDossier }
-
-        var summary = ""
-
-        for ref in dossierRefs {
-            if !ref.name.isEmpty {
-                summary += "**\(ref.name)**\n"
-            }
-            if !ref.content.isEmpty {
-                // Include full dossier content (these are typically concise background facts)
-                summary += "\(ref.content)\n\n"
-            }
-        }
-
-        if summary.isEmpty {
-            summary = "No detailed background available."
-        }
-
-        return summary
+        candidateDossierStore.dossier?.exportForDiscovery() ?? "No detailed background available."
     }
 
     private func fetchLocationPreferences() async {

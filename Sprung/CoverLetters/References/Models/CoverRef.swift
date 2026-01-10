@@ -18,7 +18,6 @@ class CoverRef: Identifiable, Codable {
     var name: String
     var enabledByDefault: Bool
     var type: CoverRefType
-    var isDossier: Bool
 
     // Voice primer structured fields (only populated when type == .voicePrimer)
     /// JSON-encoded voice primer analysis from VoicePrimerExtractionService
@@ -27,7 +26,6 @@ class CoverRef: Identifiable, Codable {
     init(
         name: String = "", content: String = "",
         enabledByDefault: Bool = false, type: CoverRefType,
-        isDossier: Bool = false,
         voicePrimerJSON: String? = nil
     ) {
         id = UUID().uuidString
@@ -35,7 +33,6 @@ class CoverRef: Identifiable, Codable {
         self.name = name
         self.enabledByDefault = enabledByDefault
         self.type = type
-        self.isDossier = isDossier
         self.voicePrimerJSON = voicePrimerJSON
     }
     // Manual Codable implementation
@@ -45,7 +42,6 @@ class CoverRef: Identifiable, Codable {
         case name
         case enabledByDefault
         case type
-        case isDossier
         case voicePrimerJSON
     }
     // Required initializer for Decodable
@@ -56,7 +52,6 @@ class CoverRef: Identifiable, Codable {
         name = try container.decode(String.self, forKey: .name)
         enabledByDefault = try container.decode(Bool.self, forKey: .enabledByDefault)
         type = try container.decode(CoverRefType.self, forKey: .type)
-        isDossier = try container.decodeIfPresent(Bool.self, forKey: .isDossier) ?? false
         voicePrimerJSON = try container.decodeIfPresent(String.self, forKey: .voicePrimerJSON)
     }
     // Required function for Encodable
@@ -67,7 +62,6 @@ class CoverRef: Identifiable, Codable {
         try container.encode(name, forKey: .name)
         try container.encode(enabledByDefault, forKey: .enabledByDefault)
         try container.encode(type, forKey: .type)
-        try container.encode(isDossier, forKey: .isDossier)
         try container.encodeIfPresent(voicePrimerJSON, forKey: .voicePrimerJSON)
     }
 

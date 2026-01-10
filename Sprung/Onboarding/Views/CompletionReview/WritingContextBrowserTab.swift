@@ -139,16 +139,6 @@ struct WritingContextBrowserTab: View {
                     Text("\(ref.content.split(separator: " ").count) words")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
-
-                    if ref.isDossier {
-                        Text("Dossier")
-                            .font(.caption2)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.purple.opacity(0.15))
-                            .foregroundStyle(.purple)
-                            .clipShape(Capsule())
-                    }
                 }
                 .padding(12)
                 .contentShape(Rectangle())
@@ -180,7 +170,7 @@ struct WritingContextBrowserTab: View {
                 .foregroundStyle(.tertiary)
             Text("No Writing Context")
                 .font(.title3.weight(.medium))
-            Text("Writing samples and dossier entries will appear here")
+            Text("Writing samples and background facts will appear here")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
