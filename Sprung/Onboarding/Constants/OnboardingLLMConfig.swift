@@ -51,9 +51,6 @@ enum OnboardingLLMConfig {
     /// Maximum turns for multi-turn agent loops
     static let maxAgentTurns = 50
 
-    /// Number of turns to keep ephemeral messages in context
-    static let ephemeralMessageTurns = 5
-
     // MARK: - Concurrency
 
     /// Default maximum concurrent extractions

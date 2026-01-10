@@ -14,25 +14,29 @@ final class ContactsImportService {
     /// - Throws: `ContactFetchError` if permission is denied, contact not found, or system error.
     func fetchMeCardAsDraft() async throws -> ApplicantProfileDraft {
         try await requestContactsAccess()
-        let store = CNContactStore()
-        let keys: [CNKeyDescriptor] = [
-            CNContactGivenNameKey as CNKeyDescriptor,
-            CNContactFamilyNameKey as CNKeyDescriptor,
-            CNContactEmailAddressesKey as CNKeyDescriptor,
-            CNContactPhoneNumbersKey as CNKeyDescriptor,
-            CNContactOrganizationNameKey as CNKeyDescriptor,
-            CNContactJobTitleKey as CNKeyDescriptor,
-            CNContactPostalAddressesKey as CNKeyDescriptor
-        ]
-        let contact: CNContact
-        do {
-            contact = try store.unifiedMeContactWithKeys(toFetch: keys)
-        } catch {
-            if let cnError = error as? CNError, cnError.code == .recordDoesNotExist {
-                throw ContactFetchError.notFound
+
+        // Fetch contact on background thread to avoid priority inversion
+        let contact: CNContact = try await Task.detached(priority: .userInitiated) {
+            let store = CNContactStore()
+            let keys: [CNKeyDescriptor] = [
+                CNContactGivenNameKey as CNKeyDescriptor,
+                CNContactFamilyNameKey as CNKeyDescriptor,
+                CNContactEmailAddressesKey as CNKeyDescriptor,
+                CNContactPhoneNumbersKey as CNKeyDescriptor,
+                CNContactOrganizationNameKey as CNKeyDescriptor,
+                CNContactJobTitleKey as CNKeyDescriptor,
+                CNContactPostalAddressesKey as CNKeyDescriptor
+            ]
+            do {
+                return try store.unifiedMeContactWithKeys(toFetch: keys)
+            } catch {
+                if let cnError = error as? CNError, cnError.code == .recordDoesNotExist {
+                    throw ContactFetchError.notFound
+                }
+                throw ContactFetchError.system(error.localizedDescription)
             }
-            throw ContactFetchError.system(error.localizedDescription)
-        }
+        }.value
+
         Logger.debug("📇 Fetched Me card from Contacts", category: .ai)
         return buildDraft(from: contact)
     }

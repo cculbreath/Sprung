@@ -266,30 +266,71 @@ actor ConversationLog {
     // MARK: - Persistence Support
 
     /// Restore entries from persistence
-    /// Immediately heals any orphaned tool calls to maintain Anthropic API invariant
+    /// Removes any orphaned tool calls (tool_use without tool_result) to maintain Anthropic API invariant
     func restore(entries: [ConversationEntry]) {
-        self.entries = entries
-        Logger.info("ConversationLog: Restored \(entries.count) entries", category: .ai)
-
-        // CRITICAL: Heal orphaned tool calls immediately on restore.
+        // CRITICAL: Remove orphaned tool calls from ALL entries on restore.
         // Anthropic API requires every tool_use to have a tool_result immediately after.
-        // Deferring healing to "next user message" doesn't work because:
-        // 1. AnthropicHistoryBuilder builds history BEFORE appendUser() is called
-        // 2. AnthropicRequestBuilder may merge with trailing user message, bypassing appendUser()
-        // Healing now ensures the conversation state is always valid for API calls.
-        if hasPendingToolCalls {
-            let pendingIds = pendingToolCallIds
-            Logger.warning("ConversationLog: Healing \(pendingIds.count) orphaned tool call(s) on restore", category: .ai)
+        // Instead of trying to synthetically fill orphaned slots (which has edge cases),
+        // we simply remove the corrupted tool calls entirely - the conversation can
+        // continue without them.
+        self.entries = removeOrphanedToolCalls(from: entries)
+        Logger.info("ConversationLog: Restored \(self.entries.count) entries", category: .ai)
+    }
 
-            for callId in pendingIds {
-                setToolResult(
-                    callId: callId,
-                    output: #"{"status":"interrupted","reason":"Session ended before tool completion"}"#,
-                    status: .cancelled
+    /// Remove orphaned tool calls from conversation history.
+    /// An orphaned tool call is a ToolCallSlot where isResolved is false (no result was filled).
+    /// These represent tool calls that were interrupted before completion.
+    private func removeOrphanedToolCalls(from entries: [ConversationEntry]) -> [ConversationEntry] {
+        guard !entries.isEmpty else { return [] }
+
+        var result: [ConversationEntry] = []
+        var totalRemoved = 0
+
+        for (index, entry) in entries.enumerated() {
+            switch entry {
+            case .user:
+                result.append(entry)
+
+            case .assistant(let id, let text, let toolCalls, let timestamp):
+                guard let toolCalls = toolCalls, !toolCalls.isEmpty else {
+                    // No tool calls, keep as-is
+                    result.append(entry)
+                    continue
+                }
+
+                // Keep only tool calls that have their result filled (isResolved)
+                let validToolCalls = toolCalls.filter { $0.isResolved }
+                let orphanedCount = toolCalls.count - validToolCalls.count
+
+                if orphanedCount > 0 {
+                    let orphanedIds = toolCalls.filter { !$0.isResolved }
+                        .map { String($0.callId.prefix(12)) }
+                    Logger.warning("ConversationLog: Removing \(orphanedCount) orphaned tool call(s) from entry \(index): \(orphanedIds)", category: .ai)
+                    totalRemoved += orphanedCount
+                }
+
+                // If no valid tool calls remain and text is empty, skip this entry entirely
+                if validToolCalls.isEmpty && text.isEmpty {
+                    Logger.warning("ConversationLog: Removing empty assistant entry \(index) (had only orphaned tool calls)", category: .ai)
+                    continue
+                }
+
+                // Rebuild the entry with only valid tool calls
+                let cleanedEntry = ConversationEntry.assistant(
+                    id: id,
+                    text: text,
+                    toolCalls: validToolCalls.isEmpty ? nil : validToolCalls,
+                    timestamp: timestamp
                 )
+                result.append(cleanedEntry)
             }
-            Logger.info("ConversationLog: Orphaned tool calls healed", category: .ai)
         }
+
+        if totalRemoved > 0 {
+            Logger.info("ConversationLog: Removed \(totalRemoved) total orphaned tool call(s) from history", category: .ai)
+        }
+
+        return result
     }
 
     /// Reset all state

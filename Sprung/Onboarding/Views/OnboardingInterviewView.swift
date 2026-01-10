@@ -36,7 +36,7 @@ struct OnboardingInterviewView: View {
         let corner: CGFloat = 44
         let cardShape = RoundedRectangle(cornerRadius: corner, style: .continuous)
         let contentStack = VStack(spacing: 0) {
-            // Progress bar anchored close to top
+            // Progress bar anchored close to top, with invisible drag handle overlay
             OnboardingInterviewStepProgressView(coordinator: coordinator)
                 .padding(.top, 8)
                 .padding(.bottom, 16)
@@ -45,6 +45,7 @@ struct OnboardingInterviewView: View {
                 .scaleEffect(progressAppeared ? 1 : 0.92)
                 .offset(y: progressAppeared ? 0 : -24)
                 .blur(radius: progressAppeared ? 0 : 10)
+                .background(WindowDragHandle())
             // Main body centered within available space
             VStack(spacing: 8) {
                 mainCard(

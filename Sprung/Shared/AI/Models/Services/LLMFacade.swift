@@ -497,17 +497,30 @@ final class LLMFacade {
         modelId: String,
         temperature: Double? = nil,
         reasoningEffort: String? = nil,
+        maxTokens: Int? = nil,
+        useFullContextLength: Bool = false,
         backend: Backend = .openRouter
     ) async throws -> ChatCompletionObject {
         if backend == .openRouter {
             try await capabilityValidator.validate(modelId: modelId, requires: [])
+
+            // Determine maxTokens: explicit value takes precedence, then fullMax lookup
+            var resolvedMaxTokens = maxTokens
+            if resolvedMaxTokens == nil && useFullContextLength {
+                resolvedMaxTokens = openRouterService.findModel(id: modelId)?.contextLength
+                if let tokens = resolvedMaxTokens {
+                    Logger.debug("🔧 Using full context length for \(modelId): \(tokens) tokens", category: .ai)
+                }
+            }
+
             let parameters = LLMRequestBuilder.buildToolRequest(
                 messages: messages,
                 modelId: modelId,
                 tools: tools,
                 toolChoice: toolChoice,
                 temperature: temperature ?? 0.7,
-                reasoningEffort: reasoningEffort
+                reasoningEffort: reasoningEffort,
+                maxTokens: resolvedMaxTokens
             )
             return try await llmService.executeToolRequest(parameters: parameters)
         }

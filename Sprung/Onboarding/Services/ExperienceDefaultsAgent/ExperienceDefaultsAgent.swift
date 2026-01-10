@@ -80,11 +80,9 @@ class ExperienceDefaultsAgent {
     // Limits
     private let maxTurns = 50
     private let timeoutSeconds: TimeInterval = 600  // 10 minutes
-    private let ephemeralTurns = 5
 
     // Conversation state
     private var messages: [ChatCompletionParameters.Message] = []
-    private var ephemeralMessages: [(index: Int, addedAtTurn: Int, toolCallId: String)] = []
 
     // Tools
     private var tools: [ChatCompletionParameters.Tool]
@@ -144,13 +142,14 @@ class ExperienceDefaultsAgent {
                     )
                 }
 
-                // Call LLM with tools
+                // Call LLM with tools - use full context length to avoid re-reading files
                 let response = try await facade.executeWithTools(
                     messages: messages,
                     tools: tools,
                     toolChoice: .auto,
                     modelId: modelId,
-                    temperature: 0.3
+                    temperature: 0.3,
+                    useFullContextLength: true
                 )
 
                 // Track token usage
@@ -225,9 +224,6 @@ class ExperienceDefaultsAgent {
                     )
                 }
 
-                // Prune old ephemeral messages
-                pruneEphemeralMessages()
-
                 // Execute tool calls
                 for toolCall in toolCalls {
                     let toolId = toolCall.id ?? UUID().uuidString
@@ -237,13 +233,7 @@ class ExperienceDefaultsAgent {
                     await updateProgress("Turn \(turnCount): \(toolDisplayName(toolName))")
 
                     let result = await executeTool(name: toolName, arguments: arguments)
-                    let messageIndex = messages.count
                     messages.append(buildToolResultMessage(toolCallId: toolId, result: result))
-
-                    // Mark file reads as ephemeral
-                    if toolName == ReadFileTool.name {
-                        ephemeralMessages.append((index: messageIndex, addedAtTurn: turnCount, toolCallId: toolId))
-                    }
 
                     // Log to transcript
                     if let agentId = agentId {
@@ -415,29 +405,6 @@ class ExperienceDefaultsAgent {
             return "Generation complete"
         }
         return json["summary"].stringValue
-    }
-
-    // MARK: - Ephemeral Pruning
-
-    private func pruneEphemeralMessages() {
-        let expiredTurn = turnCount - ephemeralTurns
-        let toRemove = ephemeralMessages.filter { $0.addedAtTurn <= expiredTurn }
-
-        for item in toRemove {
-            guard item.index < messages.count else { continue }
-
-            messages[item.index] = ChatCompletionParameters.Message(
-                role: .tool,
-                content: .text("[Content pruned - file was read \(turnCount - item.addedAtTurn) turns ago. Re-read if needed.]"),
-                toolCallID: item.toolCallId
-            )
-        }
-
-        ephemeralMessages.removeAll { $0.addedAtTurn <= expiredTurn }
-
-        if !toRemove.isEmpty {
-            Logger.debug("🗂️ Pruned \(toRemove.count) ephemeral messages", category: .ai)
-        }
     }
 
     // MARK: - Helpers

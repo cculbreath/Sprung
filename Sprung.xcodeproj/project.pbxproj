@@ -9,7 +9,6 @@
 /* Begin PBXBuildFile section */
 		573467692DF42865008DED68 /* Mustache in Frameworks */ = {isa = PBXBuildFile; productRef = 573467682DF42865008DED68 /* Mustache */; };
 		574223AA2DD9392200EF672C /* ChunkedAudioPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 574223A92DD9392200EF672C /* ChunkedAudioPlayer */; };
-		575811F42F10AB100060EA15 /* File.txt in Resources */ = {isa = PBXBuildFile; fileRef = 575811F32F10AB100060EA15 /* File.txt */; };
 		57DAC2742DDA558300B511B5 /* SwiftOpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = 57DAC2732DDA558300B511B5 /* SwiftOpenAI */; };
 		57DC4F1D2DBA323F000F1A48 /* SwiftyJSON in Frameworks */ = {isa = PBXBuildFile; productRef = 57DC4F1C2DBA323F000F1A48 /* SwiftyJSON */; };
 		57DC4F202DBA324B000F1A48 /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = 57DC4F1F2DBA324B000F1A48 /* SwiftSoup */; };
@@ -20,7 +19,6 @@
 		570FEC682C855BF50074D1E0 /* Sprung.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Sprung.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		57306AFA2DDE6B630053246D /* SwiftData.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftData.framework; path = System/Library/Frameworks/SwiftData.framework; sourceTree = SDKROOT; };
 		57306AFC2DDE6B730053246D /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
-		575811F32F10AB100060EA15 /* File.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = File.txt; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -68,7 +66,6 @@
 		570FEC5F2C855BF50074D1E0 = {
 			isa = PBXGroup;
 			children = (
-				575811F32F10AB100060EA15 /* File.txt */,
 				570FEC6A2C855BF50074D1E0 /* Sprung */,
 				57DC4F252DBA356C000F1A48 /* Frameworks */,
 				570FEC692C855BF50074D1E0 /* Products */,
@@ -121,7 +118,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1630;
-				LastUpgradeCheck = 2600;
+				LastUpgradeCheck = 2620;
 				TargetAttributes = {
 					570FEC672C855BF50074D1E0 = {
 						CreatedOnToolsVersion = 16.0;
@@ -159,7 +156,6 @@
 		570FEC662C855BF50074D1E0 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
-				575811F42F10AB100060EA15 /* File.txt in Resources */,
 			);
 		};
 /* End PBXResourcesBuildPhase section */
@@ -209,6 +205,7 @@
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = SHTVYKLJHV;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -274,6 +271,7 @@
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = SHTVYKLJHV;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -309,7 +307,6 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
-				DEVELOPMENT_TEAM = SHTVYKLJHV;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -361,7 +358,6 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
-				DEVELOPMENT_TEAM = SHTVYKLJHV;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;

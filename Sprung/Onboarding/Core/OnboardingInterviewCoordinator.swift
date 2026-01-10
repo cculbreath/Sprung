@@ -427,10 +427,9 @@ final class OnboardingInterviewCoordinator {
         }.joined(separator: "\n")
 
         var payload = SwiftyJSON.JSON()
-        payload["title"].string = "Title Sets Curated"
-        payload["details"]["approvedCount"].int = approvedSets.count
-        payload["details"]["instruction"].string = """
-            User has approved \(approvedSets.count) identity title sets:
+        payload["text"].string = """
+            <system>
+            Title Sets Curated: User has approved \(approvedSets.count) identity title sets:
 
             \(setsDescription)
 
@@ -439,9 +438,10 @@ final class OnboardingInterviewCoordinator {
 
             Call generate_experience_defaults with your chosen titles in the `selected_titles` parameter \
             as an array of 4 strings, e.g. ["Engineer", "Developer", "Builder", "Maker"].
+            </system>
             """
 
-        await eventBus.publish(.llm(.sendCoordinatorMessage(payload: payload)))
+        await eventBus.publish(.llm(.enqueueUserMessage(payload: payload, isSystemGenerated: true)))
     }
 
     // MARK: - Evidence Handling

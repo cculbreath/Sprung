@@ -3,11 +3,11 @@
 //  Sprung
 //
 //  Builds Anthropic message history from conversation transcript.
-//  Handles role alternation, message merging, and tool_use/tool_result repair.
+//  Handles role alternation, message merging, and PDF re-inclusion for resume uploads.
 //
 //  Anthropic API Invariant: Every tool_use block MUST have a corresponding
 //  tool_result block with matching tool_use_id in the immediately following
-//  user message. This builder enforces that invariant via ensureToolResultsPresent().
+//  user message. Orphaned tool calls are cleaned up at ConversationLog.restore() time.
 //
 
 import Foundation
@@ -49,7 +49,16 @@ struct AnthropicHistoryBuilder {
                             Logger.warning("⚠️ Skipping empty user message in Anthropic history", category: .ai)
                             continue
                         }
-                        messages.append(.user(text))
+
+                        // Check for PDF attachment that needs to be re-included (resume uploads)
+                        // The user message text contains <ui-action-result> with pdf_attachment.storage_url
+                        if let pdfBlocks = extractPDFFromUserMessage(text) {
+                            var contentBlocks: [AnthropicContentBlock] = [.text(AnthropicTextBlock(text: text))]
+                            contentBlocks.append(contentsOf: pdfBlocks)
+                            messages.append(AnthropicMessage(role: "user", content: .blocks(contentBlocks)))
+                        } else {
+                            messages.append(.user(text))
+                        }
                     }
                 case "assistant":
                     if case .text(let text) = inputMessage.content {
@@ -115,113 +124,14 @@ struct AnthropicHistoryBuilder {
         // Merge consecutive messages of same role (can happen after skipping empty messages)
         messages = mergeConsecutiveMessages(messages)
 
-        // CRITICAL: Ensure every tool_use has a corresponding tool_result
-        // This repairs orphaned tool calls from interrupted sessions, crashes, or data corruption
-        messages = ensureToolResultsPresent(messages)
+        // Note: Orphaned tool calls are now removed at ConversationLog.restore() time,
+        // so we no longer need to repair them here.
 
         // Validate and log
         AnthropicMessageValidator.validateMessageStructure(messages)
         AnthropicMessageValidator.logMessageDump(messages, label: "Anthropic History")
 
         return messages
-    }
-
-    // MARK: - Tool Result Repair
-
-    /// Ensures every tool_use block in an assistant message has a corresponding
-    /// tool_result block in the immediately following user message.
-    /// Adds synthetic tool_results for any orphaned tool_use blocks.
-    private func ensureToolResultsPresent(_ messages: [AnthropicMessage]) -> [AnthropicMessage] {
-        guard !messages.isEmpty else { return [] }
-
-        var result: [AnthropicMessage] = []
-        var skipNextIndex: Int? = nil
-
-        for (index, message) in messages.enumerated() {
-            // Skip this message if we already processed it as part of a repair
-            if let skipIndex = skipNextIndex, index == skipIndex {
-                skipNextIndex = nil
-                continue
-            }
-
-            if message.role == "assistant" {
-                // Extract tool_use IDs from this assistant message
-                let toolUseIds = extractToolUseIds(from: message)
-
-                if !toolUseIds.isEmpty {
-                    // Check if the next message is a user message with matching tool_results
-                    let nextIndex = index + 1
-                    if nextIndex < messages.count && messages[nextIndex].role == "user" {
-                        let existingToolResultIds = extractToolResultIds(from: messages[nextIndex])
-                        let missingIds = toolUseIds.filter { !existingToolResultIds.contains($0) }
-
-                        if !missingIds.isEmpty {
-                            // Add synthetic tool_results to the next user message
-                            Logger.warning("⚠️ Repairing \(missingIds.count) orphaned tool_use block(s): \(missingIds.map { String($0.prefix(12)) })", category: .ai)
-
-                            result.append(message)
-
-                            // Modify the next user message to include synthetic tool_results
-                            var userBlocks = extractContentBlocks(messages[nextIndex])
-                            for toolUseId in missingIds {
-                                let syntheticResult = AnthropicToolResultBlock(
-                                    toolUseId: toolUseId,
-                                    content: #"{"status":"interrupted","reason":"Session ended before tool completion"}"#
-                                )
-                                userBlocks.insert(.toolResult(syntheticResult), at: 0)
-                            }
-                            result.append(AnthropicMessage(role: "user", content: .blocks(userBlocks)))
-
-                            // Mark the next message to be skipped since we already added a modified version
-                            skipNextIndex = nextIndex
-                            continue
-                        }
-                    } else {
-                        // No following user message - need to insert one with synthetic tool_results
-                        Logger.warning("⚠️ No user message after assistant with \(toolUseIds.count) tool_use block(s) - inserting synthetic tool_results", category: .ai)
-
-                        result.append(message)
-
-                        var syntheticBlocks: [AnthropicContentBlock] = []
-                        for toolUseId in toolUseIds {
-                            let syntheticResult = AnthropicToolResultBlock(
-                                toolUseId: toolUseId,
-                                content: #"{"status":"interrupted","reason":"Session ended before tool completion"}"#
-                            )
-                            syntheticBlocks.append(.toolResult(syntheticResult))
-                        }
-                        result.append(AnthropicMessage(role: "user", content: .blocks(syntheticBlocks)))
-                        continue
-                    }
-                }
-            }
-
-            result.append(message)
-        }
-
-        return result
-    }
-
-    /// Extract all tool_use IDs from an assistant message
-    private func extractToolUseIds(from message: AnthropicMessage) -> [String] {
-        let blocks = extractContentBlocks(message)
-        return blocks.compactMap { block in
-            if case .toolUse(let toolUse) = block {
-                return toolUse.id
-            }
-            return nil
-        }
-    }
-
-    /// Extract all tool_result IDs from a user message
-    private func extractToolResultIds(from message: AnthropicMessage) -> Set<String> {
-        let blocks = extractContentBlocks(message)
-        return Set(blocks.compactMap { block in
-            if case .toolResult(let toolResult) = block {
-                return toolResult.toolUseId
-            }
-            return nil
-        })
     }
 
     // MARK: - Message Merging
@@ -276,5 +186,46 @@ struct AnthropicHistoryBuilder {
         case .blocks(let blocks):
             return blocks
         }
+    }
+
+    // MARK: - PDF Re-inclusion
+
+    /// Extract PDF attachment from user message text if present.
+    /// User messages containing resume uploads have <ui-action-result> tags with pdf_attachment info.
+    /// Returns document blocks to append if PDF found, nil otherwise.
+    private func extractPDFFromUserMessage(_ text: String) -> [AnthropicContentBlock]? {
+        // Look for <ui-action-result> tag containing pdf_attachment
+        guard text.contains("pdf_attachment") else { return nil }
+
+        // Extract JSON content from the ui-action-result tag
+        guard let startRange = text.range(of: "<ui-action-result"),
+              let endRange = text.range(of: "</ui-action-result>"),
+              startRange.upperBound < endRange.lowerBound else {
+            return nil
+        }
+
+        // Find the closing > of the opening tag
+        let afterStartTag = text[startRange.upperBound...]
+        guard let closingBracket = afterStartTag.firstIndex(of: ">") else { return nil }
+
+        let jsonStart = afterStartTag.index(after: closingBracket)
+        let jsonContent = String(text[jsonStart..<endRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard let jsonData = jsonContent.data(using: .utf8) else { return nil }
+        let json = JSON(jsonData)
+
+        // Check for pdf_attachment with storage_url
+        guard json["pdf_attachment"].exists(),
+              let storagePath = json["pdf_attachment"]["storage_url"].string,
+              let pdfData = try? Data(contentsOf: URL(fileURLWithPath: storagePath)) else {
+            return nil
+        }
+
+        let pdfBase64 = pdfData.base64EncodedString()
+        let docSource = AnthropicDocumentSource(mediaType: "application/pdf", data: pdfBase64)
+        let filename = json["pdf_attachment"]["filename"].string ?? "resume.pdf"
+        Logger.info("📄 Re-including PDF in user message history: \(filename) (\(pdfData.count / 1024) KB)", category: .ai)
+
+        return [.document(AnthropicDocumentBlock(source: docSource))]
     }
 }

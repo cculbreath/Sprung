@@ -26,8 +26,6 @@ struct OnboardingModelSettingsView: View {
     @AppStorage("maxConcurrentPDFExtractions") private var maxConcurrentPDFExtractions: Int = 30
     @AppStorage("pdfJudgeUseFourUp") private var pdfJudgeUseFourUp: Bool = false
     @AppStorage("pdfJudgeDPI") private var pdfJudgeDPI: Int = 150
-    @AppStorage("onboardingEphemeralTurns") private var ephemeralTurns: Int = 3
-
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(LLMFacade.self) private var llmFacade
 
@@ -73,7 +71,6 @@ struct OnboardingModelSettingsView: View {
             Section {
                 knowledgeCardTokenLimitPicker
                 maxConcurrentExtractionsPicker
-                ephemeralTurnsPicker
                 Toggle("Allow web search during interviews", isOn: $onboardingWebSearchAllowed)
             } header: {
                 SettingsSectionHeader(title: "Processing Limits", systemImage: "slider.horizontal.3")
@@ -279,7 +276,7 @@ private extension OnboardingModelSettingsView {
                     }
                 }
                 .pickerStyle(.menu)
-                Text("Agentic card deduplication via filesystem tools.")
+                Text("Card deduplication and experience defaults generation.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -519,22 +516,6 @@ private extension OnboardingModelSettingsView {
         }
     }
 
-    var ephemeralTurnsPicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Stepper(value: $ephemeralTurns, in: 1...10) {
-                HStack {
-                    Text("Ephemeral Content Turns")
-                    Spacer()
-                    Text("\(ephemeralTurns)")
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                }
-            }
-            Text("File contents from browsing tools are pruned after this many conversation turns.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-    }
 }
 
 // MARK: - Model Loading
