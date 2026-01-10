@@ -873,6 +873,10 @@ actor StateCoordinator: OnboardingEventEmitter {
     func setDossierNotes(_ notes: String) {
         dossierNotes = notes
         Logger.info("📝 Dossier notes updated (\(notes.count) chars)", category: .ai)
+        // Persist to SwiftData via event bus
+        Task {
+            await eventBus.publish(.state(.dossierNotesUpdated(notes: notes)))
+        }
     }
 
     /// Get current dossier notes

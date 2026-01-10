@@ -264,6 +264,9 @@ final class SwiftDataSessionPersistenceHandler {
         case .state(.enabledSectionsUpdated(let sections)):
             sessionStore.updateEnabledSections(session, sections: sections)
 
+        case .state(.dossierNotesUpdated(let notes)):
+            sessionStore.updateDossierNotes(session, notes: notes.isEmpty ? nil : notes)
+
         case .state(.documentCollectionActiveChanged(let isActive)):
             sessionStore.updateDocumentCollectionActive(session, isActive: isActive)
 
@@ -518,6 +521,11 @@ final class SwiftDataSessionPersistenceHandler {
     /// Get restored todo list JSON
     func getRestoredTodoList(_ session: OnboardingSession) -> String? {
         sessionStore.getTodoList(session)
+    }
+
+    /// Get restored dossier WIP notes
+    func getRestoredDossierNotes(_ session: OnboardingSession) -> String? {
+        sessionStore.getDossierNotes(session)
     }
 
     // MARK: - ConversationLog Restore (New Architecture)

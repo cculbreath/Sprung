@@ -304,6 +304,21 @@ final class OnboardingSessionStore {
         session.todoListJSON
     }
 
+    // MARK: - Dossier Notes Management
+
+    /// Update dossier WIP notes (LLM scratchpad for interview)
+    func updateDossierNotes(_ session: OnboardingSession, notes: String?) {
+        session.dossierNotesJSON = notes
+        session.lastActiveAt = Date()
+        saveContext()
+        Logger.debug("Persisted dossier notes (\(notes?.count ?? 0) chars)", category: .ai)
+    }
+
+    /// Get dossier notes
+    func getDossierNotes(_ session: OnboardingSession) -> String? {
+        session.dossierNotesJSON
+    }
+
     // MARK: - UI State Management
 
     /// Update document collection active state

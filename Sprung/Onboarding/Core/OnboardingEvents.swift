@@ -202,6 +202,7 @@ extension OnboardingEvent {
         case applicantProfileStored(JSON)
         case skeletonTimelineStored(JSON)
         case enabledSectionsUpdated(Set<String>)
+        case dossierNotesUpdated(notes: String)
 
         // UI state
         case documentCollectionActiveChanged(Bool)
@@ -485,6 +486,8 @@ extension OnboardingEvent.StateEvent {
             return "state.skeletonTimelineStored"
         case .enabledSectionsUpdated(let sections):
             return "state.enabledSectionsUpdated(\(sections.count) sections)"
+        case .dossierNotesUpdated(let notes):
+            return "state.dossierNotesUpdated(\(notes.count) chars)"
         case .documentCollectionActiveChanged(let isActive):
             return "state.documentCollectionActiveChanged(\(isActive))"
         case .timelineEditorActiveChanged(let isActive):

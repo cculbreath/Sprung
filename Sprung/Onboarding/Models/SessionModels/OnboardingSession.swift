@@ -35,6 +35,8 @@ class OnboardingSession {
     var isTimelineEditorActive: Bool?
     /// Todo list JSON (for restoring LLM task tracking state)
     var todoListJSON: String?
+    /// Dossier WIP notes (for restoring LLM scratchpad across session resume)
+    var dossierNotesJSON: String?
 
     // MARK: - Relationships
     @Relationship(deleteRule: .cascade, inverse: \OnboardingObjectiveRecord.session)
@@ -90,7 +92,8 @@ class OnboardingSession {
         mergedInventoryJSON: String? = nil,
         isDocumentCollectionActive: Bool? = nil,
         isTimelineEditorActive: Bool? = nil,
-        todoListJSON: String? = nil
+        todoListJSON: String? = nil,
+        dossierNotesJSON: String? = nil
     ) {
         self.id = id
         self.phase = phase
@@ -104,6 +107,7 @@ class OnboardingSession {
         self.isDocumentCollectionActive = isDocumentCollectionActive
         self.isTimelineEditorActive = isTimelineEditorActive
         self.todoListJSON = todoListJSON
+        self.dossierNotesJSON = dossierNotesJSON
     }
 
     // MARK: - Tool Coordination Computed Properties

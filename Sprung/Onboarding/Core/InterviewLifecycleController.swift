@@ -175,6 +175,9 @@ final class InterviewLifecycleController {
         // Restore todo list
         await restoreTodoList(from: session)
 
+        // Restore dossier WIP notes (LLM scratchpad)
+        await restoreDossierNotes(from: session)
+
         // Mark session as resumed
         _ = sessionPersistenceHandler.startSession(resumeExisting: true)
 
@@ -282,6 +285,16 @@ final class InterviewLifecycleController {
 
         await todoStore.restoreItems(items)
         Logger.info("📥 Restored \(items.count) todo item(s)", category: .ai)
+    }
+
+    /// Restore dossier WIP notes from persisted session
+    private func restoreDossierNotes(from session: OnboardingSession) async {
+        guard let notes = sessionPersistenceHandler.getRestoredDossierNotes(session), !notes.isEmpty else {
+            return
+        }
+
+        await state.setDossierNotes(notes)
+        Logger.info("📥 Restored dossier notes (\(notes.count) chars)", category: .ai)
     }
 
     /// Internal method to start the LLM orchestrator and related infrastructure

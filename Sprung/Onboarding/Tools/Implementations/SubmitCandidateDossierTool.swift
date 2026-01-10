@@ -23,14 +23,14 @@ struct SubmitCandidateDossierTool: InterviewTool {
                 - Strategic positioning insights
                 - Job fit assessment criteria
 
-                The tool auto-generates dossier_id and timestamps. Only job_search_context is required;
+                The tool auto-generates dossier_id and timestamps. Only jobSearchContext is required;
                 include other fields based on what was gathered during the interview.
 
                 IMPORTANT: Keep prose concise and factual. Avoid medical/health details unless
                 the candidate volunteered them. Write in professional, neutral tone.
                 """,
             properties: properties,
-            required: ["job_search_context"],
+            required: ["jobSearchContext"],
             additionalProperties: false
         )
     }()
@@ -41,9 +41,9 @@ struct SubmitCandidateDossierTool: InterviewTool {
     var name: String { OnboardingToolName.submitCandidateDossier.rawValue }
     var description: String {
         """
-        Submit the finalized candidate dossier. Only job_search_context is required.
-        Auto-generates dossier_id and timestamps. Include strengths_to_emphasize and
-        pitfalls_to_avoid for strategic positioning guidance.
+        Submit the finalized candidate dossier. Only jobSearchContext is required.
+        Auto-generates dossier_id and timestamps. Include strengthsToEmphasize and
+        pitfallsToAvoid for strategic positioning guidance.
         """
     }
     var parameters: JSONSchema { Self.schema }
@@ -54,10 +54,10 @@ struct SubmitCandidateDossierTool: InterviewTool {
     }
 
     func execute(_ params: JSON) async throws -> ToolResult {
-        // Validate required field
+        // Validate required field (camelCase to match schema)
         let jobSearchContext = try ToolResultHelpers.requireString(
-            params["job_search_context"].string,
-            named: "job_search_context"
+            params["jobSearchContext"].string,
+            named: "jobSearchContext"
         )
 
         // Build dossier with auto-generated fields
@@ -69,23 +69,23 @@ struct SubmitCandidateDossierTool: InterviewTool {
         dossier["created_at"].string = now
         dossier["updated_at"].string = now
 
-        // Required field
+        // Required field (output uses snake_case for downstream consumers)
         dossier["job_search_context"].string = jobSearchContext
 
-        // Optional fields - only include if provided
-        if let value = params["work_arrangement_preferences"].string, !value.isEmpty {
+        // Optional fields - read camelCase from params, write snake_case to output
+        if let value = params["workArrangementPreferences"].string, !value.isEmpty {
             dossier["work_arrangement_preferences"].string = value
         }
         if let value = params["availability"].string, !value.isEmpty {
             dossier["availability"].string = value
         }
-        if let value = params["unique_circumstances"].string, !value.isEmpty {
+        if let value = params["uniqueCircumstances"].string, !value.isEmpty {
             dossier["unique_circumstances"].string = value
         }
-        if let value = params["strengths_to_emphasize"].string, !value.isEmpty {
+        if let value = params["strengthsToEmphasize"].string, !value.isEmpty {
             dossier["strengths_to_emphasize"].string = value
         }
-        if let value = params["pitfalls_to_avoid"].string, !value.isEmpty {
+        if let value = params["pitfallsToAvoid"].string, !value.isEmpty {
             dossier["pitfalls_to_avoid"].string = value
         }
         if let value = params["notes"].string, !value.isEmpty {
@@ -142,13 +142,13 @@ struct SubmitCandidateDossierTool: InterviewTool {
             response["dossier_id"].string = dossierId
             response["persisted_id"].string = identifier
 
-            // List which fields were included
-            var includedFields: [String] = ["job_search_context"]
-            if dossier["work_arrangement_preferences"].exists() { includedFields.append("work_arrangement_preferences") }
+            // List which fields were included (report camelCase names as sent by LLM)
+            var includedFields: [String] = ["jobSearchContext"]
+            if dossier["work_arrangement_preferences"].exists() { includedFields.append("workArrangementPreferences") }
             if dossier["availability"].exists() { includedFields.append("availability") }
-            if dossier["unique_circumstances"].exists() { includedFields.append("unique_circumstances") }
-            if dossier["strengths_to_emphasize"].exists() { includedFields.append("strengths_to_emphasize") }
-            if dossier["pitfalls_to_avoid"].exists() { includedFields.append("pitfalls_to_avoid") }
+            if dossier["unique_circumstances"].exists() { includedFields.append("uniqueCircumstances") }
+            if dossier["strengths_to_emphasize"].exists() { includedFields.append("strengthsToEmphasize") }
+            if dossier["pitfalls_to_avoid"].exists() { includedFields.append("pitfallsToAvoid") }
             if dossier["notes"].exists() { includedFields.append("notes") }
 
             response["fields_included"].arrayObject = includedFields
