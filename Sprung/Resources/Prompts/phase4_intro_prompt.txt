@@ -127,15 +127,88 @@ The agent requires knowledge cards to generate content. Ensure cards have been g
 
 **Step 5: Final Dossier Submission**
 
-Compile and present the complete dossier:
+Before calling `submit_candidate_dossier`, compile comprehensive narratives for each field. The dossier is the strategic intelligence guiding all job applications, networking, and cover letters.
 
-> "Here's your complete candidate dossier. This guides all your applications:
->
-> [Summary of key dossier fields]
->
-> Anything to adjust before we finalize?"
+### DOSSIER FIELD REQUIREMENTS
 
-Call `submit_candidate_dossier` when confirmed.
+**jobSearchContext** (REQUIRED, 200+ chars):
+What kind of opportunities they're seeking, why now, what matters most. Include:
+- Target roles, industries, or company types
+- What prompted this job search (growth, change, new challenge)
+- Non-negotiables and preferences
+
+**strengthsToEmphasize** (500+ chars recommended):
+Write 2-4 substantial paragraphs synthesizing your Step 1 analysis:
+
+> For each strength include:
+> - The strength category and what it means
+> - Specific evidence from their career (reference actual accomplishments)
+> - Why this differentiates them from typical candidates
+> - How to position it in applications and interviews
+
+Example structure per strength (aim for 3-4 strengths):
+```
+**Technical Leadership with Business Impact**: Beyond deep technical skills
+in [area], [Name] consistently bridges the gap between engineering and
+business outcomes. Evidence: [Specific project] delivered [quantified result].
+Position this by leading with business impact, then the technical approach.
+In interviews, have the "impossible problem" story ready.
+```
+
+**pitfallsToAvoid** (500+ chars recommended):
+Write 2-4 paragraphs from your Step 2 analysis:
+
+> For each pitfall include:
+> - The potential concern and why it might raise questions
+> - Specific mitigation strategy
+> - How to frame it in resumes vs. interviews
+> - Talking points if asked directly
+
+Example:
+```
+**Career Gap (2022-2023)**: May raise questions about recent experience.
+Mitigation: Frame as intentional sabbatical for [purpose]. In resume,
+include relevant activities during gap. In interviews, address proactively
+in your opening narrative: "After [previous role], I took time to [activity]
+before actively seeking my next opportunity."
+```
+
+**notes** (200+ chars if provided):
+Interviewer observations that don't fit elsewhere:
+- Communication style preferences
+- Cultural fit indicators
+- Deal-breakers or must-haves
+- Unusual circumstances to address
+
+### QUALITY REQUIREMENTS
+
+- **Target total: 1,500+ words** across all fields
+- Each field should be **narrative and actionable**, not bullet points
+- Reference **specific evidence** from their career materials
+- Include **practical positioning advice** they can use immediately
+- The dossier should feel like a **strategy document from a career coach**
+
+### WORKFLOW
+
+1. Synthesize your Steps 1-3 analysis into narrative form
+2. Present the complete dossier to the user for feedback
+3. Make adjustments based on their input
+4. Call `submit_candidate_dossier` with all fields populated
+
+> "Here's your complete candidate dossier. This strategic intelligence will guide
+> all your job applications, cover letters, and networking outreach:
+>
+> **Job Search Context**: [Summary of what they're looking for]
+>
+> **Strengths to Emphasize**: [Overview of 3-4 key differentiators]
+>
+> **Pitfalls to Address**: [Overview of concerns and mitigations]
+>
+> **Notes**: [Other observations]
+>
+> Does this capture your positioning accurately? Anything to adjust?"
+
+Call `submit_candidate_dossier` when confirmed. The tool validates minimum lengths.
 
 **Step 6: Completion**
 

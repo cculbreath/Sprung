@@ -64,6 +64,7 @@ struct AppSheetsModifier: ViewModifier {
     @Environment(KnowledgeCardStore.self) private var knowledgeCardStore
     @Environment(CoverRefStore.self) private var coverRefStore
     @Environment(SkillStore.self) private var skillStore
+    @Environment(CandidateDossierStore.self) private var candidateDossierStore
     @State private var showReprocessConfirmation = false
     @State private var newlyAddedCardName: String = ""
     private var revisionSheetBinding: Binding<Bool> {
@@ -220,7 +221,7 @@ struct AppSheetsModifier: ViewModifier {
                         coverRefStore.addCoverRef(ref)
                     },
                     skillStore: skillStore,
-                    dossierNotes: nil,  // TODO: Load from OnboardingSession when available
+                    dossierStore: candidateDossierStore,
                     llmFacade: nil   // Regeneration not available outside onboarding
                 )
             }

@@ -72,6 +72,7 @@ struct SprungApp: App {
                 .environment(appDependencies.experienceDefaultsStore)
                 .environment(appDependencies.careerKeywordStore)
                 .environment(appDependencies.guidanceStore)
+                .environment(appDependencies.candidateDossierStore)
                 .onAppear {
                     // Pass environment and dependencies to AppDelegate for windows
                     appDelegate.appEnvironment = appEnvironment

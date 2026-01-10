@@ -28,6 +28,7 @@ final class AppDependencies {
     let careerKeywordStore: CareerKeywordStore
     let applicantProfileStore: ApplicantProfileStore
     let onboardingSessionStore: OnboardingSessionStore
+    let candidateDossierStore: CandidateDossierStore
     let onboardingCoordinator: OnboardingInterviewCoordinator
     let reasoningStreamManager: ReasoningStreamManager
     let resumeReviseViewModel: ResumeReviseViewModel
@@ -57,6 +58,7 @@ final class AppDependencies {
         let applicantProfileStore = ApplicantProfileStore(context: modelContext)
         self.applicantProfileStore = applicantProfileStore
         self.onboardingSessionStore = OnboardingSessionStore(context: modelContext)
+        self.candidateDossierStore = CandidateDossierStore(context: modelContext)
         let guidanceStore = InferenceGuidanceStore(context: modelContext)
         self.guidanceStore = guidanceStore
         // Core export orchestration

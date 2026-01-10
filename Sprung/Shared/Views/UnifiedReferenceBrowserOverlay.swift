@@ -64,8 +64,8 @@ struct UnifiedReferenceBrowserOverlay: View {
     // Skills Store (SwiftData-backed)
     let skillStore: SkillStore?
 
-    // Dossier notes
-    let dossierNotes: String?
+    // Dossier store (SwiftData-backed)
+    let dossierStore: CandidateDossierStore?
 
     // Optional LLM for analysis
     let llmFacade: LLMFacade?
@@ -132,7 +132,7 @@ struct UnifiedReferenceBrowserOverlay: View {
         case .knowledge: return knowledgeCards.count
         case .writing: return writingSamples.count
         case .skills: return skillStore?.skills.count ?? 0
-        case .dossier: return dossierNotes?.isEmpty == false ? 1 : 0
+        case .dossier: return dossierStore?.dossier != nil ? 1 : 0
         }
     }
 
@@ -184,7 +184,7 @@ struct UnifiedReferenceBrowserOverlay: View {
         case .skills:
             SkillsBankBrowser(skillStore: skillStore, llmFacade: llmFacade)
         case .dossier:
-            DossierBrowserTab(notes: dossierNotes)
+            DossierBrowserTab(dossierStore: dossierStore)
         }
     }
 
@@ -215,7 +215,7 @@ struct UnifiedReferenceBrowserOverlay: View {
             knowledgeCards: knowledgeCards,
             writingSamples: writingSamples,
             skills: skillStore?.skills ?? [],
-            dossierNotes: dossierNotes
+            dossier: dossierStore?.dossier
         )
         exportToJSON(bundle, filename: "all-references.json")
     }
@@ -223,35 +223,160 @@ struct UnifiedReferenceBrowserOverlay: View {
 
 // MARK: - Dossier Browser Tab
 
-/// Simple browser for dossier notes
+/// Browser tab for candidate dossier
 private struct DossierBrowserTab: View {
-    let notes: String?
+    let dossierStore: CandidateDossierStore?
+
+    @State private var showEditor = false
 
     var body: some View {
         ScrollView {
-            if let notes = notes, !notes.isEmpty {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack {
-                        Image(systemName: "person.text.rectangle")
-                            .font(.title2)
-                            .foregroundStyle(.green)
-                        Text("Dossier Notes")
-                            .font(.title3.weight(.semibold))
-                        Spacer()
-                    }
+            VStack(alignment: .leading, spacing: 20) {
+                // Header with edit button
+                HStack {
+                    Image(systemName: "person.text.rectangle")
+                        .font(.title2)
+                        .foregroundStyle(.green)
+                    Text("Candidate Dossier")
+                        .font(.title3.weight(.semibold))
 
-                    Text(notes)
-                        .font(.body)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                        .background(Color(nsColor: .controlBackgroundColor))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    Spacer()
+
+                    if dossierStore != nil {
+                        Button {
+                            showEditor = true
+                        } label: {
+                            Label("Edit Dossier", systemImage: "pencil")
+                        }
+                        .buttonStyle(.bordered)
+                    }
                 }
-                .padding(20)
-            } else {
-                emptyState
+
+                // Content based on what's available
+                if let store = dossierStore, let dossier = store.dossier {
+                    dossierContent(dossier)
+                } else {
+                    emptyState
+                }
             }
+            .padding(20)
+        }
+        .sheet(isPresented: $showEditor) {
+            if let store = dossierStore {
+                CandidateDossierEditorView()
+                    .environment(store)
+            }
+        }
+    }
+
+    private func dossierContent(_ dossier: CandidateDossier) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Status bar
+            HStack(spacing: 12) {
+                Text("\(dossier.wordCount) words")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if dossier.isComplete {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.caption2)
+                        Text("Complete")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(.green)
+                } else if !dossier.validationErrors.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption2)
+                        Text("\(dossier.validationErrors.count) issue\(dossier.validationErrors.count == 1 ? "" : "s")")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(.orange)
+                }
+
+                Spacer()
+
+                Text("Updated \(dossier.updatedAt.formatted(date: .abbreviated, time: .shortened))")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
+            Divider()
+
+            // Job Search Context
+            dossierField(title: "Job Search Context", content: dossier.jobSearchContext, required: true)
+
+            // Strengths
+            if let strengths = dossier.strengthsToEmphasize, !strengths.isEmpty {
+                dossierField(title: "Strengths to Emphasize", content: strengths, required: false)
+            }
+
+            // Pitfalls
+            if let pitfalls = dossier.pitfallsToAvoid, !pitfalls.isEmpty {
+                dossierField(title: "Pitfalls to Avoid", content: pitfalls, required: false)
+            }
+
+            // Preferences
+            if let prefs = dossier.workArrangementPreferences, !prefs.isEmpty {
+                dossierField(title: "Work Arrangement", content: prefs, required: false)
+            }
+
+            if let avail = dossier.availability, !avail.isEmpty {
+                dossierField(title: "Availability", content: avail, required: false)
+            }
+
+            // Private fields (shown with lock icon)
+            if let circumstances = dossier.uniqueCircumstances, !circumstances.isEmpty {
+                dossierField(title: "Unique Circumstances", content: circumstances, required: false, isPrivate: true)
+            }
+
+            if let notes = dossier.interviewerNotes, !notes.isEmpty {
+                dossierField(title: "Interviewer Notes", content: notes, required: false, isPrivate: true)
+            }
+        }
+    }
+
+    private func dossierField(title: String, content: String, required: Bool, isPrivate: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+
+                if required {
+                    Text("Required")
+                        .font(.caption2)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Color.red.opacity(0.15))
+                        .foregroundStyle(.red)
+                        .clipShape(Capsule())
+                }
+
+                if isPrivate {
+                    HStack(spacing: 2) {
+                        Image(systemName: "lock.fill")
+                            .font(.caption2)
+                        Text("Private")
+                            .font(.caption2)
+                    }
+                    .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Text("\(content.count) chars")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
+            Text(content)
+                .font(.body)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(Color(nsColor: .controlBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
         }
     }
 
@@ -260,14 +385,31 @@ private struct DossierBrowserTab: View {
             Image(systemName: "person.text.rectangle")
                 .font(.system(size: 48))
                 .foregroundStyle(.tertiary)
-            Text("No Dossier Notes")
+            Text("No Dossier")
                 .font(.title3.weight(.medium))
-            Text("Complete an onboarding interview to capture dossier notes")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+
+            if dossierStore != nil {
+                Text("Create a dossier to capture strategic positioning for your job search")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+
+                Button {
+                    showEditor = true
+                } label: {
+                    Label("Create Dossier", systemImage: "plus.circle")
+                }
+                .buttonStyle(.borderedProminent)
+                .padding(.top, 8)
+            } else {
+                Text("Complete an onboarding interview to capture dossier notes")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.vertical, 40)
     }
 }
 
@@ -277,14 +419,14 @@ private struct ReferenceBundleExport: Codable {
     let knowledgeCards: [KnowledgeCard]
     let writingSamples: [CoverRef]
     let skills: [Skill]
-    let dossierNotes: String?
+    let dossier: CandidateDossier?
     let exportedAt: Date
 
-    init(knowledgeCards: [KnowledgeCard], writingSamples: [CoverRef], skills: [Skill], dossierNotes: String?) {
+    init(knowledgeCards: [KnowledgeCard], writingSamples: [CoverRef], skills: [Skill], dossier: CandidateDossier?) {
         self.knowledgeCards = knowledgeCards
         self.writingSamples = writingSamples
         self.skills = skills
-        self.dossierNotes = dossierNotes
+        self.dossier = dossier
         self.exportedAt = Date()
     }
 }

@@ -33,6 +33,7 @@ enum SprungSchema {
         OnboardingMessageRecord.self,
         OnboardingPlanItemRecord.self,
         // Discovery Models (SearchPreferences and DiscoverySettings moved to UserDefaults)
+        CandidateDossier.self,
         JobSource.self,
         DailyTask.self,
         TimeEntry.self,

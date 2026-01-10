@@ -116,6 +116,33 @@ struct PhaseFourScript: PhaseScript {
                 id: OnboardingObjectiveId.dossierComplete.rawValue,
                 dependsOn: [OnboardingObjectiveId.pitfallsDocumented.rawValue],
                 autoStartWhenReady: false,  // Don't auto-start - LLM drives via todos
+                onBegin: { _ in
+                    let title = """
+                        Ready to compile the candidate dossier. QUALITY REQUIREMENTS:
+
+                        BEFORE calling submit_candidate_dossier, ensure you have:
+
+                        1. **jobSearchContext** (200+ chars REQUIRED): Target roles, industries, \
+                        motivation for searching, non-negotiables
+
+                        2. **strengthsToEmphasize** (500+ chars recommended): 2-4 PARAGRAPHS with \
+                        specific evidence, not bullet points. Include positioning advice for each strength.
+
+                        3. **pitfallsToAvoid** (500+ chars recommended): 2-4 PARAGRAPHS with mitigation \
+                        strategies for each concern. Include talking points for interviews.
+
+                        4. **notes** (200+ chars if relevant): Communication style, cultural fit, deal-breakers
+
+                        TARGET: 1,500+ total words. This is a strategy document, not a summary.
+                        The tool will validate minimum lengths and return warnings if content is thin.
+                        """
+                    let details = [
+                        "action": "compile_comprehensive_dossier",
+                        "minimums": "jobSearchContext=200, strengths=500, pitfalls=500, notes=200",
+                        "target": "1500+ total words"
+                    ]
+                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
+                },
                 onComplete: { _ in
                     let title = """
                         Dossier submitted! Next step depends on whether custom.jobTitles was enabled:
