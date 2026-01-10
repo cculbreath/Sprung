@@ -81,8 +81,20 @@ class ExperienceDefaultsAgent {
     private let maxTurns = 50
     private let timeoutSeconds: TimeInterval = 600  // 10 minutes
 
+    // Context pruning (0 = disabled, uses full context)
+    private var ephemeralTurns: Int {
+        UserDefaults.standard.integer(forKey: "onboardingEphemeralTurns")
+    }
+
     // Conversation state
     private var messages: [ChatCompletionParameters.Message] = []
+
+    // Track ephemeral messages for pruning: (messageIndex, addedAtTurn, toolCallId)
+    private var ephemeralMessages: [(index: Int, addedAtTurn: Int, toolCallId: String)] = []
+
+    // Track file reads to detect excessive re-reading
+    private var fileReadCounts: [String: Int] = [:]
+    private var duplicateReadWarningIssued = false
 
     // Tools
     private var tools: [ChatCompletionParameters.Tool]
@@ -142,14 +154,15 @@ class ExperienceDefaultsAgent {
                     )
                 }
 
-                // Call LLM with tools - use full context length to avoid re-reading files
+                // Call LLM with tools
+                // Use full context when ephemeralTurns is 0 (disabled)
                 let response = try await facade.executeWithTools(
                     messages: messages,
                     tools: tools,
                     toolChoice: .auto,
                     modelId: modelId,
                     temperature: 0.3,
-                    useFullContextLength: true
+                    useFullContextLength: ephemeralTurns == 0
                 )
 
                 // Track token usage
@@ -224,6 +237,11 @@ class ExperienceDefaultsAgent {
                     )
                 }
 
+                // Prune old ephemeral messages if enabled
+                if ephemeralTurns > 0 {
+                    pruneEphemeralMessages()
+                }
+
                 // Execute tool calls
                 for toolCall in toolCalls {
                     let toolId = toolCall.id ?? UUID().uuidString
@@ -233,7 +251,18 @@ class ExperienceDefaultsAgent {
                     await updateProgress("Turn \(turnCount): \(toolDisplayName(toolName))")
 
                     let result = await executeTool(name: toolName, arguments: arguments)
+                    let messageIndex = messages.count
                     messages.append(buildToolResultMessage(toolCallId: toolId, result: result))
+
+                    // Track file reads for ephemeral pruning
+                    if toolName == ReadFileTool.name {
+                        ephemeralMessages.append((index: messageIndex, addedAtTurn: turnCount, toolCallId: toolId))
+
+                        // Track duplicate reads
+                        if let path = extractToolDetail(name: toolName, arguments: arguments) {
+                            trackFileRead(path: path)
+                        }
+                    }
 
                     // Log to transcript
                     if let agentId = agentId {
@@ -444,6 +473,52 @@ class ExperienceDefaultsAgent {
             return "Finished"
         default:
             return nil
+        }
+    }
+
+    // MARK: - Context Pruning
+
+    /// Prune old ephemeral messages to keep context size manageable.
+    /// Only called when ephemeralTurns > 0.
+    private func pruneEphemeralMessages() {
+        let expiredTurn = turnCount - ephemeralTurns
+        let toRemove = ephemeralMessages.filter { $0.addedAtTurn <= expiredTurn }
+
+        for item in toRemove {
+            guard item.index < messages.count else { continue }
+
+            messages[item.index] = ChatCompletionParameters.Message(
+                role: .tool,
+                content: .text("[Content pruned - file was read \(turnCount - item.addedAtTurn) turns ago. Re-read if needed.]"),
+                toolCallID: item.toolCallId
+            )
+        }
+
+        ephemeralMessages.removeAll { $0.addedAtTurn <= expiredTurn }
+
+        if !toRemove.isEmpty {
+            Logger.debug("🗂️ Pruned \(toRemove.count) ephemeral messages", category: .ai)
+        }
+    }
+
+    // MARK: - Duplicate Read Tracking
+
+    /// Track file reads and warn if excessive re-reading is detected.
+    private func trackFileRead(path: String) {
+        let count = (fileReadCounts[path] ?? 0) + 1
+        fileReadCounts[path] = count
+
+        // Warn on first duplicate (count >= 2)
+        if count >= 2 && !duplicateReadWarningIssued {
+            let totalDuplicates = fileReadCounts.values.filter { $0 >= 2 }.count
+            if totalDuplicates >= 3 {
+                duplicateReadWarningIssued = true
+                Logger.warning("⚠️ ExperienceDefaultsAgent: Excessive file re-reading detected (\(totalDuplicates) files read multiple times). Consider increasing 'Context Pruning Turns' in Settings or setting to 0 (disabled).", category: .ai)
+            }
+        }
+
+        if count >= 3 {
+            Logger.debug("🗂️ File '\(path)' read \(count) times this session", category: .ai)
         }
     }
 }

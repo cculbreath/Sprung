@@ -85,13 +85,21 @@ class CardMergeAgent {
     // Limits
     private let maxTurns = 100  // More turns allowed for thorough merging
     private let timeoutSeconds: TimeInterval = 900  // 15 minutes
-    private let ephemeralTurns = 5  // Prune old tool results after this many turns
+
+    // Context pruning (0 = disabled, uses full context)
+    private var ephemeralTurns: Int {
+        UserDefaults.standard.integer(forKey: "onboardingEphemeralTurns")
+    }
 
     // Conversation state
     private var messages: [ChatCompletionParameters.Message] = []
 
     // Track ephemeral messages: (messageIndex, addedAtTurn, toolCallId)
     private var ephemeralMessages: [(index: Int, addedAtTurn: Int, toolCallId: String)] = []
+
+    // Track file reads to detect excessive re-reading
+    private var fileReadCounts: [String: Int] = [:]
+    private var duplicateReadWarningIssued = false
 
     // Tools
     private var tools: [ChatCompletionParameters.Tool]
@@ -169,12 +177,14 @@ class CardMergeAgent {
                 }
 
                 // Call LLM with tools
+                // Use full context when ephemeralTurns is 0 (disabled)
                 let response = try await facade.executeWithTools(
                     messages: messages,
                     tools: tools,
                     toolChoice: .auto,
                     modelId: modelId,
-                    temperature: 0.2  // Low temperature for consistent merging decisions
+                    temperature: 0.2,  // Low temperature for consistent merging decisions
+                    useFullContextLength: ephemeralTurns == 0
                 )
 
                 // Track token usage
@@ -254,8 +264,10 @@ class CardMergeAgent {
                     }
                 }
 
-                // Prune old ephemeral messages before adding new ones
-                pruneEphemeralMessages()
+                // Prune old ephemeral messages before adding new ones (if enabled)
+                if ephemeralTurns > 0 {
+                    pruneEphemeralMessages()
+                }
 
                 // Execute other tool calls
                 let executableCalls = toolCalls.filter { $0.function.name != CompleteMergeTool.name }
@@ -279,6 +291,8 @@ class CardMergeAgent {
                         if isCardFile {
                             ephemeralMessages.append((index: messageIndex, addedAtTurn: turnCount, toolCallId: toolId))
                         }
+                        // Track duplicate reads
+                        trackFileRead(path: path)
                     }
 
                     // Log to transcript
@@ -598,10 +612,11 @@ class CardMergeAgent {
         }
     }
 
-    // MARK: - Ephemeral Message Pruning
+    // MARK: - Context Pruning
 
     /// Prune old ephemeral messages to keep context size manageable.
     /// Replaces pruned messages with a placeholder so tool call IDs remain valid.
+    /// Only called when ephemeralTurns > 0.
     private func pruneEphemeralMessages() {
         let expiredTurn = turnCount - ephemeralTurns
         let toRemove = ephemeralMessages.filter { $0.addedAtTurn <= expiredTurn }
@@ -676,6 +691,27 @@ class CardMergeAgent {
             return json["pattern"] as? String
         default:
             return nil
+        }
+    }
+
+    // MARK: - Duplicate Read Tracking
+
+    /// Track file reads and warn if excessive re-reading is detected.
+    private func trackFileRead(path: String) {
+        let count = (fileReadCounts[path] ?? 0) + 1
+        fileReadCounts[path] = count
+
+        // Warn on first duplicate (count >= 2)
+        if count >= 2 && !duplicateReadWarningIssued {
+            let totalDuplicates = fileReadCounts.values.filter { $0 >= 2 }.count
+            if totalDuplicates >= 3 {
+                duplicateReadWarningIssued = true
+                Logger.warning("⚠️ CardMergeAgent: Excessive file re-reading detected (\(totalDuplicates) files read multiple times). Consider increasing 'Context Pruning Turns' in Settings or setting to 0 (disabled).", category: .ai)
+            }
+        }
+
+        if count >= 3 {
+            Logger.debug("🔀 File '\(path)' read \(count) times this session", category: .ai)
         }
     }
 }

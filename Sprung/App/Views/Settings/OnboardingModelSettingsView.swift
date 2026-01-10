@@ -26,6 +26,8 @@ struct OnboardingModelSettingsView: View {
     @AppStorage("maxConcurrentPDFExtractions") private var maxConcurrentPDFExtractions: Int = 30
     @AppStorage("pdfJudgeUseFourUp") private var pdfJudgeUseFourUp: Bool = false
     @AppStorage("pdfJudgeDPI") private var pdfJudgeDPI: Int = 150
+    @AppStorage("onboardingEphemeralTurns") private var ephemeralTurns: Int = 15
+
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(LLMFacade.self) private var llmFacade
 
@@ -71,6 +73,7 @@ struct OnboardingModelSettingsView: View {
             Section {
                 knowledgeCardTokenLimitPicker
                 maxConcurrentExtractionsPicker
+                ephemeralTurnsPicker
                 Toggle("Allow web search during interviews", isOn: $onboardingWebSearchAllowed)
             } header: {
                 SettingsSectionHeader(title: "Processing Limits", systemImage: "slider.horizontal.3")
@@ -516,6 +519,24 @@ private extension OnboardingModelSettingsView {
         }
     }
 
+    var ephemeralTurnsPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Stepper(value: $ephemeralTurns, in: 0...30) {
+                HStack {
+                    Text("Context Pruning Turns")
+                    Spacer()
+                    Text(ephemeralTurns == 0 ? "Disabled" : "\(ephemeralTurns)")
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
+            Text(ephemeralTurns == 0
+                ? "File contents retained for entire agent session (uses full context window)."
+                : "File contents pruned after \(ephemeralTurns) turns. Set to 0 to disable and use full context.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
 }
 
 // MARK: - Model Loading

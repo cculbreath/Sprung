@@ -13,6 +13,7 @@ struct PipelineView: View {
 
     @Environment(KnowledgeCardStore.self) private var knowledgeCardStore
     @Environment(CoverRefStore.self) private var coverRefStore
+    @Environment(CandidateDossierStore.self) private var candidateDossierStore
 
     @State private var showingAddLead = false
     @State private var isChoosing = false
@@ -91,7 +92,6 @@ struct PipelineView: View {
         isChoosing = true
         selectionError = nil
 
-        // TODO: Context source choice - may revisit (currently using knowledge cards + dossier)
         // Build knowledge context from KnowledgeCards
         let knowledgeContext = knowledgeCardStore.knowledgeCards
             .map { card in
@@ -100,11 +100,21 @@ struct PipelineView: View {
             }
             .joined(separator: "\n\n")
 
-        // Build dossier context from CoverRefs marked as dossier
-        let dossierContext = coverRefStore.storedCoverRefs
-            .filter { $0.isDossier }
-            .map { "\($0.name):\n\($0.content)" }
+        // Build dossier context from CandidateDossier + writing samples
+        var dossierParts: [String] = []
+        if let dossier = candidateDossierStore.dossier {
+            dossierParts.append(dossier.exportForJobMatching())
+        }
+        // Append writing samples (CoverRefs) for additional context
+        let writingSamples = coverRefStore.storedCoverRefs
+            .filter { $0.type == .writingSample }
+            .prefix(5)  // Limit to avoid overwhelming context
+            .map { "<writing_sample name=\"\($0.name)\">\n\($0.content.prefix(500))...\n</writing_sample>" }
             .joined(separator: "\n\n")
+        if !writingSamples.isEmpty {
+            dossierParts.append(writingSamples)
+        }
+        let dossierContext = dossierParts.joined(separator: "\n\n")
 
         do {
             let result = try await coordinator.chooseBestJobs(
