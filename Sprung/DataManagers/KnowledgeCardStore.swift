@@ -133,6 +133,37 @@ final class KnowledgeCardStore: SwiftDataStore {
         Logger.info("🗑️ Deleted \(cardsToDelete.count) cards from artifact \(artifactId)", category: .ai)
     }
 
+    /// Deletes only non-pending (approved) cards that originated from a specific artifact
+    /// Used during regeneration to clear old approved cards before adding new pending ones
+    /// - Parameter artifactId: The artifact ID to match against evidenceAnchors
+    func deleteApprovedCardsFromArtifact(_ artifactId: String) {
+        let cardsToDelete = knowledgeCards.filter { card in
+            !card.isPending && card.evidenceAnchors.contains { $0.documentId == artifactId }
+        }
+        for card in cardsToDelete {
+            modelContext.delete(card)
+        }
+        saveContext()
+        if !cardsToDelete.isEmpty {
+            Logger.info("🗑️ Deleted \(cardsToDelete.count) approved cards from artifact \(artifactId)", category: .ai)
+        }
+    }
+
+    /// Deletes non-pending (approved) cards from multiple artifacts
+    /// - Parameter artifactIds: Set of artifact IDs to match against evidenceAnchors
+    func deleteApprovedCardsFromArtifacts(_ artifactIds: Set<String>) {
+        let cardsToDelete = knowledgeCards.filter { card in
+            !card.isPending && card.evidenceAnchors.contains { artifactIds.contains($0.documentId) }
+        }
+        for card in cardsToDelete {
+            modelContext.delete(card)
+        }
+        saveContext()
+        if !cardsToDelete.isEmpty {
+            Logger.info("🗑️ Deleted \(cardsToDelete.count) approved cards from \(artifactIds.count) artifacts", category: .ai)
+        }
+    }
+
     // MARK: - Import/Export
 
     /// Imports KnowledgeCards from a JSON file URL
